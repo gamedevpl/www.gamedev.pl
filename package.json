@@ -1,0 +1,34 @@
+{
+  "name": "www.gamedev.pl",
+  "version": "1.0.0",
+  "description": "Source code for https://www.gamedev.pl",
+  "main": "gulpfile.js",
+  "dependencies": {
+    "gulp": "^3.9.0",
+    "gulp-run": "^1.6.10"
+  },
+  "devDependencies": {
+    "gulp": "^3.9.0",
+    "gulp-concat": "^2.6.0",
+    "gulp-ext-replace": "^0.2.0",
+    "gulp-less": "^3.0.3",
+    "gulp-mustache": "^1.1.1",
+    "gulp-rename": "^1.2.2",
+    "gulp-rm": "^1.0.0",
+    "gulp-run": "^1.6.10",
+    "gulp-serve": "^1.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gamedevpl/www.gamedev.pl.git"
+  },
+  "author": "Grzegorz Tańczyk",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gamedevpl/www.gamedev.pl/issues"
+  },
+  "homepage": "https://github.com/gamedevpl/www.gamedev.pl#readme"
+}
