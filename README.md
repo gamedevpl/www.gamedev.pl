@@ -21,6 +21,7 @@ How to run:
 
     git clone git@github.com:gamedevpl/www.gamedev.pl.git
     cd www.gamedev.pl
+    npm install
     gulp serve
   
   
