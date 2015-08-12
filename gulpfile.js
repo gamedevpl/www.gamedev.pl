@@ -15,26 +15,28 @@ gulp.task('clean', function() {
 });
 
 gulp.task('fetch', function() {
-	run('ruby generators/discourse.rb', {
+	run('ruby app/generators/discourse.rb', {
 		silent : true
 	}).exec()
 	  .pipe(rename("latest.json"))
 	  .pipe(gulp.dest('./dist'));
 });
 
-gulp.task('render', ['fetch'], function() {
-	gulp.src("./templates/*.mustache")
+gulp.task('render', function() {
+	gulp.src("app/templates/**/*.mustache")
     	.pipe(mustache("./dist/latest.json"))
     	.pipe(ext_replace('.html'))
     	.pipe(gulp.dest("./dist/public"));	
 })
 
 gulp.task('less', function() {
-	return gulp.src('./less/**/*.less')
+	return gulp.src('app/less/**/*.less')
 	    .pipe(less({
 		    paths : [ path.join(__dirname, 'less', 'includes') ]
 	    }))
 	    .pipe(gulp.dest('./dist/public/css'));
 });
 
-gulp.task('serve', serve('./dist/public'));
+gulp.task('build', ['less', 'render']);
+
+gulp.task('serve', ['build'], serve('./dist/public'));

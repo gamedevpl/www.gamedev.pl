@@ -2,4 +2,4 @@ Gemfile.lock
 node_modules
 dist
 .project
-generators/config.rb
+app/generators/config.rb

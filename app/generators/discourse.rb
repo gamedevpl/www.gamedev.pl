@@ -1,5 +1,5 @@
 require "discourse_api"
-require './generators/config.rb'
+require './app/generators/config.rb'
 
 client = DiscourseApi::Client.new(@discourse[:url])
 client.api_key = @discourse[:key]
