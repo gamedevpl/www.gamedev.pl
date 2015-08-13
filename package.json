@@ -17,9 +17,7 @@
     "gulp-mustache": "^1.1.1",
     "gulp-rename": "^1.2.2",
     "gulp-rm": "^1.0.0",
-    "gulp-run": "^1.6.10",
-    "gulp-serve": "^1.0.0",
-    "merge-stream": "^1.0.0"
+    "gulp-serve": "^1.0.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -8,10 +8,7 @@ var less = require('gulp-less');
 var path = require('path');
 var rename = require("gulp-rename");
 var rm = require('gulp-rm')
-var run = require('gulp-run');
 var serve = require('gulp-serve');
-
-var merge = require('merge-stream');
 
 gulp.task('clean', function() {
     gulp.src('dist/**/*')
@@ -19,13 +16,13 @@ gulp.task('clean', function() {
 });
 
 gulp.task('fetch_topics', function() {
-    download("https://forum.gamedev.pl/latest.json")
+    return download("https://forum.gamedev.pl/latest.json")
       .pipe(rename("topics.json"))
       .pipe(gulp.dest('./dist'));
 });
 
 gulp.task('fetch_highlights', function() {
-    gulp.src("highlights/*.json")
+    return gulp.src("highlights/*.json")
         .pipe(jsoncombine("highlights.json", function(data) {
             return new Buffer(JSON.stringify(data));
          }))

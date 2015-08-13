@@ -6,13 +6,11 @@
     <body>
         <header>Gamedev.pl</header>
         <main>
-            <ul>
-                {{#topics}}
-                    {{#topic_list}}
-                        {{> ../partials/topics }}
-                    {{/topic_list}}
-                {{/topics}}
-            </ul>
+            {{#topics}}
+                {{#topic_list}}
+                    {{> ../partials/topics }}
+                {{/topic_list}}
+            {{/topics}}
         </main>
         <footer>Gamedev.pl</footer>
     </body>
