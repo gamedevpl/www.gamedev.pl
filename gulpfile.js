@@ -1,4 +1,5 @@
 var concat = require('gulp-concat');
+var download = require("gulp-download");
 var ext_replace = require('gulp-ext-replace');
 var gulp = require('gulp');
 var mustache = require("gulp-mustache");
@@ -15,9 +16,7 @@ gulp.task('clean', function() {
 });
 
 gulp.task('fetch', function() {
-	run('ruby app/generators/discourse.rb', {
-		silent : true
-	}).exec()
+	download("https://forum.gamedev.pl/latest.json")
 	  .pipe(rename("latest.json"))
 	  .pipe(gulp.dest('./dist'));
 });
