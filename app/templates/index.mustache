@@ -7,11 +7,11 @@
         <header>Gamedev.pl</header>
         <main>
             <ul>
-                {{#topic_list}}
-                  {{#topics}}
-                    {{> ../partials/feed-topic }}
-                  {{/topics}}
-                {{/topic_list}}
+                {{#topics}}
+                    {{#topic_list}}
+                        {{> ../partials/topics }}
+                    {{/topic_list}}
+                {{/topics}}
             </ul>
         </main>
         <footer>Gamedev.pl</footer>

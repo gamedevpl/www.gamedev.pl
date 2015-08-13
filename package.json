@@ -12,12 +12,14 @@
     "gulp": "^3.9.0",
     "gulp-concat": "^2.6.0",
     "gulp-ext-replace": "^0.2.0",
+    "gulp-jsoncombine": "^1.0.2",
     "gulp-less": "^3.0.3",
     "gulp-mustache": "^1.1.1",
     "gulp-rename": "^1.2.2",
     "gulp-rm": "^1.0.0",
     "gulp-run": "^1.6.10",
-    "gulp-serve": "^1.0.0"
+    "gulp-serve": "^1.0.0",
+    "merge-stream": "^1.0.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
