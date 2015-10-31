@@ -3,10 +3,9 @@ node_js:
   - '0.12'
 before_script:
   - npm install -g gulp
-  - git remote set-url origin "https://${GH_TOKEN}@github.com:gamedevpl/www.gamedev.pl.git"
   - git config --global user.email "travis@travis-ci.org"
   - git config --global user.name "Travis-CI"
-script: gulp deploy
+script: gulp travis-deploy
 env:
   global:
     secure: EKD171GCDyIAWrj7N5I6O1G2rFrYgXBf9EcDduW8Li9V0EJlkYThjYrFbAAhny0qTU4Fov3pClJxrlX1Uc+hztszYzFPqoJFLwWLkSNkn2jxCfR3zKaWpQj8ZCyn4lWu6WDYS/dINIDMTsAhS7Hw5IBBtX0OMbc6/nVp+SBin1Py24X9h72b+HZp0WBlDRKAodGnYscBMsZFoJ+X91idhVopDEKwuGJnVoTdOoQJGRfbtlzoFiK1fpS6G2LwrHyKBHkHl85GUoGaMp2d9aVKBXfJctqAnWhMz6LV6VZ6smkgPjuVKtif+uys/5C6OoVZQQm2Rb4zEOU6GnG3A8ML5cWVTuMuVYgUgIYD16tEVBXOe/UV62WA/5Fva0F7pVKS5tYONP/ekGF0bGjboDkR3H8CdWx6Pz+0p/kmbGPsNEDjXPHUoasnAmPcuCApWsd2uLmxRGGY1XgX4Vcqap9vStzQel5S/C8d1Vk3Ao9h6TcuGY+lFYt0NijhDPW7phRGKZrm3p6OGRuwR67RhEpOZHPUNSJaXt3LbCmTSpDvXGuJ2KRFtVYcsJQKxVkaYn+lECGAwurce81VTaDrup/Ehrjn4MmwmyllMtttbmd87BDRESqssQgAzi+crR+7q9L2uJB1Tm2N42uHlBDPyckIZrdDnpXg2pXOvPvbwikgaPA=

@@ -12,6 +12,16 @@ gulp.task('deploy', ['build'], function() {
         .pipe(ghPages());
 });
 
+gulp.task('travis-config', function(done) {
+    git.addRemote('origin', 'https://'+process.env.GH_TOKEN+'@github.com:gamedevpl/www.gamedev.pl.git', function (err) {
+        if (err) throw err; else done();
+    });
+});
+
+gulp.task('travis-deploy', function(done) {
+    runSequence('travis-config', 'deploy', done);
+});
+
 gulp.task('clean', function() {
     return gulp.src('dist/**/*')
         .pipe(rm());
