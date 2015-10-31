@@ -1,7 +1,7 @@
 language: node_js
 node_js:
 - '0.12'
-script: echo $encrypted_6d68858b518f_key
+script: echo $PATH; echo $encrypted_6d68858b518f_key
 branches:
   only: 
     - master
