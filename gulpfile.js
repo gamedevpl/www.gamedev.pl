@@ -2,6 +2,7 @@
 var gulp = require('gulp');
 var serve = require('gulp-serve');
 var ghPages = require('gulp-gh-pages');
+var runSequence = require('run-sequence');
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -11,17 +12,19 @@ gulp.task('deploy', ['build'], function() {
 });
 
 gulp.task('clean', function() {
-    gulp.src('dist/**/*')
+    return gulp.src('dist/**/*')
         .pipe(rm());
 });
 
 // watch
 var watch = require('gulp-watch');
 
-gulp.task('build', ['less', 'render', 'assets', 'CNAME']);
+gulp.task('build', function(done) {
+    runSequence('fetch', ['less', 'render', 'assets', 'CNAME'], done);
+});
 
 gulp.task('watch', function() {
-    watch('app/**/*',['build']);
+    watch('app/**/*', ['render']);
 });
 
 // sub tasks
@@ -54,7 +57,7 @@ gulp.task('fetch_jobs', function() {
 });
 
 gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs'], function() {
-    gulp.src(['dist/topics.json', 
+    return gulp.src(['dist/topics.json', 
               'dist/jobs.json', 
               'dist/highlights.json'])
          .pipe(jsoncombine("combined.json", function(data) {
@@ -64,11 +67,11 @@ gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs'], function(
 });
 
 gulp.task('render', function() {
-    gulp.src("app/templates/**/*.mustache")
+    return gulp.src("app/templates/**/*.mustache")
         .pipe(mustache("./dist/combined.json"))
         .pipe(ext_replace('.html'))
         .pipe(gulp.dest("./dist/public"));    
-})
+});
 
 gulp.task('less', function() {
     return gulp.src('app/less/**/*.less')

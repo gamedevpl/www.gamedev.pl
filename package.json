@@ -19,7 +19,8 @@
     "gulp-rename": "^1.2.2",
     "gulp-rm": "^1.0.0",
     "gulp-serve": "^1.0.0",
-    "gulp-watch": "^4.3.5"
+    "gulp-watch": "^4.3.5",
+    "run-sequence": "^1.1.4"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

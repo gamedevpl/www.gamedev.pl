@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/gamedevpl/www.gamedev.pl.svg?branch=master)](https://travis-ci.org/gamedevpl/www.gamedev.pl)
+
 # Gamedev.pl
 
 Gamedev.pl is a static website generated from various sources.
