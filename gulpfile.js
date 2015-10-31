@@ -6,7 +6,7 @@ var ghPages = require('gulp-gh-pages');
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
 gulp.task('deploy', ['build'], function() {
-    return gulp.src('./dist/**/*')
+    return gulp.src('./dist/public/**/*')
         .pipe(ghPages());
 });
 
