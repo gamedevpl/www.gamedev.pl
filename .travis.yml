@@ -3,11 +3,12 @@ node_js:
 - '0.12'
 before_script:
 - npm install -g gulp
-- openssl aes-256-cbc -K $encrypted_6d68858b518f_key -iv $encrypted_6d68858b518f_iv
-  -in .travisdeploykey.enc -out .travisdeploykey -d
 - chmod go-rwx .travisdeploykey
 - eval `ssh-agent -s`
 - ssh-add .travisdeploykey
 - git config --global user.email "gamedevpl@travis-ci.org"
 - git config --global user.name "Travis-CI"
 script: gulp deploy
+before_install:
+- openssl aes-256-cbc -K $encrypted_6d68858b518f_key -iv $encrypted_6d68858b518f_iv
+  -in .travisdeploykey.enc -out .travisdeploykey -d
