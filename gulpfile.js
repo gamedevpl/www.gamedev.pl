@@ -3,6 +3,7 @@ var gulp = require('gulp');
 var serve = require('gulp-serve');
 var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
+var watch = require('gulp-watch');
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -15,9 +16,6 @@ gulp.task('clean', function() {
     return gulp.src('dist/**/*')
         .pipe(rm());
 });
-
-// watch
-var watch = require('gulp-watch');
 
 gulp.task('build', function(done) {
     runSequence('fetch', ['less', 'render', 'assets', 'CNAME'], done);
