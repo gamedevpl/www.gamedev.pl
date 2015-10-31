@@ -1,6 +1,8 @@
 language: node_js
 node_js:
 - '0.12'
+before_install:
+- eval `ssh-agent -s`
 before_script:
 - npm install -g gulp
 - gulp travis-prepare

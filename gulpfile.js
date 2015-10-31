@@ -30,7 +30,7 @@ gulp.task('deploy', ['build'], function() {
 
 gulp.task('travis-prepare', function(done) {
     if (process.env.TRAVIS_PULL_REQUEST === "false") {
-        runSequence("travis-decrypt", "travis-ssh-agent", "travis-ssh-add", "travis-gitconfig", done);
+        runSequence("travis-decrypt", "travis-ssh-add", "travis-gitconfig", done);
     } else {
         console.log("Pull request, skipping.")
         done();
@@ -40,7 +40,6 @@ gulp.task('travis-decrypt', shell([
     'openssl aes-256-cbc -K $encrypted_6d68858b518f_key -iv $encrypted_6d68858b518f_iv -in .travisdeploykey.enc -out .travisdeploykey -d',     
     'chmod go-rwx .travisdeploykey'
 ]));
-gulp.task('travis-ssh-agent', shell('eval `ssh-agent -s`'));
 gulp.task('travis-ssh-add', shell('ssh-add .travisdeploykey'));        
 gulp.task('travis-gitconfig', shell([     
     'git config --global user.email "gamedevpl@travis-ci.org"',
