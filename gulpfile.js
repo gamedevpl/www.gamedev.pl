@@ -1,20 +1,39 @@
+// main tasks
+var gulp = require('gulp');
+var serve = require('gulp-serve');
+var ghPages = require('gulp-gh-pages');
+
+gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
+
+gulp.task('deploy', function() {
+    return gulp.src('./dist/**/*')
+        .pipe(ghPages());
+});
+
+gulp.task('clean', function() {
+    gulp.src('dist/**/*')
+        .pipe(rm());
+});
+
+// watch
+var watch = require('gulp-watch');
+
+gulp.task('build', ['less', 'render', 'assets']);
+
+gulp.task('watch', function() {
+    watch('app/**/*',['build']);
+});
+
+// sub tasks
 var concat = require('gulp-concat');
 var download = require("gulp-download");
 var ext_replace = require('gulp-ext-replace');
-var gulp = require('gulp');
 var jsoncombine = require("gulp-jsoncombine");
 var mustache = require("gulp-mustache");
 var less = require('gulp-less');
 var path = require('path');
 var rename = require("gulp-rename");
 var rm = require('gulp-rm')
-var serve = require('gulp-serve');
-var watch = require('gulp-watch');
-
-gulp.task('clean', function() {
-    gulp.src('dist/**/*')
-        .pipe(rm());
-});
 
 gulp.task('fetch_topics', function() {
     return download("https://forum.gamedev.pl/latest.json")
@@ -63,11 +82,3 @@ gulp.task('assets', function() {
     return gulp.src('app/assets/**/*')
         .pipe(gulp.dest('./dist/public/assets'));
 });
-
-gulp.task('build', ['less', 'render', 'assets']);
-
-gulp.task('watch', function() {
-    watch('app/**/*',['build']);
-});
-
-gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
