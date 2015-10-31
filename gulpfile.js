@@ -4,7 +4,7 @@ var serve = require('gulp-serve');
 var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
-var shell = require('gulp-shell');
+var shell = require('gulp-shell').task;
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -28,12 +28,21 @@ gulp.task('deploy', ['build'], function() {
         }));
 });
 
-console.log("Pull request?", process.env.TRAVIS_PULL_REQUEST);
-gulp.task('travis-prepare', process.env.TRAVIS_PULL_REQUEST === "false" && shell.task([
+gulp.task('travis-prepare', function(done) {
+    if (process.env.TRAVIS_PULL_REQUEST === "false") {
+        runSequence("travis-decrypt", "travis-ssh-agent", "travis-ssh-add", "travis-gitconfig", done);
+    } else {
+        console.log("Pull request, skipping.")
+        done();
+    }
+});        
+gulp.task('travis-decrypt', shell([
     'openssl aes-256-cbc -K $encrypted_6d68858b518f_key -iv $encrypted_6d68858b518f_iv -in .travisdeploykey.enc -out .travisdeploykey -d',     
-    'chmod go-rwx .travisdeploykey',
-    'eval `ssh-agent -s`',
-    'ssh-add .travisdeploykey',
+    'chmod go-rwx .travisdeploykey'
+]));
+gulp.task('travis-ssh-agent', shell('eval `ssh-agent -s`'));
+gulp.task('travis-ssh-add', shell('ssh-add .travisdeploykey'));        
+gulp.task('travis-gitconfig', shell([     
     'git config --global user.email "gamedevpl@travis-ci.org"',
     'git config --global user.name "Travis-CI"'
 ]));
