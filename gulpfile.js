@@ -9,6 +9,7 @@ var path = require('path');
 var rename = require("gulp-rename");
 var rm = require('gulp-rm')
 var serve = require('gulp-serve');
+var watch = require('gulp-watch');
 
 gulp.task('clean', function() {
     gulp.src('dist/**/*')
@@ -58,6 +59,15 @@ gulp.task('less', function() {
         .pipe(gulp.dest('./dist/public/css'));
 });
 
-gulp.task('build', ['less', 'render']);
+gulp.task('assets', function() {
+    return gulp.src('app/assets/**/*')
+        .pipe(gulp.dest('./dist/public/assets'));
+});
 
-gulp.task('serve', ['build'], serve('./dist/public'));
+gulp.task('build', ['less', 'render', 'assets']);
+
+gulp.task('watch', function() {
+    watch('app/**/*',['build']);
+});
+
+gulp.task('serve', ['build', 'watch'], serve('./dist/public'));

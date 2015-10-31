@@ -17,7 +17,8 @@
     "gulp-mustache": "^1.1.1",
     "gulp-rename": "^1.2.2",
     "gulp-rm": "^1.0.0",
-    "gulp-serve": "^1.0.0"
+    "gulp-serve": "^1.0.0",
+    "gulp-watch": "^4.3.5"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -27,7 +28,7 @@
     "url": "git+https://github.com/gamedevpl/www.gamedev.pl.git"
   },
   "author": "Grzegorz Tańczyk",
-  "license": ""SEE LICENSE IN LICENSE"",
+  "license": "SEE LICENSE IN LICENSE",
   "bugs": {
     "url": "https://github.com/gamedevpl/www.gamedev.pl/issues"
   },
