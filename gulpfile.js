@@ -4,16 +4,9 @@ var serve = require('gulp-serve');
 var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
-var git = require('gulp-git');
+var shell = require('gulp-shell');
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
-
-gulp.task('deploy', ['build'], function() {
-    return gulp.src('./dist/public/**/*')
-        .pipe(ghPages({
-            remoteUrl: "git@github.com:gamedevpl/www.gamedev.pl.git"
-        }));
-});
 
 gulp.task('clean', function() {
     return gulp.src('dist/**/*')
@@ -27,6 +20,23 @@ gulp.task('build', function(done) {
 gulp.task('watch', function() {
     watch('app/**/*', ['render']);
 });
+
+gulp.task('deploy', ['build'], function() {
+    return gulp.src('./dist/public/**/*')
+        .pipe(ghPages({
+            remoteUrl: "git@github.com:gamedevpl/www.gamedev.pl.git"
+        }));
+});
+
+console.log("Pull request?", process.env.TRAVIS_PULL_REQUEST);
+gulp.task('travis-prepare', process.env.TRAVIS_PULL_REQUEST === "false" && shell.task([
+    'openssl aes-256-cbc -K $encrypted_6d68858b518f_key -iv $encrypted_6d68858b518f_iv -in .travisdeploykey.enc -out .travisdeploykey -d',     
+    'chmod go-rwx .travisdeploykey',
+    'eval `ssh-agent -s`',
+    'ssh-add .travisdeploykey',
+    'git config --global user.email "gamedevpl@travis-ci.org"',
+    'git config --global user.name "Travis-CI"'
+]));
 
 // sub tasks
 var concat = require('gulp-concat');
