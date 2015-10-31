@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/gamedevpl/www.gamedev.pl.svg?branch=master)](https://travis-ci.org/gamedevpl/www.gamedev.pl)
+[![Build Status](https://travis-ci.org/gamedevpl/www.gamedev.pl.svg?branch=master)](https://travis-ci.org/gamedevpl/www.gamedev.pl) (continous deployment to http://beta.warsztat.io)
 
 # Gamedev.pl
 
