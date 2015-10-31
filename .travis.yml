@@ -2,6 +2,7 @@ language: node_js
 node_js:
 - '0.12'
 before_script:
+- echo "TEST"
 - npm install -g gulp
 - chmod go-rwx .travisdeploykey
 - eval `ssh-agent -s`
