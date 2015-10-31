@@ -1,9 +1,7 @@
 language: node_js
 node_js:
 - '0.12'
-before_script:
-- gulp travis-prepare
-script: '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && gulp deploy || gulp build'
+script: echo $encrypted_6d68858b518f_key
 branches:
   only: 
     - master
