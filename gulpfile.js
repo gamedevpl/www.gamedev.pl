@@ -18,7 +18,7 @@ gulp.task('clean', function() {
 // watch
 var watch = require('gulp-watch');
 
-gulp.task('build', ['less', 'render', 'assets']);
+gulp.task('build', ['less', 'render', 'assets', 'CNAME']);
 
 gulp.task('watch', function() {
     watch('app/**/*',['build']);
@@ -81,4 +81,9 @@ gulp.task('less', function() {
 gulp.task('assets', function() {
     return gulp.src('app/assets/**/*')
         .pipe(gulp.dest('./dist/public/assets'));
+});
+
+gulp.task('CNAME', function() {
+    return gulp.src('CNAME')
+        .pipe(gulp.dest('./dist/public'));
 });
