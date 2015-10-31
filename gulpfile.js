@@ -15,7 +15,7 @@ gulp.task('deploy', ['build'], function() {
 
 gulp.task('travis-config', function(done) {
     git.removeRemote('origin');
-    git.addRemote('origin', 'https://'+process.env.GH_TOKEN+'@github.com:gamedevpl/www.gamedev.pl.git', function (err) {
+    git.addRemote('origin', 'https://'+process.env.GH_TOKEN+'@github.com/gamedevpl/www.gamedev.pl.git', function (err) {
         if (err) throw new Error('git remote not configured'); else done();
     });
 });
