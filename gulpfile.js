@@ -4,6 +4,7 @@ var serve = require('gulp-serve');
 var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
+var git = require('gulp-git');
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
