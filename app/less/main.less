@@ -20,10 +20,12 @@ a:visited{
     color: #dedede;
 }
 
+/* header */
+
 header {
     background: #1d2123;
-    
-    
+    border-radius: 4px;
+     
     h1.logo {
         width: 369px;
         height: 79px;
@@ -35,3 +37,29 @@ header {
         }
     }
 }
+
+/* sections */
+
+main {    
+    section {
+        width: 50%;
+        float: left;
+    }
+    
+    &:after {
+        content:'';
+        display:block;
+        clear: both;
+    }
+}
+
+/* content list */
+
+.content-list {
+    background: #1d2123;
+    border-radius: 4px;
+}
+
+
+@import "./highlights.less";
+@import "./topic-list.less";

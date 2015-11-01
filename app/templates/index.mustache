@@ -10,11 +10,18 @@
             </h1>
         </header>
         <main>
-            {{#topics}}
-                {{#topic_list}}
-                    {{> ../partials/topics }}
-                {{/topic_list}}
-            {{/topics}}
+            <section class="highlights">
+                {{> ../partials/highlights }}
+            </section>
+            <section class="content-list">
+	            {{#topics}}
+	                {{#topic_list}}
+	                    {{> ../partials/topics }}
+	                {{/topic_list}}
+	            {{/topics}}
+            </section>
+            <section class="content-list">
+            </section>
         </main>
         <footer>Gamedev.pl</footer>
     </body>

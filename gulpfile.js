@@ -68,7 +68,12 @@ gulp.task('fetch_topics', function() {
 gulp.task('fetch_highlights', function() {
     return gulp.src("highlights/*.json")
         .pipe(jsoncombine("highlights.json", function(data) {
-            return new Buffer(JSON.stringify(data));
+            return new Buffer(JSON.stringify(Object.keys(data).map(function(key) {
+                return {
+                    key: key,
+                    data: data[key]
+                }
+            })));
          }))
         .pipe(gulp.dest('./dist'));
 });
@@ -102,10 +107,17 @@ gulp.task('less', function() {
         .pipe(gulp.dest('./dist/public/css'));
 });
 
-gulp.task('assets', function() {
+gulp.task('assets-app', function() {
     return gulp.src('app/assets/**/*')
         .pipe(gulp.dest('./dist/public/assets'));
 });
+
+gulp.task('assets-highlights', function() {
+    return gulp.src('highlights/*.png')
+        .pipe(gulp.dest('./dist/public/assets/highlights'));
+});
+
+gulp.task('assets', ['assets-app', 'assets-highlights']);
 
 gulp.task('CNAME', function() {
     return gulp.src('CNAME')
