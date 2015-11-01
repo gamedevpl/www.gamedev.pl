@@ -18,7 +18,9 @@ gulp.task('build', function(done) {
 });
 
 gulp.task('watch', function() {
-    watch('app/**/*', ['render']);
+    watch('app/**/*', function() { 
+        runSequence('render'); 
+    });
 });
 
 gulp.task('deploy', ['build'], function() {
