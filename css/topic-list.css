@@ -1,0 +1,9 @@
+.topic-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.topic-list__topic-item {
+  border-top: 1px solid #484848;
+  padding: 25px 20px;
+}

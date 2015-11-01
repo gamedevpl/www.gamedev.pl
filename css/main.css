@@ -14,8 +14,10 @@ a {
 a:visited {
   color: #dedede;
 }
+/* header */
 header {
   background: #1d2123;
+  border-radius: 4px;
 }
 header h1.logo {
   width: 369px;
@@ -24,4 +26,28 @@ header h1.logo {
 }
 header h1.logo span {
   display: none;
+}
+/* sections */
+main section {
+  width: 50%;
+  float: left;
+}
+main:after {
+  content: '';
+  display: block;
+  clear: both;
+}
+/* content list */
+.content-list {
+  background: #1d2123;
+  border-radius: 4px;
+}
+.topic-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.topic-list__topic-item {
+  border-top: 1px solid #484848;
+  padding: 25px 20px;
 }
