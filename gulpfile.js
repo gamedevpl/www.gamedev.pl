@@ -19,7 +19,7 @@ gulp.task('build', function(done) {
 
 gulp.task('watch', function() {
     watch('app/**/*', function() { 
-        runSequence('render'); 
+        runSequence('less', 'render', 'assets'); 
     });
 });
 
