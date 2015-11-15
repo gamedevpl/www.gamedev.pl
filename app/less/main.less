@@ -14,29 +14,12 @@ a {
     color: #dddddd;   
     font-weight: bold;
     text-decoration: none;
+    transition-duration:.3s;
+    -webkit-transition-duration:.3s
 }
 
 a:hover{
     color: white;   
-}
-
-/* header */
-
-header {
-    background: #1d2123;
-    margin: 0 10px;
-    border-radius: 4px;
-     
-    h1.logo {
-        width: 369px;
-        height: 79px;
-        
-        background: url(../assets/logo.png);
-        
-        span {
-            display: none;
-        }
-    }
 }
 
 /* sections */
@@ -63,6 +46,7 @@ main {
 }
 
 
+@import "./header.less";
 @import "./highlights.less";
 @import "./topic-list.less";
 @import "./footer.less";
