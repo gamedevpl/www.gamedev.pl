@@ -17,15 +17,16 @@ a:hover {
 /* header */
 header {
   background: #1d2123;
-  margin: 0 10px;
+  margin: 20px 10px;
   border-radius: 4px;
 }
-header h1.logo {
+header h1#logo {
   width: 369px;
   height: 79px;
+  margin: 0;
   background: url(../assets/logo.png);
 }
-header h1.logo span {
+header h1#logo span {
   display: none;
 }
 /* sections */
