@@ -8,16 +8,26 @@ body {
     margin: 10px auto;
     
     font-family: 'Open Sans', sans-serif;
+    @font-face {
+      font-family: 'fontello';
+      src: url('./font/fontello.eot?23286411');
+      src: url('./font/fontello.eot?23286411#iefix') format('embedded-opentype'),
+           url('./font/fontello.woff?23286411') format('woff'),
+           url('./font/fontello.ttf?23286411') format('truetype'),
+           url('./font/fontello.svg?23286411#fontello') format('svg');
+      font-weight: normal;
+      font-style: normal;
+    }
 }
 
 a {
-    color: white;
+    color: #dddddd;   
     font-weight: bold;
     text-decoration: none;
 }
 
-a:visited{
-    color: #dedede;
+a:hover{
+    color: white;   
 }
 
 /* header */
@@ -65,3 +75,4 @@ main {
 
 @import "./highlights.less";
 @import "./topic-list.less";
+@import "./footer.less";
