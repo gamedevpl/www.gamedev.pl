@@ -4,27 +4,43 @@
         {{> ../partials/assets}}
     </head>
     <body>
-        <header>
-            <h1 id="logo">
-                <span>Gamedev.pl</span>
-            </h1>
-        </header>
-        <main>
-            <section id="highlights">
-                {{> ../partials/highlights }}
-            </section>
-            <section class="content-list">
-	            {{#topics}}
-	                {{#topic_list}}
-	                    {{> ../partials/topics }}
-	                {{/topic_list}}
-	            {{/topics}}
-            </section>
-            <section class="content-list">
-            </section>
-        </main>
-        <footer>
-            {{> ../partials/footer}}
-        </footer>
+        <section id="top-bar">
+            <div class="container">
+                <p class="gray-color"><span class="midgray-color">Witaj, Nieznajomy.</span> Obecnie jesteś niezalogowany. <button id="login-btn"><span class="bold">Zaloguj</span> się <div class="icon"><img src="../assets/register-icon.png"></div></button> <span class="turquoise-color"> bądź </span> <button id="login-btn" class="bold">zarejestruj</span> <div class="icon"><img src="../assets/login-icon.png"></div></button></p>
+            </div>
+            
+        </section>
+        <div class="container">
+            <header>
+                <a href="">
+                    <h1 id="logo">                    
+                        <span>Gamedev.pl</span>                
+                    </h1>
+                </a>
+                <nav id="main-menu">
+                    <ul>
+                        <li><a href="#">Home</a></li><li><a href="#">Oferty pracy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Użytkownicy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Forum<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Odznaki<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <h2>Co nowego?</h2> 
+                <section id="highlights">
+                    {{> ../partials/highlights }}
+                </section>
+                <section class="content-list">
+    	            {{#topics}}
+    	                {{#topic_list}}
+    	                    {{> ../partials/topics }}
+    	                {{/topic_list}}
+    	            {{/topics}}
+                </section>
+                <section class="content-list">
+                </section>
+            </main>
+            <footer>
+                {{> ../partials/footer}}
+            </footer>
+        </div>
     </body>
 </html>
