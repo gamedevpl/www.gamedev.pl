@@ -4,18 +4,33 @@
 <link href="/css/main.css" media="all" rel="stylesheet" />
 <link rel="stylesheet" href="/css/fontello.css" type="text/css" />    </head>
     <body>
-        <header>
-            <h1 id="logo">
-                <span>Gamedev.pl</span>
-            </h1>
-        </header>
-        <main>
-            <section id="highlights">
+        <section id="top-bar">
+            <div class="container">
+                <p class="gray-color"><span class="midgray-color">Witaj, Nieznajomy.</span> Obecnie jesteś niezalogowany. <button id="login-btn"><span class="bold">Zaloguj</span> się <div class="icon"><img src="../assets/register-icon.png"></div></button> <span class="turquoise-color"> bądź </span> <button id="login-btn" class="bold">zarejestruj</span> <div class="icon"><img src="../assets/login-icon.png"></div></button></p>
+            </div>
+            
+        </section>
+        <div class="container">
+            <header>
+                <a href="">
+                    <h1 id="logo">                    
+                        <span>Gamedev.pl</span>                
+                    </h1>
+                </a>
+                <nav id="main-menu">
+                    <ul>
+                        <li><a href="#">Home</a></li><li><a href="#">Oferty pracy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Użytkownicy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Forum<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Odznaki<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <h2>Co nowego?</h2> 
+                <section id="highlights">
     <div class="highlights_item">
         <img src="/assets/highlights/highlight-redesign.png" />
     </div>
-            </section>
-            <section class="content-list">
+                </section>
+                <section class="content-list">
 <ul class="topic-list">                
         <li class="topic-list__topic-item">
             <a href="https://forum.gamedev.pl/t/nowe-forum-o-tworzeniu-gier/8">Nowe forum o tworzeniu gier</a>
@@ -24,13 +39,22 @@
             <a href="https://forum.gamedev.pl/t/crazy-towers-wciagajaca-gra-na-androida/230">Crazy Towers - wciągająca gra na Androida</a>
         </li>
         <li class="topic-list__topic-item">
+            <a href="https://forum.gamedev.pl/t/poszukuje-osob-chetnych-do-wspolpracy/232">Poszukuję osób chętnych do współpracy</a>
+        </li>
+        <li class="topic-list__topic-item">
+            <a href="https://forum.gamedev.pl/t/advanced-pirates-monsters/180">Advanced Pirates &amp; Monsters</a>
+        </li>
+        <li class="topic-list__topic-item">
+            <a href="https://forum.gamedev.pl/t/ue-unity-do-izometrycznej-gry-3d-ktory-wybrac/105">UE&#x2F;Unity do izometrycznej gry 3D - który wybrać?</a>
+        </li>
+        <li class="topic-list__topic-item">
+            <a href="https://forum.gamedev.pl/t/sciezka-w-unreal-engine-4/151">Ścieżka w Unreal engine 4</a>
+        </li>
+        <li class="topic-list__topic-item">
             <a href="https://forum.gamedev.pl/t/detekcja-zdarzen/224">Detekcja zdarzeń</a>
         </li>
         <li class="topic-list__topic-item">
             <a href="https://forum.gamedev.pl/t/praca-zdalna-od-10-do-40-godz-tyg-do-wymagajacej-gry-3d-w-c-do-uzgodnienia/221">Praca zdalna od 10 do 40 godz&#x2F;tyg do wymagajacej gry 3D w C++, $$ do uzgodnienia</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/advanced-pirates-monsters/180">Advanced Pirates &amp; Monsters</a>
         </li>
         <li class="topic-list__topic-item">
             <a href="https://forum.gamedev.pl/t/grafik-2d-koncept-artysta-ilustrator-do-przygarniecia/217">Grafik 2d, koncept artysta, ilustrator - do przygarnięcia</a>
@@ -98,21 +122,12 @@
         <li class="topic-list__topic-item">
             <a href="https://forum.gamedev.pl/t/pomoc-z-wyjasnieniem-animacji/153">Pomoc z wyjaśnieniem animacji</a>
         </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/sciezka-w-unreal-engine-4/151">Ścieżka w Unreal engine 4</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/blindshot-gra-na-urzadzenia-mobilne-o-komandosie-ofermie/146">blindShot - Gra na urządzenia mobilne, o komandosie - ofermie</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/john-carmack-o-renderowaniu-netflixa-w-oculus-vr/144">John Carmack o renderowaniu Netflixa w Oculus VR</a>
-        </li>
 </ul>
-            </section>
-            <section class="content-list">
-            </section>
-        </main>
-        <footer>
+                </section>
+                <section class="content-list">
+                </section>
+            </main>
+            <footer>
 <div id="footer-info">Wszelkie prawa zastrzeżone <a href="http://www.gamedev.pl">Gamedev.pl</a></div>
   <div id="footer-color"><a href="#top"><div id="footer-go-top">IDŹ W GÓRĘ <i class="icon-up-open"></i></div></a></div>
   <div id="border-footer"></div>
@@ -122,6 +137,7 @@
     <a href="#"><i class="icon-linkedin"></i></a>
     <a href="#"><i class="icon-youtube"></i></a>
     <a href="#"><i class="icon-rss"></i></a>
-</div>        </footer>
+</div>            </footer>
+        </div>
     </body>
 </html>
