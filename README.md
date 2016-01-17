@@ -16,6 +16,7 @@ Requirements:
 - nodejs
 - npm
 - gulp
+- https://git-lfs.github.com/
 
 How to run:
 
