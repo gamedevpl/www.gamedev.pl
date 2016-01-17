@@ -1,0 +1,14 @@
+.nav-social {
+	li {
+		display: inline-block;
+	}	
+
+	[class^="icon-"] {
+		color: $gray-iron;
+		font-size: em(26);
+
+		&:hover {
+			color: $turquoise;
+		}
+	}
+}

@@ -1,0 +1,80 @@
+@mixin antialias {
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+@mixin clear {
+	clear: both;
+	
+	&:after {
+		clear: both;
+		display: block;
+		content: '';
+	}
+}
+
+@mixin font( $font-name, $font-size, $line-height ) {
+	@include antialias;
+	font-family: '#{$font-name}';
+	font-size: em($font-size);
+	line-height: #{$line-height}em;
+}
+
+@mixin font-face-db( $font-name, $font-filename, $font-weight ){
+  @font-face {
+    font-family: $font-name;
+    src: url('../font/' + $font-filename + '.eot');
+    src: url('../font/' + $font-filename + '.eot?#iefix') format('embedded-opentype'),
+         url('../font/' + $font-filename + '.woff') format('woff'),
+         url('../font/' + $font-filename + '.ttf') format('truetype'),
+         url('../font/' + $font-filename + '.svg#' + $font-filename ) format('svg');
+    font-weight: $font-weight; font-style: normal;
+  }
+}
+
+@mixin gradient( $start, $stop: darken( $start, 8% ), $dir: top ){
+	$experimental-support-for-svg: true;
+	//@include background( linear-gradient( $dir, $start, $stop ) );
+	@include background( linear-gradient( $dir, $start, $stop ) );
+	@include filter-gradient($start, $stop, $dir);
+}
+/* @include gradient( darken( red, 10% ), white ); */
+
+@mixin hide-text{
+	text-indent: -2007px;
+	overflow: hidden;
+}
+
+@mixin hover {
+	@include transition-property(all);
+	@include transition-duration(0.2s);
+}
+
+@mixin input-placeholder($selector: "") {
+	@if $experimental-support-for-webkit {
+		#{$selector}::-webkit-input-placeholder { @content; }
+	}
+	@if $experimental-support-for-mozilla {
+		#{$selector}:-moz-placeholder { @content; }
+	}
+	@if $experimental-support-for-microsoft {
+		#{$selector}:-ms-input-placeholder { @content; }
+	}
+}
+
+$prefixes: ("-webkit-","-moz-", "-o-", "");
+@mixin selection($color, $background) {
+    @each $prefix in $prefixes {
+        ::#{$prefix}selection {
+            color: $color;
+            background: $background;
+        }
+    }
+}
+
+@mixin wrapper {
+	@include clear;
+	position: relative; z-index: 10;
+	max-width: $grid-base-width+px;
+	margin: 0 auto;
+}

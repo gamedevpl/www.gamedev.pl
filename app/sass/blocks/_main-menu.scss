@@ -1,0 +1,92 @@
+#main-menu {
+	position: absolute;
+	right: 395px;
+	top: 45px;
+	z-index: 5;
+	
+	li {
+		float: left;		
+		
+		a {
+			@include antialias;
+			@include box-shadow($gray-emperor 1px 0 0);
+			display: block;
+			position: relative; z-index: 5;
+			height: 55px;
+			padding: 0 25px;
+			font: {
+				family: $proxima;
+				size: em(16);
+				weight: $bold;
+			}
+			color: white;
+			
+			&:after, &:before {
+				position: absolute; z-index: 10;
+				display: block;
+				background-color: $turquoise;
+			}
+			
+			&:after {
+				bottom: -3px;
+				left: 0;
+				width: 100%;
+				height: 6px;
+				content: ' ';
+			}
+			
+			&:before {
+				position: absolute; z-index: 10;
+				bottom: -12px; right: 0;
+				width: 15px; height: 12px;
+				text-align: center;
+				font: {
+					family: $icons;
+					style: normal;
+					weight: normal;
+					size: 16px;
+				}
+				speak: none;
+				content: '\e80b';
+				line-height: 10px;
+				color: white;
+			}
+			
+			&:hover {
+				&:after {
+					height: 10px;
+				}
+			}
+		}
+		
+		&:nth-child(2) a {
+			&:after, &:before {
+				background-color: $blue;
+			}
+		}
+		
+		&:nth-child(3) a {
+			&:after, &:before {
+				background-color: $yellow;
+			}
+		}
+		
+		&:nth-child(4) a {
+			&:after, &:before {
+				background-color: $green;
+			}
+		}
+		
+		&:nth-child(5) a {
+			&:after, &:before {
+				background-color: $red;
+			}
+		}
+		
+		&.current-menu-item a {
+			&:before {
+				display: none;
+			}
+		}
+	}
+}

@@ -1,0 +1,56 @@
+#header {
+	position: relative;
+	height: 100px;
+	background-color: $gray-shark;
+	margin-bottom: 30px;
+	
+	.logo {
+		@include antialias;
+		position: absolute;
+		left: 20px; top: 20px;
+		display: block;
+		text-transform: uppercase;
+		font: {
+			family: $proxima;
+			size: em(44);
+			weight: $bold;
+		}
+		line-height: 60px;
+		color: white;
+		
+		img {
+			display: inline-block;
+			margin-right: 10px;
+			vertical-align: bottom;
+		}
+		
+		.turquoise {
+			font-weight: $light;
+		}
+	}
+	
+	.nav-social {
+		position: absolute;
+		right: 120px; top: 0; z-index: 5;
+		
+		[class^="icon-"] {
+			line-height: 100px;
+		}
+	}
+	
+	.search-trigger {
+		position: absolute; right: 0; top: 0; z-index: 5;
+		display: block;
+		width: 100px; height: 100px;
+		border-left: 1px solid $gray-shaft;
+		text-align: center;
+		line-height: 100px;
+		font-size: em(30);
+		color: $gray;
+		
+		&:hover {
+			background-color: $turquoise;
+			color: white;
+		}
+	}
+}

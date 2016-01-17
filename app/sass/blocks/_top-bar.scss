@@ -1,0 +1,250 @@
+#top-bar {
+	position: relative; z-index: 15; 
+	background-color: $gray-shark;
+	height: 68px;
+	margin-bottom: 20px;
+	color: white;
+	
+	.text {
+		display: inline-block;
+		margin-right: 15px;
+		line-height: 68px;
+		font-size: em(14);
+	}
+
+	.panel-select {
+		position: absolute;
+		top: 15px; z-index: 10;
+		
+		.text {
+			float: right;
+			margin-right: 15px;
+			line-height: 36px;
+			font: {
+				size: em(12);
+				weight: $light;
+			}
+			color: #959595;
+		}
+		
+		.sbHolder {
+			float: right;
+			width: 180px;
+		}
+		
+		.sbSelector {
+			@include antialias;
+			@include gradient(#313536, #292c2d);
+			@include border-radius(3px);
+			@include box-shadow( rgba(0,0,0,.28) 0 1px 1px);
+			@include text-shadow( rgba(0,0,0,.28) 0 1px 1px);
+			border: 1px solid rgba(white, .1);
+			border-bottom: none;
+			text-transform: uppercase;
+			font: {
+				family: $proxima;
+				size: em(14);
+				weight: $semibold;
+			}
+			color: $gray-mercury;
+		}
+		
+		.sbOptions {
+			@include box-shadow(rgba(0,0,0,.3) 0 2px 4px);
+			background-color: #2c2d2f;
+			
+			li {		
+				a {
+					margin: 1px 0;
+					padding: 3px 10px;
+					text-transform: uppercase;
+					font: {
+						size: em(11);
+						weight: $light;
+					}
+					color: $gray-mercury;
+		
+					&:hover {
+						color: white;
+					}
+				}
+			}
+		}
+		
+		.sbToggle {
+			@include border-top-right-radius(5px);
+			@include border-bottom-right-radius(5px);
+
+			&:after {
+				position: absolute;
+				left: 0; top: 0; z-index: 5;
+				width: 100%; height: 100%;
+				line-height: 34px;
+				font: {
+					family: $icons;
+					size: 12px;
+				}
+				content: '\e80f';
+				color: white;
+			}			
+		}
+	}
+	
+	&.not-logged {		
+		.btn {
+			@include antialias;
+			height: 28px;
+			border: 1px solid white;
+			padding: 0 50px 0 10px;
+			line-height: 26px;
+			text-transform: uppercase;
+			font: {
+				family: $proxima;
+				weight: $bold;
+			}
+
+			&:hover {
+				color: $turquoise;
+			}		
+			
+			&:after {
+				position: absolute; right: 0; top: 0;
+				display: block;
+				width: 32px; height: 26px;
+				border-left: 1px solid white;
+			}	
+			
+			&.login {
+				margin-right: 15px;
+				
+				&:after {
+					background: {
+						image: url(../assets/icon-login.png);
+						repeat: no-repeat;
+						position: center center;
+					}
+					content: ' ';
+				}
+			}
+			
+			&.register {				
+				&:after {
+					text-align: center;
+					font: {
+						family: $icons;
+						size: em(12);
+						style: normal;
+						weight: normal;
+					}
+					speak: none;
+					line-height: 24px;
+					content: '\e80a';
+				}
+			}
+		}
+		
+		.container {
+			padding: 0 50px;
+		}
+		
+		.panel-select {
+			right: 50px;
+			
+			.sbOptions {				
+				li {		
+					a {
+						&:hover {
+							background-color: $turquoise;
+						}
+					}
+				}
+			}
+
+			.sbToggle {
+				@include gradient(#00daa8, #009271);
+				border-top: 1px solid #33ffd1;
+			}
+		}
+	}
+	
+	&.logged {
+		.container {
+			padding: 0 10px;
+		}
+			
+		.panel-select {
+			right: 50px;
+			
+			.sbOptions {				
+				li {		
+					a {
+						&:hover {
+							@include gradient(#ff0015, #d20414);
+						}
+					}
+				}
+			}
+			
+			.sbToggle {
+				@include gradient(#ff0015, #d20414);
+				border-top: 1px solid #ff0015;
+			}
+		}
+	}
+	
+	.user-info {
+		display: inline-block;
+		margin-right: 35px;
+		padding-top: 11px;
+		font-size: em(14);
+		
+		.info {
+			display: inline-block;
+			vertical-align: middle;
+			line-height: 1.2;
+		}
+		
+		.name {
+			white-space: nowrap;
+			font: {
+				size: 16px;
+				weight: $semibold;
+			}
+			color: $green-cari;
+			
+			&:hover {
+				text-decoration: underline;
+			}
+		}
+		
+		.logout {
+			display: block;	
+			font-size: em(11);
+			color: $gray-boulder;
+			
+			&:after {
+				margin-left: 5px;
+				font-family: $icons;
+				content: '\e811';
+				color: #7c7c7c;
+			}
+			
+			&:hover {
+				color: $green-cari;
+				
+				&:after {
+					color: #7c7c7c;
+				}
+			}
+		}
+		
+		.photo {
+			display: inline-block;
+			width: 50px; height: 46px;
+			border: 1px solid #5e5e5e;
+			margin-right: 10px;
+			vertical-align: middle;
+		}
+	}
+}
+

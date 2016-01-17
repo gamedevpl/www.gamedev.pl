@@ -1,0 +1,146 @@
+#highlights {
+	float: left;
+	position: relative;
+	width: 755px;
+
+	h2 {
+		margin-bottom: .5em;
+		font: {
+			size: em(44);
+			weight: $light;
+		}
+		color: $turquoise;
+	}
+	
+	.archive {
+		position: absolute; right: 0; top: 0;
+		padding-right: 80px;
+		text-transform: uppercase;
+		line-height: 52px;
+		color: white;
+		
+		&:after {
+			position: absolute; right: 0; top: 0;
+			display: block;
+			width: 54px; height: 52px;
+			background: {
+				image: url(../assets/icon-archive.png);
+				repeat: no-repeat;
+				position: right center;
+				color: $gray-emperor;
+			}
+			border-left: 6px solid $blue;
+			content: ' ';
+		}
+		
+		&:hover {
+			&:after {
+				background-color: $turquoise;
+				border-color: white;
+			}
+			color: $turquoise;
+		}
+	}
+	
+	.slider {
+		display: none;
+		position: relative;
+		width: 100%;
+		margin-bottom: 35px;
+
+		.rsSlide {
+			img {
+				position: relative; z-index: 5;
+			}
+			
+			article {
+				position: absolute; z-index: 10;
+				left: 0; bottom: 0;
+
+				h4 {
+					@include gradient(rgba(0,0,0,0), #242424);
+					line-height: 1;
+					padding: 25px 110px 0 25px;
+					font: {
+						size: em(44);
+						weight: $bold;
+					}
+					color: white;
+				}
+				
+				p {
+					@include gradient(#242424, #060606);
+					position: relative;
+					padding: 10px 420px 25px 25px;
+					font: {
+						size: em(13);
+						weight: $light;
+					}
+					color: #bebebe;
+				}
+				
+				.more {
+					position: absolute; right: 110px; top: 10px;
+					font: {
+						size: em(16);
+						weight: $light;
+					}
+					color: $green-jungle;
+					
+					&:hover {
+						color: white;
+					}
+				}
+			}
+		}
+	}
+
+	.outerCont {
+		position: absolute; bottom: 45px; right: 25px; z-index: 10;
+		text-align: right;
+
+		.rsNav {
+			&.rsBullets {
+				display: inline-block;
+		
+				.rsBullet {
+					@include border-radius( 50% );
+					@include hover;
+					position: relative;
+					background-color: #adadad;
+					display: inline-block;
+					width: 12px; height: 12px;
+					margin: 0 3px;
+					cursor: pointer;
+			
+					&.rsNavSelected {
+						background-color: $turquoise;
+					}
+					
+					&:hover {
+						background-color: white;
+					}
+				}
+			}
+		}
+	}
+	
+	.highlights {
+		.item {
+			@include border-radius(5px);
+			float: left;
+			width: 368px;
+			margin-bottom: 35px;
+			overflow: hidden;
+			
+			&:nth-child(even) {
+				float: right;
+				width: 356px;
+			}
+		}
+	}
+	
+	.video {
+		margin-bottom: 25px;
+	}
+}

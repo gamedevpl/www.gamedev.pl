@@ -1,0 +1,65 @@
+body .container > footer {
+	@include border-radius(5px);
+	@include clear;
+	background-color: $gray-thunder;
+	margin-bottom: 80px;
+	height: 60px;
+	padding: 0 20px;
+	
+	.copyrights {
+		@include antialias;
+		float: left;
+		font: {
+			size: em(13);
+			weight: $semibold;
+		}
+		line-height: 60px;
+		color: $gray2;
+		
+		a {
+			color: $turquoise;
+			
+			&:hover {
+				color: white;
+			}
+		}
+	}
+	
+	.go-top {
+		@include antialias;
+		float: right;
+		border-left: 1px solid #464545;
+		padding: 0 0 0 20px;
+		text-transform: uppercase;
+		font-size: em(14);
+		line-height: 60px;
+		color: $gray-silver2;
+		
+		&:after {
+			margin-left: 10px;
+			font: {
+				family: $icons;
+				size: 16px;
+			}
+			content: '\e80c';
+			color: #d3d2d2;
+		}
+		
+		&:hover {
+			color: $turquoise;
+			
+			&:after {
+				color: $turquoise;
+			}
+		}
+	}
+	
+	.nav-social {
+		float: right;
+		margin-right: 10px;
+		
+		[class^="icon-"] {
+			line-height: 60px;
+		}
+	}
+}

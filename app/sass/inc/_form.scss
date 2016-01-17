@@ -1,0 +1,28 @@
+button,
+input[type='submit'] {
+	@include hover;
+	cursor: pointer;
+}
+
+input,
+textarea {
+    -webkit-appearance: none;
+    border-radius: 0;
+}
+
+input, button, textarea {
+	background-color: transparent;
+	border: none;
+	outline: none;
+	line-height: 1.5;
+	font-family: $text;
+	font-size: #{$base-font-size}px;
+}
+
+textarea {
+	resize: none;
+}
+
+input[type=text] {
+	width: 100%;
+}
