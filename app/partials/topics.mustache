@@ -43,6 +43,52 @@
 					{{/topics}}
 
 					</tbody>
+				</table>
+				
+				<table class="topic-list">
+					<thead>
+						<tr>
+							<th>temat</th>
+							<th>kategoria</th>
+							<th class="align-center">odpowiedzi</th>
+							<th class="align-center">odsłony</th>
+							<th class="align-center">użytkownicy</th>
+						</tr>
+					</thead>
+					
+					<tbody>
+					
+					{{#topics}}
+						<tr>
+							<td>
+								<a href="https://forum.gamedev.pl/t/{{slug}}/{{id}}" class="topic">{{title}}</a>
+							</td>
+							<td>
+								<a class="btn blue-bg">Forum i warsztat</a>
+							</td>
+							<td class="align-center">
+								<span class="answer"><span class="num">12</span></span>
+							</td>
+							<td class="align-center">
+								<span class="views">
+									<i class="icon-heart-empty"></i> <span class="num">166</span>
+								</span>
+							</td>
+							<td class="align-center">
+								<span class="user border">
+									<img src="assets/user.jpg" alt="user" />
+								</span>
+								<span class="user">
+									<img src="assets/user.jpg" alt="user" />
+								</span>
+								<span class="user">
+									<img src="assets/user.jpg" alt="user" />
+								</span>
+							</td>
+						</tr>
+					{{/topics}}
+
+					</tbody>
 				</table>				
 			</div>
 			
