@@ -139,19 +139,9 @@ jQuery(function($) {
 		Layout.init();
 		Slider.init();
 		
-		var Modernizr;
-
 	    // js is on
 	    $('html').removeClass('no-js');
 
-		if (!Modernizr.input.placeholder) {
-	        var inputs = $('input[placeholder], textarea[placeholder]');
-	        Modernizr.load([{
-	            load:'js/jquery.placeholder.min.js',
-	            complete:function () {
-	                inputs.placeholder();
-	            }
-	        }]);
-	    }
+		
 	});
 });

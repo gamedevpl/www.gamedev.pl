@@ -270,6 +270,13 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
     content: ''; }
 
+.column.left {
+  float: left;
+  width: 755px; }
+.column.right {
+  float: right;
+  width: 760px; }
+
 .container {
   clear: both;
   position: relative;
@@ -480,16 +487,8 @@ input[type=text] {
   -moz-border-radius: 5px;
   -webkit-border-radius: 5px;
   border-radius: 5px;
-  float: right;
-  width: 760px;
   margin-bottom: 25px;
   color: white; }
-  .content-list.forum {
-    background-color: #1d2123; }
-    .content-list.forum header {
-      padding: 25px 20px; }
-      .content-list.forum header h3 {
-        margin: 3px 15px 0 0; }
   .content-list.jobs {
     background-color: #232323;
     margin-bottom: 50px; }
@@ -611,191 +610,6 @@ input[type=text] {
     .content-list header .logo {
       float: right;
       margin-right: 20px; }
-  .content-list .jobs-list {
-    width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.05); }
-    .content-list .jobs-list tr td {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      padding: 21px 25px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      border-right: 1px solid rgba(255, 255, 255, 0.05);
-      font-family: "Montserrat";
-      font-weight: 400;
-      line-height: 1; }
-      .content-list .jobs-list tr td.action {
-        padding: 0;
-        width: 60px;
-        text-align: center;
-        font-size: 24px;
-        color: rgba(255, 255, 255, 0.2); }
-        .content-list .jobs-list tr td.action .icon-cancel {
-          font-size: 14px; }
-        .content-list .jobs-list tr td.action .icon-star-empty {
-          font-size: 24px; }
-      .content-list .jobs-list tr td.no-border {
-        border-right: none; }
-      .content-list .jobs-list tr td a:hover {
-        color: #00e4ac; }
-      .content-list .jobs-list tr td .dark {
-        filter: progid:DXImageTransform.Microsoft.Alpha(Opacity=60);
-        opacity: 0.6; }
-      .content-list .jobs-list tr td .date {
-        color: #7e7e7e; }
-      .content-list .jobs-list tr td .info {
-        margin-right: 10px;
-        line-height: 1;
-        padding: 3px 3px;
-        text-transform: uppercase;
-        font-size: 12px;
-        color: white; }
-  .content-list .topic-list {
-    width: 100%; }
-    .content-list .topic-list th {
-      text-transform: uppercase;
-      font-family: "Proxima Nova";
-      font-size: 0.8em;
-      font-weight: 300;
-      color: #909497; }
-    .content-list .topic-list td {
-      font-family: "Montserrat"; }
-      .content-list .topic-list td .topic {
-        background-image: url(../assets/icon-arrow-right.png);
-        background-repeat: no-repeat;
-        background-position: left top;
-        padding: 0 0 5px 35px; }
-        .content-list .topic-list td .topic:hover {
-          color: #00e4ac; }
-    .content-list .topic-list th, .content-list .topic-list td {
-      border-bottom: 1px solid #363637;
-      padding: 10px; }
-    .content-list .topic-list tr:first-child th:first-child {
-      padding-left: 20px; }
-    .content-list .topic-list tr td:first-child {
-      padding-left: 20px; }
-    .content-list .topic-list tbody tr:nth-child(even) {
-      background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4gPHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkIiBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgeDE9IjAuNSIgeTE9IjAuMCIgeDI9IjAuNSIgeTI9IjEuMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzJlMmUyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzFkMjEyMyIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JhZCkiIC8+PC9zdmc+IA==');
-      background: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, #2e2e2e), color-stop(100%, #1d2123));
-      background: -moz-linear-gradient(top, #2e2e2e, #1d2123);
-      background: -webkit-linear-gradient(top, #2e2e2e, #1d2123);
-      background: linear-gradient(to bottom, #2e2e2e, #1d2123);
-      *zoom: 1;
-      filter: progid:DXImageTransform.Microsoft.gradient(gradientType=1, startColorstr='#FF2E2E2E', endColorstr='#FF1D2123'); }
-    .content-list .topic-list i {
-      font-family: "Icons";
-      font-style: normal;
-      font-weight: normal;
-      speak: none; }
-    .content-list .topic-list .answer {
-      display: inline-block;
-      width: 18px;
-      height: 18px;
-      background-image: url(../assets/icon-answer.png);
-      background-repeat: no-repeat;
-      padding: 0 0 0 25px;
-      line-height: 15px; }
-    .content-list .topic-list .btn {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      -moz-border-radius: 3px;
-      -webkit-border-radius: 3px;
-      border-radius: 3px;
-      display: block;
-      padding: 6px 10px;
-      line-height: 1;
-      white-space: nowrap;
-      text-transform: uppercase;
-      text-align: center;
-      font-family: "Proxima Nova";
-      font-size: 0.8em;
-      font-weight: 700;
-      color: white; }
-    .content-list .topic-list .views i {
-      font-size: 18px;
-      color: #d0474b; }
-    .content-list .topic-list .num {
-      font-family: "Montserrat";
-      color: #b6b6b6; }
-    .content-list .topic-list .user {
-      -moz-border-radius: 50%;
-      -webkit-border-radius: 50%;
-      border-radius: 50%;
-      -moz-box-sizing: content-box;
-      -webkit-box-sizing: content-box;
-      box-sizing: content-box;
-      display: inline-block;
-      width: 25px;
-      height: 25px;
-      overflow: hidden;
-      border: 3px solid transparent; }
-      .content-list .topic-list .user.border {
-        border-color: #85c2e0; }
-  .content-list .topic-slider {
-    display: none; }
-  .content-list .topic-slider-pagination {
-    padding: 15px 20px;
-    text-align: right; }
-    .content-list .topic-slider-pagination .text {
-      margin-right: 5px;
-      font-size: 0.93333em;
-      font-weight: 300;
-      color: #bebebe; }
-    .content-list .topic-slider-pagination .bullets {
-      display: inline-block; }
-    .content-list .topic-slider-pagination .bullet {
-      -moz-border-radius: 50%;
-      -webkit-border-radius: 50%;
-      border-radius: 50%;
-      -moz-transition-property: all;
-      -o-transition-property: all;
-      -webkit-transition-property: all;
-      transition-property: all;
-      -moz-transition-duration: 0.2s;
-      -o-transition-duration: 0.2s;
-      -webkit-transition-duration: 0.2s;
-      transition-duration: 0.2s;
-      position: relative;
-      background-color: #adadad;
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      margin: 0 3px;
-      cursor: pointer; }
-      .content-list .topic-slider-pagination .bullet.rsNavSelected {
-        background-color: #00e4ac; }
-      .content-list .topic-slider-pagination .bullet:hover {
-        background-color: white; }
-  .content-list .results {
-    float: right;
-    font-family: "Montserrat";
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.2); }
-
-.search-job {
-  float: left;
-  position: relative;
-  width: 400px; }
-  .search-job input[type=text] {
-    position: relative;
-    z-index: 5;
-    border-bottom: 1px solid #454545;
-    padding: 5px 0;
-    font-size: 0.8em;
-    color: #979797; }
-  .search-job button[type=submit] {
-    position: absolute;
-    right: 0;
-    top: -10px;
-    z-index: 10;
-    width: 40px;
-    height: 40px;
-    background-color: #232323;
-    text-align: center;
-    line-height: 40px;
-    font-size: 32px;
-    color: #878787; }
-    .search-job button[type=submit]:hover {
-      color: white; }
 
 body .container > footer {
   -moz-border-radius: 5px;
@@ -848,6 +662,132 @@ body .container > footer {
     body .container > footer .nav-social [class^="icon-"] {
       line-height: 60px; }
 
+.forum {
+  background-color: #1d2123; }
+  .forum header {
+    padding: 25px 20px; }
+    .forum header h3 {
+      margin: 3px 15px 0 0; }
+  .forum .topic-list {
+    width: 100%; }
+    .forum .topic-list th {
+      text-transform: uppercase;
+      font-family: "Proxima Nova";
+      font-size: 0.8em;
+      font-weight: 300;
+      color: #909497; }
+    .forum .topic-list td {
+      font-family: "Montserrat"; }
+      .forum .topic-list td .topic {
+        display: inline-block;
+        background-image: url(../assets/icon-arrow-right.png);
+        background-repeat: no-repeat;
+        background-position: left top;
+        padding: 0 0 5px 35px; }
+        .forum .topic-list td .topic:hover {
+          color: #00e4ac; }
+    .forum .topic-list th, .forum .topic-list td {
+      border-bottom: 1px solid #363637;
+      padding: 10px; }
+    .forum .topic-list tr:first-child th:first-child {
+      padding-left: 20px; }
+    .forum .topic-list tr td:last-child {
+      white-space: nowrap; }
+    .forum .topic-list tr td:first-child {
+      padding-left: 20px; }
+    .forum .topic-list tbody tr:nth-child(even) {
+      background: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4gPHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkIiBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgeDE9IjAuNSIgeTE9IjAuMCIgeDI9IjAuNSIgeTI9IjEuMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzJlMmUyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzFkMjEyMyIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JhZCkiIC8+PC9zdmc+IA==');
+      background: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, #2e2e2e), color-stop(100%, #1d2123));
+      background: -moz-linear-gradient(top, #2e2e2e, #1d2123);
+      background: -webkit-linear-gradient(top, #2e2e2e, #1d2123);
+      background: linear-gradient(to bottom, #2e2e2e, #1d2123);
+      *zoom: 1;
+      filter: progid:DXImageTransform.Microsoft.gradient(gradientType=1, startColorstr='#FF2E2E2E', endColorstr='#FF1D2123'); }
+    .forum .topic-list i {
+      font-family: "Icons";
+      font-style: normal;
+      font-weight: normal;
+      speak: none; }
+    .forum .topic-list .answer {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      background-image: url(../assets/icon-answer.png);
+      background-repeat: no-repeat;
+      padding: 0 0 0 25px;
+      line-height: 15px; }
+    .forum .topic-list .btn {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      -moz-border-radius: 3px;
+      -webkit-border-radius: 3px;
+      border-radius: 3px;
+      display: block;
+      padding: 6px 10px;
+      line-height: 1;
+      white-space: nowrap;
+      text-transform: uppercase;
+      text-align: center;
+      font-family: "Proxima Nova";
+      font-size: 0.8em;
+      font-weight: 700;
+      color: white; }
+    .forum .topic-list .views i {
+      font-size: 18px;
+      color: #d0474b; }
+    .forum .topic-list .num {
+      font-family: "Montserrat";
+      color: #b6b6b6; }
+    .forum .topic-list .user {
+      -moz-border-radius: 50%;
+      -webkit-border-radius: 50%;
+      border-radius: 50%;
+      -moz-box-sizing: content-box;
+      -webkit-box-sizing: content-box;
+      box-sizing: content-box;
+      display: inline-block;
+      width: 25px;
+      height: 25px;
+      overflow: hidden;
+      border: 3px solid transparent; }
+      .forum .topic-list .user.border {
+        border-color: #85c2e0; }
+  .forum .topic-slider {
+    display: none; }
+  .forum .topic-slider-pagination {
+    padding: 15px 20px;
+    text-align: right; }
+    .forum .topic-slider-pagination .text {
+      margin-right: 5px;
+      font-size: 0.93333em;
+      font-weight: 300;
+      color: #bebebe; }
+    .forum .topic-slider-pagination .bullets {
+      display: inline-block; }
+    .forum .topic-slider-pagination .bullet {
+      -moz-border-radius: 50%;
+      -webkit-border-radius: 50%;
+      border-radius: 50%;
+      -moz-transition-property: all;
+      -o-transition-property: all;
+      -webkit-transition-property: all;
+      transition-property: all;
+      -moz-transition-duration: 0.2s;
+      -o-transition-duration: 0.2s;
+      -webkit-transition-duration: 0.2s;
+      transition-duration: 0.2s;
+      position: relative;
+      background-color: #adadad;
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin: 0 3px;
+      cursor: pointer; }
+      .forum .topic-slider-pagination .bullet.rsNavSelected {
+        background-color: #00e4ac; }
+      .forum .topic-slider-pagination .bullet:hover {
+        background-color: white; }
+
 #header {
   position: relative;
   height: 100px;
@@ -896,10 +836,77 @@ body .container > footer {
       background-color: #00e4ac;
       color: white; }
 
-#highlights {
+.jobs .jobs-list {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.05); }
+  .jobs .jobs-list tr td {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    padding: 21px 25px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    font-family: "Montserrat";
+    font-weight: 400;
+    line-height: 1; }
+    .jobs .jobs-list tr td.action {
+      padding: 0;
+      width: 60px;
+      text-align: center;
+      font-size: 24px;
+      color: rgba(255, 255, 255, 0.2); }
+      .jobs .jobs-list tr td.action .icon-cancel {
+        font-size: 14px; }
+      .jobs .jobs-list tr td.action .icon-star-empty {
+        font-size: 24px; }
+    .jobs .jobs-list tr td.no-border {
+      border-right: none; }
+    .jobs .jobs-list tr td a:hover {
+      color: #00e4ac; }
+    .jobs .jobs-list tr td .dark {
+      filter: progid:DXImageTransform.Microsoft.Alpha(Opacity=60);
+      opacity: 0.6; }
+    .jobs .jobs-list tr td .date {
+      color: #7e7e7e; }
+    .jobs .jobs-list tr td .info {
+      margin-right: 10px;
+      line-height: 1;
+      padding: 3px 3px;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: white; }
+.jobs .results {
+  float: right;
+  font-family: "Montserrat";
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.2); }
+.jobs .search-job {
   float: left;
   position: relative;
-  width: 755px; }
+  width: 400px; }
+  .jobs .search-job input[type=text] {
+    position: relative;
+    z-index: 5;
+    border-bottom: 1px solid #454545;
+    padding: 5px 0;
+    font-size: 0.8em;
+    color: #979797; }
+  .jobs .search-job button[type=submit] {
+    position: absolute;
+    right: 0;
+    top: -10px;
+    z-index: 10;
+    width: 40px;
+    height: 40px;
+    background-color: #232323;
+    text-align: center;
+    line-height: 40px;
+    font-size: 32px;
+    color: #878787; }
+    .jobs .search-job button[type=submit]:hover {
+      color: white; }
+
+#highlights {
+  position: relative; }
   #highlights h2 {
     margin-bottom: .5em;
     font-size: 2.93333em;

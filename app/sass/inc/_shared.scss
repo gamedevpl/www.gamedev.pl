@@ -10,6 +10,18 @@
 	@include clear;
 }
 
+.column {
+	&.left {
+		float: left;
+		width: 755px;
+	}
+
+	&.right {
+		float: right;
+		width: 760px;
+	}
+}
+
 .container {
 	@include wrapper;
 }

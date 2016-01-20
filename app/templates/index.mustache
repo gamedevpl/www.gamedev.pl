@@ -69,116 +69,117 @@
 			</nav>
 		</div>
 
-		<section id="highlights">
-			<h2>Co nowego?</h2> 
-
-			{{> ../partials/highlights }}
-		</section>
-
-		<section class="content-list forum">
-			<header>
-				<h3>Ostatnio na forum</h3>
-
-				<nav class="nav-topics">
-					<a class="prev icon-left-open"></a>
-					<a class="next icon-right-open"></a>
-				</nav>
-
-				<span class="buttons">
-					<a href="#" class="btn black-gradient"><i class="icon-bell"></i> dodaj post</a>
-					<a href="#" class="btn black-gradient"><i class="icon-plus"></i> zobacz forum</a>
-				</span>
-
-				<span class="logo">
-					<img src="assets/logo-warsztat.png" alt="warsztat" width="118" height="30" />
-				</span>
-			</header>
-
-			{{#topics}}
-                {{#topic_list}}
-                    {{> ../partials/topics }}
-                {{/topic_list}}
-            {{/topics}}
-		</section>
-
-		<section class="content-list jobs">
-			<header>
-				<h3>Oferty pracy</h3>
-				
-				<span class="nav-buttons">
-					<a class="btn blue-bg icon-cw"></a>
-					
-					<span class="actions">
-						<a class="btn yellow-bg icon-reply"></a>
-						<a class="btn red-bg icon-cancel"></a>
-						<a class="btn green-bg icon-ok"></a>
-						<a class="btn green-light-bg icon-star-empty"></a>
-					</span>
-				</span>
-				
-				<form action="#" class="search-job">
-					<input type="text" placeholder="Wpisz czego szukasz" />
-					<button type="submit" class="icon-search"></button>
-				</form>
-				
-				<span class="results">1-50 z 300</span>
-			</header>
-			
-			{{#jobs}}
-                {{#jobs_list}}
-                    {{> ../partials/jobs }}
-                {{/jobs_list}}
-            {{/jobs}}
-		</section>
-
-		<div class="additions">
-			<section class="about">
-				<h4 class="bordered blue-border">O Gamedev.pl</h4>
-				
-				<p>
-				 Lorem Ipsum jest tekstem stosowanym jako przykładowy wypełniacz w przemyśle poligraficznym. Został po raz pierwszy użyty w XV w. przez nieznanego drukarza do wypełnienia tekstem próbnej książki. 
-				</p>
-				
-				<p>
-Pięć wieków później zaczął być używany przemyśle elektronicznym, pozostając praktycznie niezmienionym. Spopularyzował się w latach 60. XX w. wraz z publikacją <a href="#">arkuszy Letrasetu</a>. 
-				</p>
-
-				<p>
-					<a href="#">Zobacz więcej....</a>
-				</p>
-			</section>
-			
-			<section class="language">
-				<h4 class="bordered yellow-border">Wybór języka</h4>
-				
-				<ul class="lang-list">
-					<li>
-						<a href="#" class="lang gb"></a>
-					</li>
-					
-					<li>
-						<a href="#" class="lang fr"></a>
-					</li>
-					
-					<li>
-						<a href="#" class="lang de"></a>
-					</li>
-
-					<li class="active">
-						<a href="#" class="lang pl"></a>
-					</li>
-					
-					<li>
-						<a href="#" class="lang es"></a>
-					</li>
-					
-					<li>
-						<a href="#" class="lang ch"></a>
-					</li>
-				</ul>
+		<div class="column left">
+			<section id="highlights">
+				<h2>Co nowego?</h2> 
+	
+				{{> ../partials/highlights }}
 			</section>
 		</div>
 
+		<div class="column right">
+			<section class="content-list forum">
+				<header>
+					<h3>Ostatnio na forum</h3>
+	
+					<nav class="nav-topics">
+						<a class="prev icon-left-open"></a>
+						<a class="next icon-right-open"></a>
+					</nav>
+	
+					<span class="buttons">
+						<a href="#" class="btn black-gradient"><i class="icon-bell"></i> dodaj post</a>
+						<a href="#" class="btn black-gradient"><i class="icon-plus"></i> zobacz forum</a>
+					</span>
+	
+					<span class="logo">
+						<img src="assets/logo-warsztat.png" alt="warsztat" width="118" height="30" />
+					</span>
+				</header>
+	
+				{{#topics}}
+	                {{#topic_list}}
+	                    {{> ../partials/topics }}
+	                {{/topic_list}}
+	            {{/topics}}
+			</section>
+	
+			<section class="content-list jobs">
+				<header>
+					<h3>Oferty pracy</h3>
+					
+					<span class="nav-buttons">
+						<a class="btn blue-bg icon-cw"></a>
+						
+						<span class="actions">
+							<a class="btn yellow-bg icon-reply"></a>
+							<a class="btn red-bg icon-cancel"></a>
+							<a class="btn green-bg icon-ok"></a>
+							<a class="btn green-light-bg icon-star-empty"></a>
+						</span>
+					</span>
+					
+					<form action="#" class="search-job">
+						<input type="text" placeholder="Wpisz czego szukasz" />
+						<button type="submit" class="icon-search"></button>
+					</form>
+					
+					<span class="results">1-50 z 300</span>
+				</header>				
+
+                {{> ../partials/jobs }}
+
+			</section>
+	
+			<div class="additions">
+				<section class="about">
+					<h4 class="bordered blue-border">O Gamedev.pl</h4>
+					
+					<p>
+					 Lorem Ipsum jest tekstem stosowanym jako przykładowy wypełniacz w przemyśle poligraficznym. Został po raz pierwszy użyty w XV w. przez nieznanego drukarza do wypełnienia tekstem próbnej książki. 
+					</p>
+					
+					<p>
+	Pięć wieków później zaczął być używany przemyśle elektronicznym, pozostając praktycznie niezmienionym. Spopularyzował się w latach 60. XX w. wraz z publikacją <a href="#">arkuszy Letrasetu</a>. 
+					</p>
+	
+					<p>
+						<a href="#">Zobacz więcej....</a>
+					</p>
+				</section>
+				
+				<section class="language">
+					<h4 class="bordered yellow-border">Wybór języka</h4>
+					
+					<ul class="lang-list">
+						<li>
+							<a href="#" class="lang gb"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang fr"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang de"></a>
+						</li>
+	
+						<li class="active">
+							<a href="#" class="lang pl"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang es"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang ch"></a>
+						</li>
+					</ul>
+				</section>
+			</div>
+		</div>
+		
 		<footer>
 			{{> ../partials/footer}}
 		</footer>

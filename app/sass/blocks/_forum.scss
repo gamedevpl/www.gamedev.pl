@@ -1,0 +1,182 @@
+.forum {
+	background-color: $black-shark;
+	
+	header {
+		padding: 25px 20px;
+		
+		h3 {
+			margin: 3px 15px 0 0;
+		}
+	}
+	
+	.topic-list {
+		width: 100%;
+		
+		th {
+			text-transform: uppercase;
+			font: {
+				family: $proxima;
+				size: em(12);
+				weight: $light;	
+			}
+			color: $gray-oslo;
+		}
+		
+		td {
+			font: {
+				family: $mont;
+			}
+			
+			.topic {
+				display: inline-block;
+				background: {
+					image: url(../assets/icon-arrow-right.png);
+					repeat: no-repeat;
+					position: left top;
+				}
+				
+				padding: 0 0 5px 35px;
+
+				&:hover {
+					color: $turquoise;
+				}
+			}
+		}
+		
+		th, td {
+			border-bottom: 1px solid #363637;
+			padding: 10px;
+		}
+		
+		tr {
+			&:first-child {
+				th {
+					&:first-child {
+						padding-left: 20px;
+					}
+				}
+			}
+			
+			td {
+				&:last-child {
+					white-space: nowrap;
+				}
+				
+				&:first-child {
+					padding-left: 20px;
+				}
+			}
+		}
+		
+		tbody {
+			tr {
+				&:nth-child(even) {
+					@include gradient(#2e2e2e, $black-shark);
+				}
+			}
+		}
+		
+		i {
+			font-family: $icons;
+			font-style: normal;
+			font-weight: normal;
+			speak: none;
+		}
+		
+		.answer {
+			display: inline-block;
+			width: 18px; height: 18px;
+			background: {
+				image: url(../assets/icon-answer.png);
+				repeat: no-repeat;
+			}
+			padding: 0 0 0 25px;
+			line-height: 15px;
+		}
+		
+		.btn {
+			@include antialias;
+			@include border-radius(3px);
+			display: block;
+			padding: 6px 10px;
+			line-height: 1;
+			white-space: nowrap;
+			text: {
+				transform: uppercase;
+				align: center;
+			}
+			font: {
+				family: $proxima;
+				size: em(12);
+				weight: $bold;
+			}
+			color: white;
+		}
+		
+		.views i {
+			font-size: 18px;
+			color: #d0474b;
+		}
+		
+		.num {
+			font: {
+				family: $mont;
+			}
+			color: $gray-nobel;
+		}
+		
+		.user {
+			@include border-radius(50%);
+			@include box-sizing(content-box);
+			display: inline-block;
+			width: 25px; height: 25px;
+			overflow: hidden;
+			border: 3px solid transparent;
+			
+			&.border {
+				border-color: #85c2e0;
+			}
+		}
+	}
+	
+	.topic-slider {
+		display: none;
+	}
+	
+	.topic-slider-pagination {
+		padding: 15px 20px;
+		text-align: right;
+
+		.text {
+			margin-right: 5px;
+			font: {
+				size: em(14);
+				weight: $light;
+			}
+			color: #bebebe;
+		}
+		
+		.bullets {
+			display: inline-block;
+		}
+		
+		.bullet {
+			@include border-radius( 50% );
+			@include hover;
+			position: relative;
+			background-color: #adadad;
+			display: inline-block;
+			width: 12px; height: 12px;
+			margin: 0 3px;
+			cursor: pointer;
+	
+			&.rsNavSelected {
+				background-color: $turquoise;
+			}
+			
+			&:hover {
+				background-color: white;
+			}
+		}
+	}
+}
