@@ -117,7 +117,22 @@ gulp.task('assets-highlights', function() {
         .pipe(gulp.dest('./dist/public/assets/highlights'));
 });
 
-gulp.task('assets', ['assets-app', 'assets-highlights']);
+gulp.task('assets-js', function() {
+    return gulp.src('app/js/**/*')
+        .pipe(gulp.dest('./dist/public/js'));
+});
+
+gulp.task('assets-css', function() {
+    return gulp.src('app/css/**/*')
+        .pipe(gulp.dest('./dist/public/css'));
+});
+
+gulp.task('assets-font', function() {
+    return gulp.src('app/font/**/*')
+        .pipe(gulp.dest('./dist/public/font'));
+});
+
+gulp.task('assets', ['assets-app', 'assets-js', 'assets-css', 'assets-font', 'assets-highlights']);
 
 gulp.task('CNAME', function() {
     return gulp.src('CNAME')
