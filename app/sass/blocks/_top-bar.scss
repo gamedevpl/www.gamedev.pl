@@ -5,6 +5,10 @@
 	margin-bottom: 20px;
 	color: white;
 	
+	@media screen and ( max-width: $tablet_landscape - 1 + px ) {
+		display: none;
+	}
+	
 	.text {
 		display: inline-block;
 		margin-right: 15px;
@@ -25,6 +29,10 @@
 				weight: $light;
 			}
 			color: #959595;
+			
+			@media screen and ( max-width: $netbook+px ) {
+				display: none;
+			}
 		}
 		
 		.sbHolder {
@@ -127,7 +135,7 @@
 				}
 			}
 			
-			&.register {				
+			&.register {
 				&:after {
 					text-align: center;
 					font: {

@@ -5,6 +5,9 @@ var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
 var shell = require('gulp-shell').task;
+var sass = require('gulp-sass')
+var compass = require('compass-importer')
+
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -137,4 +140,17 @@ gulp.task('assets', ['assets-app', 'assets-js', 'assets-css', 'assets-font', 'as
 gulp.task('CNAME', function() {
     return gulp.src('CNAME')
         .pipe(gulp.dest('./dist/public'));
+});
+
+gulp.task('sass', function()
+{
+    return gulp.src('./app/sass/**/*.scss')
+      .pipe(sass({ importer: compass }).on('error', sass.logError))
+      .pipe(sass({outputStyle: 'compressed'}))
+      .pipe(gulp.dest('./app/css'));
+
+});
+ 
+gulp.task('sass:watch', function () {
+  gulp.watch('./app/sass/**/*.scss', ['sass']);
 });

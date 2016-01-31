@@ -1,11 +1,67 @@
 .forum {
 	background-color: $black-shark;
 	
+	@media screen and ( max-width: $tablet_landscape + px ) {
+		margin-bottom: 10px;
+	}
+	
 	header {
 		padding: 25px 20px;
 		
 		h3 {
 			margin: 3px 15px 0 0;
+			
+			@media screen and ( max-width: $grid-base-width+px ) {
+				margin-bottom: 5px;
+			}
+		}
+	}
+	
+	.logo {
+		margin-right: 20px;
+		
+		@media screen and ( min-width: $grid-base-width+px ) {
+			float: right;
+		}
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			display: none;
+		}
+	}
+	
+	.nav-topics {
+		float: left;
+		vertical-align: middle;
+		
+		@media screen and ( max-width: $grid-base-width+px ) {
+			margin-right: 10px;
+		}
+
+		a {
+			@include border-radius(50%);
+			@include box-shadow( rgba(0,0,0,.28) 0 1px 1px);
+			@include gradient(#36393b, #2c2f31);
+			@include transition-property(none);
+			display: inline-block;
+			width: 28px; height: 28px;
+			border: 1px solid rgba(white, .05);
+			border-bottom: none;
+			text-align: center;
+			font-size: em(12);
+			speak: none;
+			line-height: 26px;
+			color: rgba(white, .3);
+			
+			@media screen and ( max-width: $smartphone_portrait + px ) {
+				width: 20px; height: 20px;
+				line-height: 18px;
+				font-size: em(10);
+			}
+			
+			&:hover {
+				@include gradient(#29a98b, #33bba3);
+				color: white;
+			}
 		}
 	}
 	
@@ -20,6 +76,18 @@
 				weight: $light;	
 			}
 			color: $gray-oslo;
+
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+				screen and ( max-width: $smartphone_landscape + px ) {
+
+				&:nth-of-type(2),
+				&:nth-of-type(3),
+				&:nth-of-type(4),
+				&:nth-of-type(5) {
+					display: none;
+				}
+			}
 		}
 		
 		td {
@@ -34,8 +102,14 @@
 					repeat: no-repeat;
 					position: left top;
 				}
-				
 				padding: 0 0 5px 35px;
+				
+				@media 
+					screen and (min-width: 1161px) and ( max-width: $netbook + px ),
+					screen and (max-width: $smartphone_portrait + px)  {
+
+					font-size: em(13);
+				}
 
 				&:hover {
 					color: $turquoise;
@@ -46,9 +120,30 @@
 		th, td {
 			border-bottom: 1px solid #363637;
 			padding: 10px;
+			
+			@media screen and ( max-width: $ultrabook + px ) {
+				padding: 10px 5px;
+			}
+			
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+				screen and ( max-width: $smartphone_landscape + px ) {
+
+				float: left;
+				border: none;
+			}
 		}
 		
 		tr {
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+				screen and ( max-width: $smartphone_landscape + px ) {
+
+				float: left;
+				width: 100%;
+				border-bottom: 1px solid #363637;
+			}
+
 			&:first-child {
 				th {
 					&:first-child {
@@ -58,13 +153,63 @@
 			}
 			
 			td {
+				@media 
+					screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+					screen and ( max-width: $smartphone_landscape + px ) {
+				
+					padding: 0;
+				}
+
 				&:last-child {
 					white-space: nowrap;
 				}
 				
 				&:first-child {
 					padding-left: 20px;
+					
+					@media 
+						screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+						screen and ( max-width: $smartphone_landscape + px ) {
+						
+						width: 100%;
+						padding: 10px 10px 0 20px;
+					}
 				}
+				
+				&:nth-of-type(2) {
+					@media 
+						screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+						screen and ( max-width: $smartphone_landscape + px ) {
+						
+						width: 100%;
+						padding-left: 55px;
+						padding-bottom: 5px;
+					}
+				}
+				
+				&:nth-of-type(3) {
+					@media 
+						screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+						screen and ( max-width: $smartphone_landscape + px ) {
+						
+						width: 120px;
+						padding-left: 55px;
+						padding-bottom: 10px;
+						text-align: left;
+					}
+				}
+				
+				&:nth-of-type(5) {
+					@media 
+						screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+						screen and ( max-width: $smartphone_landscape + px ) {
+
+						padding-left: 40px;
+					    padding-bottom: 10px;
+					    margin-top: -10px;
+						text-align: left;
+					}
+				}				    
 			}
 		}
 		
@@ -111,6 +256,17 @@
 				weight: $bold;
 			}
 			color: white;
+			
+			@media screen and ( max-width: $netbook + px ) {
+				font-size: em(10);
+			}
+			
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: 1160px ),
+				screen and ( max-width: $smartphone_landscape + px ) {
+
+				display: inline-block;
+			}
 		}
 		
 		.views i {

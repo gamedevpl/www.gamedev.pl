@@ -1,5 +1,17 @@
+function debouncer( func , timeout ) {
+   var timeoutID , timeout = timeout || 200;
+   return function () {
+      var scope = this , args = arguments;
+      clearTimeout( timeoutID );
+      timeoutID = setTimeout( function () {
+          func.apply( scope , Array.prototype.slice.call( args ) );
+      } , timeout );
+   }
+}
+
 jQuery(function($) {
 	var Layout = {
+
 		goTop: function() {
 			var $viewport = $('html, body');
 
@@ -30,6 +42,149 @@ jQuery(function($) {
 			if ( $('.jobs .nav-buttons').length > 0 ) {
 				Layout.jobButtons();
 			}
+		}
+	};
+	
+	var Nav = {
+		mobileNav: function() {
+			var b = $('body'),
+			 	h = $('#header').height(),
+			 	mm = $('#main-menu'),
+			 	windowpos,
+			 	ww = $(window).width();
+			 	console.log(ww);
+
+			function fixNav() {
+				windowpos = $(window).scrollTop();
+				
+				if (ww <= 640) {
+					if (windowpos >= h) {
+						b.addClass("fixed");
+					} else {
+						b.removeClass("fixed");
+					}
+				}
+				
+				$(window).on('scroll', function() {					    
+				    windowpos = $(window).scrollTop();
+					ww = $(window).width();
+					
+					if (ww <= 640) { 
+						if (windowpos >= h) {
+							b.addClass("fixed");
+							
+						} else {
+							b.removeClass("fixed");
+						}
+					}
+				});				
+			}
+			
+			function showHide() {
+				var e = $('.nav-trigger');
+				
+				e.on('click', function(e) {
+					e.preventDefault();
+					
+					mm.toggleClass('opened');
+				});
+				
+				$(window).on('resize', function() {
+					ww = $(window).width();
+					
+					if (ww > 640) { 
+						mm.removeClass('opened');
+					}
+				});
+			}
+			
+			fixNav();
+			showHide();
+		},		
+		
+		init: function() {
+			Nav.mobileNav();
+		}
+	}
+	
+	var Rwd = {
+	
+		forumTitle: function(ww) {			
+			if ($('.content-list.forum').length > 0) {
+			
+				var e = $('.content-list.forum'),
+					long_name = $('h3', e).attr('data-long');
+					short_name = $('h3', e).attr('data-short');
+
+				if (ww <= 480) {
+					$('h3', e).html(short_name);
+				} else {
+					$('h3', e).html(long_name);
+				}
+			}
+		},
+		
+		loginButton: function(ww) {
+			if ( $('#top-bar').hasClass('not-logged')) {
+				var e = $('.btn.login');
+
+				if ($('.btn.login').length > 0) {
+					if (ww < 1024) {
+						e.detach();
+						$('#header').append(e);
+	
+					} else {
+						e.detach();
+						$('#top-bar .welcome').after(e);
+					}
+				}
+			}
+		},
+
+		mainMenu: function(ww) {
+			var e = $('#main-menu');
+
+			if (ww < 1024) {
+				e.detach();
+				$('#header').after(e);
+
+			} else {
+				e.detach();
+				$('#header').append(e);
+			}			
+		},
+		
+		highlightsVideo: function(ww) {
+			if (('#highlights .video').length > 0) {
+				var e = $('#highlights .video');
+	
+				if (ww <= 1024) {
+					e.detach();
+					$('.content-list.jobs').after(e);
+	
+				} else {
+					e.detach();
+					$('#highlights .highlights').after(e);
+				}
+			}
+		},
+		
+		init: function() {
+			var ww = $(window).width();
+			
+			Rwd.forumTitle(ww);
+			Rwd.highlightsVideo(ww);
+			Rwd.loginButton(ww);
+			Rwd.mainMenu(ww);
+		
+			$(window).resize( debouncer( function(e) {
+				ww = $(window).width();
+	
+				Rwd.forumTitle(ww);
+				Rwd.highlightsVideo(ww);
+				Rwd.loginButton(ww);
+				Rwd.mainMenu(ww);
+			}));
 		}
 	};
 	
@@ -98,7 +253,7 @@ jQuery(function($) {
 		highlightsSlider: function() {
 	
 			var el = $('#highlights .slider');
-	
+			
 			el.show().royalSlider({
 				addActiveClass: true,
 				autoPlay: {
@@ -137,7 +292,9 @@ jQuery(function($) {
 	$(document).ready(function () {
 	
 		Layout.init();
+		Nav.init();
 		Slider.init();
+		Rwd.init();
 		
 	    // js is on
 	    $('html').removeClass('no-js');

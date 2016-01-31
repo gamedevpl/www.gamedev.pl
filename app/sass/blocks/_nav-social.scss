@@ -6,6 +6,14 @@
 	[class^="icon-"] {
 		color: $gray-iron;
 		font-size: em(26);
+		
+		@media screen and ( max-width: $ultrabook+px ) {
+			font-size: em(24);
+		}
+		
+		@media screen and ( max-width: $netbook+px ) {
+			font-size: em(20);
+		}
 
 		&:hover {
 			color: $turquoise;

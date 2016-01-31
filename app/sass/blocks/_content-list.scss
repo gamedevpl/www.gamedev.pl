@@ -2,54 +2,6 @@
 	@include border-radius(5px);
 	margin-bottom: 25px;
 	color: white;
-	
-	&.jobs {
-		background-color: $gray-shaft2;
-		margin-bottom: 50px;
-		
-		.nav-buttons {
-			@include clear;
-			position: absolute; z-index: 10;
-			left: 0; top: 0;
-			width: 60px;
-
-			.btn {
-				float: left;
-				width: 60px; height: 60px;
-				text-align: center;
-				line-height: 60px;
-				font-size: 24px;
-				color: white;
-			}
-			
-			.actions {
-				position: absolute; top: 60px; left: -120px;
-				width: 240px; 
-				display: none;
-				
-				.btn {
-					font-size: 20px;
-				}
-				
-				.icon-cancel {
-					font-size: 14px;
-				}
-
-				.icon-star-empty {
-					font-size: 24px;
-				}
-			}
-		}
-		
-		header {
-			height: 60px;
-			padding: 20px 20px 20px 80px;
-			
-			h3 {
-				margin-right: 30px;
-			}
-		}
-	}
 
 	header {
 		@include clear;
@@ -57,6 +9,13 @@
 		
 		h3, .topic-nav {
 			float: left;
+
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $grid-base-width+px ),
+				screen and ( min-width: $smartphone_portrait + 1 + px ) and ( max-width: $tablet_portrait + px ) {
+				
+				float: none;
+			}
 		}
 		
 		h3 {
@@ -67,35 +26,16 @@
 			color: $gray-mercury;
 		}
 
-		.nav-topics {
-			float: left;
-			vertical-align: middle;
-
-			a {
-				@include border-radius(50%);
-				@include box-shadow( rgba(0,0,0,.28) 0 1px 1px);
-				@include gradient(#36393b, #2c2f31);
-				@include transition-property(none);
-				display: inline-block;
-				width: 28px; height: 28px;
-				border: 1px solid rgba(white, .05);
-				border-bottom: none;
-				text-align: center;
-				font-size: em(12);
-				speak: none;
-				line-height: 26px;
-				color: rgba(white, .3);
-
-				
-				&:hover {
-					@include gradient(#29a98b, #33bba3);
-					color: white;
-				}
-			}
-		}
-
 		.buttons {
 			float: right;
+			
+			@media 
+				screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $grid-base-width+px ),
+				screen and ( max-width: $tablet_portrait + px ) {
+
+				float: none;
+				position: absolute; right: 20px; top: 25px;
+			}
 			
 			.btn {
 				float: right;
@@ -109,9 +49,23 @@
 					size: em(12);
 					weight: $bold;
 				}
+				
+				@media 
+					screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $netbook + px ),
+					screen and ( max-width: $tablet_portrait + px ) {
+					
+					padding: 0 10px;
+					font-size: em(11);
+				}
 	
 				&:hover {
 					@include gradient(#29a98b, #33bba3);
+				}
+				
+				&.add-post {
+					@media screen and ( max-width: $smartphone_portrait + px ) {
+						display: none;
+					}
 				}
 				
 				i {
@@ -126,11 +80,6 @@
 					font-size: 8px;
 				}
 			}
-		}		
-
-		.logo {
-			float: right;
-			margin-right: 20px;
 		}
 	}
 }

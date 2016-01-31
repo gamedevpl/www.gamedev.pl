@@ -13,7 +13,7 @@ head.js('http://code.jquery.com/jquery-1.11.1.min.js', function() {
 		}
 	})
 	.js('https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.js')
-	.js('/js/min/main-min.js');
+	.js('/js/main.js');
 	//.js('/js/main.js')
 	
 

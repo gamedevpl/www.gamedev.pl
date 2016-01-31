@@ -1,9 +1,25 @@
 #header {
 	position: relative;
+	z-index: 30;
 	height: 100px;
 	background-color: $gray-shark;
-	margin-bottom: 30px;
-	
+	margin-bottom: 30px;	
+
+	@media screen and ( max-width: 1023px ) {
+		height: 110px;
+		background-color: black;
+		margin-bottom: 0;
+	}
+
+	.fixed & {
+		position: fixed;
+	    left: 0;
+	    top: -110px;
+	    width: 100%;
+	    height: 200px;
+	    background-color: #1e1e1e;
+	}
+
 	.logo {
 		@include antialias;
 		position: absolute;
@@ -18,10 +34,26 @@
 		line-height: 60px;
 		color: white;
 		
+		@media
+			screen and ( min-width: $tablet_landscape+px ) and ( max-width: $netbook+px ),
+			screen and ( max-width: $smartphone_landscape+px ) {
+			font-size: em(34);
+		}
+		
 		img {
 			display: inline-block;
+			height: auto;
 			margin-right: 10px;
 			vertical-align: bottom;
+			
+			@media
+				screen and ( min-width: $tablet_landscape+px ) and ( max-width: $netbook+px ),
+				screen and ( max-width: $smartphone_landscape+px ) {
+
+				width: 50px;
+				margin-right: 5px;
+				vertical-align: middle;
+			}
 		}
 		
 		.turquoise {
@@ -29,12 +61,109 @@
 		}
 	}
 	
+	.login {
+		@include antialias;
+		display: block;
+		position: absolute; right: 110px; top: 0; z-index: 5;
+		background-color: #343434;
+		height: 110px;
+		padding: 0 30px;
+		text-align: center;
+		line-height: 110px;
+		font: {
+			size: em(16);
+			weight: $bold;
+		}
+		color: white;
+		
+		@media screen and ( max-width: $smartphone_landscape + px ) {
+			top: 110px;
+			right: grid(90, $smartphone_portrait);
+			height: 90px;
+			background-color: transparent;
+			line-height: 90px;
+		}
+		
+		&:hover {
+			background-color: $turquoise;
+		}
+	}
+	
 	.nav-social {
 		position: absolute;
 		right: 120px; top: 0; z-index: 5;
 		
+		@media screen and ( max-width: $netbook+px ) {
+			right: 100px;
+		}
+		
+		@media screen and ( max-width: $tablet_landscape + px) {
+			right: 80px;
+		}
+		
+		@media screen and ( max-width: $tablet_landscape - 1 + px ) {
+			display: none;
+		}
+
 		[class^="icon-"] {
 			line-height: 100px;
+		}
+	}
+	
+	.nav-trigger {
+		@include antialias;
+		@include box-shadow($gray-emperor 1px 0 0);
+		position: absolute; left: 0; top: 110px; z-index: 5;
+		display: none;
+		height: 90px;
+		padding: 0 25px;
+		font: {
+			family: $proxima;
+			size: em(16);
+			weight: $bold;
+		}
+		line-height: 90px;
+		color: white;
+		
+		@media screen and ( max-width: $smartphone_landscape + px ) {
+			display: block;
+		}
+		
+		&:after, &:before {
+			position: absolute; z-index: 10;
+			display: block;
+			background-color: $turquoise;
+		}
+		
+		&:after {
+			bottom: 0;
+			left: 0;
+			width: 100%;
+			height: 6px;
+			content: ' ';
+		}
+		
+		&:before {
+			position: absolute; z-index: 10;
+			bottom: -12px; right: 0;
+			width: 15px; height: 12px;
+			text-align: center;
+			font: {
+				family: $icons;
+				style: normal;
+				weight: normal;
+				size: 16px;
+			}
+			speak: none;
+			content: '\e80b';
+			line-height: 10px;
+			color: white;
+		}
+		
+		&:hover {
+			&:after {
+				height: 10px;
+			}
 		}
 	}
 	
@@ -43,10 +172,34 @@
 		display: block;
 		width: 100px; height: 100px;
 		border-left: 1px solid $gray-shaft;
+		padding-top: 5px;
 		text-align: center;
 		line-height: 100px;
 		font-size: em(30);
 		color: $gray;
+		
+		@media screen and ( max-width: $netbook+px ) {
+			width: 80px;
+		}
+		
+		@media screen and ( min-width: $tablet_landscape+px ) and ( max-width: $tablet_landscape + px) {
+			width: 60px;
+			font-size: em(24);
+		}
+		
+		@media screen and ( max-width: $tablet_landscape - 1 + px ) {
+			width: 110px; height: 110px;
+			background-color: #444;
+		}
+		
+		@media screen and ( max-width: $smartphone_landscape + px ) {
+			top: 110px;
+			width: grid(90, $smartphone_portrait);
+			height: 90px;
+			background-color: transparent;
+			padding: 0;
+			line-height: 90px;
+		}
 		
 		&:hover {
 			background-color: $turquoise;

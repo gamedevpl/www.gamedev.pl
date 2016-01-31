@@ -11,19 +11,34 @@
 }
 
 .column {
+	width: 768px;
+	margin: 0 auto;
+	
+	@media screen and ( max-width: $tablet_portrait + px ) {
+		width: 100%;
+	}
+
 	&.left {
-		float: left;
-		width: 755px;
+		@media screen and ( min-width: $tablet_landscape + 1 + px ) {
+			float: left;
+			width: grid(755);
+		}
 	}
 
 	&.right {
-		float: right;
-		width: 760px;
+		@media screen and ( min-width: $tablet_landscape + 1 + px ) {
+			float: right;
+			width: grid(760);
+		}
 	}
 }
 
 .container {
 	@include wrapper;
+	
+	.fixed & {
+		padding-top: 235px;
+	}
 }
 
 [class^="icon-"]:before, [class*=" icon-"]:before {
@@ -60,3 +75,4 @@
   /* Uncomment for 3D effect */
   /* text-shadow: 1px 1px 1px rgba(127, 127, 127, 0.3); */
 }
+

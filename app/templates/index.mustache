@@ -3,11 +3,12 @@
     <head>
         <title>Gamedev.pl - Warsztat to polski serwis o tworzeniu gier</title>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         {{> ../partials/assets}}
     </head>
    
 <body>
-	{{> ../partials/top-bar-logged}}
+	{{> ../partials/top-bar}}
   
 	
 	<div class="container">
@@ -43,6 +44,8 @@
 			</nav>
 
 			<a class="search-trigger icon-search"></a>
+			
+			<a class="nav-trigger">menu</a>
 
 			<nav id="main-menu">
 				<ul>
@@ -71,7 +74,9 @@
 
 		<div class="column left">
 			<section id="highlights">
-				<h2>Co nowego?</h2> 
+				<h2>Co nowego?</h2>
+				
+				<a href="#" class="archive">archiwum</a>
 	
 				{{> ../partials/highlights }}
 			</section>
@@ -80,7 +85,7 @@
 		<div class="column right">
 			<section class="content-list forum">
 				<header>
-					<h3>Ostatnio na forum</h3>
+					<h3 data-long="Ostatnio na forum" data-short="Na forum"></h3>
 	
 					<nav class="nav-topics">
 						<a class="prev icon-left-open"></a>
@@ -88,8 +93,8 @@
 					</nav>
 	
 					<span class="buttons">
-						<a href="#" class="btn black-gradient"><i class="icon-bell"></i> dodaj post</a>
-						<a href="#" class="btn black-gradient"><i class="icon-plus"></i> zobacz forum</a>
+						<a href="#" class="btn black-gradient add-post"><i class="icon-bell"></i> dodaj post</a>
+						<a href="#" class="btn black-gradient see-forum"><i class="icon-plus"></i> zobacz forum</a>
 					</span>
 	
 					<span class="logo">
