@@ -1,0 +1,116 @@
+body {
+	line-height: 1.5;
+	font: {
+		family: $text;
+		size: #{$base-font-size}px;
+		weight: $regular;
+	}
+	color: black;
+}
+
+a { 
+	@include hover;
+	text-decoration: none;
+	color: inherit;
+	cursor: pointer;
+	
+	&:after, &:before {
+		@include hover;
+	}
+}
+
+strong {
+	font-weight: $bold;
+}
+
+h1,h2,h3,h4,h5,h6 {
+	@include antialias;
+	line-height: 1;
+	font-family: $proxima;
+	
+	&.bordered {
+		position: relative;
+		border-bottom: 1px solid $gray-boulder;
+		padding-bottom: 15px;
+		
+		&:after {
+			position: absolute; left: 0; bottom: 0;
+			width: 90px; height: 3px;
+			display: block;
+			content: ' ';
+		}
+		
+		&.blue-border {
+			&:after {
+				background-color: $blue;
+			}
+		}
+		
+		&.yellow-border {
+			&:after {
+				background-color: $yellow;
+			}
+		}
+	}
+}
+
+// Colors
+
+.gray-nobel {
+	color: $gray-nobel;
+}
+
+.turquoise {
+	color: $turquoise;
+}
+
+.black-gradient {
+	@include antialias;
+	@include gradient(#313536, #292c2d);
+	@include border-radius(3px);
+	@include box-shadow( rgba(0,0,0,.28) 0 1px 1px);
+	@include text-shadow( rgba(0,0,0,.28) 0 1px 1px);
+	border: 1px solid rgba(white, .1);
+	border-bottom: none;
+	color: $gray-mercury;
+}
+
+.blue-bg {
+	background-color: $blue;
+	
+	&:hover {
+		background-color: darken($blue, 10%);
+	}
+}
+
+.yellow-bg {
+	background-color: $yellow;
+	
+	&:hover {
+		background-color: darken($yellow, 10%);
+	}
+}
+
+.red-bg {
+	background-color: $red;
+	
+	&:hover {
+		background-color: darken($red, 10%);
+	}
+}
+
+.green-bg {
+	background-color: $green;
+	
+	&:hover {
+		background-color: darken($green, 10%);
+	}
+}
+
+.green-light-bg {
+	background-color: $green-cari;
+	
+	&:hover {
+		background-color: darken($green-cari, 10%);
+	}
+}

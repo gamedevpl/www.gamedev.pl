@@ -1,0 +1,277 @@
+#highlights {
+	position: relative;
+
+	h2 {
+		margin-bottom: .5em;
+		font: {
+			size: em(44);
+			weight: $light;
+		}
+		color: $turquoise;
+		
+		@media
+			screen and ( min-width: $tablet_landscape + px ) and ( max-width: $grid-base-width + px ),
+			screen and ( max-width: $tablet_portrait + px ) {
+
+			padding-left: 20px;
+		}
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			font-size: em(36);
+		}
+	}
+
+	.archive {
+		position: absolute; right: 0; top: 0;
+		padding-right: 80px;
+		text-transform: uppercase;
+		line-height: 52px;
+		color: white;
+		
+		@media screen and ( max-width: $tablet_portrait + 20 + px ) {
+			right: 30px;
+		}
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			display: none;
+		}
+		
+		&:after {
+			position: absolute; right: 0; top: 0;
+			display: block;
+			width: 54px; height: 52px;
+			background: {
+				image: url(../assets/icon-archive.png);
+				repeat: no-repeat;
+				position: right center;
+				color: $gray-emperor;
+			}
+			border-left: 6px solid $blue;
+			content: ' ';
+		}
+		
+		&:hover {
+			&:after {
+				background-color: $turquoise;
+				border-color: white;
+			}
+			color: $turquoise;
+		}
+	}
+	
+	.slider {
+		display: none;
+		position: relative;
+		width: 100%;
+		margin-bottom: 35px;
+		
+		@media screen and ( max-width: $tablet_landscape + px ) {
+			margin-bottom: 20px;
+		}
+		
+		@media screen and ( min-width: $smartphone_landscape + px ) and ( max-width: $tablet_portrait + 20 + px ) {
+			padding: 0 10px;
+		}
+
+		.rsSlide {
+			img {
+				position: relative; z-index: 5;
+				width: 100%;
+				height: auto;
+				
+				@media screen and ( max-width: $smartphone_portrait - 1 + px ) {
+					width: auto;
+				}
+			}
+			
+			article {
+				position: absolute; z-index: 10;
+				left: 0; bottom: 0;
+				width: 100%;				
+
+				h4 {
+					@include gradient(rgba(0,0,0,0), #242424);
+					line-height: 1;
+					padding: {
+						left: 10px;
+						top: 25px;
+					}
+					font: {
+						size: em(44);
+						weight: $bold;
+					}
+					color: white;
+					
+					@media screen and ( min-width: $smartphone_landscape + px ) {
+						padding: {
+							left: grid(25, 755);
+							right: grid(110, 755);
+							
+						}
+					}
+					
+					@media screen and ( min-width: $smartphone_portrait + px )  and ( max-width: $netbook + px ) {
+						font-size: em(34);
+					}
+				}
+				
+				p {
+					@include gradient(#242424, #060606);
+					position: relative;
+					padding: {
+						left: 10px;
+						top: 10px;
+						bottom: 25px;
+					}
+					font: {
+						size: em(13);
+						weight: $light;
+					}
+					color: #bebebe;
+					
+					@media screen and ( max-width: $ultrabook + px ) {
+						padding-right: grid(220, 755);
+					}
+					
+					@media screen and ( min-width: $smartphone_landscape + px ) {
+						padding: {
+							right: grid(420, 755);
+							left: grid(25, 755);
+						}
+					}					
+					
+					@media screen and ( max-width: $smartphone_landscape - 1 + px ) {
+						padding: {
+							bottom: 50px;
+							right: 0;
+						}
+					}
+				}
+				
+				.more {
+					position: absolute; right: grid(110, 755); bottom: 45px;
+					font: {
+						size: em(16);
+						weight: $light;
+					}
+					color: $green-jungle;
+					
+					@media screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $netbook + px ) {
+						right: 26px; bottom: 25px;
+					}
+					
+					@media screen and ( max-width: $smartphone_landscape - 1 + px ) {
+						display: none;
+					}
+					
+					&:hover {
+						color: white;
+					}
+				}
+			}
+		}
+	}
+
+	.outerCont {
+		position: absolute; bottom: 45px; right: 25px; z-index: 10;
+		text-align: right;
+		
+		@media screen and ( max-width: $smartphone_landscape - 1 + px ) {
+			bottom: 20px; right: auto; left: 10px;
+		}
+
+		.rsNav {
+			&.rsBullets {
+				display: inline-block;
+		
+				.rsBullet {
+					@include border-radius( 50% );
+					@include hover;
+					position: relative;
+					background-color: #adadad;
+					display: inline-block;
+					width: 12px; height: 12px;
+					margin: 0 3px;
+					cursor: pointer;
+			
+					&.rsNavSelected {
+						background-color: $turquoise;
+					}
+					
+					&:hover {
+						background-color: white;
+					}
+				}
+			}
+		}
+	}
+	
+	.highlights {
+		@include clear;
+		
+		@media screen and ( max-width: $tablet_portrait + 20 + px ) {
+			padding: 0 10px;
+		}
+
+		.item {
+			@include border-radius(5px);
+			float: left;
+			width: grid(368, 755);
+			margin-bottom: 35px;
+			overflow: hidden;
+			
+			@media screen and ( max-width: $tablet_landscape + px ) {
+				margin-bottom: 10px;
+			}
+			
+			@media screen and ( max-width: $tablet_landscape + px ) {
+				width: grid(368, 768);
+			}
+			
+			@media screen and ( max-width: $smartphone_portrait - 1 + px ) {
+				float: none;
+				width: 100%;
+				margin: 0 auto 10px auto;
+			}
+			
+			&:nth-child(even) {
+				@media screen and ( min-width: $smartphone_portrait + px ) {
+					float: right;
+				}
+			}
+			
+			img {
+				width: 100%;
+				height: auto;
+				
+				@media screen and ( max-width: $smartphone_portrait - 1 + px ) {
+					display: block;
+					width: auto;
+					max-width: 100%;
+					margin: 0 auto;
+				}
+			}
+		}
+	}
+}
+
+#highlights,
+.column.right {
+	.video {
+		margin-bottom: 35px;
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			margin-bottom: 20px;
+		}
+		
+		@media screen and ( max-width: $tablet_portrait + 20 + px ) {
+			padding: 0 10px;
+		}
+	
+		img {
+			width: 100%;
+			max-width: 100%;
+			height: auto;
+		}
+	}
+}

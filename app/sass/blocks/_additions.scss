@@ -1,0 +1,149 @@
+.additions {
+	width: 640px;
+	margin: 0 auto 50px auto;
+	
+	@media screen and ( min-width: $tablet_landscape + 1 + px ) {
+		float: right;
+		width: grid(740, 760);
+	}
+	
+	@media screen and ( max-width: $smartphone_landscape + px ) {
+		width: 100%;
+		padding: 0 20px;
+	}
+	
+	h4 {
+		margin-bottom: 15px;
+		line-height: 1;
+		text-align: left;
+		font: {
+			family: $proxima;
+			size: em(18);
+			weight: $bold;
+		}
+		color: white;
+	}
+
+	.about {
+		float: left;
+		width: grid(340, 740);
+		margin-bottom: 30px;
+		
+		@media 
+			screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $ultrabook + px ),
+			screen and ( max-width: $smartphone_landscape + px ) {
+			
+			float: none;
+			width: 100%;
+		}
+		
+		p {
+			@include antialias;
+			margin-bottom: 1em;
+			line-height: 2;
+			font-size: em(12);
+			color: $gray-silver;
+		}
+
+		a {
+			color: white;
+			
+			&:hover {
+				color: $turquoise;
+			}
+		}
+	}
+	
+	.language {
+		float: right;
+		width: grid(360, 740);
+		text-align: center;
+		
+		@media 
+			screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $ultrabook + px ),
+			screen and ( max-width: $smartphone_landscape + px ) {
+
+			float: none;
+			width: 100%;
+			text-align: left;
+		}
+
+		h4 {
+			margin-bottom: 30px;
+		}
+		
+		li {
+			display: inline-block;
+			padding: 0 2px 5px 2px;
+
+			&.active {
+				.lang {
+					&:after {
+						color: white;
+					}
+				}
+			}
+		}
+
+		.lang-list {
+			@include border-radius(5px);
+			@include box-shadow( rgba(black, 0.2) 0 0 3px 1px inset );
+			display: inline-block;
+			padding: 10px;
+			background-color: rgba(black, .1);
+			border-bottom: 1px solid rgba(white, .1);
+			text-align: center;
+		}
+
+		.lang {
+			position: relative;
+			display: inline-block;
+			width: 35px;
+			height: 24px;
+			background: {
+				image: url(../assets/lang.png);
+				repeat: no-repeat;
+				position: center top;
+			}
+			
+			&.gb {
+				background-position: -185px -5px;
+			}
+			
+			&.fr {
+				background-position: -140px -5px;
+			}
+			
+			&.de {
+				background-position: -50px -5px;
+			}
+			
+			&.pl {
+				background-position: -230px -5px;
+			}
+			
+			&.es {
+				background-position: -95px -5px;
+			}
+			
+			&.ch {
+				background-position: -5px -5px;
+			}
+			
+			&:after {
+				position: absolute;
+				left: 0; bottom: -14px;
+				display: block;
+				width: 100%;
+				text-align: center;
+				font: {
+					family: $icons;
+					size: 9px;
+				}
+				content: '\e80b';
+				color: #333;
+			}
+		}
+		
+	}
+}

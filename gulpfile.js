@@ -5,6 +5,9 @@ var ghPages = require('gulp-gh-pages');
 var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
 var shell = require('gulp-shell').task;
+var sass = require('gulp-sass')
+var compass = require('compass-importer')
+
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -117,9 +120,37 @@ gulp.task('assets-highlights', function() {
         .pipe(gulp.dest('./dist/public/assets/highlights'));
 });
 
-gulp.task('assets', ['assets-app', 'assets-highlights']);
+gulp.task('assets-js', function() {
+    return gulp.src('app/js/**/*')
+        .pipe(gulp.dest('./dist/public/js'));
+});
+
+gulp.task('assets-css', function() {
+    return gulp.src('app/css/**/*')
+        .pipe(gulp.dest('./dist/public/css'));
+});
+
+gulp.task('assets-font', function() {
+    return gulp.src('app/font/**/*')
+        .pipe(gulp.dest('./dist/public/font'));
+});
+
+gulp.task('assets', ['assets-app', 'assets-js', 'assets-css', 'assets-font', 'assets-highlights']);
 
 gulp.task('CNAME', function() {
     return gulp.src('CNAME')
         .pipe(gulp.dest('./dist/public'));
+});
+
+gulp.task('sass', function()
+{
+    return gulp.src('./app/sass/**/*.scss')
+      .pipe(sass({ importer: compass }).on('error', sass.logError))
+      .pipe(sass({outputStyle: 'compressed'}))
+      .pipe(gulp.dest('./app/css'));
+
+});
+ 
+gulp.task('sass:watch', function () {
+  gulp.watch('./app/sass/**/*.scss', ['sass']);
 });

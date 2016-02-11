@@ -1,0 +1,200 @@
+#main-menu {
+	position: relative;
+	z-index: 25;	
+
+	@media screen and ( max-width: 1023px ) {
+		@include clear;
+		height: 90px;
+		background-color:  #1e1e1e;
+		margin-bottom: 35px;
+		padding-top: 35px;
+	}
+
+	.fixed & {
+		position: absolute; left: 0; top: 165px;
+		width: 100%; display: none;
+		height: auto;
+	}
+
+	ul {
+		@media screen and ( max-width: $smartphone_landscape + px ) {
+			display: none;			
+		    position: absolute;
+		    left: 0;
+		    top: 90px;
+		    width: 100%;
+		    
+		    .fixed & {
+				position: fixed;
+				top: 90px;
+			}
+		}		
+	}
+	
+	&.opened {	
+		display: block;
+		-webkit-animation: show_mobilemenu .4s;
+	       -moz-animation: show_mobilemenu .4s;
+	        -ms-animation: show_mobilemenu .4s;
+	         -o-animation: show_mobilemenu .4s;
+	            animation: show_mobilemenu .4s;
+
+		ul {
+			display: block;
+		}
+	}
+
+	li {
+		@media screen and ( min-width: $smartphone_landscape + 1 + px ) {
+			float: left;		
+		}
+
+		a {
+			@include antialias;
+			display: block;
+			position: relative; z-index: 5;
+			//background-color:  #1e1e1e;
+			padding: 0 25px;
+			font: {
+				family: $proxima;
+				size: em(16);
+				weight: $bold;
+			}
+			color: white;
+			
+			@media screen and ( min-width: $smartphone_landscape + 1 + px ) {
+				@include box-shadow($gray-emperor 1px 0 0);
+				height: 55px;
+			}
+
+			@media screen and ( max-width: $tablet_portrait + px ) {
+				padding: 0 15px;
+			}
+			
+			@media screen and ( max-width: $smartphone_landscape + px ) {
+				background-color: #1e1e1e;
+				padding: {
+					top: 15px;
+					bottom: 15px;
+				}
+			}
+			
+			#header & {
+				@media screen and ( min-width: 1125px ) and ( max-width: $netbook+px ) {
+					padding: {
+						left: 20px;
+						right: 20px;
+					}
+				}
+				
+				@media screen and ( min-width: $tablet_landscape+px ) and ( max-width: 1124px ) {
+					padding: { 
+						left: 15px;
+						right: 15px;
+					}
+					font-size: em(14);
+				}
+			}
+			
+			&:after, &:before {
+				position: absolute; z-index: 10;
+				display: block;
+				background-color: $turquoise;
+			}
+			
+			&:after {
+				bottom: 0px;
+				left: 0;
+				width: 100%;
+				height: 6px;
+				content: ' ';
+			}
+			
+			&:before {
+				position: absolute; z-index: 10;
+				bottom: -12px; right: 0;
+				width: 15px; height: 12px;
+				text-align: center;
+				font: {
+					family: $icons;
+					style: normal;
+					weight: normal;
+					size: 16px;
+				}
+				speak: none;
+				content: '\e80b';
+				line-height: 10px;
+				color: white;
+				
+				@media screen and ( max-width: $smartphone_landscape + px ) {
+					display: none;
+				}
+				
+			}
+			
+			&:hover {
+				&:after {
+					height: 10px;
+				}
+			}
+		}
+		
+		&:nth-child(2) a {
+			&:after, &:before {
+				background-color: $blue;
+			}
+		}
+		
+		&:nth-child(3) a {
+			&:after, &:before {
+				background-color: $yellow;
+			}
+		}
+		
+		&:nth-child(4) a {
+			&:after, &:before {
+				background-color: $green;
+			}
+		}
+		
+		&:nth-child(5) a {
+			&:after, &:before {
+				background-color: $red;
+			}
+		}
+		
+		&.current-menu-item a {
+			&:before {
+				display: none;
+			}
+		}
+	}
+	
+	#header & {
+		position: absolute;
+		right: 395px;
+		top: 45px;
+		
+		@media screen and ( max-width: $ultrabook + px ) {
+			right: 320px;
+		}
+		
+		@media screen and ( max-width: $netbook+px ) {
+			right: 280px;
+		}
+		
+		@media screen and ( max-width: $tablet_landscape + px) {
+			right: 260px;
+		}
+		
+		@media screen and ( max-width: $tablet_landscape - 1 + px) {
+			top: 60px;
+		}
+	}
+}
+
+#top-bar {
+	#main-menu {
+		
+	}
+}

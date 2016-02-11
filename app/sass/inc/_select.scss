@@ -1,0 +1,74 @@
+.sbHolder {
+	position: relative; z-index: 30;
+	width: 100%; height: 36px;
+}
+
+.sbSelector {
+	position: absolute;
+	left: 0; top: 0; z-index: 5;
+	display: block;
+	width: 100%; height: 36px;
+	line-height: 36px;
+	outline: none;
+	overflow: hidden;
+	text-indent: 10px;	
+}
+
+.sbSelector:link, .sbSelector:visited, .sbSelector:hover{
+}
+
+.sbToggle {
+	display: block;
+	position: absolute; right: 0; top: 0; z-index: 10;
+	width: 36px; height: 36px;
+	text-align: center;
+	line-height: 36px;
+}
+
+.sbOptions {
+	@include border-bottom-left-radius(5px);
+	@include border-bottom-right-radius(5px);
+	position: absolute; top: 36px; left: 0; z-index: 1;
+	width: 100%;
+	overflow: hidden;
+	overflow-y: auto;
+	padding: 5px 0;
+
+	li {		
+		a {
+			@include border-radius(3px);
+			display: block;
+			outline: none;
+		}
+	}
+}
+
+.sbOptions a:hover,
+.sbOptions a:focus,
+.sbOptions a.sbFocus{
+
+}
+
+.sbOptions li.last a {
+
+}
+
+.sbOptions .sbDisabled {
+	
+}
+
+.sbOptions .sbGroup {
+	
+}
+
+.sbOptions .sbSub {
+}
+
+
+.short {
+	.sbHolder,
+	.sbSelector,
+	.sbOptions {
+		width: 70px;
+	}
+}

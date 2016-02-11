@@ -1,0 +1,218 @@
+.jobs {
+	background-color: $gray-shaft2;
+	margin-bottom: 50px;
+	
+	@media screen and ( max-width: $smartphone_landscape + px ) {
+		margin-bottom: 20px;
+	}
+	
+	header {
+		height: 60px;
+		padding: 20px 20px 20px 80px;
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			height: 100px;
+			padding-left: 20px;
+		}
+		
+		h3 {
+			float: left;
+			margin-right: 30px;
+			
+			@media screen and ( max-width: $smartphone_portrait + px ) {
+				float: none;
+				margin-bottom: 15px;
+			}
+		}
+	}
+	
+	.jobs-list {
+		width: 100%;
+		border: 1px solid rgba(white, 0.05);
+		
+		tr {
+			td {
+				@include antialias;
+				padding: 21px 25px;
+				border: {
+					bottom: 1px solid rgba(white, 0.05);
+					right: 1px solid rgba(white, 0.05);
+				}
+				font: {
+					family: $mont;
+					weight: $regular;
+				}
+				line-height: 1;
+				
+				@media 
+					screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $netbook + px ),
+					screen and ( max-width: $smartphone_landscape + px ) {
+
+					padding: 16px 20px;
+				}
+				
+				&:nth-child(1),
+				&:nth-child(2),
+				&:nth-child(5), {
+					@media screen and ( max-width: $smartphone_portrait + px ) {
+						display: none;
+					}
+				}
+				
+				&:nth-child(3) {
+					@media screen and ( max-width: $smartphone_portrait + px ) {
+						font-size: em(12);
+					}
+				}
+				
+				&:nth-child(4) {
+					font-size: em(13);
+				}
+	
+				&.action {
+					padding: 0;
+					width: 60px;
+					text-align: center;
+					font-size: 24px;
+					color: rgba(white, 0.2);
+					
+					.icon-cancel {
+						font-size: 14px;
+					}
+	
+					.icon-star-empty {
+						font-size: 24px;
+					}
+				}
+				
+				&.no-border {
+					border-right: none;
+				}
+				
+				a {
+					&:hover {
+						color: $turquoise;
+					}
+				}
+	
+				.dark {
+					@include opacity(0.6);
+				}
+				
+				.date {
+					color: #7e7e7e;
+				}
+				
+				.info {
+					margin-right: 10px;
+					line-height: 1;
+					padding: 3px 3px;
+					text-transform: uppercase;
+					font-size: 12px;
+					color: white;
+				}
+			}
+		}
+	}
+	
+	.nav-buttons {
+		@include clear;
+		position: absolute; z-index: 10;
+		left: 0; top: 0;
+		width: 60px;
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			display: none;
+		}
+
+		.btn {
+			float: left;
+			width: 60px; height: 60px;
+			text-align: center;
+			line-height: 60px;
+			font-size: 24px;
+			color: white;
+		}
+		
+		.actions {
+			position: absolute; top: 60px; left: -120px;
+			width: 240px; 
+			display: none;
+			
+			.btn {
+				font-size: 20px;
+			}
+			
+			.icon-cancel {
+				font-size: 14px;
+			}
+
+			.icon-star-empty {
+				font-size: 24px;
+			}
+		}
+	}
+	
+	.results {
+		float: right;
+		font: {
+			family: $mont;
+			weight: $regular;
+		}
+		color: rgba(white, .2);
+		
+		@media screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $netbook + px ) {
+			font-size: em(12);
+		}
+
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			position: absolute;
+		    right: 20px;
+		    top: 20px;
+		}
+	}
+
+	.search-job {
+		float: left;
+		position: relative;
+		width: grid(400, 760);
+		margin-top: -2px;
+		
+		@media 
+			screen and ( min-width: $tablet_landscape + 1 + px ) and ( max-width: $netbook + px ),
+			screen and ( max-width: $smartphone_landscape + px ) {
+
+			width: grid(300, 760);
+		}
+		
+		@media screen and ( max-width: $smartphone_portrait + px ) {
+			width: 100%;
+		}
+		
+		input[type=text] {
+			position: relative; z-index: 5;
+			border-bottom: 1px solid $gray-tundora;
+			padding: 5px 0;
+			font-size: em(12);
+			color: $gray-dusty;
+		}
+		
+		button[type=submit] {
+			position: absolute; right: 0; top: -10px; z-index: 10;
+			width: 40px; height: 40px;
+			background-color: $gray-shaft2;
+			text-align: center;
+			line-height: 40px;
+			font-size: 32px;
+			color: $gray;
+			
+			@media screen and ( max-width: $netbook + px ) {
+				font-size: 28px;
+			}
+			
+			&:hover {
+				color: white;
+			}
+		}
+	}
+}

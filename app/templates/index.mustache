@@ -1,46 +1,196 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>Gamedev.pl - Warsztat to polski serwis o tworzeniu gier</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         {{> ../partials/assets}}
     </head>
-    <body>
-        <section id="top-bar">
-            <div class="container">
-                <p class="gray-color"><span class="midgray-color">Witaj, Nieznajomy.</span> Obecnie jesteś niezalogowany. <button id="login-btn"><span class="bold">Zaloguj</span> się <div class="icon"><img src="../assets/register-icon.png"></div></button> <span class="turquoise-color"> bądź </span> <button id="login-btn" class="bold">zarejestruj</span> <div class="icon"><img src="../assets/login-icon.png"></div></button></p>
-            </div>
+   
+<body>
+	{{> ../partials/top-bar}}
+  
+	
+	<div class="container">
             
-        </section>
-        <div class="container">
-            <header>
-                <a href="">
-                    <h1 id="logo">                    
-                        <span>Gamedev.pl</span>                
-                    </h1>
-                </a>
-                <nav id="main-menu">
-                    <ul>
-                        <li><a href="#">Home</a></li><li><a href="#">Oferty pracy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Użytkownicy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Forum<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Odznaki<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li>
-                    </ul>
-                </nav>
-            </header>
-            <main>
-                <h2>Co nowego?</h2> 
-                <section id="highlights">
-                    {{> ../partials/highlights }}
-                </section>
-                <section class="content-list">
-    	            {{#topics}}
-    	                {{#topic_list}}
-    	                    {{> ../partials/topics }}
-    	                {{/topic_list}}
-    	            {{/topics}}
-                </section>
-                <section class="content-list">
-                </section>
-            </main>
-            <footer>
-                {{> ../partials/footer}}
-            </footer>
-        </div>
-    </body>
+		<div id="header">
+			<a href="#" class="logo">
+				<img src="/assets/logo-gamedev.png" alt="Gamedev.pl" width="70" height="60" />
+				gamedev<span class="turquoise">.pl</span>
+			</a>
+
+			<nav class="nav-social">
+				<ul>
+					<li>
+						<a href="#" class="icon-twitter"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-facebook"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-linkedin"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-youtube"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-rss"></a>
+					</li>
+				</ul>
+			</nav>
+
+			<a class="search-trigger icon-search"></a>
+			
+			<a class="nav-trigger">menu</a>
+
+			<nav id="main-menu">
+				<ul>
+					<li class="current-menu-item">
+						<a href="#">Home</a>
+					</li>
+
+					<li>
+						<a href="#">Oferty pracy</a>
+					</li>
+
+					<li>
+						<a href="#">Użytkownicy</a>
+					</li>
+
+					<li>
+						<a href="#">Forum</a>
+					</li>
+
+					<li>
+						<a href="#">Odznaki</a>
+					</li>
+				</ul>
+			</nav>
+		</div>
+
+		<div class="column left">
+			<section id="highlights">
+				<h2>Co nowego?</h2>
+				
+				<a href="#" class="archive">archiwum</a>
+	
+				{{> ../partials/highlights }}
+			</section>
+		</div>
+
+		<div class="column right">
+			<section class="content-list forum">
+				<header>
+					<h3 data-long="Ostatnio na forum" data-short="Na forum"></h3>
+	
+					<nav class="nav-topics">
+						<a class="prev icon-left-open"></a>
+						<a class="next icon-right-open"></a>
+					</nav>
+	
+					<span class="buttons">
+						<a href="#" class="btn black-gradient add-post"><i class="icon-bell"></i> dodaj post</a>
+						<a href="#" class="btn black-gradient see-forum"><i class="icon-plus"></i> zobacz forum</a>
+					</span>
+	
+					<span class="logo">
+						<img src="assets/logo-warsztat.png" alt="warsztat" width="118" height="30" />
+					</span>
+				</header>
+	
+				{{#topics}}
+	                {{#topic_list}}
+	                    {{> ../partials/topics }}
+	                {{/topic_list}}
+	            {{/topics}}
+			</section>
+	
+			<section class="content-list jobs">
+				<header>
+					<h3>Oferty pracy</h3>
+					
+					<span class="nav-buttons">
+						<a class="btn blue-bg icon-cw"></a>
+						
+						<span class="actions">
+							<a class="btn yellow-bg icon-reply"></a>
+							<a class="btn red-bg icon-cancel"></a>
+							<a class="btn green-bg icon-ok"></a>
+							<a class="btn green-light-bg icon-star-empty"></a>
+						</span>
+					</span>
+					
+					<form action="#" class="search-job">
+						<input type="text" placeholder="Wpisz czego szukasz" />
+						<button type="submit" class="icon-search"></button>
+					</form>
+					
+					<span class="results">1-50 z 300</span>
+				</header>				
+
+                {{> ../partials/jobs }}
+
+			</section>
+	
+			<div class="additions">
+				<section class="about">
+					<h4 class="bordered blue-border">O Gamedev.pl</h4>
+					
+					<p>
+					 Lorem Ipsum jest tekstem stosowanym jako przykładowy wypełniacz w przemyśle poligraficznym. Został po raz pierwszy użyty w XV w. przez nieznanego drukarza do wypełnienia tekstem próbnej książki. 
+					</p>
+					
+					<p>
+	Pięć wieków później zaczął być używany przemyśle elektronicznym, pozostając praktycznie niezmienionym. Spopularyzował się w latach 60. XX w. wraz z publikacją <a href="#">arkuszy Letrasetu</a>. 
+					</p>
+	
+					<p>
+						<a href="#">Zobacz więcej....</a>
+					</p>
+				</section>
+				
+				<section class="language">
+					<h4 class="bordered yellow-border">Wybór języka</h4>
+					
+					<ul class="lang-list">
+						<li>
+							<a href="#" class="lang gb"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang fr"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang de"></a>
+						</li>
+	
+						<li class="active">
+							<a href="#" class="lang pl"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang es"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang ch"></a>
+						</li>
+					</ul>
+				</section>
+			</div>
+		</div>
+		
+		<footer>
+			{{> ../partials/footer}}
+		</footer>
+
+	</div>
+        
+	{{> ../partials/javascript}}
+</body>
 </html>

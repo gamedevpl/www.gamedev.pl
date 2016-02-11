@@ -1,0 +1,263 @@
+@keyframes show_submenu {
+	0% {
+		@include opacity(0);
+		@include transform(translateY(-20px));
+	}
+
+	100% {
+		@include opacity(1);
+		@include transform(translateY(0));
+	}
+}
+
+@keyframes show_mobilemenu {
+	0% {
+		@include opacity(0);
+		//@include transform(translateY(-20px));
+	}
+
+	100% {
+		@include opacity(1);
+		//@include transform(translateY(0));
+	}
+}
+
+
+.nav-account {
+	display: inline-block;
+	vertical-align: middle;
+
+	> ul {
+		position: relative;
+
+		> li {
+			display: inline-block;
+			height: 68px;
+			margin-right: 5px;
+			padding: 15px 10px 0 10px;
+			
+			[class^="icon--"] {
+				display: block;
+				height: 40px;
+			    background: {
+			    	image: url(../assets/icons-nav-account.png);
+					repeat: no-repeat;
+				}			    
+			}
+			
+			a {
+				@include transition-property(none);
+			}
+			
+			.icon--mail {
+			    width: 38px;
+			    background-position: -5px -5px;
+			}
+			
+			.icon--comment {
+			    width: 41px;
+			    background-position: -101px -5px;
+			}
+			
+			.icon--watch {
+			    width: 45px;
+			    background-position: -203px -5px;
+			}
+			
+			[class^="icon--"] {
+				position: relative;
+				color: #535353;
+				font-size: em(42);
+			}
+			
+			&:hover {
+				background-color: #2b2d2e;
+				
+				.icon--mail {
+					background-position: -53px -5px;
+				}
+				
+				.icon--comment {
+					background-position: -152px -5px;
+				}
+				
+				.icon--watch {
+					background-position: -258px -5px;
+				}
+			}
+			
+			.tooltip {
+				position: absolute; right: -5px; top: -3px;
+				display: inline-block;
+				padding: 2px;
+				line-height: 1;
+				font: {
+					size: 11px;
+					weight: $bold;
+				}
+				color: white;
+				
+				&:after {
+					position: absolute; right: 5px; bottom: -4px;
+					display: block;
+					width: 0;
+					height: 0;
+					border-style: solid;
+					border-width: 4px 4px 0 4px;
+					content: ' ';
+				}
+				
+				&.blue {
+					background-color: #12b0cc;
+					
+					&:after {
+						border-color: #12b0cc transparent transparent transparent;
+					}
+				}
+				
+				&.red {
+					background-color: #ec0f21;
+					
+					&:after {
+						border-color: #ec0f21 transparent transparent transparent;
+					}
+				}				
+			}
+			
+			&:last-child {
+				.tooltip {
+					right: 10px;
+				}
+			}
+			
+			&:hover {
+				.sub-menu {
+					display: block;
+					-webkit-animation: show_submenu .4s;
+				       -moz-animation: show_submenu .4s;
+				        -ms-animation: show_submenu .4s;
+				         -o-animation: show_submenu .4s;
+				            animation: show_submenu .4s;            
+				}
+			}
+		}
+	}
+	
+	.sub-menu {
+		@include box-shadow( rgba(black, .6) 0 5px 5px );
+		position: absolute; 
+		left: 0; top: 68px;
+		display: none;
+		width: 420px;
+		background-color: #2b2d2e;
+		padding: 10px 15px;
+		
+		.lead {
+			@include box-shadow( #414141 0 1px 0 );
+			display: block;
+			margin-bottom: 10px;
+			padding-bottom: 5px;
+			border-bottom: 1px solid black;
+			font: {
+				size: em(13);
+				weight: $light;
+			}
+			color: #8d8d8d;			
+		}
+		
+		.messages {
+			li {
+				@include clear;
+				margin-bottom: 5px;
+				
+				&:last-child {
+					margin: 0;
+				}
+
+				.meta {
+					-webkit-font-smoothing: inherit;
+					display: block;
+					font: {
+						family: $open;
+						size: 10px;
+					}
+					color: $gray-boulder;
+					
+					.name {
+						color: #b5b5b5;
+						
+						&:after {
+							content: ' | ';
+							color: $gray-boulder;
+						}
+					}
+				}
+				
+				figure {
+					float: left;
+					margin-right: 10px;
+				}
+				
+				article {
+					float: right;
+					width: 320px;
+					font: {
+						size: 12px;
+						weight: $light;
+					}
+					color: #d7d7d7;
+				}
+				
+				a {					
+					&:hover {
+						text-decoration: underline;
+					}
+				}
+			}
+		}
+		
+		.projects {
+			li {
+				float: left;
+				margin: 0 10px 5px 0;
+				
+				&:nth-child(5n) {
+					margin-right: 0;
+				}
+				
+				a {
+					&:hover {
+						img {
+							@include hover;
+							border: 2px solid transparent;
+						}
+					}
+				}
+			}
+		}
+		
+		.more {
+			font-size: em(13);
+			text-align: right;
+			
+			a {
+				color: #8d8d8d;
+
+				&:after {
+					margin-left: 5px;
+					font-family: $icons;
+					content: '\e811';
+					color: #7f7f7f;
+				}
+				
+				&:hover {
+					color: $green-cari;
+					
+					&:after {
+						color: #7f7f7f;
+					}
+				}
+			}
+		}
+	}
+}
