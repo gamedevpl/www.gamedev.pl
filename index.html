@@ -1,143 +1,2150 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>Gamedev.pl - Warsztat to polski serwis o tworzeniu gier</title>
-<link href="/css/main.css" media="all" rel="stylesheet" />
-<link rel="stylesheet" href="/css/fontello.css" type="text/css" />    </head>
-    <body>
-        <section id="top-bar">
-            <div class="container">
-                <p class="gray-color"><span class="midgray-color">Witaj, Nieznajomy.</span> Obecnie jesteś niezalogowany. <button id="login-btn"><span class="bold">Zaloguj</span> się <div class="icon"><img src="../assets/register-icon.png"></div></button> <span class="turquoise-color"> bądź </span> <button id="login-btn" class="bold">zarejestruj</span> <div class="icon"><img src="../assets/login-icon.png"></div></button></p>
-            </div>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<link href="/css/main.css" media="all" rel="stylesheet" />
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+	<link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    </head>
+   
+<body>
+     <div id="top-bar" class="not-logged">
+		<div class="container">
+			<p class="text welcome">Witaj, Nieznajomy. <span class="gray-nobel">Obecnie jesteś niezalogowany.</span></p>
+			
+			<a class="btn login">Zaloguj się</a>
+			
+			<span class="text turquoise">bądź</span>
+			
+			<a class="btn register">zarejestruj</a>
+			
+			<div class="panel-select">
+				<select>
+					<option>Twój panel</option>
+					<option>Wybór 1</option>
+					<option>Wybór 2</option>
+				</select>
+				
+				<span class="text">Wypromuj swoją twórczość już teraz!</span>
+			</div>
+		</div>
+	</div>  
+	
+	<div class="container">
             
-        </section>
-        <div class="container">
-            <header>
-                <a href="">
-                    <h1 id="logo">                    
-                        <span>Gamedev.pl</span>                
-                    </h1>
-                </a>
-                <nav id="main-menu">
-                    <ul>
-                        <li><a href="#">Home</a></li><li><a href="#">Oferty pracy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Użytkownicy<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Forum<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li><li><a href="#">Odznaki<div class="item-expand"><img src="../assets/arrow-down.png"></div></a></li>
-                    </ul>
-                </nav>
-            </header>
-            <main>
-                <h2>Co nowego?</h2> 
-                <section id="highlights">
-    <div class="highlights_item">
-        <img src="/assets/highlights/highlight-redesign.png" />
-    </div>
-                </section>
-                <section class="content-list">
-<ul class="topic-list">                
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/nowe-forum-o-tworzeniu-gier/8">Nowe forum o tworzeniu gier</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/szukam-game-designerow/299">Szukam game designerów</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/unity-transsiberian-2d-horror-adventure-game-poszukujemy-osob-do-wspolpracy/297">[Unity] Transsiberian 2D horror&#x2F;adventure Game - poszukujemy osób do współpracy</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/unity-android-jump-knight-jump/293">[Unity][Android] Jump Knight, Jump!</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/tworzenie-gier-od-czego-zaczac/71">Tworzenie gier, od czego zacząć?</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/opengl-glsl-shaders-tutorial-jako-udokumentowany-przyklad/286">OpenGL GLSL Shaders tutorial jako udokumentowany przykład</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/projekt-gra-szukamy-wspoltworcow/143">Projekt GRA - szukamy współtwórców</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/how-to-make-sound-effects-for-games/255">How to make sound effects for games</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/szukamy-ludzi-chetnych-do-wspolpracy-nad-tworzeniem-gry/129">Szukamy ludzi chętnych do współpracy nad tworzeniem gry</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/jak-tworzyc-dzwieki-do-gier/205">Jak tworzyć dźwięki do gier</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/stellar-asylum-mobilny-multiplayer-na-jednym-urzadzeniu/279">Stellar Asylum - mobilny multiplayer na jednym urządzeniu</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/monogame-xna-szukanie-najkrotszej-drogi/273">MonoGame&#x2F;XNA - szukanie najkrótszej drogi</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/rekrutacja-programista-unity3d-x6-game-designer-x3/270">Rekrutacja - Programista Unity3d (x6), Game designer (x3)</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/studio-deweloperskie-rekrutacja-koncepcja-i-plany-gra/268">Studio deweloperskie - rekrutacja,koncepcja i plany (GRA)</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/matura-rozszerzona-z-informatyki/251">Matura rozszerzona z informatyki</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/gorwen-strategiczno-ekonomiczna-gra-online/95">Gorwen - strategiczno-ekonomiczna gra online</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/unity3d-android-mapquiz-polska/249">[UNITY3D][ANDROID] MapQuiz Polska</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/wspolpraca-tlumacz-polsko-angielski-szuka-zespolu/246">[Współpraca] Tłumacz polsko-angielski szuka zespołu</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/geometry-techno-meteor-storm/244">Geometry Techno Meteor Storm</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/gra-rpg-m-a-wspolpraca/187">Gra RPG M&amp;A - Współpraca</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/unity3d-android-mr-candy-climber/241">[UNITY3D][ANDROID] Mr. Candy Climber</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/crazy-towers-wciagajaca-gra-na-androida/230">Crazy Towers - wciągająca gra na Androida</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/poszukuje-osob-chetnych-do-wspolpracy/232">Poszukuję osób chętnych do współpracy</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/advanced-pirates-monsters/180">Advanced Pirates &amp; Monsters</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/ue-unity-do-izometrycznej-gry-3d-ktory-wybrac/105">UE&#x2F;Unity do izometrycznej gry 3D - który wybrać?</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/sciezka-w-unreal-engine-4/151">Ścieżka w Unreal engine 4</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/detekcja-zdarzen/224">Detekcja zdarzeń</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/praca-zdalna-od-10-do-40-godz-tyg-do-wymagajacej-gry-3d-w-c-do-uzgodnienia/221">Praca zdalna od 10 do 40 godz&#x2F;tyg do wymagajacej gry 3D w C++, $$ do uzgodnienia</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/grafik-2d-koncept-artysta-ilustrator-do-przygarniecia/217">Grafik 2d, koncept artysta, ilustrator - do przygarnięcia</a>
-        </li>
-        <li class="topic-list__topic-item">
-            <a href="https://forum.gamedev.pl/t/gamedev-pl-redesign/192">Gamedev.pl redesign</a>
-        </li>
-</ul>
-                </section>
-                <section class="content-list">
-                </section>
-            </main>
-            <footer>
-<div id="footer-info">Wszelkie prawa zastrzeżone <a href="http://www.gamedev.pl">Gamedev.pl</a></div>
-  <div id="footer-color"><a href="#top"><div id="footer-go-top">IDŹ W GÓRĘ <i class="icon-up-open"></i></div></a></div>
-  <div id="border-footer"></div>
-  <div id="footer-social">
-    <a href="#"><i class="icon-twitter"></i></a>
-    <a href="#"><i class="icon-facebook"></i></a>
-    <a href="#"><i class="icon-linkedin"></i></a>
-    <a href="#"><i class="icon-youtube"></i></a>
-    <a href="#"><i class="icon-rss"></i></a>
-</div>            </footer>
-        </div>
-    </body>
+		<div id="header">
+			<a href="#" class="logo">
+				<img src="/assets/logo-gamedev.png" alt="Gamedev.pl" width="70" height="60" />
+				gamedev<span class="turquoise">.pl</span>
+			</a>
+
+			<nav class="nav-social">
+				<ul>
+					<li>
+						<a href="#" class="icon-twitter"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-facebook"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-linkedin"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-youtube"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-rss"></a>
+					</li>
+				</ul>
+			</nav>
+
+			<a class="search-trigger icon-search"></a>
+			
+			<a class="nav-trigger">menu</a>
+
+			<nav id="main-menu">
+				<ul>
+					<li class="current-menu-item">
+						<a href="#">Home</a>
+					</li>
+
+					<li>
+						<a href="#">Oferty pracy</a>
+					</li>
+
+					<li>
+						<a href="#">Użytkownicy</a>
+					</li>
+
+					<li>
+						<a href="#">Forum</a>
+					</li>
+
+					<li>
+						<a href="#">Odznaki</a>
+					</li>
+				</ul>
+			</nav>
+		</div>
+
+		<div class="column left">
+			<section id="highlights">
+				<h2>Co nowego?</h2>
+				
+				<a href="#" class="archive">archiwum</a>
+	
+				<ul class="slider">
+					<li>
+						<article>
+							<h4>Nowa odsłona Gamedev</h4>
+							<p>Set without brought abundantly. You'll behold. Night, moveth which fruit without saw to was rule. <a href="#" class="more">Read more...</a></p>
+							
+						</article>
+
+						<a href="#">
+							<img src="assets/news-slide.jpg" alt="" width="755" height="395" />
+						</a>
+					</li>
+					
+					<li>
+						<article>
+							<h4>Drugi slide</h4>
+							<p>Set without brought abundantly. You'll behold. Night, moveth which fruit without saw to was rule. Set without brought abundantly. You'll behold. Night, moveth which fruit without saw to was rule. <a href="#" class="more">Read more...</a></p>
+							
+						</article>
+	
+						<img src="assets/news-slide.jpg" alt="" width="755" height="395" />
+					</li>
+					
+					<li>
+						<article>
+							<h4>Nowa odsłona</h4>
+							<p>Set without brought abundantly. You'll behold. Night, moveth which fruit without saw to was rule. <a href="#" class="more">Read more...</a></p>
+							
+						</article>
+	
+						<a href="#">
+							<img src="assets/news-slide.jpg" alt="" width="755" height="395" />
+						</a>
+					</li>
+				</ul>
+				
+				<ul class="highlights">
+					<li class="item">
+						<img src="assets/highlight-1.jpg" alt="highlight-1" width="368" height="394" />
+					</li>
+					
+					<li class="item">
+						<img src="assets/highlight-3.jpg" alt="highlight-3" width="368" height="394" />
+					</li>
+					
+					<li class="item">
+						<img src="assets/highlight-3.jpg" alt="highlight-3" width="368" height="394" />
+					</li>
+					
+					<li class="item">
+						<img src="assets/highlight-3.jpg" alt="highlight-3" width="368" height="394" />
+					</li>
+				</ul>
+				
+				<div class="video">
+					<img src="assets/video.png" alt="video" width="755" height="334" />
+				</div>
+			</section>
+		</div>
+
+		<div class="column right">
+			<section class="content-list forum">
+				<header>
+					<h3 data-long="Ostatnio na forum" data-short="Na forum"></h3>
+	
+					<nav class="nav-topics">
+						<a class="prev icon-left-open"></a>
+						<a class="next icon-right-open"></a>
+					</nav>
+	
+					<span class="buttons">
+						<a href="#" class="btn black-gradient add-post"><i class="icon-bell"></i> dodaj post</a>
+						<a href="#" class="btn black-gradient see-forum"><i class="icon-plus"></i> zobacz forum</a>
+					</span>
+	
+					<span class="logo">
+						<img src="assets/logo-warsztat.png" alt="warsztat" width="118" height="30" />
+					</span>
+				</header>
+	
+				<div class="topic-slider">
+					<table class="topic-list">
+						<thead>
+							<tr>
+								<th>temat</th>
+								<th>kategoria</th>
+								<th class="align-center">odpowiedzi</th>
+								<th class="align-center">odsłony</th>
+								<th class="align-center">użytkownicy</th>
+							</tr>
+						</thead>
+						
+						<tbody>
+						
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/nowe-forum-o-tworzeniu-gier/8" class="topic">Nowe forum o tworzeniu gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/jaki-silnik-do-izometrycznej-gry-2d/331" class="topic">Jaki silnik do izometrycznej gry 2D</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukamy-kogos-do-pomocy-przy-grze-survival-3d-unity-5-3/318" class="topic">Szukamy kogoś do pomocy przy grze survival 3D(Unity 5.3)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/technikum-programowanie-gier-komputerowych/325" class="topic">Technikum programowanie gier komputerowych</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/sprzedam-ksiazke-opengl-programowanie-gier/324" class="topic">Sprzedam książkę OpenGL. Programowanie gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/grafik-2d-szuka-grupy-koncept-ilustracja-pomoc-lub-praca/320" class="topic">Grafik 2D szuka grupy (koncept, ilustracja) Pomoc lub praca</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/tlumaczenie-polski-angielski-niemiecki-francuski/314" class="topic">[Tłumaczenie] polski-angielski-niemiecki-francuski</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukam-grafikow-animatorow-skrypterow-do-projektu-gry/311" class="topic">Szukam Grafikow,Animatorow,Skrypterow do projektu gry</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/looking-for-unity-developer-in-warsaw/308" class="topic">Looking for Unity Developer in Warsaw</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/biuro-dla-gamedeveloperow-do-wynajecia-w-chorzowie/306" class="topic">Biuro dla gamedeveloperów do wynajęcia w Chorzowie</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukam-game-designerow/299" class="topic">Szukam game designerów</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity-transsiberian-2d-horror-adventure-game-poszukujemy-osob-do-wspolpracy/297" class="topic">[Unity] Transsiberian 2D horror&#x2F;adventure Game - poszukujemy osób do współpracy</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity-android-jump-knight-jump/293" class="topic">[Unity][Android] Jump Knight, Jump!</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/tworzenie-gier-od-czego-zaczac/71" class="topic">Tworzenie gier, od czego zacząć?</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/opengl-glsl-shaders-tutorial-jako-udokumentowany-przyklad/286" class="topic">OpenGL GLSL Shaders tutorial jako udokumentowany przykład</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/projekt-gra-szukamy-wspoltworcow/143" class="topic">Projekt GRA - szukamy współtwórców</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/how-to-make-sound-effects-for-games/255" class="topic">How to make sound effects for games</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukamy-ludzi-chetnych-do-wspolpracy-nad-tworzeniem-gry/129" class="topic">Szukamy ludzi chętnych do współpracy nad tworzeniem gry</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/jak-tworzyc-dzwieki-do-gier/205" class="topic">Jak tworzyć dźwięki do gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/stellar-asylum-mobilny-multiplayer-na-jednym-urzadzeniu/279" class="topic">Stellar Asylum - mobilny multiplayer na jednym urządzeniu</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/monogame-xna-szukanie-najkrotszej-drogi/273" class="topic">MonoGame&#x2F;XNA - szukanie najkrótszej drogi</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/rekrutacja-programista-unity3d-x6-game-designer-x3/270" class="topic">Rekrutacja - Programista Unity3d (x6), Game designer (x3)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/studio-deweloperskie-rekrutacja-koncepcja-i-plany-gra/268" class="topic">Studio deweloperskie - rekrutacja,koncepcja i plany (GRA)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/matura-rozszerzona-z-informatyki/251" class="topic">Matura rozszerzona z informatyki</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/gorwen-strategiczno-ekonomiczna-gra-online/95" class="topic">Gorwen - strategiczno-ekonomiczna gra online</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity3d-android-mapquiz-polska/249" class="topic">[UNITY3D][ANDROID] MapQuiz Polska</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/wspolpraca-tlumacz-polsko-angielski-szuka-zespolu/246" class="topic">[Współpraca] Tłumacz polsko-angielski szuka zespołu</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/geometry-techno-meteor-storm/244" class="topic">Geometry Techno Meteor Storm</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/gra-rpg-m-a-wspolpraca/187" class="topic">Gra RPG M&amp;A - Współpraca</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity3d-android-mr-candy-climber/241" class="topic">[UNITY3D][ANDROID] Mr. Candy Climber</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+	
+						</tbody>
+					</table>
+					
+					<table class="topic-list">
+						<thead>
+							<tr>
+								<th>temat</th>
+								<th>kategoria</th>
+								<th class="align-center">odpowiedzi</th>
+								<th class="align-center">odsłony</th>
+								<th class="align-center">użytkownicy</th>
+							</tr>
+						</thead>
+						
+						<tbody>
+						
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/nowe-forum-o-tworzeniu-gier/8" class="topic">Nowe forum o tworzeniu gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/jaki-silnik-do-izometrycznej-gry-2d/331" class="topic">Jaki silnik do izometrycznej gry 2D</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukamy-kogos-do-pomocy-przy-grze-survival-3d-unity-5-3/318" class="topic">Szukamy kogoś do pomocy przy grze survival 3D(Unity 5.3)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/technikum-programowanie-gier-komputerowych/325" class="topic">Technikum programowanie gier komputerowych</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/sprzedam-ksiazke-opengl-programowanie-gier/324" class="topic">Sprzedam książkę OpenGL. Programowanie gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/grafik-2d-szuka-grupy-koncept-ilustracja-pomoc-lub-praca/320" class="topic">Grafik 2D szuka grupy (koncept, ilustracja) Pomoc lub praca</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/tlumaczenie-polski-angielski-niemiecki-francuski/314" class="topic">[Tłumaczenie] polski-angielski-niemiecki-francuski</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukam-grafikow-animatorow-skrypterow-do-projektu-gry/311" class="topic">Szukam Grafikow,Animatorow,Skrypterow do projektu gry</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/looking-for-unity-developer-in-warsaw/308" class="topic">Looking for Unity Developer in Warsaw</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/biuro-dla-gamedeveloperow-do-wynajecia-w-chorzowie/306" class="topic">Biuro dla gamedeveloperów do wynajęcia w Chorzowie</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukam-game-designerow/299" class="topic">Szukam game designerów</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity-transsiberian-2d-horror-adventure-game-poszukujemy-osob-do-wspolpracy/297" class="topic">[Unity] Transsiberian 2D horror&#x2F;adventure Game - poszukujemy osób do współpracy</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity-android-jump-knight-jump/293" class="topic">[Unity][Android] Jump Knight, Jump!</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/tworzenie-gier-od-czego-zaczac/71" class="topic">Tworzenie gier, od czego zacząć?</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/opengl-glsl-shaders-tutorial-jako-udokumentowany-przyklad/286" class="topic">OpenGL GLSL Shaders tutorial jako udokumentowany przykład</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/projekt-gra-szukamy-wspoltworcow/143" class="topic">Projekt GRA - szukamy współtwórców</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/how-to-make-sound-effects-for-games/255" class="topic">How to make sound effects for games</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/szukamy-ludzi-chetnych-do-wspolpracy-nad-tworzeniem-gry/129" class="topic">Szukamy ludzi chętnych do współpracy nad tworzeniem gry</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/jak-tworzyc-dzwieki-do-gier/205" class="topic">Jak tworzyć dźwięki do gier</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/stellar-asylum-mobilny-multiplayer-na-jednym-urzadzeniu/279" class="topic">Stellar Asylum - mobilny multiplayer na jednym urządzeniu</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/monogame-xna-szukanie-najkrotszej-drogi/273" class="topic">MonoGame&#x2F;XNA - szukanie najkrótszej drogi</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/rekrutacja-programista-unity3d-x6-game-designer-x3/270" class="topic">Rekrutacja - Programista Unity3d (x6), Game designer (x3)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/studio-deweloperskie-rekrutacja-koncepcja-i-plany-gra/268" class="topic">Studio deweloperskie - rekrutacja,koncepcja i plany (GRA)</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/matura-rozszerzona-z-informatyki/251" class="topic">Matura rozszerzona z informatyki</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/gorwen-strategiczno-ekonomiczna-gra-online/95" class="topic">Gorwen - strategiczno-ekonomiczna gra online</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity3d-android-mapquiz-polska/249" class="topic">[UNITY3D][ANDROID] MapQuiz Polska</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/wspolpraca-tlumacz-polsko-angielski-szuka-zespolu/246" class="topic">[Współpraca] Tłumacz polsko-angielski szuka zespołu</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/geometry-techno-meteor-storm/244" class="topic">Geometry Techno Meteor Storm</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/gra-rpg-m-a-wspolpraca/187" class="topic">Gra RPG M&amp;A - Współpraca</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<a href="https://forum.gamedev.pl/t/unity3d-android-mr-candy-climber/241" class="topic">[UNITY3D][ANDROID] Mr. Candy Climber</a>
+								</td>
+								<td>
+									<a class="btn blue-bg">Forum i warsztat</a>
+								</td>
+								<td class="align-center">
+									<span class="answer"><span class="num">12</span></span>
+								</td>
+								<td class="align-center">
+									<span class="views">
+										<i class="icon-heart-empty"></i> <span class="num">166</span>
+									</span>
+								</td>
+								<td class="align-center">
+									<span class="user border">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+									<span class="user">
+										<img src="assets/user.jpg" alt="user" />
+									</span>
+								</td>
+							</tr>
+	
+						</tbody>
+					</table>				
+				</div>
+				
+				<div class="topic-slider-pagination">
+					<span class="text">Zobacz więcej</span>
+				</div>              
+			</section>
+	
+			<section class="content-list jobs">
+				<header>
+					<h3>Oferty pracy</h3>
+					
+					<span class="nav-buttons">
+						<a class="btn blue-bg icon-cw"></a>
+						
+						<span class="actions">
+							<a class="btn yellow-bg icon-reply"></a>
+							<a class="btn red-bg icon-cancel"></a>
+							<a class="btn green-bg icon-ok"></a>
+							<a class="btn green-light-bg icon-star-empty"></a>
+						</span>
+					</span>
+					
+					<form action="#" class="search-job">
+						<input type="text" placeholder="Wpisz czego szukasz" />
+						<button type="submit" class="icon-search"></button>
+					</form>
+					
+					<span class="results">1-50 z 300</span>
+				</header>				
+
+				<table class="jobs-list">
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Dribble.com</span>
+						</td>
+						<td class="no-border">
+							<span class="btn info blue-bg">users</span>
+							<a href="#">Graphic designer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Python Developer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Programista gier CC/C++</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Twitter</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Grafik 2D</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Python Developer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Programista gier CC/C++</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Python Developer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Programista gier CC/C++</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Python Developer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Programista gier CC/C++</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="action">
+							<i class="icon-ok"></i>
+						</td>
+						<td class="action">
+							<i class="icon-star-empty"></i>
+						</td>
+						<td>
+							<span class="dark">Behance</span>
+						</td>
+						<td class="no-border">
+							<a href="#">Python Developer</a>
+						</td>
+						<td class="align-right">
+							<span class="date">Dziś, 15:48</span>
+						</td>
+					</tr>
+				</table>
+			</section>
+	
+			<div class="additions">
+				<section class="about">
+					<h4 class="bordered blue-border">O Gamedev.pl</h4>
+					
+					<p>
+					 Lorem Ipsum jest tekstem stosowanym jako przykładowy wypełniacz w przemyśle poligraficznym. Został po raz pierwszy użyty w XV w. przez nieznanego drukarza do wypełnienia tekstem próbnej książki. 
+					</p>
+					
+					<p>
+	Pięć wieków później zaczął być używany przemyśle elektronicznym, pozostając praktycznie niezmienionym. Spopularyzował się w latach 60. XX w. wraz z publikacją <a href="#">arkuszy Letrasetu</a>. 
+					</p>
+	
+					<p>
+						<a href="#">Zobacz więcej....</a>
+					</p>
+				</section>
+				
+				<section class="language">
+					<h4 class="bordered yellow-border">Wybór języka</h4>
+					
+					<ul class="lang-list">
+						<li>
+							<a href="#" class="lang gb"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang fr"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang de"></a>
+						</li>
+	
+						<li class="active">
+							<a href="#" class="lang pl"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang es"></a>
+						</li>
+						
+						<li>
+							<a href="#" class="lang ch"></a>
+						</li>
+					</ul>
+				</section>
+			</div>
+		</div>
+		
+		<footer>
+			<p class="copyrights">Wszelkie prawa zastrzeżone przez <a href="//www.gamedev.pl">Gamedev.pl</a></p>
+			
+			<a class="go-top">idź na górę</a>
+
+			<nav class="nav-social">
+				<ul>
+					<li>
+						<a href="#" class="icon-twitter"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-facebook"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-linkedin"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-youtube"></a>
+					</li>
+					
+					<li>
+						<a href="#" class="icon-rss"></a>
+					</li>
+				</ul>
+			</nav>
+		</footer>
+
+	</div>
+        
+<script src="/js/head.core.min.js" data-headjs-load="/js/init.js" type="text/javascript"></script></body>
 </html>
