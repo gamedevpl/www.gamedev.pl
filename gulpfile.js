@@ -112,7 +112,7 @@ gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_cat
                 topic.categoryUrl = 'https://forum.gamedev.pl/c/' + category.slug;
                 topic.posters.forEach(poster => {
                     poster.user = data.topics.users.filter(user => user.id == poster.user_id)[0];
-                    poster.user.avatarUrl = "http://d2yqgc61pg3yk6.cloudfront.net" + poster.user.avatar_template.replace("{size}", "32");
+                    poster.user.avatarUrl = "http://d2yqgc61pg3yk6.cloudfront.net" + poster.user.avatar_template.replace("{size}", "25");
                 });
 
                 return true;//topic.categoryName != "Ogłoszenia";
