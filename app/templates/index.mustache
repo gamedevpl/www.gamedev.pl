@@ -8,7 +8,7 @@
     </head>
    
 <body>
-	{{> ../partials/top-bar}}
+	{{!> ../partials/top-bar}}
   
 	
 	<div class="container">
@@ -18,7 +18,7 @@
 				<img src="/assets/logo-gamedev.png" alt="Gamedev.pl" width="70" height="60" />
 				gamedev<span class="turquoise">.pl</span>
 			</a>
-
+            {{!--
 			<nav class="nav-social">
 				<ul>
 					<li>
@@ -42,31 +42,32 @@
 					</li>
 				</ul>
 			</nav>
+            --}}
 
-			<a class="search-trigger icon-search"></a>
-			
+			<a class="search-trigger icon-search" href="https://forum.gamedev.pl/search"></a>
+
 			<a class="nav-trigger">menu</a>
 
 			<nav id="main-menu">
 				<ul>
 					<li class="current-menu-item">
-						<a href="#">Home</a>
+						<a href="http://www.gamedev.pl">Home</a>
 					</li>
 
 					<li>
-						<a href="#">Oferty pracy</a>
+						<a href="https://forum.gamedev.pl/c/ogloszenia">Oferty pracy</a>
 					</li>
 
 					<li>
-						<a href="#">Użytkownicy</a>
+						<a href="https://forum.gamedev.pl/users">Użytkownicy</a>
 					</li>
 
 					<li>
-						<a href="#">Forum</a>
+						<a href="https://forum.gamedev.pl">Forum</a>
 					</li>
 
 					<li>
-						<a href="#">Odznaki</a>
+						<a href="https://forum.gamedev.pl/badges">Odznaki</a>
 					</li>
 				</ul>
 			</nav>
@@ -76,11 +77,42 @@
 			<section id="highlights">
 				<h2>Co nowego?</h2>
 				
-				<a href="#" class="archive">archiwum</a>
+				<a href="https://github.com/gamedevpl/www.gamedev.pl/tree/master/highlights" class="archive"></a>
 	
 				{{> ../partials/highlights }}
 			</section>
-		</div>
+
+            <section class="content-list jobs">
+                <header>
+                    <h3>Oferty pracy</h3>
+
+					<span class="nav-buttons">
+						<a class="btn blue-bg icon-cw"></a>
+
+						<span class="actions">
+							<a class="btn yellow-bg icon-reply"></a>
+							<a class="btn red-bg icon-cancel"></a>
+							<a class="btn green-bg icon-ok"></a>
+							<a class="btn green-light-bg icon-star-empty"></a>
+						</span>
+					</span>
+
+                    <form action="https://forum.gamedev.pl/search" class="search-job" onsubmit="this.querySelector('input').value += ' category:12';">
+                        <input type="text" name="q" placeholder="Wpisz czego szukasz" />
+                        <button type="submit" class="icon-search"></button>
+                    </form>
+
+                    <span class="results">1-50 z 300</span>
+                </header>
+
+                {{#jobs}}
+                    {{#topic_list}}
+                        {{> ../partials/jobs }}
+                    {{/topic_list}}
+                {{/jobs}}
+            </section>
+
+        </div>
 
 		<div class="column right">
 			<section class="content-list forum">
@@ -93,8 +125,8 @@
 					</nav>
 	
 					<span class="buttons">
-						<a href="#" class="btn black-gradient add-post"><i class="icon-bell"></i> dodaj post</a>
-						<a href="#" class="btn black-gradient see-forum"><i class="icon-plus"></i> zobacz forum</a>
+						<a href="https://forum.gamedev.pl/new-topic" class="btn black-gradient add-post"><i class="icon-bell"></i> dodaj post</a>
+						<a href="https://forum.gamedev.pl/" class="btn black-gradient see-forum"><i class="icon-plus"></i> zobacz forum</a>
 					</span>
 	
 					<span class="logo">
@@ -108,51 +140,23 @@
 	                {{/topic_list}}
 	            {{/topics}}
 			</section>
-	
-			<section class="content-list jobs">
-				<header>
-					<h3>Oferty pracy</h3>
-					
-					<span class="nav-buttons">
-						<a class="btn blue-bg icon-cw"></a>
-						
-						<span class="actions">
-							<a class="btn yellow-bg icon-reply"></a>
-							<a class="btn red-bg icon-cancel"></a>
-							<a class="btn green-bg icon-ok"></a>
-							<a class="btn green-light-bg icon-star-empty"></a>
-						</span>
-					</span>
-					
-					<form action="#" class="search-job">
-						<input type="text" placeholder="Wpisz czego szukasz" />
-						<button type="submit" class="icon-search"></button>
-					</form>
-					
-					<span class="results">1-50 z 300</span>
-				</header>				
 
-                {{> ../partials/jobs }}
-
-			</section>
-	
 			<div class="additions">
 				<section class="about">
 					<h4 class="bordered blue-border">O Gamedev.pl</h4>
 					
-					<p>
-					 Lorem Ipsum jest tekstem stosowanym jako przykładowy wypełniacz w przemyśle poligraficznym. Został po raz pierwszy użyty w XV w. przez nieznanego drukarza do wypełnienia tekstem próbnej książki. 
-					</p>
+					<p>Warsztat to strona przeznaczona dla wszystkich, którzy chcą zajmować się tworzenie gier - zawodowo i/lub amatorsko.</p>
 					
 					<p>
-	Pięć wieków później zaczął być używany przemyśle elektronicznym, pozostając praktycznie niezmienionym. Spopularyzował się w latach 60. XX w. wraz z publikacją <a href="#">arkuszy Letrasetu</a>. 
+
 					</p>
 	
 					<p>
-						<a href="#">Zobacz więcej....</a>
+						<a href="https://forum.gamedev.pl/c/o-forum-i-warsztacie">Zobacz więcej....</a>
 					</p>
 				</section>
-				
+
+                {{!--
 				<section class="language">
 					<h4 class="bordered yellow-border">Wybór języka</h4>
 					
@@ -182,6 +186,7 @@
 						</li>
 					</ul>
 				</section>
+				--}}
 			</div>
 		</div>
 		

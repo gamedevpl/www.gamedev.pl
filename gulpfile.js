@@ -22,7 +22,7 @@ gulp.task('build', function(done) {
 
 gulp.task('watch', function() {
     watch('app/**/*', function() { 
-        runSequence('less', 'render', 'assets'); 
+        runSequence('fetch', 'less', 'render', 'assets');
     });
 });
 
@@ -82,7 +82,9 @@ gulp.task('fetch_highlights', function() {
 });
 
 gulp.task('fetch_jobs', function() {
-
+    return download("https://forum.gamedev.pl/latest.json?category=ogloszenia")
+      .pipe(rename("jobs.json"))
+      .pipe(gulp.dest('./dist'));
 });
 
 gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs'], function() {
@@ -125,30 +127,23 @@ gulp.task('assets-js', function() {
         .pipe(gulp.dest('./dist/public/js'));
 });
 
-gulp.task('assets-css', function() {
-    return gulp.src('app/css/**/*')
-        .pipe(gulp.dest('./dist/public/css'));
-});
-
 gulp.task('assets-font', function() {
     return gulp.src('app/font/**/*')
         .pipe(gulp.dest('./dist/public/font'));
 });
 
-gulp.task('assets', ['assets-app', 'assets-js', 'assets-css', 'assets-font', 'assets-highlights']);
+gulp.task('assets', ['assets-app', 'assets-js', 'sass', 'assets-font', 'assets-highlights']);
 
 gulp.task('CNAME', function() {
     return gulp.src('CNAME')
         .pipe(gulp.dest('./dist/public'));
 });
 
-gulp.task('sass', function()
-{
+gulp.task('sass', function() {
     return gulp.src('./app/sass/**/*.scss')
       .pipe(sass({ importer: compass }).on('error', sass.logError))
       .pipe(sass({outputStyle: 'compressed'}))
-      .pipe(gulp.dest('./app/css'));
-
+      .pipe(gulp.dest('./dist/public/css'));
 });
  
 gulp.task('sass:watch', function () {
