@@ -6,7 +6,8 @@
   "dependencies": {
     "gulp": "^3.9.0",
     "gulp-download": "0.0.1",
-    "gulp-run": "^1.6.10"
+    "gulp-run": "^1.6.10",
+    "moment": "^2.11.2"
   },
   "devDependencies": {
     "compass-importer": "^0.1.3",

@@ -6,8 +6,10 @@ var runSequence = require('run-sequence');
 var watch = require('gulp-watch');
 var shell = require('gulp-shell').task;
 var sass = require('gulp-sass')
-var compass = require('compass-importer')
+var compass = require('compass-importer');
 
+var moment = require("moment");
+moment.locale('pl');
 
 gulp.task('serve', ['build', 'watch'], serve('./dist/public'));
 
@@ -63,8 +65,14 @@ var rename = require("gulp-rename");
 var rm = require('gulp-rm')
 
 gulp.task('fetch_topics', function() {
-    return download("https://forum.gamedev.pl/latest.json")
+    return download("https://forum.gamedev.pl/latest.json?exclude_category_ids=12&page=0")
       .pipe(rename("topics.json"))
+      .pipe(gulp.dest('./dist'));
+});
+
+gulp.task('fetch_categories', function() {
+    return download("https://forum.gamedev.pl/categories.json")
+      .pipe(rename("categories.json"))
       .pipe(gulp.dest('./dist'));
 });
 
@@ -87,11 +95,27 @@ gulp.task('fetch_jobs', function() {
       .pipe(gulp.dest('./dist'));
 });
 
-gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs'], function() {
-    return gulp.src(['dist/topics.json', 
-              'dist/jobs.json', 
+gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_categories'], function() {
+    return gulp.src([
+              'dist/topics.json',
+              'dist/jobs.json',
+              'dist/categories.json',
               'dist/highlights.json'])
          .pipe(jsoncombine("combined.json", function(data) {
+             data.jobs.topic_list.topics.forEach(function(topic) {
+                topic.date = moment(topic.created_at).calendar();
+             });
+             data.topics.topic_list.topics = data.topics.topic_list.topics.filter(function(topic) {
+                var category = (data.categories.category_list.categories.filter(category => category.id == topic.category_id)[0] || {});
+                topic.categoryName = category.name;
+                topic.categoryUrl = 'https://forum.gamedev.pl/c/' + category.slug;
+                topic.posters.forEach(poster => {
+                    poster.user = data.topics.users.filter(user => user.id == poster.user_id)[0];
+                    poster.user.avatarUrl = "http://d2yqgc61pg3yk6.cloudfront.net" + poster.user.avatar_template.replace("{size}", "32");
+                });
+
+                return true;//topic.categoryName != "Ogłoszenia";
+             }).slice(0, 50);
              return new Buffer(JSON.stringify(data))
           }))
          .pipe(gulp.dest('./dist'));
