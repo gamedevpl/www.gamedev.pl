@@ -26,7 +26,7 @@ gulp.task('watch', function() {
     });
 });
 
-gulp.task('deploy', ['build'], function() {
+gulp.task('deploy', ['clean', 'build'], function() {
     return gulp.src('./dist/public/**/*')
         .pipe(ghPages({
             remoteUrl: "git@github.com:gamedevpl/www.gamedev.pl.git"

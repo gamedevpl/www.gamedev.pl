@@ -8,8 +8,7 @@ head.js('http://code.jquery.com/jquery-1.11.1.min.js', function() {
 		}
 		
 		if ($(".slider").size()>0) {
-			head.js('/js/jquery.royalslider.custom.min.js')
-				.load('css/royalslider.css');
+			head.js('/js/jquery.royalslider.custom.min.js');
 		}
 	})
 	.js('https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.js')
