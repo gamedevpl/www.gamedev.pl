@@ -2,3 +2,5 @@ node_modules
 dist
 .project
 .publish
+.idea
+/app/sass/.sass-cache
