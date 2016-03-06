@@ -105,6 +105,7 @@ gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_cat
              data.jobs.topic_list.topics.forEach(function(topic) {
                 topic.date = moment(topic.created_at).calendar();
              });
+             data.jobs.category = (data.categories.category_list.categories.filter(category => category.name == 'Ogłoszenia')[0] || {});
              data.topics.topic_list.topics = data.topics.topic_list.topics.filter(function(topic) {
                 var category = (data.categories.category_list.categories.filter(category => category.id == topic.category_id)[0] || {});
                 topic.categoryName = category.name;

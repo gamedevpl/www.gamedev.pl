@@ -105,7 +105,7 @@
                         <button type="submit" class="icon-search"></button>
                     </form>
 
-                    {{!--<span class="results">1-50 z 300</span>--}}
+                    <span class="results">1-{{jobs.topic_list.per_page}} z {{jobs.category.topic_count}}</span>
                 </header>
 
                 {{#jobs}}
