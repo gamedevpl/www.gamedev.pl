@@ -143,7 +143,7 @@ gulp.task('assets-app', function() {
 });
 
 gulp.task('assets-highlights', function() {
-    return gulp.src('highlights/*.png')
+    return gulp.src(['highlights/*.png', 'highlights/*.jpg'])
         .pipe(gulp.dest('./dist/public/assets/highlights'));
 });
 
