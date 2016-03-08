@@ -9,7 +9,7 @@ function debouncer( func , timeout ) {
    }
 }
 
-jQuery(function($) {
+var init = function() {
 	var Layout = {
 
 		goTop: function() {
@@ -289,16 +289,13 @@ jQuery(function($) {
 		}
 	};
 	
-	$(document).ready(function () {
-	
 		Layout.init();
 		Nav.init();
 		Slider.init();
 		Rwd.init();
 		
 	    // js is on
-	    $('html').removeClass('no-js');
+    $('html').removeClass('no-js');
+};
 
-		
-	});
-});
+init();
