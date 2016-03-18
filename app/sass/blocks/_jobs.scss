@@ -8,7 +8,7 @@
 	
 	header {
 		height: 60px;
-		padding: 20px 20px 20px 80px;
+		padding: 20px 20px 20px 20px;
 		
 		@media screen and ( max-width: $smartphone_portrait + px ) {
 			height: 100px;
