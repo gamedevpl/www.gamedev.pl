@@ -7,6 +7,7 @@ var watch = require('gulp-watch');
 var shell = require('gulp-shell').task;
 var sass = require('gulp-sass')
 var compass = require('compass-importer');
+var sort = require('gulp-sort');
 
 var moment = require("moment");
 moment.locale('pl');
@@ -78,6 +79,9 @@ gulp.task('fetch_categories', function() {
 
 gulp.task('fetch_highlights', function() {
     return gulp.src("highlights/*.json")
+        .pipe(sort({
+            asc: false
+        }))
         .pipe(jsoncombine("highlights.json", function(data) {
             return new Buffer(JSON.stringify(Object.keys(data).map(function(key) {
                 return {
