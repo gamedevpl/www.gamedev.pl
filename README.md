@@ -6,8 +6,9 @@ Gamedev.pl is a static website generated from various sources.
 
 # Roadmap
 
-1. Implement new design
-2. Switch http://www.gamedev.pl to new layout
+1. ~~Implement new design~~
+2. ~~Switch http://www.gamedev.pl to new layout~~
+3. Improve performance
 
 # Development
 
