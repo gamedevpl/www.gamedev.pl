@@ -94,7 +94,7 @@ gulp.task('fetch_highlights', function() {
 });
 
 gulp.task('fetch_jobs', function() {
-    return download("https://forum.gamedev.pl/latest.json?category=ogloszenia")
+    return download("https://forum.gamedev.pl/latest.json?category=ogloszenia&order=created")
       .pipe(rename("jobs.json"))
       .pipe(gulp.dest('./dist'));
 });
