@@ -56,7 +56,7 @@
 					</li>
 
 					<li>
-						<a href="https://forum.gamedev.pl/c/ogloszenia">Oferty pracy</a>
+						<a href="https://forum.gamedev.pl/c/ogloszenia/oferty-pracy-jobs">Oferty pracy</a>
 					</li>
 
 					<li>
@@ -85,7 +85,37 @@
 
             <section class="content-list jobs">
                 <header>
-                    <h3>Oferty pracy</h3>
+                    <h3><a href="https://forum.gamedev.pl/c/ogloszenia/oferty-pracy-jobs">Oferty pracy / Jobs</a></h3>
+
+                    {{!--
+					<span class="nav-buttons">
+						<a class="btn blue-bg icon-cw"></a>
+
+						<span class="actions">
+							<a class="btn yellow-bg icon-reply"></a>
+							<a class="btn red-bg icon-cancel"></a>
+							<a class="btn green-bg icon-ok"></a>
+							<a class="btn green-light-bg icon-star-empty"></a>
+						</span>
+					</span>
+					--}}
+
+                    <form action="https://forum.gamedev.pl/search" class="search-job" onsubmit="this.querySelector('input').value += ' category:16';">
+                        <input type="text" name="q" placeholder="Wpisz czego szukasz" />
+                        <button type="submit" class="icon-search"></button>
+                    </form>
+
+                    <span class="results">1-{{jobs.topic_list.per_page}} z {{jobs.category.topic_count}}</span>
+                </header>
+
+                {{#jobs}}
+                    {{#topic_list}}
+                        {{> ../partials/jobs }}
+                    {{/topic_list}}
+                {{/jobs}}
+
+                <header>
+                    <h3><a href="https://forum.gamedev.pl/c/ogloszenia">Ogłoszenia</a></h3>
 
                     {{!--
 					<span class="nav-buttons">
@@ -104,15 +134,13 @@
                         <input type="text" name="q" placeholder="Wpisz czego szukasz" />
                         <button type="submit" class="icon-search"></button>
                     </form>
-
-                    <span class="results">1-{{jobs.topic_list.per_page}} z {{jobs.category.topic_count}}</span>
                 </header>
 
-                {{#jobs}}
+                {{#offers}}
                     {{#topic_list}}
                         {{> ../partials/jobs }}
                     {{/topic_list}}
-                {{/jobs}}
+                {{/offers}}
             </section>
 
         </div>

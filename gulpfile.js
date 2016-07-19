@@ -94,21 +94,37 @@ gulp.task('fetch_highlights', function() {
 });
 
 gulp.task('fetch_jobs', function() {
-    return download("https://forum.gamedev.pl/latest.json?category=ogloszenia&order=created")
+    return download("https://forum.gamedev.pl/latest.json?category=oferty-pracy-jobs&order=created&limit=15")
       .pipe(rename("jobs.json"))
       .pipe(gulp.dest('./dist'));
 });
 
-gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_categories'], function() {
+gulp.task('fetch_offers', function() {
+    return download("https://forum.gamedev.pl/latest.json?category=ogloszenia&order=created&limit=15")
+      .pipe(rename("offers.json"))
+      .pipe(gulp.dest('./dist'));
+});
+
+gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_offers', 'fetch_categories'], function() {
     return gulp.src([
               'dist/topics.json',
               'dist/jobs.json',
+              'dist/offers.json',
               'dist/categories.json',
               'dist/highlights.json'])
          .pipe(jsoncombine("combined.json", function(data) {
-             data.jobs.topic_list.topics.forEach(function(topic) {
+             data.jobs.topic_list.topics = data.jobs.topic_list.topics.filter(function(topic) {
                 topic.date = moment(topic.created_at).calendar();
-             });
+
+                return topic.category_id === 16;
+             }).slice(0, 15);
+
+             data.offers.topic_list.topics = data.offers.topic_list.topics.filter(function(topic) {
+                topic.date = moment(topic.created_at).calendar();
+
+                return topic.category_id === 12;
+             }).slice(0, 15);
+
              data.jobs.category = (data.categories.category_list.categories.filter(category => category.name == 'Ogłoszenia')[0] || {});
              data.topics.topic_list.topics = data.topics.topic_list.topics.filter(function(topic) {
                 var category = (data.categories.category_list.categories.filter(category => category.id == topic.category_id)[0] || {});
