@@ -8,7 +8,7 @@ before_script:
 - gulp travis-prepare
 script: '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && gulp deploy || gulp build'
 after_script:
-- ps auxf
+- eval `/usr/bin/ssh-agent -k`
 branches:
   only: 
     - master
