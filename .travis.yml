@@ -7,6 +7,8 @@ before_script:
 - npm install -g gulp
 - gulp travis-prepare
 script: '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && gulp deploy || gulp build'
+after_script:
+- ps auxf
 branches:
   only: 
     - master
