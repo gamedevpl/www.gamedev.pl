@@ -137,6 +137,10 @@ gulp.task('fetch', ['fetch_topics', 'fetch_highlights', 'fetch_jobs', 'fetch_off
 
                 return true;//topic.categoryName != "Ogłoszenia";
              }).slice(0, 50);
+
+             data.highlights = data.highlights.filter(item => item.data.expiry && item.data.expiry > Date.now());
+             data.hasHighlights = data.highlights.length > 0;
+
              return new Buffer(JSON.stringify(data))
           }))
          .pipe(gulp.dest('./dist'));
