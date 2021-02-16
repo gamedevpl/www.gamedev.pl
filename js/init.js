@@ -1,4 +1,4 @@
-head.js('http://code.jquery.com/jquery-1.11.1.min.js', function() {
+head.js('https://code.jquery.com/jquery-1.11.1.min.js', function() {
         head.js('/js/jquery.selectbox-0.2.min.js', function() {
             $('select').selectbox();
         });
