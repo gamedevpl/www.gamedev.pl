@@ -1,5 +1,6 @@
 {
   "name": "website",
+  "homepage": "https://www.gamedev.pl",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
@@ -31,6 +32,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "deploy": "gh-pages -d build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "prepare": "husky install"
