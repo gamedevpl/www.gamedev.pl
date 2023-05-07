@@ -1,8 +1,8 @@
 import React from "react";
 import PageWrapper from "../../components/page-wrapper";
 import Section from "../../components/section";
-import styled from "styled-components";
-import highlight from "./highlight.png";
+// import styled from "styled-components";
+// import highlight from "./highlight.png";
 
 export default function WarGames() {
   return (
@@ -24,8 +24,8 @@ export default function WarGames() {
   );
 }
 
-const WarGamesWrapper = styled.div`
-  background: url(${highlight}) no-repeat;
-  background-size: 100%;
-  height: 100vh;
-`;
+// const WarGamesWrapper = styled.div`
+//   background: url(${highlight}) no-repeat;
+//   background-size: 100%;
+//   height: 100vh;
+// `;

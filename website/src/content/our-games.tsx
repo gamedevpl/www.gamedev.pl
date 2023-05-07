@@ -1,12 +1,12 @@
-import { useTranslation } from "react-i18next";
+// import { useTranslation } from "react-i18next";
 import { Heading2 } from "../components/headers";
 import Section from "../components/section";
-import styled from "styled-components";
+// import styled from "styled-components";
 
-import warGamesHighlight from "../games/wargames/highlight.png";
+// import warGamesHighlight from "../games/wargames/highlight.png";
 
 export default function OurGames() {
-  const { t } = useTranslation();
+  // const { t } = useTranslation();
 
   return (
     <Section isTransparent>
@@ -22,22 +22,22 @@ export default function OurGames() {
   );
 }
 
-function GameBox(props: {
-  title: string;
-  description: string;
-  highlight: string;
-  href: string;
-}) {
-  return (
-    <GameBoxContent href={props.href}>
-      <h4>{props.title}</h4>
-      <img src={props.highlight} alt={props.title} />
-    </GameBoxContent>
-  );
-}
-
-const GameBoxContent = styled.a`
-  img {
-    max-width: 300px;
-  }
-`;
+// function GameBox(props: {
+//   title: string;
+//   description: string;
+//   highlight: string;
+//   href: string;
+// }) {
+//   return (
+//     <GameBoxContent href={props.href}>
+//       <h4>{props.title}</h4>
+//       <img src={props.highlight} alt={props.title} />
+//     </GameBoxContent>
+//   );
+// }
+//
+// const GameBoxContent = styled.a`
+//   img {
+//     max-width: 300px;
+//   }
+// `;
