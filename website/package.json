@@ -36,7 +36,7 @@
     "test": "react-scripts test",
     "lint": "eslint --max-warnings 0 .",
     "eject": "react-scripts eject",
-    "prepare": "husky install"
+    "prepare": "cd .. && husky install"
   },
   "eslintConfig": {
     "extends": [
