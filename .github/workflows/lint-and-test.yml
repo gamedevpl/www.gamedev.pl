@@ -1,0 +1,28 @@
+
+
+
+name: Lint and test
+
+on: [push, pull_request]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nodejs: [16]
+
+    steps:
+      - uses: actions/checkout@v2
+      - directory: ./website
+
+      # https://github.com/actions/setup-node
+      - uses: actions/setup-node@v2-beta
+        with:
+          node-version: ${{ matrix.nodejs }}
+
+      - run: npm install
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build

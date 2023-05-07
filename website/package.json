@@ -34,6 +34,7 @@
     "build": "react-scripts build",
     "deploy": "gh-pages -d build",
     "test": "react-scripts test",
+    "lint": "eslint --max-warnings 0 .",
     "eject": "react-scripts eject",
     "prepare": "husky install"
   },
@@ -43,6 +44,11 @@
       "react-app/jest"
     ]
   },
+  "eslintIgnore": [
+    "node_modules",
+    "build",
+    "dist"
+  ],
   "browserslist": {
     "production": [
       ">0.2%",
