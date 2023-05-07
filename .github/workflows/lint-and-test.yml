@@ -10,9 +10,12 @@ jobs:
       matrix:
         nodejs: [16]
 
+    defaults:
+      run:
+        working-directory: ./website
+
     steps:
       - uses: actions/checkout@v2
-      - directory: ./website
       # https://github.com/actions/setup-node
       - uses: actions/setup-node@v2-beta
         with:
