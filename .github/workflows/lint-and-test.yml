@@ -11,15 +11,15 @@ jobs:
         nodejs: [16]
 
     steps:
-      - uses: actions/checkout@v2
-      - directory: ./website
+    - uses: actions/checkout@v2
+    - directory: ./website
 
-      # https://github.com/actions/setup-node
-      - uses: actions/setup-node@v2-beta
-        with:
-          node-version: ${{ matrix.nodejs }}
+    # https://github.com/actions/setup-node
+    - uses: actions/setup-node@v2-beta
+      with:
+        node-version: ${{ matrix.nodejs }}
 
-      - run: npm install
-      - run: npm run lint
-      - run: npm run test
-      - run: npm run build
+    - run: npm install
+    - run: npm run lint
+    - run: npm run test
+    - run: npm run build
