@@ -6,4 +6,5 @@ export type GameStateComponent = React.FunctionComponent<GameStateProps>;
 
 export type GameState = {
   Component: GameStateComponent;
+  path: string;
 };
