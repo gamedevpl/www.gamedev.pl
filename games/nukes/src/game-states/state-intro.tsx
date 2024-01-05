@@ -1,19 +1,18 @@
 import { GameState, GameStateComponent } from './types';
-import GameStateMapTechDemo from './state-techdemo-map';
-import GameStateNukeTechDemo from './state-techdemo-nuke';
+import { GameStateTechMap } from './state-tech-map';
+import { GameStateTechNuke } from './state-tech-nuke';
 
 const Intro: GameStateComponent = ({ setGameState }) => {
   return (
     <>
       intro
-      <button onClick={() => setGameState(GameStateMapTechDemo)}>Map tech demo</button>
-      <button onClick={() => setGameState(GameStateNukeTechDemo)}>Nuke tech demo</button>
+      <button onClick={() => setGameState(GameStateTechMap)}>Map tech demo</button>
+      <button onClick={() => setGameState(GameStateTechNuke)}>Nuke tech demo</button>
     </>
   );
 };
 
-const GameStateIntro: GameState = {
+export const GameStateIntro: GameState = {
   Component: Intro,
+  path: '/',
 };
-
-export default GameStateIntro;

@@ -1,28 +1,29 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+
 import './App.css';
 import { GameState } from './game-states/types';
-import GameStateIntro from './game-states/state-intro';
-import GameStateMap from './game-states/state-techdemo-map';
-import GameStateNuke from './game-states/state-techdemo-nuke';
+import { GameStateIntro } from './game-states/state-intro';
+import { GameStateTechMap } from './game-states/state-tech-map';
+import { GameStateTechNuke } from './game-states/state-tech-nuke';
 
 function App() {
-  const [currentGameState, setGameState] = useState<GameState>(() => {
-    if (document.location.pathname === '/techdemo-nuke') {
-      return GameStateNuke;
-    } else if (document.location.pathname === '/techdemo-map') {
-      return GameStateMap;
-    } else {
-      return GameStateIntro;
-    }
-  });
-
-  const GameStateComponent = currentGameState?.Component;
-
   return (
     <>
-      <GameStateComponent setGameState={setGameState} />
+      <BrowserRouter basename="/">
+        <Routes>
+          <Route path={GameStateIntro.path} element={<GameStateRoute state={GameStateIntro} />} />
+          <Route path={GameStateTechMap.path} element={<GameStateRoute state={GameStateTechMap} />} />
+          <Route path={GameStateTechNuke.path} element={<GameStateRoute state={GameStateTechNuke} />} />
+        </Routes>
+      </BrowserRouter>
     </>
   );
+}
+
+function GameStateRoute({ state }: { state: GameState }) {
+  const navigate = useNavigate();
+
+  return <state.Component setGameState={(state) => navigate(state.path)} />;
 }
 
 export default App;
