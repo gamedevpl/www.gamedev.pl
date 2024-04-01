@@ -6,6 +6,8 @@ export type StateId = string;
 
 export type CityId = string;
 
+export type LaunchSiteId = string;
+
 export type MissileId = string;
 
 export type SectorId = string;
@@ -21,6 +23,7 @@ export type City = {
   id: CityId;
   stateId: StateId;
   name: string;
+  position: Position;
 };
 
 export enum SectorType {
@@ -35,6 +38,7 @@ export type Sector = {
 };
 
 export type LaunchSite = {
+  id: LaunchSiteId;
   position: Position;
   stateId?: StateId;
 };
