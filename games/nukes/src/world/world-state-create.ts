@@ -7,11 +7,29 @@ export function createWorldState(): WorldState {
     states: [
       {
         id: 'test-state',
-        name: 'Test',
+        name: 'TestState',
       },
     ],
-    cities: [],
-    launchSites: [],
+    cities: [
+      {
+        id: 'test-city',
+        name: 'TestCity',
+        stateId: 'test-state',
+        position: { x: 100, y: 100 },
+      },
+    ],
+    launchSites: [
+      {
+        id: 'test-launch-site-1',
+        stateId: 'test-state',
+        position: { x: 100, y: 100 },
+      },
+      {
+        id: 'test-launch-site-2',
+        stateId: 'test-state',
+        position: { x: 200, y: 200 },
+      },
+    ],
     missiles: [
       {
         id: 'test-missile',
@@ -30,26 +48,23 @@ export function createWorldState(): WorldState {
         radius: 30,
       },
     ],
-    sectors: generateSectors(128, 50),
+    sectors: generateSectors(32, 32, 16),
   };
 
   return result;
 }
 
-function generateSectors(sectorCount: number, sectorSize: number) {
-  const cols = Math.floor(Math.sqrt(sectorCount));
-  const rows = Math.floor(sectorCount / cols);
-
+function generateSectors(cols: number, rows: number, sectorSize: number) {
   const centerColX = cols / 2;
   const centerRowY = rows / 2;
 
-  return Array.from({ length: sectorCount }).map((v, i) => {
+  return Array.from({ length: cols * rows }).map((v, i) => {
     const x = i % cols;
     const y = Math.floor(i / rows);
 
     return {
       id: 'test-sector-' + i,
-      type: distance(x, y, centerColX, centerRowY) <= centerColX ? SectorType.GROUND : SectorType.WATER,
+      type: distance(x, y, centerColX, centerRowY) <= centerColX / 2 ? SectorType.GROUND : SectorType.WATER,
       rect: {
         left: x * sectorSize,
         top: y * sectorSize,
