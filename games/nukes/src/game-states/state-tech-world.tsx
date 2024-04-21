@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { createWorldState } from '../world/world-state-create';
 import { updateWorldState } from '../world/world-state-updates';
 import { WorldState } from '../world/world-state-types';
-
+import { SelectionContextWrapper } from '../controls/selection';
 import { WorldStateRender } from '../render/world-state-render';
 
 import { GameState, GameStateComponent } from './types';
@@ -17,19 +17,33 @@ const WorldComponent: GameStateComponent = ({ setGameState }) => {
   );
 
   return (
-    <StateContainer>
-      <div className="meta-controls">
-        <div>Timestamp: {worldState.timestamp}</div>
-        <div>
-          <button onClick={() => updateWorld(worldState, 1)}>+1 Second</button>
-          <button onClick={() => updateWorld(worldState, 10)}>+10 Seconds</button>
-          <button onClick={() => updateWorld(worldState, 60)}>+60 seconds</button>
-        </div>
-      </div>
-      <WorldStateRender state={worldState} />
-    </StateContainer>
+    <SelectionContextWrapper>
+      <StateContainer>
+        <TimeControls worldState={worldState} updateWorld={updateWorld} />
+        <WorldStateRender state={worldState} />
+      </StateContainer>
+    </SelectionContextWrapper>
   );
 };
+
+function TimeControls({
+  worldState,
+  updateWorld,
+}: {
+  worldState: WorldState;
+  updateWorld: (worldState: WorldState, deltaTime: number) => void;
+}) {
+  return (
+    <div className="meta-controls">
+      <div>Timestamp: {worldState.timestamp}</div>
+      <div>
+        <button onClick={() => updateWorld(worldState, 1)}>+1 Second</button>
+        <button onClick={() => updateWorld(worldState, 10)}>+10 Seconds</button>
+        <button onClick={() => updateWorld(worldState, 60)}>+60 seconds</button>
+      </div>
+    </div>
+  );
+}
 
 const StateContainer = styled.div`
   position: absolute;

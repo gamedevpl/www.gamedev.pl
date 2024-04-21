@@ -13,5 +13,7 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
     sectors: state.sectors,
   };
 
+  // convert explosions to population changes
+
   return result;
 }
