@@ -1,6 +1,4 @@
 import { GameState, GameStateComponent } from './types';
-import { GameStateTechMap } from './state-tech-map';
-import { GameStateTechNuke } from './state-tech-nuke';
 import { GameStateTechWorld } from './state-tech-world';
 
 const Intro: GameStateComponent = ({ setGameState }) => {
