@@ -5,9 +5,6 @@ const Intro: GameStateComponent = ({ setGameState }) => {
   return (
     <>
       <h3>intro</h3>
-      <button onClick={() => setGameState(GameStateTechMap)}>Map tech demo</button>
-      <br />
-      <button onClick={() => setGameState(GameStateTechNuke)}>Nuke tech demo</button>
       <br />
       <button onClick={() => setGameState(GameStateTechWorld)}>Nuke world demo</button>
     </>

@@ -1,5 +1,5 @@
 import { distance } from '../math/position-utils';
-import { SectorType, WorldState } from './world-state-types';
+import { EntityType, SectorType, WorldState } from './world-state-types';
 
 export function createWorldState(): WorldState {
   const result: WorldState = {
@@ -17,14 +17,28 @@ export function createWorldState(): WorldState {
         stateId: 'test-state',
         position: { x: 100, y: 100 },
       },
+      {
+        id: 'test-city2',
+        name: 'TestCity2',
+        stateId: 'test-state',
+        position: { x: 150, y: 100 },
+      },
+      {
+        id: 'test-city3',
+        name: 'TestCity3',
+        stateId: 'test-state',
+        position: { x: 150, y: 50 },
+      },
     ],
     launchSites: [
       {
+        type: EntityType.LAUNCH_SITE,
         id: 'test-launch-site-1',
         stateId: 'test-state',
         position: { x: 100, y: 100 },
       },
       {
+        type: EntityType.LAUNCH_SITE,
         id: 'test-launch-site-2',
         stateId: 'test-state',
         position: { x: 200, y: 200 },
@@ -58,7 +72,7 @@ function generateSectors(cols: number, rows: number, sectorSize: number) {
   const centerColX = cols / 2;
   const centerRowY = rows / 2;
 
-  return Array.from({ length: cols * rows }).map((v, i) => {
+  return Array.from({ length: cols * rows }).map((_v, i) => {
     const x = i % cols;
     const y = Math.floor(i / rows);
 

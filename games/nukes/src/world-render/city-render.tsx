@@ -1,10 +1,15 @@
 import styled from 'styled-components';
 
 import { City } from '../world/world-state-types';
+import { useObjectPointer } from '../controls/pointer';
 
 export function CityRender({ city }: { city: City }) {
+  const [point, unpoint] = useObjectPointer();
+
   return (
     <CityContainer
+      onMouseEnter={() => point(city)}
+      onMouseLeave={() => unpoint(city)}
       style={
         {
           '--x': city.position.x,
