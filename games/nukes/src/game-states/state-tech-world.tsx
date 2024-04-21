@@ -5,11 +5,15 @@ import { createWorldState } from '../world/world-state-create';
 import { updateWorldState } from '../world/world-state-updates';
 import { WorldState } from '../world/world-state-types';
 import { SelectionContextWrapper } from '../controls/selection';
-import { WorldStateRender } from '../render/world-state-render';
+import { WorldStateRender } from '../world-render/world-state-render';
+
+import { LaunchHighlight } from '../controls-render/launch-highlight';
 
 import { GameState, GameStateComponent } from './types';
+import { PointerContextWrapper } from '../controls/pointer';
+import { Command } from '../controls/command';
 
-const WorldComponent: GameStateComponent = ({ setGameState }) => {
+const WorldComponent: GameStateComponent = ({}) => {
   const [worldState, setWorldState] = useState(() => createWorldState());
   const updateWorld = useCallback(
     (worldState: WorldState, deltaTime: number) => setWorldState(updateWorldState(worldState, deltaTime)),
@@ -18,10 +22,15 @@ const WorldComponent: GameStateComponent = ({ setGameState }) => {
 
   return (
     <SelectionContextWrapper>
-      <StateContainer>
-        <TimeControls worldState={worldState} updateWorld={updateWorld} />
-        <WorldStateRender state={worldState} />
-      </StateContainer>
+      <PointerContextWrapper>
+        <StateContainer>
+          <Command worldState={worldState} setWorldState={setWorldState} />
+          <TimeControls worldState={worldState} updateWorld={updateWorld} />
+          <WorldStateRender state={worldState} />
+
+          <LaunchHighlight />
+        </StateContainer>
+      </PointerContextWrapper>
     </SelectionContextWrapper>
   );
 };

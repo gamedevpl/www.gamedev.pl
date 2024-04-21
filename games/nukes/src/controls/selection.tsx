@@ -4,10 +4,10 @@ import { LaunchSite } from '../world/world-state-types';
 
 type SelectionDispatchAction =
   | {
-      action: 'clear';
+      type: 'clear';
     }
   | {
-      action: 'set';
+      type: 'set';
       object: LaunchSite;
     };
 
@@ -21,9 +21,9 @@ const selectionReducer: React.Reducer<Selection, SelectionDispatchAction> = (
   selection: Selection,
   action: SelectionDispatchAction,
 ) => {
-  if (action.action === 'clear') {
+  if (action.type === 'clear') {
     return initialSelection;
-  } else if (action.action === 'set') {
+  } else if (action.type === 'set') {
     return { ...selection, selectedObject: action.object };
   } else {
     return selection;
@@ -34,7 +34,7 @@ const selectionReducer: React.Reducer<Selection, SelectionDispatchAction> = (
 const SelectionContext = createContext<Selection>(initialSelection);
 
 // definition of dispatch function for selection context
-const SelectionDispatchContext = createContext<React.Dispatch<SelectionDispatchAction>>(selectionReducer);
+const SelectionDispatchContext = createContext<React.Dispatch<SelectionDispatchAction>>(() => {});
 
 export function SelectionContextWrapper({ children }: { children: React.ReactNode }) {
   const [selection, reducer] = useReducer(selectionReducer, initialSelection);
@@ -50,11 +50,19 @@ export function useObjectSelection(object: LaunchSite) {
   const dispatch = useContext(SelectionDispatchContext);
   const selection = useContext(SelectionContext);
 
-  return [selection.selectedObject?.id === object.id, () => dispatch({ action: 'set', object })] as const;
+  return [selection.selectedObject?.id === object.id, () => dispatch({ type: 'set', object })] as const;
 }
+
+export function useSelectedObject() {
+  const selection = useContext(SelectionContext);
+
+  return selection.selectedObject;
+}
+
+// definition of clear selection function for selection context
 
 export function useClearSelection() {
   const dispatch = useContext(SelectionDispatchContext);
 
-  return () => dispatch({ action: 'clear' });
+  return () => dispatch({ type: 'clear' });
 }

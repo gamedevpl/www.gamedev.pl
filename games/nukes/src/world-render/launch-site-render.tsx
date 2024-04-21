@@ -2,12 +2,16 @@ import styled from 'styled-components';
 
 import { LaunchSite } from '../world/world-state-types';
 import { useObjectSelection } from '../controls/selection';
+import { useObjectPointer } from '../controls/pointer';
 
 export function LaunchSiteRender({ launchSite }: { launchSite: LaunchSite }) {
   const [isSelected, select] = useObjectSelection(launchSite);
+  const [point, unpoint] = useObjectPointer();
 
   return (
     <LaunchSiteContainer
+      onMouseEnter={() => point(launchSite)}
+      onMouseLeave={() => unpoint(launchSite)}
       onClick={() => select()}
       style={
         {

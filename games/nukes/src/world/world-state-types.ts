@@ -26,6 +26,10 @@ export type City = {
   position: Position;
 };
 
+export enum EntityType {
+  LAUNCH_SITE = 'LAUNCH_SITE`',
+}
+
 export enum SectorType {
   WATER = 'WATER',
   GROUND = 'GROUND',
@@ -38,6 +42,7 @@ export type Sector = {
 };
 
 export type LaunchSite = {
+  type: EntityType.LAUNCH_SITE;
   id: LaunchSiteId;
   position: Position;
   stateId?: StateId;

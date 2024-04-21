@@ -1,4 +1,4 @@
-import { WorldState, Missile } from './world-state-types';
+import { WorldState } from './world-state-types';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
