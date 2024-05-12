@@ -47,7 +47,7 @@ function TimeControls({
   worldStateTimestamp: number;
   updateWorldTime: (deltaTime: number) => void;
 }) {
-  const [isAutoplay, setAutoplay] = useState(false);
+  const [isAutoplay, setAutoplay] = useState(true);
   useRafLoop((deltaTime) => {
     if (isAutoplay) {
       updateWorldTime(deltaTime / 100000);
