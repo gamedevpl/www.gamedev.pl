@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { useRafLoop } from 'react-use';
 
@@ -48,9 +48,22 @@ function TimeControls({
   updateWorldTime: (deltaTime: number) => void;
 }) {
   const [isAutoplay, setAutoplay] = useState(true);
-  useRafLoop((deltaTime) => {
+  const timeRef = useRef<number | null>(null);
+  useRafLoop((time) => {
+    if (!timeRef.current) {
+      timeRef.current = time;
+      return;
+    }
+
+    const deltaTime = time - timeRef.current;
+    timeRef.current = time;
+
+    if (deltaTime <= 0) {
+      return;
+    }
+
     if (isAutoplay) {
-      updateWorldTime(deltaTime / 100000);
+      updateWorldTime(deltaTime / 1000);
     }
   }, true);
 
