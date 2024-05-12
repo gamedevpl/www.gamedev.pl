@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer } from 'react';
-import { City, LaunchSite } from '../world/world-state-types';
+import { City, LaunchSite, Sector } from '../world/world-state-types';
 
-type PointableObject = LaunchSite | City;
+type PointableObject = LaunchSite | City | Sector;
 
 type PointerDispatchAction =
   | {

@@ -37,6 +37,7 @@ export enum SectorType {
 
 export type Sector = {
   id: SectorId;
+  position: Position;
   rect: Rect;
   type: SectorType;
 };
