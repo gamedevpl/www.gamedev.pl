@@ -27,6 +27,7 @@
     "react-dom": "^18.2.0",
     "react-router": "^6.21.1",
     "react-router-dom": "^6.21.1",
+    "react-use": "^17.5.0",
     "styled-components": "^6.1.6",
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
