@@ -20,7 +20,7 @@ export function LaunchHighlight() {
         } as React.CSSProperties
       }
     >
-      {pointer.x}, {pointer.y}
+      {pointer.pointingObjects.length > 0 ? 'Launch' : ''}
     </HighlightContainer>
   );
 }
