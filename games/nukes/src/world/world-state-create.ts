@@ -79,6 +79,10 @@ function generateSectors(cols: number, rows: number, sectorSize: number) {
     return {
       id: 'test-sector-' + i,
       type: distance(x, y, centerColX, centerRowY) <= centerColX / 2 ? SectorType.GROUND : SectorType.WATER,
+      position: {
+        x: x * sectorSize + sectorSize / 2,
+        y: y * sectorSize + sectorSize / 2,
+      },
       rect: {
         left: x * sectorSize,
         top: y * sectorSize,

@@ -1,10 +1,15 @@
 import styled from 'styled-components';
 
 import { Sector } from '../world/world-state-types';
+import { useObjectPointer } from '../controls/pointer';
 
 export function SectorRender({ sector }: { sector: Sector }) {
+  const [point, unpoint] = useObjectPointer();
+
   return (
     <SectorContainer
+      onMouseEnter={() => point(sector)}
+      onMouseLeave={() => unpoint(sector)}
       data-sector-type={sector.type}
       style={
         {

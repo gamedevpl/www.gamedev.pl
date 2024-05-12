@@ -32,4 +32,6 @@ const ExplosionContainer = styled.div`
   height: calc(var(--radius) * 1px);
   border-radius: 50%;
   background: rgb(255, 255, 255);
+
+  pointer-events: none;
 `;
