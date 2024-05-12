@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import styled from 'styled-components';
+import { useRafLoop } from 'react-use';
 
 import { createWorldState } from '../world/world-state-create';
 import { updateWorldState } from '../world/world-state-updates';
@@ -25,7 +26,11 @@ const WorldComponent: GameStateComponent = ({}) => {
       <PointerContextWrapper>
         <StateContainer>
           <Command worldState={worldState} setWorldState={setWorldState} />
-          <TimeControls worldState={worldState} updateWorld={updateWorld} />
+          <TimeControls
+            worldStateTimestamp={worldState.timestamp}
+            updateWorldTime={(deltaTime) => updateWorld(worldState, deltaTime)}
+          />
+
           <WorldStateRender state={worldState} />
 
           <LaunchHighlight />
@@ -36,19 +41,28 @@ const WorldComponent: GameStateComponent = ({}) => {
 };
 
 function TimeControls({
-  worldState,
-  updateWorld,
+  worldStateTimestamp,
+  updateWorldTime,
 }: {
-  worldState: WorldState;
-  updateWorld: (worldState: WorldState, deltaTime: number) => void;
+  worldStateTimestamp: number;
+  updateWorldTime: (deltaTime: number) => void;
 }) {
+  const [isAutoplay, setAutoplay] = useState(false);
+  useRafLoop((deltaTime) => {
+    if (isAutoplay) {
+      updateWorldTime(deltaTime / 100000);
+    }
+  }, true);
+
   return (
     <div className="meta-controls">
-      <div>Timestamp: {worldState.timestamp}</div>
       <div>
-        <button onClick={() => updateWorld(worldState, 1)}>+1 Second</button>
-        <button onClick={() => updateWorld(worldState, 10)}>+10 Seconds</button>
-        <button onClick={() => updateWorld(worldState, 60)}>+60 seconds</button>
+        <button onClick={() => updateWorldTime(1)}>+1 Second</button>
+        <button onClick={() => updateWorldTime(10)}>+10 Seconds</button>
+        <button onClick={() => updateWorldTime(60)}>+60 seconds</button>
+        <button onClick={() => setAutoplay(!isAutoplay)}>{isAutoplay ? 'Stop autoplay' : 'Start autoplay'}</button>
+
+        <div>Timestamp: {worldStateTimestamp.toFixed(2)}</div>
       </div>
     </div>
   );
