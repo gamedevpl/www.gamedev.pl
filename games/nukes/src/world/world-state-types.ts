@@ -24,6 +24,10 @@ export type City = {
   stateId: StateId;
   name: string;
   position: Position;
+  populationHistogram: Array<{
+    timestamp: number;
+    population: number;
+  }>;
 };
 
 export enum EntityType {

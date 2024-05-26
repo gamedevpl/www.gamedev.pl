@@ -13,6 +13,7 @@ import { LaunchHighlight } from '../controls-render/launch-highlight';
 import { GameState, GameStateComponent } from './types';
 import { PointerContextWrapper } from '../controls/pointer';
 import { Command } from '../controls/command';
+import { Infotainment } from '../controls-render/infotainment';
 
 const WorldComponent: GameStateComponent = ({}) => {
   const [worldState, setWorldState] = useState(() => createWorldState());
@@ -34,6 +35,7 @@ const WorldComponent: GameStateComponent = ({}) => {
           <WorldStateRender state={worldState} />
 
           <LaunchHighlight />
+          <Infotainment worldState={worldState} />
         </StateContainer>
       </PointerContextWrapper>
     </SelectionContextWrapper>

@@ -9,6 +9,10 @@ export function createWorldState(): WorldState {
         id: 'test-state',
         name: 'TestState',
       },
+      {
+        id: 'test-state2',
+        name: 'TestState2',
+      },
     ],
     cities: [
       {
@@ -16,18 +20,36 @@ export function createWorldState(): WorldState {
         name: 'TestCity',
         stateId: 'test-state',
         position: { x: 100, y: 100 },
+        populationHistogram: [
+          {
+            timestamp: 0,
+            population: 1000000,
+          },
+        ],
       },
       {
         id: 'test-city2',
         name: 'TestCity2',
         stateId: 'test-state',
         position: { x: 150, y: 100 },
+        populationHistogram: [
+          {
+            timestamp: 0,
+            population: 1000000,
+          },
+        ],
       },
       {
         id: 'test-city3',
         name: 'TestCity3',
-        stateId: 'test-state',
+        stateId: 'test-state2',
         position: { x: 150, y: 50 },
+        populationHistogram: [
+          {
+            timestamp: 0,
+            population: 1000000,
+          },
+        ],
       },
     ],
     launchSites: [
@@ -40,7 +62,7 @@ export function createWorldState(): WorldState {
       {
         type: EntityType.LAUNCH_SITE,
         id: 'test-launch-site-2',
-        stateId: 'test-state',
+        stateId: 'test-state2',
         position: { x: 200, y: 200 },
       },
     ],
