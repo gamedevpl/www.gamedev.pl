@@ -34,7 +34,7 @@ const pointerReducer: React.Reducer<Pointer, PointerDispatchAction> = (
     return {
       x: pointer.x,
       y: pointer.y,
-      pointingObjects: pointer.pointingObjects.filter((object) => object.id === action.object.id),
+      pointingObjects: pointer.pointingObjects.filter((object) => object.id !== action.object.id),
     };
   } else {
     return pointer;

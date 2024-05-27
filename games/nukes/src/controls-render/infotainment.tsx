@@ -2,8 +2,11 @@ import styled from 'styled-components';
 
 import { City, State, WorldState } from '../world/world-state-types';
 import { getValueInTime } from '../world/world-state-time-utils';
+import { usePointer } from '../controls/pointer';
 
 export function Infotainment({ worldState }: { worldState: WorldState }) {
+  const pointer = usePointer();
+
   const cityPopulation: Array<[City, number]> = worldState.cities.map((city) => [
     city,
     getValueInTime(city.populationHistogram, worldState.timestamp).population,
@@ -31,6 +34,8 @@ export function Infotainment({ worldState }: { worldState: WorldState }) {
   return (
     <InfotainmentContainer>
       <ul>
+        <li>Time: {worldState.timestamp.toFixed(2)}</li>
+        <li>Pointing object: {pointer.pointingObjects.length}</li>
         <li>World population: {worldPopulation}</li>
         <li>State population: </li>
         <ul>
