@@ -1,7 +1,9 @@
+/** Position and size */
 export type Position = { x: number; y: number };
 
 export type Rect = { left: number; top: number; right: number; bottom: number };
 
+/** Identifiers */
 export type StateId = string;
 
 export type CityId = string;
@@ -14,6 +16,10 @@ export type SectorId = string;
 
 export type ExplosionId = string;
 
+/** Histogram */
+export type HistogramEntry<T> = { timestamp: number } & T;
+
+/** World structure */
 export type State = {
   id: StateId;
   name: string;
@@ -24,10 +30,7 @@ export type City = {
   stateId: StateId;
   name: string;
   position: Position;
-  populationHistogram: Array<{
-    timestamp: number;
-    population: number;
-  }>;
+  populationHistogram: Array<HistogramEntry<{ population: number }>>;
 };
 
 export enum EntityType {
