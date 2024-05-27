@@ -10,6 +10,7 @@ import { LaunchSiteRender } from './launch-site-render';
 import { MissileRender } from './missile-render';
 import { ExplosionRender } from './explosion-render';
 import { dispatchCustomEvent } from '../events';
+import React from 'react';
 
 export function WorldStateRender({ state }: { state: WorldState }) {
   const pointerMove = usePointerMove();
@@ -19,27 +20,37 @@ export function WorldStateRender({ state }: { state: WorldState }) {
       onMouseMove={(event) => pointerMove(event.clientX, event.clientY)}
       onClick={() => dispatchCustomEvent('world-click')}
     >
-      {state.sectors.map((sector) => (
-        <SectorRender key={sector.id} sector={sector} />
-      ))}
-      {state.states.map((state) => (
-        <StateRender key={state.id} state={state} />
-      ))}
-      {state.cities.map((city) => (
-        <CityRender key={city.id} city={city} />
-      ))}
-      {state.launchSites.map((launchSite) => (
-        <LaunchSiteRender key={launchSite.id} launchSite={launchSite} />
-      ))}
-      {state.missiles.map((missile) => (
-        <MissileRender key={missile.id} missile={missile} worldTimestamp={state.timestamp} />
-      ))}
-      {state.explosions.map((explosion) => (
-        <ExplosionRender key={explosion.id} explosion={explosion} worldTimestamp={state.timestamp} />
-      ))}
+      {/* static content, does not change at all */}
+      <BulkRender items={state.sectors} Component={SectorRender} propertyName="sector" />
+      <BulkRender items={state.states} Component={StateRender} propertyName="state" />
+      <BulkRender items={state.cities} Component={CityRender} propertyName="city" />
+      <BulkRender items={state.launchSites} Component={LaunchSiteRender} propertyName="launchSite" />
+
+      {/* dynamic content, changes with time */}
+      {state.missiles
+        .filter((missile) => missile.launchTimestamp < state.timestamp && missile.targetTimestamp > state.timestamp)
+        .map((missile) => (
+          <MissileRender key={missile.id} missile={missile} worldTimestamp={state.timestamp} />
+        ))}
+      {state.explosions
+        .filter((explosion) => explosion.startTimestamp < state.timestamp && explosion.endTimestamp > state.timestamp)
+        .map((explosion) => (
+          <ExplosionRender key={explosion.id} explosion={explosion} worldTimestamp={state.timestamp} />
+        ))}
     </WorldStateContainer>
   );
 }
+
+// simple bulk render component for rendering an array of items with static content
+const BulkRender = React.memo(
+  ({ items, Component, propertyName }: { items: any[]; propertyName: string; Component: React.FC<any> }) => (
+    <>
+      {items.map((item) => (
+        <Component key={item.id} {...{ [propertyName]: item }} />
+      ))}
+    </>
+  ),
+);
 
 const WorldStateContainer = styled.div`
   display: flex;
