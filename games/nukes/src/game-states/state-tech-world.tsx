@@ -27,10 +27,7 @@ const WorldComponent: GameStateComponent = ({}) => {
       <PointerContextWrapper>
         <StateContainer>
           <Command worldState={worldState} setWorldState={setWorldState} />
-          <TimeControls
-            worldStateTimestamp={worldState.timestamp}
-            updateWorldTime={(deltaTime) => updateWorld(worldState, deltaTime)}
-          />
+          <TimeControls updateWorldTime={(deltaTime) => updateWorld(worldState, deltaTime)} />
 
           <WorldStateRender state={worldState} />
 
@@ -42,13 +39,7 @@ const WorldComponent: GameStateComponent = ({}) => {
   );
 };
 
-function TimeControls({
-  worldStateTimestamp,
-  updateWorldTime,
-}: {
-  worldStateTimestamp: number;
-  updateWorldTime: (deltaTime: number) => void;
-}) {
+function TimeControls({ updateWorldTime }: { updateWorldTime: (deltaTime: number) => void }) {
   const [isAutoplay, setAutoplay] = useState(true);
   const timeRef = useRef<number | null>(null);
   useRafLoop((time) => {
@@ -76,8 +67,6 @@ function TimeControls({
         <button onClick={() => updateWorldTime(10)}>+10 Seconds</button>
         <button onClick={() => updateWorldTime(60)}>+60 seconds</button>
         <button onClick={() => setAutoplay(!isAutoplay)}>{isAutoplay ? 'Stop autoplay' : 'Start autoplay'}</button>
-
-        <div>Timestamp: {worldStateTimestamp.toFixed(2)}</div>
       </div>
     </div>
   );
