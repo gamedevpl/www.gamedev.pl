@@ -38,6 +38,7 @@ export function Command({
 
     const explosion: Explosion = {
       id: Math.random() + '',
+      missileId: missile.id,
       startTimestamp: missile.targetTimestamp,
       endTimestamp: missile.targetTimestamp + EXPLOSION_DURATION,
       position: missile.target,
