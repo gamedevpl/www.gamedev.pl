@@ -26,7 +26,11 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
       // reduce population by half
       city.populationHistogram.push({
         timestamp: explosion.startTimestamp,
-        population: Math.floor(city.populationHistogram[city.populationHistogram.length - 1].population / 2),
+        population: Math.max(
+          0,
+          city.populationHistogram[city.populationHistogram.length - 1].population -
+            Math.floor(city.populationHistogram[city.populationHistogram.length - 1].population / 2),
+        ),
       });
     }
   }
