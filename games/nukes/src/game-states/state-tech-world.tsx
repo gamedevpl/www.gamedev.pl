@@ -32,7 +32,7 @@ const WorldComponent: GameStateComponent = ({}) => {
           <WorldStateRender state={worldState} />
 
           <LaunchHighlight />
-          <Infotainment worldState={worldState} />
+          <Infotainment worldState={worldState} setWorldState={setWorldState} />
         </StateContainer>
       </PointerContextWrapper>
     </SelectionContextWrapper>
