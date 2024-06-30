@@ -62,6 +62,7 @@ export function generateLaunches(state: WorldState) {
         // Create corresponding explosion
         const newExplosion: Explosion = {
           id: `explosion-${Math.random().toString(36).substring(2, 15)}`, // Generate a unique ID
+          missileId: newMissile.id,
           startTimestamp: state.timestamp + missileFlightTime,
           endTimestamp: state.timestamp + missileFlightTime + EXPLOSION_DURATION,
           position: targetCity.position,

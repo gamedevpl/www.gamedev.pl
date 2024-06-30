@@ -67,6 +67,7 @@ export type Missile = {
 
 export type Explosion = {
   id: ExplosionId;
+  missileId: MissileId;
   startTimestamp: number;
   endTimestamp: number;
   position: Position;
