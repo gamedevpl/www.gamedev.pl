@@ -53,9 +53,24 @@ export function Infotainment({ worldState }: { worldState: WorldState }) {
             </li>
           ))}
         </ul>
+        <li>
+          <CopyToClipboard
+            getText={() =>
+              JSON.stringify({
+                ...worldState,
+                sectors: [],
+              })
+            }
+          />
+        </li>
       </ul>
     </InfotainmentContainer>
   );
+}
+
+// a component that copies string to clipboard on click
+function CopyToClipboard({ getText }: { getText: () => string }) {
+  return <button onClick={() => navigator.clipboard.writeText(getText())}>Copy world state</button>;
 }
 
 const InfotainmentContainer = styled.div`
