@@ -2,9 +2,16 @@ import styled from 'styled-components';
 
 import { City, State, WorldState } from '../world/world-state-types';
 import { getValueInTime } from '../world/world-state-time-utils';
+import { generateLaunches } from '../world/generate-launches';
 import { usePointer } from '../controls/pointer';
 
-export function Infotainment({ worldState }: { worldState: WorldState }) {
+export function Infotainment({
+  worldState,
+  setWorldState,
+}: {
+  worldState: WorldState;
+  setWorldState: (worldState: WorldState) => void;
+}) {
   const pointer = usePointer();
 
   const cityPopulation: Array<[City, number]> = worldState.cities.map((city) => [
@@ -63,6 +70,9 @@ export function Infotainment({ worldState }: { worldState: WorldState }) {
             }
           />
         </li>
+        <li>
+          <GenerateLaunches worldState={worldState} setWorldState={setWorldState} />
+        </li>
       </ul>
     </InfotainmentContainer>
   );
@@ -73,6 +83,30 @@ function CopyToClipboard({ getText }: { getText: () => string }) {
   return <button onClick={() => navigator.clipboard.writeText(getText())}>Copy world state</button>;
 }
 
+// a component that generates launches
+function GenerateLaunches({
+  worldState,
+  setWorldState,
+}: {
+  worldState: WorldState;
+  setWorldState: (worldState: WorldState) => void;
+}) {
+  return (
+    <button
+      onClick={() => {
+        const { missiles, explosions } = generateLaunches(worldState);
+        setWorldState({
+          ...worldState,
+          missiles: [...worldState.missiles, ...missiles],
+          explosions: [...worldState.explosions, ...explosions],
+        });
+      }}
+    >
+      Generate launches
+    </button>
+  );
+}
+
 const InfotainmentContainer = styled.div`
   position: fixed;
   right: 0;
@@ -81,7 +115,6 @@ const InfotainmentContainer = styled.div`
 
   max-width: 25%;
   min-width: 200px;
-  max-height: 25%;
   min-height: 200px;
   overflow-y: auto;
 
