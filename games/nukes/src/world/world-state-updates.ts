@@ -35,5 +35,44 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
     }
   }
 
+  // explosions destroy missiles
+  for (const explosion of state.explosions.filter(
+    (e) => e.startTimestamp >= state.timestamp && e.startTimestamp < worldTimestamp,
+  )) {
+    // get missiles which are in flight during explosion
+    const missiles = state.missiles
+      .filter(
+        (missile) =>
+          missile.id !== explosion.missileId &&
+          missile.launchTimestamp <= explosion.startTimestamp &&
+          missile.targetTimestamp >= explosion.startTimestamp,
+      )
+      .filter((missile) => {
+        // Calculate missile position at the time of explosion
+        const explosionTime = explosion.startTimestamp;
+        const { x, y } = {
+          x:
+            missile.launch.x +
+            ((missile.target.x - missile.launch.x) / (missile.targetTimestamp - missile.launchTimestamp)) *
+              (explosionTime - missile.launchTimestamp),
+          y:
+            missile.launch.y +
+            ((missile.target.y - missile.launch.y) / (missile.targetTimestamp - missile.launchTimestamp)) *
+              (explosionTime - missile.launchTimestamp),
+        };
+
+        // check if missle is in explosion radius
+        return distance(x, y, explosion.position.x, explosion.position.y) <= explosion.radius;
+      });
+
+    for (const missile of missiles) {
+      // modify missle targetTimestamp to moment of explosion
+      missile.targetTimestamp = explosion.startTimestamp;
+
+      // delete explosion of the missle
+      result.explosions = result.explosions.filter((e) => e.missileId !== missile.id);
+    }
+  }
+
   return result;
 }

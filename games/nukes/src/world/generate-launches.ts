@@ -1,156 +1,188 @@
 // prompt: 2940295303300907008
 
-import { WorldState, Missile, Explosion } from './world-state-types';
+import { WorldState, Missile, Explosion, Position } from './world-state-types';
 import { distance } from '../math/position-utils';
-import {
-  EXPLOSION_DAMAGE_RATIO,
-  EXPLOSION_DURATION,
-  EXPLOSION_RADIUS,
-  MIN_EXPLOSION_DAMAGE,
-  MISSILE_SPEED,
-} from './world-state-constants';
+import { EXPLOSION_DURATION, EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
 
 /**
- * For each state, determine launch targets and generate missile and explosion events.
+ * Plan launches for each state to eliminate other states' populations,
+ * considering existing missiles and future explosions.
  *
- * This function aims to strategically target cities to maximize damage to enemy states,
- * taking into account existing missiles and future explosions to optimize target distribution.
- *
- * @param state Current world state
- * @returns A tuple containing two arrays: new missiles and their corresponding explosions
+ * @param state The current world state.
+ * @returns A list of new missiles and their corresponding explosions.
  */
-export function generateLaunches(state: WorldState) {
+export function generateLaunches(state: WorldState): {
+  missiles: Missile[];
+  explosions: Explosion[];
+} {
   const newMissiles: Missile[] = [];
   const newExplosions: Explosion[] = [];
 
-  // Iterate through states to plan launches for each state's launch sites
+  // Iterate through each state to plan their launches.
   for (const currentState of state.states) {
-    // Get launch sites belonging to the current state
+    // Get launch sites belonging to the current state.
     const stateLaunchSites = state.launchSites.filter((launchSite) => launchSite.stateId === currentState.id);
 
-    // For each launch site, determine and execute a launch
+    // Iterate through each launch site of the state.
     for (const launchSite of stateLaunchSites) {
-      // Find potential target cities in other states
-      const potentialTargets = state.cities.filter((city) => city.stateId !== currentState.id);
+      // Find potential target cities in other states.
+      const enemyCities = state.cities.filter((city) => city.stateId !== currentState.id);
 
-      // Rank potential targets based on strategic value
-      const rankedTargets = rankTargets(state, launchSite.position, potentialTargets);
+      // Prioritize targets: enemy missiles in flight > enemy cities
+      const potentialTargets = [
+        ...findMissilesInFlight(state, currentState.id), // Higher priority
+        ...enemyCities,
+      ];
 
-      // If there are any valid targets
-      if (rankedTargets.length > 0) {
-        const targetCity = rankedTargets[0]; // Choose the highest-ranked target
+      // Evaluate potential targets and launch a missile if possible.
+      let targetFound = false;
+      for (const target of potentialTargets) {
+        if (targetFound) {
+          break; // Only launch one missile per launch site
+        }
 
-        // Calculate missile flight time
-        const distanceToTarget = distance(
-          launchSite.position.x,
-          launchSite.position.y,
-          targetCity.position.x,
-          targetCity.position.y,
-        );
-        const missileFlightTime = distanceToTarget / MISSILE_SPEED;
+        const launchPosition = launchSite.position;
+        let targetPosition;
+        if ('launch' in target) {
+          // Targeting a missile in flight
+          // Calculate the missile's position at the estimated time of impact.
+          const flightTime =
+            distance(launchPosition.x, launchPosition.y, target.target.x, target.target.y) / MISSILE_SPEED;
+          targetPosition = estimateTargetPosition(target, flightTime);
+        } else {
+          // Targeting a city
+          targetPosition = target.position;
+        }
 
-        // Create new missile
-        const newMissile: Missile = {
-          id: `missile-${Math.random().toString(36).substring(2, 15)}`, // Generate a unique ID
-          launch: launchSite.position,
-          launchTimestamp: state.timestamp,
-          target: targetCity.position,
-          targetTimestamp: state.timestamp + missileFlightTime,
-        };
-        newMissiles.push(newMissile);
+        const flightDuration =
+          distance(launchPosition.x, launchPosition.y, targetPosition.x, targetPosition.y) / MISSILE_SPEED;
 
-        // Create corresponding explosion
-        const newExplosion: Explosion = {
-          id: `explosion-${Math.random().toString(36).substring(2, 15)}`, // Generate a unique ID
-          missileId: newMissile.id,
-          startTimestamp: state.timestamp + missileFlightTime,
-          endTimestamp: state.timestamp + missileFlightTime + EXPLOSION_DURATION,
-          position: targetCity.position,
-          radius: EXPLOSION_RADIUS,
-        };
-        newExplosions.push(newExplosion);
+        // Check if the target is reachable and the area is safe.
+        if (
+          isTargetReachable(state, launchPosition, targetPosition, flightDuration) &&
+          isLaunchSafe(state, launchPosition, targetPosition, flightDuration)
+        ) {
+          const missileId = `missile-${Date.now()}-${Math.random()}`; // Generate a unique ID
+          const launchTimestamp = state.timestamp;
+          const targetTimestamp = state.timestamp + flightDuration;
+
+          // Create new missile.
+          const newMissile: Missile = {
+            id: missileId,
+            launch: launchPosition,
+            launchTimestamp,
+            target: targetPosition,
+            targetTimestamp,
+          };
+          newMissiles.push(newMissile);
+
+          // Create corresponding explosion.
+          const newExplosion: Explosion = {
+            id: `explosion-${Date.now()}-${Math.random()}`, // Generate a unique ID
+            missileId: missileId, // Associate explosion with missile
+            startTimestamp: targetTimestamp,
+            endTimestamp: targetTimestamp + EXPLOSION_DURATION,
+            position: targetPosition,
+            radius: EXPLOSION_RADIUS,
+          };
+          newExplosions.push(newExplosion);
+
+          targetFound = true; // Mark target as found to launch only one missile
+        }
       }
     }
   }
 
-  return { explosions: newExplosions, missiles: newMissiles };
+  return { missiles: newMissiles, explosions: newExplosions };
 }
 
 /**
- * Rank potential target cities based on strategic value.
+ * Estimates the future position of a missile in flight.
  *
- * This function considers factors like remaining population, proximity to other targets,
- * and existing missile/explosion activity to prioritize targets that maximize damage.
- *
- * @param state Current world state
- * @param launchPosition Position of the launching entity
- * @param potentialTargets Array of potential target cities
- * @returns Sorted array of target cities in descending order of strategic value
+ * @param missile The missile to track
+ * @param flightTimeRemaining The remaining flight time of the missile
+ * @returns The estimated position of the missile after the remaining flight time
  */
-function rankTargets(
-  state: WorldState,
-  _launchPosition: { x: number; y: number },
-  potentialTargets: {
-    id: string;
-    stateId: string;
-    name: string;
-    position: { x: number; y: number };
-    populationHistogram: { timestamp: number; population: number }[];
-  }[],
-): {
-  id: string;
-  stateId: string;
-  name: string;
-  position: { x: number; y: number };
-  populationHistogram: { timestamp: number; population: number }[];
-}[] {
-  return potentialTargets
-    .map((target) => {
-      // Calculate remaining population after considering future explosions
-      const futurePopulation = calculateFuturePopulation(state, target);
-
-      // Prioritize targets with higher remaining population
-      return {
-        ...target,
-        futurePopulation,
-        value: futurePopulation * target.populationHistogram.length,
-      };
-    })
-    .sort((a, b) => b.value - a.value); // Sort by value in descending order
+function estimateTargetPosition(missile: Missile, flightTimeRemaining: number): Position {
+  const distanceRatio = flightTimeRemaining / (missile.targetTimestamp - missile.launchTimestamp);
+  const x = missile.launch.x + (missile.target.x - missile.launch.x) * distanceRatio;
+  const y = missile.launch.y + (missile.target.y - missile.launch.y) * distanceRatio;
+  return { x, y };
 }
 
 /**
- * Calculate the future population of a city after accounting for upcoming explosions.
+ * Checks if a launch is safe by considering existing explosions.
  *
- * This function iterates through future explosions and estimates the population reduction
- * based on the explosion's damage radius and the city's distance from the epicenter.
- *
- * @param state Current world state
- * @param city Target city for population calculation
- * @returns Estimated future population of the city
+ * @param state The current world state.
+ * @param launchPosition The launch position of the missile.
+ * @param targetPosition The target position of the missile.
+ * @param flightDuration The flight duration of the missile.
+ * @returns True if the launch is safe, false otherwise.
  */
-function calculateFuturePopulation(
+function isLaunchSafe(
   state: WorldState,
-  city: {
-    id: string;
-    stateId: string;
-    name: string;
-    position: { x: number; y: number };
-    populationHistogram: { timestamp: number; population: number }[];
-  },
-): number {
-  let futurePopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
+  launchPosition: Position,
+  targetPosition: Position,
+  flightDuration: number,
+): boolean {
+  // Check if the launch path intersects with any future explosions.
+  for (const explosion of state.explosions) {
+    // Calculate the distance between the explosion center and the launch/target positions.
+    const distanceToLaunch = distance(explosion.position.x, explosion.position.y, launchPosition.x, launchPosition.y);
+    const distanceToTarget = distance(explosion.position.x, explosion.position.y, targetPosition.x, targetPosition.y);
 
-  // Consider future explosions
-  for (const explosion of state.explosions.filter((e) => e.startTimestamp >= state.timestamp)) {
-    const distanceToExplosion = distance(city.position.x, city.position.y, explosion.position.x, explosion.position.y);
-
-    // If within explosion radius, calculate population reduction
-    if (distanceToExplosion <= explosion.radius) {
-      const damage = Math.max(MIN_EXPLOSION_DAMAGE, futurePopulation * EXPLOSION_DAMAGE_RATIO);
-      futurePopulation -= damage;
+    // If the missile is in flight during the explosion
+    if (state.timestamp + flightDuration > explosion.startTimestamp && state.timestamp < explosion.endTimestamp) {
+      // If the distance to the launch or target is within the explosion radius, the launch is not safe.
+      if (distanceToLaunch <= explosion.radius || distanceToTarget <= explosion.radius) {
+        return false;
+      }
     }
   }
 
-  return Math.max(0, futurePopulation); // Ensure population doesn't go negative
+  return true;
+}
+
+/**
+ * Checks if a target is reachable within the simulation time limit.
+ *
+ * @param state The current world state.
+ * @param launchPosition The launch position of the missile.
+ * @param targetPosition The target position of the missile.
+ * @param flightDuration The flight duration of the missile.
+ * @returns True if the target is reachable, false otherwise.
+ */
+function isTargetReachable(
+  state: WorldState,
+  launchPosition: Position,
+  targetPosition: Position,
+  flightDuration: number,
+): boolean {
+  // Calculate the time it will take for the missile to reach the target.
+  const timeToTarget = distance(launchPosition.x, launchPosition.y, targetPosition.x, targetPosition.y) / MISSILE_SPEED;
+
+  // Check if the missile can reach the target before the simulation ends.
+  return state.timestamp + timeToTarget <= state.timestamp + flightDuration;
+}
+
+/**
+ * Finds missiles that are currently in flight and belong to enemy states.
+ *
+ * @param state The current world state.
+ * @param currentStateId The ID of the current state to exclude its own missiles.
+ * @returns A list of missiles in flight from enemy states.
+ */
+function findMissilesInFlight(state: WorldState, currentStateId: string): Missile[] {
+  // Find missiles that were launched but haven't reached their target yet
+  return state.missiles.filter(
+    (missile) =>
+      missile.launchTimestamp <= state.timestamp &&
+      missile.targetTimestamp >= state.timestamp &&
+      !state.launchSites.some(
+        (launchSite) =>
+          launchSite.position.x === missile.launch.x &&
+          launchSite.position.y === missile.launch.y &&
+          launchSite.stateId === currentStateId,
+      ),
+  );
 }
