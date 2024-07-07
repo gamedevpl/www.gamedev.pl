@@ -62,6 +62,14 @@ const promptResponseText = await generateContent();
 console.log('Parse response');
 const parsedResponse = parsePromptResponse(promptResponseText);
 
-console.log('Update files');
-updateFiles(parsedResponse);
-console.log('Done!');
+// read --dry-run flag from command line
+const isDryRun = process.argv.includes('--dry-run');
+console.log('Parsed response:', parsedResponse);
+
+if (isDryRun) {
+  console.log('Dry run mode, not updating files');
+} else {
+  console.log('Update files');
+  updateFiles(parsedResponse);
+  console.log('Done!');
+}

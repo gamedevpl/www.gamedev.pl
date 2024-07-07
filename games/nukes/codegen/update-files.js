@@ -14,6 +14,6 @@ export function updateFiles(codegenResults) {
     }
 
     console.log(`Updating file: ${filePath}`);
-    fs.writeFileSync(filePath + '.codegen', newContent, 'utf-8');
+    fs.writeFileSync(filePath, newContent, 'utf-8');
   }
 }

@@ -44,5 +44,5 @@ export const codeGenPrompt = `
         "filepath": "new file content"
     }
     \`\`\`
-    Make sure to return a valid JSON that will work with JSON.stringify
+    Make sure to return a valid JSON that will work with JSON.parse
 `;
