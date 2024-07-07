@@ -1,5 +1,6 @@
 import { distance } from '../math/position-utils';
 import { WorldState } from './world-state-types';
+import { EXPLOSION_DAMAGE_RATIO, MIN_EXPLOSION_DAMAGE } from './world-state-constants';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
@@ -24,13 +25,11 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
         distance(city.position.x, city.position.y, explosion.position.x, explosion.position.y) <= explosion.radius,
     )) {
       // reduce population by half
+      const lastPopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
+      const damage = Math.max(MIN_EXPLOSION_DAMAGE, lastPopulation * EXPLOSION_DAMAGE_RATIO);
       city.populationHistogram.push({
         timestamp: explosion.startTimestamp,
-        population: Math.max(
-          0,
-          city.populationHistogram[city.populationHistogram.length - 1].population -
-            Math.floor(city.populationHistogram[city.populationHistogram.length - 1].population / 2),
-        ),
+        population: Math.max(0, lastPopulation - damage),
       });
     }
   }
@@ -71,6 +70,18 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
 
       // delete explosion of the missle
       result.explosions = result.explosions.filter((e) => e.missileId !== missile.id);
+
+      // CODEGEN START
+      // find launch site of the destroyed missile
+      const launchSite = state.launchSites.find(
+        (ls) => ls.position.x === missile.launch.x && ls.position.y === missile.launch.y,
+      );
+      // if launch site exists, destroy it
+      if (launchSite) {
+        // remove launch site from the world
+        result.launchSites = result.launchSites.filter((ls) => ls.id !== launchSite.id);
+      }
+      // CODEGEN END
     }
   }
 

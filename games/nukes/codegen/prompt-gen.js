@@ -23,20 +23,22 @@ export const codeGenPrompt = `
 
     For example this fragment:
     \`\`\` 
+    console.log('Some other statement');
     // CODEGEN START
     // print hello world to console
     // CODEGEN END
+    console.log('Yet another statement');
     \`\`\`
 
     should probably result in:
     \`\`\`
+    console.log('Some other statement');
     console.log("hello world");
+    console.log('Yet another statement');
     \`\`\`
     (note that comments were removed, and the instruction was also removed, and replaced with final code)
 
-    Parse my application source code and find the fragments, and replace them with code accordingly to the context and instructions.
-    I would prefer to not update files which do not contain valid aforementioned fragments marked with comments, so 
-    if there are not codegen comments, do not propose modification of that file.
+    Parse my application source code and find the fragments, and replace them with code accordingly to the context and instructions.    
 
     Return your response as a json in this format:
     \`\`\`
@@ -45,4 +47,7 @@ export const codeGenPrompt = `
     }
     \`\`\`
     Make sure to return a valid JSON that will work with JSON.parse
+    Do not modify files which do not contain the fragments
+    Do not not output files if there are no changes.
+    If there are no files to be changed, return an empty object.
 `;
