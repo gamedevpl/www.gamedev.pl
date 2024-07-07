@@ -71,7 +71,6 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
       // delete explosion of the missle
       result.explosions = result.explosions.filter((e) => e.missileId !== missile.id);
 
-      // CODEGEN START
       // find launch site of the destroyed missile
       const launchSite = state.launchSites.find(
         (ls) => ls.position.x === missile.launch.x && ls.position.y === missile.launch.y,
@@ -81,7 +80,6 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
         // remove launch site from the world
         result.launchSites = result.launchSites.filter((ls) => ls.id !== launchSite.id);
       }
-      // CODEGEN END
     }
   }
 
