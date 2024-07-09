@@ -23,6 +23,6 @@ function findFiles(dir, ...exts) {
 }
 
 const jsFiles = findFiles(codegenDir, '.js');
-const tsFiles = findFiles(srcDir, '.ts', '.tsx');
+const tsFiles = findFiles(srcDir, '.ts', '.tsx', '.md');
 
 export const sourceFiles = [...jsFiles, ...tsFiles];

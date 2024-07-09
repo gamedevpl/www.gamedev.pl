@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 
 import { sourceFiles } from './find-files.js';
 
@@ -8,12 +9,17 @@ import { sourceFiles } from './find-files.js';
 export function updateFiles(codegenResults) {
   for (const [filePath, newContent] of Object.entries(codegenResults)) {
     // ignore files which are not located inside project directory (sourceFiles)
-    if (!sourceFiles.includes(filePath)) {
+    if (!sourceFiles.includes(filePath) && !sourceFiles.some((file) => path.dirname(filePath) === path.dirname(file))) {
       console.log(`Skipping file: ${filePath}`);
       throw new Error(`File ${filePath} is not located inside project directory, something is wrong?`);
     }
 
-    console.log(`Updating file: ${filePath}`);
-    fs.writeFileSync(filePath, newContent, 'utf-8');
+    if (newContent === '') {
+      console.log(`Removing file: ${filePath}`);
+      fs.unlinkSync(filePath);
+    } else {
+      console.log(`Updating file: ${filePath}`);
+      fs.writeFileSync(filePath, newContent, 'utf-8');
+    }
   }
 }
