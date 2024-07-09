@@ -2,7 +2,6 @@ import assert from 'node:assert';
 import { sourceCode } from './read-files.js';
 import { CODEGEN_END, CODEGEN_START } from './prompt-consts.js';
 
-// read --dry-run flag from command line
 const considerAllFiles = process.argv.includes('--consider-all-files');
 const allowFileCreate = process.argv.includes('--allow-file-create');
 const allowFileDelete = process.argv.includes('--allow-file-delete');
