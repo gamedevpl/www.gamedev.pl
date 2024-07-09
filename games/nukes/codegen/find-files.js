@@ -22,7 +22,7 @@ function findFiles(dir, ...exts) {
   return files;
 }
 
-const jsFiles = findFiles(codegenDir, '.js');
+const jsFiles = findFiles(codegenDir, '.js', '.md');
 const tsFiles = findFiles(srcDir, '.ts', '.tsx', '.md');
 
 export const sourceFiles = [...jsFiles, ...tsFiles];
