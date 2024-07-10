@@ -43,12 +43,7 @@ function generatePrompt() {
 
   Parse my application source code and find the fragments, and replace them with code accordingly to the context and instructions.  
 
-  Return your response as a json in this format:
-  \`\`\`
-  {
-      "filepath": "new file content"
-  }
-  \`\`\`
+  You will be using the \`updateFile\` function in response.
   `;
 
   return systemPrompt;
@@ -71,7 +66,6 @@ export const codeGenPrompt = `${
 }
 ${codeGenFiles.join('\n')}
 
-Make sure to return a valid JSON that will work with JSON.parse
 ${
   considerAllFiles
     ? 'You are allowed to modify files which do not contain the fragments.'
@@ -83,6 +77,6 @@ ${
     ? 'You are allowed to delete files, in such case add empty string for their path in output JSON.'
     : 'Do not delete files.'
 }
-Do not not output files if there are no changes.
-If there are no files to be changed, return an empty object.
+Do not output files if there are no changes.
+If there are no files to be changed, do not call \`updateFile\` function.
 `;

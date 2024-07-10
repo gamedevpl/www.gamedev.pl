@@ -6,8 +6,8 @@ import { sourceFiles } from './find-files.js';
 /**
  * @param codegenResults Result of the code generation, a map of file paths to new content
  */
-export function updateFiles(codegenResults) {
-  for (const [filePath, newContent] of Object.entries(codegenResults)) {
+export function updateFiles(functionCalls) {
+  for (const { filePath, newContent } of functionCalls) {
     // ignore files which are not located inside project directory (sourceFiles)
     if (!sourceFiles.includes(filePath) && !sourceFiles.some((file) => path.dirname(filePath) === path.dirname(file))) {
       console.log(`Skipping file: ${filePath}`);

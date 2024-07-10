@@ -13,11 +13,40 @@ export async function generateContent(systemPrompt, prompt) {
         ],
       },
     ],
+    tools: [
+      {
+        functionDeclarations: [
+          {
+            name: 'updateFile',
+            parameters: {
+              type: 'OBJECT',
+              description: 'Update a file with new content',
+              properties: {
+                filePath: {
+                  type: 'STRING',
+                  description: 'The file path to update.',
+                },
+                newContent: {
+                  type: 'STRING',
+                  description: 'The content to update the file with.',
+                },
+              },
+              required: ['filePath', 'newContent'],
+            },
+          },
+        ],
+      },
+    ],
   };
 
   const result = await getGenModel(systemPrompt).generateContent(req);
 
-  return result.response.candidates[0].content.parts[0].text;
+  const functionCalls = result.response.candidates
+    .map((candidate) => candidate.content.parts.map((part) => part.functionCall))
+    .flat()
+    .filter((functionCall) => !!functionCall);
+
+  return functionCalls.filter((call) => call.name === 'updateFile').map((call) => call.args);
 }
 
 // A function to get the generative model
