@@ -1,3 +1,4 @@
+import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
 
 // A function to generate content using the generative model
@@ -28,7 +29,7 @@ export async function generateContent(systemPrompt, prompt) {
                 },
                 newContent: {
                   type: 'STRING',
-                  description: 'The content to update the file with.',
+                  description: 'The content to update the file with, empty string means the file will be deleted.',
                 },
               },
               required: ['filePath', 'newContent'],
@@ -45,6 +46,11 @@ export async function generateContent(systemPrompt, prompt) {
     .map((candidate) => candidate.content.parts.map((part) => part.functionCall))
     .flat()
     .filter((functionCall) => !!functionCall);
+
+  assert(
+    functionCalls.every((call) => call.name === 'updateFile'),
+    'Only updateFile function is allowed',
+  );
 
   return functionCalls.filter((call) => call.name === 'updateFile').map((call) => call.args);
 }

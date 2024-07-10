@@ -19,7 +19,12 @@ export function updateFiles(functionCalls) {
       fs.unlinkSync(filePath);
     } else {
       console.log(`Updating file: ${filePath}`);
-      fs.writeFileSync(filePath, newContent, 'utf-8');
+      fs.writeFileSync(
+        filePath,
+        // Fixing a problem caused by vertex function calling. Possible not a good fix
+        newContent.replace(/\\n/g, '\n').replace(/\\'/g, "'"),
+        'utf-8',
+      );
     }
   }
 }

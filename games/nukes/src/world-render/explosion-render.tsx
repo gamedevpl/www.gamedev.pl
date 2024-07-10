@@ -19,6 +19,7 @@ export function ExplosionRender({ explosion, worldTimestamp }: { explosion: Expl
           '--x': explosion.position.x,
           '--y': explosion.position.y,
           '--radius': explosion.radius * progress,
+          '--color': `rgb(${255 * progress}, ${255 * (1-progress)}, 0)`
         } as React.CSSProperties
       }
     />
@@ -31,7 +32,7 @@ const ExplosionContainer = styled.div`
   width: calc(var(--radius) * 1px);
   height: calc(var(--radius) * 1px);
   border-radius: 50%;
-  background: rgb(255, 255, 255);
+  background: var(--color);
 
   pointer-events: none;
 `;
