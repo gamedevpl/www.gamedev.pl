@@ -6,5 +6,5 @@ const PlayedComponent: GameStateComponent = ({}) => {
 
 export const GameStatePlayed: GameState = {
   Component: PlayedComponent,
-  path: '/playing',
+  path: '/played',
 };

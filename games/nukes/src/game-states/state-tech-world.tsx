@@ -1,6 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import styled from 'styled-components';
-import { useRafLoop } from 'react-use';
 
 import { createWorldState } from '../world/world-state-create';
 import { updateWorldState } from '../world/world-state-updates';
@@ -14,6 +13,7 @@ import { GameState, GameStateComponent } from './types';
 import { PointerContextWrapper } from '../controls/pointer';
 import { Command } from '../controls/command';
 import { Infotainment } from '../controls-render/infotainment';
+import { TimeControls } from './state-playing/time-controls';
 
 const WorldComponent: GameStateComponent = ({}) => {
   const [worldState, setWorldState] = useState(() => createWorldState());
@@ -38,39 +38,6 @@ const WorldComponent: GameStateComponent = ({}) => {
     </SelectionContextWrapper>
   );
 };
-
-function TimeControls({ updateWorldTime }: { updateWorldTime: (deltaTime: number) => void }) {
-  const [isAutoplay, setAutoplay] = useState(true);
-  const timeRef = useRef<number | null>(null);
-  useRafLoop((time) => {
-    if (!timeRef.current) {
-      timeRef.current = time;
-      return;
-    }
-
-    const deltaTime = time - timeRef.current;
-    timeRef.current = time;
-
-    if (deltaTime <= 0) {
-      return;
-    }
-
-    if (isAutoplay) {
-      updateWorldTime(deltaTime / 1000);
-    }
-  }, true);
-
-  return (
-    <div className="meta-controls">
-      <div>
-        <button onClick={() => updateWorldTime(1)}>+1 Second</button>
-        <button onClick={() => updateWorldTime(10)}>+10 Seconds</button>
-        <button onClick={() => updateWorldTime(60)}>+60 seconds</button>
-        <button onClick={() => setAutoplay(!isAutoplay)}>{isAutoplay ? 'Stop autoplay' : 'Start autoplay'}</button>
-      </div>
-    </div>
-  );
-}
 
 const StateContainer = styled.div`
   position: absolute;

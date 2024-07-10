@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GameState, GameStateComponent } from './types';
-import { GameStatePlaying } from './state-playing';
+import { GameStatePlaying } from './state-playing/state-playing';
 
 const PlayComponent: GameStateComponent = ({ setGameState }) => {
   const [stateName, setStateName] = useState('');

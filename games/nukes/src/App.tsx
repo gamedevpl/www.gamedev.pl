@@ -5,7 +5,7 @@ import { GameState } from './game-states/types';
 import { GameStateIntro } from './game-states/state-intro';
 
 import { GameStatePlay } from './game-states/state-play';
-import { GameStatePlaying } from './game-states/state-playing';
+import { GameStatePlaying } from './game-states/state-playing/state-playing';
 import { GameStatePlayed } from './game-states/state-played';
 
 import { GameStateTechWorld } from './game-states/state-tech-world';
