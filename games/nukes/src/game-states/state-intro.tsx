@@ -1,12 +1,12 @@
 import { GameState, GameStateComponent } from './types';
-import { GameStateTechWorld } from './state-tech-world';
+import { GameStatePlay } from './state-play';
 
 const Intro: GameStateComponent = ({ setGameState }) => {
   return (
     <>
-      <h3>intro</h3>
+      <h3>Nukes game</h3>
       <br />
-      <button onClick={() => setGameState(GameStateTechWorld)}>Nuke world demo</button>
+      <button onClick={() => setGameState(GameStatePlay)}>Play</button>
     </>
   );
 };
