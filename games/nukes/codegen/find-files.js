@@ -16,7 +16,7 @@ function findFiles(dir, recursive, ...exts) {
     const fullPath = path.join(dir, item);
     if (fs.statSync(fullPath).isDirectory()) {
       if (recursive) {
-        files.push(...findFiles(fullPath, ...exts));
+        files.push(...findFiles(fullPath, true, ...exts));
       }
     } else if (exts.includes(path.extname(fullPath))) {
       files.push(fullPath);

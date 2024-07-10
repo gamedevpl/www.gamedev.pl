@@ -19,7 +19,7 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
       {/* UI */}
       <WorldCanvas worldState={worldState} updateWorldState={updateWorldState} setWorldState={setWorldState} />
       {/* Controllers */}
-      <GameOverController worldState={worldState} onGameOver={() => setGameState(GameStatePlayed)} />
+      <GameOverController worldState={worldState} onGameOver={(result) => setGameState(GameStatePlayed, { result })} />
     </>
   );
 };

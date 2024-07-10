@@ -1,5 +1,5 @@
 export type GameStateProps = {
-  setGameState: (gameState: GameState, params?: Record<string, string>) => void;
+  setGameState: (gameState: GameState, params?: unknown) => void;
 };
 
 export type GameStateComponent = React.FunctionComponent<GameStateProps>;

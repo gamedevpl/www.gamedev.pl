@@ -75,6 +75,7 @@ export type Explosion = {
 };
 
 export type WorldState = {
+  // timestamp in seconds
   timestamp: number;
 
   states: State[];
