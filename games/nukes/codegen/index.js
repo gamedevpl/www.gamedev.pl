@@ -25,6 +25,9 @@ providedParameters.forEach((param) => {
   }
 });
 
+// Print to console the received parameters
+console.log(`Received parameters: ${providedParameters.join(' ')}`);
+
 console.log('Generating response');
 const functionCalls = await generateContent(getSystemPrompt(), getCodeGenPrompt());
 console.log('Received function calls:', functionCalls);

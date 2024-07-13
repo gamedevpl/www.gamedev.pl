@@ -9,7 +9,7 @@ const allowFileDelete = process.argv.includes('--allow-file-delete');
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
   const codeGenFiles = Object.entries(getSourceCode())
-    .filter(([path, content]) => content.includes(CODEGEN_TRIGGER))
+    .filter(([path, content]) => content.match(new RegExp("([^'^`]+)" + CODEGEN_TRIGGER)))
     .map(([path]) => path);
 
   if (!considerAllFiles) {
@@ -28,17 +28,18 @@ export function getCodeGenPrompt() {
 
 ${
   considerAllFiles
-    ? 'You are allowed to modify files which do not contain the fragments.'
+    ? 'You are allowed to modify all files in the application regardless if they contain codegen fragments or not.'
     : 'Do not modify files which do not contain the fragments.'
 }
 ${allowFileCreate ? 'You are allowed to create new files.' : 'Do not create new files.'}
 ${
   allowFileDelete
-    ? 'You are allowed to delete files, in such case add empty string for their path in output JSON.'
+    ? 'You are allowed to delete files, in such case add empty string as content.'
     : 'Do not delete files, empty content means something would be deleted.'
 }
 Do not output files if there are no changes.
-If there are no files to be changed, do not call \`updateFile\` function, but make sure the explain your reasoning with \`explanation\` function.
+Call the \`explanation\` function to explain reason for changes or reason for lack of changes.
+Call the \`updateFile\` function for code changes.
 `;
 
   console.log('Code gen prompt:');
