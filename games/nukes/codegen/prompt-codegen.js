@@ -1,10 +1,7 @@
 import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-
-const considerAllFiles = process.argv.includes('--consider-all-files');
-const allowFileCreate = process.argv.includes('--allow-file-create');
-const allowFileDelete = process.argv.includes('--allow-file-delete');
+import { considerAllFiles, allowFileCreate, allowFileDelete } from './cli-params.js';
 
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
