@@ -1,9 +1,9 @@
 import { useCustomEvent } from '../events';
-import { EntityType, Explosion, Missile, WorldState } from '../world/world-state-types';
+import { EntityType, Missile, WorldState } from '../world/world-state-types';
 import { distance } from '../math/position-utils';
 import { usePointer } from './pointer';
 import { useSelectedObject } from './selection';
-import { EXPLOSION_RADIUS, EXPLOSION_DURATION, MISSILE_SPEED } from '../world/world-state-constants';
+import { MISSILE_SPEED } from '../world/world-state-constants';
 
 export function Command({
   worldState,
@@ -29,6 +29,10 @@ export function Command({
 
     const missile: Missile = {
       id: Math.random() + '',
+
+      stateId: selectedObject.stateId,
+      launchSiteId: selectedObject.id,
+
       launch: selectedObject.position,
       launchTimestamp: worldState.timestamp,
 
@@ -36,19 +40,9 @@ export function Command({
       targetTimestamp: worldState.timestamp + dist / MISSILE_SPEED,
     };
 
-    const explosion: Explosion = {
-      id: Math.random() + '',
-      missileId: missile.id,
-      startTimestamp: missile.targetTimestamp,
-      endTimestamp: missile.targetTimestamp + EXPLOSION_DURATION,
-      position: missile.target,
-      radius: EXPLOSION_RADIUS,
-    };
-
     setWorldState({
       ...worldState,
       missiles: [...worldState.missiles, missile],
-      explosions: [...worldState.explosions, explosion],
     });
   });
 

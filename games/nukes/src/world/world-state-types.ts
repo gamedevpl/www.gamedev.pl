@@ -53,11 +53,15 @@ export type LaunchSite = {
   type: EntityType.LAUNCH_SITE;
   id: LaunchSiteId;
   position: Position;
-  stateId?: StateId;
+  stateId: StateId;
 };
 
 export type Missile = {
   id: MissileId;
+
+  stateId: StateId;
+  launchSiteId: LaunchSiteId;
+
   launch: Position;
   launchTimestamp: number;
 

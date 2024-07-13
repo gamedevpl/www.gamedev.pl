@@ -1,8 +1,24 @@
 import { distance } from '../math/position-utils';
 import { WorldState } from './world-state-types';
-import { EXPLOSION_DAMAGE_RATIO, MIN_EXPLOSION_DAMAGE } from './world-state-constants';
+import {
+  EXPLOSION_DAMAGE_RATIO,
+  EXPLOSION_DURATION,
+  EXPLOSION_RADIUS,
+  MIN_EXPLOSION_DAMAGE,
+  WORLD_UPDATE_STEP,
+} from './world-state-constants';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
+  while (deltaTime > 0) {
+    const worldState = worldUpdateIteration(state, deltaTime > WORLD_UPDATE_STEP ? WORLD_UPDATE_STEP : deltaTime);
+    deltaTime = deltaTime > WORLD_UPDATE_STEP ? deltaTime - WORLD_UPDATE_STEP : 0;
+    state = worldState;
+  }
+
+  return state;
+}
+
+function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
 
   const result: WorldState = {
@@ -15,10 +31,21 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
     sectors: state.sectors,
   };
 
-  // convert explosions to population changes
-  for (const explosion of state.explosions.filter(
-    (e) => e.startTimestamp >= state.timestamp && e.startTimestamp < worldTimestamp,
-  )) {
+  // When missile reaches its target, it should create an explosion
+  for (const missile of state.missiles.filter((m) => m.targetTimestamp <= worldTimestamp)) {
+    const explosion = {
+      id: `explosion-${Math.random()}`,
+      missileId: missile.id,
+      startTimestamp: missile.targetTimestamp,
+      endTimestamp: missile.targetTimestamp + EXPLOSION_DURATION,
+      position: missile.target,
+      radius: EXPLOSION_RADIUS,
+    };
+
+    result.explosions.push(explosion);
+
+    // convert explosions to population changes
+
     // find cities which are in explosion radius
     for (const city of state.cities.filter(
       (city) =>
@@ -32,12 +59,9 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
         population: Math.max(0, lastPopulation - damage),
       });
     }
-  }
 
-  // explosions destroy missiles
-  for (const explosion of state.explosions.filter(
-    (e) => e.startTimestamp >= state.timestamp && e.startTimestamp < worldTimestamp,
-  )) {
+    // explosions destroy missiles
+
     // get missiles which are in flight during explosion
     const missiles = state.missiles
       .filter(
@@ -67,11 +91,14 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
     for (const missile of missiles) {
       // modify missle targetTimestamp to moment of explosion
       missile.targetTimestamp = explosion.startTimestamp;
-
-      // delete explosion of the missle
-      result.explosions = result.explosions.filter((e) => e.missileId !== missile.id);
     }
   }
+
+  // Remove explosions which already finished
+  result.explosions = result.explosions.filter((e) => e.endTimestamp >= worldTimestamp);
+
+  // Remove missiles which already reached their target
+  result.missiles = result.missiles.filter((m) => m.targetTimestamp > worldTimestamp);
 
   return result;
 }

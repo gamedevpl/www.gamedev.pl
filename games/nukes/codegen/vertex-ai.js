@@ -65,7 +65,7 @@ export async function generateContent(systemPrompt, prompt) {
 export function getGenModel(systemPrompt) {
   // Initialize Vertex with your Cloud project and location
   const vertex_ai = new VertexAI({ project: 'gamedevpl', location: 'us-central1' });
-  const model = 'gemini-1.5-pro-001';
+  const model = 'gemini-1.5-flash-001';
 
   // Instantiate the models
   return vertex_ai.preview.getGenerativeModel({

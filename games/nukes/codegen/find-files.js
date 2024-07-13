@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const codegenDir = path.join(__dirname);
 const srcDir = path.join(__dirname, '..', 'src');
 const rootDir = path.join(__dirname, '..');
+const tasksDir = path.join(__dirname, '..', 'tasks');
 
 function findFiles(dir, recursive, ...exts) {
   const files = [];
@@ -28,16 +29,17 @@ function findFiles(dir, recursive, ...exts) {
 }
 
 const rootFiles = findFiles(rootDir, false, '.md');
+const taskFiles = findFiles(tasksDir, true, '.md');
 const codegenFiles = findFiles(codegenDir, true, '.js', '.md');
 const gameFiles = findFiles(srcDir, true, '.ts', '.tsx', '.md');
 
 /** Get source files of the application */
 export function getSourceFiles() {
   if (codegenOnly) {
-    return [...codegenFiles];
+    return [...rootFiles, ...taskFiles, ...codegenFiles];
   }
   if (gameOnly) {
-    return [...gameFiles];
+    return [...rootFiles, ...taskFiles, ...gameFiles];
   }
   return [...rootFiles, ...codegenFiles, ...gameFiles];
 }

@@ -14,4 +14,10 @@ export const EXPLOSION_DURATION = EXPLOSION_RADIUS / EXPLOSION_SPEED;
 export const EXPLOSION_DAMAGE_RATIO = 0.5;
 
 /** Minimum explosion damage */
-export const MIN_EXPLOSION_DAMAGE = 10;
+export const MIN_EXPLOSION_DAMAGE = 500;
+
+/** World update step in seconds */
+export const WORLD_UPDATE_STEP = 0.05;
+
+/** Launch cooldown in seconds */
+export const LAUNCH_COOLDOWN = 5;
