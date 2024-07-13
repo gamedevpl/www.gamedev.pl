@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { considerAllFiles, allowFileCreate, allowFileDelete, prompt } from './cli-params.js';
+import { considerAllFiles, allowFileCreate, allowFileDelete, explicitPrompt } from './cli-params.js';
 
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
@@ -16,7 +16,7 @@ export function getCodeGenPrompt() {
   }
 
   const codeGenPrompt =
-    (prompt ? prompt + '\n\n' : '') +
+    (explicitPrompt ? explicitPrompt + '\n\n' : '') +
     `${
       considerAllFiles
         ? codeGenFiles.length > 0

@@ -6,7 +6,7 @@ const allowedParameters = [
   '--codegen-only',
   '--game-only',
   '--chat-gpt',
-  '--prompt='
+  '--explicit-prompt='
 ];
 
 // Validate CLI parameters accordingly to those mentioned in README.md, fail the process if not valid, or unknown parameter is passed
