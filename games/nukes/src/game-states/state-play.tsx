@@ -11,12 +11,14 @@ const PlayComponent: GameStateComponent = ({ setGameState }) => {
 
   return (
     <>
-      <input
-        type="text"
-        placeholder="Name your state"
-        value={stateName}
-        onChange={(event) => setStateName(event.currentTarget.value)}
-      />
+      <div>
+        <input
+          type="text"
+          placeholder="Name your state"
+          value={stateName}
+          onChange={(event) => setStateName(event.currentTarget.value)}
+        />
+      </div>
 
       <button onClick={handlePlay} disabled={!stateName}>
         Play
