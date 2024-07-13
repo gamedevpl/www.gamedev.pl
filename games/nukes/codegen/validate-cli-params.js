@@ -1,0 +1,23 @@
+// Validate CLI parameters accordingly to those mentioned in README.md, fail the process if not valid, or unknown parameter is passed
+const allowedParameters = [
+  '--dry-run',
+  '--consider-all-files',
+  '--allow-file-create',
+  '--allow-file-delete',
+  '--codegen-only',
+];
+
+export function validateCliParams() {
+  const providedParameters = process.argv.slice(2);
+
+  providedParameters.forEach((param) => {
+    if (!param.startsWith('--')) {
+      console.error(`Invalid parameter: ${param}, all parameters must start with --`);
+      process.exit(1);
+    }
+    if (!allowedParameters.includes(param)) {
+      console.error(`Invalid parameter: ${param}, allowed parameters are: ${allowedParameters.join(', ')}`);
+      process.exit(1);
+    }
+  });
+}
