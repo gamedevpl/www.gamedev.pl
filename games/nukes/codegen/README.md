@@ -34,3 +34,4 @@ The codegen script accepts the following options:
 - `--game-only`: Limit the scope of codegen to the game itself (the `src/` directory).
 - `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model.
 - `--explicit-prompt`: An explicit prompt to use for code generation.
+- `--task-file`: Specifies a file with a task description for code generation.
