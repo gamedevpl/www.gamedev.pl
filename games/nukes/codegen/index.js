@@ -1,4 +1,5 @@
-import { systemPrompt, codeGenPrompt } from './prompt-gen.js';
+import { getSystemPrompt } from './systemprompt.js';
+import { getCodeGenPrompt } from './prompt-codegen.js';
 import { updateFiles } from './update-files.js';
 import { generateContent } from './vertex-ai.js';
 
@@ -8,6 +9,7 @@ const allowedParameters = [
   '--consider-all-files',
   '--allow-file-create',
   '--allow-file-delete',
+  '--codegen-only',
 ];
 
 const providedParameters = process.argv.slice(2);
@@ -17,15 +19,14 @@ providedParameters.forEach((param) => {
     console.error(`Invalid parameter: ${param}, all parameters must start with --`);
     process.exit(1);
   }
-  const parameterName = param.substring(2);
-  if (!allowedParameters.includes(parameterName)) {
+  if (!allowedParameters.includes(param)) {
     console.error(`Invalid parameter: ${param}, allowed parameters are: ${allowedParameters.join(', ')}`);
     process.exit(1);
   }
 });
 
 console.log('Generating response');
-const functionCalls = await generateContent(systemPrompt, codeGenPrompt);
+const functionCalls = await generateContent(getSystemPrompt(), getCodeGenPrompt());
 console.log('Received function calls:', functionCalls);
 
 // read --dry-run flag from command line

@@ -31,4 +31,7 @@ const rootFiles = findFiles(rootDir, false, '.md');
 const codegenFiles = findFiles(codegenDir, true, '.js', '.md');
 const gameFiles = findFiles(srcDir, true, '.ts', '.tsx', '.md');
 
-export const sourceFiles = codegenOnly ? [...codegenFiles] : [...rootFiles, ...codegenFiles, ...gameFiles];
+/** Get source files of the application */
+export function getSourceFiles() {
+  return codegenOnly ? [...codegenFiles] : [...rootFiles, ...codegenFiles, ...gameFiles];
+}
