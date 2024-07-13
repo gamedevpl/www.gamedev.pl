@@ -3,7 +3,13 @@ import { EntityType, WorldState } from '../world/world-state-types';
 import { usePointer } from './pointer';
 import { useSelectedObject } from './selection';
 
-export function Command({}: { worldState: WorldState; setWorldState: (worldState: WorldState) => void }) {
+export function Command({
+  worldState,
+  setWorldState,
+}: {
+  worldState: WorldState;
+  setWorldState: (worldState: WorldState) => void;
+}) {
   const selectedObject = useSelectedObject();
   const pointer = usePointer();
 
@@ -13,6 +19,10 @@ export function Command({}: { worldState: WorldState; setWorldState: (worldState
     }
 
     selectedObject.nextLaunchTarget = pointer.pointingObjects[0].position;
+
+    setWorldState({
+      ...worldState,
+    });
   });
 
   return null;

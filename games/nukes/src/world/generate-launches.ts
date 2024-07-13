@@ -1,4 +1,4 @@
-import { WorldState, Missile } from './world-state-types';
+import { WorldState } from './world-state-types';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -7,12 +7,8 @@ import { WorldState, Missile } from './world-state-types';
  * @param state The current world state.
  * @returns A list of new missiles and their corresponding explosions.
  */
-export function generateLaunches(_state: WorldState): {
-  missiles: Missile[];
-} {
-  const newMissiles: Missile[] = [];
-
+export function generateLaunches(state: WorldState): WorldState {
   // @CODEGEN: Implement new logic
 
-  return { missiles: newMissiles };
+  return state;
 }

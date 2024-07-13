@@ -94,10 +94,8 @@ function GenerateLaunches({
   return (
     <button
       onClick={() => {
-        const { missiles } = generateLaunches(worldState);
         setWorldState({
-          ...worldState,
-          missiles: [...worldState.missiles, ...missiles],
+          ...generateLaunches(worldState),
         });
       }}
     >
