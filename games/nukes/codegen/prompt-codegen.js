@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { considerAllFiles, allowFileCreate, allowFileDelete } from './cli-params.js';
+import { considerAllFiles, allowFileCreate, allowFileDelete, prompt } from './cli-params.js';
 
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
@@ -15,13 +15,15 @@ export function getCodeGenPrompt() {
     console.log(codeGenFiles);
   }
 
-  const codeGenPrompt = `${
-    considerAllFiles
-      ? codeGenFiles.length > 0
-        ? `I have marked some files with the ${CODEGEN_TRIGGER} fragments:\n${codeGenFiles.join('\n')}`
-        : `No files are marked with ${CODEGEN_TRIGGER} fragment, so you can consider doing changes in any file.`
-      : `Generate updates only for the following files:\n${codeGenFiles.join('\n')}`
-  }
+  const codeGenPrompt =
+    (prompt ? prompt + '\n\n' : '') +
+    `${
+      considerAllFiles
+        ? codeGenFiles.length > 0
+          ? `I have marked some files with the ${CODEGEN_TRIGGER} fragments:\n${codeGenFiles.join('\n')}`
+          : `No files are marked with ${CODEGEN_TRIGGER} fragment, so you can consider doing changes in any file.`
+        : `Generate updates only for the following files:\n${codeGenFiles.join('\n')}`
+    }
 
 ${
   considerAllFiles
