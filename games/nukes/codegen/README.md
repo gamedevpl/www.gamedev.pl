@@ -32,3 +32,4 @@ The codegen script accepts the following options:
 - `--allow-file-delete`: Allow the codegen script to delete files.
 - `--codegen-only`: Limit the scope of codegen to the codegen tool itself (the `codegen/` directory).
 - `--game-only`: Limit the scope of codegen to the game tool itself (the `src/` directory).
+- `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model
