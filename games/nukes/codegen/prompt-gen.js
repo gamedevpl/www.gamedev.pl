@@ -52,7 +52,9 @@ function generatePrompt() {
 export const systemPrompt = generatePrompt();
 
 const codeGenFiles = Object.entries(sourceCode)
-  .filter(([path, content]) => (considerAllFiles ? true : content.includes(`// ${CODEGEN_START}`)))
+  .filter(([path, content]) =>
+    considerAllFiles ? true : content.includes(`// ${CODEGEN_START}`) && !content.includes(`\`// ${CODEGEN_START}`),
+  )
   .map(([path]) => path);
 
 assert(codeGenFiles.length > 0, 'No codegen files found');

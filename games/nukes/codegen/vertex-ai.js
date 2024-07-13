@@ -25,7 +25,7 @@ export async function generateContent(systemPrompt, prompt) {
               properties: {
                 filePath: {
                   type: 'STRING',
-                  description: 'The file path to update.',
+                  description: 'The file path to update, if the file path does not exist, it will be created.',
                 },
                 newContent: {
                   type: 'STRING',
@@ -42,8 +42,12 @@ export async function generateContent(systemPrompt, prompt) {
 
   const result = await getGenModel(systemPrompt).generateContent(req);
 
+  if (result.response.promptFeedback) {
+    console.log(JSON.stringify(result.response.promptFeedback, null, 2));
+  }
+
   const functionCalls = result.response.candidates
-    .map((candidate) => candidate.content.parts.map((part) => part.functionCall))
+    .map((candidate) => candidate.content.parts?.map((part) => part.functionCall))
     .flat()
     .filter((functionCall) => !!functionCall);
 
@@ -52,7 +56,19 @@ export async function generateContent(systemPrompt, prompt) {
     'Only updateFile function is allowed',
   );
 
-  return functionCalls.filter((call) => call.name === 'updateFile').map((call) => call.args);
+  if (functionCalls.length === 0) {
+    const textResponse = result.response.candidates
+      .map((candidate) => candidate.content.parts?.map((part) => part.text))
+      .flat()
+      .filter((text) => !!text)
+      .join(
+        '\
+',
+      );
+    console.log('No function calls, output text response if it exists:', textResponse);
+  }
+
+  return functionCalls.map((call) => call.args);
 }
 
 // A function to get the generative model
