@@ -41,9 +41,12 @@ function generatePrompt() {
   \`\`\`
   (note that comments were removed, and the instruction was also removed, and replaced with final code)
 
-  Parse my application source code and find the fragments, and replace them with code accordingly to the context and instructions.  
+  Parse my application source code and suggest changes.  
 
-  You will be using the \`updateFile\` function in response.
+  You will be using the \`updateFile\` function call in response.
+  The function takes two arguments: 
+   - \`filePath\`: path to the file, if file does not exist, it will be created
+   - \`newContent\`: the entire content of the new file, empty string means delete the file
   `;
 
   return systemPrompt;
@@ -52,21 +55,27 @@ function generatePrompt() {
 export const systemPrompt = generatePrompt();
 
 const codeGenFiles = Object.entries(sourceCode)
-  .filter(([path, content]) =>
-    considerAllFiles ? true : content.includes(`// ${CODEGEN_START}`) && !content.includes(`\`// ${CODEGEN_START}`),
-  )
+  .filter(([path, content]) => content.includes(`// ${CODEGEN_START}`) && !content.includes(`\`// ${CODEGEN_START}`))
   .map(([path]) => path);
 
-assert(codeGenFiles.length > 0, 'No codegen files found');
-
-console.log('Code gen files:', codeGenFiles);
+if (!considerAllFiles) {
+  assert(codeGenFiles.length > 0, 'No codegen files found');
+  console.log('Code gen files:');
+  console.log(codeGenFiles);
+}
 
 export const codeGenPrompt = `${
   considerAllFiles
-    ? `I have marked some files with the ${CODEGEN_START} fragments:`
-    : 'Generate updates only for the following files:'
+    ? codeGenFiles.length > 0
+      ? `I have marked some files with the ${CODEGEN_START} fragments:\
+${codeGenFiles.join('\n')}`
+      : `No files are marked with ${CODEGEN_START} fragment, so you can consider doing changes in any file.`
+    : `Generate updates only for the following files:\
+${codeGenFiles.join(
+  '\
+',
+)}`
 }
-${codeGenFiles.join('\n')}
 
 ${
   considerAllFiles
@@ -77,8 +86,11 @@ ${allowFileCreate ? 'You are allowed to create new files.' : 'Do not create new 
 ${
   allowFileDelete
     ? 'You are allowed to delete files, in such case add empty string for their path in output JSON.'
-    : 'Do not delete files.'
+    : 'Do not delete files, empty content means something would be deleted.'
 }
 Do not output files if there are no changes.
 If there are no files to be changed, do not call \`updateFile\` function.
 `;
+
+console.log('Code gen prompt:');
+console.log(codeGenPrompt);
