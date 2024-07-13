@@ -65,6 +65,11 @@ export async function generateContent(systemPrompt, prompt) {
     console.log(JSON.stringify(result.response.promptFeedback, null, 2));
   }
 
+  if (!result.response.candidates?.length > 0) {
+    console.log('Response:', result);
+    throw new Error('No candidates found');
+  }
+
   const functionCalls = result.response.candidates
     .map((candidate) => candidate.content.parts?.map((part) => part.functionCall))
     .flat()

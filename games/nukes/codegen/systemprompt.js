@@ -1,14 +1,18 @@
+import assert from 'node:assert';
+
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-
-const codegenOnly = process.argv.includes('--codegen-only');
+import { codegenOnly, gameOnly } from './cli-params.js';
 
 /** Generates a system prompt */
 export function getSystemPrompt() {
   console.log('Generate system prompt');
+
+  assert(!codegenOnly || !gameOnly, 'codegenOnly and gameOnly cannot be true at the same time');
+
   let systemPrompt = `
   I want you to help me generate code for my ideas in my application the source code have been given:
-  - codegen: node.js script that helps me generate code using Vertex AI, it is using javascript
+  ${gameOnly ? '' : `- codegen: node.js script that helps me generate code using Vertex AI, it is using javascript`}
   ${
     codegenOnly
       ? ''

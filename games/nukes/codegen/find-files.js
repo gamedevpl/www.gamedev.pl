@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { codegenOnly } from './cli-params.js';
+import { codegenOnly, gameOnly } from './cli-params.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,5 +33,11 @@ const gameFiles = findFiles(srcDir, true, '.ts', '.tsx', '.md');
 
 /** Get source files of the application */
 export function getSourceFiles() {
-  return codegenOnly ? [...codegenFiles] : [...rootFiles, ...codegenFiles, ...gameFiles];
+  if (codegenOnly) {
+    return [...codegenFiles];
+  }
+  if (gameOnly) {
+    return [...gameFiles];
+  }
+  return [...rootFiles, ...codegenFiles, ...gameFiles];
 }

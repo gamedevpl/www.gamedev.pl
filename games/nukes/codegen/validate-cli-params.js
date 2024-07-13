@@ -5,6 +5,7 @@ const allowedParameters = [
   '--allow-file-create',
   '--allow-file-delete',
   '--codegen-only',
+  '--game-only',
 ];
 
 export function validateCliParams() {
