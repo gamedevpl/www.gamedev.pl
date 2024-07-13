@@ -30,3 +30,4 @@ The codegen script accepts the following options:
 - `--consider-all-files`: Consider all files for code generation, even if they don't contain the `@CODEGEN` comments.
 - `--allow-file-create`: Allow the codegen script to create new files.
 - `--allow-file-delete`: Allow the codegen script to delete files.
+- `--codegen-only`: Limit the scope of codegen to the codegen tool itself.
