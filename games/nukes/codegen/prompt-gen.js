@@ -8,6 +8,7 @@ const allowFileDelete = process.argv.includes('--allow-file-delete');
 
 function generatePrompt() {
   console.log('Generate system prompt');
+  // CODEGEN START: Refactor the systemPrompt generation, put parts of the prompt into an array, and cocatenate it in the end.
   let systemPrompt = `
   I want you to help me generate code for my ideas in my application the source code have been given:
   - codegen: node.js script that helps me generate code using Vertex AI
@@ -64,17 +65,13 @@ if (!considerAllFiles) {
   console.log(codeGenFiles);
 }
 
+// CODEGEN START: Refactor the codeGenPrompt generation, create a function for this, and put parts of the prompt into an array, then concatenate it.
 export const codeGenPrompt = `${
   considerAllFiles
     ? codeGenFiles.length > 0
-      ? `I have marked some files with the ${CODEGEN_START} fragments:\
-${codeGenFiles.join('\n')}`
+      ? `I have marked some files with the ${CODEGEN_START} fragments:\n${codeGenFiles.join('\n')}`
       : `No files are marked with ${CODEGEN_START} fragment, so you can consider doing changes in any file.`
-    : `Generate updates only for the following files:\
-${codeGenFiles.join(
-  '\
-',
-)}`
+    : `Generate updates only for the following files:\n${codeGenFiles.join('\n')}`
 }
 
 ${
