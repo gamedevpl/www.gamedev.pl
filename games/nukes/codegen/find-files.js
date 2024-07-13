@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const codegenOnly = process.argv.includes('--codegen-only');
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -29,4 +31,4 @@ const rootFiles = findFiles(rootDir, false, '.md');
 const codegenFiles = findFiles(codegenDir, true, '.js', '.md');
 const gameFiles = findFiles(srcDir, true, '.ts', '.tsx', '.md');
 
-export const sourceFiles = [...rootFiles, ...codegenFiles, ...gameFiles];
+export const sourceFiles = codegenOnly ? [...codegenFiles] : [...rootFiles, ...codegenFiles, ...gameFiles];
