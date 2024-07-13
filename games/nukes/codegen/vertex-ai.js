@@ -31,8 +31,27 @@ export async function generateContent(systemPrompt, prompt) {
                   type: 'STRING',
                   description: 'The content to update the file with, empty string means the file will be deleted.',
                 },
+                explanation: {
+                  type: 'STRING',
+                  description: 'The explanation of the reasoning behind the suggested code changes for this file',
+                },
               },
-              required: ['filePath', 'newContent'],
+              required: ['filePath', 'newContent', 'explanation'],
+            },
+          },
+          {
+            name: 'explanation',
+            parameters: {
+              type: 'OBJECT',
+              description:
+                'Explain the reasoning behind the suggested code changes or reasoning for lack of code changes',
+              properties: {
+                text: {
+                  type: 'STRING',
+                  description: 'The explanation text',
+                },
+              },
+              required: ['text'],
             },
           },
         ],
@@ -52,8 +71,8 @@ export async function generateContent(systemPrompt, prompt) {
     .filter((functionCall) => !!functionCall);
 
   assert(
-    functionCalls.every((call) => call.name === 'updateFile'),
-    'Only updateFile function is allowed',
+    functionCalls.every((call) => call.name === 'updateFile' || call.name === 'explanation'),
+    'Only updateFile and explanation functions are allowed',
   );
 
   if (functionCalls.length === 0) {
@@ -68,7 +87,12 @@ export async function generateContent(systemPrompt, prompt) {
     console.log('No function calls, output text response if it exists:', textResponse);
   }
 
-  return functionCalls.map((call) => call.args);
+  console.log(
+    'Explanations:',
+    functionCalls.filter((fn) => fn.name === 'explanation').map((call) => call.args.text),
+  );
+
+  return functionCalls.filter((fn) => fn.name === 'updateFile').map((call) => call.args);
 }
 
 // A function to get the generative model
@@ -82,7 +106,7 @@ export function getGenModel(systemPrompt) {
     model: model,
     generationConfig: {
       maxOutputTokens: 8192,
-      temperature: 1,
+      temperature: 0,
       topP: 0.95,
     },
     safetySettings: [
