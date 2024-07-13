@@ -18,7 +18,7 @@ This will run the codegen script, which will:
 
 1. Read the source code of the application.
 2. Find the fragments marked with `@CODEGEN`
-3. Send the fragments to Vertex AI for code generation.
+3. Send the fragments to Vertex AI or OpenAI's model for code generation, depending on the `--chat-gpt` flag.
 4. Replace the fragments with the generated code.
 5. Save the updated source code.
 
@@ -31,6 +31,6 @@ The codegen script accepts the following options:
 - `--allow-file-create`: Allow the codegen script to create new files.
 - `--allow-file-delete`: Allow the codegen script to delete files.
 - `--codegen-only`: Limit the scope of codegen to the codegen tool itself (the `codegen/` directory).
-- `--game-only`: Limit the scope of codegen to the game tool itself (the `src/` directory).
-- `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model
-- `--prompt`: An explicit prompt to use for code generation
+- `--game-only`: Limit the scope of codegen to the game itself (the `src/` directory).
+- `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model.
+- `--prompt`: An explicit prompt to use for code generation.
