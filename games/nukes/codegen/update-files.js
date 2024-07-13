@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { getSourceFiles } from './find-files.js';
+import { chatGpt } from './cli-params.js';
 
 /**
  * @param codegenResults Result of the code generation, a map of file paths to new content
@@ -24,7 +25,7 @@ export function updateFiles(functionCalls) {
       fs.writeFileSync(
         filePath,
         // Fixing a problem caused by vertex function calling. Possible not a good fix
-        newContent.replace(/\\n/g, '\n').replace(/\\'/g, "'"),
+        chatGpt ? newContent : newContent.replace(/\\n/g, '\n').replace(/\\'/g, "'"),
         'utf-8',
       );
     }

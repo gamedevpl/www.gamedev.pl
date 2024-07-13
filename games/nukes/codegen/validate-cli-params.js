@@ -6,6 +6,7 @@ const allowedParameters = [
   '--allow-file-delete',
   '--codegen-only',
   '--game-only',
+  '--chat-gpt',
 ];
 
 export function validateCliParams() {

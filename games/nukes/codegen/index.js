@@ -2,8 +2,9 @@ import { getSystemPrompt } from './systemprompt.js';
 import { getCodeGenPrompt } from './prompt-codegen.js';
 import { updateFiles } from './update-files.js';
 import { generateContent } from './vertex-ai.js';
-import { dryRun } from './cli-params.js';
+import { dryRun, chatGpt } from './cli-params.js';
 import { validateCliParams } from './validate-cli-params.js';
+import { generateContent as generateContentGPT } from './chat-gpt.js';
 
 // Print to console the received parameters
 console.log(`Received parameters: ${process.argv.slice(2).join(' ')}`);
@@ -11,7 +12,7 @@ console.log(`Received parameters: ${process.argv.slice(2).join(' ')}`);
 validateCliParams();
 
 console.log('Generating response');
-const functionCalls = await generateContent(getSystemPrompt(), getCodeGenPrompt());
+const functionCalls = await (chatGpt ? generateContentGPT : generateContent)(getSystemPrompt(), getCodeGenPrompt());
 console.log('Received function calls:', functionCalls);
 
 if (dryRun) {

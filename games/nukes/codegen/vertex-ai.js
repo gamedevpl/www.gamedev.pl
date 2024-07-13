@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
+import { explanationFD, updateFileFD } from './function-calling.js';
 
 // A function to generate content using the generative model
 export async function generateContent(systemPrompt, prompt) {
@@ -16,47 +17,10 @@ export async function generateContent(systemPrompt, prompt) {
     ],
     tools: [
       {
-        functionDeclarations: [
-          {
-            name: 'updateFile',
-            parameters: {
-              type: 'OBJECT',
-              description: 'Update a file with new content',
-              properties: {
-                filePath: {
-                  type: 'STRING',
-                  description: 'The file path to update, if the file path does not exist, it will be created.',
-                },
-                newContent: {
-                  type: 'STRING',
-                  description: 'The content to update the file with, empty string means the file will be deleted.',
-                },
-                explanation: {
-                  type: 'STRING',
-                  description: 'The explanation of the reasoning behind the suggested code changes for this file',
-                },
-              },
-              required: ['filePath', 'newContent', 'explanation'],
-            },
-          },
-          {
-            name: 'explanation',
-            parameters: {
-              type: 'OBJECT',
-              description:
-                'Explain the reasoning behind the suggested code changes or reasoning for lack of code changes',
-              properties: {
-                text: {
-                  type: 'STRING',
-                  description: 'The explanation text',
-                },
-              },
-              required: ['text'],
-            },
-          },
-        ],
+        functionDeclarations: [updateFileFD, explanationFD],
       },
     ],
+    // TODO: add tool_config once [it is supported](https://github.com/googleapis/nodejs-vertexai/issues/331)
   };
 
   const result = await getGenModel(systemPrompt).generateContent(req);
@@ -85,10 +49,7 @@ export async function generateContent(systemPrompt, prompt) {
       .map((candidate) => candidate.content.parts?.map((part) => part.text))
       .flat()
       .filter((text) => !!text)
-      .join(
-        '\
-',
-      );
+      .join('\n');
     console.log('No function calls, output text response if it exists:', textResponse);
   }
 
