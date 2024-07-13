@@ -1,10 +1,12 @@
 import { distance } from '../math/position-utils';
-import { WorldState } from './world-state-types';
+import { Missile, WorldState } from './world-state-types';
 import {
   EXPLOSION_DAMAGE_RATIO,
   EXPLOSION_DURATION,
   EXPLOSION_RADIUS,
+  LAUNCH_COOLDOWN,
   MIN_EXPLOSION_DAMAGE,
+  MISSILE_SPEED,
   WORLD_UPDATE_STEP,
 } from './world-state-constants';
 
@@ -99,6 +101,40 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
 
   // Remove missiles which already reached their target
   result.missiles = result.missiles.filter((m) => m.targetTimestamp > worldTimestamp);
+
+  // Launch new missiles
+  for (const launchSite of state.launchSites) {
+    if (!launchSite.nextLaunchTarget) {
+      // No target
+      continue;
+    } else if (!!launchSite.lastLaunchTimestamp && worldTimestamp - launchSite.lastLaunchTimestamp < LAUNCH_COOLDOWN) {
+      // Not ready to launch yet
+      continue;
+    }
+
+    const dist = distance(
+      launchSite.position.x,
+      launchSite.position.y,
+      launchSite.nextLaunchTarget.x,
+      launchSite.nextLaunchTarget.y,
+    );
+
+    const missile: Missile = {
+      id: Math.random() + '',
+
+      stateId: launchSite.stateId,
+      launchSiteId: launchSite.id,
+
+      launch: launchSite.position,
+      launchTimestamp: worldTimestamp,
+
+      target: launchSite.nextLaunchTarget,
+      targetTimestamp: worldTimestamp + dist / MISSILE_SPEED,
+    };
+
+    result.missiles.push(missile);
+    launchSite.lastLaunchTimestamp = worldTimestamp;
+  }
 
   return result;
 }

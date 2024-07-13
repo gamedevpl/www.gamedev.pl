@@ -1,17 +1,9 @@
 import { useCustomEvent } from '../events';
-import { EntityType, Missile, WorldState } from '../world/world-state-types';
-import { distance } from '../math/position-utils';
+import { EntityType, WorldState } from '../world/world-state-types';
 import { usePointer } from './pointer';
 import { useSelectedObject } from './selection';
-import { MISSILE_SPEED } from '../world/world-state-constants';
 
-export function Command({
-  worldState,
-  setWorldState,
-}: {
-  worldState: WorldState;
-  setWorldState: (worldState: WorldState) => void;
-}) {
+export function Command({}: { worldState: WorldState; setWorldState: (worldState: WorldState) => void }) {
   const selectedObject = useSelectedObject();
   const pointer = usePointer();
 
@@ -20,30 +12,7 @@ export function Command({
       return;
     }
 
-    const dist = distance(
-      selectedObject.position.x,
-      selectedObject.position.y,
-      pointer.pointingObjects[0].position.x,
-      pointer.pointingObjects[0].position.y,
-    );
-
-    const missile: Missile = {
-      id: Math.random() + '',
-
-      stateId: selectedObject.stateId,
-      launchSiteId: selectedObject.id,
-
-      launch: selectedObject.position,
-      launchTimestamp: worldState.timestamp,
-
-      target: pointer.pointingObjects[0].position,
-      targetTimestamp: worldState.timestamp + dist / MISSILE_SPEED,
-    };
-
-    setWorldState({
-      ...worldState,
-      missiles: [...worldState.missiles, missile],
-    });
+    selectedObject.nextLaunchTarget = pointer.pointingObjects[0].position;
   });
 
   return null;

@@ -54,6 +54,9 @@ export type LaunchSite = {
   id: LaunchSiteId;
   position: Position;
   stateId: StateId;
+
+  lastLaunchTimestamp?: number;
+  nextLaunchTarget?: Position;
 };
 
 export type Missile = {
