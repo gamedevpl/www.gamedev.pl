@@ -134,6 +134,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
 
     result.missiles.push(missile);
     launchSite.lastLaunchTimestamp = worldTimestamp;
+    launchSite.nextLaunchTarget = undefined;
   }
 
   return result;
