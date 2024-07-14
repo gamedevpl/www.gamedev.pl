@@ -12,7 +12,14 @@ export function updateFiles(functionCalls) {
 
   for (const { filePath, newContent } of functionCalls) {
     // ignore files which are not located inside project directory (sourceFiles)
-    if (!sourceFiles.includes(filePath) && !sourceFiles.some((file) => path.dirname(filePath) === path.dirname(file))) {
+    if (
+      !sourceFiles.includes(filePath) &&
+      !sourceFiles.some(
+        (sourceFile) =>
+          path.dirname(filePath) === path.dirname(sourceFile) ||
+          isAncestorDirectory(path.dirname(sourceFile), path.dirname(filePath)),
+      )
+    ) {
       console.log(`Skipping file: ${filePath}`);
       throw new Error(`File ${filePath} is not located inside project directory, something is wrong?`);
     }
@@ -30,4 +37,9 @@ export function updateFiles(functionCalls) {
       );
     }
   }
+}
+
+function isAncestorDirectory(parent, dir) {
+  const relative = path.relative(parent, dir);
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
