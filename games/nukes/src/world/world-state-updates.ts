@@ -9,6 +9,7 @@ import {
   MISSILE_SPEED,
   WORLD_UPDATE_STEP,
 } from './world-state-constants';
+import { generateLaunches } from './generate-launches';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   while (deltaTime > 0) {
@@ -136,6 +137,8 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     launchSite.lastLaunchTimestamp = worldTimestamp;
     launchSite.nextLaunchTarget = undefined;
   }
+
+  generateLaunches(result);
 
   return result;
 }
