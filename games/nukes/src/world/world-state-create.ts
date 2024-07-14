@@ -2,24 +2,21 @@ import {
   City,
   EntityType,
   Explosion,
-  // HistogramEntry,
   LaunchSite,
   Missile,
-  // Position,
-  // Rect,
   Sector,
   SectorType,
   State,
   WorldState,
 } from './world-state-types';
 
-export function createWorldState(): WorldState {
+export function createWorldState({ playerStateName }: { playerStateName: string }): WorldState {
   const sectorSize = 16;
   const worldWidth = 50;
   const worldHeight = 50;
 
   const states: State[] = [
-    { id: 'state-1', name: 'State 1' },
+    { id: 'state-1', name: playerStateName },
     { id: 'state-2', name: 'State 2' },
     { id: 'state-3', name: 'State 3' },
   ];

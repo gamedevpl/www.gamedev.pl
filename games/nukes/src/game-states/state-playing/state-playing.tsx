@@ -11,7 +11,7 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
     state: { stateName, gameId },
   } = useLocation();
 
-  const { worldState, setWorldState, updateWorldState } = useWorldStore();
+  const { worldState, setWorldState, updateWorldState } = useWorldStore(stateName);
 
   return (
     <>

@@ -16,7 +16,7 @@ import { Infotainment } from '../controls-render/infotainment';
 import { TimeControls } from './state-playing/time-controls';
 
 const WorldComponent: GameStateComponent = ({}) => {
-  const [worldState, setWorldState] = useState(() => createWorldState());
+  const [worldState, setWorldState] = useState(() => createWorldState({ playerStateName: 'Player state' }));
   const updateWorld = useCallback(
     (worldState: WorldState, deltaTime: number) => setWorldState(updateWorldState(worldState, deltaTime)),
     [],

@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 
-const SYSTEM_PROMPT_LIMIT = 5000;
+const SYSTEM_PROMPT_LIMIT = 10000;
 const CODEGEN_PROMPT_LIMIT = 1000;
 
 function verifyPromptLimit(promptType, prompt, limit) {
