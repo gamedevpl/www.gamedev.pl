@@ -31,6 +31,18 @@ export async function generateContent(systemPrompt, prompt) {
     tool_choice: 'required',
   });
 
+  // Print token usage for chat gpt
+  console.log('Token Usage:');
+  console.log('  - Completion tokens: ', response.usage.completion_tokens);
+  console.log('  - Prompt tokens: ', response.usage.prompt_tokens);
+  console.log('  - Total tokens: ', response.usage.total_tokens);
+
+  // Calculate and print the estimated cost
+  const inputCost = response.usage.prompt_tokens * 0.000005;
+  const outputCost = response.usage.completion_tokens * 0.000015;
+  const totalCost = inputCost + outputCost;
+  console.log('  - Estimated cost: ', totalCost.toFixed(6), ' USD');
+
   const responseMessage = response.choices[0].message;
 
   if (responseMessage.content?.message) {

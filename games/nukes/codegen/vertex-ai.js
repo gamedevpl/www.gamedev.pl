@@ -25,7 +25,21 @@ export async function generateContent(systemPrompt, prompt) {
 
   const result = await getGenModel(systemPrompt).generateContent(req);
 
+  // Print token usage
+  const usageMetadata = result.response.usageMetadata;
+  console.log('Token Usage:');
+  console.log('  - Candidates tokens: ', usageMetadata.candidatesTokenCount);
+  console.log('  - Prompt tokens: ', usageMetadata.promptTokenCount);
+  console.log('  - Total tokens: ', usageMetadata.totalTokenCount);
+
+  // Calculate and print the estimated cost
+  const inputCost = (usageMetadata.promptTokenCount * 0.000125) / 1000;
+  const outputCost = (usageMetadata.candidatesTokenCount * 0.000375) / 1000;
+  const totalCost = inputCost + outputCost;
+  console.log('  - Estimated cost: ', totalCost.toFixed(6), ' USD');
+
   if (result.response.promptFeedback) {
+    console.log('Prompt feedback:');
     console.log(JSON.stringify(result.response.promptFeedback, null, 2));
   }
 
@@ -49,7 +63,10 @@ export async function generateContent(systemPrompt, prompt) {
       .map((candidate) => candidate.content.parts?.map((part) => part.text))
       .flat()
       .filter((text) => !!text)
-      .join('\n');
+      .join(
+        '\
+',
+      );
     console.log('No function calls, output text response if it exists:', textResponse);
   }
 
@@ -72,7 +89,7 @@ export function getGenModel(systemPrompt) {
     model: model,
     generationConfig: {
       maxOutputTokens: 8192,
-      temperature: 0,
+      temperature: 1,
       topP: 0.95,
     },
     safetySettings: [
