@@ -35,3 +35,4 @@ The codegen script accepts the following options:
 - `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model.
 - `--explicit-prompt`: An explicit prompt to use for code generation.
 - `--task-file`: Specifies a file with a task description for code generation.
+- `--dependency-tree`: Limit the scope of codegen only to files marked with `@CODEGEN` and their dependencies

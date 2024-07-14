@@ -1,18 +1,33 @@
 import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { considerAllFiles, allowFileCreate, allowFileDelete, explicitPrompt } from './cli-params.js';
+import { considerAllFiles, allowFileCreate, allowFileDelete, explicitPrompt, dependencyTree } from './cli-params.js';
+import { getDependencyTree } from './find-files.js';
 
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
-  const codeGenFiles = Object.entries(getSourceCode())
-    .filter(([path, content]) => content.match(new RegExp("([^'^`]+)" + CODEGEN_TRIGGER)))
-    .map(([path]) => path);
+  let codeGenFiles;
+  if (considerAllFiles) {
+    codeGenFiles = Object.keys(getSourceCode());
+  } else {
+    codeGenFiles = Object.entries(getSourceCode())
+      .filter(([path, content]) => content.match(new RegExp("([^'^`]+)" + CODEGEN_TRIGGER)))
+      .map(([path]) => path);
+  }
 
-  if (!considerAllFiles) {
-    assert(codeGenFiles.length > 0, 'No codegen files found');
-    console.log('Code gen files:');
-    console.log(codeGenFiles);
+  // Add logic to consider dependency tree
+  if (dependencyTree) {
+    assert(codeGenFiles.length > 0, `You must use ${CODEGEN_TRIGGER} together with --dependency-tree`);
+
+    const dependencyTreeFiles = new Set();
+    codeGenFiles.forEach((file) => {
+      const tree = getDependencyTree(file);
+      Object.keys(tree).forEach((key) => dependencyTreeFiles.add(key));
+      Object.values(tree)
+        .flat()
+        .forEach((dep) => dependencyTreeFiles.add(dep));
+    });
+    codeGenFiles = Array.from(dependencyTreeFiles);
   }
 
   const codeGenPrompt =
