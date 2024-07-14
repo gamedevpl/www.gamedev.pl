@@ -36,3 +36,4 @@ The codegen script accepts the following options:
 - `--explicit-prompt`: An explicit prompt to use for code generation.
 - `--task-file`: Specifies a file with a task description for code generation.
 - `--dependency-tree`: Limit the scope of codegen only to files marked with `@CODEGEN` and their dependencies
+- `--verbose-prompt`: Print the prompt used for code generation.

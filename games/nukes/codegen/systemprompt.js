@@ -2,7 +2,7 @@ import assert from 'node:assert';
 
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { codegenOnly, gameOnly } from './cli-params.js';
+import { codegenOnly, gameOnly, verbosePrompt } from './cli-params.js';
 import { verify } from 'node:crypto';
 import { verifySystemPromptLimit } from './limits.js';
 
@@ -75,8 +75,10 @@ export function getSystemPrompt() {
   Parse my application source code and make changes using the \`updateFile\` and \`explanation\` functions.
   `;
 
-  console.log('System prompt:');
-  console.log(systemPrompt);
+  if (verbosePrompt) {
+    console.log('System prompt:');
+    console.log(systemPrompt);
+  }
 
   verifySystemPromptLimit(systemPrompt);
 

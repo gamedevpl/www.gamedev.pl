@@ -10,6 +10,7 @@ export const codegenOnly = params.includes('--codegen-only');
 export const gameOnly = params.includes('--game-only');
 export const chatGpt = params.includes('--chat-gpt');
 export const dependencyTree = params.includes('--dependency-tree');
+export const verbosePrompt = params.includes('--verbose-prompt');
 export let explicitPrompt = params.find((param) => param.startsWith('--explicit-prompt'))?.split('=')[1];
 export const taskFile = params.find((param) => param.startsWith('--task-file'))?.split('=')[1];
 

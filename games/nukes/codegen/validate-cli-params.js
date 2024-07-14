@@ -9,6 +9,7 @@ const allowedParameters = [
   '--explicit-prompt=',
   '--task-file=',
   '--dependency-tree',
+  '--verbose-prompt',
 ];
 
 // Validate CLI parameters accordingly to those mentioned in README.md, fail the process if not valid, or unknown parameter is passed

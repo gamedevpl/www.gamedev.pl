@@ -1,7 +1,14 @@
 import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { considerAllFiles, allowFileCreate, allowFileDelete, explicitPrompt, dependencyTree } from './cli-params.js';
+import {
+  considerAllFiles,
+  allowFileCreate,
+  allowFileDelete,
+  explicitPrompt,
+  dependencyTree,
+  verbosePrompt,
+} from './cli-params.js';
 import { getDependencyList } from './find-files.js';
 import { verifyCodegenPromptLimit } from './limits.js';
 
@@ -54,8 +61,10 @@ Call the \`explanation\` function to explain reason for changes or reason for la
 Call the \`updateFile\` function for code changes.
 `;
 
-  console.log('Code gen prompt:');
-  console.log(codeGenPrompt);
+  if (verbosePrompt) {
+    console.log('Code gen prompt:');
+    console.log(codeGenPrompt);
+  }
 
   verifyCodegenPromptLimit(codeGenPrompt);
 
