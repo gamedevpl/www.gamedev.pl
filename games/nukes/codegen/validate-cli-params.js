@@ -8,6 +8,7 @@ const allowedParameters = [
   '--chat-gpt',
   '--explicit-prompt=',
   '--task-file=',
+  '--dependency-tree',
 ];
 
 // Validate CLI parameters accordingly to those mentioned in README.md, fail the process if not valid, or unknown parameter is passed

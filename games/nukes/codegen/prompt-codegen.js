@@ -2,7 +2,8 @@ import assert from 'node:assert';
 import { getSourceCode } from './read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
 import { considerAllFiles, allowFileCreate, allowFileDelete, explicitPrompt, dependencyTree } from './cli-params.js';
-import { getDependencyTree } from './find-files.js';
+import { getDependencyList } from './find-files.js';
+import { verifyCodegenPromptLimit } from './limits.js';
 
 /** Get codegen prompt */
 export function getCodeGenPrompt() {
@@ -20,13 +21,10 @@ export function getCodeGenPrompt() {
     assert(codeGenFiles.length > 0, `You must use ${CODEGEN_TRIGGER} together with --dependency-tree`);
 
     const dependencyTreeFiles = new Set();
-    codeGenFiles.forEach((file) => {
-      const tree = getDependencyTree(file);
-      Object.keys(tree).forEach((key) => dependencyTreeFiles.add(key));
-      Object.values(tree)
-        .flat()
-        .forEach((dep) => dependencyTreeFiles.add(dep));
-    });
+    codeGenFiles
+      .map(getDependencyList)
+      .flat()
+      .forEach((key) => dependencyTreeFiles.add(key));
     codeGenFiles = Array.from(dependencyTreeFiles);
   }
 
@@ -58,6 +56,8 @@ Call the \`updateFile\` function for code changes.
 
   console.log('Code gen prompt:');
   console.log(codeGenPrompt);
+
+  verifyCodegenPromptLimit(codeGenPrompt);
 
   return codeGenPrompt;
 }
