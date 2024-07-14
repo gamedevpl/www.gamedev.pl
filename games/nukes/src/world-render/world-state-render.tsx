@@ -5,7 +5,7 @@ import { WorldState } from '../world/world-state-types';
 import { usePointerMove } from '../controls/pointer';
 import { dispatchCustomEvent } from '../events';
 
-import { SectorRender } from './sector-render';
+import SectorCanvas from './sector-canvas-render';
 import { StateRender } from './state-render';
 import { CityRender } from './city-render';
 import { LaunchSiteRender } from './launch-site-render';
@@ -21,7 +21,7 @@ export function WorldStateRender({ state }: { state: WorldState }) {
       onClick={() => dispatchCustomEvent('world-click')}
     >
       {/* static content, does not change at all */}
-      <BulkRender items={state.sectors} Component={SectorRender} propertyName="sector" />
+      <SectorCanvas sectors={state.sectors} />
       <BulkRender items={state.states} Component={StateRender} propertyName="state" />
       <BulkRender items={state.cities} Component={CityRender} propertyName="city" />
       {state.launchSites.map((launchSite) => (
