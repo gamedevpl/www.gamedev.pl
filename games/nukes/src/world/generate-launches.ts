@@ -12,7 +12,7 @@ import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
  * @returns A list of new missiles and their corresponding explosions.
  */
 export function generateLaunches(worldState: WorldState): WorldState {
-  for (const state of worldState.states) {
+  for (const state of worldState.states.filter((state) => !state.isPlayerControlled)) {
     const myCities = worldState.cities.filter((city) => city.stateId === state.id);
     const enemyCities = worldState.cities.filter(
       (city) => city.stateId !== state.id && city.populationHistogram.slice(-1)[0].population > 0,

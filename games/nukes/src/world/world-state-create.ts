@@ -16,9 +16,9 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
   const worldHeight = 50;
 
   const states: State[] = [
-    { id: 'state-1', name: playerStateName },
-    { id: 'state-2', name: 'State 2' },
-    { id: 'state-3', name: 'State 3' },
+    { id: 'state-1', name: playerStateName, isPlayerControlled: true },
+    { id: 'state-2', name: 'State 2', isPlayerControlled: false },
+    { id: 'state-3', name: 'State 3', isPlayerControlled: false },
   ];
 
   const cities: City[] = [

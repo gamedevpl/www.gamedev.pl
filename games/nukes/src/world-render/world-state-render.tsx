@@ -24,7 +24,14 @@ export function WorldStateRender({ state }: { state: WorldState }) {
       <BulkRender items={state.sectors} Component={SectorRender} propertyName="sector" />
       <BulkRender items={state.states} Component={StateRender} propertyName="state" />
       <BulkRender items={state.cities} Component={CityRender} propertyName="city" />
-      <BulkRender items={state.launchSites} Component={LaunchSiteRender} propertyName="launchSite" />
+      {state.launchSites.map((launchSite) => (
+        <LaunchSiteRender
+          key={launchSite.id}
+          launchSite={launchSite}
+          worldTimestamp={state.timestamp}
+          isPlayerControlled={launchSite.stateId === state.states.find((state) => state.isPlayerControlled)?.id}
+        />
+      ))}
 
       {/* dynamic content, changes with time */}
       {state.missiles

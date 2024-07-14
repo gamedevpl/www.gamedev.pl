@@ -23,6 +23,7 @@ export type HistogramEntry<T> = { timestamp: number } & T;
 export type State = {
   id: StateId;
   name: string;
+  isPlayerControlled: boolean;
 };
 
 export type City = {
@@ -34,7 +35,7 @@ export type City = {
 };
 
 export enum EntityType {
-  LAUNCH_SITE = 'LAUNCH_SITE`',
+  LAUNCH_SITE = 'LAUNCH_SITE',
 }
 
 export enum SectorType {

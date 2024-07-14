@@ -95,6 +95,16 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       // modify missle targetTimestamp to moment of explosion
       missile.targetTimestamp = explosion.startTimestamp;
     }
+
+    // Add damage to launch sites
+    const affectedLaunchSites = state.launchSites.filter(
+      (launchSite) =>
+        distance(launchSite.position.x, launchSite.position.y, explosion.position.x, explosion.position.y) <=
+        explosion.radius,
+    );
+    for (const launchSite of affectedLaunchSites) {
+      result.launchSites = state.launchSites.filter((ls) => ls.id !== launchSite.id);
+    }
   }
 
   // Remove explosions which already finished
