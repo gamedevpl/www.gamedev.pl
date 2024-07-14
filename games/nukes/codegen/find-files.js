@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { codegenOnly, gameOnly } from './cli-params.js';
+import { codegenOnly, gameOnly, taskFile } from './cli-params.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,17 +74,41 @@ export function getDependencyList(entryFile) {
 }
 
 const rootFiles = findFiles(rootDir, false, '.md');
-const docsFiles = findFiles(docsDir, true, '.md');
+
 const codegenFiles = findFiles(codegenDir, true, '.js', '.md');
 const gameFiles = findFiles(srcDir, true, '.ts', '.tsx', '.md');
+
+const codegenTaskFiles = findFiles(path.join(docsDir, 'tasks', 'codegen'), true, '.md');
+const codegenDesignFiles = findFiles(path.join(docsDir, 'design', 'codegen'), true, '.md');
+
+const gameTaskFiles = findFiles(path.join(docsDir, 'tasks', 'game'), true, '.md');
+const gameDesignFiles = findFiles(path.join(docsDir, 'design', 'game'), true, '.md');
 
 /** Get source files of the application */
 export function getSourceFiles() {
   if (codegenOnly) {
-    return [...rootFiles, ...docsFiles, ...codegenFiles];
+    return [
+      ...rootFiles,
+      ...codegenDesignFiles,
+      ...codegenFiles,
+      ...(taskFile ? codegenTaskFiles.filter((file) => file.includes(taskFile)) : []),
+    ];
   }
   if (gameOnly) {
-    return [...rootFiles, ...docsFiles, ...gameFiles];
+    return [
+      ...rootFiles,
+      ...codegenDesignFiles, // codegen design files are there to improve response quality
+      ...gameDesignFiles,
+      ...gameFiles,
+      ...(taskFile ? gameTaskFiles.filter((file) => file.includes(taskFile)) : []),
+    ];
   }
-  return [...rootFiles, ...codegenFiles, ...gameFiles];
+  return [
+    ...rootFiles,
+    ...gameDesignFiles,
+    ...codegenDesignFiles,
+    ...codegenFiles,
+    ...gameFiles,
+    ...(taskFile ? [...codegenTaskFiles, ...gameTaskFiles].filter((file) => file.includes(taskFile)) : []),
+  ];
 }

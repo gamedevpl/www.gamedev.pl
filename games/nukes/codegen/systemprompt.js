@@ -30,38 +30,9 @@ export function getSystemPrompt() {
   \`\`\`
   (format of this JSON object is: \`{ [filePath: string]: string }\`)
 
-  I have marked fragments I want you to generate with a comments:
-  - \`// ${CODEGEN_TRIGGER}: instruction for you\` or \`/* ${CODEGEN_TRIGGER}: some hints for you\ */\`
+  You can generate new code, or modify the existing one. You will receive instructions on what is the goal of requested code modification.
 
-  For example this fragment:
-  \`\`\` 
-  console.log('Some other statement');
-  // ${CODEGEN_TRIGGER}: print hello world to console
-  console.log('Yet another statement');
-  \`\`\`
-
-  should result in:
-  \`\`\`
-  console.log('Some other statement');
-  console.log("hello world");
-  console.log('Yet another statement');
-  \`\`\`
-  (note that comment was removed, and the instruction was also removed, and replaced with final code)
-
-  Another example with multiline instruction:
-  \`\`\` 
-  /* 
-   * ${CODEGEN_TRIGGER}
-   * fix a bug in this code, item is sometimes undefined 
-   */
-  const output = input.map(item => item.toUpperCase());
-  \`\`\`
-
-  should result in:
-  \`\`\`
-  const output = input.map(item => item?.toUpperCase());
-  \`\`\`
-  (also note that the comment was removed)
+  Instructions will be passed to you either directly via message or using a file or by using special ${CODEGEN_TRIGGER} comment in the code.
 
   You will be using the \`updateFile\` and \`explanation\` functions in response.
 
