@@ -9,11 +9,11 @@ export const updateFileFD = {
     properties: {
       filePath: {
         type: 'string',
-        description: 'The file path to update, if the file path does not exist, it will be created.',
+        description: 'The file path to update.',
       },
       newContent: {
         type: 'string',
-        description: 'The content to update the file with, empty string means the file will be deleted.',
+        description: 'The content to update the file with.',
       },
       explanation: {
         type: 'string',
@@ -21,6 +21,54 @@ export const updateFileFD = {
       },
     },
     required: ['filePath', 'newContent', 'explanation'],
+  },
+};
+
+/**
+ * Function declaration for createFile function
+ */
+export const createFileFD = {
+  name: 'createFile',
+  parameters: {
+    type: 'object',
+    description: 'Create a new file with specified content',
+    properties: {
+      filePath: {
+        type: 'string',
+        description: 'The file path to create.',
+      },
+      newContent: {
+        type: 'string',
+        description: 'The content for the new file.',
+      },
+      explanation: {
+        type: 'string',
+        description: 'The explanation of the reasoning behind creating this file',
+      },
+    },
+    required: ['filePath', 'newContent', 'explanation'],
+  },
+};
+
+/**
+ * Function declaration for deleteFile function
+ */
+export const deleteFileFD = {
+  name: 'deleteFile',
+  parameters: {
+    type: 'object',
+    description: 'Delete a specified file',
+    properties: {
+      filePath: {
+        type: 'string',
+        description: 'The file path to delete.',
+      },
+      explanation: {
+        type: 'string',
+        description: 'The explanation of the reasoning behind deleting this file',
+      },
+    },
+    required: ['filePath', 'explanation'],
   },
 };
 

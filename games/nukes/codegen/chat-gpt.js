@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import OpenAI from 'openai';
-import { explanationFD, updateFileFD } from './function-calling.js';
+import { createFileFD, deleteFileFD, explanationFD, updateFileFD } from './function-calling.js';
 
 /**
  * This function generates content using the OpenAI chat model.
@@ -25,7 +25,9 @@ export async function generateContent(systemPrompt, prompt) {
       },
     ],
     tools: [
+      { type: 'function', function: createFileFD },
       { type: 'function', function: updateFileFD },
+      { type: 'function', function: deleteFileFD },
       { type: 'function', function: explanationFD },
     ],
     tool_choice: 'required',
@@ -55,7 +57,10 @@ export async function generateContent(systemPrompt, prompt) {
       const name = call.function.name;
       const args = JSON.parse(call.function.arguments);
 
-      assert(name === 'updateFile' || name === 'explanation', 'Invalid tool call: ' + name);
+      assert(
+        name === 'updateFile' || name === 'explanation' || name === 'createFile' || name === 'deleteFile',
+        'Invalid tool call: ' + name,
+      );
 
       return {
         name,
@@ -68,7 +73,9 @@ export async function generateContent(systemPrompt, prompt) {
       functionCalls.filter((fn) => fn.name === 'explanation').map((call) => call.args.text),
     );
 
-    return functionCalls.filter((fn) => fn.name === 'updateFile').map((call) => call.args);
+    return functionCalls.filter(
+      (fn) => fn.name === 'updateFile' || fn.name === 'createFile' || fn.name === 'deleteFile',
+    );
   } else {
     throw new Error('No tool calls found in response');
   }

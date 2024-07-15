@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
-import { explanationFD, updateFileFD } from './function-calling.js';
+import { explanationFD, updateFileFD, createFileFD, deleteFileFD } from './function-calling.js';
 
 // A function to generate content using the generative model
 export async function generateContent(systemPrompt, prompt) {
@@ -17,7 +17,7 @@ export async function generateContent(systemPrompt, prompt) {
     ],
     tools: [
       {
-        functionDeclarations: [updateFileFD, explanationFD],
+        functionDeclarations: [updateFileFD, explanationFD, createFileFD, deleteFileFD],
       },
     ],
     // TODO: add tool_config once [it is supported](https://github.com/googleapis/nodejs-vertexai/issues/331)
@@ -54,8 +54,14 @@ export async function generateContent(systemPrompt, prompt) {
     .filter((functionCall) => !!functionCall);
 
   assert(
-    functionCalls.every((call) => call.name === 'updateFile' || call.name === 'explanation'),
-    'Only updateFile and explanation functions are allowed',
+    functionCalls.every(
+      (call) =>
+        call.name === 'updateFile' ||
+        call.name === 'explanation' ||
+        call.name === 'createFile' ||
+        call.name === 'deleteFile',
+    ),
+    'Only updateFile, createFile, deleteFile, and explanation functions are allowed',
   );
 
   if (functionCalls.length === 0) {
@@ -75,7 +81,7 @@ export async function generateContent(systemPrompt, prompt) {
     functionCalls.filter((fn) => fn.name === 'explanation').map((call) => call.args.text),
   );
 
-  return functionCalls.filter((fn) => fn.name === 'updateFile').map((call) => call.args);
+  return functionCalls.filter((fn) => fn.name === 'updateFile' || fn.name === 'createFile' || fn.name === 'deleteFile');
 }
 
 // A function to get the generative model

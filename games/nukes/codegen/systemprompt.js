@@ -36,14 +36,23 @@ export function getSystemPrompt() {
 
   You will be using the \`updateFile\` and \`explanation\` functions in response.
 
-  The \`updateFile\` should be used to suggest code changes, it takes two arguments: 
+  The \`updateFile\` should be used to make code changes in existing files, it takes three arguments: 
    - \`filePath\`: path to the file, if file does not exist, it will be created
-   - \`newContent\`: the entire content of the new file, empty string means delete the file.
-   - \`reasoning\`: explanation of why the file was changed
+   - \`newContent\`: new content of the file.
+   - \`explanation\`: explanation of why the file was changed
+
+   The \`createFile\` should be used to create new files, it takes three arguments: 
+   - \`filePath\`: path to the file, if file does not exist, it will be created
+   - \`newContent\`: content of the new file
+   - \`explanation\`: explanation of why the file was changed
+
+   The \`deleteFile\` should be used to delete existing files, it takes two arguments: 
+   - \`filePath\`: path to the file, if file does not exist, it will be created
+   - \`explanation\`: explanation of why the file was changed
 
   The \`explanation\` function should be used to provide reasoning for code changes or lack of code change. It takes only one \`text\` argument.
 
-  Parse my application source code and make changes using the \`updateFile\` and \`explanation\` functions.
+  Parse my application source code and make changes using the \`updateFile\`, \`createFile\`, \`deleteFile\` and \`explanation\` functions.
   `;
 
   if (verbosePrompt) {

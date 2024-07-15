@@ -58,7 +58,9 @@ ${
 }
 Do not output files if there are no changes.
 Call the \`explanation\` function to explain reason for changes or reason for lack of changes.
-Call the \`updateFile\` function for code changes.
+Call the \`updateFile\` function for code changes in existing files.
+Call the \`createFile\` function for creating new files.
+Call the \`deleteFile\` function for deleting files.
 `;
 
   if (verbosePrompt) {
