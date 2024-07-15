@@ -33,13 +33,11 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
     // Draw the sectors
     ctx.clearRect(0, 0, width, height);
     sectors.forEach((sector) => {
-      ctx.fillStyle = sector.type === 'GROUND' ? 'rgb(93, 42, 0)' : 'rgb(0, 34, 93)';
-      ctx.fillRect(
-        sector.rect.left - minX,
-        sector.rect.top - minY,
-        sector.rect.right - sector.rect.left,
-        sector.rect.bottom - sector.rect.top,
-      );
+      const { fillStyle, drawSector } = getRenderFunction(sector);
+
+      // Fill with the appropriate color or gradient
+      ctx.fillStyle = fillStyle;
+      drawSector(ctx, sector.rect, minX, minY);
     });
   }, [sectors]);
 
@@ -73,5 +71,37 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
 
   return <canvas ref={canvasRef}></canvas>;
 });
+
+function getRenderFunction(sector: Sector) {
+  switch (sector.type) {
+    case 'GROUND':
+      return {
+        fillStyle: 'rgb(93, 42, 0)',
+        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+          ctx.fillStyle = 'rgb(93, 42, 0)'; // Ground color
+          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
+        },
+      };
+    case 'WATER':
+      return {
+        fillStyle: 'rgb(0, 34, 93)',
+        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+          const gradient = ctx.createLinearGradient(rect.left - minX, rect.top - minY, rect.right - minX, rect.bottom - minY);
+          gradient.addColorStop(0, 'rgb(0, 34, 93)'); // Deep water
+          gradient.addColorStop(1, 'rgb(0, 137, 178)'); // Shallow water
+          ctx.fillStyle = gradient;
+          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
+        },
+      };
+    default:
+      return {
+        fillStyle: 'rgb(0, 34, 93)', // Default to water color
+        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+          ctx.fillStyle = 'rgb(0, 34, 93)'; // Default color
+          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
+        },
+      };
+  }
+}
 
 export default SectorCanvas;
