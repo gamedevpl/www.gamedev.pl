@@ -6,6 +6,7 @@ Nukes is a strategic and tactical nuclear war simulation game where each player 
 
 - **Protect your Cities and Launch Sites:** Defend your cities and launch sites from enemy missile attacks.
 - **Eliminate Enemy States:** Destroy enemy cities and launch sites to reduce their population to zero.
+- Intercept enemy missiles in flight to protect vital assets.
 
 ## Game Entities
 
@@ -25,16 +26,18 @@ Nukes is a strategic and tactical nuclear war simulation game where each player 
 - Launch sites are locations from which missiles are launched.
 - Each launch site is assigned to a specific state.
 - Launch sites have a cooldown period of 5 seconds between launches.
+- Launch sites can be destroyed by nearby explosions.
 
 ### Missiles
 
 - Missiles are launched from launch sites and can target enemy cities, launch sites, or other missiles.
 - Missiles travel to their targets and create explosions on impact.
+- Missiles can intercept other missiles in flight.
 
 ### Explosions
 
 - Explosions result from missile impacts.
-- Explosions can damage cities and reduce the population
+- Explosions can damage cities and reduce the population.
 - Explosions can destroy missiles which are in range of the explosion.
 - Explosions can destroy launch sites which are in range of the explosion.
 
@@ -54,3 +57,4 @@ Nukes is a strategic and tactical nuclear war simulation game where each player 
 
 - Computer-controlled states follow a set of strategies to protect their cities and launch sites while targeting enemy assets.
 - They prioritize targeting approaching enemy missiles, then enemy launch sites, and finally enemy cities.
+- Computer-controlled states dynamically update their strategies based on the changing state of the game.
