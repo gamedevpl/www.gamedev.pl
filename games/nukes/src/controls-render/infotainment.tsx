@@ -110,7 +110,7 @@ const InfotainmentContainer = styled.div`
   top: 0;
   z-index: 1;
 
-  max-width: 25%;
+  width: 250px;
   min-width: 200px;
   min-height: 200px;
   overflow-y: auto;

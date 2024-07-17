@@ -3,6 +3,7 @@
 ## States
 - States can be player-controlled or computer-controlled.
 - Each state has a unique name.
+- Each state has a strategy towards other states, which can be NEUTRAL, FRIENDLY, or HOSTILE.
 
 ## Cities
 - Cities are assigned to states and have populations.

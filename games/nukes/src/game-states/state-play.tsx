@@ -6,7 +6,7 @@ const PlayComponent: GameStateComponent = ({ setGameState }) => {
   const [stateName, setStateName] = useState('');
 
   const handlePlay = () => {
-    setGameState(GameStatePlaying, { stateName, gameId: String(Date.now()) });
+    setGameState(GameStatePlaying, { stateName });
   };
 
   return (

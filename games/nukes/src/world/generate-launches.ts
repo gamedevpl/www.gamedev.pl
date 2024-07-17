@@ -1,4 +1,4 @@
-import { Position, WorldState } from './world-state-types';
+import { Position, WorldState, Strategy } from './world-state-types';
 import { distance } from '../math/position-utils';
 import { Missile } from './world-state-types';
 import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
@@ -11,14 +11,22 @@ import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
  * @returns A list of new missiles and their corresponding explosions.
  */
 export function generateLaunches(worldState: WorldState): WorldState {
-  for (const state of worldState.states.filter((state) => !state.isPlayerControlled)) {
+  for (const state of worldState.states) {
     const myCities = worldState.cities.filter((city) => city.stateId === state.id);
     const myLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id);
+
     const enemyCities = worldState.cities.filter(
-      (city) => city.stateId !== state.id && city.populationHistogram.slice(-1)[0].population > 0,
+      (city) =>
+        state.strategies[city.stateId] === Strategy.HOSTILE &&
+        city.stateId !== state.id &&
+        city.populationHistogram.slice(-1)[0].population > 0,
     );
-    const enemyMissiles = worldState.missiles.filter((missile) => missile.stateId !== state.id);
-    const enemyLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId !== state.id);
+    const enemyMissiles = worldState.missiles.filter(
+      (missile) => state.strategies[missile.stateId] !== Strategy.FRIENDLY && missile.stateId !== state.id,
+    );
+    const enemyLaunchSites = worldState.launchSites.filter(
+      (launchSite) => state.strategies[launchSite.stateId] === Strategy.HOSTILE && launchSite.stateId !== state.id,
+    );
 
     // Filter enemy missiles, keep only those which are approaching any of myCities or myLaunchSites
     const threateningMissiles = enemyMissiles.filter((missile) => {
@@ -35,7 +43,7 @@ export function generateLaunches(worldState: WorldState): WorldState {
     for (const launchSite of worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id)) {
       if (launchSite.nextLaunchTarget) {
         continue;
-      } else if (enemyCities.length === 0 && enemyLaunchSites.length === 0) {
+      } else if (enemyCities.length === 0 && enemyLaunchSites.length === 0 && enemyMissiles.length === 0) {
         break;
       }
 
@@ -95,8 +103,8 @@ function calculateInterceptionPoint(missile: Missile, sitePosition: Position, wo
   const dy = (missile.target.y - missile.launch.y) / dist;
 
   const interceptionPoint = {
-    x: missile.target.x - dx * EXPLOSION_RADIUS,
-    y: missile.target.y - dy * EXPLOSION_RADIUS,
+    x: missile.target.x - dx * EXPLOSION_RADIUS * 2,
+    y: missile.target.y - dy * EXPLOSION_RADIUS * 2,
   };
 
   // Calculate how much time it will take the missile to reach the interception point

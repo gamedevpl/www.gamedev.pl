@@ -8,14 +8,13 @@ import { GameStatePlayed } from '../state-played';
 
 const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   const {
-    state: { stateName, gameId },
+    state: { stateName },
   } = useLocation();
 
   const { worldState, setWorldState, updateWorldState } = useWorldStore(stateName);
 
   return (
     <>
-      Playing: {stateName} {gameId}
       {/* UI */}
       <WorldCanvas worldState={worldState} updateWorldState={updateWorldState} setWorldState={setWorldState} />
       {/* Controllers */}

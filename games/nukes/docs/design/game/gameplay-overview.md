@@ -13,6 +13,7 @@ Nukes is a strategic and tactical nuclear war simulation game where each player 
 
 - Each state is controlled either by a player or computer.
 - States have a unique name and possess multiple cities and launch sites.
+- States have strategies towards other states that can be NEUTRAL, FRIENDLY, or HOSTILE.
 
 ### Cities
 

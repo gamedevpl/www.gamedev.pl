@@ -24,7 +24,14 @@ export type State = {
   id: StateId;
   name: string;
   isPlayerControlled: boolean;
+  strategies: Record<StateId, Strategy>;
 };
+
+export enum Strategy {
+  NEUTRAL = 'NEUTRAL',
+  FRIENDLY = 'FRIENDLY',
+  HOSTILE = 'HOSTILE',
+}
 
 export type City = {
   id: CityId;

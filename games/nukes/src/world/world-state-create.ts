@@ -7,6 +7,7 @@ import {
   Sector,
   SectorType,
   State,
+  Strategy,
   WorldState,
 } from './world-state-types';
 
@@ -16,9 +17,24 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
   const worldHeight = 50;
 
   const states: State[] = [
-    { id: 'state-1', name: playerStateName, isPlayerControlled: true },
-    { id: 'state-2', name: 'State 2', isPlayerControlled: false },
-    { id: 'state-3', name: 'State 3', isPlayerControlled: false },
+    {
+      id: 'state-1',
+      name: playerStateName,
+      isPlayerControlled: true,
+      strategies: { 'state-2': Strategy.NEUTRAL, 'state-3': Strategy.NEUTRAL },
+    },
+    {
+      id: 'state-2',
+      name: 'State 2',
+      isPlayerControlled: false,
+      strategies: { 'state-1': Strategy.NEUTRAL, 'state-3': Strategy.NEUTRAL },
+    },
+    {
+      id: 'state-3',
+      name: 'State 3',
+      isPlayerControlled: false,
+      strategies: { 'state-1': Strategy.NEUTRAL, 'state-2': Strategy.NEUTRAL },
+    },
   ];
 
   const cities: City[] = [

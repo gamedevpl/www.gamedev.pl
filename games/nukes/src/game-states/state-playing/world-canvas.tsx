@@ -7,6 +7,7 @@ import { LaunchHighlight } from '../../controls-render/launch-highlight';
 import { WorldState } from '../../world/world-state-types';
 import { TimeControls } from './time-controls';
 import { Infotainment } from '../../controls-render/infotainment';
+import { StateControl } from '../../controls-render/state-control';
 
 export function WorldCanvas({
   worldState,
@@ -23,6 +24,7 @@ export function WorldCanvas({
         <CanvasContainer>
           <Command worldState={worldState} setWorldState={setWorldState} />
           <TimeControls updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)} />
+          <StateControl worldState={worldState} setWorldState={setWorldState} />
 
           <WorldStateRender state={worldState} />
 
