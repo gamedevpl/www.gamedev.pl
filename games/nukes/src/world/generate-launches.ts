@@ -1,8 +1,7 @@
 import { Position, WorldState } from './world-state-types';
 import { distance } from '../math/position-utils';
-import { Missile } from './world-state-types'; /* Import Missile to be able to define new missiles. */
+import { Missile } from './world-state-types';
 import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
-/* Add necessary imports here if needed */
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -14,22 +13,29 @@ import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
 export function generateLaunches(worldState: WorldState): WorldState {
   for (const state of worldState.states.filter((state) => !state.isPlayerControlled)) {
     const myCities = worldState.cities.filter((city) => city.stateId === state.id);
+    const myLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id);
     const enemyCities = worldState.cities.filter(
       (city) => city.stateId !== state.id && city.populationHistogram.slice(-1)[0].population > 0,
     );
     const enemyMissiles = worldState.missiles.filter((missile) => missile.stateId !== state.id);
+    const enemyLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId !== state.id);
 
-    // Filter enemy missiles, keep only those which are approaching any of myCities
+    // Filter enemy missiles, keep only those which are approaching any of myCities or myLaunchSites
     const threateningMissiles = enemyMissiles.filter((missile) => {
-      return myCities.some((city) => {
-        return isPointClose(missile.target, city.position);
-      });
+      return (
+        myCities.some((city) => {
+          return isPointClose(missile.target, city.position);
+        }) ||
+        myLaunchSites.some((launchSite) => {
+          return isPointClose(missile.target, launchSite.position);
+        })
+      );
     });
 
     for (const launchSite of worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id)) {
       if (launchSite.nextLaunchTarget) {
         continue;
-      } else if (enemyCities.length === 0) {
+      } else if (enemyCities.length === 0 && enemyLaunchSites.length === 0) {
         break;
       }
 
@@ -43,12 +49,16 @@ export function generateLaunches(worldState: WorldState): WorldState {
         launchSite.position,
       );
 
-      // Instead of poping enemy city from the list, get the one which is closest to the launch site
+      // Find closest enemy launch site
+      const closestLaunchSite = findClosest(enemyLaunchSites, launchSite.position);
+
+      // Find closest enemy city
       const closestCity = findClosest(enemyCities, launchSite.position);
 
-      // Set launchSite.nextLaunchTarget to enemy missile, or to enemy city if there is no missile
+      // Set launchSite.nextLaunchTarget to enemy missile, or to enemy launch site, or to enemy city
       launchSite.nextLaunchTarget =
-        (closestMissile ? closestMissile.interceptionPoint : closestCity?.position) ?? undefined;
+        (closestMissile ? closestMissile.interceptionPoint : closestLaunchSite?.position || closestCity?.position) ??
+        undefined;
     }
   }
 
