@@ -10,6 +10,7 @@ import {
   WORLD_UPDATE_STEP,
 } from './world-state-constants';
 import { generateLaunches } from './generate-launches';
+import { strategyUpdate } from './strategy-update';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   while (deltaTime > 0) {
@@ -24,7 +25,7 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
 function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
 
-  const result: WorldState = {
+  let result: WorldState = {
     timestamp: worldTimestamp,
     states: state.states,
     cities: state.cities,
@@ -148,7 +149,9 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     launchSite.nextLaunchTarget = undefined;
   }
 
-  generateLaunches(result);
+  result = generateLaunches(result);
+
+  result = strategyUpdate(result);
 
   return result;
 }
