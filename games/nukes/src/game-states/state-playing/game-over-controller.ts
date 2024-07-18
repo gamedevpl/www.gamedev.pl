@@ -3,8 +3,10 @@ import { StateId, WorldState } from '../../world/world-state-types';
 
 // A type for game result
 export type GameResult = {
-  populuations: Record<StateId, number>;
+  populations: Record<StateId, number>;
   winner: StateId | undefined;
+  stateNames: Record<StateId, string>;
+  playerStateId: StateId;
 };
 
 // A component which controls whether the game should end
@@ -28,8 +30,10 @@ export function GameOverController({
     if (numStatesWithPopulation <= 1 || areAllLaunchSitesDestroyed) {
       const winner = worldState.states.find((state) => statePopulations[worldState.states.indexOf(state)] > 0)?.id;
       onGameOver({
-        populuations: Object.fromEntries(worldState.states.map((state, index) => [state.id, statePopulations[index]])),
+        populations: Object.fromEntries(worldState.states.map((state, index) => [state.id, statePopulations[index]])),
         winner,
+        stateNames: Object.fromEntries(worldState.states.map((state) => [state.id, state.name])),
+        playerStateId: worldState.states.find((state) => state.isPlayerControlled)!.id,
       });
     }
   }, [worldState]);
