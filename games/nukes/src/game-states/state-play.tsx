@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { GameState, GameStateComponent } from './types';
 import { GameStatePlaying } from './state-playing/state-playing';
+import { getRandomStateNames } from '../content/state-names';
 
 const PlayComponent: GameStateComponent = ({ setGameState }) => {
-  const [stateName, setStateName] = useState('');
+  const [stateName, setStateName] = useState(getRandomStateNames(1)[0]);
 
   const handlePlay = () => {
     setGameState(GameStatePlaying, { stateName });

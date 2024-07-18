@@ -1,3 +1,4 @@
+import { getRandomStateNames } from '../content/state-names';
 import {
   City,
   EntityType,
@@ -16,6 +17,8 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
   const worldWidth = 50;
   const worldHeight = 50;
 
+  const fantasyNames = getRandomStateNames(3).filter((name) => name !== playerStateName);
+
   const states: State[] = [
     {
       id: 'state-1',
@@ -25,13 +28,13 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
     },
     {
       id: 'state-2',
-      name: 'State 2',
+      name: fantasyNames[0],
       isPlayerControlled: false,
       strategies: { 'state-1': Strategy.NEUTRAL, 'state-3': Strategy.NEUTRAL },
     },
     {
       id: 'state-3',
-      name: 'State 3',
+      name: fantasyNames[1],
       isPlayerControlled: false,
       strategies: { 'state-1': Strategy.NEUTRAL, 'state-2': Strategy.NEUTRAL },
     },
