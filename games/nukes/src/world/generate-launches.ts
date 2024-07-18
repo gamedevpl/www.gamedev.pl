@@ -29,16 +29,22 @@ export function generateLaunches(worldState: WorldState): WorldState {
     );
 
     // Filter enemy missiles, keep only those which are approaching any of myCities or myLaunchSites
-    const threateningMissiles = enemyMissiles.filter((missile) => {
-      return (
-        myCities.some((city) => {
-          return isPointClose(missile.target, city.position);
-        }) ||
-        myLaunchSites.some((launchSite) => {
-          return isPointClose(missile.target, launchSite.position);
-        })
+    const threateningMissiles = enemyMissiles
+      .filter((missile) => {
+        return (
+          myCities.some((city) => {
+            return isPointClose(missile.target, city.position);
+          }) ||
+          myLaunchSites.some((launchSite) => {
+            return isPointClose(missile.target, launchSite.position);
+          })
+        );
+      })
+      // Ignore missiles which are early in flight
+      .filter(
+        (missile) =>
+          (worldState.timestamp - missile.launchTimestamp) / (missile.targetTimestamp - missile.launchTimestamp) > 0.5,
       );
-    });
 
     for (const launchSite of worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id)) {
       if (launchSite.nextLaunchTarget) {
@@ -48,7 +54,7 @@ export function generateLaunches(worldState: WorldState): WorldState {
       }
 
       // Find closest enemy missile
-      const closestMissile = findClosest(
+      const sortedMissiles = sortByDistance(
         threateningMissiles.map((missile) => ({
           ...missile,
           position: calculateMissilePosition(missile, worldState.timestamp),
@@ -57,16 +63,23 @@ export function generateLaunches(worldState: WorldState): WorldState {
         launchSite.position,
       );
 
-      // Find closest enemy launch site
-      const closestLaunchSite = findClosest(enemyLaunchSites, launchSite.position);
+      const missiles = worldState.missiles.filter((missile) => missile.stateId === state.id);
 
-      // Find closest enemy city
-      const closestCity = findClosest(enemyCities, launchSite.position);
+      const missileLaunchCounts = countMissiles(sortedMissiles, missiles).filter(
+        ([, count]) => count < myLaunchSites.length,
+      );
 
-      // Set launchSite.nextLaunchTarget to enemy missile, or to enemy launch site, or to enemy city
-      launchSite.nextLaunchTarget =
-        (closestMissile ? closestMissile.interceptionPoint : closestLaunchSite?.position || closestCity?.position) ??
-        undefined;
+      if (missileLaunchCounts.length > 0) {
+        // missiles are highest priority targets
+        launchSite.nextLaunchTarget = missileLaunchCounts[0][0].interceptionPoint ?? undefined;
+      } else {
+        const targets = countMissiles(
+          sortByDistance([...enemyLaunchSites, ...enemyCities], launchSite.position),
+          missiles,
+        );
+
+        launchSite.nextLaunchTarget = targets?.[0]?.[0]?.position ?? undefined;
+      }
     }
   }
 
@@ -127,25 +140,27 @@ function calculateInterceptionPoint(missile: Missile, sitePosition: Position, wo
  * @returns Whether the point is close or not.
  */
 function isPointClose(point: Position, target: Position): boolean {
-  const tolerance = 5; // Define a closeness tolerance
+  const tolerance = EXPLOSION_RADIUS; // Define a closeness tolerance
   return distance(point.x, point.y, target.x, target.y) <= tolerance;
 }
 
-/**
- * Find the closest entity to a position.
- * @param entities The entities to search from.
- * @param position The reference position.
- * @returns The closest entity or undefined if none.
- */
-function findClosest<T extends { position: Position }>(entities: T[], position: Position): T | null {
-  let closestEntity = null;
-  let minDist = Infinity;
+/** Sort entities by distance to a position, ascending. */
+function sortByDistance<T extends { position: Position }>(entities: T[], position: Position): T[] {
+  return entities.sort(
+    (a, b) =>
+      distance(a.position.x, a.position.y, position.x, position.y) -
+      distance(b.position.x, b.position.y, position.x, position.y),
+  );
+}
+
+/** Count how many missiles are targeted towards entity */
+function countMissiles<T extends { position: Position }>(entities: T[], missiles: Missile[]): Array<[T, number]> {
+  // Count the missiles that target each entity
+  const missileCounts = new Map<T, number>();
   for (const entity of entities) {
-    const dist = distance(position.x, position.y, entity.position.x, entity.position.y);
-    if (dist < minDist) {
-      minDist = dist;
-      closestEntity = entity;
-    }
+    missileCounts.set(entity, missiles.filter((missile) => isPointClose(missile.target, entity.position)).length);
   }
-  return closestEntity;
+
+  // Convert the map to a sorted array by missile count ascending
+  return Array.from(missileCounts).sort((a, b) => a[1] - b[1]);
 }
