@@ -55,10 +55,10 @@ export function GameOverController({
     ) {
       const winner =
         numStatesWithPopulation === 1
-          ? worldState.states.find((state) => statePopulations[worldState.states.indexOf(state)] > 0)?.id
+          ? worldState.states.find((state) => statePopulations[state.id] > 0)?.id
           : undefined;
       onGameOver({
-        populations: Object.fromEntries(worldState.states.map((state, index) => [state.id, statePopulations[index]])),
+        populations: Object.fromEntries(worldState.states.map((state) => [state.id, statePopulations[state.id]])),
         winner,
         stateNames: Object.fromEntries(worldState.states.map((state) => [state.id, state.name])),
         playerStateId: worldState.states.find((state) => state.isPlayerControlled)!.id,

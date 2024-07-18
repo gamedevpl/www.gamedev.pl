@@ -1,37 +1,25 @@
 import styled from 'styled-components';
 
-import { City, State, WorldState } from '../world/world-state-types';
+import { City, State, StateId, WorldState } from '../world/world-state-types';
 import { getValueInTime } from '../world/world-state-time-utils';
-import { generateLaunches } from '../world/generate-launches';
 import { usePointer } from '../controls/pointer';
 
-export function Infotainment({
-  worldState,
-  setWorldState,
-}: {
-  worldState: WorldState;
-  setWorldState: (worldState: WorldState) => void;
-}) {
+export function Infotainment({ worldState }: { worldState: WorldState }) {
   const pointer = usePointer();
 
-  const cityPopulation: Array<[City, number]> = worldState.cities.map((city) => [
-    city,
-    getValueInTime(city.populationHistogram, worldState.timestamp).population,
-  ]);
-
-  const statePopulation: Array<[State, number]> = Object.values(
-    cityPopulation.reduce(
-      (r, [city, population]) => {
-        if (!r[city.stateId]) {
-          r[city.stateId] = [worldState.states.find((s) => s.id === city.stateId)!, 0];
-        }
-
-        r[city.stateId][1] += population;
-        return r;
-      },
-      {} as { [stateId: string]: [State, number] },
-    ),
+  const cityPopulation: Record<StateId, Array<[City, number]>> = Object.fromEntries(
+    worldState.states.map((state) => [
+      state.id,
+      worldState.cities
+        .filter((city) => city.stateId === state.id)
+        .map((city) => [city, getValueInTime(city.populationHistogram, worldState.timestamp).population]),
+    ]),
   );
+
+  const statePopulation: Array<[State, number]> = worldState.states.map((state) => [
+    state,
+    cityPopulation[state.id].reduce((r, [, population]) => r + population, 0),
+  ]);
 
   const worldPopulation = worldState.cities.reduce(
     (r, city) => r + getValueInTime(city.populationHistogram, worldState.timestamp).population,
@@ -44,63 +32,23 @@ export function Infotainment({
         <li>Time: {worldState.timestamp.toFixed(2)}</li>
         <li>Pointing object: {pointer.pointingObjects.length}</li>
         <li>World population: {worldPopulation}</li>
-        <li>State population: </li>
+        <li>Population: </li>
         <ul>
           {statePopulation.map(([state, population]) => (
             <li key={state.id}>
               {state.name}: {population}
+              <ul>
+                {cityPopulation[state.id].map(([city, population]) => (
+                  <li key={city.id}>
+                    {city.name}: {population}
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>
-        <li>City population:</li>
-        <ul>
-          {cityPopulation.map(([city, population]) => (
-            <li key={city.id}>
-              {city.name}: {population}
-            </li>
-          ))}
-        </ul>
-        <li>
-          <CopyToClipboard
-            getText={() =>
-              JSON.stringify({
-                ...worldState,
-                sectors: [],
-              })
-            }
-          />
-        </li>
-        <li>
-          <GenerateLaunches worldState={worldState} setWorldState={setWorldState} />
-        </li>
       </ul>
     </InfotainmentContainer>
-  );
-}
-
-// a component that copies string to clipboard on click
-function CopyToClipboard({ getText }: { getText: () => string }) {
-  return <button onClick={() => navigator.clipboard.writeText(getText())}>Copy world state</button>;
-}
-
-// a component that generates launches
-function GenerateLaunches({
-  worldState,
-  setWorldState,
-}: {
-  worldState: WorldState;
-  setWorldState: (worldState: WorldState) => void;
-}) {
-  return (
-    <button
-      onClick={() => {
-        setWorldState({
-          ...generateLaunches(worldState),
-        });
-      }}
-    >
-      Generate launches
-    </button>
   );
 }
 

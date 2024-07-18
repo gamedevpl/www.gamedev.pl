@@ -1,3 +1,4 @@
+import { getRandomCityNames } from '../content/city-names';
 import { getRandomStateNames } from '../content/state-names';
 import {
   City,
@@ -12,12 +13,19 @@ import {
   WorldState,
 } from './world-state-types';
 
-export function createWorldState({ playerStateName }: { playerStateName: string }): WorldState {
+export function createWorldState({
+  playerStateName,
+  numberOfStates = 3,
+}: {
+  playerStateName: string;
+  numberOfStates: number;
+}): WorldState {
   const sectorSize = 16;
   const worldWidth = 50;
   const worldHeight = 50;
 
-  const fantasyNames = getRandomStateNames(3).filter((name) => name !== playerStateName);
+  const fantasyStateNames = getRandomStateNames(numberOfStates + 1).filter((name) => name !== playerStateName);
+  const fantasyCityNames = getRandomCityNames(numberOfStates * 2);
 
   const states: State[] = [
     {
@@ -28,13 +36,13 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
     },
     {
       id: 'state-2',
-      name: fantasyNames[0],
+      name: fantasyStateNames.pop()!,
       isPlayerControlled: false,
       strategies: { 'state-1': Strategy.NEUTRAL, 'state-3': Strategy.NEUTRAL },
     },
     {
       id: 'state-3',
-      name: fantasyNames[1],
+      name: fantasyStateNames.pop()!,
       isPlayerControlled: false,
       strategies: { 'state-1': Strategy.NEUTRAL, 'state-2': Strategy.NEUTRAL },
     },
@@ -44,42 +52,42 @@ export function createWorldState({ playerStateName }: { playerStateName: string 
     {
       id: 'city-1',
       stateId: 'state-1',
-      name: 'City 1A',
+      name: fantasyCityNames.pop()!,
       position: { x: 10 * sectorSize, y: 10 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 1000 }],
     },
     {
       id: 'city-2',
       stateId: 'state-1',
-      name: 'City 1B',
+      name: fantasyCityNames.pop()!,
       position: { x: 13 * sectorSize, y: 13 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 1500 }],
     },
     {
       id: 'city-3',
       stateId: 'state-2',
-      name: 'City 2A',
+      name: fantasyCityNames.pop()!,
       position: { x: 30 * sectorSize, y: 10 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 2000 }],
     },
     {
       id: 'city-4',
       stateId: 'state-2',
-      name: 'City 2B',
+      name: fantasyCityNames.pop()!,
       position: { x: 33 * sectorSize, y: 13 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 2500 }],
     },
     {
       id: 'city-5',
       stateId: 'state-3',
-      name: 'City 3A',
+      name: fantasyCityNames.pop()!,
       position: { x: 10 * sectorSize, y: 30 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 3000 }],
     },
     {
       id: 'city-6',
       stateId: 'state-3',
-      name: 'City 3B',
+      name: fantasyCityNames.pop()!,
       position: { x: 13 * sectorSize, y: 33 * sectorSize },
       populationHistogram: [{ timestamp: 0, population: 3500 }],
     },

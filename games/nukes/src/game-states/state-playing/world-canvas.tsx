@@ -29,7 +29,7 @@ export function WorldCanvas({
           <WorldStateRender state={worldState} />
 
           <LaunchHighlight />
-          <Infotainment worldState={worldState} setWorldState={setWorldState} />
+          <Infotainment worldState={worldState} />
         </CanvasContainer>
       </PointerContextWrapper>
     </SelectionContextWrapper>
