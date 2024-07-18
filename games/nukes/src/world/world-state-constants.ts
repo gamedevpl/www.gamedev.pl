@@ -21,3 +21,6 @@ export const WORLD_UPDATE_STEP = 0.05;
 
 /** Launch cooldown in seconds */
 export const LAUNCH_COOLDOWN = 5;
+
+/** Game over timeout */
+export const GAME_OVER_TIMEOUT = 60;

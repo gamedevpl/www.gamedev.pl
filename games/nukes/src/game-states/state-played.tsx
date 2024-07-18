@@ -20,7 +20,7 @@ const PlayedComponent: GameStateComponent = ({ setGameState }) => {
           The winner is {result.stateNames[result.winner]} with {result.populations[result.winner]} population alive.
         </p>
       ) : (
-        <p>No one survived. It's a draw!</p>
+        <p>It's a draw!</p>
       )}
       <button onClick={handlePlayAgain}>Play Again</button>
       <br />
