@@ -54,9 +54,10 @@ ${allowFileCreate ? 'You are allowed to create new files.' : 'Do not create new 
 ${
   allowFileDelete
     ? 'You are allowed to delete files, in such case add empty string as content.'
-    : 'Do not delete files, empty content means something would be deleted.'
+    : 'Do not delete files.'
 }
-Do not output files if there are no changes.
+Do not output file changes if there are no content changes.
+
 Call the \`explanation\` function to explain reason for changes or reason for lack of changes.
 Call the \`updateFile\` function for code changes in existing files.
 Call the \`createFile\` function for creating new files.

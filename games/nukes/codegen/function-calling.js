@@ -29,9 +29,9 @@ export const updateFileFD = {
  */
 export const createFileFD = {
   name: 'createFile',
+  description: 'Create a new file with specified content',
   parameters: {
     type: 'object',
-    description: 'Create a new file with specified content',
     properties: {
       filePath: {
         type: 'string',
@@ -55,9 +55,9 @@ export const createFileFD = {
  */
 export const deleteFileFD = {
   name: 'deleteFile',
+  description: 'Delete a specified file',    
   parameters: {
     type: 'object',
-    description: 'Delete a specified file',
     properties: {
       filePath: {
         type: 'string',
@@ -77,9 +77,9 @@ export const deleteFileFD = {
  */
 export const explanationFD = {
   name: 'explanation',
+  description: 'Explain the reasoning behind the suggested code changes or reasoning for lack of code changes',
   parameters: {
     type: 'object',
-    description: 'Explain the reasoning behind the suggested code changes or reasoning for lack of code changes',
     properties: {
       text: {
         type: 'string',

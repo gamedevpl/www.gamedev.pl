@@ -10,6 +10,7 @@ const allowedParameters = [
   '--task-file=',
   '--dependency-tree',
   '--verbose-prompt',
+  '--anthropic'
 ];
 
 // Validate CLI parameters accordingly to those mentioned in README.md, fail the process if not valid, or unknown parameter is passed
