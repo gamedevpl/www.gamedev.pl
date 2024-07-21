@@ -3,7 +3,7 @@ import path from 'path';
 import assert from 'node:assert';
 
 import { getSourceFiles } from './find-files.js';
-import { allowDirectoryCreate, allowFileCreate, allowFileDelete, anthropic, chatGpt } from './cli-params.js';
+import { allowDirectoryCreate, allowFileCreate, allowFileDelete, anthropic, chatGpt } from '../cli/cli-params.js';
 
 /**
  * @param functionCalls Result of the code generation, a map of file paths to new content

@@ -9,7 +9,11 @@ import { createFileFD, deleteFileFD, explanationFD, updateFileFD, createDirector
  * @returns Array of function calls
  */
 export async function generateContent(systemPrompt, prompt) {
-  const anthropic = new Anthropic();
+  const anthropic = new Anthropic({
+    defaultHeaders: {
+      'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15',
+    },
+  });
 
   const response = await anthropic.messages.create({
     model: 'claude-3-5-sonnet-20240620',
@@ -21,7 +25,7 @@ export async function generateContent(systemPrompt, prompt) {
       input_schema: fd.parameters,
     })),
     tool_choice: { type: 'any' },
-    max_tokens: 4096,
+    max_tokens: 8192,
   });
 
   // Print token usage for Anthropic

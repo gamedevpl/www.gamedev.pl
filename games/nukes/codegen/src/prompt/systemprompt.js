@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 
-import { getSourceCode } from './read-files.js';
+import { getSourceCode } from '../files/read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
-import { codegenOnly, gameOnly, verbosePrompt } from './cli-params.js';
+import { codegenOnly, gameOnly, verbosePrompt } from '../cli/cli-params.js';
 import { verify } from 'node:crypto';
 import { verifySystemPromptLimit } from './limits.js';
 

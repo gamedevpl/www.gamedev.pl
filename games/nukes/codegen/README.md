@@ -41,3 +41,31 @@ The codegen script accepts the following options:
 - `--verbose-prompt`: Print the prompt used for code generation.
 
 Note: The `--chat-gpt` and `--anthropic` flags are mutually exclusive. If neither is specified, the default Vertex AI with Google's Gemini Pro model will be used.
+
+## Supported AI Models
+
+### Vertex AI (Default)
+Uses Google's Vertex AI with the Gemini Pro model. This is the default option if no specific AI model flag is provided.
+
+### OpenAI GPT
+Activated with the `--chat-gpt` flag. Uses OpenAI's GPT model for code generation.
+
+### Anthropic Claude
+Activated with the `--anthropic` flag. Uses Anthropic's Claude model for code generation.
+
+## File Operations
+
+The codegen tool can perform various file operations based on the provided flags:
+
+- Create new files (with `--allow-file-create`)
+- Delete existing files (with `--allow-file-delete`)
+- Create new directories (with `--allow-directory-create`)
+- Update existing files (always allowed)
+
+## Dependency Tree
+
+When using the `--dependency-tree` flag, the tool will analyze the dependencies of files marked with `@CODEGEN` and include them in the code generation process. This ensures that all relevant files are considered, even if they're not directly marked for code generation.
+
+## Verbose Mode
+
+The `--verbose-prompt` flag allows you to see the prompts being sent to the AI model. This can be useful for debugging or understanding how the tool constructs its requests.

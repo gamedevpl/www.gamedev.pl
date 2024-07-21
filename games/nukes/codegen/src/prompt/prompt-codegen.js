@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { getSourceCode } from './read-files.js';
+import { getSourceCode } from '../files/read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
 import {
   considerAllFiles,
@@ -9,8 +9,8 @@ import {
   explicitPrompt,
   dependencyTree,
   verbosePrompt,
-} from './cli-params.js';
-import { getDependencyList } from './find-files.js';
+} from '../cli/cli-params.js';
+import { getDependencyList } from '../files/find-files.js';
 import { verifyCodegenPromptLimit } from './limits.js';
 
 /** Get codegen prompt */
