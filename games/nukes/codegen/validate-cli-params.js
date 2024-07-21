@@ -3,6 +3,7 @@ const allowedParameters = [
   '--consider-all-files',
   '--allow-file-create',
   '--allow-file-delete',
+  '--allow-directory-create',
   '--codegen-only',
   '--game-only',
   '--chat-gpt',

@@ -5,6 +5,7 @@ import {
   considerAllFiles,
   allowFileCreate,
   allowFileDelete,
+  allowDirectoryCreate,
   explicitPrompt,
   dependencyTree,
   verbosePrompt,
@@ -56,12 +57,15 @@ ${
     ? 'You are allowed to delete files, in such case add empty string as content.'
     : 'Do not delete files.'
 }
-Do not output file changes if there are no content changes.
+${allowDirectoryCreate ? 'You are allowed to create new directories.' : 'Do not create new directories.'}
+
+Do not output file changes if there are no content changes (output is the same as input).
 
 Call the \`explanation\` function to explain reason for changes or reason for lack of changes.
 Call the \`updateFile\` function for code changes in existing files.
 Call the \`createFile\` function for creating new files.
 Call the \`deleteFile\` function for deleting files.
+Call the \`createDirectory\` function for creating new directories.
 `;
 
   if (verbosePrompt) {

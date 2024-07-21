@@ -13,7 +13,7 @@ export const updateFileFD = {
       },
       newContent: {
         type: 'string',
-        description: 'The content to update the file with.',
+        description: 'The content to update the file with. Must not be empty.',
       },
       explanation: {
         type: 'string',
@@ -55,7 +55,7 @@ export const createFileFD = {
  */
 export const deleteFileFD = {
   name: 'deleteFile',
-  description: 'Delete a specified file',    
+  description: 'Delete a specified file',
   parameters: {
     type: 'object',
     properties: {
@@ -87,5 +87,27 @@ export const explanationFD = {
       },
     },
     required: ['text'],
+  },
+};
+
+/**
+ * Function declaration for createDirectory function
+ */
+export const createDirectoryFD = {
+  name: 'createDirectory',
+  description: 'Create a new directory',
+  parameters: {
+    type: 'object',
+    properties: {
+      filePath: {
+        type: 'string',
+        description: 'The directory path to create.',
+      },
+      explanation: {
+        type: 'string',
+        description: 'The explanation of the reasoning behind creating this directory',
+      },
+    },
+    required: ['filePath', 'explanation'],
   },
 };

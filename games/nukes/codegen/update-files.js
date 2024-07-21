@@ -3,7 +3,7 @@ import path from 'path';
 import assert from 'node:assert';
 
 import { getSourceFiles } from './find-files.js';
-import { allowFileCreate, allowFileDelete, chatGpt } from './cli-params.js';
+import { allowDirectoryCreate, allowFileCreate, allowFileDelete, anthropic, chatGpt } from './cli-params.js';
 
 /**
  * @param functionCalls Result of the code generation, a map of file paths to new content
@@ -32,7 +32,12 @@ export function updateFiles(functionCalls) {
       assert(allowFileDelete, 'File delete option was not enabled');
       console.log(`Removing file: ${filePath}`);
       fs.unlinkSync(filePath);
+    } else if (name === 'createDirectory') {
+      assert(allowDirectoryCreate, 'Directory create option was not enabled');
+      console.log(`Creating directory: ${filePath}`);
+      fs.mkdirSync(filePath);
     } else if (name === 'updateFile' || name === 'createFile') {
+      assert(!!newContent, 'newContent must not be empty');
       if (name === 'createFile') {
         console.log(`Creating file: ${filePath}`);
         assert(allowFileCreate, 'File create option was not enabled');
@@ -43,7 +48,7 @@ export function updateFiles(functionCalls) {
       }
       fs.writeFileSync(
         filePath,
-        chatGpt
+        chatGpt || anthropic
           ? newContent
           : // Fixing a problem caused by vertex function calling. Possibly not a good fix
             newContent.replace(/\\n/g, '\n').replace(/\\'/g, "'"),

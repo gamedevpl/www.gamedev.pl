@@ -21,6 +21,7 @@ The tool accepts several CLI parameters to control its behavior:
 - `--consider-all-files`: Considers all files for code generation, even if they don't contain `@CODEGEN` comments.
 - `--allow-file-create`: Allows the tool to create new files.
 - `--allow-file-delete`: Allows the tool to delete files.
+- `--allow-directory-create`: Allows the tool to create directories.
 - `--codegen-only`: Limits the scope of code generation to the `codegen` directory.
 - `--game-only`: Limits the scope of code generation to the `src` directory.
 - `--chat-gpt`: Uses the OpenAI model for code generation instead of Vertex AI.
