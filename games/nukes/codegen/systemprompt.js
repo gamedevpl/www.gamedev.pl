@@ -51,7 +51,7 @@ export function getSystemPrompt() {
    - \`explanation\`: explanation of why the file was changed
 
   The \`createDirectory\` should be used to create new directories, it takes two arguments:
-   - \`dirPath\`: path to the directory to be created
+   - \`filePath\`: path to the directory to be created
    - \`explanation\`: explanation of why the directory was created
 
   The \`explanation\` function should be used to provide reasoning for code changes or lack of code change. It takes only one \`text\` argument.
