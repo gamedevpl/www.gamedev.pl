@@ -1,5 +1,6 @@
+import assert from 'node:assert';
 import Anthropic from '@anthropic-ai/sdk';
-import { createFileFD, deleteFileFD, explanationFD, updateFileFD, createDirectoryFD } from './function-calling.js';
+import * as functionDefs from './function-calling.js';
 
 /**
  * This function generates content using the Anthropic Claude model.
@@ -19,7 +20,7 @@ export async function generateContent(systemPrompt, prompt) {
     model: 'claude-3-5-sonnet-20240620',
     system: systemPrompt,
     messages: [{ role: 'user', content: prompt }],
-    tools: [createFileFD, updateFileFD, deleteFileFD, explanationFD, createDirectoryFD].map((fd) => ({
+    tools: Object.values(functionDefs).map((fd) => ({
       name: fd.name,
       description: fd.description,
       input_schema: fd.parameters,
@@ -46,6 +47,10 @@ export async function generateContent(systemPrompt, prompt) {
   }
 
   const functionCalls = response.content.filter((item) => item.type === 'tool_use');
+  assert(
+    functionCalls.every((call) => Object.values(functionDefs).some((fd) => fd.name === call.name)),
+    'Unknown function name',
+  );
 
   const explanations = functionCalls.filter((call) => call.name === 'explanation');
   console.log(
@@ -54,12 +59,6 @@ export async function generateContent(systemPrompt, prompt) {
   );
 
   return functionCalls
-    .filter(
-      (call) =>
-        call.name === 'updateFile' ||
-        call.name === 'createFile' ||
-        call.name === 'deleteFile' ||
-        call.name === 'createDirectory',
-    )
+    .filter((call) => call.name !== 'explanation')
     .map((item) => ({ name: item.name, args: item.input }));
 }

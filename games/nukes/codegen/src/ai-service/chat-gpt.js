@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import OpenAI from 'openai';
-import { createFileFD, deleteFileFD, explanationFD, updateFileFD, createDirectoryFD } from './function-calling.js';
+import * as functionDefs from './function-calling.js';
 
 /**
  * This function generates content using the OpenAI chat model.
@@ -24,13 +24,7 @@ export async function generateContent(systemPrompt, prompt) {
         content: prompt,
       },
     ],
-    tools: [
-      { type: 'function', function: createFileFD },
-      { type: 'function', function: updateFileFD },
-      { type: 'function', function: deleteFileFD },
-      { type: 'function', function: explanationFD },
-      { type: 'function', function: createDirectoryFD },
-    ],
+    tools: Object.values(functionDefs).map((funDef) => ({ type: 'function', function: funDef })),
     tool_choice: 'required',
   });
 
@@ -59,11 +53,7 @@ export async function generateContent(systemPrompt, prompt) {
       const args = JSON.parse(call.function.arguments);
 
       assert(
-        name === 'updateFile' ||
-          name === 'explanation' ||
-          name === 'createFile' ||
-          name === 'deleteFile' ||
-          name === 'createDirectory',
+        Object.values(functionDefs).some((funDef) => funDef.name === name),
         'Invalid tool call: ' + name,
       );
 
@@ -78,13 +68,7 @@ export async function generateContent(systemPrompt, prompt) {
       functionCalls.filter((fn) => fn.name === 'explanation').map((call) => call.args.text),
     );
 
-    return functionCalls.filter(
-      (fn) =>
-        fn.name === 'updateFile' ||
-        fn.name === 'createFile' ||
-        fn.name === 'deleteFile' ||
-        fn.name === 'createDirectory',
-    );
+    return functionCalls.filter((fn) => fn.name !== 'explanation');
   } else {
     throw new Error('No tool calls found in response');
   }

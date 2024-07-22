@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
-import { explanationFD, updateFileFD, createFileFD, deleteFileFD, createDirectoryFD } from './function-calling.js';
+import * as functionDefs from './function-calling.js';
 
 // A function to generate content using the generative model
 export async function generateContent(systemPrompt, prompt) {
@@ -17,7 +17,7 @@ export async function generateContent(systemPrompt, prompt) {
     ],
     tools: [
       {
-        functionDeclarations: [updateFileFD, explanationFD, createFileFD, deleteFileFD, createDirectoryFD],
+        functionDeclarations: Object.values(functionDefs),
       },
     ],
     // TODO: add tool_config once [it is supported](https://github.com/googleapis/nodejs-vertexai/issues/331)
@@ -54,15 +54,8 @@ export async function generateContent(systemPrompt, prompt) {
     .filter((functionCall) => !!functionCall);
 
   assert(
-    functionCalls.every(
-      (call) =>
-        call.name === 'updateFile' ||
-        call.name === 'explanation' ||
-        call.name === 'createFile' ||
-        call.name === 'deleteFile' ||
-        call.name === 'createDirectory',
-    ),
-    'Only updateFile, createFile, deleteFile, createDirectory, and explanation functions are allowed',
+    functionCalls.every((call) => Object.values(functionDefs).some((fd) => fd.name === call.name)),
+    'Unknown function name',
   );
 
   if (functionCalls.length === 0) {
@@ -70,10 +63,7 @@ export async function generateContent(systemPrompt, prompt) {
       .map((candidate) => candidate.content.parts?.map((part) => part.text))
       .flat()
       .filter((text) => !!text)
-      .join(
-        '\
-',
-      );
+      .join('\n');
     console.log('No function calls, output text response if it exists:', textResponse);
   }
 
@@ -82,10 +72,7 @@ export async function generateContent(systemPrompt, prompt) {
     functionCalls.filter((fn) => fn.name === 'explanation').map((call) => call.args.text),
   );
 
-  return functionCalls.filter(
-    (fn) =>
-      fn.name === 'updateFile' || fn.name === 'createFile' || fn.name === 'deleteFile' || fn.name === 'createDirectory',
-  );
+  return functionCalls.filter((fn) => fn.name !== 'explanation');
 }
 
 // A function to get the generative model
