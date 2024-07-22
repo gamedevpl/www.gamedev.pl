@@ -6,6 +6,7 @@ import {
   allowFileCreate,
   allowFileDelete,
   allowDirectoryCreate,
+  allowFileMove,
   explicitPrompt,
   dependencyTree,
   verbosePrompt,
@@ -58,6 +59,7 @@ ${
     : 'Do not delete files.'
 }
 ${allowDirectoryCreate ? 'You are allowed to create new directories.' : 'Do not create new directories.'}
+${allowFileMove ? 'You are allowed to move files.' : 'Do not move files.'}
 `;
 
   if (verbosePrompt) {

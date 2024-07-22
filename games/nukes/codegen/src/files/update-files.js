@@ -3,14 +3,19 @@ import path from 'path';
 import assert from 'node:assert';
 
 import { getSourceFiles } from './find-files.js';
-import { allowDirectoryCreate, allowFileCreate, allowFileDelete, anthropic, chatGpt } from '../cli/cli-params.js';
+import {
+  allowDirectoryCreate,
+  allowFileCreate,
+  allowFileDelete,
+  allowFileMove,
+  anthropic,
+  chatGpt,
+} from '../cli/cli-params.js';
 
 /**
  * @param functionCalls Result of the code generation, a map of file paths to new content
  */
 export function updateFiles(functionCalls) {
-  const sourceFiles = getSourceFiles();
-
   for (const { name, args } of functionCalls) {
     const { filePath, newContent, source, destination } = args;
 
@@ -53,6 +58,7 @@ export function updateFiles(functionCalls) {
       console.log(`Moving file from ${source} to ${destination}`);
       assert(fs.existsSync(source), 'Source file does not exist');
       assert(!fs.existsSync(destination), 'Destination file already exists');
+      assert(allowFileMove, 'File move option was not enabled');
       fs.renameSync(source, destination);
     }
   }
@@ -64,6 +70,8 @@ function isAncestorDirectory(parent, dir) {
 }
 
 function isProjectPath(filePath) {
+  const sourceFiles = getSourceFiles();
+
   return (
     sourceFiles.includes(filePath) ||
     !sourceFiles.some(
