@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import OpenAI from 'openai';
-import * as functionDefs from './function-calling.js';
+import { functionDefs } from './function-calling.js';
 
 /**
  * This function generates content using the OpenAI chat model.
@@ -24,7 +24,7 @@ export async function generateContent(systemPrompt, prompt) {
         content: prompt,
       },
     ],
-    tools: Object.values(functionDefs).map((funDef) => ({ type: 'function', function: funDef })),
+    tools: functionDefs.map((funDef) => ({ type: 'function', function: funDef })),
     tool_choice: 'required',
   });
 
@@ -53,7 +53,7 @@ export async function generateContent(systemPrompt, prompt) {
       const args = JSON.parse(call.function.arguments);
 
       assert(
-        Object.values(functionDefs).some((funDef) => funDef.name === name),
+        functionDefs.some((funDef) => funDef.name === name),
         'Invalid tool call: ' + name,
       );
 

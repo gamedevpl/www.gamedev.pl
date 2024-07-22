@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
-import * as functionDefs from './function-calling.js';
+import { functionDefs } from './function-calling.js';
 
 // A function to generate content using the generative model
 export async function generateContent(systemPrompt, prompt) {
@@ -17,7 +17,7 @@ export async function generateContent(systemPrompt, prompt) {
     ],
     tools: [
       {
-        functionDeclarations: Object.values(functionDefs),
+        functionDeclarations: functionDefs,
       },
     ],
     // TODO: add tool_config once [it is supported](https://github.com/googleapis/nodejs-vertexai/issues/331)
@@ -54,7 +54,7 @@ export async function generateContent(systemPrompt, prompt) {
     .filter((functionCall) => !!functionCall);
 
   assert(
-    functionCalls.every((call) => Object.values(functionDefs).some((fd) => fd.name === call.name)),
+    functionCalls.every((call) => functionDefs.some((fd) => fd.name === call.name)),
     'Unknown function name',
   );
 

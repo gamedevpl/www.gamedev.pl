@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import Anthropic from '@anthropic-ai/sdk';
-import * as functionDefs from './function-calling.js';
+import { functionDefs } from './function-calling.js';
 
 /**
  * This function generates content using the Anthropic Claude model.
@@ -20,7 +20,7 @@ export async function generateContent(systemPrompt, prompt) {
     model: 'claude-3-5-sonnet-20240620',
     system: systemPrompt,
     messages: [{ role: 'user', content: prompt }],
-    tools: Object.values(functionDefs).map((fd) => ({
+    tools: functionDefs.map((fd) => ({
       name: fd.name,
       description: fd.description,
       input_schema: fd.parameters,
@@ -48,7 +48,7 @@ export async function generateContent(systemPrompt, prompt) {
 
   const functionCalls = response.content.filter((item) => item.type === 'tool_use');
   assert(
-    functionCalls.every((call) => Object.values(functionDefs).some((fd) => fd.name === call.name)),
+    functionCalls.every((call) => functionDefs.some((fd) => fd.name === call.name)),
     'Unknown function name',
   );
 
