@@ -1,3 +1,5 @@
+import { requireExplanations } from '../cli/cli-params.js';
+
 /**
  * Function definitions for function calling feature
  */
@@ -22,7 +24,7 @@ export const functionDefs = [
           description: 'The explanation of the reasoning behind the suggested code changes for this file',
         },
       },
-      required: ['filePath', 'newContent', 'explanation'],
+      required: ['filePath', 'newContent'],
     },
   },
   {
@@ -45,7 +47,7 @@ export const functionDefs = [
           description: 'The explanation of the reasoning behind creating this file',
         },
       },
-      required: ['filePath', 'newContent', 'explanation'],
+      required: ['filePath', 'newContent'],
     },
   },
   {
@@ -63,7 +65,7 @@ export const functionDefs = [
           description: 'The explanation of the reasoning behind deleting this file',
         },
       },
-      required: ['filePath', 'explanation'],
+      required: ['filePath'],
     },
   },
   {
@@ -95,7 +97,7 @@ export const functionDefs = [
           description: 'The explanation of the reasoning behind creating this directory',
         },
       },
-      required: ['filePath', 'explanation'],
+      required: ['filePath'],
     },
   },
   {
@@ -117,7 +119,15 @@ export const functionDefs = [
           description: 'The explanation of the reasoning behind moving this file',
         },
       },
-      required: ['source', 'destination', 'explanation'],
+      required: ['source', 'destination'],
     },
   },
-];
+].map((fd) => {
+  if (requireExplanations && fd.parameters.properties.explanation && !fd.parameters.required.includes('explanation')) {
+    fd.parameters.required.push('explanation');
+  } else if (!requireExplanations) {
+    delete fd.parameters.properties.explanation;
+  }
+
+  return fd;
+});

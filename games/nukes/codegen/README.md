@@ -40,6 +40,7 @@ The codegen script accepts the following options:
 - `--task-file`: Specifies a file with a task description for code generation.
 - `--dependency-tree`: Limit the scope of codegen only to files marked with `@CODEGEN` and their dependencies
 - `--verbose-prompt`: Print the prompt used for code generation.
+- `--require-explanations`: Require explanations for all code generation operations.
 
 Note: The `--chat-gpt` and `--anthropic` flags are mutually exclusive. If neither is specified, the default Vertex AI with Google's Gemini Pro model will be used.
 
@@ -71,3 +72,7 @@ When using the `--dependency-tree` flag, the tool will analyze the dependencies 
 ## Verbose Mode
 
 The `--verbose-prompt` flag allows you to see the prompts being sent to the AI model. This can be useful for debugging or understanding how the tool constructs its requests.
+
+## Requiring Explanations
+
+The `--require-explanations` flag makes it mandatory for the AI model to provide explanations for all code generation operations. This can be useful for understanding the reasoning behind the changes, but may consume more tokens.

@@ -17,7 +17,7 @@ import {
  */
 export function updateFiles(functionCalls) {
   for (const { name, args } of functionCalls) {
-    const { filePath, newContent, source, destination } = args;
+    const { filePath, newContent, source, destination, explanation } = args;
 
     // ignore files which are not located inside project directory (sourceFiles)
     if (
@@ -60,6 +60,11 @@ export function updateFiles(functionCalls) {
       assert(!fs.existsSync(destination), 'Destination file already exists');
       assert(allowFileMove, 'File move option was not enabled');
       fs.renameSync(source, destination);
+    }
+
+    if (explanation) {
+      console.log(`Explanation for ${name} operation on ${filePath || source}:`);
+      console.log(explanation);
     }
   }
 }
