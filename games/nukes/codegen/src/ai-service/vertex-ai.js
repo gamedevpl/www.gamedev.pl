@@ -23,7 +23,16 @@ export async function generateContent(systemPrompt, prompt) {
     // TODO: add tool_config once [it is supported](https://github.com/googleapis/nodejs-vertexai/issues/331)
   };
 
-  const result = await getGenModel(systemPrompt).generateContent(req);
+  const model = await getGenModel(systemPrompt);
+
+  assert(
+    (await import('@google-cloud/vertexai/build/src/functions/generate_content.js')).generateContent
+      .toString()
+      .includes(MONKEY_PATCH_TOOL_CONFIG),
+    'Vertex AI Tool Config was not monkey patched',
+  );
+
+  const result = await model.generateContent(req);
 
   // Print token usage
   const usageMetadata = result.response.usageMetadata;
@@ -86,25 +95,25 @@ export function getGenModel(systemPrompt) {
     model: model,
     generationConfig: {
       maxOutputTokens: 8192,
-      temperature: 1,
+      temperature: 0,
       topP: 0.95,
     },
     safetySettings: [
       {
         category: 'HARM_CATEGORY_HATE_SPEECH',
-        threshold: 'BLOCK_ONLY_HIGH',
+        threshold: 'BLOCK_NONE',
       },
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_ONLY_HIGH',
+        threshold: 'BLOCK_NONE',
       },
       {
         category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-        threshold: 'BLOCK_ONLY_HIGH',
+        threshold: 'BLOCK_NONE',
       },
       {
         category: 'HARM_CATEGORY_HARASSMENT',
-        threshold: 'BLOCK_ONLY_HIGH',
+        threshold: 'BLOCK_NONE',
       },
     ],
     systemInstruction: {
@@ -117,3 +126,12 @@ export function getGenModel(systemPrompt) {
     },
   });
 }
+
+const MONKEY_PATCH_TOOL_CONFIG = `// MONKEY PATCH TOOL_CONFIG`;
+// MONKEY PATCH TOOL_CONFIG
+// data: {
+//     ...generateContentRequest,
+//     tool_config: {
+//         function_calling_config: { mode: "ANY" }
+//     }
+// },`;

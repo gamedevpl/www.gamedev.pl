@@ -1,9 +1,13 @@
+/**
+ * Function definitions for function calling feature
+ */
 export const functionDefs = [
   {
     name: 'updateFile',
     parameters: {
       type: 'object',
-      description: 'Update a file with new content',
+      description:
+        'Update a file with new content. The file must already exists in the application source code. The function should be called only if there is a need to actually change something.',
       properties: {
         filePath: {
           type: 'string',
@@ -23,7 +27,8 @@ export const functionDefs = [
   },
   {
     name: 'createFile',
-    description: 'Create a new file with specified content',
+    description:
+      'Create a new file with specified content. The file will be created inside of project folder structure.',
     parameters: {
       type: 'object',
       properties: {
@@ -45,7 +50,7 @@ export const functionDefs = [
   },
   {
     name: 'deleteFile',
-    description: 'Delete a specified file',
+    description: 'Delete a specified file from the application source code.',
     parameters: {
       type: 'object',
       properties: {
