@@ -22,6 +22,7 @@ The tool accepts several CLI parameters to control its behavior:
 - `--allow-file-create`: Allows the tool to create new files.
 - `--allow-file-delete`: Allows the tool to delete files.
 - `--allow-directory-create`: Allows the tool to create directories.
+- `--allow-file-move`: Allows the tool to move files within the project structure.
 - `--codegen-only`: Limits the scope of code generation to the `codegen` directory.
 - `--game-only`: Limits the scope of code generation to the `src` directory.
 - `--chat-gpt`: Uses the OpenAI model for code generation instead of Vertex AI.
@@ -53,6 +54,18 @@ When the `--chat-gpt` flag is used, the tool switches to OpenAI's GPT model. Thi
 
 The `--anthropic` flag enables the use of Anthropic's Claude model. Claude is designed to be helpful, harmless, and honest, making it suitable for code generation tasks that require a high degree of reliability and safety.
 
+## File Operations
+
+The Codegen tool now supports the following file operations:
+
+- Creating new files
+- Deleting existing files
+- Creating new directories
+- Moving files within the project structure
+- Updating existing files
+
+These operations are controlled by their respective CLI parameters and are executed based on the AI model's suggestions.
+
 ## Conclusion
 
-The Codegen tool is a versatile and powerful assistant for developers, capable of leveraging multiple AI models to generate code efficiently. By supporting various configuration options and AI models, it provides flexibility to suit different project needs and developer preferences.
+The Codegen tool is a versatile and powerful assistant for developers, capable of leveraging multiple AI models to generate code efficiently. By supporting various configuration options and AI models, it provides flexibility to suit different project needs and developer preferences. The addition of the file move functionality further enhances its capabilities in managing project structure.

@@ -4,6 +4,7 @@ const allowedParameters = [
   '--allow-file-create',
   '--allow-file-delete',
   '--allow-directory-create',
+  '--allow-file-move',
   '--codegen-only',
   '--game-only',
   '--chat-gpt',

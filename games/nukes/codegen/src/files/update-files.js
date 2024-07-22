@@ -11,21 +11,16 @@ import { allowDirectoryCreate, allowFileCreate, allowFileDelete, anthropic, chat
 export function updateFiles(functionCalls) {
   const sourceFiles = getSourceFiles();
 
-  for (const {
-    name,
-    args: { filePath, newContent },
-  } of functionCalls) {
+  for (const { name, args } of functionCalls) {
+    const { filePath, newContent, source, destination } = args;
+
     // ignore files which are not located inside project directory (sourceFiles)
     if (
-      !sourceFiles.includes(filePath) &&
-      !sourceFiles.some(
-        (sourceFile) =>
-          path.dirname(filePath) === path.dirname(sourceFile) ||
-          isAncestorDirectory(path.dirname(sourceFile), path.dirname(filePath)),
-      )
+      (name !== 'moveFile' && !isProjectPath(filePath)) ||
+      (name == 'moveFile' && !(isProjectPath(source) || isProjectPath(destination)))
     ) {
-      console.log(`Skipping file: ${filePath}`);
-      throw new Error(`File ${filePath} is not located inside project directory, something is wrong?`);
+      console.log(`Skipping file: ${filePath || source}`);
+      throw new Error(`File ${filePath || source} is not located inside project directory, something is wrong?`);
     }
 
     if (name === 'deleteFile') {
@@ -54,6 +49,11 @@ export function updateFiles(functionCalls) {
             newContent.replace(/\\n/g, '\n').replace(/\\'/g, "'"),
         'utf-8',
       );
+    } else if (name === 'moveFile') {
+      console.log(`Moving file from ${source} to ${destination}`);
+      assert(fs.existsSync(source), 'Source file does not exist');
+      assert(!fs.existsSync(destination), 'Destination file already exists');
+      fs.renameSync(source, destination);
     }
   }
 }
@@ -61,4 +61,15 @@ export function updateFiles(functionCalls) {
 function isAncestorDirectory(parent, dir) {
   const relative = path.relative(parent, dir);
   return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function isProjectPath(filePath) {
+  return (
+    sourceFiles.includes(filePath) ||
+    !sourceFiles.some(
+      (sourceFile) =>
+        path.dirname(filePath) === path.dirname(sourceFile) ||
+        isAncestorDirectory(path.dirname(sourceFile), path.dirname(filePath)),
+    )
+  );
 }

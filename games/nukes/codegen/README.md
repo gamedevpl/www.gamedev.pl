@@ -31,6 +31,7 @@ The codegen script accepts the following options:
 - `--allow-file-create`: Allow the codegen script to create new files.
 - `--allow-file-delete`: Allow the codegen script to delete files.
 - `--allow-directory-create`: Allow codegen script to create directories
+- `--allow-file-move`: Allow the codegen script to move files.
 - `--codegen-only`: Limit the scope of codegen to the codegen tool itself (the `codegen/` directory).
 - `--game-only`: Limit the scope of codegen to the game itself (the `src/` directory).
 - `--chat-gpt`: Use the OpenAI model for code generation instead of Vertex AI with Google's Gemini Pro model.
@@ -60,6 +61,7 @@ The codegen tool can perform various file operations based on the provided flags
 - Create new files (with `--allow-file-create`)
 - Delete existing files (with `--allow-file-delete`)
 - Create new directories (with `--allow-directory-create`)
+- Move files (with `--allow-file-move`)
 - Update existing files (always allowed)
 
 ## Dependency Tree
