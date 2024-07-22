@@ -55,6 +55,13 @@ Activated with the `--chat-gpt` flag. Uses OpenAI's GPT model for code generatio
 ### Anthropic Claude
 Activated with the `--anthropic` flag. Uses Anthropic's Claude model for code generation.
 
+### Vertex AI Monkey Patch
+
+The Codegen tool includes a monkey patch for the Vertex AI library to enable the use of the `tool_config` parameter. This patch is necessary because the official Vertex AI Node.js client library does not yet support the `tool_config` parameter, which is required for function calling.
+
+The patch is applied at runtime and modifies the `generateContent` function of the Vertex AI library to include the `tool_config` parameter in the request. This allows the Codegen tool to use function calling with Vertex AI, similar to how it works with other AI models.
+
+
 ## File Operations
 
 The codegen tool can perform various file operations based on the provided flags:

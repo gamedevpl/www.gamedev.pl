@@ -28,6 +28,29 @@ export const functionDefs = [
     },
   },
   {
+    name: 'updateFilePartial',
+    parameters: {
+      type: 'object',
+      description:
+        'Partially update a file content. The file must already exists in the application source code. The function should be called only if there is a need to actually change something.',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'The file path to update.',
+        },
+        patch: {
+          type: 'string',
+          description: 'Modification to the file expressed in a diff format.',
+        },
+        explanation: {
+          type: 'string',
+          description: 'The explanation of the reasoning behind the suggested code changes for this file',
+        },
+      },
+      required: ['filePath', 'patch'],
+    },
+  },
+  {
     name: 'createFile',
     description:
       'Create a new file with specified content. The file will be created inside of project folder structure.',

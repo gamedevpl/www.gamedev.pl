@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import assert from 'node:assert';
+import * as diff from 'diff';
 
 import { getSourceFiles } from './find-files.js';
 import {
@@ -17,7 +18,7 @@ import {
  */
 export function updateFiles(functionCalls) {
   for (const { name, args } of functionCalls) {
-    const { filePath, newContent, source, destination, explanation } = args;
+    let { filePath, newContent, source, destination, patch } = args;
 
     // ignore files which are not located inside project directory (sourceFiles)
     if (
@@ -36,7 +37,13 @@ export function updateFiles(functionCalls) {
       assert(allowDirectoryCreate, 'Directory create option was not enabled');
       console.log(`Creating directory: ${filePath}`);
       fs.mkdirSync(filePath);
-    } else if (name === 'updateFile' || name === 'createFile') {
+    } else if (name === 'updateFile' || name === 'createFile' || name === 'updateFilePartial') {
+      if (name === 'updateFilePartial') {
+        console.log(`Applying a patch: ${filePath} content`);
+        newContent = applyPatch(fs.readFileSync(filePath, 'utf-8'), patch);
+        assert(!!newContent, 'Patch was not successful');
+      }
+
       assert(!!newContent, 'newContent must not be empty');
       if (name === 'createFile') {
         console.log(`Creating file: ${filePath}`);
@@ -61,11 +68,6 @@ export function updateFiles(functionCalls) {
       assert(allowFileMove, 'File move option was not enabled');
       fs.renameSync(source, destination);
     }
-
-    if (explanation) {
-      console.log(`Explanation for ${name} operation on ${filePath || source}:`);
-      console.log(explanation);
-    }
   }
 }
 
@@ -85,4 +87,8 @@ function isProjectPath(filePath) {
         isAncestorDirectory(path.dirname(sourceFile), path.dirname(filePath)),
     )
   );
+}
+
+function applyPatch(original, patch) {
+  return diff.applyPatch(original, patch);
 }
