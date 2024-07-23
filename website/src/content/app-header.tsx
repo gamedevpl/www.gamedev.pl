@@ -1,4 +1,3 @@
-import React from "react";
 import logo from "../logo-gamedev.png";
 
 export default function AppHeader() {

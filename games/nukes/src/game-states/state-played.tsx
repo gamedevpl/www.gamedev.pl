@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router';
+import { useLocation } from 'react-router-dom';
 import { GameState, GameStateComponent } from './types';
 import { GameResult } from './state-playing/game-over-controller';
 import { GameStatePlaying } from './state-playing/state-playing';
@@ -32,5 +32,5 @@ const PlayedComponent: GameStateComponent = ({ setGameState }) => {
 
 export const GameStatePlayed: GameState = {
   Component: PlayedComponent,
-  path: '/played',
+  path: 'played',
 };

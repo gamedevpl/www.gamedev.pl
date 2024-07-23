@@ -68,5 +68,5 @@ const StateContainer = styled.div`
 
 export const GameStateTechWorld: GameState = {
   Component: WorldComponent,
-  path: '/tech-world',
+  path: 'tech-world',
 };

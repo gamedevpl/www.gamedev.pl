@@ -1,4 +1,3 @@
-import React from "react";
 import "./App.css";
 import AppHeader from "./content/app-header";
 import OurGames from "./content/our-games";

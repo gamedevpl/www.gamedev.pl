@@ -1,7 +1,6 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App";
-import Games from "./games";
-import WarGames from "./games/wargames";
+import {routes as nukesRoutes} from "@gamedevpl/nukes/src/App";
 
 const router = createBrowserRouter([
   {
@@ -9,12 +8,8 @@ const router = createBrowserRouter([
     element: <App />,
   },
   {
-    path: "/games",
-    element: <Games />,
-  },
-  {
-    path: "/games/wargames",
-    element: <WarGames />,
+    path: "/games/nukes",
+    children: nukesRoutes
   },
 ]);
 

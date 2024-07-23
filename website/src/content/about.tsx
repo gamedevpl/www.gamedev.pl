@@ -1,5 +1,3 @@
-import React from "react";
-
 import { Heading3 } from "../components/headers";
 import Section from "../components/section";
 import { useTranslation } from "react-i18next";

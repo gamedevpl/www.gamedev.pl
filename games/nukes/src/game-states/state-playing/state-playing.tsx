@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router';
+import { useLocation } from 'react-router-dom';
 import { GameState, GameStateComponent } from '../types';
 
 import { useWorldStore } from './world-store';
@@ -25,5 +25,5 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
 
 export const GameStatePlaying: GameState = {
   Component: PlayingComponent,
-  path: '/playing',
+  path: 'playing',
 };

@@ -1,3 +1,4 @@
+import React from "react";
 import styled from 'styled-components';
 import { EntityType } from '../world/world-state-types';
 import { useSelectedObject } from '../controls/selection';

@@ -29,5 +29,5 @@ const Intro: GameStateComponent = ({ setGameState }) => {
 
 export const GameStateIntro: GameState = {
   Component: Intro,
-  path: '/',
+  path: '',
 };

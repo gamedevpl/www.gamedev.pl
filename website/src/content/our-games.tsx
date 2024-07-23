@@ -1,4 +1,3 @@
-// import { useTranslation } from "react-i18next";
 import { Heading2 } from "../components/headers";
 import Section from "../components/section";
 // import styled from "styled-components";

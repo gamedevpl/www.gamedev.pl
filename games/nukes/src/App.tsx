@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { useNavigate, RouterProvider, createBrowserRouter } from 'react-router-dom';
 
-import './App.css';
 import { GameState } from './game-states/types';
 import { GameStateIntro } from './game-states/state-intro';
 
@@ -9,27 +8,27 @@ import { GameStatePlaying } from './game-states/state-playing/state-playing';
 import { GameStatePlayed } from './game-states/state-played';
 
 import { GameStateTechWorld } from './game-states/state-tech-world';
+import { AppStyles } from './app-styles';
 
-function App() {
-  return (
-    <>
-      <BrowserRouter basename="/">
-        <Routes>
-          <Route path={GameStateIntro.path} element={<GameStateRoute state={GameStateIntro} />} />
-          <Route path={GameStatePlay.path} element={<GameStateRoute state={GameStatePlay} />} />
-          <Route path={GameStatePlaying.path} element={<GameStateRoute state={GameStatePlaying} />} />
-          <Route path={GameStatePlayed.path} element={<GameStateRoute state={GameStatePlayed} />} />
-          <Route path={GameStateTechWorld.path} element={<GameStateRoute state={GameStateTechWorld} />} />
-        </Routes>
-      </BrowserRouter>
-    </>
-  );
+export const routes = [
+  { path: GameStateIntro.path, element: <GameStateRoute state={GameStateIntro} /> },
+  { path: GameStatePlay.path, element: <GameStateRoute state={GameStatePlay} /> },
+  { path: GameStatePlaying.path, element: <GameStateRoute state={GameStatePlaying} /> },
+  { path: GameStatePlayed.path, element: <GameStateRoute state={GameStatePlayed} /> },
+  { path: GameStateTechWorld.path, element: <GameStateRoute state={GameStateTechWorld} /> },
+];
+
+const router = createBrowserRouter(routes);
+
+export function App() {
+  return <RouterProvider router={router} />;
 }
 
 function GameStateRoute({ state }: { state: GameState }) {
   const navigate = useNavigate();
 
-  return <state.Component setGameState={(state, params) => navigate(state.path, { state: params })} />;
+  return <>
+    <AppStyles/>
+    <state.Component setGameState={(state, params) => navigate('../' + state.path, { state: params })} />
+  </>;
 }
-
-export default App;
