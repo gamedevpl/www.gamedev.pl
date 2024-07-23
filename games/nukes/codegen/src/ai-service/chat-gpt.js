@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import OpenAI from 'openai';
 import { functionDefs } from './function-calling.js';
+import { getSourceCode } from '../files/read-files.js';
 
 /**
  * This function generates content using the OpenAI chat model.
@@ -22,6 +23,17 @@ export async function generateContent(systemPrompt, prompt) {
       {
         role: 'user',
         content: prompt,
+      },
+      {
+        role: 'assistant',
+        content: 'Please provide application source code.',
+        tool_calls: [{ type: 'function', function: { name: 'getSourceCode', arguments: '{}' }, id: 'get_source_code' }],
+      },
+      {
+        role: 'tool',
+        name: 'getSourceCode',
+        content: JSON.stringify(getSourceCode()),
+        tool_call_id: 'get_source_code',
       },
     ],
     tools: functionDefs.map((funDef) => ({ type: 'function', function: funDef })),

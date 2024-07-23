@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import Anthropic from '@anthropic-ai/sdk';
 import { functionDefs } from './function-calling.js';
+import { getSourceCode } from '../files/read-files.js';
 
 /**
  * This function generates content using the Anthropic Claude model.
@@ -19,7 +20,31 @@ export async function generateContent(systemPrompt, prompt) {
   const response = await anthropic.messages.create({
     model: 'claude-3-5-sonnet-20240620',
     system: systemPrompt,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'user', content: prompt },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Please provide application source code.' },
+          {
+            id: 'get_source_code',
+            name: 'getSourceCode',
+            input: {},
+            type: 'tool_use',
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            tool_use_id: 'get_source_code',
+            content: JSON.stringify(getSourceCode()),
+            type: 'tool_result',
+          },
+        ],
+      },
+    ],
     tools: functionDefs.map((fd) => ({
       name: fd.name,
       description: fd.description,

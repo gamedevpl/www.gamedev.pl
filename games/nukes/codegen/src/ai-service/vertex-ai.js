@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import { VertexAI } from '@google-cloud/vertexai';
 import { functionDefs } from './function-calling.js';
+import { getSourceCode } from '../files/read-files.js';
 
 // A function to generate content using the generative model
 export async function generateContent(systemPrompt, prompt) {
@@ -11,6 +12,31 @@ export async function generateContent(systemPrompt, prompt) {
         parts: [
           {
             text: prompt,
+          },
+        ],
+      },
+      {
+        role: 'model',
+        parts: [
+          {
+            text: 'Please provide application source code.',
+          },
+          {
+            functionCall: {
+              name: 'getSourceCode',
+              args: {},
+            },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              name: 'getSourceCode',
+              response: { name: 'getSourceCode', content: JSON.stringify(getSourceCode()) },
+            },
           },
         ],
       },

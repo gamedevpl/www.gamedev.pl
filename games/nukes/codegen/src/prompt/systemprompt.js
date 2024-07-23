@@ -1,9 +1,7 @@
 import assert from 'node:assert';
 
-import { getSourceCode } from '../files/read-files.js';
 import { CODEGEN_TRIGGER } from './prompt-consts.js';
 import { codegenOnly, gameOnly, verbosePrompt } from '../cli/cli-params.js';
-import { verify } from 'node:crypto';
 import { verifySystemPromptLimit } from './limits.js';
 
 /** Generates a system prompt */
@@ -17,12 +15,6 @@ export function getSystemPrompt() {
   ${gameOnly ? '' : `- /codegen: node.js script that helps me generate code using Vertex AI, it is using javascript`}
   ${codegenOnly ? '' : `- /src: React application that will run in a browser, it is using typescript`}
   - /docs: Directory which contains description of the application
-
-  This is the source code of the application:
-  \`\`\`json
-  ${JSON.stringify(getSourceCode(), null, 2)}
-  \`\`\`
-  (format of this JSON object is: \`{ [filePath: string]: string }\`)
 
   You can generate new code, or modify the existing one. You will receive instructions on what is the goal of requested code modification.
 
