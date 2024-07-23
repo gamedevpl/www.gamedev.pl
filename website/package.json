@@ -1,6 +1,7 @@
 {
   "name": "@gamedevpl/website",
   "homepage": "https://www.gamedev.pl",
+  "type": "module",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
@@ -40,7 +41,8 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
-    "vite-plugin-checker": "^0.6.4"
+    "vite-plugin-checker": "^0.6.4",
+    "vite-plugin-static-copy": "^1.0.6"
   },
   "scripts": {
     "start": "vite",
