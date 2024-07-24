@@ -15,8 +15,7 @@ export default defineConfig({
       targets: [
         {
           src: "build/index.html",
-          dest: ".",
-          rename: "404.html",
+          dest: "games/nukes",
         },
       ],
     }),
