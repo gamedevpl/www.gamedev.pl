@@ -1,4 +1,3 @@
-import React from 'react';
 import styled from 'styled-components';
 
 import { WorldState } from '../world/world-state-types';
@@ -22,8 +21,12 @@ export function WorldStateRender({ state }: { state: WorldState }) {
     >
       {/* static content, does not change at all */}
       <SectorCanvas sectors={state.sectors} />
-      <BulkRender items={state.states} Component={StateRender} propertyName="state" />
-      <BulkRender items={state.cities} Component={CityRender} propertyName="city" />
+      {state.states.map((state) => (
+        <StateRender key={state.id} />
+      ))}
+      {state.cities.map((city) => (
+        <CityRender key={city.id} city={city} />
+      ))}
       {state.launchSites.map((launchSite) => (
         <LaunchSiteRender
           key={launchSite.id}
@@ -47,17 +50,6 @@ export function WorldStateRender({ state }: { state: WorldState }) {
     </WorldStateContainer>
   );
 }
-
-// simple bulk render component for rendering an array of items with static content
-const BulkRender = React.memo(
-  ({ items, Component, propertyName }: { items: unknown[]; propertyName: string; Component: React.FC<unknown> }) => (
-    <>
-      {items.map((item) => (
-        <Component key={item.id} {...{ [propertyName]: item }} />
-      ))}
-    </>
-  ),
-);
 
 const WorldStateContainer = styled.div`
   display: flex;

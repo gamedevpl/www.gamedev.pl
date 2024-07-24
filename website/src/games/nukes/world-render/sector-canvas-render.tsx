@@ -67,7 +67,7 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
     return () => {
       canvas?.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [sectors]);
+  }, [sectors, point, unpoint]);
 
   return <canvas ref={canvasRef}></canvas>;
 });
@@ -86,7 +86,12 @@ function getRenderFunction(sector: Sector) {
       return {
         fillStyle: 'rgb(0, 34, 93)',
         drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          const gradient = ctx.createLinearGradient(rect.left - minX, rect.top - minY, rect.right - minX, rect.bottom - minY);
+          const gradient = ctx.createLinearGradient(
+            rect.left - minX,
+            rect.top - minY,
+            rect.right - minX,
+            rect.bottom - minY,
+          );
           gradient.addColorStop(0, 'rgb(0, 34, 93)'); // Deep water
           gradient.addColorStop(1, 'rgb(0, 137, 178)'); // Shallow water
           ctx.fillStyle = gradient;
