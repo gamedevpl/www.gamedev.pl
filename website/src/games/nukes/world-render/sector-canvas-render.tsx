@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Sector } from '../world/world-state-types';
+import { Rect, Sector } from '../world/world-state-types';
 import { useObjectPointer } from '../controls/pointer';
 
 interface SectorCanvasProps {
@@ -77,7 +77,7 @@ function getRenderFunction(sector: Sector) {
     case 'GROUND':
       return {
         fillStyle: 'rgb(93, 42, 0)',
-        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
           ctx.fillStyle = 'rgb(93, 42, 0)'; // Ground color
           ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
         },
@@ -85,7 +85,7 @@ function getRenderFunction(sector: Sector) {
     case 'WATER':
       return {
         fillStyle: 'rgb(0, 34, 93)',
-        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
           const gradient = ctx.createLinearGradient(rect.left - minX, rect.top - minY, rect.right - minX, rect.bottom - minY);
           gradient.addColorStop(0, 'rgb(0, 34, 93)'); // Deep water
           gradient.addColorStop(1, 'rgb(0, 137, 178)'); // Shallow water
@@ -96,7 +96,7 @@ function getRenderFunction(sector: Sector) {
     default:
       return {
         fillStyle: 'rgb(0, 34, 93)', // Default to water color
-        drawSector: (ctx: CanvasRenderingContext2D, rect: any, minX: number, minY: number) => {
+        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
           ctx.fillStyle = 'rgb(0, 34, 93)'; // Default color
           ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
         },

@@ -15,7 +15,7 @@ import { Command } from '../controls/command';
 import { Infotainment } from '../controls-render/infotainment';
 import { TimeControls } from './state-playing/time-controls';
 
-const WorldComponent: GameStateComponent = ({}) => {
+const WorldComponent: GameStateComponent = () => {
   const [worldState, setWorldState] = useState(() =>
     createWorldState({ playerStateName: 'Player state', numberOfStates: 3 }),
   );

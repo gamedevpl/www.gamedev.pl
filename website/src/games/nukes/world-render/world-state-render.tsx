@@ -50,7 +50,7 @@ export function WorldStateRender({ state }: { state: WorldState }) {
 
 // simple bulk render component for rendering an array of items with static content
 const BulkRender = React.memo(
-  ({ items, Component, propertyName }: { items: any[]; propertyName: string; Component: React.FC<any> }) => (
+  ({ items, Component, propertyName }: { items: unknown[]; propertyName: string; Component: React.FC<unknown> }) => (
     <>
       {items.map((item) => (
         <Component key={item.id} {...{ [propertyName]: item }} />
