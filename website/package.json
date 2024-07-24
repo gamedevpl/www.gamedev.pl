@@ -1,11 +1,9 @@
 {
   "name": "@gamedevpl/website",
   "homepage": "https://www.gamedev.pl",
-  "type": "module",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
-    "@gamedevpl/nukes": "file:../games/nukes",
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^16.0.0",
     "@types/jest": "^29.5.12",
@@ -51,8 +49,7 @@
     "test": "jest",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "prepare": "cd .. && husky install",
-    "preview": "vite preview",
-    "postinstall": "cd ../games/nukes && npm install"
+    "preview": "vite preview"
   },
   "browserslist": {
     "production": [
