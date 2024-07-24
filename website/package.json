@@ -65,5 +65,8 @@
   },
   "lint-staged": {
     "*.{js,ts,tsx,css,md}": "prettier --write"
+  },
+  "dependencies": {
+    "codegen": "file:../../codegen"
   }
 }

@@ -17,6 +17,18 @@ export default defineConfig({
           src: "build/index.html",
           dest: "games/nukes",
         },
+        {
+          src: "build/index.html",
+          dest: "games/nukes/play",
+        },
+        {
+          src: "build/index.html",
+          dest: "games/nukes/playing",
+        },
+        {
+          src: "build/index.html",
+          dest: "games/nukes/played"
+        },
       ],
     }),
   ],
