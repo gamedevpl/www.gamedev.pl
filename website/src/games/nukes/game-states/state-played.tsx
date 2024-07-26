@@ -25,12 +25,12 @@ const PlayedComponent: GameStateComponent = ({ setGameState }) => {
       <button onClick={handlePlayAgain}>Play Again</button>
       <br />
       <br />
-      <a href="/games/nukes">Back to main menu</a>
+      <a href="/games/nukes/">Back to main menu</a>
     </div>
   );
 };
 
 export const GameStatePlayed: GameState = {
   Component: PlayedComponent,
-  path: '/games/nukes/played',
+  path: 'played',
 };

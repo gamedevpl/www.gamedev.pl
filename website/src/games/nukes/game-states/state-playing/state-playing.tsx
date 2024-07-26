@@ -25,5 +25,5 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
 
 export const GameStatePlaying: GameState = {
   Component: PlayingComponent,
-  path: '/games/nukes/playing',
+  path: 'playing',
 };

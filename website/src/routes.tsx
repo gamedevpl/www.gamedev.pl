@@ -1,13 +1,15 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import App from "./App";
-import {routes as nukesRoutes} from "./games/nukes/App.tsx";
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import App from './App';
 
 const router = createBrowserRouter([
   {
-    path: "/",
+    path: '/',
     element: <App />,
   },
-  ...nukesRoutes,
+  {
+    path: '/games/nukes',
+    lazy: async () => ({ Component: (await import('./games/nukes/NukesApp.tsx')).NukesApp }),
+  },
 ]);
 
 export default function Routes() {

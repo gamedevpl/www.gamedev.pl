@@ -30,5 +30,5 @@ const PlayComponent: GameStateComponent = ({ setGameState }) => {
 
 export const GameStatePlay: GameState = {
   Component: PlayComponent,
-  path: '/games/nukes/play',
+  path: 'play',
 };
