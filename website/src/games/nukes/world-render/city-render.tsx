@@ -38,6 +38,7 @@ const CityContainer = styled.div`
   height: calc(var(--size) * 1px);
   opacity: var(--opacity);
   background: rgb(0, 0, 255);
+  box-shadow: 0 0 10px 5px rgb(0, 0, 255);
 
   &:hover > div {
     display: block;
