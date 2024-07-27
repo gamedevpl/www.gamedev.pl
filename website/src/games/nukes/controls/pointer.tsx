@@ -71,5 +71,5 @@ export function useObjectPointer() {
   return [
     (object: PointableObject) => dispatch({ type: 'point', object }),
     (object: PointableObject) => dispatch({ type: 'unpoint', object }),
-  ];
+  ] as const;
 }

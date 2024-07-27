@@ -28,9 +28,9 @@ export type State = {
 };
 
 export enum Strategy {
-  NEUTRAL = "NEUTRAL",
-  FRIENDLY = "FRIENDLY",
-  HOSTILE = "HOSTILE",
+  NEUTRAL = 'NEUTRAL',
+  FRIENDLY = 'FRIENDLY',
+  HOSTILE = 'HOSTILE',
 }
 
 export type City = {
@@ -42,12 +42,12 @@ export type City = {
 };
 
 export enum EntityType {
-  LAUNCH_SITE = "LAUNCH_SITE",
+  LAUNCH_SITE = 'LAUNCH_SITE',
 }
 
 export enum SectorType {
-  WATER = "WATER",
-  GROUND = "GROUND",
+  WATER = 'WATER',
+  GROUND = 'GROUND',
 }
 
 export type Sector = {
