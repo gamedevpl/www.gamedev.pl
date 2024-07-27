@@ -156,7 +156,7 @@ function executeCommand(
   setWorldState: (worldState: WorldState) => void,
 ): ChatEntry | undefined {
   switch (command.type) {
-    case CommandType.ATTACK_STATE:
+    case CommandType.ATTACK_STATE: {
       const state = worldState.states.find((state) => state.id === command.stateId);
       if (!state) {
         return {
@@ -179,6 +179,7 @@ function executeCommand(
           message: 'Affirmative, attacking ' + state.name,
         };
       }
+    }
     case CommandType.ATTACK_CITY:
       console.log('attack city', command.cityId);
       break;
