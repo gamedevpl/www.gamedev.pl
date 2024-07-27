@@ -153,7 +153,7 @@ async function matchCommand(
 ): Promise<CommandPayload | undefined> {
   const sentenceMap = generateCommandSentences(playerState, worldState);
 
-  const match = await findMostSimilarSentence(input, Object.keys(sentenceMap));
+  const match = await findMostSimilarSentence(input.toLowerCase(), Object.keys(sentenceMap));
 
   return match ? sentenceMap[match] : undefined;
 }
@@ -214,7 +214,12 @@ function generateCommandSentences(playerState: State, worldState: WorldState): S
   const result: SentenceMap = {};
 
   for (const state of worldState.states.filter((state) => state.id !== playerState.id)) {
-    result['attack ' + state.name] = { type: CommandType.ATTACK_STATE, stateId: state.id };
+    ATTACK_STATE_TEMPLATES.forEach((template) => {
+      result[template.replace('$STATE_NAME', state.name).toLowerCase()] = {
+        type: CommandType.ATTACK_STATE,
+        stateId: state.id,
+      };
+    });
   }
 
   for (const city of worldState.cities.filter((city) => city.stateId !== playerState.id)) {
@@ -224,6 +229,29 @@ function generateCommandSentences(playerState: State, worldState: WorldState): S
   return result;
 }
 
+const ATTACK_STATE_TEMPLATES = [
+  'attack $STATE_NAME',
+  'declare war on $STATE_NAME',
+  'start attacking $STATE_NAME',
+  'initiate hostilities with $STATE_NAME',
+  'begin offensive against $STATE_NAME',
+  'launch assault on $STATE_NAME',
+  'commence attack on $STATE_NAME',
+  'start war with $STATE_NAME',
+  'engage $STATE_NAME in combat',
+  'strike $STATE_NAME',
+  'atack $STATE_NAME', // Common typo
+  'attck $STATE_NAME', // Another common typo
+  'attak $STATE_NAME', // Another common typo
+  'destroy $STATE_NAME',
+  'eliminate $STATE_NAME',
+  'target $STATE_NAME',
+  'go to war with $STATE_NAME',
+  'start conflict with $STATE_NAME',
+  'invade $STATE_NAME',
+  'assault $STATE_NAME',
+];
+
 // Load the Universal Sentence Encoder model
 const model = await use.load();
 
@@ -231,7 +259,7 @@ async function findMostSimilarSentence(input: string, sentences: string[]) {
   const inputEmbedding = (await model.embed([input])).arraySync();
 
   let closestSentence = '';
-  let closestScore = 0.7; // this is the treshold, may be wrong
+  let closestScore = 0.7; // this is the threshold, may be wrong
 
   for (const sentence of sentences) {
     const sentenceEmbedding = (await model.embed([sentence])).arraySync();
@@ -241,7 +269,6 @@ async function findMostSimilarSentence(input: string, sentences: string[]) {
     const norm2 = tf.norm(sentenceEmbedding);
 
     const score = dotProduct.div(tf.mul(norm1, norm2)).dataSync()[0];
-    console.log(sentence, score);
 
     if (score > closestScore) {
       closestScore = score;
