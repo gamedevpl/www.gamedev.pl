@@ -250,12 +250,24 @@ const ATTACK_STATE_TEMPLATES = [
   'start conflict with $STATE_NAME',
   'invade $STATE_NAME',
   'assault $STATE_NAME',
+  'obliterate $STATE_NAME',
+  'annihilate $STATE_NAME',
+  'lay siege to $STATE_NAME',
+  'wage war against $STATE_NAME',
+  'initiate combat with $STATE_NAME',
+  'open hostilities with $STATE_NAME',
+  'commence offensive on $STATE_NAME',
+  'begin siege of $STATE_NAME',
+  'start military action against $STATE_NAME',
+  'launch military campaign against $STATE_NAME',
+  'nuke $STATE_NAME',
 ];
 
 // Load the Universal Sentence Encoder model
-const model = await use.load();
+const modelLoading = use.load();
 
 async function findMostSimilarSentence(input: string, sentences: string[]) {
+  const model = await modelLoading;
   const inputEmbedding = (await model.embed([input])).arraySync();
 
   let closestSentence = '';
