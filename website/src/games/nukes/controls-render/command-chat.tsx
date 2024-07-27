@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { CityId, LaunchSiteId, MissileId, StateId, WorldState, State, Strategy } from '../world/world-state-types';
 import styled from 'styled-components';
+import * as tf from '@tensorflow/tfjs';
+import * as use from '@tensorflow-models/universal-sentence-encoder';
+
+import { CityId, LaunchSiteId, MissileId, StateId, WorldState, State, Strategy } from '../world/world-state-types';
 
 export function CommandChat({
   playerState,
@@ -18,7 +21,7 @@ export function CommandChat({
       <input
         type="text"
         placeholder="Chat with commander"
-        onKeyDown={(event) => {
+        onKeyDown={async (event) => {
           if (event.key === 'Enter') {
             const input = event.target as HTMLInputElement;
             const message = input.value;
@@ -27,7 +30,7 @@ export function CommandChat({
             }
 
             input.value = '';
-            const command = matchCommand(message, playerState, worldState);
+            const command = await matchCommand(message, playerState, worldState);
 
             if (command) {
               const entry = executeCommand(command, playerState, worldState, setWorldState);
@@ -61,8 +64,8 @@ export function CommandChat({
         }}
       />
       <div>
-        {log.map((entry) => (
-          <p>{entry.message}</p>
+        {log.map((entry, idx) => (
+          <p key={idx + entry.message}>{entry.message}</p>
         ))}
       </div>
     </ChatContainer>
@@ -143,10 +146,16 @@ type CommandPayload =
 
 type SentenceMap = Record<string, CommandPayload>;
 
-function matchCommand(input: string, playerState: State, worldState: WorldState): CommandPayload | undefined {
+async function matchCommand(
+  input: string,
+  playerState: State,
+  worldState: WorldState,
+): Promise<CommandPayload | undefined> {
   const sentenceMap = generateCommandSentences(playerState, worldState);
 
-  return sentenceMap[input];
+  const match = await findMostSimilarSentence(input, Object.keys(sentenceMap));
+
+  return match ? sentenceMap[match] : undefined;
 }
 
 function executeCommand(
@@ -181,17 +190,24 @@ function executeCommand(
       }
     }
     case CommandType.ATTACK_CITY:
-      console.log('attack city', command.cityId);
-      break;
+      return {
+        timestamp: worldState.timestamp,
+        role: 'commander',
+        message: "I don't know how to attack cities.",
+      };
     case CommandType.ATTACK_LAUNCH_SITE:
-      console.log('attack launch site', command.stateId);
-      break;
+      return {
+        timestamp: worldState.timestamp,
+        role: 'commander',
+        message: "I don't know how to attack launch sites.",
+      };
     case CommandType.ATTACK_MISSILE:
-      console.log('attack missile', command.stateId);
-      break;
+      return {
+        timestamp: worldState.timestamp,
+        role: 'commander',
+        message: "I don't know how to attack missiles.",
+      };
   }
-
-  return undefined;
 }
 
 function generateCommandSentences(playerState: State, worldState: WorldState): SentenceMap {
@@ -202,8 +218,36 @@ function generateCommandSentences(playerState: State, worldState: WorldState): S
   }
 
   for (const city of worldState.cities.filter((city) => city.stateId !== playerState.id)) {
-    result['attack ' + city.name] = { type: CommandType.ATTACK_STATE, stateId: city.id };
+    result['attack ' + city.name] = { type: CommandType.ATTACK_CITY, cityId: city.id };
   }
 
   return result;
+}
+
+// Load the Universal Sentence Encoder model
+const model = await use.load();
+
+async function findMostSimilarSentence(input: string, sentences: string[]) {
+  const inputEmbedding = (await model.embed([input])).arraySync();
+
+  let closestSentence = '';
+  let closestScore = 0.7; // this is the treshold, may be wrong
+
+  for (const sentence of sentences) {
+    const sentenceEmbedding = (await model.embed([sentence])).arraySync();
+
+    const dotProduct = tf.matMul(inputEmbedding, tf.transpose(sentenceEmbedding));
+    const norm1 = tf.norm(inputEmbedding);
+    const norm2 = tf.norm(sentenceEmbedding);
+
+    const score = dotProduct.div(tf.mul(norm1, norm2)).dataSync()[0];
+    console.log(sentence, score);
+
+    if (score > closestScore) {
+      closestScore = score;
+      closestSentence = sentence;
+    }
+  }
+
+  return closestSentence;
 }
