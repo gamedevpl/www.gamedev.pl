@@ -67,7 +67,7 @@ const InfotainmentContainer = styled.div`
 
   color: white;
   background: rgba(0, 0, 0, 0.9);
-  border: 1px solid green;
+  border: 1px solid rgb(0, 255, 0);
 
   li {
     text-align: left;

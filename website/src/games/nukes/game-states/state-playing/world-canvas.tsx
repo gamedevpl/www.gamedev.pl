@@ -47,16 +47,4 @@ const CanvasContainer = styled.div`
   flex-direction: column;
 
   background: black;
-
-  .meta-controls {
-    display: flex;
-    flex-grow: 0;
-
-    border: 1px solid rgb(0, 255, 0);
-    padding: 5px 10px;
-
-    text-align: left;
-    color: white;
-    z-index: 1;
-  }
 `;

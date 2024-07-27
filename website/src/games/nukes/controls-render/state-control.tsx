@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { StateId, WorldState, Strategy } from '../world/world-state-types';
+import { CommandChat } from './command-chat';
 
 /** A component that allows user to control the player controlled state */
 export function StateControl({
@@ -43,13 +44,14 @@ export function StateControl({
           </div>
         ) : null,
       )}
+      <CommandChat playerState={playerState} worldState={worldState} setWorldState={setWorldState} />
     </StateControlContainer>
   );
 }
 
 const StateControlContainer = styled.div`
   position: fixed;
-  right: 250px;
+  right: 280px;
   top: 0;
   z-index: 1;
 
@@ -62,5 +64,5 @@ const StateControlContainer = styled.div`
 
   color: white;
   background: rgba(0, 0, 0, 0.9);
-  border: 1px solid green;
+  border: 1px solid rgb(0, 255, 0);
 `;
