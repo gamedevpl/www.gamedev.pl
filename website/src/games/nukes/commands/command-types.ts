@@ -18,11 +18,11 @@ export type CommandPayload =
     }
   | {
       type: CommandType.ATTACK_LAUNCH_SITE;
-      stateId: LaunchSiteId;
+      launchSiteId: LaunchSiteId;
     }
   | {
       type: CommandType.ATTACK_MISSILE;
-      stateId: MissileId;
+      missileId: MissileId;
     };
 
 export type ChatEntry = {

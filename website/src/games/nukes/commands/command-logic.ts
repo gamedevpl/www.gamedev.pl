@@ -43,18 +43,56 @@ export function executeCommand(
         };
       }
     }
-    case CommandType.ATTACK_CITY:
+    case CommandType.ATTACK_CITY: {
+      const city = worldState.cities.find((city) => city.id === command.cityId);
+      if (!city) {
+        return {
+          timestamp: worldState.timestamp,
+          role: 'commander',
+          message: "I don't understand which city should be attacked",
+        };
+      }
+      const launchSite = worldState.launchSites.find((site) => site.stateId === playerState.id);
+      if (!launchSite) {
+        return {
+          timestamp: worldState.timestamp,
+          role: 'commander',
+          message: "We don't have any available launch sites",
+        };
+      }
+      launchSite.nextLaunchTarget = city.position;
+      setWorldState({ ...worldState, launchSites: worldState.launchSites });
       return {
         timestamp: worldState.timestamp,
         role: 'commander',
-        message: "I don't know how to attack cities.",
+        message: 'Affirmative, targeting ' + city.name,
       };
-    case CommandType.ATTACK_LAUNCH_SITE:
+    }
+    case CommandType.ATTACK_LAUNCH_SITE: {
+      const launchSite = worldState.launchSites.find((site) => site.id === command.launchSiteId);
+      if (!launchSite) {
+        return {
+          timestamp: worldState.timestamp,
+          role: 'commander',
+          message: "I don't understand which launch site should be attacked",
+        };
+      }
+      const playerLaunchSite = worldState.launchSites.find((site) => site.stateId === playerState.id);
+      if (!playerLaunchSite) {
+        return {
+          timestamp: worldState.timestamp,
+          role: 'commander',
+          message: "We don't have any available launch sites",
+        };
+      }
+      playerLaunchSite.nextLaunchTarget = launchSite.position;
+      setWorldState({ ...worldState, launchSites: worldState.launchSites });
       return {
         timestamp: worldState.timestamp,
         role: 'commander',
-        message: "I don't know how to attack launch sites.",
+        message: 'Affirmative, targeting enemy launch site',
       };
+    }
     case CommandType.ATTACK_MISSILE:
       return {
         timestamp: worldState.timestamp,
@@ -77,7 +115,19 @@ function generateCommandSentences(playerState: State, worldState: WorldState): S
   }
 
   for (const city of worldState.cities.filter((city) => city.stateId !== playerState.id)) {
-    result['attack ' + city.name] = { type: CommandType.ATTACK_CITY, cityId: city.id };
+    ATTACK_CITY_TEMPLATES.forEach((template) => {
+      result[template.replace('$CITY_NAME', city.name.toLowerCase())] = {
+        type: CommandType.ATTACK_CITY,
+        cityId: city.id,
+      };
+    });
+  }
+
+  for (const launchSite of worldState.launchSites.filter((site) => site.stateId !== playerState.id)) {
+    result['attack launch site ' + launchSite.id.toLowerCase()] = {
+      type: CommandType.ATTACK_LAUNCH_SITE,
+      launchSiteId: launchSite.id,
+    };
   }
 
   return result;
@@ -115,4 +165,29 @@ const ATTACK_STATE_TEMPLATES = [
   'start military action against $STATE_NAME',
   'launch military campaign against $STATE_NAME',
   'nuke $STATE_NAME',
+];
+
+const ATTACK_CITY_TEMPLATES = [
+  'attack $CITY_NAME',
+  'bomb $CITY_NAME',
+  'launch missile at $CITY_NAME',
+  'target $CITY_NAME',
+  'strike $CITY_NAME',
+  'hit $CITY_NAME',
+  'destroy $CITY_NAME',
+  'obliterate $CITY_NAME',
+  'annihilate $CITY_NAME',
+  'blast $CITY_NAME',
+  'nuke $CITY_NAME',
+  'fire at $CITY_NAME',
+  'aim at $CITY_NAME',
+  'assault $CITY_NAME',
+  'bombard $CITY_NAME',
+  'raid $CITY_NAME',
+  'devastate $CITY_NAME',
+  'eliminate $CITY_NAME',
+  'launch attack on $CITY_NAME',
+  'initiate strike on $CITY_NAME',
+  'commence bombing of $CITY_NAME',
+  'begin assault on $CITY_NAME',
 ];
