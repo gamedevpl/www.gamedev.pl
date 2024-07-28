@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { State, WorldState } from '../world/world-state-types';
-import { matchCommand, executeCommand } from '../commands/command-logic';
+import { matchCommand } from '../commands/command-match';
+import { executeCommand } from '../commands/command-execute';
 import { ChatEntry } from '../commands/command-types';
 
 export function CommandChat({
