@@ -1,9 +1,6 @@
-import React from "react";
-import styled from 'styled-components';
-
 import { Missile } from '../world/world-state-types';
 
-export function MissileRender({ missile, worldTimestamp }: { missile: Missile; worldTimestamp: number }) {
+export function calculateMissilePosition(missile: Missile, worldTimestamp: number): { x: number; y: number } | null {
   if (missile.launchTimestamp > worldTimestamp || missile.targetTimestamp < worldTimestamp) {
     return null;
   }
@@ -16,22 +13,32 @@ export function MissileRender({ missile, worldTimestamp }: { missile: Missile; w
   const x = missile.launch.x + (missile.target.x - missile.launch.x) * progress;
   const y = missile.launch.y + (missile.target.y - missile.launch.y) * progress;
 
-  return (
-    <MissileContainer
-      style={
-        {
-          '--x': x,
-          '--y': y,
-        } as React.CSSProperties
-      }
-    />
-  );
+  return { x, y };
 }
 
-const MissileContainer = styled.div`
-  transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px));
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  background: rgb(0, 255, 0);
-`;
+export function renderMissile(ctx: CanvasRenderingContext2D, missile: Missile, worldTimestamp: number) {
+  const position = calculateMissilePosition(missile, worldTimestamp);
+  if (!position) return;
+
+  ctx.fillStyle = 'rgb(0, 255, 0)';
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, 1, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+export function renderChemtrail(ctx: CanvasRenderingContext2D, missile: Missile, worldTimestamp: number) {
+  const startPosition = calculateMissilePosition(missile, missile.launchTimestamp);
+  const endPosition = calculateMissilePosition(missile, worldTimestamp);
+  if (!startPosition || !endPosition) return;
+
+  const gradient = ctx.createLinearGradient(startPosition.x, startPosition.y, endPosition.x, endPosition.y);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
+
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startPosition.x, startPosition.y);
+  ctx.lineTo(endPosition.x, endPosition.y);
+  ctx.stroke();
+}
