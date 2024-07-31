@@ -9,7 +9,6 @@ import { StateRender } from './state-render';
 import { CityRender } from './city-render';
 import { LaunchSiteRender } from './launch-site-render';
 import { EffectsCanvas } from './effects-canvas';
-import { ExplosionRender } from './explosion-render';
 
 export function WorldStateRender({ state }: { state: WorldState }) {
   const pointerMove = usePointerMove();
@@ -38,11 +37,6 @@ export function WorldStateRender({ state }: { state: WorldState }) {
 
       {/* dynamic content, changes with time */}
       <EffectsCanvas state={state} />
-      {state.explosions
-        .filter((explosion) => explosion.startTimestamp < state.timestamp && explosion.endTimestamp > state.timestamp)
-        .map((explosion) => (
-          <ExplosionRender key={explosion.id} explosion={explosion} worldTimestamp={state.timestamp} />
-        ))}
     </WorldStateContainer>
   );
 }

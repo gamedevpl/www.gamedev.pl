@@ -1,11 +1,8 @@
-import React from "react";
-import styled from 'styled-components';
-
 import { Explosion } from '../world/world-state-types';
 
-export function ExplosionRender({ explosion, worldTimestamp }: { explosion: Explosion; worldTimestamp: number }) {
+export function renderExplosion(ctx: CanvasRenderingContext2D, explosion: Explosion, worldTimestamp: number) {
   if (explosion.startTimestamp > worldTimestamp || explosion.endTimestamp < worldTimestamp) {
-    return null;
+    return;
   }
 
   const progress = Math.pow(
@@ -16,27 +13,8 @@ export function ExplosionRender({ explosion, worldTimestamp }: { explosion: Expl
     0.15,
   );
 
-  return (
-    <ExplosionContainer
-      style={
-        {
-          '--x': explosion.position.x,
-          '--y': explosion.position.y,
-          '--radius': explosion.radius * progress,
-          '--color': `rgb(${255 * progress}, ${255 * (1 - progress)}, 0)`,
-        } as React.CSSProperties
-      }
-    />
-  );
+  ctx.fillStyle = `rgb(${255 * progress}, ${255 * (1 - progress)}, 0)`;
+  ctx.beginPath();
+  ctx.arc(explosion.position.x, explosion.position.y, explosion.radius * progress, 0, 2 * Math.PI);
+  ctx.fill();
 }
-
-const ExplosionContainer = styled.div`
-  transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px)) translate(-50%, -50%);
-  position: absolute;
-  width: calc(var(--radius) * 2px);
-  height: calc(var(--radius) * 2px);
-  border-radius: 50%;
-  background: var(--color);
-
-  pointer-events: none;
-`;

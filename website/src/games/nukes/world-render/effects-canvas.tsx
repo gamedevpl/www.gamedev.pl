@@ -2,6 +2,7 @@ import { useRef, useLayoutEffect } from 'react';
 import { useRafLoop } from 'react-use';
 import styled from 'styled-components';
 import { WorldState } from '../world/world-state-types';
+import { renderExplosion } from './explosion-render';
 import { renderMissile, renderChemtrail } from './missile-render';
 
 export function EffectsCanvas({ state }: { state: WorldState }) {
@@ -46,6 +47,13 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
       .filter((missile) => missile.launchTimestamp < state.timestamp && missile.targetTimestamp > state.timestamp)
       .forEach((missile) => {
         renderMissile(ctx, missile, state.timestamp);
+      });
+
+    // Render explosions
+    state.explosions
+      .filter((explosion) => explosion.startTimestamp < state.timestamp && explosion.endTimestamp > state.timestamp)
+      .forEach((explosion) => {
+        renderExplosion(ctx, explosion, state.timestamp);
       });
   };
 
