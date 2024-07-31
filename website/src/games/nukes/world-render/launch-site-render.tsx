@@ -20,12 +20,20 @@ export function LaunchSiteRender({
   const isOnCooldown =
     launchSite.lastLaunchTimestamp && launchSite.lastLaunchTimestamp + LAUNCH_COOLDOWN > worldTimestamp;
 
+  const cooldownProgress = isOnCooldown ? (worldTimestamp - launchSite.lastLaunchTimestamp!) / LAUNCH_COOLDOWN : 0;
+
   return (
     <LaunchSiteContainer
       onMouseEnter={() => point(launchSite)}
       onMouseLeave={() => unpoint(launchSite)}
       onClick={() => isPlayerControlled && select()}
-      style={{ '--x': launchSite.position.x, '--y': launchSite.position.y } as React.CSSProperties}
+      style={
+        {
+          '--x': launchSite.position.x,
+          '--y': launchSite.position.y,
+          '--cooldown-progress': cooldownProgress,
+        } as React.CSSProperties
+      }
       data-selected={isSelected}
       data-cooldown={isOnCooldown}
     ></LaunchSiteContainer>
@@ -36,8 +44,9 @@ const LaunchSiteContainer = styled.div`
   transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px)) translate(-50%, -50%);
   position: absolute;
   width: 5px;
-  height: 5px;
+  height: 10px;
   background: rgb(255, 0, 0);
+  overflow: hidden;
 
   cursor: pointer;
 
@@ -46,7 +55,16 @@ const LaunchSiteContainer = styled.div`
   }
 
   &[data-cooldown='true'] {
-    opacity: 0.5;
-    background: rgb(255, 165, 0); /* Change color to indicate cooldown */
+    background: rgb(255, 165, 0);
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(var(--cooldown-progress) * 100%);
+      background: rgb(255, 0, 0);
+    }
   }
 `;
