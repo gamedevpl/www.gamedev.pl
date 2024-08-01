@@ -16,7 +16,18 @@ export function renderChemtrail(ctx: CanvasRenderingContext2D, missile: Missile,
     return;
   }
 
-  const startPosition = missile.launch;
+  // Calculate the start position of the chemtrail as the missile's position 5 seconds ago
+  const elapsedTime = Math.min(
+    Math.max(worldTimestamp - 5, missile.launchTimestamp) - missile.launchTimestamp,
+    missile.targetTimestamp - missile.launchTimestamp,
+  );
+  const missileTravelTime = missile.targetTimestamp - missile.launchTimestamp;
+  const progress = elapsedTime / missileTravelTime;
+
+  const startX = missile.launch.x + (missile.target.x - missile.launch.x) * progress;
+  const startY = missile.launch.y + (missile.target.y - missile.launch.y) * progress;
+  const startPosition = { x: startX, y: startY };
+
   const endPosition = missile.position;
 
   const gradient = ctx.createLinearGradient(startPosition.x, startPosition.y, endPosition.x, endPosition.y);
