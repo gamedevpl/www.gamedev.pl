@@ -76,6 +76,8 @@ export type Missile = {
   launch: Position;
   launchTimestamp: number;
 
+  position: Position;
+
   target: Position;
   targetTimestamp: number;
 };

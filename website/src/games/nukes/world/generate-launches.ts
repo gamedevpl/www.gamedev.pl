@@ -1,7 +1,7 @@
-import { Position, WorldState, Strategy } from "./world-state-types";
-import { distance } from "../math/position-utils";
-import { Missile } from "./world-state-types";
-import { EXPLOSION_RADIUS, MISSILE_SPEED } from "./world-state-constants";
+import { Position, WorldState, Strategy } from './world-state-types';
+import { distance } from '../math/position-utils';
+import { Missile } from './world-state-types';
+import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -12,28 +12,20 @@ import { EXPLOSION_RADIUS, MISSILE_SPEED } from "./world-state-constants";
  */
 export function generateLaunches(worldState: WorldState): WorldState {
   for (const state of worldState.states) {
-    const myCities = worldState.cities.filter(
-      (city) => city.stateId === state.id
-    );
-    const myLaunchSites = worldState.launchSites.filter(
-      (launchSite) => launchSite.stateId === state.id
-    );
+    const myCities = worldState.cities.filter((city) => city.stateId === state.id);
+    const myLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id);
 
     const enemyCities = worldState.cities.filter(
       (city) =>
         state.strategies[city.stateId] === Strategy.HOSTILE &&
         city.stateId !== state.id &&
-        city.populationHistogram.slice(-1)[0].population > 0
+        city.populationHistogram.slice(-1)[0].population > 0,
     );
     const enemyMissiles = worldState.missiles.filter(
-      (missile) =>
-        state.strategies[missile.stateId] !== Strategy.FRIENDLY &&
-        missile.stateId !== state.id
+      (missile) => state.strategies[missile.stateId] !== Strategy.FRIENDLY && missile.stateId !== state.id,
     );
     const enemyLaunchSites = worldState.launchSites.filter(
-      (launchSite) =>
-        state.strategies[launchSite.stateId] === Strategy.HOSTILE &&
-        launchSite.stateId !== state.id
+      (launchSite) => state.strategies[launchSite.stateId] === Strategy.HOSTILE && launchSite.stateId !== state.id,
     );
 
     // Filter enemy missiles, keep only those which are approaching any of myCities or myLaunchSites
@@ -51,21 +43,13 @@ export function generateLaunches(worldState: WorldState): WorldState {
       // Ignore missiles which are early in flight
       .filter(
         (missile) =>
-          (worldState.timestamp - missile.launchTimestamp) /
-            (missile.targetTimestamp - missile.launchTimestamp) >
-          0.5
+          (worldState.timestamp - missile.launchTimestamp) / (missile.targetTimestamp - missile.launchTimestamp) > 0.5,
       );
 
-    for (const launchSite of worldState.launchSites.filter(
-      (launchSite) => launchSite.stateId === state.id
-    )) {
+    for (const launchSite of worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id)) {
       if (launchSite.nextLaunchTarget) {
         continue;
-      } else if (
-        enemyCities.length === 0 &&
-        enemyLaunchSites.length === 0 &&
-        enemyMissiles.length === 0
-      ) {
+      } else if (enemyCities.length === 0 && enemyLaunchSites.length === 0 && enemyMissiles.length === 0) {
         break;
       }
 
@@ -73,36 +57,24 @@ export function generateLaunches(worldState: WorldState): WorldState {
       const sortedMissiles = sortByDistance(
         threateningMissiles.map((missile) => ({
           ...missile,
-          position: calculateMissilePosition(missile, worldState.timestamp),
-          interceptionPoint: calculateInterceptionPoint(
-            missile,
-            launchSite.position,
-            worldState.timestamp
-          ),
+          interceptionPoint: calculateInterceptionPoint(missile, launchSite.position),
         })),
-        launchSite.position
+        launchSite.position,
       );
 
-      const missiles = worldState.missiles.filter(
-        (missile) => missile.stateId === state.id
-      );
+      const missiles = worldState.missiles.filter((missile) => missile.stateId === state.id);
 
-      const missileLaunchCounts = countMissiles(
-        sortedMissiles,
-        missiles
-      ).filter(([, count]) => count < myLaunchSites.length);
+      const missileLaunchCounts = countMissiles(sortedMissiles, missiles).filter(
+        ([, count]) => count < myLaunchSites.length,
+      );
 
       if (missileLaunchCounts.length > 0) {
         // missiles are highest priority targets
-        launchSite.nextLaunchTarget =
-          missileLaunchCounts[0][0].interceptionPoint ?? undefined;
+        launchSite.nextLaunchTarget = missileLaunchCounts[0][0].interceptionPoint ?? undefined;
       } else {
         const targets = countMissiles(
-          sortByDistance(
-            [...enemyLaunchSites, ...enemyCities],
-            launchSite.position
-          ),
-          missiles
+          sortByDistance([...enemyLaunchSites, ...enemyCities], launchSite.position),
+          missiles,
         );
 
         launchSite.nextLaunchTarget = targets?.[0]?.[0]?.position ?? undefined;
@@ -113,20 +85,6 @@ export function generateLaunches(worldState: WorldState): WorldState {
   return worldState;
 }
 
-// Calculate the current position of the missile based on its launch and target positions, and the elapsed time
-function calculateMissilePosition(
-  missile: Missile,
-  currentTimestamp: number
-): Position {
-  const progress =
-    (currentTimestamp - missile.launchTimestamp) /
-    (missile.targetTimestamp - missile.launchTimestamp);
-  return {
-    x: missile.launch.x + (missile.target.x - missile.launch.x) * progress,
-    y: missile.launch.y + (missile.target.y - missile.launch.y) * progress,
-  };
-}
-
 /**
  * Calculate the interception point for a missile.
  * @param missile The missile to intercept.
@@ -134,30 +92,15 @@ function calculateMissilePosition(
  * @param worldTimestamp The current world timestamp.
  * @returns The interception point position.
  */
-function calculateInterceptionPoint(
-  missile: Missile,
-  sitePosition: Position,
-  worldTimestamp: number
-): Position | null {
-  const missilePosition = calculateMissilePosition(missile, worldTimestamp);
-  const distToLaunchSite = distance(
-    missilePosition.x,
-    missilePosition.y,
-    sitePosition.x,
-    sitePosition.y
-  );
+function calculateInterceptionPoint(missile: Missile, sitePosition: Position): Position | null {
+  const distToLaunchSite = distance(missile.position.x, missile.position.y, sitePosition.x, sitePosition.y);
   if (distToLaunchSite < EXPLOSION_RADIUS) {
     // Ensure interception point is not within explosion radius to launch site
     return null;
   }
 
   // Take target position, and move towards missile position by EXPLOSION_RADIUS distance
-  const dist = distance(
-    missile.target.x,
-    missile.target.y,
-    missile.launch.x,
-    missile.launch.y
-  );
+  const dist = distance(missile.target.x, missile.target.y, missile.launch.x, missile.launch.y);
   const dx = (missile.target.x - missile.launch.x) / dist;
   const dy = (missile.target.y - missile.launch.y) / dist;
 
@@ -170,17 +113,9 @@ function calculateInterceptionPoint(
   const timeToIntercept = distToLaunchSite / MISSILE_SPEED;
   // Given MISSILE_SPEED and the distance from launch site to interception point calculate how much time it will take to reach the interception point for new missile launched from launch site.
   const newMissileTravelTime =
-    distance(
-      sitePosition.x,
-      sitePosition.y,
-      interceptionPoint.x,
-      interceptionPoint.y
-    ) / MISSILE_SPEED;
+    distance(sitePosition.x, sitePosition.y, interceptionPoint.x, interceptionPoint.y) / MISSILE_SPEED;
   // Return null if it is too early or too late to launch the missile in order to destroy the enemy missile
-  if (
-    timeToIntercept < newMissileTravelTime ||
-    timeToIntercept > newMissileTravelTime + 10
-  ) {
+  if (timeToIntercept < newMissileTravelTime || timeToIntercept > newMissileTravelTime + 10) {
     // 10 seconds tolerance
     return null;
   }
@@ -199,31 +134,20 @@ function isPointClose(point: Position, target: Position): boolean {
 }
 
 /** Sort entities by distance to a position, ascending. */
-function sortByDistance<T extends { position: Position }>(
-  entities: T[],
-  position: Position
-): T[] {
+function sortByDistance<T extends { position: Position }>(entities: T[], position: Position): T[] {
   return entities.sort(
     (a, b) =>
       distance(a.position.x, a.position.y, position.x, position.y) -
-      distance(b.position.x, b.position.y, position.x, position.y)
+      distance(b.position.x, b.position.y, position.x, position.y),
   );
 }
 
 /** Count how many missiles are targeted towards entity */
-function countMissiles<T extends { position: Position }>(
-  entities: T[],
-  missiles: Missile[]
-): Array<[T, number]> {
+function countMissiles<T extends { position: Position }>(entities: T[], missiles: Missile[]): Array<[T, number]> {
   // Count the missiles that target each entity
   const missileCounts = new Map<T, number>();
   for (const entity of entities) {
-    missileCounts.set(
-      entity,
-      missiles.filter((missile) =>
-        isPointClose(missile.target, entity.position)
-      ).length
-    );
+    missileCounts.set(entity, missiles.filter((missile) => isPointClose(missile.target, entity.position)).length);
   }
 
   // Convert the map to a sorted array by missile count ascending
