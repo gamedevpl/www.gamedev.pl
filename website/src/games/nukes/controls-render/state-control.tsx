@@ -1,6 +1,5 @@
 import styled from 'styled-components';
 import { StateId, WorldState, Strategy } from '../world/world-state-types';
-import { CommandChat } from './command-chat';
 
 /** A component that allows user to control the player controlled state */
 export function StateControl({
@@ -44,7 +43,6 @@ export function StateControl({
           </div>
         ) : null,
       )}
-      <CommandChat playerState={playerState} worldState={worldState} setWorldState={setWorldState} />
     </StateControlContainer>
   );
 }
