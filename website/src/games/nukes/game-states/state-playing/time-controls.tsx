@@ -3,7 +3,7 @@ import { useRafLoop } from 'react-use';
 import styled from 'styled-components';
 
 export function TimeControls({ updateWorldTime }: { updateWorldTime: (deltaTime: number) => void }) {
-  const [isAutoplay, setAutoplay] = useState(true);
+  const [isAutoplay, setAutoplay] = useState(false);
   const timeRef = useRef<number | null>(null);
   useRafLoop((time) => {
     if (!timeRef.current) {

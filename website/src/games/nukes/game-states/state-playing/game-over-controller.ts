@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { StateId, Strategy, WorldState } from '../../world/world-state-types';
 import { GAME_OVER_TIMEOUT } from '../../world/world-state-constants';
+import { dispatchFullScreenMessage } from '../../messaging/full-screen-messages';
 
 // A type for game result
 export type GameResult = {
@@ -45,6 +46,15 @@ export function GameOverController({
       (site) => site.lastLaunchTimestamp && currentTime - site.lastLaunchTimestamp < GAME_OVER_TIMEOUT,
     );
 
+    const timeLeft = GAME_OVER_TIMEOUT - currentTime;
+    if (!hostileStates.length && !recentMissileLaunches && timeLeft > 0 && timeLeft <= 10) {
+      dispatchFullScreenMessage(
+        `Game will end in ${Math.ceil(timeLeft)} seconds if no action is taken!`,
+        currentTime,
+        currentTime + 3,
+      );
+    }
+
     if (
       // only one state survived, and it is the winner
       numStatesWithPopulation <= 1 ||
@@ -57,12 +67,17 @@ export function GameOverController({
         numStatesWithPopulation === 1
           ? worldState.states.find((state) => statePopulations[state.id] > 0)?.id
           : undefined;
-      onGameOver({
-        populations: Object.fromEntries(worldState.states.map((state) => [state.id, statePopulations[state.id]])),
-        winner,
-        stateNames: Object.fromEntries(worldState.states.map((state) => [state.id, state.name])),
-        playerStateId: worldState.states.find((state) => state.isPlayerControlled)!.id,
-      });
+
+      dispatchFullScreenMessage(['Game Over!', 'Results will be shown shortly...'], currentTime, currentTime + 5);
+
+      setTimeout(() => {
+        onGameOver({
+          populations: Object.fromEntries(worldState.states.map((state) => [state.id, statePopulations[state.id]])),
+          winner,
+          stateNames: Object.fromEntries(worldState.states.map((state) => [state.id, state.name])),
+          playerStateId: worldState.states.find((state) => state.isPlayerControlled)!.id,
+        });
+      }, 5000); // 5 seconds delay
     }
   }, [worldState, onGameOver]);
 

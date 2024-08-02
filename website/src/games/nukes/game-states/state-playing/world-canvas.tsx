@@ -1,13 +1,12 @@
-import styled from 'styled-components';
-import { Command } from '../../controls/command';
 import { PointerContextWrapper } from '../../controls/pointer';
 import { SelectionContextWrapper } from '../../controls/selection';
 import { WorldStateRender } from '../../world-render/world-state-render';
-import { LaunchHighlight } from '../../controls-render/launch-highlight';
 import { WorldState } from '../../world/world-state-types';
-import { TimeControls } from './time-controls';
 import { Infotainment } from '../../controls-render/infotainment';
 import { StateControl } from '../../controls-render/state-control';
+
+import { TimeControls } from './time-controls';
+import { Viewport } from './viewport';
 
 export function WorldCanvas({
   worldState,
@@ -21,30 +20,13 @@ export function WorldCanvas({
   return (
     <SelectionContextWrapper>
       <PointerContextWrapper>
-        <CanvasContainer>
-          <Command worldState={worldState} setWorldState={setWorldState} />
-          <TimeControls updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)} />
-          <StateControl worldState={worldState} setWorldState={setWorldState} />
-
+        <Viewport>
           <WorldStateRender state={worldState} />
-
-          <LaunchHighlight />
-          <Infotainment worldState={worldState} />
-        </CanvasContainer>
+        </Viewport>
+        <TimeControls updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)} />
+        <StateControl worldState={worldState} setWorldState={setWorldState} />
+        <Infotainment worldState={worldState} />
       </PointerContextWrapper>
     </SelectionContextWrapper>
   );
 }
-
-const CanvasContainer = styled.div`
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-
-  display: flex;
-  flex-direction: column;
-
-  background: black;
-`;

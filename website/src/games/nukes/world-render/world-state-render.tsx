@@ -42,8 +42,11 @@ export function WorldStateRender({ state }: { state: WorldState }) {
 }
 
 const WorldStateContainer = styled.div`
-  display: flex;
-  flex-grow: 1;
+  position: absolute;
 
   background: black;
+
+  > canvas {
+    position: absolute;
+  }
 `;
