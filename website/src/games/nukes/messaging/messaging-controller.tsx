@@ -20,9 +20,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       setGameStarted(true);
       dispatchFullScreenMessage('The game has started!', worldState.timestamp, worldState.timestamp + 3);
     }
-  }, [worldState.timestamp > 0, gameStarted]);
-
-  useEffect(() => {}, [worldState.timestamp > 0, gameStarted]);
+  }, [worldState.timestamp, gameStarted]);
 
   useEffect(() => {
     if (playerState) {
@@ -35,8 +33,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           if (hostileState) {
             dispatchFullScreenMessage(
               `You have declared war on ${hostileState.name}!`,
-              worldState.timestamp,
-              worldState.timestamp + 3,
+              roundedTimestamp,
+              roundedTimestamp + 3,
             );
           }
         }
@@ -49,15 +47,15 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         ) {
           dispatchFullScreenMessage(
             `${otherState.name} has declared war on you!`,
-            worldState.timestamp,
-            worldState.timestamp + 3,
+            roundedTimestamp,
+            roundedTimestamp + 3,
           );
         }
       });
 
       setPreviousStrategies(currentStrategies);
     }
-  }, [roundedTimestamp]);
+  }, [roundedTimestamp, playerState, previousStrategies, worldState.states]);
 
   useEffect(() => {
     // Inform the player if two other states start a war between themselves
@@ -68,15 +66,15 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           if (state1.strategies[state2.id] === Strategy.HOSTILE && !warStartedBetween.has(warKey)) {
             dispatchFullScreenMessage(
               `${state1.name} has declared war on ${state2.name}!`,
-              worldState.timestamp,
-              worldState.timestamp + 3,
+              roundedTimestamp,
+              roundedTimestamp + 3,
             );
             setWarStartedBetween(new Set(warStartedBetween).add(warKey));
           }
         }
       });
     });
-  }, [roundedTimestamp]);
+  }, [playerState, worldState.states, roundedTimestamp, warStartedBetween]);
 
   useEffect(() => {
     // Inform the player if their city is hit, tell the number of casualties
@@ -95,8 +93,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           if (casualties > 0) {
             dispatchFullScreenMessage(
               [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
-              worldState.timestamp,
-              worldState.timestamp + 3,
+              roundedTimestamp,
+              roundedTimestamp + 3,
             );
           }
         });
@@ -104,7 +102,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
     setPreviousCities(
       worldState.cities.map((city) => ({ ...city, populationHistogram: [...city.populationHistogram] })),
     );
-  }, [roundedTimestamp]);
+  }, [playerState, roundedTimestamp, worldState.cities, previousCities]);
 
   useEffect(() => {
     // Inform the user if their launch site is destroyed
@@ -118,14 +116,14 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         destroyedLaunchSites.forEach(() => {
           dispatchFullScreenMessage(
             `One of your launch sites has been destroyed!`,
-            worldState.timestamp,
-            worldState.timestamp + 3,
+            roundedTimestamp,
+            roundedTimestamp + 3,
           );
         });
       }
       setPreviousLaunchSites(playerLaunchSites);
     }
-  }, [roundedTimestamp]);
+  }, [playerState, roundedTimestamp, previousLaunchSites, worldState.launchSites]);
 
   useEffect(() => {
     // Inform the user if they lost the game
@@ -141,13 +139,13 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       if (!hasPopulatedCities && playerLaunchSites.length === 0) {
         dispatchFullScreenMessage(
           ['You have been defeated.', 'All your cities are destroyed.', 'You have no remaining launch sites.'],
-          worldState.timestamp,
-          worldState.timestamp + 5,
+          roundedTimestamp,
+          roundedTimestamp + 5,
         );
         setIsDefeated(true);
       }
     }
-  }, [roundedTimestamp, isDefeated]);
+  }, [roundedTimestamp, isDefeated, playerState, worldState.cities, worldState.launchSites]);
 
   return null;
 }
