@@ -20,6 +20,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       setGameStarted(true);
       dispatchFullScreenMessage('The game has started!', worldState.timestamp, worldState.timestamp + 3);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
 
       setPreviousStrategies(currentStrategies);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         }
       });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   useEffect(() => {
@@ -102,6 +105,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
     setPreviousCities(
       worldState.cities.map((city) => ({ ...city, populationHistogram: [...city.populationHistogram] })),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   useEffect(() => {
@@ -123,6 +127,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       }
       setPreviousLaunchSites(playerLaunchSites);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   useEffect(() => {
@@ -145,6 +150,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         setIsDefeated(true);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
   return null;
