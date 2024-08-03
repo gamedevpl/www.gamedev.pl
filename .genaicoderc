@@ -1,3 +1,4 @@
 {
-  "rootDir": "website/src"
+  "rootDir": "website/src",
+  "linCommand": "npm run lint"
 }
