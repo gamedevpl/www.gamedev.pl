@@ -5,23 +5,43 @@ import { WorldState } from '../world/world-state-types';
 
 const CUSTOM_EVENT_NAME = 'fullScreenMessage';
 
-interface FullScreenMessageEvent {
+/** Full screen message event payload */
+export interface FullScreenMessageEvent {
   message: string | string[];
   startTimestamp: number;
   endTimestamp: number;
+  messageId: string;
 }
 
 /** Display a full screen message */
-export function dispatchFullScreenMessage(message: string | string[], startTimestamp: number, endTimestamp: number) {
-  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, { message, startTimestamp, endTimestamp });
+export function dispatchFullScreenMessage(
+  message: string | string[],
+  startTimestamp: number,
+  endTimestamp: number,
+  messageId = '',
+) {
+  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, { message, startTimestamp, endTimestamp, messageId });
 }
 
+/** Hook for handling full screen messages */
+export function useFullScreenMessageEvent(callback: (event: FullScreenMessageEvent) => void) {
+  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, (event) => {
+    callback(event);
+  });
+}
+
+/** A component that displays the most recent full screen message */
 export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
   const [events, setEvents] = useState<FullScreenMessageEvent[]>([]);
   const [currentMessage, setCurrentMessage] = useState<FullScreenMessageEvent | null>(null);
 
-  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, (event) => {
-    setEvents([event, ...events].filter((event) => event.endTimestamp > worldState.timestamp));
+  useFullScreenMessageEvent((event) => {
+    setEvents((prevEvents) =>
+      (event.messageId && prevEvents.find((prevEvent) => prevEvent.messageId === event.messageId)
+        ? [...prevEvents.map((prevEvent) => (prevEvent.messageId === event.messageId ? event : prevEvent))]
+        : [event, ...prevEvents]
+      ).filter((event) => event.endTimestamp > worldState.timestamp),
+    );
   });
 
   const getMessageState = (event: FullScreenMessageEvent, timestamp: number) => {

@@ -6,7 +6,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
 
   const [gameStarted, setGameStarted] = useState(false);
-  const [previousStrategies, setPreviousStrategies] = useState<Record<string, Strategy>>({});
+  const [previousStrategies, setPreviousStrategies] = useState<Record<string, Record<string, Strategy>>>({});
   const [previousCities, setPreviousCities] = useState<City[]>([]);
   const [previousLaunchSites, setPreviousLaunchSites] = useState<LaunchSite[]>([]);
   const [warStartedBetween, setWarStartedBetween] = useState<Set<string>>(new Set());
@@ -20,15 +20,15 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       setGameStarted(true);
       dispatchFullScreenMessage('The game has started!', worldState.timestamp, worldState.timestamp + 3);
     }
-  }, [worldState.timestamp, gameStarted]);
+  }, [roundedTimestamp]);
 
   useEffect(() => {
     if (playerState) {
-      const currentStrategies = playerState.strategies;
+      const currentStrategies = Object.fromEntries(worldState.states.map((state) => [state.id, state.strategies]));
 
       // Check for strategy changes (wars starting)
-      Object.entries(currentStrategies).forEach(([stateId, strategy]) => {
-        if (strategy === Strategy.HOSTILE && previousStrategies[stateId] !== Strategy.HOSTILE) {
+      Object.entries(currentStrategies[playerState.id]).forEach(([stateId, strategy]) => {
+        if (strategy === Strategy.HOSTILE && previousStrategies[playerState.id][stateId] !== Strategy.HOSTILE) {
           const hostileState = worldState.states.find((state) => state.id === stateId);
           if (hostileState) {
             dispatchFullScreenMessage(
@@ -38,12 +38,13 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             );
           }
         }
+
         // Check if another state declared war on the player
         const otherState = worldState.states.find((state) => state.id === stateId);
         if (
           otherState &&
           otherState.strategies[playerState.id] === Strategy.HOSTILE &&
-          previousStrategies[stateId] !== Strategy.HOSTILE
+          previousStrategies[stateId][playerState.id] !== Strategy.HOSTILE
         ) {
           dispatchFullScreenMessage(
             `${otherState.name} has declared war on you!`,
@@ -55,7 +56,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
 
       setPreviousStrategies(currentStrategies);
     }
-  }, [roundedTimestamp, playerState, previousStrategies, worldState.states]);
+  }, [roundedTimestamp]);
 
   useEffect(() => {
     // Inform the player if two other states start a war between themselves
@@ -74,7 +75,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         }
       });
     });
-  }, [playerState, worldState.states, roundedTimestamp, warStartedBetween]);
+  }, [roundedTimestamp]);
 
   useEffect(() => {
     // Inform the player if their city is hit, tell the number of casualties
@@ -89,7 +90,6 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             ? previousCity.populationHistogram[previousCity.populationHistogram.length - 1].population
             : currentPopulation;
           const casualties = previousPopulation - currentPopulation;
-          console.log(`City hit: ${city.name}, Casualties: ${casualties}`); // Add logging for debugging
           if (casualties > 0) {
             dispatchFullScreenMessage(
               [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
@@ -102,7 +102,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
     setPreviousCities(
       worldState.cities.map((city) => ({ ...city, populationHistogram: [...city.populationHistogram] })),
     );
-  }, [playerState, roundedTimestamp, worldState.cities, previousCities]);
+  }, [roundedTimestamp]);
 
   useEffect(() => {
     // Inform the user if their launch site is destroyed
@@ -123,7 +123,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       }
       setPreviousLaunchSites(playerLaunchSites);
     }
-  }, [playerState, roundedTimestamp, previousLaunchSites, worldState.launchSites]);
+  }, [roundedTimestamp]);
 
   useEffect(() => {
     // Inform the user if they lost the game
@@ -145,7 +145,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         setIsDefeated(true);
       }
     }
-  }, [roundedTimestamp, isDefeated, playerState, worldState.cities, worldState.launchSites]);
+  }, [roundedTimestamp]);
 
   return null;
 }

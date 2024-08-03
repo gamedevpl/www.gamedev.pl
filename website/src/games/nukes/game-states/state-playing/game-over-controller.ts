@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StateId, Strategy, WorldState } from '../../world/world-state-types';
 import { GAME_OVER_TIMEOUT } from '../../world/world-state-constants';
 import { dispatchFullScreenMessage } from '../../messaging/full-screen-messages';
@@ -19,7 +19,14 @@ export function GameOverController({
   worldState: WorldState;
   onGameOver: (result: GameResult) => void;
 }) {
+  const [gameOverTimestamp, setGameOverTimestamp] = useState<number | null>(null);
+  const [isGameOver, setGameOver] = useState(false);
+
   useEffect(() => {
+    if (isGameOver) {
+      return;
+    }
+
     const statePopulations = Object.fromEntries(
       worldState.states.map((state) => [
         state.id,
@@ -48,11 +55,16 @@ export function GameOverController({
 
     const timeLeft = GAME_OVER_TIMEOUT - currentTime;
     if (!hostileStates.length && !recentMissileLaunches && timeLeft > 0 && timeLeft <= 10) {
-      dispatchFullScreenMessage(
-        `Game will end in ${Math.ceil(timeLeft)} seconds if no action is taken!`,
-        currentTime,
-        currentTime + 3,
-      );
+      if (!gameOverTimestamp) {
+        setGameOverTimestamp(currentTime);
+      } else {
+        dispatchFullScreenMessage(
+          `Game will end in ${Math.ceil(timeLeft)} seconds if no action is taken!`,
+          gameOverTimestamp,
+          gameOverTimestamp + 10,
+          'gameOverCountdown',
+        );
+      }
     }
 
     if (
@@ -68,7 +80,14 @@ export function GameOverController({
           ? worldState.states.find((state) => statePopulations[state.id] > 0)?.id
           : undefined;
 
-      dispatchFullScreenMessage(['Game Over!', 'Results will be shown shortly...'], currentTime, currentTime + 5);
+      setGameOver(true);
+
+      dispatchFullScreenMessage(
+        ['Game Over!', 'Results will be shown shortly...'],
+        currentTime,
+        currentTime + 5,
+        'gameOverCountdown',
+      );
 
       setTimeout(() => {
         onGameOver({
@@ -79,7 +98,7 @@ export function GameOverController({
         });
       }, 5000); // 5 seconds delay
     }
-  }, [worldState, onGameOver]);
+  }, [worldState, onGameOver, gameOverTimestamp, isGameOver]);
 
   return null;
 }

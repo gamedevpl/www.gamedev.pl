@@ -35,7 +35,8 @@ export function TimeControls({ updateWorldTime }: { updateWorldTime: (deltaTime:
 
 const TimeControlsContainer = styled.div`
   position: absolute;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: 0;
   flex-grow: 0;
 

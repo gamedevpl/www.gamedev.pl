@@ -7,6 +7,7 @@ import { GameOverController } from './game-over-controller';
 import { GameStatePlayed } from '../state-played';
 import { FullScreenMessages } from '../../messaging/full-screen-messages';
 import { MessagingController } from '../../messaging/messaging-controller';
+import { MessagesLog } from '../../messaging/messages-log';
 
 const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   const {
@@ -20,6 +21,7 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
       {/* UI */}
       <WorldCanvas worldState={worldState} updateWorldState={updateWorldState} setWorldState={setWorldState} />
       <FullScreenMessages worldState={worldState} />
+      <MessagesLog />
       {/* Controllers */}
       <GameOverController worldState={worldState} onGameOver={(result) => setGameState(GameStatePlayed, { result })} />
       <MessagingController worldState={worldState} />

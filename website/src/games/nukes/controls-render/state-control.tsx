@@ -49,8 +49,8 @@ export function StateControl({
 
 const StateControlContainer = styled.div`
   position: fixed;
-  right: 280px;
-  top: 0;
+  left: 0;
+  bottom: 0;
   z-index: 1;
 
   max-width: 25%;

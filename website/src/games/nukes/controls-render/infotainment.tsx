@@ -54,7 +54,7 @@ export function Infotainment({ worldState }: { worldState: WorldState }) {
 
 const InfotainmentContainer = styled.div`
   position: fixed;
-  right: 0;
+  left: 0;
   top: 0;
   z-index: 1;
 
