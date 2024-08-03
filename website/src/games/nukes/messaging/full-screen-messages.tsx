@@ -102,7 +102,10 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
   };
 
   return (
-    <FullScreenMessageContainer data-message-state={messageState} data-action={!!(currentMessage.actions?.length! > 0)}>
+    <FullScreenMessageContainer
+      data-message-state={messageState}
+      data-action={!!((currentMessage.actions?.length ?? 0) > 0)}
+    >
       <MessageText>{renderMessage(currentMessage.message)}</MessageText>
       {currentMessage.prompt && currentMessage.actions && (
         <ActionContainer>
