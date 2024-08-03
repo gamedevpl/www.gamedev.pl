@@ -1,19 +1,14 @@
 import { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { WorldState } from '../world/world-state-types';
-import {
-  FullScreenMessageEvent,
-  useFullScreenMessageEvent,
-  useFullScreenMessageActionEvent,
-  dispatchFullScreenMessageAction,
-} from './messages';
+import { MessageEvent, useMessageEvent, useMessageActionEvent, dispatchMessageAction } from './messages';
 
 /** A component that displays the most recent full screen message */
 export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
-  const [events, setEvents] = useState<FullScreenMessageEvent[]>([]);
-  const [currentMessage, setCurrentMessage] = useState<FullScreenMessageEvent | null>(null);
+  const [events, setEvents] = useState<MessageEvent[]>([]);
+  const [currentMessage, setCurrentMessage] = useState<MessageEvent | null>(null);
 
-  useFullScreenMessageEvent((event) => {
+  useMessageEvent((event) => {
     setEvents((prevEvents) =>
       event.messageId && prevEvents.find((prevEvent) => prevEvent.messageId === event.messageId)
         ? [...prevEvents.map((prevEvent) => (prevEvent.messageId === event.messageId ? event : prevEvent))]
@@ -28,7 +23,7 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
     return a.startTimestamp - b.startTimestamp;
   });
 
-  useFullScreenMessageActionEvent((event) => {
+  useMessageActionEvent((event) => {
     setEvents((prevEvents) => prevEvents.filter((prevEvent) => prevEvent.messageId !== event.messageId));
   });
 
@@ -44,7 +39,7 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
     return null;
   }
 
-  const getMessageState = (event: FullScreenMessageEvent, timestamp: number) => {
+  const getMessageState = (event: MessageEvent, timestamp: number) => {
     if (timestamp < event.startTimestamp) return 'pre';
     if (timestamp < event.startTimestamp + 0.5) return 'pre-in';
     if (timestamp > event.endTimestamp - 0.5) return 'post-in';
@@ -67,10 +62,7 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
       {currentMessage.prompt && currentMessage.actions && (
         <ActionContainer>
           {currentMessage.actions.map((action, index) => (
-            <ActionButton
-              key={index}
-              onClick={() => dispatchFullScreenMessageAction(currentMessage.messageId, action.id)}
-            >
+            <ActionButton key={index} onClick={() => dispatchMessageAction(currentMessage.messageId, action.id)}>
               {action.text}
             </ActionButton>
           ))}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
-import { dispatchFullScreenMessage } from './messages'; // Removed incorrect import
+import { dispatchMessage } from './messages'; // Removed incorrect import
 import { dispatchAllianceProposal } from './alliance-proposal';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
@@ -18,7 +18,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
   useEffect(() => {
     if (!gameStarted && worldState.timestamp > 0) {
       setGameStarted(true);
-      dispatchFullScreenMessage('The game has started!', worldState.timestamp, worldState.timestamp + 3);
+      dispatchMessage('The game has started!', worldState.timestamp, worldState.timestamp + 3);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
@@ -47,7 +47,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             (previousStrategies[otherState.id][state.id] !== Strategy.FRIENDLY ||
               previousStrategies[state.id][otherState.id] !== Strategy.FRIENDLY)
           ) {
-            dispatchFullScreenMessage(
+            dispatchMessage(
               `${otherState.name} has formed alliance with ${state.isPlayerControlled ? 'you' : state.name}!`,
               roundedTimestamp,
               roundedTimestamp + 3,
@@ -59,7 +59,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             state.strategies[otherState.id] === Strategy.HOSTILE &&
             previousStrategies[state.id][otherState.id] !== Strategy.HOSTILE
           ) {
-            dispatchFullScreenMessage(
+            dispatchMessage(
               otherState.isPlayerControlled
                 ? `${state.name} has declared war on You!`
                 : `${state.isPlayerControlled ? 'You have' : state.name} declared war on ${otherState.name}!`,
@@ -93,7 +93,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             : currentPopulation;
           const casualties = previousPopulation - currentPopulation;
           if (casualties > 0) {
-            dispatchFullScreenMessage(
+            dispatchMessage(
               [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
               roundedTimestamp,
               roundedTimestamp + 3,
@@ -121,7 +121,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           (prevSite) => !playerLaunchSites.some((site) => site.id === prevSite.id),
         );
         destroyedLaunchSites.forEach(() => {
-          dispatchFullScreenMessage(
+          dispatchMessage(
             `One of your launch sites has been destroyed!`,
             roundedTimestamp,
             roundedTimestamp + 3,
@@ -149,7 +149,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       });
 
       if (!hasPopulatedCities && playerLaunchSites.length === 0) {
-        dispatchFullScreenMessage(
+        dispatchMessage(
           ['You have been defeated.', 'All your cities are destroyed.', 'You have no remaining launch sites.'],
           roundedTimestamp,
           roundedTimestamp + 5,

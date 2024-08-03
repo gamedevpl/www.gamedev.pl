@@ -4,7 +4,7 @@ export const CUSTOM_EVENT_NAME_MESSAGE = 'fullScreenMessage';
 export const CUSTOM_EVENT_NAME_ACTION = 'fullScreenMessageAction';
 
 /** Full screen message event payload */
-export interface FullScreenMessageEvent {
+export interface MessageEvent {
   message: string | string[];
   startTimestamp: number;
   endTimestamp: number;
@@ -15,7 +15,7 @@ export interface FullScreenMessageEvent {
 }
 
 /** Display a full screen message */
-export function dispatchFullScreenMessage(
+export function dispatchMessage(
   message: string | string[],
   startTimestamp: number,
   endTimestamp: number,
@@ -24,7 +24,7 @@ export function dispatchFullScreenMessage(
   prompt?: boolean,
   fullScreen?: boolean,
 ) {
-  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, {
+  dispatchCustomEvent<MessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, {
     message,
     startTimestamp,
     endTimestamp,
@@ -35,18 +35,18 @@ export function dispatchFullScreenMessage(
   });
 }
 
-export function dispatchFullScreenMessageAction(messageId: string, actionId: string) {
+export function dispatchMessageAction(messageId: string, actionId: string) {
   dispatchCustomEvent(CUSTOM_EVENT_NAME_ACTION, { messageId, actionId });
 }
 
 /** Hook for handling full screen messages */
-export function useFullScreenMessageEvent(callback: (event: FullScreenMessageEvent) => void) {
-  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, (event) => {
+export function useMessageEvent(callback: (event: MessageEvent) => void) {
+  useCustomEvent<MessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, (event) => {
     callback(event);
   });
 }
 
-export function useFullScreenMessageActionEvent(callback: (event: { messageId: string; actionId: string }) => void) {
+export function useMessageActionEvent(callback: (event: { messageId: string; actionId: string }) => void) {
   useCustomEvent<{ messageId: string; actionId: string }>(CUSTOM_EVENT_NAME_ACTION, (event) => {
     callback(event);
   });

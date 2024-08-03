@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StateId, Strategy, WorldState } from '../../world/world-state-types';
 import { GAME_OVER_TIMEOUT } from '../../world/world-state-constants';
-import { dispatchFullScreenMessage } from '../../messaging/messages'; // Updated import
+import { dispatchMessage } from '../../messaging/messages'; // Updated import
 
 // A type for game result
 export type GameResult = {
@@ -58,7 +58,7 @@ export function GameOverController({
       if (!gameOverTimestamp) {
         setGameOverTimestamp(currentTime);
       } else {
-        dispatchFullScreenMessage(
+        dispatchMessage(
           `Game will end in ${Math.ceil(timeLeft)} seconds if no action is taken!`,
           gameOverTimestamp,
           gameOverTimestamp + 10,
@@ -85,7 +85,7 @@ export function GameOverController({
 
       setGameOver(true);
 
-      dispatchFullScreenMessage(
+      dispatchMessage(
         ['Game Over!', 'Results will be shown shortly...'],
         currentTime,
         currentTime + 5,

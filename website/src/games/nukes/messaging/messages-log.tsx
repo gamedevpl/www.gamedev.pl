@@ -1,24 +1,19 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import {
-  FullScreenMessageEvent,
-  useFullScreenMessageEvent,
-  useFullScreenMessageActionEvent,
-  dispatchFullScreenMessageAction,
-} from './messages';
+import { MessageEvent, useMessageEvent, useMessageActionEvent, dispatchMessageAction } from './messages';
 
 /** UI component that displays the log of messages */
 export function MessagesLog() {
-  const [events, setEvents] = useState<FullScreenMessageEvent[]>([]);
+  const [events, setEvents] = useState<MessageEvent[]>([]);
 
-  useFullScreenMessageEvent((event) => {
+  useMessageEvent((event) => {
     setEvents((prevEvents) =>
       event.messageId && prevEvents.find((prevEvent) => prevEvent.messageId === event.messageId)
         ? [...prevEvents.map((prevEvent) => (prevEvent.messageId === event.messageId ? event : prevEvent))]
         : [event, ...prevEvents],
     );
   });
-  useFullScreenMessageActionEvent((event) => {
+  useMessageActionEvent((event) => {
     setEvents((prevEvents) => prevEvents.filter((prevEvent) => prevEvent.messageId !== event.messageId));
   });
 
@@ -34,10 +29,7 @@ export function MessagesLog() {
           {event.prompt && event.actions && (
             <ActionContainer>
               {event.actions.map((action, actionIndex) => (
-                <ActionButton
-                  key={actionIndex}
-                  onClick={() => dispatchFullScreenMessageAction(event.messageId, action.id)}
-                >
+                <ActionButton key={actionIndex} onClick={() => dispatchMessageAction(event.messageId, action.id)}>
                   {action.text}
                 </ActionButton>
               ))}

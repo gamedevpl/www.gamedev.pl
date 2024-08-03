@@ -1,5 +1,5 @@
 import { State, Strategy, WorldState } from '../world/world-state-types';
-import { dispatchFullScreenMessage, useFullScreenMessageActionEvent } from './messages';
+import { dispatchMessage, useMessageActionEvent } from './messages';
 
 const PROPOSAL_PREFIX = 'ALLIANCEPROPOSAL';
 
@@ -16,7 +16,7 @@ export function dispatchAllianceProposal(
   const startTimestamp = worldState.timestamp;
   const endTimestamp = startTimestamp + 10; // 10 seconds to respond
 
-  dispatchFullScreenMessage(
+  dispatchMessage(
     message,
     startTimestamp,
     endTimestamp,
@@ -36,7 +36,7 @@ export function AllianceProposals({
   worldState: WorldState;
   setWorldState: (worldState: WorldState) => void;
 }) {
-  useFullScreenMessageActionEvent((event) => {
+  useMessageActionEvent((event) => {
     if (event.messageId.startsWith(PROPOSAL_PREFIX)) {
       const [, senderId, receiverId] = event.messageId.split('_');
       const senderState = worldState.states.find((state) => state.id === senderId);
@@ -69,14 +69,14 @@ export function AllianceProposals({
         });
 
         // Dispatch a confirmation message
-        dispatchFullScreenMessage(
+        dispatchMessage(
           `Alliance formed between ${senderState.name} and ${receiverState.name}!`,
           worldState.timestamp,
           worldState.timestamp + 5,
         );
       } else if (event.actionId === 'reject') {
         // Dispatch a rejection message
-        dispatchFullScreenMessage(
+        dispatchMessage(
           `${receiverState.name} has rejected the alliance proposal from ${senderState.name}.`,
           worldState.timestamp,
           worldState.timestamp + 5,
