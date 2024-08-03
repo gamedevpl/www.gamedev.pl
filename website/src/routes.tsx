@@ -8,7 +8,7 @@ const router = createBrowserRouter([
   },
   {
     path: '/games/nukes',
-    lazy: async () => ({ Component: (await import('./games/nukes/NukesApp')).NukesApp }),
+    lazy: async () => ({ Component: (await import('./games/nukes/NukesApp.tsx')).NukesApp }),
   },
 ]);
 

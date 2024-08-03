@@ -1,4 +1,3 @@
 {
-  "rootDir": ".",
-  "lintCommand": "npm run lint"
+  "rootDir": "."
 }
