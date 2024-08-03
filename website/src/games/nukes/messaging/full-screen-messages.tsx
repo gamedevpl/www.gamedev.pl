@@ -3,7 +3,8 @@ import styled, { keyframes } from 'styled-components';
 import { dispatchCustomEvent, useCustomEvent } from '../events';
 import { WorldState } from '../world/world-state-types';
 
-const CUSTOM_EVENT_NAME = 'fullScreenMessage';
+const CUSTOM_EVENT_NAME_MESSAGE = 'fullScreenMessage';
+const CUSTOM_EVENT_NAME_ACTION = 'fullScreenMessageAction';
 
 /** Full screen message event payload */
 export interface FullScreenMessageEvent {
@@ -11,6 +12,8 @@ export interface FullScreenMessageEvent {
   startTimestamp: number;
   endTimestamp: number;
   messageId: string;
+  actions?: { id: string; text: string }[];
+  prompt?: boolean;
 }
 
 /** Display a full screen message */
@@ -19,13 +22,32 @@ export function dispatchFullScreenMessage(
   startTimestamp: number,
   endTimestamp: number,
   messageId = '',
+  actions?: { id: string; text: string }[],
+  prompt?: boolean,
 ) {
-  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, { message, startTimestamp, endTimestamp, messageId });
+  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, {
+    message,
+    startTimestamp,
+    endTimestamp,
+    messageId,
+    actions,
+    prompt,
+  });
+}
+
+export function dispatchFullScreenMessageAction(messageId: string, actionId: string) {
+  dispatchCustomEvent(CUSTOM_EVENT_NAME_ACTION, { messageId, actionId });
 }
 
 /** Hook for handling full screen messages */
 export function useFullScreenMessageEvent(callback: (event: FullScreenMessageEvent) => void) {
-  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME, (event) => {
+  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, (event) => {
+    callback(event);
+  });
+}
+
+export function useFullScreenMessageActionEvent(callback: (event: { messageId: string; actionId: string }) => void) {
+  useCustomEvent<{ messageId: string; actionId: string }>(CUSTOM_EVENT_NAME_ACTION, (event) => {
     callback(event);
   });
 }
@@ -37,12 +59,33 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
 
   useFullScreenMessageEvent((event) => {
     setEvents((prevEvents) =>
-      (event.messageId && prevEvents.find((prevEvent) => prevEvent.messageId === event.messageId)
+      event.messageId && prevEvents.find((prevEvent) => prevEvent.messageId === event.messageId)
         ? [...prevEvents.map((prevEvent) => (prevEvent.messageId === event.messageId ? event : prevEvent))]
-        : [event, ...prevEvents]
-      ).filter((event) => event.endTimestamp > worldState.timestamp),
+        : [event, ...prevEvents],
     );
   });
+
+  // Sort events so actionable messages have higher priority
+  const sortedEvents = events.sort((a, b) => {
+    if (a.actions && !b.actions) return -1;
+    if (!a.actions && b.actions) return 1;
+    return a.startTimestamp - b.startTimestamp;
+  });
+
+  useFullScreenMessageActionEvent((event) => {
+    setEvents((prevEvents) => prevEvents.filter((prevEvent) => prevEvent.messageId !== event.messageId));
+  });
+
+  useEffect(() => {
+    const activeEvent = sortedEvents.find(
+      (event) => event.startTimestamp <= worldState.timestamp && event.endTimestamp > worldState.timestamp,
+    );
+    setCurrentMessage(activeEvent || null);
+  }, [sortedEvents, worldState.timestamp]);
+
+  if (!currentMessage) {
+    return null;
+  }
 
   const getMessageState = (event: FullScreenMessageEvent, timestamp: number) => {
     if (timestamp < event.startTimestamp) return 'pre';
@@ -52,30 +95,27 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
     return 'active';
   };
 
-  useEffect(() => {
-    const activeEvent = events.find(
-      (event) => event.startTimestamp <= worldState.timestamp && event.endTimestamp > worldState.timestamp,
-    );
-
-    setCurrentMessage(activeEvent ? activeEvent : null);
-  }, [events, worldState.timestamp]);
-
-  if (!currentMessage) {
-    return null;
-  }
-  const activeEvent = events.find(
-    (event) => event.startTimestamp <= worldState.timestamp && event.endTimestamp > worldState.timestamp,
-  );
-
-  const messageState = activeEvent ? getMessageState(activeEvent, worldState.timestamp) : 'none';
+  const messageState = getMessageState(currentMessage, worldState.timestamp);
 
   const renderMessage = (message: string | string[]) => {
     return Array.isArray(message) ? message.map((line, index) => <div key={index}>{line}</div>) : message;
   };
 
   return (
-    <FullScreenMessageContainer data-message-state={messageState}>
+    <FullScreenMessageContainer data-message-state={messageState} data-action={!!(currentMessage.actions?.length! > 0)}>
       <MessageText>{renderMessage(currentMessage.message)}</MessageText>
+      {currentMessage.prompt && currentMessage.actions && (
+        <ActionContainer>
+          {currentMessage.actions.map((action, index) => (
+            <ActionButton
+              key={index}
+              onClick={() => dispatchFullScreenMessageAction(currentMessage.messageId, action.id)}
+            >
+              {action.text}
+            </ActionButton>
+          ))}
+        </ActionContainer>
+      )}
     </FullScreenMessageContainer>
   );
 }
@@ -112,8 +152,12 @@ const FullScreenMessageContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-direction: column;
   text-shadow: 0px 0px 10px black;
-  pointer-events: none;
+  &:not([data-action='true']) {
+    pointer-events: none;
+  }
+  z-index: 1;
 
   &[data-message-state='pre'] {
     display: none;
@@ -143,8 +187,31 @@ const MessageText = styled.div`
   color: white;
   text-align: center;
   max-width: 80%;
-  /* animation:
-    ${fadeIn} 0.5s ease-in-out forwards,
-    ${fadeOut} 0.5s ease-in-out forwards 2.5s; */
   white-space: pre-line;
+`;
+
+const ActionContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+`;
+
+const ActionButton = styled.button`
+  font-size: 2rem;
+  padding: 1rem 2rem;
+  margin: 0 1rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid white;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+
+  &:active {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
 `;

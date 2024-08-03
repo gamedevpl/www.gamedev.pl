@@ -37,13 +37,13 @@ export function Infotainment({ worldState }: { worldState: WorldState }) {
           {statePopulation.map(([state, population]) => (
             <li key={state.id}>
               {state.name}: {population}
-              <ul>
+              {/* <ul>
                 {cityPopulation[state.id].map(([city, population]) => (
                   <li key={city.id}>
                     {city.name}: {population}
                   </li>
                 ))}
-              </ul>
+              </ul> */}
             </li>
           ))}
         </ul>

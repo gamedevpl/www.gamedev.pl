@@ -8,6 +8,7 @@ import { GameStatePlayed } from '../state-played';
 import { FullScreenMessages } from '../../messaging/full-screen-messages';
 import { MessagingController } from '../../messaging/messaging-controller';
 import { MessagesLog } from '../../messaging/messages-log';
+import { AllianceProposals } from '../../messaging/alliance-proposal';
 
 const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   const {
@@ -25,6 +26,7 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
       {/* Controllers */}
       <GameOverController worldState={worldState} onGameOver={(result) => setGameState(GameStatePlayed, { result })} />
       <MessagingController worldState={worldState} />
+      <AllianceProposals worldState={worldState} setWorldState={setWorldState} />
     </>
   );
 };

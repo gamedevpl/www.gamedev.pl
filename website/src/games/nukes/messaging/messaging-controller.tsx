@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
 import { dispatchFullScreenMessage } from './full-screen-messages';
+import { dispatchAllianceProposal } from './alliance-proposal';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
@@ -9,7 +10,6 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
   const [previousStrategies, setPreviousStrategies] = useState<Record<string, Record<string, Strategy>>>({});
   const [previousCities, setPreviousCities] = useState<City[]>([]);
   const [previousLaunchSites, setPreviousLaunchSites] = useState<LaunchSite[]>([]);
-  const [warStartedBetween, setWarStartedBetween] = useState<Set<string>>(new Set());
   const [isDefeated, setIsDefeated] = useState(false);
 
   // We are running checks every 100 miliseconds
@@ -27,56 +27,49 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
     if (playerState) {
       const currentStrategies = Object.fromEntries(worldState.states.map((state) => [state.id, state.strategies]));
 
-      // Check for strategy changes (wars starting)
-      Object.entries(currentStrategies[playerState.id]).forEach(([stateId, strategy]) => {
-        if (strategy === Strategy.HOSTILE && previousStrategies[playerState.id][stateId] !== Strategy.HOSTILE) {
-          const hostileState = worldState.states.find((state) => state.id === stateId);
-          if (hostileState) {
+      for (const state of worldState.states) {
+        for (const otherState of worldState.states.filter((otherState) => otherState.id !== state.id)) {
+          // Check if other state became friendly towards player
+          if (
+            playerState &&
+            otherState.id === playerState.id &&
+            state.strategies[otherState.id] === Strategy.FRIENDLY &&
+            otherState.strategies[state.id] !== Strategy.FRIENDLY &&
+            previousStrategies[state.id][otherState.id] !== Strategy.FRIENDLY
+          ) {
+            dispatchAllianceProposal(state, playerState, worldState, true);
+          }
+
+          // Check if states became allies
+          if (
+            otherState.strategies[state.id] === Strategy.FRIENDLY &&
+            state.strategies[otherState.id] === Strategy.FRIENDLY &&
+            (previousStrategies[otherState.id][state.id] !== Strategy.FRIENDLY ||
+              previousStrategies[state.id][otherState.id] !== Strategy.FRIENDLY)
+          ) {
             dispatchFullScreenMessage(
-              `You have declared war on ${hostileState.name}!`,
+              `${otherState.name} has formed alliance with ${state.isPlayerControlled ? 'you' : state.name}!`,
+              roundedTimestamp,
+              roundedTimestamp + 3,
+            );
+          }
+
+          // Check if states started a war
+          if (
+            state.strategies[otherState.id] === Strategy.HOSTILE &&
+            previousStrategies[state.id][otherState.id] !== Strategy.HOSTILE
+          ) {
+            dispatchFullScreenMessage(
+              `${state.isPlayerControlled ? 'You have' : state.name} declared war on ${otherState.name}!`,
               roundedTimestamp,
               roundedTimestamp + 3,
             );
           }
         }
-
-        // Check if another state declared war on the player
-        const otherState = worldState.states.find((state) => state.id === stateId);
-        if (
-          otherState &&
-          otherState.strategies[playerState.id] === Strategy.HOSTILE &&
-          previousStrategies[stateId][playerState.id] !== Strategy.HOSTILE
-        ) {
-          dispatchFullScreenMessage(
-            `${otherState.name} has declared war on you!`,
-            roundedTimestamp,
-            roundedTimestamp + 3,
-          );
-        }
-      });
+      }
 
       setPreviousStrategies(currentStrategies);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundedTimestamp]);
-
-  useEffect(() => {
-    // Inform the player if two other states start a war between themselves
-    worldState.states.forEach((state1) => {
-      worldState.states.forEach((state2) => {
-        if (state1.id !== state2.id && state1.id !== playerState?.id && state2.id !== playerState?.id) {
-          const warKey = `${state1.id}-${state2.id}`;
-          if (state1.strategies[state2.id] === Strategy.HOSTILE && !warStartedBetween.has(warKey)) {
-            dispatchFullScreenMessage(
-              `${state1.name} has declared war on ${state2.name}!`,
-              roundedTimestamp,
-              roundedTimestamp + 3,
-            );
-            setWarStartedBetween(new Set(warStartedBetween).add(warKey));
-          }
-        }
-      });
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 

@@ -1,5 +1,5 @@
-import { getRandomCityNames } from "../content/city-names";
-import { getRandomStateNames } from "../content/state-names";
+import { getRandomCityNames } from '../content/city-names';
+import { getRandomStateNames } from '../content/state-names';
 import {
   City,
   EntityType,
@@ -11,7 +11,9 @@ import {
   State,
   Strategy,
   WorldState,
-} from "./world-state-types";
+  Position,
+} from './world-state-types';
+import { EXPLOSION_RADIUS } from './world-state-constants';
 
 export function createWorldState({
   playerStateName,
@@ -21,131 +23,24 @@ export function createWorldState({
   numberOfStates: number;
 }): WorldState {
   const sectorSize = 16;
-  const worldWidth = 50;
-  const worldHeight = 50;
+  const worldWidth = Math.max(200, Math.ceil(Math.sqrt(numberOfStates) * 10));
+  const worldHeight = worldWidth;
 
-  const fantasyStateNames = getRandomStateNames(numberOfStates + 1).filter(
-    (name) => name !== playerStateName
-  );
-  const fantasyCityNames = getRandomCityNames(numberOfStates * 2);
+  const fantasyStateNames = getRandomStateNames(numberOfStates * 2).filter((name) => name !== playerStateName);
+  const citiesPerState = 5;
+  const fantasyCityNames = getRandomCityNames(numberOfStates * citiesPerState * 2);
 
-  const states: State[] = [
-    {
-      id: "state-1",
-      name: playerStateName,
-      isPlayerControlled: true,
-      strategies: { "state-2": Strategy.NEUTRAL, "state-3": Strategy.NEUTRAL },
-    },
-    {
-      id: "state-2",
-      name: fantasyStateNames.pop()!,
-      isPlayerControlled: false,
-      strategies: { "state-1": Strategy.NEUTRAL, "state-3": Strategy.NEUTRAL },
-    },
-    {
-      id: "state-3",
-      name: fantasyStateNames.pop()!,
-      isPlayerControlled: false,
-      strategies: { "state-1": Strategy.NEUTRAL, "state-2": Strategy.NEUTRAL },
-    },
-  ];
-
-  const cities: City[] = [
-    {
-      id: "city-1",
-      stateId: "state-1",
-      name: fantasyCityNames.pop()!,
-      position: { x: 10 * sectorSize, y: 10 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 1000 }],
-    },
-    {
-      id: "city-2",
-      stateId: "state-1",
-      name: fantasyCityNames.pop()!,
-      position: { x: 13 * sectorSize, y: 13 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 1500 }],
-    },
-    {
-      id: "city-3",
-      stateId: "state-2",
-      name: fantasyCityNames.pop()!,
-      position: { x: 30 * sectorSize, y: 10 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 2000 }],
-    },
-    {
-      id: "city-4",
-      stateId: "state-2",
-      name: fantasyCityNames.pop()!,
-      position: { x: 33 * sectorSize, y: 13 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 2500 }],
-    },
-    {
-      id: "city-5",
-      stateId: "state-3",
-      name: fantasyCityNames.pop()!,
-      position: { x: 10 * sectorSize, y: 30 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 3000 }],
-    },
-    {
-      id: "city-6",
-      stateId: "state-3",
-      name: fantasyCityNames.pop()!,
-      position: { x: 13 * sectorSize, y: 33 * sectorSize },
-      populationHistogram: [{ timestamp: 0, population: 3500 }],
-    },
-  ];
-
-  const launchSites: LaunchSite[] = [
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-1",
-      stateId: "state-1",
-      position: { x: 8 * sectorSize, y: 15 * sectorSize },
-    },
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-2",
-      stateId: "state-1",
-      position: { x: 15 * sectorSize, y: 8 * sectorSize },
-    },
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-3",
-      stateId: "state-2",
-      position: { x: 28 * sectorSize, y: 15 * sectorSize },
-    },
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-4",
-      stateId: "state-2",
-      position: { x: 35 * sectorSize, y: 8 * sectorSize },
-    },
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-5",
-      stateId: "state-3",
-      position: { x: 8 * sectorSize, y: 35 * sectorSize },
-    },
-    {
-      type: EntityType.LAUNCH_SITE,
-      id: "launch-site-6",
-      stateId: "state-3",
-      position: { x: 15 * sectorSize, y: 28 * sectorSize },
-    },
-  ];
-
+  const states: State[] = [];
+  const cities: City[] = [];
+  const launchSites: LaunchSite[] = [];
   const sectors: Sector[] = [];
-  let sectorIdCounter = 1;
+  const MIN_DISTANCE = EXPLOSION_RADIUS * 3; // Minimum distance between entities
 
+  // Initialize the world with water
   for (let y = 0; y < worldHeight; y++) {
     for (let x = 0; x < worldWidth; x++) {
-      const isGround =
-        (y >= 8 && y <= 17 && x >= 7 && x <= 18) ||
-        (y >= 7 && y <= 18 && x >= 27 && x <= 38) ||
-        (y >= 27 && y <= 38 && x >= 7 && x <= 18);
-
       sectors.push({
-        id: `sector-${sectorIdCounter++}`,
+        id: `sector-${sectors.length + 1}`,
         position: { x: x * sectorSize, y: y * sectorSize },
         rect: {
           left: x * sectorSize,
@@ -153,8 +48,135 @@ export function createWorldState({
           right: (x + 1) * sectorSize,
           bottom: (y + 1) * sectorSize,
         },
-        type: isGround ? SectorType.GROUND : SectorType.WATER,
+        type: SectorType.WATER,
       });
+    }
+  }
+
+  // Function to get a random position within the world
+  const getRandomPosition = (): Position => ({
+    x: Math.floor(Math.random() * (worldWidth - 10) + 5) * sectorSize,
+    y: Math.floor(Math.random() * (worldHeight - 10) + 5) * sectorSize,
+  });
+
+  // Function to check if a position is valid (not too close to other states)
+  const isValidPosition = (pos: Position, statePositions: Position[]): boolean => {
+    const minDistance = Math.floor(worldWidth / (Math.sqrt(numberOfStates) * 2)) * sectorSize;
+    return statePositions.every(
+      (statePos) => Math.abs(pos.x - statePos.x) > minDistance || Math.abs(pos.y - statePos.y) > minDistance,
+    );
+  };
+
+  // Function to create ground around a position
+  const createGround = (center: Position, radius: number) => {
+    const centerX = Math.floor(center.x / sectorSize);
+    const centerY = Math.floor(center.y / sectorSize);
+    for (let y = centerY - radius; y <= centerY + radius; y++) {
+      for (let x = centerX - radius; x <= centerX + radius; x++) {
+        if (x >= 0 && x < worldWidth && y >= 0 && y < worldHeight) {
+          const index = y * worldWidth + x;
+          sectors[index].type = SectorType.GROUND;
+        }
+      }
+    }
+  };
+
+  // Function to check if a position is far enough from existing entities
+  const isFarEnough = (pos: Position, entities: { position: Position }[]): boolean => {
+    return entities.every(
+      (entity) =>
+        Math.sqrt(Math.pow(pos.x - entity.position.x, 2) + Math.pow(pos.y - entity.position.y, 2)) >= MIN_DISTANCE,
+    );
+  };
+
+  const statePositions: Position[] = [];
+
+  for (let i = 0; i < numberOfStates; i++) {
+    const stateId = `state-${i + 1}`;
+    const stateName = i === 0 ? playerStateName : fantasyStateNames.pop()!;
+
+    const state: State = {
+      id: stateId,
+      name: stateName,
+      isPlayerControlled: i === 0,
+      strategies: {},
+    };
+
+    // Set strategies for all other states
+    states.forEach((otherState) => {
+      state.strategies[otherState.id] = Strategy.NEUTRAL;
+      otherState.strategies[stateId] = Strategy.NEUTRAL;
+    });
+
+    states.push(state);
+
+    // Find a valid position for the state
+    let statePosition: Position;
+    let maxIterations = 10;
+    do {
+      statePosition = getRandomPosition();
+      if (maxIterations-- <= 0) {
+        break;
+      }
+    } while (!isValidPosition(statePosition, statePositions));
+    statePositions.push(statePosition);
+
+    // Create ground for the state
+    createGround(statePosition, 8);
+
+    // Create cities for the state
+    const stateEntities: { position: Position }[] = [];
+    for (let j = 0; j < citiesPerState; j++) {
+      const cityId = `city-${cities.length + 1}`;
+      let cityPosition: Position;
+      let maxIterations = 10;
+      do {
+        cityPosition = {
+          x: statePosition.x + (Math.random() - 0.5) * 10 * sectorSize,
+          y: statePosition.y + (Math.random() - 0.5) * 10 * sectorSize,
+        };
+        if (maxIterations-- <= 0) {
+          break;
+        }
+      } while (!isFarEnough(cityPosition, stateEntities));
+      stateEntities.push({ position: cityPosition });
+      cities.push({
+        id: cityId,
+        stateId,
+        name: fantasyCityNames.pop()!,
+        position: cityPosition,
+        populationHistogram: [{ timestamp: 0, population: Math.floor(Math.random() * 3000) + 1000 }],
+      });
+
+      // Ensure ground around the city
+      createGround(cityPosition, 2);
+    }
+
+    // Create launch sites for the state
+    for (let j = 0; j < 4; j++) {
+      const launchSiteId = `launch-site-${launchSites.length + 1}`;
+      let launchSitePosition: Position;
+      let maxIterations = 10;
+      do {
+        launchSitePosition = {
+          x: statePosition.x + (Math.random() - 0.5) * 8 * sectorSize,
+          y: statePosition.y + (Math.random() - 0.5) * 8 * sectorSize,
+        };
+        if (maxIterations-- <= 0) {
+          break;
+        }
+      } while (!isFarEnough(launchSitePosition, stateEntities));
+      stateEntities.push({ position: launchSitePosition });
+
+      launchSites.push({
+        type: EntityType.LAUNCH_SITE,
+        id: launchSiteId,
+        stateId,
+        position: launchSitePosition,
+      });
+
+      // Ensure ground around the launch site
+      createGround(launchSitePosition, 1);
     }
   }
 

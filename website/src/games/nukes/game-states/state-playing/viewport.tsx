@@ -59,17 +59,12 @@ const ViewportContainer = styled.div`
 `;
 
 const InteractionContainer = styled.div`
-  /* flex-grow: 1;
-          display: flex;
-          flexDirection: column;
-          alignItems: "center", */
   user-select: none;
   position: fixed;
   width: 100%;
   height: 100%;
   left: 0;
   top: 0;
-  /* WebkitUserSelect: "none", */
 `;
 
 const TransformContainer = styled.div`
@@ -78,5 +73,6 @@ const TransformContainer = styled.div`
 
   &[data-is-interacting='true'] {
     pointer-events: none;
+    will-change: transform;
   }
 `;
