@@ -1,56 +1,12 @@
 import { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { dispatchCustomEvent, useCustomEvent } from '../events';
 import { WorldState } from '../world/world-state-types';
-
-const CUSTOM_EVENT_NAME_MESSAGE = 'fullScreenMessage';
-const CUSTOM_EVENT_NAME_ACTION = 'fullScreenMessageAction';
-
-/** Full screen message event payload */
-export interface FullScreenMessageEvent {
-  message: string | string[];
-  startTimestamp: number;
-  endTimestamp: number;
-  messageId: string;
-  actions?: { id: string; text: string }[];
-  prompt?: boolean;
-}
-
-/** Display a full screen message */
-export function dispatchFullScreenMessage(
-  message: string | string[],
-  startTimestamp: number,
-  endTimestamp: number,
-  messageId = '',
-  actions?: { id: string; text: string }[],
-  prompt?: boolean,
-) {
-  dispatchCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, {
-    message,
-    startTimestamp,
-    endTimestamp,
-    messageId,
-    actions,
-    prompt,
-  });
-}
-
-export function dispatchFullScreenMessageAction(messageId: string, actionId: string) {
-  dispatchCustomEvent(CUSTOM_EVENT_NAME_ACTION, { messageId, actionId });
-}
-
-/** Hook for handling full screen messages */
-export function useFullScreenMessageEvent(callback: (event: FullScreenMessageEvent) => void) {
-  useCustomEvent<FullScreenMessageEvent>(CUSTOM_EVENT_NAME_MESSAGE, (event) => {
-    callback(event);
-  });
-}
-
-export function useFullScreenMessageActionEvent(callback: (event: { messageId: string; actionId: string }) => void) {
-  useCustomEvent<{ messageId: string; actionId: string }>(CUSTOM_EVENT_NAME_ACTION, (event) => {
-    callback(event);
-  });
-}
+import {
+  FullScreenMessageEvent,
+  useFullScreenMessageEvent,
+  useFullScreenMessageActionEvent,
+  dispatchFullScreenMessageAction,
+} from './messages';
 
 /** A component that displays the most recent full screen message */
 export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
@@ -78,7 +34,8 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
 
   useEffect(() => {
     const activeEvent = sortedEvents.find(
-      (event) => event.startTimestamp <= worldState.timestamp && event.endTimestamp > worldState.timestamp,
+      (event) =>
+        event.fullScreen && event.startTimestamp <= worldState.timestamp && event.endTimestamp > worldState.timestamp,
     );
     setCurrentMessage(activeEvent || null);
   }, [sortedEvents, worldState.timestamp]);

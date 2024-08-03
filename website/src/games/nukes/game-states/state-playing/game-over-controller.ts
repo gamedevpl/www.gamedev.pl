@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StateId, Strategy, WorldState } from '../../world/world-state-types';
 import { GAME_OVER_TIMEOUT } from '../../world/world-state-constants';
-import { dispatchFullScreenMessage } from '../../messaging/full-screen-messages';
+import { dispatchFullScreenMessage } from '../../messaging/messages'; // Updated import
 
 // A type for game result
 export type GameResult = {
@@ -63,6 +63,9 @@ export function GameOverController({
           gameOverTimestamp,
           gameOverTimestamp + 10,
           'gameOverCountdown',
+          undefined,
+          false,
+          true,
         );
       }
     }
@@ -87,6 +90,9 @@ export function GameOverController({
         currentTime,
         currentTime + 5,
         'gameOverCountdown',
+        undefined,
+        false,
+        true,
       );
 
       setTimeout(() => {

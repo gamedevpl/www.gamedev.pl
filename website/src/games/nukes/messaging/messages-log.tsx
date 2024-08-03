@@ -5,7 +5,7 @@ import {
   useFullScreenMessageEvent,
   useFullScreenMessageActionEvent,
   dispatchFullScreenMessageAction,
-} from './full-screen-messages';
+} from './messages';
 
 /** UI component that displays the log of messages */
 export function MessagesLog() {

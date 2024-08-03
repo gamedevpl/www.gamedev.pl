@@ -1,5 +1,5 @@
 import { State, Strategy, WorldState } from '../world/world-state-types';
-import { dispatchFullScreenMessage, useFullScreenMessageActionEvent } from './full-screen-messages';
+import { dispatchFullScreenMessage, useFullScreenMessageActionEvent } from './messages';
 
 const PROPOSAL_PREFIX = 'ALLIANCEPROPOSAL';
 

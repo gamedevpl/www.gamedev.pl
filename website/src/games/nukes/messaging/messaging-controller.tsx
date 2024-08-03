@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
-import { dispatchFullScreenMessage } from './full-screen-messages';
+import { dispatchFullScreenMessage } from './messages'; // Removed incorrect import
 import { dispatchAllianceProposal } from './alliance-proposal';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
@@ -60,9 +60,15 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             previousStrategies[state.id][otherState.id] !== Strategy.HOSTILE
           ) {
             dispatchFullScreenMessage(
-              `${state.isPlayerControlled ? 'You have' : state.name} declared war on ${otherState.name}!`,
+              otherState.isPlayerControlled
+                ? `${state.name} has declared war on You!`
+                : `${state.isPlayerControlled ? 'You have' : state.name} declared war on ${otherState.name}!`,
               roundedTimestamp,
               roundedTimestamp + 3,
+              undefined,
+              undefined,
+              undefined,
+              state.isPlayerControlled || otherState.isPlayerControlled,
             );
           }
         }
@@ -91,6 +97,10 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
               [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
               roundedTimestamp,
               roundedTimestamp + 3,
+              undefined,
+              undefined,
+              false,
+              true,
             );
           }
         });
@@ -115,6 +125,10 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             `One of your launch sites has been destroyed!`,
             roundedTimestamp,
             roundedTimestamp + 3,
+            undefined,
+            undefined,
+            false,
+            true,
           );
         });
       }
@@ -139,6 +153,10 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           ['You have been defeated.', 'All your cities are destroyed.', 'You have no remaining launch sites.'],
           roundedTimestamp,
           roundedTimestamp + 5,
+          undefined,
+          undefined,
+          false,
+          true,
         );
         setIsDefeated(true);
       }
