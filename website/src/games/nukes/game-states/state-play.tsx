@@ -93,10 +93,10 @@ const PlayComponent: GameStateComponent = ({ setGameState }) => {
   return (
     <Container>
       <div>
-        <h1>New game</h1>
+        <h1>Name your state:</h1>
         <input
           type="text"
-          placeholder="Name your state"
+          placeholder="Type your state name here"
           value={stateName}
           onChange={(event) => setStateName(event.currentTarget.value)}
         />
