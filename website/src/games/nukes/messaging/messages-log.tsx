@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import styled from 'styled-components';
 import { MessageEvent, useMessageEvent, useMessageActionEvent, dispatchMessageAction } from './messages';
 
+interface WorldState {
+  timestamp: number;
+}
+
 /** UI component that displays the log of messages */
-export function MessagesLog() {
+export function MessagesLog({ worldState }: { worldState: WorldState }) {
   const [events, setEvents] = useState<MessageEvent[]>([]);
 
   useMessageEvent((event) => {
@@ -18,13 +22,38 @@ export function MessagesLog() {
   });
 
   const renderMessage = (message: string | string[]) => {
-    return Array.isArray(message) ? message.map((line) => <div>{line}</div>) : message;
+    return Array.isArray(message) ? message.map((line, index) => <div key={index}>{line}</div>) : message;
   };
+
+  const calculateOpacity = (eventTime: number, currentTime: number) => {
+    const oneMinuteInMilliseconds = 60;
+    const tenSecondsInMilliseconds = 10;
+    const age = currentTime - eventTime;
+    if (age > oneMinuteInMilliseconds) return 0;
+    if (age > oneMinuteInMilliseconds - tenSecondsInMilliseconds) {
+      return 1 - (age - (oneMinuteInMilliseconds - tenSecondsInMilliseconds)) / tenSecondsInMilliseconds;
+    }
+    return 1;
+  };
+
+  const filteredEvents = useMemo(() => {
+    const currentTime = worldState.timestamp;
+    const oneMinuteInMilliseconds = 60;
+    return events
+      .filter((event) => {
+        const eventTime = event.startTimestamp || 0;
+        return currentTime - eventTime <= oneMinuteInMilliseconds;
+      })
+      .map((event) => ({
+        ...event,
+        opacity: calculateOpacity(event.startTimestamp || 0, currentTime),
+      }));
+  }, [events, worldState.timestamp]);
 
   return (
     <MessageLogContainer>
-      {events.map((event, index) => (
-        <MessageItem key={index}>
+      {filteredEvents.map((event, index) => (
+        <MessageItem key={index} style={{ opacity: event.opacity }}>
           <div>{renderMessage(event.message)}</div>
           {event.prompt && event.actions && (
             <ActionContainer>
@@ -44,7 +73,7 @@ export function MessagesLog() {
 const MessageLogContainer = styled.div`
   position: fixed;
   right: 0;
-  top: 0;
+  max-height: 100%;
   bottom: 0;
   width: 300px;
   background-color: rgba(0, 0, 0, 0.7);
@@ -61,6 +90,7 @@ const MessageItem = styled.div`
   border-bottom: 1px solid rgba(255, 255, 255, 0.3);
   padding-bottom: 5px;
   text-align: left;
+  transition: opacity 0.5s ease-out;
 `;
 
 const ActionContainer = styled.div`
