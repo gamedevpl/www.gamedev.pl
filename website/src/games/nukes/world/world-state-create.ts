@@ -1,3 +1,4 @@
+import stringToColor from 'string-to-color';
 import { getRandomCityNames } from '../content/city-names';
 import { getRandomStateNames } from '../content/state-names';
 import {
@@ -98,8 +99,13 @@ export function createWorldState({
     const state: State = {
       id: stateId,
       name: stateName,
+      color: stringToColor(stateName),
       isPlayerControlled: i === 0,
       strategies: {},
+      generalStrategy:
+        i === 0
+          ? undefined
+          : [Strategy.NEUTRAL, Strategy.HOSTILE, Strategy.FRIENDLY].sort(() => Math.random() - Math.random())[0],
     };
 
     // Set strategies for all other states

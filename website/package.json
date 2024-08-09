@@ -35,6 +35,7 @@
     "react-router": "^6.21.1",
     "react-router-dom": "^6.21.1",
     "react-use": "^17.5.0",
+    "string-to-color": "^2.2.2",
     "styled-components": "^6.1.6",
     "ts-jest": "^29.2.3",
     "ts-node": "^10.9.2",
@@ -67,8 +68,5 @@
   },
   "lint-staged": {
     "*.{js,ts,tsx,css,md}": "prettier --write"
-  },
-  "dependencies": {
-    "codegen": "file:../../codegen"
   }
 }

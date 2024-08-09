@@ -58,15 +58,24 @@ function stateStrategyUpdate(state: State, worldState: WorldState) {
   state.strategies = { ...state.strategies };
 
   // Respond to friendly proposals
-  otherStates.forEach((otherState) => {
-    if (otherState.strategies[state.id] === Strategy.FRIENDLY && state.strategies[otherState.id] === Strategy.NEUTRAL) {
-      state.strategies[otherState.id] = Strategy.FRIENDLY;
-    }
-  });
+  if (state.generalStrategy !== Strategy.HOSTILE) {
+    otherStates.forEach((otherState) => {
+      if (
+        otherState.strategies[state.id] === Strategy.FRIENDLY &&
+        state.strategies[otherState.id] === Strategy.NEUTRAL
+      ) {
+        state.strategies[otherState.id] = Strategy.FRIENDLY;
+      }
+    });
+  }
 
   // Send friendly proposals
-  const neutralStates = otherStates.filter((s) => state.strategies[s.id] === Strategy.NEUTRAL);
-  if (neutralStates.length > 0) {
+  const neutralStates = otherStates.filter(
+    (s) =>
+      Object.values(s.strategies).every((strategy) => strategy !== Strategy.HOSTILE) &&
+      s.generalStrategy !== Strategy.HOSTILE,
+  );
+  if (neutralStates.length > 0 && state.generalStrategy === Strategy.FRIENDLY) {
     const randomNeutralState = neutralStates[Math.floor(Math.random() * neutralStates.length)];
     state.strategies[randomNeutralState.id] = Strategy.FRIENDLY;
   }
@@ -87,7 +96,9 @@ function stateStrategyUpdate(state: State, worldState: WorldState) {
   });
 
   // Attack states which are weaker than you and your alliance
-  const hostileStates = otherStates.filter((s) => state.strategies[s.id] === Strategy.HOSTILE);
+  const hostileStates = otherStates.filter(
+    (s) => s.strategies[state.id] !== Strategy.FRIENDLY && state.strategies[s.id] !== Strategy.FRIENDLY,
+  );
   hostileStates.forEach((enemy) => {
     if (isWeakerState(enemy, state, allies, worldState)) {
       const availableLaunchSites = worldState.launchSites.filter(

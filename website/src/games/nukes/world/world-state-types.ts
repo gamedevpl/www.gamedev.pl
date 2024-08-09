@@ -23,8 +23,10 @@ export type HistogramEntry<T> = { timestamp: number } & T;
 export type State = {
   id: StateId;
   name: string;
+  color: string;
   isPlayerControlled: boolean;
   strategies: Record<StateId, Strategy>;
+  generalStrategy: Strategy | undefined;
 };
 
 export enum Strategy {

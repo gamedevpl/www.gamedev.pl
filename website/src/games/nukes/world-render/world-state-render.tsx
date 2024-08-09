@@ -20,8 +20,8 @@ export function WorldStateRender({ state }: { state: WorldState }) {
     >
       {/* static content, does not change at all */}
       <SectorCanvas sectors={state.sectors} />
-      {state.states.map((state) => (
-        <StateRender key={state.id} />
+      {state.states.map((stateItem) => (
+        <StateRender key={stateItem.id} state={stateItem} cities={state.cities} launchSites={state.launchSites} />
       ))}
       {state.cities.map((city) => (
         <CityRender key={city.id} city={city} />
