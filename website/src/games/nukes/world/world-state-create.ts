@@ -50,6 +50,8 @@ export function createWorldState({
           bottom: (y + 1) * sectorSize,
         },
         type: SectorType.WATER,
+        depth: 0, // Initialize depth to 0
+        height: 0, // Initialize height to 0 for water sectors
       });
     }
   }
@@ -77,6 +79,7 @@ export function createWorldState({
         if (x >= 0 && x < worldWidth && y >= 0 && y < worldHeight) {
           const index = y * worldWidth + x;
           sectors[index].type = SectorType.GROUND;
+          sectors[index].depth = undefined; // Remove depth for ground sectors
         }
       }
     }
@@ -128,7 +131,7 @@ export function createWorldState({
     statePositions.push(statePosition);
 
     // Create ground for the state
-    createGround(statePosition, 8);
+    createGround(statePosition, citiesPerState * citiesPerState);
 
     // Create cities for the state
     const stateEntities: { position: Position }[] = [];
@@ -138,8 +141,8 @@ export function createWorldState({
       let maxIterations = 10;
       do {
         cityPosition = {
-          x: statePosition.x + (Math.random() - 0.5) * 10 * sectorSize,
-          y: statePosition.y + (Math.random() - 0.5) * 10 * sectorSize,
+          x: statePosition.x + (Math.random() - 0.5) * 30 * sectorSize,
+          y: statePosition.y + (Math.random() - 0.5) * 30 * sectorSize,
         };
         if (maxIterations-- <= 0) {
           break;
@@ -165,8 +168,8 @@ export function createWorldState({
       let maxIterations = 10;
       do {
         launchSitePosition = {
-          x: statePosition.x + (Math.random() - 0.5) * 8 * sectorSize,
-          y: statePosition.y + (Math.random() - 0.5) * 8 * sectorSize,
+          x: statePosition.x + (Math.random() - 0.5) * 15 * sectorSize,
+          y: statePosition.y + (Math.random() - 0.5) * 15 * sectorSize,
         };
         if (maxIterations-- <= 0) {
           break;
@@ -185,6 +188,70 @@ export function createWorldState({
       createGround(launchSitePosition, 1);
     }
   }
+
+  // Calculate water depth and ground height
+  const calculateWaterDepthAndGroundHeight = () => {
+    const queue: [number, number, number][] = [];
+    const visited: boolean[][] = Array(worldHeight)
+      .fill(null)
+      .map(() => Array(worldWidth).fill(false));
+
+    // Find all water sectors adjacent to ground and add them to the queue
+    for (let y = 0; y < worldHeight; y++) {
+      for (let x = 0; x < worldWidth; x++) {
+        const index = y * worldWidth + x;
+        if (sectors[index].type === SectorType.WATER) {
+          const adjacentToGround = [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+          ].some(([dx, dy]) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx < worldWidth && ny >= 0 && ny < worldHeight) {
+              const neighborIndex = ny * worldWidth + nx;
+              return sectors[neighborIndex].type === SectorType.GROUND;
+            }
+            return false;
+          });
+          if (adjacentToGround) {
+            queue.push([x, y, 0]);
+            visited[y][x] = true;
+          }
+        }
+      }
+    }
+
+    // BFS to calculate depth and height
+    while (queue.length > 0) {
+      const [x, y, distance] = queue.shift()!;
+      const index = y * worldWidth + x;
+
+      if (sectors[index].type === SectorType.WATER) {
+        sectors[index].depth = distance + (Math.random() - Math.random()) / 5;
+      } else if (sectors[index].type === SectorType.GROUND) {
+        sectors[index].height = Math.sqrt(distance) + (Math.random() - Math.random()) / 10;
+      }
+
+      const directions = [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ];
+      for (const [dx, dy] of directions) {
+        const newX = x + dx;
+        const newY = y + dy;
+        if (newX >= 0 && newX < worldWidth && newY >= 0 && newY < worldHeight && !visited[newY][newX]) {
+          queue.push([newX, newY, distance + 1]);
+          visited[newY][newX] = true;
+        }
+      }
+    }
+  };
+
+  calculateWaterDepthAndGroundHeight();
 
   const missiles: Missile[] = [];
   const explosions: Explosion[] = [];

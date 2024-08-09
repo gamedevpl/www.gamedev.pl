@@ -57,6 +57,8 @@ export type Sector = {
   position: Position;
   rect: Rect;
   type: SectorType;
+  depth?: number; // Property for water depth
+  height?: number; // New property for ground height
 };
 
 export type LaunchSite = {

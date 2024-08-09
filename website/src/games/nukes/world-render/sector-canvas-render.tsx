@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Rect, Sector } from '../world/world-state-types';
+import { Rect, Sector, SectorType } from '../world/world-state-types';
 import { useObjectPointer } from '../controls/pointer';
 
 interface SectorCanvasProps {
@@ -30,10 +30,14 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
+    // Find the maximum depth and height
+    const maxDepth = Math.max(...sectors.filter((s) => s.type === SectorType.WATER).map((s) => s.depth || 0));
+    const maxHeight = Math.max(...sectors.filter((s) => s.type === SectorType.GROUND).map((s) => s.height || 0));
+
     // Draw the sectors
     ctx.clearRect(0, 0, width, height);
     sectors.forEach((sector) => {
-      const { fillStyle, drawSector } = getRenderFunction(sector);
+      const { fillStyle, drawSector } = getRenderFunction(sector, maxDepth, maxHeight);
 
       // Fill with the appropriate color or gradient
       ctx.fillStyle = fillStyle;
@@ -72,29 +76,25 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
   return <canvas ref={canvasRef}></canvas>;
 });
 
-function getRenderFunction(sector: Sector) {
+function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number) {
   switch (sector.type) {
-    case 'GROUND':
+    case SectorType.GROUND:
       return {
-        fillStyle: 'rgb(93, 42, 0)',
+        fillStyle: getGroundColor(sector.height || 0, maxHeight),
         drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          ctx.fillStyle = 'rgb(93, 42, 0)'; // Ground color
+          ctx.fillStyle = getGroundColor(sector.height || 0, maxHeight);
           ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
         },
       };
-    case 'WATER':
+    case SectorType.WATER:
       return {
         fillStyle: 'rgb(0, 34, 93)',
         drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          const gradient = ctx.createLinearGradient(
-            rect.left - minX,
-            rect.top - minY,
-            rect.right - minX,
-            rect.bottom - minY,
-          );
-          gradient.addColorStop(0, 'rgb(0, 34, 93)'); // Deep water
-          gradient.addColorStop(1, 'rgb(0, 137, 178)'); // Shallow water
-          ctx.fillStyle = gradient;
+          const depthRatio = (sector.depth || 0) / maxDepth;
+          const r = Math.round(0 + (34 - 0) * (1 - depthRatio));
+          const g = Math.round(137 + (34 - 137) * depthRatio);
+          const b = Math.round(178 + (93 - 178) * depthRatio);
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
           ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
         },
       };
@@ -106,6 +106,29 @@ function getRenderFunction(sector: Sector) {
           ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
         },
       };
+  }
+}
+
+function getGroundColor(height: number, maxHeight: number): string {
+  const heightRatio = height / maxHeight;
+
+  if (heightRatio < 0.2) {
+    // Sand/beach (light yellow)
+    return `rgb(255, ${Math.round(223 + (187 - 223) * (heightRatio / 0.2))}, 128)`;
+  } else if (heightRatio < 0.5) {
+    // Grass/forest (from light green to dark green)
+    const greenIntensity = Math.round(200 - (200 - 100) * ((heightRatio - 0.2) / 0.3));
+    return `rgb(34, ${greenIntensity}, 34)`;
+  } else if (heightRatio < 0.95) {
+    // Mountains (from dark green to brown)
+    const r = Math.round(34 + (101 - 34) * ((heightRatio - 0.5) / 0.3));
+    const g = Math.round(100 + (67 - 100) * ((heightRatio - 0.5) / 0.3));
+    const b = Math.round(34 + (33 - 34) * ((heightRatio - 0.5) / 0.3));
+    return `rgb(${r}, ${g}, ${b})`;
+  } else {
+    // Snow (white to light blue for highest peaks)
+    const blueIntensity = Math.round(255 - (255 - 200) * ((heightRatio - 0.8) / 0.2));
+    return `rgb(255, 255, ${blueIntensity})`;
   }
 }
 
