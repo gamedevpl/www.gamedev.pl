@@ -16,6 +16,44 @@ import {
 } from './world-state-types';
 import { EXPLOSION_RADIUS } from './world-state-constants';
 
+// Add this function at the top of the file
+function createSimplexNoise() {
+  const gradients = [
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  const permutation = Array.from({ length: 256 }, (_, i) => i).sort(() => Math.random() - 0.5);
+  const perm = [...permutation, ...permutation];
+
+  function dot(g: number[], x: number, y: number) {
+    return g[0] * x + g[1] * y;
+  }
+
+  return function noise(x: number, y: number) {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    x -= Math.floor(x);
+    y -= Math.floor(y);
+    const u = x * x * x * (x * (x * 6 - 15) + 10);
+    const v = y * y * y * (y * (y * 6 - 15) + 10);
+    const A = perm[X] + Y;
+    const B = perm[X + 1] + Y;
+    return (
+      (1 +
+        (dot(gradients[perm[A] & 7], x, y) * (1 - u) + dot(gradients[perm[B] & 7], x - 1, y) * u) * (1 - v) +
+        (dot(gradients[perm[A + 1] & 7], x, y - 1) * (1 - u) + dot(gradients[perm[B + 1] & 7], x - 1, y - 1) * u) * v) /
+      2
+    );
+  };
+}
+
 export function createWorldState({
   playerStateName,
   numberOfStates = 3,
@@ -58,31 +96,68 @@ export function createWorldState({
 
   // Function to get a random position within the world
   const getRandomPosition = (): Position => ({
-    x: Math.floor(Math.random() * (worldWidth - 10) + 5) * sectorSize,
-    y: Math.floor(Math.random() * (worldHeight - 10) + 5) * sectorSize,
+    x: Math.floor(Math.random() * (worldWidth * 0.8) + worldWidth * 0.1) * sectorSize,
+    y: Math.floor(Math.random() * (worldHeight * 0.8) + worldHeight * 0.1) * sectorSize,
   });
 
   // Function to check if a position is valid (not too close to other states)
   const isValidPosition = (pos: Position, statePositions: Position[]): boolean => {
+    if (pos.x < 0 || pos.y < 0 || pos.x >= worldWidth || pos.y >= worldHeight) {
+      return false;
+    }
+
     const minDistance = Math.floor(worldWidth / (Math.sqrt(numberOfStates) * 2)) * sectorSize;
     return statePositions.every(
       (statePos) => Math.abs(pos.x - statePos.x) > minDistance || Math.abs(pos.y - statePos.y) > minDistance,
     );
   };
 
-  // Function to create ground around a position
-  const createGround = (center: Position, radius: number) => {
+  // Updated createGround function to create more irregular shapes
+  const createGround = (center: Position, maxSteps: number) => {
+    const noise = createSimplexNoise();
     const centerX = Math.floor(center.x / sectorSize);
     const centerY = Math.floor(center.y / sectorSize);
+    const radius = Math.floor(worldWidth / 4); // Define radius
+    const threshold = 0.5; // Define threshold
+    const noiseScale = 0.005;
+    const walkProbability = 0.7;
+
     for (let y = centerY - radius; y <= centerY + radius; y++) {
       for (let x = centerX - radius; x <= centerX + radius; x++) {
         if (x >= 0 && x < worldWidth && y >= 0 && y < worldHeight) {
-          const index = y * worldWidth + x;
-          sectors[index].type = SectorType.GROUND;
-          sectors[index].depth = undefined; // Remove depth for ground sectors
+          // Random walk adjustment
+          let walkX = x;
+          let walkY = y;
+          for (let step = 0; step < maxSteps; step++) {
+            if (Math.random() < walkProbability) {
+              walkX += Math.random() > 0.5 ? 1 : -1;
+              walkY += Math.random() > 0.5 ? 1 : -1;
+            }
+          }
+
+          // Ensure within bounds
+          walkX = Math.max(0, Math.min(worldWidth - 1, walkX));
+          walkY = Math.max(0, Math.min(worldHeight - 1, walkY));
+
+          const distanceFromCenter =
+            Math.sqrt((walkX - centerX) * (walkX - centerX) + (walkY - centerY) * (walkY - centerY)) / radius;
+          const noiseValue = noise(x * noiseScale, y * noiseScale);
+
+          if (distanceFromCenter < 1 && noiseValue > threshold + distanceFromCenter * 0.01) {
+            const index = y * worldWidth + x;
+            sectors[index].type = SectorType.GROUND;
+            sectors[index].depth = undefined;
+            sectors[index].height = (1 - distanceFromCenter) * 2 * (noiseValue - threshold);
+          }
         }
       }
     }
+
+    // Ensure the center is always ground
+    const centerIndex = Math.min(Math.max(centerY * worldWidth + centerX, 0), worldWidth);
+    sectors[centerIndex].type = SectorType.GROUND;
+    sectors[centerIndex].depth = undefined;
+    sectors[centerIndex].height = 1;
   };
 
   // Function to check if a position is far enough from existing entities
@@ -131,7 +206,7 @@ export function createWorldState({
     statePositions.push(statePosition);
 
     // Create ground for the state
-    createGround(statePosition, citiesPerState * citiesPerState);
+    createGround(statePosition, worldWidth / 2);
 
     // Create cities for the state
     const stateEntities: { position: Position }[] = [];
