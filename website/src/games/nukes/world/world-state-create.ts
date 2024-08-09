@@ -1,58 +1,6 @@
-import stringToColor from 'string-to-color';
-import { getRandomCityNames } from '../content/city-names';
-import { getRandomStateNames } from '../content/state-names';
-import {
-  City,
-  EntityType,
-  Explosion,
-  LaunchSite,
-  Missile,
-  Sector,
-  SectorType,
-  State,
-  Strategy,
-  WorldState,
-  Position,
-} from './world-state-types';
-import { EXPLOSION_RADIUS } from './world-state-constants';
-
-// Add this function at the top of the file
-function createSimplexNoise() {
-  const gradients = [
-    [1, 1],
-    [-1, 1],
-    [1, -1],
-    [-1, -1],
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ];
-
-  const permutation = Array.from({ length: 256 }, (_, i) => i).sort(() => Math.random() - 0.5);
-  const perm = [...permutation, ...permutation];
-
-  function dot(g: number[], x: number, y: number) {
-    return g[0] * x + g[1] * y;
-  }
-
-  return function noise(x: number, y: number) {
-    const X = Math.floor(x) & 255;
-    const Y = Math.floor(y) & 255;
-    x -= Math.floor(x);
-    y -= Math.floor(y);
-    const u = x * x * x * (x * (x * 6 - 15) + 10);
-    const v = y * y * y * (y * (y * 6 - 15) + 10);
-    const A = perm[X] + Y;
-    const B = perm[X + 1] + Y;
-    return (
-      (1 +
-        (dot(gradients[perm[A] & 7], x, y) * (1 - u) + dot(gradients[perm[B] & 7], x - 1, y) * u) * (1 - v) +
-        (dot(gradients[perm[A + 1] & 7], x, y - 1) * (1 - u) + dot(gradients[perm[B + 1] & 7], x - 1, y - 1) * u) * v) /
-      2
-    );
-  };
-}
+import { Explosion, Missile, Sector, SectorType, WorldState } from './world-state-types';
+import { calculateWaterDepthAndGroundHeight } from './create-world/sector-generation';
+import { generateStates } from './create-world/state-generation';
 
 export function createWorldState({
   playerStateName,
@@ -65,15 +13,7 @@ export function createWorldState({
   const worldWidth = Math.max(200, Math.ceil(Math.sqrt(numberOfStates) * 10));
   const worldHeight = worldWidth;
 
-  const fantasyStateNames = getRandomStateNames(numberOfStates * 2).filter((name) => name !== playerStateName);
-  const citiesPerState = 5;
-  const fantasyCityNames = getRandomCityNames(numberOfStates * citiesPerState * 2);
-
-  const states: State[] = [];
-  const cities: City[] = [];
-  const launchSites: LaunchSite[] = [];
   const sectors: Sector[] = [];
-  const MIN_DISTANCE = EXPLOSION_RADIUS * 3; // Minimum distance between entities
 
   // Initialize the world with water
   for (let y = 0; y < worldHeight; y++) {
@@ -94,239 +34,17 @@ export function createWorldState({
     }
   }
 
-  // Function to get a random position within the world
-  const getRandomPosition = (): Position => ({
-    x: Math.floor(Math.random() * (worldWidth * 0.8) + worldWidth * 0.1) * sectorSize,
-    y: Math.floor(Math.random() * (worldHeight * 0.8) + worldHeight * 0.1) * sectorSize,
-  });
-
-  // Function to check if a position is valid (not too close to other states)
-  const isValidPosition = (pos: Position, statePositions: Position[]): boolean => {
-    if (pos.x < 0 || pos.y < 0 || pos.x >= worldWidth || pos.y >= worldHeight) {
-      return false;
-    }
-
-    const minDistance = Math.floor(worldWidth / (Math.sqrt(numberOfStates) * 2)) * sectorSize;
-    return statePositions.every(
-      (statePos) => Math.abs(pos.x - statePos.x) > minDistance || Math.abs(pos.y - statePos.y) > minDistance,
-    );
-  };
-
-  // Updated createGround function to create more irregular shapes
-  const createGround = (center: Position, maxSteps: number) => {
-    const noise = createSimplexNoise();
-    const centerX = Math.floor(center.x / sectorSize);
-    const centerY = Math.floor(center.y / sectorSize);
-    const radius = Math.floor(worldWidth / 4); // Define radius
-    const threshold = 0.5; // Define threshold
-    const noiseScale = 0.005;
-    const walkProbability = 0.7;
-
-    for (let y = centerY - radius; y <= centerY + radius; y++) {
-      for (let x = centerX - radius; x <= centerX + radius; x++) {
-        if (x >= 0 && x < worldWidth && y >= 0 && y < worldHeight) {
-          // Random walk adjustment
-          let walkX = x;
-          let walkY = y;
-          for (let step = 0; step < maxSteps; step++) {
-            if (Math.random() < walkProbability) {
-              walkX += Math.random() > 0.5 ? 1 : -1;
-              walkY += Math.random() > 0.5 ? 1 : -1;
-            }
-          }
-
-          // Ensure within bounds
-          walkX = Math.max(0, Math.min(worldWidth - 1, walkX));
-          walkY = Math.max(0, Math.min(worldHeight - 1, walkY));
-
-          const distanceFromCenter =
-            Math.sqrt((walkX - centerX) * (walkX - centerX) + (walkY - centerY) * (walkY - centerY)) / radius;
-          const noiseValue = noise(x * noiseScale, y * noiseScale);
-
-          if (distanceFromCenter < 1 && noiseValue > threshold + distanceFromCenter * 0.01) {
-            const index = y * worldWidth + x;
-            sectors[index].type = SectorType.GROUND;
-            sectors[index].depth = undefined;
-            sectors[index].height = (1 - distanceFromCenter) * 2 * (noiseValue - threshold);
-          }
-        }
-      }
-    }
-
-    // Ensure the center is always ground
-    const centerIndex = Math.min(Math.max(centerY * worldWidth + centerX, 0), worldWidth);
-    sectors[centerIndex].type = SectorType.GROUND;
-    sectors[centerIndex].depth = undefined;
-    sectors[centerIndex].height = 1;
-  };
-
-  // Function to check if a position is far enough from existing entities
-  const isFarEnough = (pos: Position, entities: { position: Position }[]): boolean => {
-    return entities.every(
-      (entity) =>
-        Math.sqrt(Math.pow(pos.x - entity.position.x, 2) + Math.pow(pos.y - entity.position.y, 2)) >= MIN_DISTANCE,
-    );
-  };
-
-  const statePositions: Position[] = [];
-
-  for (let i = 0; i < numberOfStates; i++) {
-    const stateId = `state-${i + 1}`;
-    const stateName = i === 0 ? playerStateName : fantasyStateNames.pop()!;
-
-    const state: State = {
-      id: stateId,
-      name: stateName,
-      color: stringToColor(stateName),
-      isPlayerControlled: i === 0,
-      strategies: {},
-      generalStrategy:
-        i === 0
-          ? undefined
-          : [Strategy.NEUTRAL, Strategy.HOSTILE, Strategy.FRIENDLY].sort(() => Math.random() - Math.random())[0],
-    };
-
-    // Set strategies for all other states
-    states.forEach((otherState) => {
-      state.strategies[otherState.id] = Strategy.NEUTRAL;
-      otherState.strategies[stateId] = Strategy.NEUTRAL;
-    });
-
-    states.push(state);
-
-    // Find a valid position for the state
-    let statePosition: Position;
-    let maxIterations = 10;
-    do {
-      statePosition = getRandomPosition();
-      if (maxIterations-- <= 0) {
-        break;
-      }
-    } while (!isValidPosition(statePosition, statePositions));
-    statePositions.push(statePosition);
-
-    // Create ground for the state
-    createGround(statePosition, worldWidth / 2);
-
-    // Create cities for the state
-    const stateEntities: { position: Position }[] = [];
-    for (let j = 0; j < citiesPerState; j++) {
-      const cityId = `city-${cities.length + 1}`;
-      let cityPosition: Position;
-      let maxIterations = 10;
-      do {
-        cityPosition = {
-          x: statePosition.x + (Math.random() - 0.5) * 30 * sectorSize,
-          y: statePosition.y + (Math.random() - 0.5) * 30 * sectorSize,
-        };
-        if (maxIterations-- <= 0) {
-          break;
-        }
-      } while (!isFarEnough(cityPosition, stateEntities));
-      stateEntities.push({ position: cityPosition });
-      cities.push({
-        id: cityId,
-        stateId,
-        name: fantasyCityNames.pop()!,
-        position: cityPosition,
-        populationHistogram: [{ timestamp: 0, population: Math.floor(Math.random() * 3000) + 1000 }],
-      });
-
-      // Ensure ground around the city
-      createGround(cityPosition, 2);
-    }
-
-    // Create launch sites for the state
-    for (let j = 0; j < 4; j++) {
-      const launchSiteId = `launch-site-${launchSites.length + 1}`;
-      let launchSitePosition: Position;
-      let maxIterations = 10;
-      do {
-        launchSitePosition = {
-          x: statePosition.x + (Math.random() - 0.5) * 15 * sectorSize,
-          y: statePosition.y + (Math.random() - 0.5) * 15 * sectorSize,
-        };
-        if (maxIterations-- <= 0) {
-          break;
-        }
-      } while (!isFarEnough(launchSitePosition, stateEntities));
-      stateEntities.push({ position: launchSitePosition });
-
-      launchSites.push({
-        type: EntityType.LAUNCH_SITE,
-        id: launchSiteId,
-        stateId,
-        position: launchSitePosition,
-      });
-
-      // Ensure ground around the launch site
-      createGround(launchSitePosition, 1);
-    }
-  }
+  const { states, cities, launchSites } = generateStates(
+    numberOfStates,
+    playerStateName,
+    worldWidth,
+    worldHeight,
+    sectorSize,
+    sectors,
+  );
 
   // Calculate water depth and ground height
-  const calculateWaterDepthAndGroundHeight = () => {
-    const queue: [number, number, number][] = [];
-    const visited: boolean[][] = Array(worldHeight)
-      .fill(null)
-      .map(() => Array(worldWidth).fill(false));
-
-    // Find all water sectors adjacent to ground and add them to the queue
-    for (let y = 0; y < worldHeight; y++) {
-      for (let x = 0; x < worldWidth; x++) {
-        const index = y * worldWidth + x;
-        if (sectors[index].type === SectorType.WATER) {
-          const adjacentToGround = [
-            [-1, 0],
-            [1, 0],
-            [0, -1],
-            [0, 1],
-          ].some(([dx, dy]) => {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && nx < worldWidth && ny >= 0 && ny < worldHeight) {
-              const neighborIndex = ny * worldWidth + nx;
-              return sectors[neighborIndex].type === SectorType.GROUND;
-            }
-            return false;
-          });
-          if (adjacentToGround) {
-            queue.push([x, y, 0]);
-            visited[y][x] = true;
-          }
-        }
-      }
-    }
-
-    // BFS to calculate depth and height
-    while (queue.length > 0) {
-      const [x, y, distance] = queue.shift()!;
-      const index = y * worldWidth + x;
-
-      if (sectors[index].type === SectorType.WATER) {
-        sectors[index].depth = distance + (Math.random() - Math.random()) / 5;
-      } else if (sectors[index].type === SectorType.GROUND) {
-        sectors[index].height = Math.sqrt(distance) + (Math.random() - Math.random()) / 10;
-      }
-
-      const directions = [
-        [-1, 0],
-        [1, 0],
-        [0, -1],
-        [0, 1],
-      ];
-      for (const [dx, dy] of directions) {
-        const newX = x + dx;
-        const newY = y + dy;
-        if (newX >= 0 && newX < worldWidth && newY >= 0 && newY < worldHeight && !visited[newY][newX]) {
-          queue.push([newX, newY, distance + 1]);
-          visited[newY][newX] = true;
-        }
-      }
-    }
-  };
-
-  calculateWaterDepthAndGroundHeight();
+  calculateWaterDepthAndGroundHeight(sectors, worldWidth, worldHeight);
 
   const missiles: Missile[] = [];
   const explosions: Explosion[] = [];
