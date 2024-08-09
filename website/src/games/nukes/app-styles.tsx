@@ -1,8 +1,10 @@
 import { createGlobalStyle } from 'styled-components';
+import '@fontsource/press-start-2p';
 
 export const AppStyles = createGlobalStyle`
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Press Start 2P', system-ui;
+  font-size: 13px;
   line-height: 1.5;
   font-weight: 400;
 
@@ -14,6 +16,10 @@ export const AppStyles = createGlobalStyle`
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+input {
+  font-family: 'Press Start 2P', system-ui;
 }
 
 a {

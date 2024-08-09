@@ -1,11 +1,12 @@
-import "./App.css";
-import AppHeader from "./content/app-header";
-import OurGames from "./content/our-games";
-import About from "./content/about";
-import PageWrapper from "./components/page-wrapper";
-import AppFooter from "./content/app-footer";
+import './index.css';
+import './App.css';
+import AppHeader from './content/app-header';
+import OurGames from './content/our-games';
+import About from './content/about';
+import PageWrapper from './components/page-wrapper';
+import AppFooter from './content/app-footer';
 
-function App() {
+export function App() {
   return (
     <PageWrapper title="Gamedev.pl - Tworzymy gry!">
       <AppHeader />
@@ -15,5 +16,3 @@ function App() {
     </PageWrapper>
   );
 }
-
-export default App;

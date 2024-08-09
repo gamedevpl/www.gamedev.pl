@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import App from "./App";
+import { render, screen } from '@testing-library/react';
+import { App } from './App';
 
-test("renders something", () => {
+test('renders something', () => {
   render(<App />);
   const linkElement = screen.getByText(/O Gamedev.pl/i);
   expect(linkElement).toBeDefined();
