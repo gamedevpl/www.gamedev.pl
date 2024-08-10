@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { StateId, Strategy, WorldState } from '../../world/world-state-types';
 import { GAME_OVER_TIMEOUT } from '../../world/world-state-constants';
-import { dispatchMessage } from '../../messaging/messages'; // Updated import
+import { dispatchMessage } from '../../messaging/messages';
+import { calculateAllStatePopulations } from '../../world/world-state-utils';
 
 // A type for game result
 export type GameResult = {
@@ -27,12 +28,7 @@ export function GameOverController({
       return;
     }
 
-    const statePopulations = Object.fromEntries(
-      worldState.states.map((state) => [
-        state.id,
-        worldState.cities.filter((city) => city.stateId === state.id).reduce((sum, city) => sum + city.population, 0),
-      ]),
-    );
+    const statePopulations = calculateAllStatePopulations(worldState);
 
     const numStatesWithPopulation = Object.values(statePopulations).filter((population) => population > 0).length;
     const areAllLaunchSitesDestroyed = worldState.launchSites.length === 0;
@@ -95,7 +91,7 @@ export function GameOverController({
 
       setTimeout(() => {
         onGameOver({
-          populations: Object.fromEntries(worldState.states.map((state) => [state.id, statePopulations[state.id]])),
+          populations: statePopulations,
           winner,
           stateNames: Object.fromEntries(worldState.states.map((state) => [state.id, state.name])),
           playerStateId: worldState.states.find((state) => state.isPlayerControlled)!.id,

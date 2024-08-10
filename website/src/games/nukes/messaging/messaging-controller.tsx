@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
 import { dispatchMessage } from './messages';
 import { dispatchAllianceProposal } from './alliance-proposal';
+import { getCityPopulation } from '../world/world-state-utils';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
@@ -12,7 +13,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
   const [previousLaunchSites, setPreviousLaunchSites] = useState<LaunchSite[]>([]);
   const [isDefeated, setIsDefeated] = useState(false);
 
-  // We are running checks every 100 miliseconds
+  // We are running checks every 100 milliseconds
   const roundedTimestamp = Math.round(worldState.timestamp * 10) / 10;
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
             otherState.id === playerState.id &&
             state.strategies[otherState.id] === Strategy.FRIENDLY &&
             otherState.strategies[state.id] !== Strategy.FRIENDLY &&
-            previousStrategies[state.id][otherState.id] !== Strategy.FRIENDLY
+            previousStrategies[state.id]?.[otherState.id] !== Strategy.FRIENDLY
           ) {
             dispatchAllianceProposal(state, playerState, worldState, true);
           }
@@ -44,8 +45,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           if (
             otherState.strategies[state.id] === Strategy.FRIENDLY &&
             state.strategies[otherState.id] === Strategy.FRIENDLY &&
-            (previousStrategies[otherState.id][state.id] !== Strategy.FRIENDLY ||
-              previousStrategies[state.id][otherState.id] !== Strategy.FRIENDLY)
+            (previousStrategies[otherState.id]?.[state.id] !== Strategy.FRIENDLY ||
+              previousStrategies[state.id]?.[otherState.id] !== Strategy.FRIENDLY)
           ) {
             dispatchMessage(
               `${otherState.name} has formed alliance with ${state.isPlayerControlled ? 'you' : state.name}!`,
@@ -57,7 +58,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           // Check if states started a war
           if (
             state.strategies[otherState.id] === Strategy.HOSTILE &&
-            previousStrategies[state.id][otherState.id] !== Strategy.HOSTILE
+            previousStrategies[state.id]?.[otherState.id] !== Strategy.HOSTILE
           ) {
             dispatchMessage(
               otherState.isPlayerControlled
@@ -87,8 +88,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         .forEach((city) => {
           const previousCity = previousCities.find((prevCity) => prevCity.id === city.id);
           if (!previousCity) return; // Skip if it's a new city
-          const currentPopulation = city.population;
-          const previousPopulation = previousCity ? previousCity.population : currentPopulation;
+          const currentPopulation = getCityPopulation(worldState, city.id) || 0;
+          const previousPopulation = getCityPopulation({ ...worldState, cities: previousCities }, previousCity.id) || 0;
           const casualties = previousPopulation - currentPopulation;
           if (casualties > 0) {
             dispatchMessage(
@@ -139,7 +140,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       const playerCities = worldState.cities.filter((city) => city.stateId === playerState.id);
       const playerLaunchSites = worldState.launchSites.filter((site) => site.stateId === playerState.id);
 
-      const hasPopulatedCities = playerCities.some((city) => city.population > 0);
+      const hasPopulatedCities = playerCities.some((city) => getCityPopulation(worldState, city.id) > 0);
 
       if (!hasPopulatedCities && playerLaunchSites.length === 0) {
         dispatchMessage(

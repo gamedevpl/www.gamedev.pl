@@ -1,6 +1,7 @@
 import styled from 'styled-components';
-import { StateId, WorldState, City, Strategy } from '../../world/world-state-types';
+import { StateId, WorldState, Strategy } from '../../world/world-state-types';
 import { dispatchTranslateEvent } from './viewport';
+import { calculateAllStatePopulations } from '../../world/world-state-utils';
 
 /** A component that allows user to control the player controlled state */
 export function StateControl({
@@ -43,19 +44,7 @@ export function StateControl({
     }
   };
 
-  const cityPopulation: Record<StateId, Array<[City, number]>> = Object.fromEntries(
-    worldState.states.map((state) => [
-      state.id,
-      worldState.cities.filter((city) => city.stateId === state.id).map((city) => [city, city.population]),
-    ]),
-  );
-
-  const statePopulation: Record<StateId, number> = Object.fromEntries(
-    worldState.states.map((state) => [
-      state.id,
-      cityPopulation[state.id].reduce((r, [, population]) => r + population, 0),
-    ]),
-  );
+  const statePopulation: Record<StateId, number> = calculateAllStatePopulations(worldState);
 
   const handleStateClick = (stateId: StateId) => {
     const stateCities = worldState.cities.filter((city) => city.stateId === stateId);
