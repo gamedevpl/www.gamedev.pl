@@ -9,6 +9,8 @@ import { FullScreenMessages } from '../../messaging/full-screen-messages';
 import { MessagingController } from '../../messaging/messaging-controller';
 import { MessagesLog } from '../../messaging/messages-log';
 import { AllianceProposals } from '../../messaging/alliance-proposal';
+import { TimeControls } from './time-controls';
+import { StateControl } from './state-control';
 
 const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   const {
@@ -20,7 +22,12 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   return (
     <>
       {/* UI */}
-      <WorldCanvas worldState={worldState} updateWorldState={updateWorldState} setWorldState={setWorldState} />
+      <WorldCanvas worldState={worldState} setWorldState={setWorldState} />
+      <TimeControls
+        updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)}
+        currentWorldTime={worldState.timestamp ?? 0}
+      />
+      <StateControl worldState={worldState} setWorldState={setWorldState} />
       <FullScreenMessages worldState={worldState} />
       <MessagesLog worldState={worldState} />
       {/* Controllers */}
