@@ -22,14 +22,25 @@ export function Viewport({ children }: { children: React.ReactNode }) {
 
   useGesture(
     {
-      onPinch({ delta, pinching }) {
+      onPinch({ origin, delta, pinching }) {
         setInteracting(pinching);
-        setZoom(Math.max(zoom + delta[0], 0.1));
+        const newZoom = Math.max(zoom + delta[0], 0.1);
+        const rect = interactionRef.current?.getBoundingClientRect();
+        const offsetX = origin[0] - (rect?.left ?? 0);
+        const offsetY = origin[1] - (rect?.top ?? 0);
+        setTranslate({
+          x: translate.x - (offsetX / zoom - offsetX / newZoom),
+          y: translate.y - (offsetY / zoom - offsetY / newZoom),
+        });
+        setZoom(newZoom);
       },
       onWheel({ event, delta: [x, y], wheeling }) {
         event.preventDefault();
         setInteracting(wheeling);
-        setTranslate({ x: translate.x - x / zoom, y: translate.y - y / zoom });
+        setTranslate({
+          x: translate.x - x / zoom,
+          y: translate.y - y / zoom,
+        });
       },
     },
     {
