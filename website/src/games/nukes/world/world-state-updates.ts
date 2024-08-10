@@ -1,5 +1,5 @@
 import { distance } from '../math/position-utils';
-import { Missile, WorldState, State } from './world-state-types';
+import { Missile, WorldState, State, CityId } from './world-state-types';
 import {
   EXPLOSION_DAMAGE_RATIO,
   EXPLOSION_DURATION,
@@ -57,16 +57,18 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
 
     result.explosions.push(explosion);
 
-    // convert explosions to population changes
+    // convert explosions to sector population changes
 
-    // find cities which are in explosion radius
-    for (const city of state.cities.filter(
-      (city) =>
-        distance(city.position.x, city.position.y, explosion.position.x, explosion.position.y) <= explosion.radius,
+    // find sectors which are in explosion radius
+    for (const sector of state.sectors.filter(
+      (sector) =>
+        distance(sector.position.x, sector.position.y, explosion.position.x, explosion.position.y) <= explosion.radius,
     )) {
       // reduce population by half
-      const damage = Math.max(MIN_EXPLOSION_DAMAGE, city.population * EXPLOSION_DAMAGE_RATIO);
-      city.population = Math.max(0, city.population - damage);
+      if (sector.population) {
+        const damage = Math.max(MIN_EXPLOSION_DAMAGE, sector.population * EXPLOSION_DAMAGE_RATIO);
+        sector.population = Math.max(0, sector.population - damage);
+      }
     }
 
     // explosions destroy missiles
@@ -80,7 +82,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
           missile.targetTimestamp >= explosion.startTimestamp,
       )
       .filter((missile) => {
-        // check if missle is in explosion radius
+        // check if missile is in explosion radius
         return (
           distance(missile.position.x, missile.position.y, explosion.position.x, explosion.position.y) <=
           explosion.radius
@@ -88,7 +90,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       });
 
     for (const missile of missiles) {
-      // modify missle targetTimestamp to moment of explosion
+      // modify missile targetTimestamp to moment of explosion
       missile.targetTimestamp = explosion.startTimestamp;
     }
 
@@ -146,9 +148,21 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     launchSite.nextLaunchTarget = undefined;
   }
 
-  result = generateLaunches(result);
+  // Recalculate city populations based on their sectors
+  const cityPopulations = result.sectors.reduce(
+    (r, sector) => {
+      if (!sector.cityId) {
+        return r;
+      }
 
-  result = strategyUpdate(result);
+      r[sector.cityId] = r[sector.cityId] ? r[sector.cityId] + (sector.population ?? 0) : (sector.population ?? 0);
+      return r;
+    },
+    {} as Record<CityId, number>,
+  );
+  for (const city of result.cities) {
+    city.population = cityPopulations[city.id];
+  }
 
   // Calculate and set population for each state
   result.states = result.states.map((state: State) => {
@@ -157,6 +171,10 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       .reduce((sum, city) => sum + city.population, 0);
     return { ...state, population: statePopulation };
   });
+
+  result = generateLaunches(result);
+
+  result = strategyUpdate(result);
 
   return result;
 }

@@ -131,6 +131,26 @@ function createCitiesAndLaunchSites(
     createGround(cityPosition, 2, sectors, worldWidth, worldHeight, sectorSize);
   }
 
+  // Assign sectors to cities and calculate their initial populations
+  for (const city of cities) {
+    const citySectors = sectors.filter((sector) => {
+      const dx = sector.position.x - city.position.x;
+      const dy = sector.position.y - city.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < worldWidth / 4; // Assign sectors within a certain range
+    });
+
+    for (const sector of citySectors) {
+      sector.cityId = city.id;
+      const dx = sector.position.x - city.position.x;
+      const dy = sector.position.y - city.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      sector.population = Math.max(0, EXPLOSION_RADIUS - distance); // Population decreases with distance
+    }
+
+    city.population = citySectors.reduce((sum, sector) => sum + sector.population!, 0);
+  }
+
   // Create launch sites
   for (let j = 0; j < 4; j++) {
     const launchSitePosition = findEntityPosition(statePosition, stateEntities, MIN_DISTANCE, 15 * sectorSize);

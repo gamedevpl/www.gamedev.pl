@@ -89,10 +89,12 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           if (!previousCity) return; // Skip if it's a new city
           const currentPopulation = city.population || 0;
           const previousPopulation = previousCity.population;
-          const casualties = previousPopulation - currentPopulation;
+          const casualties = Math.floor(previousPopulation - currentPopulation);
           if (casualties > 0) {
             dispatchMessage(
-              [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
+              currentPopulation === 0
+                ? `Your city ${city.name} has been destroyed!`
+                : [`Your city ${city.name} has been hit!`, `${casualties} casualties reported.`],
               roundedTimestamp,
               roundedTimestamp + 3,
               undefined,
