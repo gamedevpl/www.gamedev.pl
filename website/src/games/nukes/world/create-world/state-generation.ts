@@ -58,6 +58,11 @@ export function generateStates(
       worldWidth,
       worldHeight,
     );
+
+    // Calculate the population of the state
+    state.population = cities
+      .filter((city) => city.stateId === stateId)
+      .reduce((total, city) => total + city.population, 0);
   }
 
   return { states, cities, launchSites };
@@ -73,6 +78,7 @@ function createState(stateId: string, stateName: string, isPlayerControlled: boo
     generalStrategy: isPlayerControlled
       ? undefined
       : [Strategy.NEUTRAL, Strategy.HOSTILE, Strategy.FRIENDLY].sort(() => Math.random() - 0.5)[0],
+    population: 0, // Initialize population with 0
   };
 }
 

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
 import { dispatchMessage } from './messages';
 import { dispatchAllianceProposal } from './alliance-proposal';
-import { getCityPopulation } from '../world/world-state-utils';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
@@ -88,8 +87,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         .forEach((city) => {
           const previousCity = previousCities.find((prevCity) => prevCity.id === city.id);
           if (!previousCity) return; // Skip if it's a new city
-          const currentPopulation = getCityPopulation(worldState, city.id) || 0;
-          const previousPopulation = getCityPopulation({ ...worldState, cities: previousCities }, previousCity.id) || 0;
+          const currentPopulation = city.population || 0;
+          const previousPopulation = previousCity.population;
           const casualties = previousPopulation - currentPopulation;
           if (casualties > 0) {
             dispatchMessage(
@@ -140,7 +139,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       const playerCities = worldState.cities.filter((city) => city.stateId === playerState.id);
       const playerLaunchSites = worldState.launchSites.filter((site) => site.stateId === playerState.id);
 
-      const hasPopulatedCities = playerCities.some((city) => getCityPopulation(worldState, city.id) > 0);
+      const hasPopulatedCities = playerCities.some((city) => city.population > 0);
 
       if (!hasPopulatedCities && playerLaunchSites.length === 0) {
         dispatchMessage(

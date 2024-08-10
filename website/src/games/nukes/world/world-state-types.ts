@@ -24,6 +24,7 @@ export type State = {
   isPlayerControlled: boolean;
   strategies: Record<StateId, Strategy>;
   generalStrategy: Strategy | undefined;
+  population: number; // Field to store the total population of the state
 };
 
 export enum Strategy {

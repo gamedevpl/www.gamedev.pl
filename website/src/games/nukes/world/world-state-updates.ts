@@ -1,5 +1,5 @@
 import { distance } from '../math/position-utils';
-import { Missile, WorldState } from './world-state-types';
+import { Missile, WorldState, State } from './world-state-types';
 import {
   EXPLOSION_DAMAGE_RATIO,
   EXPLOSION_DURATION,
@@ -149,6 +149,14 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
   result = generateLaunches(result);
 
   result = strategyUpdate(result);
+
+  // Calculate and set population for each state
+  result.states = result.states.map((state: State) => {
+    const statePopulation = result.cities
+      .filter((city) => city.stateId === state.id)
+      .reduce((sum, city) => sum + city.population, 0);
+    return { ...state, population: statePopulation };
+  });
 
   return result;
 }
