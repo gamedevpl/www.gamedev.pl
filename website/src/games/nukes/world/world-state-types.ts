@@ -16,9 +16,6 @@ export type SectorId = string;
 
 export type ExplosionId = string;
 
-/** Histogram */
-export type HistogramEntry<T> = { timestamp: number } & T;
-
 /** World structure */
 export type State = {
   id: StateId;
@@ -40,7 +37,7 @@ export type City = {
   stateId: StateId;
   name: string;
   position: Position;
-  populationHistogram: Array<HistogramEntry<{ population: number }>>;
+  population: number;
 };
 
 export enum EntityType {

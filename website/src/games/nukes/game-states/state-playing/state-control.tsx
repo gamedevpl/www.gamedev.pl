@@ -1,6 +1,5 @@
 import styled from 'styled-components';
 import { StateId, WorldState, City, Strategy } from '../../world/world-state-types';
-import { getValueInTime } from '../../world/world-state-time-utils';
 import { dispatchTranslateEvent } from './viewport';
 
 /** A component that allows user to control the player controlled state */
@@ -47,9 +46,7 @@ export function StateControl({
   const cityPopulation: Record<StateId, Array<[City, number]>> = Object.fromEntries(
     worldState.states.map((state) => [
       state.id,
-      worldState.cities
-        .filter((city) => city.stateId === state.id)
-        .map((city) => [city, getValueInTime(city.populationHistogram, worldState.timestamp).population]),
+      worldState.cities.filter((city) => city.stateId === state.id).map((city) => [city, city.population]),
     ]),
   );
 

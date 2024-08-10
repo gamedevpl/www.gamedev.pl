@@ -65,12 +65,8 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
         distance(city.position.x, city.position.y, explosion.position.x, explosion.position.y) <= explosion.radius,
     )) {
       // reduce population by half
-      const lastPopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
-      const damage = Math.max(MIN_EXPLOSION_DAMAGE, lastPopulation * EXPLOSION_DAMAGE_RATIO);
-      city.populationHistogram.push({
-        timestamp: explosion.startTimestamp,
-        population: Math.max(0, lastPopulation - damage),
-      });
+      const damage = Math.max(MIN_EXPLOSION_DAMAGE, city.population * EXPLOSION_DAMAGE_RATIO);
+      city.population = Math.max(0, city.population - damage);
     }
 
     // explosions destroy missiles

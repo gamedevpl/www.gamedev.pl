@@ -16,10 +16,7 @@ export function generateLaunches(worldState: WorldState): WorldState {
     const myLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id);
 
     const enemyCities = worldState.cities.filter(
-      (city) =>
-        state.strategies[city.stateId] === Strategy.HOSTILE &&
-        city.stateId !== state.id &&
-        city.populationHistogram.slice(-1)[0].population > 0,
+      (city) => state.strategies[city.stateId] === Strategy.HOSTILE && city.stateId !== state.id && city.population > 0,
     );
     const enemyMissiles = worldState.missiles.filter(
       (missile) => state.strategies[missile.stateId] !== Strategy.FRIENDLY && missile.stateId !== state.id,

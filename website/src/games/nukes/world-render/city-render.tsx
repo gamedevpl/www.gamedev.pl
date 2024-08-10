@@ -7,8 +7,8 @@ import { useObjectPointer } from '../controls/pointer';
 export function CityRender({ city }: { city: City }) {
   const [point, unpoint] = useObjectPointer();
 
-  const currentPopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
-  const maxPopulation = Math.max(...city.populationHistogram.map((entry) => entry.population));
+  const currentPopulation = city.population;
+  const maxPopulation = 4000; // Assuming max population is 4000, adjust if needed
   const size = Math.max(5, 10 * (currentPopulation / maxPopulation));
 
   return (

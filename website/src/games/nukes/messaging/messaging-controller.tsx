@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
-import { dispatchMessage } from './messages'; // Removed incorrect import
+import { dispatchMessage } from './messages';
 import { dispatchAllianceProposal } from './alliance-proposal';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
@@ -87,10 +87,8 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
         .forEach((city) => {
           const previousCity = previousCities.find((prevCity) => prevCity.id === city.id);
           if (!previousCity) return; // Skip if it's a new city
-          const currentPopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
-          const previousPopulation = previousCity
-            ? previousCity.populationHistogram[previousCity.populationHistogram.length - 1].population
-            : currentPopulation;
+          const currentPopulation = city.population;
+          const previousPopulation = previousCity ? previousCity.population : currentPopulation;
           const casualties = previousPopulation - currentPopulation;
           if (casualties > 0) {
             dispatchMessage(
@@ -105,9 +103,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
           }
         });
     }
-    setPreviousCities(
-      worldState.cities.map((city) => ({ ...city, populationHistogram: [...city.populationHistogram] })),
-    );
+    setPreviousCities(worldState.cities.map((city) => ({ ...city })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedTimestamp]);
 
@@ -143,10 +139,7 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
       const playerCities = worldState.cities.filter((city) => city.stateId === playerState.id);
       const playerLaunchSites = worldState.launchSites.filter((site) => site.stateId === playerState.id);
 
-      const hasPopulatedCities = playerCities.some((city) => {
-        const currentPopulation = city.populationHistogram[city.populationHistogram.length - 1].population;
-        return currentPopulation > 0;
-      });
+      const hasPopulatedCities = playerCities.some((city) => city.population > 0);
 
       if (!hasPopulatedCities && playerLaunchSites.length === 0) {
         dispatchMessage(

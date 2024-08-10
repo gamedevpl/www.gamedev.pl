@@ -118,7 +118,7 @@ function createCitiesAndLaunchSites(
       stateId,
       name: fantasyCityNames.pop()!,
       position: cityPosition,
-      populationHistogram: [{ timestamp: 0, population: Math.floor(Math.random() * 3000) + 1000 }],
+      population: Math.floor(Math.random() * 3000) + 1000,
     });
 
     // Ensure ground around the city

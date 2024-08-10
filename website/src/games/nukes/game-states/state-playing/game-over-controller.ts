@@ -30,9 +30,7 @@ export function GameOverController({
     const statePopulations = Object.fromEntries(
       worldState.states.map((state) => [
         state.id,
-        worldState.cities
-          .filter((city) => city.stateId === state.id)
-          .reduce((sum, city) => sum + city.populationHistogram[city.populationHistogram.length - 1].population, 0),
+        worldState.cities.filter((city) => city.stateId === state.id).reduce((sum, city) => sum + city.population, 0),
       ]),
     );
 
