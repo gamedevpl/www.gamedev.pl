@@ -1,6 +1,7 @@
 import styled from 'styled-components';
 import { StateId, WorldState, City, Strategy } from '../../world/world-state-types';
 import { getValueInTime } from '../../world/world-state-time-utils';
+import { dispatchTranslateEvent } from './viewport';
 
 /** A component that allows user to control the player controlled state */
 export function StateControl({
@@ -59,10 +60,35 @@ export function StateControl({
     ]),
   );
 
+  const handleStateClick = (stateId: StateId) => {
+    const stateCities = worldState.cities.filter((city) => city.stateId === stateId);
+    const stateLaunchSites = worldState.launchSites.filter((site) => site.stateId === stateId);
+
+    if (stateCities.length === 0 && stateLaunchSites.length === 0) {
+      console.warn('No position information available for this state');
+      return;
+    }
+
+    const positions = [...stateCities.map((city) => city.position), ...stateLaunchSites.map((site) => site.position)];
+
+    const averagePosition = positions.reduce((acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }), { x: 0, y: 0 });
+
+    const statePosition = {
+      x: averagePosition.x / positions.length,
+      y: averagePosition.y / positions.length,
+    };
+
+    dispatchTranslateEvent(statePosition);
+  };
+
   return (
     <StateControlContainer>
       {worldState.states.map((state) => (
-        <StateInfo key={state.id} relationshipColor={getRelationshipColor(state.id)}>
+        <StateInfo
+          key={state.id}
+          relationshipColor={getRelationshipColor(state.id)}
+          onClick={() => handleStateClick(state.id)}
+        >
           <StateFlag>{state.name.charAt(0)}</StateFlag>
           <StateDetails>
             <StateName>{state.name}</StateName>
@@ -70,6 +96,7 @@ export function StateControl({
             {state.id !== playerState.id ? (
               <select
                 value={playerState.strategies[state.id]}
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => handleStrategyChange(state.id, e.target.value as Strategy)}
               >
                 {Object.values(Strategy).map((strategy) => (
@@ -110,6 +137,7 @@ const StateInfo = styled.div<{ relationshipColor: string }>`
     `rgba(${parseInt(props.relationshipColor.slice(1, 3), 16)}, ${parseInt(props.relationshipColor.slice(3, 5), 16)}, ${parseInt(props.relationshipColor.slice(5, 7), 16)}, 0.2)`};
   border-radius: 5px;
   transition: background 0.3s ease;
+  cursor: pointer;
 `;
 
 const StateFlag = styled.div`
