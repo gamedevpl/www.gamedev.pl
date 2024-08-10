@@ -1,3 +1,4 @@
+import { SECTOR_SIZE } from '../world-state-constants';
 import { Sector, SectorType, Position } from '../world-state-types';
 import { createSimplexNoise } from './simplex-noise';
 
@@ -7,11 +8,10 @@ export function createGround(
   sectors: Sector[],
   worldWidth: number,
   worldHeight: number,
-  sectorSize: number,
 ) {
   const noise = createSimplexNoise();
-  const centerX = Math.floor(center.x / sectorSize);
-  const centerY = Math.floor(center.y / sectorSize);
+  const centerX = Math.floor(center.x / SECTOR_SIZE);
+  const centerY = Math.floor(center.y / SECTOR_SIZE);
   const radius = Math.floor(worldWidth / 4);
   const threshold = 0.5;
   const noiseScale = 0.005;

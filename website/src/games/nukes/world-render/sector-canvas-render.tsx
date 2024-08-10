@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Rect, Sector, SectorType } from '../world/world-state-types';
 import { useObjectPointer } from '../controls/pointer';
+import { useCustomEvent } from '../events';
+import { CITY_SECTOR_POPULATION } from '../world/world-state-constants';
 
 interface SectorCanvasProps {
   sectors: Sector[];
@@ -10,6 +12,11 @@ interface SectorCanvasProps {
 const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [point, unpoint] = useObjectPointer();
+  const [renderTrigger, setRenderTrigger] = useState(0);
+
+  useCustomEvent('cityDamage', () => {
+    setRenderTrigger(renderTrigger + 1);
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -43,7 +50,7 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
       ctx.fillStyle = fillStyle;
       drawSector(ctx, sector.rect, minX, minY);
     });
-  }, [sectors]);
+  }, [sectors, renderTrigger]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -79,6 +86,19 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
 function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number) {
   switch (sector.type) {
     case SectorType.GROUND:
+      if (sector.cityId) {
+        return {
+          fillStyle: getCityColor(sector),
+          drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
+            ctx.fillStyle = getCityColor(sector);
+            ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
+            if (sector.population! > 0) {
+              drawCityFeatures(ctx, rect, minX, minY);
+            }
+          },
+        };
+      }
+
       return {
         fillStyle: getGroundColor(sector.height || 0, maxHeight),
         drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
@@ -107,6 +127,27 @@ function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number) 
         },
       };
   }
+}
+
+function getCityColor(sector: Sector): string {
+  if (sector.population! === 0) {
+    return 'rgba(0,0,0,0.7)';
+  }
+
+  // Example logic to derive color based on population and height
+  const populationFactor = sector.population ? Math.min(sector.population / CITY_SECTOR_POPULATION, 1) : 0;
+  const heightFactor = sector.height ? sector.height / 100 : 0;
+  const baseColor = [200, 200, 200]; // Base grey color
+  const color = baseColor.map((v) => v - 50 * populationFactor + 20 * heightFactor);
+  return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+}
+
+function drawCityFeatures(ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) {
+  // Example drawing logic for city features
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // Shadow color
+  ctx.fillRect(rect.left - minX + 2, rect.top - minY + 2, rect.right - rect.left - 4, rect.bottom - rect.top - 4);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; // Light color
+  ctx.fillRect(rect.left - minX + 4, rect.top - minY + 4, rect.right - rect.left - 8, rect.bottom - rect.top - 8);
 }
 
 function getGroundColor(height: number, maxHeight: number): string {

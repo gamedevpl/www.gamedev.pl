@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
 import { State, City, LaunchSite, Position } from '../world/world-state-types';
-import { EXPLOSION_RADIUS } from '../world/world-state-constants';
+import { CITY_RADIUS } from '../world/world-state-constants';
 
 interface StateRenderProps {
   state: State;
@@ -9,12 +9,12 @@ interface StateRenderProps {
   launchSites: LaunchSite[];
 }
 
-const OUTLINE_PADDING = EXPLOSION_RADIUS * 2;
+const OUTLINE_PADDING = CITY_RADIUS;
 
 export function StateRender({ state, cities, launchSites }: StateRenderProps) {
   const { boundingBox, pathData } = React.useMemo(() => {
     const statePoints = [
-      ...cities.filter((city) => city.stateId === state.id).map((city) => city.position),
+      ...cities.filter((city) => city.stateId === state.id && city.population > 0).map((city) => city.position),
       ...launchSites.filter((site) => site.stateId === state.id).map((site) => site.position),
     ]
       .map(({ x, y }) => [
@@ -35,17 +35,33 @@ export function StateRender({ state, cities, launchSites }: StateRenderProps) {
   }, [state, cities, launchSites]);
 
   return (
-    <StateContainer
-      width={boundingBox.maxX - boundingBox.minX}
-      height={boundingBox.maxY - boundingBox.minY}
-      style={{
-        transform: `translate(${boundingBox.minX}px, ${boundingBox.minY}px)`,
-      }}
-    >
-      <StateOutline d={pathData} fill="none" stroke={state.color} strokeWidth="2" />
-    </StateContainer>
+    <>
+      <StateTitle
+        style={{
+          transform: `translate(${(boundingBox.maxX + boundingBox.minX) / 2}px, ${boundingBox.minY}px) translateX(-50%) translateY(-150%)`,
+        }}
+      >
+        {state.name}
+      </StateTitle>
+      <StateContainer
+        width={boundingBox.maxX - boundingBox.minX}
+        height={boundingBox.maxY - boundingBox.minY}
+        style={{
+          transform: `translate(${boundingBox.minX}px, ${boundingBox.minY}px)`,
+        }}
+      >
+        <StateOutline d={pathData} fill="none" stroke={state.color} strokeWidth="2" />
+      </StateContainer>
+    </>
   );
 }
+
+const StateTitle = styled.div`
+  position: absolute;
+  color: white;
+  pointer-events: none;
+  font-size: x-large;
+`;
 
 const StateContainer = styled.svg`
   position: absolute;

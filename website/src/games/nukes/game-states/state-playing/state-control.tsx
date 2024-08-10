@@ -78,7 +78,7 @@ export function StateControl({
           <StateFlag>{state.name.charAt(0)}</StateFlag>
           <StateDetails>
             <StateName>{state.name}</StateName>
-            <StatePopulation>{statePopulation[state.id]?.toLocaleString() ?? 'N/A'}</StatePopulation>
+            <StatePopulation>{statePopulation[state.id] << 0}</StatePopulation>
             {state.id !== playerState.id ? (
               <select
                 value={playerState.strategies[state.id]}

@@ -1,7 +1,7 @@
 import { Position, WorldState, Strategy } from './world-state-types';
 import { distance } from '../math/position-utils';
-import { Missile } from './world-state-types';
-import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
+import { Missile, City, Sector } from './world-state-types';
+import { EXPLOSION_RADIUS, MISSILE_SPEED, CITY_RADIUS } from './world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -11,29 +11,35 @@ import { EXPLOSION_RADIUS, MISSILE_SPEED } from './world-state-constants';
  * @returns A list of new missiles and their corresponding explosions.
  */
 export function generateLaunches(worldState: WorldState): WorldState {
+  const citySectors = worldState.sectors.filter((sector) => sector.cityId && sector.population! > 0);
   for (const state of worldState.states) {
     const myCities = worldState.cities.filter((city) => city.stateId === state.id);
     const myLaunchSites = worldState.launchSites.filter((launchSite) => launchSite.stateId === state.id);
 
-    const enemyCities = worldState.cities.filter(
-      (city) => state.strategies[city.stateId] === Strategy.HOSTILE && city.stateId !== state.id && city.population > 0,
-    );
+    const enemyCities = worldState.cities
+      .filter(
+        (city) =>
+          state.strategies[city.stateId] === Strategy.HOSTILE && city.stateId !== state.id && city.population > 0,
+      )
+      .map((city) => ({ ...city, isCity: true }));
     const enemyMissiles = worldState.missiles.filter(
       (missile) => state.strategies[missile.stateId] !== Strategy.FRIENDLY && missile.stateId !== state.id,
     );
-    const enemyLaunchSites = worldState.launchSites.filter(
-      (launchSite) => state.strategies[launchSite.stateId] === Strategy.HOSTILE && launchSite.stateId !== state.id,
-    );
+    const enemyLaunchSites = worldState.launchSites
+      .filter(
+        (launchSite) => state.strategies[launchSite.stateId] === Strategy.HOSTILE && launchSite.stateId !== state.id,
+      )
+      .map((city) => ({ ...city, isCity: false }));
 
     // Filter enemy missiles, keep only those which are approaching any of myCities or myLaunchSites
     const threateningMissiles = enemyMissiles
       .filter((missile) => {
         return (
           myCities.some((city) => {
-            return isPointClose(missile.target, city.position);
+            return isPointClose(missile.target, city.position, EXPLOSION_RADIUS + CITY_RADIUS);
           }) ||
           myLaunchSites.some((launchSite) => {
-            return isPointClose(missile.target, launchSite.position);
+            return isPointClose(missile.target, launchSite.position, EXPLOSION_RADIUS);
           })
         );
       })
@@ -55,6 +61,7 @@ export function generateLaunches(worldState: WorldState): WorldState {
         threateningMissiles.map((missile) => ({
           ...missile,
           interceptionPoint: calculateInterceptionPoint(missile, launchSite.position),
+          isCity: false,
         })),
         launchSite.position,
       );
@@ -74,7 +81,17 @@ export function generateLaunches(worldState: WorldState): WorldState {
           missiles,
         );
 
-        launchSite.nextLaunchTarget = targets?.[0]?.[0]?.position ?? undefined;
+        const target = targets?.[0]?.[0];
+        if (target?.position && target?.isCity) {
+          // Implement proper targeting here, find non zero population city sector for this target city
+          const citySector = findNonZeroPopulationSector(target as City, citySectors);
+          launchSite.nextLaunchTarget = citySector || {
+            x: target.position.x + (Math.random() - Math.random()) * CITY_RADIUS,
+            y: target.position.y + (Math.random() - Math.random()) * CITY_RADIUS,
+          };
+        } else {
+          launchSite.nextLaunchTarget = target?.position ?? undefined;
+        }
       }
     }
   }
@@ -123,15 +140,15 @@ function calculateInterceptionPoint(missile: Missile, sitePosition: Position): P
  * Check if a point is close to a target.
  * @param point The point to check.
  * @param target The target position.
+ * @param tolerance The threshold to consider
  * @returns Whether the point is close or not.
  */
-function isPointClose(point: Position, target: Position): boolean {
-  const tolerance = EXPLOSION_RADIUS; // Define a closeness tolerance
+function isPointClose(point: Position, target: Position, tolerance: number): boolean {
   return distance(point.x, point.y, target.x, target.y) <= tolerance;
 }
 
 /** Sort entities by distance to a position, ascending. */
-function sortByDistance<T extends { position: Position }>(entities: T[], position: Position): T[] {
+function sortByDistance<T extends { position: Position; isCity: boolean }>(entities: T[], position: Position): T[] {
   return entities.sort(
     (a, b) =>
       distance(a.position.x, a.position.y, position.x, position.y) -
@@ -140,13 +157,40 @@ function sortByDistance<T extends { position: Position }>(entities: T[], positio
 }
 
 /** Count how many missiles are targeted towards entity */
-function countMissiles<T extends { position: Position }>(entities: T[], missiles: Missile[]): Array<[T, number]> {
+function countMissiles<T extends { position: Position; isCity: boolean }>(
+  entities: T[],
+  missiles: Missile[],
+): Array<[T, number]> {
   // Count the missiles that target each entity
   const missileCounts = new Map<T, number>();
   for (const entity of entities) {
-    missileCounts.set(entity, missiles.filter((missile) => isPointClose(missile.target, entity.position)).length);
+    missileCounts.set(
+      entity,
+      missiles.filter((missile) => isPointClose(missile.target, entity.position, EXPLOSION_RADIUS)).length,
+    );
   }
 
   // Convert the map to a sorted array by missile count ascending
   return Array.from(missileCounts).sort((a, b) => a[1] - b[1]);
+}
+
+/**
+ * Find a non-zero population sector within a target city.
+ * @param target The target city.
+ * @param worldState The current world state.
+ * @returns A position within the city that has a non-zero population.
+ */
+function findNonZeroPopulationSector(target: City, citySectors: Sector[]): Position | null {
+  // This function assumes that each city has sectors and we can access their population.
+  // Adjust based on your actual data structure.
+  const sectors = citySectors.filter((sector) => sector.cityId === target.id);
+
+  // If there are no sectors with population, return null
+  if (!sectors || sectors.length === 0) {
+    return null;
+  }
+
+  // Select a random sector with non-zero population
+  const selectedSector = sectors[Math.floor(Math.random() * sectors.length)];
+  return selectedSector.position;
 }

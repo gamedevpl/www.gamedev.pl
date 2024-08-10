@@ -1,18 +1,19 @@
+import { SECTOR_SIZE } from '../world-state-constants';
 import { Sector, SectorType } from '../world-state-types';
 
-export function initializeSectors(worldWidth: number, worldHeight: number, sectorSize: number): Sector[] {
+export function initializeSectors(worldWidth: number, worldHeight: number): Sector[] {
   const sectors: Sector[] = [];
 
   for (let y = 0; y < worldHeight; y++) {
     for (let x = 0; x < worldWidth; x++) {
       sectors.push({
         id: `sector-${sectors.length + 1}`,
-        position: { x: x * sectorSize, y: y * sectorSize },
+        position: { x: x * SECTOR_SIZE, y: y * SECTOR_SIZE },
         rect: {
-          left: x * sectorSize,
-          top: y * sectorSize,
-          right: (x + 1) * sectorSize,
-          bottom: (y + 1) * sectorSize,
+          left: x * SECTOR_SIZE,
+          top: y * SECTOR_SIZE,
+          right: (x + 1) * SECTOR_SIZE,
+          bottom: (y + 1) * SECTOR_SIZE,
         },
         type: SectorType.WATER,
         depth: 0, // Initialize depth to 0

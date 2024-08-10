@@ -1,9 +1,10 @@
+import { SECTOR_SIZE } from '../world-state-constants';
 import { Position } from '../world-state-types';
 
-export function getRandomPosition(worldWidth: number, worldHeight: number, sectorSize: number): Position {
+export function getRandomPosition(worldWidth: number, worldHeight: number): Position {
   return {
-    x: Math.floor(Math.random() * (worldWidth * 0.8) + worldWidth * 0.1) * sectorSize,
-    y: Math.floor(Math.random() * (worldHeight * 0.8) + worldHeight * 0.1) * sectorSize,
+    x: Math.floor(Math.random() * (worldWidth * 0.8) + worldWidth * 0.1) * SECTOR_SIZE,
+    y: Math.floor(Math.random() * (worldHeight * 0.8) + worldHeight * 0.1) * SECTOR_SIZE,
   };
 }
 

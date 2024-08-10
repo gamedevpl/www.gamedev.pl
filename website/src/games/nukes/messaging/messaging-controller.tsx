@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { WorldState, Strategy, City, LaunchSite } from '../world/world-state-types';
 import { dispatchMessage } from './messages';
 import { dispatchAllianceProposal } from './alliance-proposal';
+import { dispatchCustomEvent } from '../events';
 
 export function MessagingController({ worldState }: { worldState: WorldState }) {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
@@ -82,15 +83,14 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
   useEffect(() => {
     // Inform the player if their city is hit, tell the number of casualties
     if (playerState) {
-      worldState.cities
-        .filter((city) => city.stateId === playerState.id)
-        .forEach((city) => {
-          const previousCity = previousCities.find((prevCity) => prevCity.id === city.id);
-          if (!previousCity) return; // Skip if it's a new city
-          const currentPopulation = city.population || 0;
-          const previousPopulation = previousCity.population;
-          const casualties = Math.floor(previousPopulation - currentPopulation);
-          if (casualties > 0) {
+      worldState.cities.forEach((city) => {
+        const previousCity = previousCities.find((prevCity) => prevCity.id === city.id);
+        if (!previousCity) return; // Skip if it's a new city
+        const currentPopulation = city.population || 0;
+        const previousPopulation = previousCity.population;
+        const casualties = Math.floor(previousPopulation - currentPopulation);
+        if (casualties > 0) {
+          if (city.stateId === playerState.id) {
             dispatchMessage(
               currentPopulation === 0
                 ? `Your city ${city.name} has been destroyed!`
@@ -103,7 +103,9 @@ export function MessagingController({ worldState }: { worldState: WorldState }) 
               true,
             );
           }
-        });
+          dispatchCustomEvent('cityDamage');
+        }
+      });
     }
     setPreviousCities(worldState.cities.map((city) => ({ ...city })));
     // eslint-disable-next-line react-hooks/exhaustive-deps

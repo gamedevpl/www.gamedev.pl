@@ -8,8 +8,10 @@ export function CityRender({ city }: { city: City }) {
   const [point, unpoint] = useObjectPointer();
 
   const currentPopulation = city.population;
-  const maxPopulation = 4000; // Assuming max population is 4000, adjust if needed
-  const size = Math.max(5, 10 * (currentPopulation / maxPopulation));
+
+  if (!currentPopulation) {
+    return null;
+  }
 
   return (
     <CityContainer
@@ -19,26 +21,21 @@ export function CityRender({ city }: { city: City }) {
         {
           '--x': city.position.x,
           '--y': city.position.y,
-          '--size': size,
-          '--opacity': currentPopulation > 0 ? 1 : 0.3,
         } as React.CSSProperties
       }
     >
-      <CityTooltip>
-        {city.name}: {currentPopulation.toLocaleString()} population
-      </CityTooltip>
+      <span>{city.name}</span>
+      <CityTooltip>{currentPopulation << 0} population</CityTooltip>
     </CityContainer>
   );
 }
 
 const CityContainer = styled.div`
-  transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px)) translate(-50%, -50%);
+  transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px)) translate(-50%, -100%);
   position: absolute;
   width: calc(var(--size) * 1px);
   height: calc(var(--size) * 1px);
-  opacity: var(--opacity);
-  background: rgb(0, 0, 255);
-  box-shadow: 0 0 10px 5px rgb(0, 0, 255);
+  color: white;
 
   &:hover > div {
     display: block;
@@ -55,6 +52,6 @@ const CityTooltip = styled.div`
   font-size: 12px;
   white-space: nowrap;
   left: 50%;
-  transform: translateX(-50%) translateY(-100%);
+  transform: translateX(-50%) translateY(0%);
   pointer-events: none;
 `;

@@ -2,7 +2,7 @@ import stringToColor from 'string-to-color';
 import { getRandomCityNames } from '../../content/city-names';
 import { getRandomStateNames } from '../../content/state-names';
 import { City, EntityType, LaunchSite, State, Strategy, Position, Sector } from '../world-state-types';
-import { EXPLOSION_RADIUS } from '../world-state-constants';
+import { EXPLOSION_RADIUS, CITY_RADIUS, CITY_SECTOR_POPULATION, SECTOR_SIZE } from '../world-state-constants';
 import { createGround } from './ground-generation';
 import { getRandomPosition, isValidPosition, isFarEnough } from './utils';
 
@@ -11,7 +11,6 @@ export function generateStates(
   playerStateName: string,
   worldWidth: number,
   worldHeight: number,
-  sectorSize: number,
   sectors: Sector[],
 ) {
   const states: State[] = [];
@@ -38,11 +37,11 @@ export function generateStates(
       otherState.strategies[stateId] = Strategy.NEUTRAL;
     });
 
-    const statePosition = findStatePosition(statePositions, worldWidth, worldHeight, sectorSize);
+    const statePosition = findStatePosition(statePositions, worldWidth, worldHeight);
     statePositions.push(statePosition);
 
     // Create ground for the state
-    createGround(statePosition, worldWidth / 2, sectors, worldWidth, worldHeight, sectorSize);
+    createGround(statePosition, worldWidth / 2, sectors, worldWidth, worldHeight);
 
     // Create cities and launch sites for the state
     createCitiesAndLaunchSites(
@@ -53,7 +52,6 @@ export function generateStates(
       cities,
       launchSites,
       MIN_DISTANCE,
-      sectorSize,
       sectors,
       worldWidth,
       worldHeight,
@@ -82,16 +80,11 @@ function createState(stateId: string, stateName: string, isPlayerControlled: boo
   };
 }
 
-function findStatePosition(
-  statePositions: Position[],
-  worldWidth: number,
-  worldHeight: number,
-  sectorSize: number,
-): Position {
+function findStatePosition(statePositions: Position[], worldWidth: number, worldHeight: number): Position {
   let statePosition: Position;
   let maxIterations = 10;
   do {
-    statePosition = getRandomPosition(worldWidth, worldHeight, sectorSize);
+    statePosition = getRandomPosition(worldWidth, worldHeight);
     if (maxIterations-- <= 0) {
       break;
     }
@@ -107,7 +100,6 @@ function createCitiesAndLaunchSites(
   cities: City[],
   launchSites: LaunchSite[],
   MIN_DISTANCE: number,
-  sectorSize: number,
   sectors: Sector[],
   worldWidth: number,
   worldHeight: number,
@@ -116,7 +108,7 @@ function createCitiesAndLaunchSites(
 
   // Create cities
   for (let j = 0; j < citiesPerState; j++) {
-    const cityPosition = findEntityPosition(statePosition, stateEntities, MIN_DISTANCE, 30 * sectorSize);
+    const cityPosition = findEntityPosition(statePosition, stateEntities, MIN_DISTANCE, 30 * SECTOR_SIZE);
     stateEntities.push({ position: cityPosition });
 
     cities.push({
@@ -128,7 +120,7 @@ function createCitiesAndLaunchSites(
     });
 
     // Ensure ground around the city
-    createGround(cityPosition, 2, sectors, worldWidth, worldHeight, sectorSize);
+    createGround(cityPosition, 2, sectors, worldWidth, worldHeight);
   }
 
   // Assign sectors to cities and calculate their initial populations
@@ -137,7 +129,7 @@ function createCitiesAndLaunchSites(
       const dx = sector.position.x - city.position.x;
       const dy = sector.position.y - city.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      return distance < worldWidth / 4; // Assign sectors within a certain range
+      return distance < CITY_RADIUS; // Assign sectors within a certain range
     });
 
     for (const sector of citySectors) {
@@ -145,7 +137,7 @@ function createCitiesAndLaunchSites(
       const dx = sector.position.x - city.position.x;
       const dy = sector.position.y - city.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      sector.population = Math.max(0, EXPLOSION_RADIUS - distance); // Population decreases with distance
+      sector.population = (Math.max(0, CITY_RADIUS - distance) / CITY_RADIUS) * CITY_SECTOR_POPULATION; // Population decreases with distance
     }
 
     city.population = citySectors.reduce((sum, sector) => sum + sector.population!, 0);
@@ -153,7 +145,7 @@ function createCitiesAndLaunchSites(
 
   // Create launch sites
   for (let j = 0; j < 4; j++) {
-    const launchSitePosition = findEntityPosition(statePosition, stateEntities, MIN_DISTANCE, 15 * sectorSize);
+    const launchSitePosition = findEntityPosition(statePosition, stateEntities, MIN_DISTANCE, 15 * SECTOR_SIZE);
     stateEntities.push({ position: launchSitePosition });
 
     launchSites.push({
@@ -164,7 +156,7 @@ function createCitiesAndLaunchSites(
     });
 
     // Ensure ground around the launch site
-    createGround(launchSitePosition, 1, sectors, worldWidth, worldHeight, sectorSize);
+    createGround(launchSitePosition, 1, sectors, worldWidth, worldHeight);
   }
 
   return stateEntities;
