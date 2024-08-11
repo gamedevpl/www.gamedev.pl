@@ -1,7 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import styled from 'styled-components';
 import { useGesture } from '@use-gesture/react';
 import { dispatchCustomEvent, useCustomEvent } from '../../events';
+
+export type ViewportConfiguration = {
+  initialTranslate: { x: number; y: number };
+  initialZoom: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
 
 export type TranslateViewportPayload = { x: number; y: number };
 
@@ -15,40 +24,71 @@ export function useTranslateViewportEvent(callback: (position: TranslateViewport
 
 export function Viewport({
   children,
-  onSetInitialViewport,
+  onGetViewportConfiguration,
 }: {
   children: React.ReactNode;
-  onSetInitialViewport: () => { translate: { x: number; y: number }; zoom: number };
+  onGetViewportConfiguration: () => ViewportConfiguration;
 }) {
   const interactionRef = useRef<HTMLDivElement>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initialViewport = React.useMemo(onSetInitialViewport, []);
-  const [zoom, setZoom] = useState(initialViewport.zoom);
-  const [translate, setTranslate] = useState(initialViewport.translate);
+  const viewportConfiguration = React.useMemo(onGetViewportConfiguration, [onGetViewportConfiguration]);
+  const [zoom, setZoom] = useState(viewportConfiguration.initialZoom);
+  const [translate, setTranslate] = useState(viewportConfiguration.initialTranslate);
   const [isInteracting, setInteracting] = useState<boolean | undefined>(false);
+  const updateViewport = useCallback(
+    (newTranslate: { x: number; y: number }, newZoom: number) => {
+      const { minX, minY, maxX, maxY } = viewportConfiguration;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Adjust zoom level
+      const adjustedZoom = Math.min(
+        Math.max(newZoom, Math.max(viewportWidth / (maxX - minX), viewportHeight / (maxY - minY))),
+        4,
+      );
+
+      // Adjust translate values
+      const adjustedTranslate = {
+        x: Math.min(Math.max(newTranslate.x, -(maxX - viewportWidth / adjustedZoom)), -minX),
+        y: Math.min(Math.max(newTranslate.y, -(maxY - viewportHeight / adjustedZoom)), -minY),
+      };
+
+      setTranslate(adjustedTranslate);
+      setZoom(adjustedZoom);
+    },
+    [viewportConfiguration],
+  );
+
+  useEffect(() => {
+    updateViewport(viewportConfiguration.initialTranslate, viewportConfiguration.initialZoom);
+  }, []);
 
   useGesture(
     {
       onPinch({ origin, delta, pinching }) {
         setInteracting(pinching);
-        const newZoom = Math.max(zoom + delta[0], 0.1);
+        const newZoom = zoom + delta[0];
         const rect = interactionRef.current?.getBoundingClientRect();
         const offsetX = origin[0] - (rect?.left ?? 0);
         const offsetY = origin[1] - (rect?.top ?? 0);
-        setTranslate({
-          x: translate.x - (offsetX / zoom - offsetX / newZoom),
-          y: translate.y - (offsetY / zoom - offsetY / newZoom),
-        });
-        setZoom(newZoom);
+        updateViewport(
+          {
+            x: translate.x - (offsetX / zoom - offsetX / newZoom),
+            y: translate.y - (offsetY / zoom - offsetY / newZoom),
+          },
+          newZoom,
+        );
       },
       onWheel({ event, delta: [x, y], wheeling }) {
         event.preventDefault();
         setInteracting(wheeling);
-        setTranslate({
-          x: translate.x - x / zoom,
-          y: translate.y - y / zoom,
-        });
+        updateViewport(
+          {
+            x: translate.x - x / zoom,
+            y: translate.y - y / zoom,
+          },
+          zoom,
+        );
       },
     },
     {
@@ -65,7 +105,7 @@ export function Viewport({
     const newTranslateX = viewportWidth / 2 - position.x * zoom;
     const newTranslateY = viewportHeight / 2 - position.y * zoom;
 
-    setTranslate({ x: newTranslateX / zoom, y: newTranslateY / zoom });
+    updateViewport({ x: newTranslateX / zoom, y: newTranslateY / zoom }, zoom);
   });
 
   return (

@@ -4,7 +4,7 @@ import { WorldStateRender } from '../../world-render/world-state-render';
 import { WorldState } from '../../world/world-state-types';
 import { StateControl } from './state-control';
 
-import { Viewport } from './viewport';
+import { Viewport, ViewportConfiguration } from './viewport';
 
 export function WorldCanvas({
   worldState,
@@ -16,7 +16,7 @@ export function WorldCanvas({
   return (
     <SelectionContextWrapper>
       <PointerContextWrapper>
-        <Viewport onSetInitialViewport={() => getInitialViewport(worldState)}>
+        <Viewport onGetViewportConfiguration={() => getViewportConfiguration(worldState)}>
           <WorldStateRender state={worldState} />
         </Viewport>
         <StateControl worldState={worldState} setWorldState={setWorldState} />
@@ -25,7 +25,7 @@ export function WorldCanvas({
   );
 }
 
-function getInitialViewport(worldState: WorldState): { translate: { x: number; y: number }; zoom: number } {
+function getViewportConfiguration(worldState: WorldState): ViewportConfiguration {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
@@ -56,11 +56,22 @@ function getInitialViewport(worldState: WorldState): { translate: { x: number; y
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;
 
+  worldState.sectors.forEach((sector) => {
+    minX = Math.min(minX, sector.rect.left);
+    minY = Math.min(minY, sector.rect.top);
+    maxX = Math.max(maxX, sector.rect.right);
+    maxY = Math.max(maxY, sector.rect.bottom);
+  });
+
   return {
-    translate: {
+    initialTranslate: {
       x: viewportWidth / 2 - centerX * zoom,
       y: viewportHeight / 2 - centerY * zoom,
     },
-    zoom,
+    initialZoom: zoom,
+    minX,
+    minY,
+    maxX,
+    maxY,
   };
 }
