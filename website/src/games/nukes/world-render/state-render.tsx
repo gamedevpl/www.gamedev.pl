@@ -12,7 +12,7 @@ interface StateRenderProps {
 const OUTLINE_PADDING = CITY_RADIUS;
 
 export function StateRender({ state, cities, launchSites }: StateRenderProps) {
-  const { boundingBox, pathData } = React.useMemo(() => {
+  const { boundingBox } = React.useMemo(() => {
     const statePoints = [
       ...cities.filter((city) => city.stateId === state.id && city.population > 0).map((city) => city.position),
       ...launchSites.filter((site) => site.stateId === state.id).map((site) => site.position),
@@ -39,19 +39,11 @@ export function StateRender({ state, cities, launchSites }: StateRenderProps) {
       <StateTitle
         style={{
           transform: `translate(${(boundingBox.maxX + boundingBox.minX) / 2}px, ${boundingBox.minY}px) translateX(-50%) translateY(-150%)`,
+          color: state.color,
         }}
       >
         {state.name}
       </StateTitle>
-      <StateContainer
-        width={boundingBox.maxX - boundingBox.minX}
-        height={boundingBox.maxY - boundingBox.minY}
-        style={{
-          transform: `translate(${boundingBox.minX}px, ${boundingBox.minY}px)`,
-        }}
-      >
-        <StateOutline d={pathData} fill="none" stroke={state.color} strokeWidth="2" />
-      </StateContainer>
     </>
   );
 }
@@ -59,16 +51,10 @@ export function StateRender({ state, cities, launchSites }: StateRenderProps) {
 const StateTitle = styled.div`
   position: absolute;
   color: white;
+  text-shadow: 2px 2px 0px white;
   pointer-events: none;
   font-size: x-large;
 `;
-
-const StateContainer = styled.svg`
-  position: absolute;
-  pointer-events: none;
-`;
-
-const StateOutline = styled.path``;
 
 function calculateStateOutline(points: Position[]): Position[] {
   if (points.length < 3) return points;

@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Rect, Sector, SectorType } from '../world/world-state-types';
+import { Rect, Sector, SectorType, State } from '../world/world-state-types';
 import { useObjectPointer } from '../controls/pointer';
 import { useCustomEvent } from '../events';
 import { CITY_SECTOR_POPULATION } from '../world/world-state-constants';
 
 interface SectorCanvasProps {
   sectors: Sector[];
+  states: State[];
 }
 
 // Memoized component to avoid unnecessary re-renders
-const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
+const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors, states }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [point, unpoint] = useObjectPointer();
   const [renderTrigger, setRenderTrigger] = useState(0);
@@ -41,16 +42,20 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
     const maxDepth = Math.max(...sectors.filter((s) => s.type === SectorType.WATER).map((s) => s.depth || 0));
     const maxHeight = Math.max(...sectors.filter((s) => s.type === SectorType.GROUND).map((s) => s.height || 0));
 
+    // Create a map of state colors
+    const stateColors = new Map(states.map((state) => [state.id, state.color]));
+
     // Draw the sectors
     ctx.clearRect(0, 0, width, height);
     sectors.forEach((sector) => {
-      const { fillStyle, drawSector } = getRenderFunction(sector, maxDepth, maxHeight);
+      const { fillStyle, drawSector } = getRenderFunction(sector, maxDepth, maxHeight, stateColors);
 
       // Fill with the appropriate color or gradient
       ctx.fillStyle = fillStyle;
       drawSector(ctx, sector.rect, minX, minY);
     });
-  }, [sectors, renderTrigger]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderTrigger]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -83,49 +88,36 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
   return <canvas ref={canvasRef} style={{ opacity: 0.5 }}></canvas>;
 });
 
-function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number) {
-  switch (sector.type) {
-    case SectorType.GROUND:
-      if (sector.cityId) {
-        return {
-          fillStyle: getCityColor(sector),
-          drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-            ctx.fillStyle = getCityColor(sector);
-            ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
-            if (sector.population! > 0) {
-              drawCityFeatures(ctx, rect, minX, minY);
-            }
-          },
-        };
+function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number, stateColors: Map<string, string>) {
+  const baseColor = getBaseColor(sector, maxDepth, maxHeight);
+  const stateColor = sector.stateId ? stateColors.get(sector.stateId) : undefined;
+
+  return {
+    fillStyle: baseColor,
+    drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
+
+      if (stateColor) {
+        ctx.fillStyle = `${stateColor}80`; // 80 is hex for opacity
+        ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
       }
 
-      return {
-        fillStyle: getGroundColor(sector.height || 0, maxHeight),
-        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          ctx.fillStyle = getGroundColor(sector.height || 0, maxHeight);
-          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
-        },
-      };
+      if (sector.cityId && sector.population! > 0) {
+        drawCityFeatures(ctx, rect, minX, minY);
+      }
+    },
+  };
+}
+
+function getBaseColor(sector: Sector, maxDepth: number, maxHeight: number): string {
+  switch (sector.type) {
+    case SectorType.GROUND:
+      return sector.cityId ? getCityColor(sector) : getGroundColor(sector.height || 0, maxHeight);
     case SectorType.WATER:
-      return {
-        fillStyle: 'rgb(0, 34, 93)',
-        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          const depthRatio = (sector.depth || 0) / maxDepth;
-          const r = Math.round(0 + (34 - 0) * (1 - depthRatio));
-          const g = Math.round(137 + (34 - 137) * depthRatio);
-          const b = Math.round(178 + (93 - 178) * depthRatio);
-          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
-        },
-      };
+      return getWaterColor(sector.depth || 0, maxDepth);
     default:
-      return {
-        fillStyle: 'rgb(0, 34, 93)', // Default to water color
-        drawSector: (ctx: CanvasRenderingContext2D, rect: Rect, minX: number, minY: number) => {
-          ctx.fillStyle = 'rgb(0, 34, 93)'; // Default color
-          ctx.fillRect(rect.left - minX, rect.top - minY, rect.right - rect.left, rect.bottom - rect.top);
-        },
-      };
+      return 'rgb(0, 34, 93)'; // Default to water color
   }
 }
 
@@ -171,6 +163,14 @@ function getGroundColor(height: number, maxHeight: number): string {
     const blueIntensity = Math.round(255 - (255 - 200) * ((heightRatio - 0.8) / 0.2));
     return `rgb(255, 255, ${blueIntensity})`;
   }
+}
+
+function getWaterColor(depth: number, maxDepth: number): string {
+  const depthRatio = depth / maxDepth;
+  const r = Math.round(0 + (34 - 0) * (1 - depthRatio));
+  const g = Math.round(137 + (34 - 137) * depthRatio);
+  const b = Math.round(178 + (93 - 178) * depthRatio);
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 export default SectorCanvas;

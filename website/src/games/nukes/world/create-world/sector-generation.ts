@@ -7,7 +7,7 @@ export function initializeSectors(worldWidth: number, worldHeight: number): Sect
   for (let y = 0; y < worldHeight; y++) {
     for (let x = 0; x < worldWidth; x++) {
       sectors.push({
-        id: `sector-${sectors.length + 1}`,
+        id: `${x * SECTOR_SIZE},${y * SECTOR_SIZE}`,
         position: { x: x * SECTOR_SIZE, y: y * SECTOR_SIZE },
         rect: {
           left: x * SECTOR_SIZE,

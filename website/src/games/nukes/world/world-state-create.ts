@@ -1,7 +1,7 @@
-import { Explosion, Missile, Sector, SectorType, WorldState, Interceptor } from './world-state-types';
+import { Explosion, Missile, Sector, WorldState, Interceptor } from './world-state-types';
 import { calculateWaterDepthAndGroundHeight } from './create-world/sector-generation';
 import { generateStates } from './create-world/state-generation';
-import { SECTOR_SIZE } from './world-state-constants';
+import { initializeSectors } from './create-world/sector-generation';
 
 export function createWorldState({
   playerStateName,
@@ -13,26 +13,7 @@ export function createWorldState({
   const worldWidth = Math.max(200, Math.ceil(Math.sqrt(numberOfStates) * 10));
   const worldHeight = worldWidth;
 
-  const sectors: Sector[] = [];
-
-  // Initialize the world with water
-  for (let y = 0; y < worldHeight; y++) {
-    for (let x = 0; x < worldWidth; x++) {
-      sectors.push({
-        id: `sector-${sectors.length + 1}`,
-        position: { x: x * SECTOR_SIZE, y: y * SECTOR_SIZE },
-        rect: {
-          left: x * SECTOR_SIZE,
-          top: y * SECTOR_SIZE,
-          right: (x + 1) * SECTOR_SIZE,
-          bottom: (y + 1) * SECTOR_SIZE,
-        },
-        type: SectorType.WATER,
-        depth: 0, // Initialize depth to 0
-        height: 0, // Initialize height to 0 for water sectors
-      });
-    }
-  }
+  const sectors: Sector[] = initializeSectors(worldWidth, worldHeight);
 
   const { states, cities, launchSites } = generateStates(
     numberOfStates,

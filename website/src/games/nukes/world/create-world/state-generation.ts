@@ -1,7 +1,17 @@
 import stringToColor from 'string-to-color';
 import { getRandomCityNames } from '../../content/city-names';
 import { getRandomStateNames } from '../../content/state-names';
-import { City, EntityType, LaunchSite, State, Strategy, Position, Sector, LaunchSiteMode } from '../world-state-types';
+import {
+  City,
+  EntityType,
+  LaunchSite,
+  State,
+  Strategy,
+  Position,
+  Sector,
+  LaunchSiteMode,
+  SectorType,
+} from '../world-state-types';
 import { EXPLOSION_RADIUS, CITY_RADIUS, CITY_SECTOR_POPULATION, SECTOR_SIZE } from '../world-state-constants';
 import { createGround } from './ground-generation';
 import { getRandomPosition, isValidPosition, isFarEnough } from './utils';
@@ -62,6 +72,9 @@ export function generateStates(
       .filter((city) => city.stateId === stateId)
       .reduce((total, city) => total + city.population, 0);
   }
+
+  // Fill sector stateIds using DFS
+  fillSectorStates(sectors, cities);
 
   return { states, cities, launchSites };
 }
@@ -181,4 +194,52 @@ function findEntityPosition(
     }
   } while (!isFarEnough(entityPosition, stateEntities, MIN_DISTANCE));
   return entityPosition;
+}
+
+// New function to fill sector stateIds using DFS
+function fillSectorStates(sectors: Sector[], cities: City[]) {
+  const sectorMap = new Map(sectors.map((sector) => [sector.id, sector]));
+  const queue: Sector[] = [];
+
+  // Start from cities
+  cities.forEach((city) => {
+    const citySectors = sectors.filter((sector) => sector.cityId === city.id);
+    citySectors.forEach((sector) => {
+      sector.stateId = city.stateId;
+      queue.push(sector);
+    });
+  });
+
+  // DFS
+  while (queue.length > 0) {
+    const currentSector = queue.splice(0, 1)[0]!;
+    const neighbors = getNeighborSectors(currentSector, sectorMap);
+
+    neighbors.forEach((neighbor) => {
+      if (!neighbor.stateId && neighbor.type === SectorType.GROUND) {
+        neighbor.stateId = currentSector.stateId;
+        queue.push(neighbor);
+      }
+    });
+  }
+}
+
+function getNeighborSectors(sector: Sector, sectorMap: Map<string, Sector>): Sector[] {
+  const neighbors: Sector[] = [];
+  const directions = [
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+  ];
+
+  directions.forEach(({ dx, dy }) => {
+    const neighborId = `${sector.position.x + dx * SECTOR_SIZE},${sector.position.y + dy * SECTOR_SIZE}`;
+    const neighbor = sectorMap.get(neighborId);
+    if (neighbor) {
+      neighbors.push(neighbor);
+    }
+  });
+
+  return neighbors;
 }

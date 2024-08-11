@@ -59,6 +59,7 @@ export type Sector = {
   type: SectorType;
   depth?: number; // water depth
   height?: number; // ground height
+  stateId?: StateId; // New property to represent sector ownership
 } & ({ cityId: CityId; population: number } | { population?: number; cityId?: CityId });
 
 export enum LaunchSiteMode {

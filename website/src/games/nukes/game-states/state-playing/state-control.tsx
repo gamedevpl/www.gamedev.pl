@@ -75,7 +75,7 @@ export function StateControl({
           relationshipColor={getRelationshipColor(state.id)}
           onClick={() => handleStateClick(state.id)}
         >
-          <StateFlag>{state.name.charAt(0)}</StateFlag>
+          <StateFlag style={{ color: state.color }}>{state.name.charAt(0)}</StateFlag>
           <StateDetails>
             <StateName>{state.name}</StateName>
             <StatePopulation>{statePopulation[state.id] << 0}</StatePopulation>

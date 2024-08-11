@@ -19,7 +19,7 @@ export function WorldStateRender({ state }: { state: WorldState }) {
       onClick={() => dispatchCustomEvent('world-click')}
     >
       {/* static content, does not change at all */}
-      <SectorCanvas sectors={state.sectors} />
+      <SectorCanvas sectors={state.sectors} states={state.states} />
       {state.states.map((stateItem) => (
         <StateRender key={stateItem.id} state={stateItem} cities={state.cities} launchSites={state.launchSites} />
       ))}
