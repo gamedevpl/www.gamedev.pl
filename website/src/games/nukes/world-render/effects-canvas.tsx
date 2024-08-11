@@ -62,7 +62,7 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
         renderInterceptor(ctx, interceptor);
 
         // Calculate distance traveled
-        const distanceTraveled = INTERCEPTOR_SPEED * (state.timestamp - interceptor.launchTimestamp + 0.5);
+        const distanceTraveled = INTERCEPTOR_SPEED * (state.timestamp - interceptor.launchTimestamp + 1);
 
         // Render disintegration animation if interceptor exceeds max range
         if (distanceTraveled > INTERCEPTOR_MAX_RANGE) {

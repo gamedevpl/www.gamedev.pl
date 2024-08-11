@@ -74,6 +74,8 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       };
     }
 
+    interceptor.tail = [...interceptor.tail.slice(-100), { timestamp: worldTimestamp, position: interceptor.position }];
+
     // Check if interceptor has exceeded its maximum range
     const distanceTraveled = INTERCEPTOR_SPEED * (worldTimestamp - interceptor.launchTimestamp);
     if (distanceTraveled > interceptor.maxRange) {
@@ -235,6 +237,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
           launchTimestamp: worldTimestamp,
           position: launchSite.position,
           direction: 0,
+          tail: [],
           targetMissileId: targetMissileId,
           maxRange: INTERCEPTOR_MAX_RANGE,
         };

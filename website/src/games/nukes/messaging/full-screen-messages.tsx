@@ -135,7 +135,7 @@ const FullScreenMessageContainer = styled.div`
 `;
 
 const MessageText = styled.div`
-  font-size: 4rem;
+  font-size: 2rem;
   color: white;
   text-align: center;
   max-width: 80%;

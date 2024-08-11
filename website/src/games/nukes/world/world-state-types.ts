@@ -105,6 +105,7 @@ export type Interceptor = {
 
   position: Position;
   direction: number;
+  tail: { timestamp: number; position: Position }[];
 
   targetMissileId: MissileId | undefined;
 

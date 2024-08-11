@@ -28,35 +28,31 @@ export function renderChemtrail(
     return;
   }
 
-  let endPosition: { x: number; y: number };
-
   if ('targetTimestamp' in projectile) {
     // It's a Missile
     if (projectile.targetTimestamp < worldTimestamp) {
       return;
     }
-    endPosition = projectile.position;
+    renderMissileChemtrail(ctx, projectile, worldTimestamp);
   } else {
     // It's an Interceptor
-    endPosition = projectile.position;
+    renderInterceptorChemtrail(ctx, projectile, worldTimestamp);
   }
+}
 
-  // Calculate the start position of the chemtrail as the projectile's position 5 seconds ago
+function renderMissileChemtrail(ctx: CanvasRenderingContext2D, missile: Missile, worldTimestamp: number) {
   const elapsedTime = Math.min(
-    Math.max(worldTimestamp - 5, projectile.launchTimestamp) - projectile.launchTimestamp,
-    'targetTimestamp' in projectile ? projectile.targetTimestamp - projectile.launchTimestamp : Infinity,
+    Math.max(worldTimestamp - 5, missile.launchTimestamp) - missile.launchTimestamp,
+    missile.targetTimestamp - missile.launchTimestamp,
   );
-  const projectileTravelTime =
-    'targetTimestamp' in projectile
-      ? projectile.targetTimestamp - projectile.launchTimestamp
-      : worldTimestamp - projectile.launchTimestamp;
-  const progress = projectileTravelTime > 0 ? elapsedTime / projectileTravelTime : 0;
+  const missileTravelTime = missile.targetTimestamp - missile.launchTimestamp;
+  const progress = missileTravelTime > 0 ? elapsedTime / missileTravelTime : 0;
 
-  const startX = projectile.launch.x + (endPosition.x - projectile.launch.x) * progress;
-  const startY = projectile.launch.y + (endPosition.y - projectile.launch.y) * progress;
+  const startX = missile.launch.x + (missile.position.x - missile.launch.x) * progress;
+  const startY = missile.launch.y + (missile.position.y - missile.launch.y) * progress;
   const startPosition = { x: startX, y: startY };
 
-  const gradient = ctx.createLinearGradient(startPosition.x, startPosition.y, endPosition.x, endPosition.y);
+  const gradient = ctx.createLinearGradient(startPosition.x, startPosition.y, missile.position.x, missile.position.y);
   gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
   gradient.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
 
@@ -64,7 +60,41 @@ export function renderChemtrail(
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(startPosition.x, startPosition.y);
-  ctx.lineTo(endPosition.x, endPosition.y);
+  ctx.lineTo(missile.position.x, missile.position.y);
+  ctx.stroke();
+}
+
+function renderInterceptorChemtrail(ctx: CanvasRenderingContext2D, interceptor: Interceptor, worldTimestamp: number) {
+  const tailDuration = 5; // Show 5 seconds of tail
+  const tailStartTime = Math.max(worldTimestamp - tailDuration, interceptor.launchTimestamp);
+
+  // Filter tail points within the last 5 seconds
+  const relevantTail = interceptor.tail.filter((point) => point.timestamp >= tailStartTime);
+
+  if (relevantTail.length < 2) {
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(relevantTail[0].position.x, relevantTail[0].position.y);
+
+  for (let i = 1; i < relevantTail.length; i++) {
+    ctx.lineTo(relevantTail[i].position.x, relevantTail[i].position.y);
+  }
+
+  // Add the current position to the path
+  ctx.lineTo(interceptor.position.x, interceptor.position.y);
+
+  const gradient = ctx.createLinearGradient(
+    relevantTail[0].position.x,
+    relevantTail[0].position.y,
+    interceptor.position.x,
+    interceptor.position.y,
+  );
+  gradient.addColorStop(0, 'rgba(0, 255, 0, 0)');
+  gradient.addColorStop(1, 'rgba(0, 255, 0, 0.5)');
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 1;
   ctx.stroke();
 }
 
