@@ -61,6 +61,7 @@ export function Viewport({
 
   useEffect(() => {
     updateViewport(viewportConfiguration.initialTranslate, viewportConfiguration.initialZoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useGesture(
