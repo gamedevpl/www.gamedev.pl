@@ -53,6 +53,9 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
   // Update current position of interceptors
   for (const interceptor of result.interceptors) {
     const targetMissile = result.missiles.find((m) => m.id === interceptor.targetMissileId);
+    if (!targetMissile) {
+      interceptor.targetMissileId = undefined;
+    }
 
     const dx = targetMissile ? targetMissile.position.x - interceptor.position.x : Math.cos(interceptor.direction);
     const dy = targetMissile ? targetMissile.position.y - interceptor.position.y : Math.sin(interceptor.direction);

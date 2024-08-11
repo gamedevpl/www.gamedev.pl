@@ -1,8 +1,8 @@
 /** How fast are the missiles */
-export const MISSILE_SPEED = 10;
+export const MISSILE_SPEED = 15;
 
 /** How fast are the interceptors (slightly faster than missiles) */
-export const INTERCEPTOR_SPEED = MISSILE_SPEED * 3;
+export const INTERCEPTOR_SPEED = MISSILE_SPEED * 2;
 
 /** Duration of launch site mode change */
 export const MODE_CHANGE_DURATION = 5;
@@ -32,7 +32,7 @@ export const WORLD_UPDATE_STEP = 0.05;
 export const LAUNCH_COOLDOWN = 5;
 
 /** Launch cooldown in seconds */
-export const INTERCEPTOR_LAUNCH_COOLDOWN = 1;
+export const INTERCEPTOR_LAUNCH_COOLDOWN = 3;
 
 /** Game over timeout */
 export const GAME_OVER_TIMEOUT = 60;

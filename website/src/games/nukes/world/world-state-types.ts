@@ -106,7 +106,7 @@ export type Interceptor = {
   position: Position;
   direction: number;
 
-  targetMissileId: MissileId;
+  targetMissileId: MissileId | undefined;
 
   maxRange: number;
 };

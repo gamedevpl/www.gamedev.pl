@@ -1,6 +1,16 @@
-import { Position, WorldState, Strategy, LaunchSiteMode, Missile, City, Sector } from './world-state-types';
+import {
+  Position,
+  WorldState,
+  Strategy,
+  LaunchSiteMode,
+  Missile,
+  City,
+  Sector,
+  MissileId,
+  Interceptor,
+} from './world-state-types';
 import { distance } from '../math/position-utils';
-import { EXPLOSION_RADIUS, MISSILE_SPEED, CITY_RADIUS, INTERCEPTOR_SPEED } from './world-state-constants';
+import { EXPLOSION_RADIUS, CITY_RADIUS } from './world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -59,24 +69,29 @@ export function generateLaunches(worldState: WorldState): WorldState {
       const sortedMissiles = sortByDistance(
         threateningMissiles.map((missile) => ({
           ...missile,
-          interceptionPoint: calculateInterceptionPoint(missile, launchSite.position),
           isCity: false,
         })),
         launchSite.position,
       );
 
       const missiles = worldState.missiles.filter((missile) => missile.stateId === state.id);
+      const interceptors = worldState.interceptors.filter((interceptor) => interceptor.stateId === state.id);
+      const freeInterceptors = interceptors.filter(
+        (interceptor) => !interceptor.targetMissileId && launchSite.id === interceptor.launchSiteId,
+      );
 
-      const missileLaunchCounts = countMissiles(sortedMissiles, missiles).filter(
+      const interceptorLaunchCounts = countInterceptors(interceptors, sortedMissiles).filter(
         ([, count]) => count < myLaunchSites.length,
       );
 
-      if (launchSite.mode === LaunchSiteMode.DEFENCE && missileLaunchCounts.length > 0) {
+      if (launchSite.mode === LaunchSiteMode.DEFENCE && interceptorLaunchCounts.length > 0) {
         // Defence mode: prioritize intercepting enemy missiles
-        const targetMissile = missileLaunchCounts[0][0];
-        // if (targetMissile.interceptionPoint) {
-        launchSite.nextLaunchTarget = { type: 'missile', missileId: targetMissile.id };
-        // }
+        const targetMissileId = interceptorLaunchCounts[0][0];
+        if (freeInterceptors.length > 0) {
+          freeInterceptors[0].targetMissileId = targetMissileId;
+        } else {
+          launchSite.nextLaunchTarget = { type: 'missile', missileId: targetMissileId };
+        }
       } else if (launchSite.mode === LaunchSiteMode.ATTACK) {
         // Attack mode: target enemy cities or launch sites
         const targets = countMissiles(
@@ -103,43 +118,6 @@ export function generateLaunches(worldState: WorldState): WorldState {
   }
 
   return worldState;
-}
-
-/**
- * Calculate the interception point for a missile.
- * @param missile The missile to intercept.
- * @param launchSite The launch site position.
- * @param worldTimestamp The current world timestamp.
- * @returns The interception point position.
- */
-function calculateInterceptionPoint(missile: Missile, sitePosition: Position): Position | null {
-  const distToLaunchSite = distance(missile.position.x, missile.position.y, sitePosition.x, sitePosition.y);
-  if (distToLaunchSite < EXPLOSION_RADIUS) {
-    // Ensure interception point is not within explosion radius to launch site
-    return null;
-  }
-
-  // Take target position, and move towards missile position by EXPLOSION_RADIUS distance
-  const dist = distance(missile.target.x, missile.target.y, missile.launch.x, missile.launch.y);
-  const dx = (missile.target.x - missile.launch.x) / dist;
-  const dy = (missile.target.y - missile.launch.y) / dist;
-
-  const interceptionPoint = {
-    x: missile.target.x - dx * EXPLOSION_RADIUS * 2,
-    y: missile.target.y - dy * EXPLOSION_RADIUS * 2,
-  };
-
-  // Calculate how much time it will take the missile to reach the interception point
-  const timeToIntercept = distToLaunchSite / MISSILE_SPEED;
-  // Given INTERCEPTOR_SPEED and the distance from launch site to interception point calculate how much time it will take to reach the interception point for new interceptor launched from launch site.
-  const newInterceptorTravelTime =
-    distance(sitePosition.x, sitePosition.y, interceptionPoint.x, interceptionPoint.y) / INTERCEPTOR_SPEED;
-  // Return null if it is too early or too late to launch the interceptor in order to destroy the enemy missile
-  if (timeToIntercept < newInterceptorTravelTime || timeToIntercept > newInterceptorTravelTime + 10) {
-    // 10 seconds tolerance
-    return null;
-  }
-  return interceptionPoint;
 }
 
 /**
@@ -174,6 +152,23 @@ function countMissiles<T extends { position: Position; isCity: boolean }>(
       entity,
       missiles.filter((missile) => isPointClose(missile.target, entity.position, EXPLOSION_RADIUS)).length,
     );
+  }
+
+  // Convert the map to a sorted array by missile count ascending
+  return Array.from(missileCounts).sort((a, b) => a[1] - b[1]);
+}
+
+/** Count how many interceptors are targeted towards missile */
+function countInterceptors(interceptors: Interceptor[], missiles: Missile[]): Array<[MissileId, number]> {
+  // Count the missiles that target each entity
+  const missileCounts = new Map<MissileId, number>();
+  for (const missile of missiles) {
+    missileCounts.set(missile.id, 0);
+  }
+  for (const interceptor of interceptors) {
+    if (interceptor.targetMissileId) {
+      missileCounts.set(interceptor.targetMissileId, (missileCounts.get(interceptor.targetMissileId) ?? 0) + 1);
+    }
   }
 
   // Convert the map to a sorted array by missile count ascending
