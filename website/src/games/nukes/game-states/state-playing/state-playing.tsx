@@ -27,8 +27,8 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
         updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)}
         currentWorldTime={worldState.timestamp ?? 0}
       />
-      <StateControl worldState={worldState} setWorldState={setWorldState} />
       <FullScreenMessages worldState={worldState} />
+      <StateControl worldState={worldState} setWorldState={setWorldState} />
       <MessagesLog worldState={worldState} />
       {/* Controllers */}
       <GameOverController worldState={worldState} onGameOver={(result) => setGameState(GameStatePlayed, { result })} />

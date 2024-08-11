@@ -13,6 +13,7 @@ export function StateRender({ state, sectors }: StateRenderProps) {
   const centerPosition = React.useMemo(() => {
     const stateSectors = sectors.filter((sector) => sector.stateId === state.id);
     return calculateStateCenter(stateSectors);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

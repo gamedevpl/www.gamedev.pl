@@ -75,32 +75,35 @@ export function FullScreenMessages({ worldState }: { worldState: WorldState }) {
 const fadeIn = keyframes`
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: translateX(-50%) scale(0.9);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(-50%) scale(1);
   }
 `;
 
 const fadeOut = keyframes`
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(-50%) scale(1);
   }
   to {
     opacity: 0;
     display: none;
-    transform: scale(0.9);
+    transform: translateX(-50%) scale(0.9);
   }
 `;
 
 const FullScreenMessageContainer = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  border: 2px solid #444;
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -135,10 +138,9 @@ const FullScreenMessageContainer = styled.div`
 `;
 
 const MessageText = styled.div`
-  font-size: 2rem;
+  font-size: 1.5rem;
   color: white;
   text-align: center;
-  max-width: 80%;
   white-space: pre-line;
 `;
 
@@ -149,10 +151,10 @@ const ActionContainer = styled.div`
 `;
 
 const ActionButton = styled.button`
-  font-size: 2rem;
+  font-size: 1.5rem;
   padding: 1rem 2rem;
   margin: 0 1rem;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: black;
   color: white;
   border: 2px solid white;
   border-radius: 5px;

@@ -80,9 +80,12 @@ const MessageLogContainer = styled.div`
   color: white;
   overflow-y: auto;
   padding: 10px;
-  font-size: 14px;
+  font-size: 10px;
   display: flex;
   flex-direction: column-reverse;
+  border: 2px solid #444;
+  border-radius: 10px;
+  padding: 10px;
 `;
 
 const MessageItem = styled.div`
@@ -100,7 +103,7 @@ const ActionContainer = styled.div`
 `;
 
 const ActionButton = styled.button`
-  font-size: 12px;
+  font-size: 10px;
   padding: 5px 10px;
   margin-right: 10px;
   background-color: rgba(255, 255, 255, 0.2);

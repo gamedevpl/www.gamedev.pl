@@ -13,11 +13,19 @@ export function useTranslateViewportEvent(callback: (position: TranslateViewport
   useCustomEvent('translateViewport', callback);
 }
 
-export function Viewport({ children }: { children: React.ReactNode }) {
+export function Viewport({
+  children,
+  onSetInitialViewport,
+}: {
+  children: React.ReactNode;
+  onSetInitialViewport: () => { translate: { x: number; y: number }; zoom: number };
+}) {
   const interactionRef = useRef<HTMLDivElement>(null);
 
-  const [zoom, setZoom] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialViewport = React.useMemo(onSetInitialViewport, []);
+  const [zoom, setZoom] = useState(initialViewport.zoom);
+  const [translate, setTranslate] = useState(initialViewport.translate);
   const [isInteracting, setInteracting] = useState<boolean | undefined>(false);
 
   useGesture(
