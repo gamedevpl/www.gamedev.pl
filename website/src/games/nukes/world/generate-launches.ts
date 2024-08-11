@@ -65,6 +65,18 @@ export function generateLaunches(worldState: WorldState): WorldState {
         break;
       }
 
+      if (
+        // No threats, no need to be in defence mode
+        (threateningMissiles.length === 0 && launchSite.mode === LaunchSiteMode.DEFENCE) ||
+        // Threats ahead, switch to defence
+        (threateningMissiles.length > 0 && launchSite.mode === LaunchSiteMode.ATTACK)
+      ) {
+        if (!launchSite.modeChangeTimestamp) {
+          launchSite.modeChangeTimestamp = worldState.timestamp;
+        }
+        continue;
+      }
+
       // Find closest enemy missile
       const sortedMissiles = sortByDistance(
         threateningMissiles.map((missile) => ({
