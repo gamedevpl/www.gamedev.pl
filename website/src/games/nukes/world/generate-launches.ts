@@ -1,7 +1,6 @@
-import { Position, WorldState, Strategy } from './world-state-types';
+import { Position, WorldState, Strategy, LaunchSiteMode, Missile, City, Sector } from './world-state-types';
 import { distance } from '../math/position-utils';
-import { Missile, City, Sector } from './world-state-types';
-import { EXPLOSION_RADIUS, MISSILE_SPEED, CITY_RADIUS } from './world-state-constants';
+import { EXPLOSION_RADIUS, MISSILE_SPEED, CITY_RADIUS, INTERCEPTOR_SPEED } from './world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -72,10 +71,14 @@ export function generateLaunches(worldState: WorldState): WorldState {
         ([, count]) => count < myLaunchSites.length,
       );
 
-      if (missileLaunchCounts.length > 0) {
-        // missiles are highest priority targets
-        launchSite.nextLaunchTarget = missileLaunchCounts[0][0].interceptionPoint ?? undefined;
-      } else {
+      if (launchSite.mode === LaunchSiteMode.DEFENCE && missileLaunchCounts.length > 0) {
+        // Defence mode: prioritize intercepting enemy missiles
+        const targetMissile = missileLaunchCounts[0][0];
+        // if (targetMissile.interceptionPoint) {
+        launchSite.nextLaunchTarget = { type: 'missile', missileId: targetMissile.id };
+        // }
+      } else if (launchSite.mode === LaunchSiteMode.ATTACK) {
+        // Attack mode: target enemy cities or launch sites
         const targets = countMissiles(
           sortByDistance([...enemyLaunchSites, ...enemyCities], launchSite.position),
           missiles,
@@ -85,12 +88,15 @@ export function generateLaunches(worldState: WorldState): WorldState {
         if (target?.position && target?.isCity) {
           // Implement proper targeting here, find non zero population city sector for this target city
           const citySector = findNonZeroPopulationSector(target as City, citySectors);
-          launchSite.nextLaunchTarget = citySector || {
-            x: target.position.x + (Math.random() - Math.random()) * CITY_RADIUS,
-            y: target.position.y + (Math.random() - Math.random()) * CITY_RADIUS,
+          launchSite.nextLaunchTarget = {
+            type: 'position',
+            position: citySector || {
+              x: target.position.x + (Math.random() - Math.random()) * CITY_RADIUS,
+              y: target.position.y + (Math.random() - Math.random()) * CITY_RADIUS,
+            },
           };
         } else {
-          launchSite.nextLaunchTarget = target?.position ?? undefined;
+          launchSite.nextLaunchTarget = target?.position ? { type: 'position', position: target?.position } : undefined;
         }
       }
     }
@@ -125,11 +131,11 @@ function calculateInterceptionPoint(missile: Missile, sitePosition: Position): P
 
   // Calculate how much time it will take the missile to reach the interception point
   const timeToIntercept = distToLaunchSite / MISSILE_SPEED;
-  // Given MISSILE_SPEED and the distance from launch site to interception point calculate how much time it will take to reach the interception point for new missile launched from launch site.
-  const newMissileTravelTime =
-    distance(sitePosition.x, sitePosition.y, interceptionPoint.x, interceptionPoint.y) / MISSILE_SPEED;
-  // Return null if it is too early or too late to launch the missile in order to destroy the enemy missile
-  if (timeToIntercept < newMissileTravelTime || timeToIntercept > newMissileTravelTime + 10) {
+  // Given INTERCEPTOR_SPEED and the distance from launch site to interception point calculate how much time it will take to reach the interception point for new interceptor launched from launch site.
+  const newInterceptorTravelTime =
+    distance(sitePosition.x, sitePosition.y, interceptionPoint.x, interceptionPoint.y) / INTERCEPTOR_SPEED;
+  // Return null if it is too early or too late to launch the interceptor in order to destroy the enemy missile
+  if (timeToIntercept < newInterceptorTravelTime || timeToIntercept > newInterceptorTravelTime + 10) {
     // 10 seconds tolerance
     return null;
   }

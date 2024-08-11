@@ -12,6 +12,8 @@ export type LaunchSiteId = string;
 
 export type MissileId = string;
 
+export type InterceptorId = string;
+
 export type SectorId = string;
 
 export type ExplosionId = string;
@@ -59,6 +61,11 @@ export type Sector = {
   height?: number; // ground height
 } & ({ cityId: CityId; population: number } | { population?: number; cityId?: CityId });
 
+export enum LaunchSiteMode {
+  ATTACK = 'ATTACK',
+  DEFENCE = 'DEFENCE',
+}
+
 export type LaunchSite = {
   type: EntityType.LAUNCH_SITE;
   id: LaunchSiteId;
@@ -66,7 +73,10 @@ export type LaunchSite = {
   stateId: StateId;
 
   lastLaunchTimestamp?: number;
-  nextLaunchTarget?: Position;
+  nextLaunchTarget?: { type: 'position'; position: Position } | { type: 'missile'; missileId: MissileId };
+
+  mode: LaunchSiteMode;
+  modeChangeTimestamp?: number;
 };
 
 export type Missile = {
@@ -82,6 +92,23 @@ export type Missile = {
 
   target: Position;
   targetTimestamp: number;
+};
+
+export type Interceptor = {
+  id: InterceptorId;
+
+  stateId: StateId;
+  launchSiteId: LaunchSiteId;
+
+  launch: Position;
+  launchTimestamp: number;
+
+  position: Position;
+  direction: number;
+
+  targetMissileId: MissileId;
+
+  maxRange: number;
 };
 
 export type Explosion = {
@@ -104,5 +131,6 @@ export type WorldState = {
   sectors: Sector[];
 
   missiles: Missile[];
+  interceptors: Interceptor[];
   explosions: Explosion[];
 };

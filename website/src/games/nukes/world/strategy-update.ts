@@ -112,7 +112,7 @@ function stateStrategyUpdate(state: State, worldState: WorldState) {
         ];
         if (enemyTargets.length > 0) {
           const randomTarget = enemyTargets[Math.floor(Math.random() * enemyTargets.length)];
-          randomLaunchSite.nextLaunchTarget = randomTarget.position;
+          randomLaunchSite.nextLaunchTarget = { type: 'position', position: randomTarget.position };
         }
       }
     }

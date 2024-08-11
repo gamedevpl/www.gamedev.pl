@@ -1,7 +1,7 @@
 import stringToColor from 'string-to-color';
 import { getRandomCityNames } from '../../content/city-names';
 import { getRandomStateNames } from '../../content/state-names';
-import { City, EntityType, LaunchSite, State, Strategy, Position, Sector } from '../world-state-types';
+import { City, EntityType, LaunchSite, State, Strategy, Position, Sector, LaunchSiteMode } from '../world-state-types';
 import { EXPLOSION_RADIUS, CITY_RADIUS, CITY_SECTOR_POPULATION, SECTOR_SIZE } from '../world-state-constants';
 import { createGround } from './ground-generation';
 import { getRandomPosition, isValidPosition, isFarEnough } from './utils';
@@ -153,6 +153,7 @@ function createCitiesAndLaunchSites(
       id: `launch-site-${launchSites.length + 1}`,
       stateId,
       position: launchSitePosition,
+      mode: Math.random() > 0.5 ? LaunchSiteMode.DEFENCE : LaunchSiteMode.ATTACK, // Default mode set to DEFENCE
     });
 
     // Ensure ground around the launch site

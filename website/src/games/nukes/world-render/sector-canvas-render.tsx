@@ -80,7 +80,7 @@ const SectorCanvas: React.FC<SectorCanvasProps> = React.memo(({ sectors }) => {
     };
   }, [sectors, point, unpoint]);
 
-  return <canvas ref={canvasRef}></canvas>;
+  return <canvas ref={canvasRef} style={{ opacity: 0.5 }}></canvas>;
 });
 
 function getRenderFunction(sector: Sector, maxDepth: number, maxHeight: number) {

@@ -1,5 +1,5 @@
 import { distance } from '../math/position-utils';
-import { Missile, WorldState, State, CityId } from './world-state-types';
+import { Missile, WorldState, State, CityId, Interceptor, LaunchSiteMode } from './world-state-types';
 import {
   EXPLOSION_DAMAGE_RATIO,
   EXPLOSION_DURATION,
@@ -8,6 +8,11 @@ import {
   MIN_EXPLOSION_DAMAGE,
   MISSILE_SPEED,
   WORLD_UPDATE_STEP,
+  INTERCEPTOR_SPEED,
+  INTERCEPTOR_LAUNCH_COOLDOWN,
+  INTERCEPT_RADIUS,
+  INTERCEPTOR_MAX_RANGE,
+  MODE_CHANGE_DURATION,
 } from './world-state-constants';
 import { generateLaunches } from './generate-launches';
 import { strategyUpdate } from './strategy-update';
@@ -31,6 +36,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     cities: state.cities,
     launchSites: state.launchSites,
     missiles: state.missiles,
+    interceptors: state.interceptors,
     explosions: state.explosions,
     sectors: state.sectors,
   };
@@ -42,6 +48,53 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       x: missile.launch.x + (missile.target.x - missile.launch.x) * progress,
       y: missile.launch.y + (missile.target.y - missile.launch.y) * progress,
     };
+  }
+
+  // Update current position of interceptors
+  for (const interceptor of result.interceptors) {
+    const targetMissile = result.missiles.find((m) => m.id === interceptor.targetMissileId);
+
+    const dx = targetMissile ? targetMissile.position.x - interceptor.position.x : Math.cos(interceptor.direction);
+    const dy = targetMissile ? targetMissile.position.y - interceptor.position.y : Math.sin(interceptor.direction);
+    const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+    interceptor.direction = Math.atan2(dy, dx);
+
+    if (targetMissile && distanceToTarget <= INTERCEPTOR_SPEED * deltaTime) {
+      // Interceptor has reached the missile
+      interceptor.position = { ...targetMissile.position };
+    } else {
+      // Move towards the missile
+      const moveFraction = (INTERCEPTOR_SPEED * deltaTime) / distanceToTarget;
+      interceptor.position = {
+        x: interceptor.position.x + dx * moveFraction,
+        y: interceptor.position.y + dy * moveFraction,
+      };
+    }
+
+    // Check if interceptor has exceeded its maximum range
+    const distanceTraveled = INTERCEPTOR_SPEED * (worldTimestamp - interceptor.launchTimestamp);
+    if (distanceTraveled > interceptor.maxRange) {
+      // Remove the interceptor if it has exceeded its range
+      result.interceptors = result.interceptors.filter((i) => i.id !== interceptor.id);
+    }
+  }
+
+  // Check for missile interceptions
+  for (const interceptor of result.interceptors) {
+    const targetMissile = result.missiles.find((m) => m.id === interceptor.targetMissileId);
+    if (targetMissile) {
+      const dist = distance(
+        interceptor.position.x,
+        interceptor.position.y,
+        targetMissile.position.x,
+        targetMissile.position.y,
+      );
+      if (dist < INTERCEPT_RADIUS) {
+        // Interceptor has caught the missile
+        result.missiles = result.missiles.filter((m) => m.id !== targetMissile.id);
+        result.interceptors = result.interceptors.filter((i) => i.id !== interceptor.id);
+      }
+    }
   }
 
   // When missile reaches its target, it should create an explosion
@@ -71,9 +124,9 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
       }
     }
 
-    // explosions destroy missiles
+    // explosions destroy missiles and interceptors
 
-    // get missiles which are in flight during explosion
+    // get missiles and interceptors which are in flight during explosion
     const missiles = state.missiles
       .filter(
         (missile) =>
@@ -89,9 +142,24 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
         );
       });
 
+    const interceptors = state.interceptors
+      .filter((interceptor) => interceptor.launchTimestamp <= explosion.startTimestamp)
+      .filter((interceptor) => {
+        // check if interceptor is in explosion radius
+        return (
+          distance(interceptor.position.x, interceptor.position.y, explosion.position.x, explosion.position.y) <=
+          explosion.radius
+        );
+      });
+
     for (const missile of missiles) {
       // modify missile targetTimestamp to moment of explosion
       missile.targetTimestamp = explosion.startTimestamp;
+    }
+
+    for (const interceptor of interceptors) {
+      // remove interceptor
+      result.interceptors = result.interceptors.filter((i) => i.id !== interceptor.id);
     }
 
     // Add damage to launch sites
@@ -111,39 +179,66 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
   // Remove missiles which already reached their target
   result.missiles = result.missiles.filter((m) => m.targetTimestamp > worldTimestamp);
 
-  // Launch new missiles
+  // Handle launch site mode changes
+  for (const launchSite of result.launchSites) {
+    if (launchSite.modeChangeTimestamp && worldTimestamp >= launchSite.modeChangeTimestamp + MODE_CHANGE_DURATION) {
+      launchSite.mode = launchSite.mode === LaunchSiteMode.ATTACK ? LaunchSiteMode.DEFENCE : LaunchSiteMode.ATTACK;
+      launchSite.modeChangeTimestamp = undefined;
+    }
+  }
+
+  // Launch new missiles or interceptors
   for (const launchSite of state.launchSites) {
     if (!launchSite.nextLaunchTarget) {
       // No target
       continue;
-    } else if (!!launchSite.lastLaunchTimestamp && worldTimestamp - launchSite.lastLaunchTimestamp < LAUNCH_COOLDOWN) {
+    } else if (
+      !!launchSite.lastLaunchTimestamp &&
+      worldTimestamp - launchSite.lastLaunchTimestamp <
+        (launchSite.mode === LaunchSiteMode.ATTACK ? LAUNCH_COOLDOWN : INTERCEPTOR_LAUNCH_COOLDOWN)
+    ) {
       // Not ready to launch yet
       continue;
     }
 
-    const dist = distance(
-      launchSite.position.x,
-      launchSite.position.y,
-      launchSite.nextLaunchTarget.x,
-      launchSite.nextLaunchTarget.y,
-    );
+    if (launchSite.mode === LaunchSiteMode.ATTACK && launchSite.nextLaunchTarget?.type === 'position') {
+      const missile: Missile = {
+        id: Math.random() + '',
+        stateId: launchSite.stateId,
+        launchSiteId: launchSite.id,
+        launch: launchSite.position,
+        launchTimestamp: worldTimestamp,
+        position: launchSite.position,
+        target: launchSite.nextLaunchTarget.position,
+        targetTimestamp:
+          worldTimestamp +
+          distance(
+            launchSite.position.x,
+            launchSite.position.y,
+            launchSite.nextLaunchTarget.position.x,
+            launchSite.nextLaunchTarget.position.y,
+          ) /
+            MISSILE_SPEED,
+      };
+      result.missiles.push(missile);
+    } else if (launchSite.mode === LaunchSiteMode.DEFENCE && launchSite.nextLaunchTarget?.type === 'missile') {
+      const targetMissileId = launchSite.nextLaunchTarget.missileId;
+      if (targetMissileId) {
+        const interceptor: Interceptor = {
+          id: Math.random() + '',
+          stateId: launchSite.stateId,
+          launchSiteId: launchSite.id,
+          launch: launchSite.position,
+          launchTimestamp: worldTimestamp,
+          position: launchSite.position,
+          direction: 0,
+          targetMissileId: targetMissileId,
+          maxRange: INTERCEPTOR_MAX_RANGE,
+        };
+        result.interceptors.push(interceptor);
+      }
+    }
 
-    const missile: Missile = {
-      id: Math.random() + '',
-
-      stateId: launchSite.stateId,
-      launchSiteId: launchSite.id,
-
-      launch: launchSite.position,
-      launchTimestamp: worldTimestamp,
-
-      position: launchSite.position,
-
-      target: launchSite.nextLaunchTarget,
-      targetTimestamp: worldTimestamp + dist / MISSILE_SPEED,
-    };
-
-    result.missiles.push(missile);
     launchSite.lastLaunchTimestamp = worldTimestamp;
     launchSite.nextLaunchTarget = undefined;
   }

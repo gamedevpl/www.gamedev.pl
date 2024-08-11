@@ -1,8 +1,17 @@
 /** How fast are the missiles */
 export const MISSILE_SPEED = 10;
 
+/** How fast are the interceptors (slightly faster than missiles) */
+export const INTERCEPTOR_SPEED = MISSILE_SPEED * 3;
+
+/** Duration of launch site mode change */
+export const MODE_CHANGE_DURATION = 5;
+
 /** What is the radius of explosions */
 export const EXPLOSION_RADIUS = 20;
+
+/** How close the interceptor must be in order to destroy the missile */
+export const INTERCEPT_RADIUS = 1;
 
 /** How fast is the explosion */
 export const EXPLOSION_SPEED = 5;
@@ -22,6 +31,9 @@ export const WORLD_UPDATE_STEP = 0.05;
 /** Launch cooldown in seconds */
 export const LAUNCH_COOLDOWN = 5;
 
+/** Launch cooldown in seconds */
+export const INTERCEPTOR_LAUNCH_COOLDOWN = 1;
+
 /** Game over timeout */
 export const GAME_OVER_TIMEOUT = 60;
 
@@ -33,3 +45,6 @@ export const CITY_RADIUS = SECTOR_SIZE * 5;
 
 /** How many inhabitians per sector */
 export const CITY_SECTOR_POPULATION = 1000;
+
+/** Maximum range of interceptors */
+export const INTERCEPTOR_MAX_RANGE = CITY_RADIUS * 5;

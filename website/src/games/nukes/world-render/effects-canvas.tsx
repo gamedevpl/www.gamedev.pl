@@ -3,7 +3,8 @@ import { useRafLoop } from 'react-use';
 import styled from 'styled-components';
 import { WorldState } from '../world/world-state-types';
 import { renderExplosion } from './explosion-render';
-import { renderMissile, renderChemtrail } from './missile-render';
+import { renderMissile, renderChemtrail, renderInterceptor, renderInterceptorDisintegration } from './missile-render';
+import { INTERCEPTOR_MAX_RANGE, INTERCEPTOR_SPEED } from '../world/world-state-constants';
 
 export function EffectsCanvas({ state }: { state: WorldState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,9 +38,14 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Render chemtrails
+    // Render chemtrails for missiles
     state.missiles.forEach((missile) => {
       renderChemtrail(ctx, missile, state.timestamp);
+    });
+
+    // Render chemtrails for interceptors
+    state.interceptors.forEach((interceptor) => {
+      renderChemtrail(ctx, interceptor, state.timestamp);
     });
 
     // Render missiles
@@ -47,6 +53,21 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
       .filter((missile) => missile.launchTimestamp < state.timestamp && missile.targetTimestamp > state.timestamp)
       .forEach((missile) => {
         renderMissile(ctx, missile, state.timestamp);
+      });
+
+    // Render interceptors
+    state.interceptors
+      .filter((interceptor) => interceptor.launchTimestamp < state.timestamp)
+      .forEach((interceptor) => {
+        renderInterceptor(ctx, interceptor);
+
+        // Calculate distance traveled
+        const distanceTraveled = INTERCEPTOR_SPEED * (state.timestamp - interceptor.launchTimestamp + 0.5);
+
+        // Render disintegration animation if interceptor exceeds max range
+        if (distanceTraveled > INTERCEPTOR_MAX_RANGE) {
+          renderInterceptorDisintegration(ctx, interceptor);
+        }
       });
 
     // Render explosions

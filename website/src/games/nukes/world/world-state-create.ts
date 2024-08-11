@@ -1,4 +1,4 @@
-import { Explosion, Missile, Sector, SectorType, WorldState } from './world-state-types';
+import { Explosion, Missile, Sector, SectorType, WorldState, Interceptor } from './world-state-types';
 import { calculateWaterDepthAndGroundHeight } from './create-world/sector-generation';
 import { generateStates } from './create-world/state-generation';
 import { SECTOR_SIZE } from './world-state-constants';
@@ -47,6 +47,7 @@ export function createWorldState({
 
   const missiles: Missile[] = [];
   const explosions: Explosion[] = [];
+  const interceptors: Interceptor[] = [];
 
   return {
     timestamp: 0,
@@ -56,5 +57,6 @@ export function createWorldState({
     sectors,
     missiles,
     explosions,
+    interceptors,
   };
 }
