@@ -22,6 +22,7 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
+    "flatbush": "^4.4.0",
     "gh-pages": "^6.1.1",
     "husky": "^9.1.1",
     "identity-obj-proxy": "^3.0.0",
