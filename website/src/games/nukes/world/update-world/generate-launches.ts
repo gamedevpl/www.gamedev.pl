@@ -17,14 +17,13 @@ import { EXPLOSION_RADIUS, CITY_RADIUS, LAUNCH_GENERATION_INTERVAL } from '../wo
  * considering existing missiles and future explosions.
  *
  * @param state The current world state.
- * @returns A list of new missiles and their corresponding explosions.
  */
-export function generateLaunches(worldState: WorldState): WorldState {
+export function generateLaunches(worldState: WorldState): void {
   if (
     worldState.lastLaunchGenerationTimestamp &&
     worldState.timestamp - worldState.lastLaunchGenerationTimestamp > LAUNCH_GENERATION_INTERVAL
   ) {
-    return worldState;
+    return;
   }
   worldState.lastLaunchGenerationTimestamp = worldState.timestamp;
 
@@ -136,8 +135,6 @@ export function generateLaunches(worldState: WorldState): WorldState {
       }
     }
   }
-
-  return worldState;
 }
 
 /**

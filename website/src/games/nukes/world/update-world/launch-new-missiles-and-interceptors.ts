@@ -7,19 +7,15 @@ import {
 } from '../world-state-constants';
 import { distance } from '../../math/position-utils';
 
-export function launchNewMissilesAndInterceptors(
-  state: WorldState,
-  prevState: WorldState,
-  worldTimestamp: number,
-): WorldState {
-  for (const launchSite of prevState.launchSites) {
+export function launchNewMissilesAndInterceptors(state: WorldState): void {
+  for (const launchSite of state.launchSites) {
     if (!launchSite.nextLaunchTarget) {
       // No target
       continue;
     }
     if (
       !!launchSite.lastLaunchTimestamp &&
-      worldTimestamp - launchSite.lastLaunchTimestamp <
+      state.timestamp - launchSite.lastLaunchTimestamp <
         (launchSite.mode === LaunchSiteMode.ATTACK ? LAUNCH_COOLDOWN : INTERCEPTOR_LAUNCH_COOLDOWN)
     ) {
       // Not ready to launch yet
@@ -27,18 +23,17 @@ export function launchNewMissilesAndInterceptors(
     }
 
     if (launchSite.mode === LaunchSiteMode.ATTACK && launchSite.nextLaunchTarget?.type === 'position') {
-      state.missiles.push(createMissile(launchSite, launchSite.nextLaunchTarget.position, worldTimestamp));
+      state.missiles.push(createMissile(launchSite, launchSite.nextLaunchTarget.position, state.timestamp));
     } else if (launchSite.mode === LaunchSiteMode.DEFENCE && launchSite.nextLaunchTarget?.type === 'missile') {
       const targetMissileId = launchSite.nextLaunchTarget.missileId;
       if (targetMissileId) {
-        state.interceptors.push(createInterceptor(launchSite, worldTimestamp, targetMissileId));
+        state.interceptors.push(createInterceptor(launchSite, state.timestamp, targetMissileId));
       }
     }
 
-    launchSite.lastLaunchTimestamp = worldTimestamp;
+    launchSite.lastLaunchTimestamp = state.timestamp;
     launchSite.nextLaunchTarget = undefined;
   }
-  return state;
 }
 
 function createMissile(launchSite: LaunchSite, targetPosition: Position, worldTimestamp: number): Missile {

@@ -2,7 +2,7 @@ import { WorldState } from '../world-state-types';
 import { INTERCEPT_RADIUS } from '../world-state-constants';
 import { distance } from '../../math/position-utils';
 
-export function handleMissileInterceptions(state: WorldState): WorldState {
+export function handleMissileInterceptions(state: WorldState): void {
   // Check for missile interceptions
   for (const interceptor of state.interceptors) {
     const targetMissile = state.missiles.find((m) => m.id === interceptor.targetMissileId);
@@ -20,5 +20,4 @@ export function handleMissileInterceptions(state: WorldState): WorldState {
       }
     }
   }
-  return state;
 }

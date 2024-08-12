@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { WorldState, Unit } from '../world/world-state-types';
-
-const UNIT_SIZE = 10; // Size of the unit rectangle
+import { UNIT_SIZE } from '../world/world-state-constants';
 
 interface UnitCanvasProps {
   worldStateRef: React.RefObject<WorldState>;

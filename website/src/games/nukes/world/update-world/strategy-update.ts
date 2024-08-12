@@ -8,12 +8,12 @@ import {
 import { distance } from '../../math/position-utils';
 
 /** Updates strategy of states depending on the situation */
-export function strategyUpdate(worldState: WorldState): WorldState {
+export function strategyUpdate(worldState: WorldState): void {
   if (
     worldState.lastStrategyUpdateTimestamp &&
     worldState.timestamp - worldState.lastStrategyUpdateTimestamp > STRATEGY_UPDATE_INTERVAL
   ) {
-    return worldState;
+    return;
   }
   worldState.lastStrategyUpdateTimestamp = worldState.timestamp;
 
@@ -62,8 +62,6 @@ export function strategyUpdate(worldState: WorldState): WorldState {
   for (const state of worldState.states.filter((state) => !state.isPlayerControlled)) {
     stateStrategyUpdate(state, worldState);
   }
-
-  return worldState;
 }
 
 function stateStrategyUpdate(state: State, worldState: WorldState) {

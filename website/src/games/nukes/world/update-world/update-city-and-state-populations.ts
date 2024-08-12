@@ -1,6 +1,6 @@
 import { WorldState, State, City, CityId } from '../world-state-types';
 
-export function updateCityAndStatePopulations(state: WorldState): WorldState {
+export function updateCityAndStatePopulations(state: WorldState): void {
   // Recalculate city populations based on their sectors
   const cityPopulations = state.sectors.reduce(
     (r, sector) => {
@@ -25,6 +25,4 @@ export function updateCityAndStatePopulations(state: WorldState): WorldState {
       .reduce((sum: number, city: City) => sum + city.population, 0);
     return { ...s, population: statePopulation };
   });
-
-  return state;
 }

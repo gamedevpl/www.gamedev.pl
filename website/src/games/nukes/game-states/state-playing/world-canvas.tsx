@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react';
 import { PointerContextWrapper } from '../../controls/pointer';
 import { SelectionContextWrapper } from '../../controls/selection';
 import { WorldStateRender } from '../../world-render/world-state-render';
@@ -6,10 +7,17 @@ import { WorldState } from '../../world/world-state-types';
 import { Viewport, ViewportConfiguration } from './viewport';
 
 export function WorldCanvas({ worldState }: { worldState: WorldState }) {
+  const worldStateRef = useRef(worldState);
+
   return (
     <SelectionContextWrapper>
       <PointerContextWrapper>
-        <Viewport onGetViewportConfiguration={() => getViewportConfiguration(worldState)}>
+        <Viewport
+          onGetViewportConfiguration={useCallback(
+            () => getViewportConfiguration(worldStateRef.current),
+            [worldStateRef],
+          )}
+        >
           <WorldStateRender state={worldState} />
         </Viewport>
       </PointerContextWrapper>

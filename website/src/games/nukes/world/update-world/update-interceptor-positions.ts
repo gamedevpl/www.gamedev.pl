@@ -1,7 +1,7 @@
 import { WorldState } from '../world-state-types';
 import { INTERCEPTOR_SPEED } from '../world-state-constants';
 
-export function updateInterceptorPositions(state: WorldState, deltaTime: number): WorldState {
+export function updateInterceptorPositions(state: WorldState, deltaTime: number): void {
   // Update current position of interceptors
   state.interceptors = state.interceptors.filter((interceptor) => {
     const targetMissile = state.missiles.find((m) => m.id === interceptor.targetMissileId);
@@ -35,6 +35,4 @@ export function updateInterceptorPositions(state: WorldState, deltaTime: number)
     const distanceTraveled = INTERCEPTOR_SPEED * (state.timestamp - interceptor.launchTimestamp);
     return distanceTraveled <= interceptor.maxRange;
   });
-
-  return state;
 }

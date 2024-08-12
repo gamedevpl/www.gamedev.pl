@@ -10,6 +10,7 @@ import { updateLaunchSiteModes } from './update-world/update-launch-site-modes';
 import { launchNewMissilesAndInterceptors } from './update-world/launch-new-missiles-and-interceptors';
 import { updateCityAndStatePopulations } from './update-world/update-city-and-state-populations';
 import { updateUnits } from './update-world/units-update';
+import { indexWorldState } from './world-state-index';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   while (deltaTime > 0) {
@@ -24,7 +25,7 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
 function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
 
-  let result: WorldState = {
+  let result = indexWorldState({
     timestamp: worldTimestamp,
     states: state.states,
     cities: state.cities,
@@ -34,19 +35,19 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     units: state.units,
     explosions: state.explosions,
     sectors: state.sectors,
-  };
+  });
 
-  result = updateUnits(result, deltaTime);
-  result = updateMissilePositions(result, worldTimestamp);
-  result = updateInterceptorPositions(result, deltaTime);
-  result = handleMissileInterceptions(result);
-  result = handleExplosions(result, state, worldTimestamp);
-  result = updateLaunchSiteModes(result, worldTimestamp);
-  result = launchNewMissilesAndInterceptors(result, state, worldTimestamp);
-  result = updateCityAndStatePopulations(result);
+  updateUnits(result, deltaTime);
+  updateMissilePositions(result);
+  updateInterceptorPositions(result, deltaTime);
+  handleMissileInterceptions(result);
+  handleExplosions(result);
+  updateLaunchSiteModes(result);
+  launchNewMissilesAndInterceptors(result);
+  updateCityAndStatePopulations(result);
 
-  result = generateLaunches(result);
-  result = strategyUpdate(result);
+  generateLaunches(result);
+  strategyUpdate(result);
 
   return result;
 }

@@ -1,5 +1,6 @@
 import { State, Unit, Sector, StateId } from '../world-state-types';
 import { findBorderSectors } from '../world-state-utils';
+import { SECTOR_SIZE } from '../world-state-constants';
 
 let unitIdCounter = 0;
 
@@ -31,7 +32,7 @@ export function dislocateStateUnits(sectors: Sector[], state: State, totalQuanti
         units.push({
           id: String(unitIdCounter++),
           quantity: unitsInSector,
-          position: sector.position,
+          position: { x: sector.position.x + SECTOR_SIZE / 2, y: sector.position.y + SECTOR_SIZE / 2 },
           stateId: state.id,
           order: { type: 'stay' },
         });

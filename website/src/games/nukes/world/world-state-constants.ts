@@ -56,10 +56,13 @@ export const STRATEGY_UPDATE_COOLDOWN = 10;
 export const UNIT_MOVEMENT_SPEED = MISSILE_SPEED / 10;
 
 /** Default total amount of unit capacity for state */
-export const INITIAL_STATE_UNITS = 1000;
+export const INITIAL_STATE_UNITS = 0;
 
 /** Launch generation interval (in seconds) */
 export const LAUNCH_GENERATION_INTERVAL = 0.1;
 
 /** Strategy update interval (in seconds) */
 export const STRATEGY_UPDATE_INTERVAL = 0.1;
+
+/** Size of the unit rectangle */
+export const UNIT_SIZE = 10;
