@@ -49,11 +49,11 @@ export function WorldStateRender({ state }: { state: WorldState }) {
         />
       ))}
 
-      {/* dynamic content, changes with time */}
-      <EffectsCanvas state={state} />
-
       {/* New UnitCanvas component for rendering units */}
       <UnitCanvas worldStateRef={worldStateRef} />
+
+      {/* dynamic content, changes with time */}
+      <EffectsCanvas state={state} />
     </WorldStateContainer>
   );
 }
