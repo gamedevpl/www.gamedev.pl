@@ -1,6 +1,6 @@
-import { WorldState, Strategy, State } from './world-state-types';
-import { EXPLOSION_RADIUS, CITY_RADIUS, STRATEGY_UPDATE_COOLDOWN } from './world-state-constants';
-import { distance } from '../math/position-utils';
+import { WorldState, Strategy, State } from '../world-state-types';
+import { EXPLOSION_RADIUS, CITY_RADIUS, STRATEGY_UPDATE_COOLDOWN } from '../world-state-constants';
+import { distance } from '../../math/position-utils';
 
 /** Updates strategy of states depending on the situation */
 export function strategyUpdate(worldState: WorldState): WorldState {

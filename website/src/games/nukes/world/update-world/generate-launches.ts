@@ -8,9 +8,9 @@ import {
   Sector,
   MissileId,
   Interceptor,
-} from './world-state-types';
-import { distance } from '../math/position-utils';
-import { EXPLOSION_RADIUS, CITY_RADIUS } from './world-state-constants';
+} from '../world-state-types';
+import { distance } from '../../math/position-utils';
+import { EXPLOSION_RADIUS, CITY_RADIUS } from '../world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
