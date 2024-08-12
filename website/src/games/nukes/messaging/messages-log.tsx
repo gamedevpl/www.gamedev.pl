@@ -73,8 +73,8 @@ export function MessagesLog({ worldState }: { worldState: WorldState }) {
 const MessageLogContainer = styled.div`
   position: fixed;
   right: 0;
-  max-height: 100%;
-  bottom: 0;
+  max-height: 300px;
+  top: 10px;
   width: 300px;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;

@@ -2,24 +2,16 @@ import { PointerContextWrapper } from '../../controls/pointer';
 import { SelectionContextWrapper } from '../../controls/selection';
 import { WorldStateRender } from '../../world-render/world-state-render';
 import { WorldState } from '../../world/world-state-types';
-import { StateControl } from './state-control';
 
 import { Viewport, ViewportConfiguration } from './viewport';
 
-export function WorldCanvas({
-  worldState,
-  setWorldState,
-}: {
-  worldState: WorldState;
-  setWorldState: (worldState: WorldState) => void;
-}) {
+export function WorldCanvas({ worldState }: { worldState: WorldState }) {
   return (
     <SelectionContextWrapper>
       <PointerContextWrapper>
         <Viewport onGetViewportConfiguration={() => getViewportConfiguration(worldState)}>
           <WorldStateRender state={worldState} />
         </Viewport>
-        <StateControl worldState={worldState} setWorldState={setWorldState} />
       </PointerContextWrapper>
     </SelectionContextWrapper>
   );

@@ -86,6 +86,7 @@ function createState(stateId: string, stateName: string, isPlayerControlled: boo
     color: stringToColor(stateName),
     isPlayerControlled,
     strategies: {},
+    lastStrategyUpdate: 0,
     generalStrategy: isPlayerControlled
       ? undefined
       : [Strategy.NEUTRAL, Strategy.HOSTILE, Strategy.FRIENDLY].sort(() => Math.random() - 0.5)[0],

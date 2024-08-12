@@ -22,13 +22,13 @@ const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   return (
     <>
       {/* UI */}
-      <WorldCanvas worldState={worldState} setWorldState={setWorldState} />
+      <WorldCanvas worldState={worldState} />
       <TimeControls
         updateWorldTime={(deltaTime) => updateWorldState(worldState, deltaTime)}
         currentWorldTime={worldState.timestamp ?? 0}
       />
       <FullScreenMessages worldState={worldState} />
-      <StateControl worldState={worldState} setWorldState={setWorldState} />
+      <StateControl worldState={worldState} />
       <MessagesLog worldState={worldState} />
       {/* Controllers */}
       <GameOverController worldState={worldState} onGameOver={(result) => setGameState(GameStatePlayed, { result })} />

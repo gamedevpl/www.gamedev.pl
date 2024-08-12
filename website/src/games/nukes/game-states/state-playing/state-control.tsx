@@ -1,46 +1,37 @@
 import styled from 'styled-components';
-import { StateId, WorldState, Strategy } from '../../world/world-state-types';
+import { StateId, WorldState, Strategy, State } from '../../world/world-state-types';
 import { dispatchTranslateEvent } from './viewport';
 import { calculateAllStatePopulations } from '../../world/world-state-utils';
 
 /** A component that allows user to control the player controlled state */
-export function StateControl({
-  worldState,
-  setWorldState,
-}: {
-  worldState: WorldState;
-  setWorldState: (worldState: WorldState) => void;
-}) {
+export function StateControl({ worldState }: { worldState: WorldState }) {
   const playerState = worldState.states.find((state) => state.isPlayerControlled);
 
   if (!playerState) {
     return null;
   }
 
-  const handleStrategyChange = (targetStateId: StateId, strategy: Strategy) => {
-    const updatedStates = worldState.states.map((state) =>
-      state.id === playerState.id
-        ? { ...state, strategies: { ...state.strategies, [targetStateId]: strategy } }
-        : state,
-    );
-    setWorldState({ ...worldState, states: updatedStates });
+  const handleStrategyChange = (targetState: State, newStrategy: Strategy, mutual = false) => {
+    playerState.strategies[targetState.id] = newStrategy;
+    if (mutual) {
+      targetState.strategies[playerState.id] = newStrategy;
+    }
   };
 
-  const getRelationshipColor = (targetStateId: StateId) => {
-    if (targetStateId === playerState.id) {
+  const getRelationshipColor = (targetState: State) => {
+    if (targetState.id === playerState.id) {
       return '#4CAF50';
     }
 
-    const strategy = playerState.strategies[targetStateId];
-    switch (strategy) {
-      case Strategy.FRIENDLY:
-        return '#4CAF50';
-      case Strategy.NEUTRAL:
-        return '#FFC107';
-      case Strategy.HOSTILE:
-        return '#F44336';
-      default:
-        return '#9E9E9E';
+    const strategy = playerState.strategies[targetState.id];
+    const otherStateStrategy = targetState.strategies[playerState.id];
+
+    if (strategy === Strategy.FRIENDLY && otherStateStrategy === Strategy.FRIENDLY) {
+      return '#4CAF50';
+    } else if (strategy === Strategy.HOSTILE || otherStateStrategy === Strategy.HOSTILE) {
+      return '#F44336';
+    } else {
+      return '#9E9E9E';
     }
   };
 
@@ -67,12 +58,69 @@ export function StateControl({
     dispatchTranslateEvent(statePosition);
   };
 
+  const renderRelationshipButtons = (state: State) => {
+    const currentStrategy = playerState.strategies[state.id];
+    const otherStateStrategy = state.strategies[playerState.id];
+
+    return (
+      <RelationshipButtons>
+        {((currentStrategy === Strategy.NEUTRAL && otherStateStrategy !== Strategy.HOSTILE) ||
+          (currentStrategy === Strategy.FRIENDLY && otherStateStrategy !== Strategy.FRIENDLY)) && (
+          <RelationshipButton
+            color="#4CAF50"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStrategyChange(state, Strategy.FRIENDLY);
+            }}
+            disabled={currentStrategy === Strategy.FRIENDLY && otherStateStrategy !== Strategy.FRIENDLY}
+          >
+            Alliance
+          </RelationshipButton>
+        )}
+        {(currentStrategy === Strategy.HOSTILE || otherStateStrategy === Strategy.HOSTILE) && (
+          <RelationshipButton
+            color="#9E9E9E"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStrategyChange(state, Strategy.NEUTRAL);
+            }}
+            disabled={currentStrategy === Strategy.NEUTRAL && otherStateStrategy !== Strategy.NEUTRAL}
+          >
+            Peace
+          </RelationshipButton>
+        )}
+        {currentStrategy === Strategy.FRIENDLY && otherStateStrategy === Strategy.FRIENDLY && (
+          <RelationshipButton
+            color="#9E9E9E"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStrategyChange(state, Strategy.NEUTRAL, true);
+            }}
+          >
+            Neutral
+          </RelationshipButton>
+        )}
+        {currentStrategy === Strategy.NEUTRAL && otherStateStrategy !== Strategy.HOSTILE && (
+          <RelationshipButton
+            color="#F44336"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStrategyChange(state, Strategy.HOSTILE, true);
+            }}
+          >
+            Attack
+          </RelationshipButton>
+        )}
+      </RelationshipButtons>
+    );
+  };
+
   return (
     <StateControlContainer>
       {worldState.states.map((state) => (
         <StateInfo
           key={state.id}
-          relationshipColor={getRelationshipColor(state.id)}
+          relationshipColor={getRelationshipColor(state)}
           onClick={() => handleStateClick(state.id)}
         >
           <StateFlag style={{ color: state.color }}>{state.name.charAt(0)}</StateFlag>
@@ -80,19 +128,9 @@ export function StateControl({
             <StateName>{state.name}</StateName>
             <StatePopulation>{statePopulation[state.id] << 0}</StatePopulation>
             {state.id !== playerState.id ? (
-              <select
-                value={playerState.strategies[state.id]}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => handleStrategyChange(state.id, e.target.value as Strategy)}
-              >
-                {Object.values(Strategy).map((strategy) => (
-                  <option key={strategy} value={strategy}>
-                    {strategy}
-                  </option>
-                ))}
-              </select>
+              renderRelationshipButtons(state)
             ) : (
-              'This is you'
+              <SelfIndicator>This is you</SelfIndicator>
             )}
           </StateDetails>
         </StateInfo>
@@ -112,15 +150,17 @@ const StateControlContainer = styled.div`
   border-top: 1px solid rgb(0, 255, 0);
   display: flex;
   justify-content: space-around;
+  flex-wrap: wrap;
 `;
 
 const StateInfo = styled.div<{ relationshipColor: string }>`
   display: flex;
   align-items: center;
   margin: 5px;
-  padding: 5px;
+  padding: 10px;
   background: ${(props) =>
     `rgba(${parseInt(props.relationshipColor.slice(1, 3), 16)}, ${parseInt(props.relationshipColor.slice(3, 5), 16)}, ${parseInt(props.relationshipColor.slice(5, 7), 16)}, 0.2)`};
+  border: 2px solid ${(props) => props.relationshipColor};
   border-radius: 5px;
   transition: background 0.3s ease;
   cursor: pointer;
@@ -151,4 +191,31 @@ const StateName = styled.span`
 const StatePopulation = styled.span`
   font-size: 0.9em;
   margin-bottom: 5px;
+`;
+
+const RelationshipButtons = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`;
+
+const RelationshipButton = styled.button<{ color: string; disabled?: boolean }>`
+  background-color: ${(props) => props.color};
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: opacity 0.3s ease;
+  ${(props) => (props.disabled ? `pointer-events: none; opacity: 0.5;` : '')}
+
+  &:hover {
+    opacity: 0.8;
+  }
+`;
+
+const SelfIndicator = styled.span`
+  font-style: italic;
+  color: #4caf50;
 `;

@@ -1,16 +1,18 @@
 import { WorldState, Strategy, State } from './world-state-types';
-import { EXPLOSION_RADIUS } from './world-state-constants';
+import { EXPLOSION_RADIUS, CITY_RADIUS, STRATEGY_UPDATE_COOLDOWN } from './world-state-constants';
 import { distance } from '../math/position-utils';
 
 /** Updates strategy of states depending on the situation */
 export function strategyUpdate(worldState: WorldState): WorldState {
-  // Iterate over all the missiles in the world state
+  // Iterate over all the missiles in the world state which were just launched
   for (const missile of worldState.missiles.filter((missile) => missile.launchTimestamp === worldState.timestamp)) {
     const launchingState = worldState.states.find((state) => state.id === missile.stateId);
     const targetState =
       // Check if city or launch site is within explosion radius
       worldState.cities.find(
-        (city) => distance(city.position.x, city.position.y, missile.target.x, missile.target.y) <= EXPLOSION_RADIUS,
+        (city) =>
+          distance(city.position.x, city.position.y, missile.target.x, missile.target.y) <=
+          EXPLOSION_RADIUS + CITY_RADIUS,
       )?.stateId ||
       worldState.launchSites.find(
         (site) => distance(site.position.x, site.position.y, missile.target.x, missile.target.y) <= EXPLOSION_RADIUS,
@@ -52,22 +54,43 @@ export function strategyUpdate(worldState: WorldState): WorldState {
 }
 
 function stateStrategyUpdate(state: State, worldState: WorldState) {
+  if (state.lastStrategyUpdate && worldState.timestamp - state.lastStrategyUpdate < STRATEGY_UPDATE_COOLDOWN) {
+    return;
+  }
+
+  state.lastStrategyUpdate = worldState.timestamp;
+
   const otherStates = worldState.states.filter((s) => s.id !== state.id);
+  const allies = otherStates.filter(
+    (s) => state.strategies[s.id] === Strategy.FRIENDLY && s.strategies[state.id] === Strategy.FRIENDLY,
+  );
 
   // Copy strategies
   state.strategies = { ...state.strategies };
 
   // Respond to friendly proposals
-  if (state.generalStrategy !== Strategy.HOSTILE) {
-    otherStates.forEach((otherState) => {
-      if (
-        otherState.strategies[state.id] === Strategy.FRIENDLY &&
-        state.strategies[otherState.id] === Strategy.NEUTRAL
-      ) {
+  otherStates.forEach((otherState) => {
+    if (otherState.strategies[state.id] === Strategy.FRIENDLY && state.strategies[otherState.id] === Strategy.NEUTRAL) {
+      if (state.generalStrategy !== Strategy.HOSTILE) {
         state.strategies[otherState.id] = Strategy.FRIENDLY;
+      } else {
+        // reject proposal
+        otherState.strategies[state.id] = Strategy.NEUTRAL;
       }
-    });
-  }
+    }
+  });
+
+  // Respond to peace proposals
+  otherStates.forEach((otherState) => {
+    if (otherState.strategies[state.id] === Strategy.NEUTRAL && state.strategies[otherState.id] === Strategy.HOSTILE) {
+      if (isWeakerState(state, otherState, allies, worldState)) {
+        state.strategies[otherState.id] = Strategy.NEUTRAL;
+      } else {
+        // reject the proposal
+        otherState.strategies[state.id] = Strategy.HOSTILE;
+      }
+    }
+  });
 
   // Send friendly proposals
   const neutralStates = otherStates.filter(
@@ -81,9 +104,6 @@ function stateStrategyUpdate(state: State, worldState: WorldState) {
   }
 
   // Declare war towards states who are hostile against your allies
-  const allies = otherStates.filter(
-    (s) => state.strategies[s.id] === Strategy.FRIENDLY && s.strategies[state.id] === Strategy.FRIENDLY,
-  );
   allies.forEach((ally) => {
     otherStates.forEach((potentialEnemy) => {
       if (
@@ -120,7 +140,13 @@ function stateStrategyUpdate(state: State, worldState: WorldState) {
 }
 
 function isWeakerState(enemy: State, state: State, allies: State[], worldState: WorldState): boolean {
-  const enemyLaunchSites = worldState.launchSites.filter((site) => site.stateId === enemy.id);
+  const enemyAllies = worldState.states.filter(
+    (s) =>
+      enemy.strategies[s.id] === Strategy.FRIENDLY && s.strategies[enemy.id] === Strategy.FRIENDLY && s.id !== enemy.id,
+  );
+  const enemyLaunchSites = worldState.launchSites.filter(
+    (site) => site.stateId === enemy.id || enemyAllies.some((ally) => ally.id === site.stateId),
+  );
   const allianceLaunchSites = worldState.launchSites.filter(
     (site) => site.stateId === state.id || allies.some((ally) => ally.id === site.stateId),
   );

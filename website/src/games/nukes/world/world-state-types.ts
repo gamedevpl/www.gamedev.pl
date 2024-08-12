@@ -25,6 +25,7 @@ export type State = {
   color: string;
   isPlayerControlled: boolean;
   strategies: Record<StateId, Strategy>;
+  lastStrategyUpdate: number;
   generalStrategy: Strategy | undefined;
   population: number; // Field to store the total population of the state
 };
