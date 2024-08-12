@@ -3,6 +3,7 @@ import { calculateWaterDepthAndGroundHeight } from './create-world/sector-genera
 import { generateStates } from './create-world/state-generation';
 import { initializeSectors } from './create-world/sector-generation';
 import { dislocateStateUnits } from './create-world/unit-dislocator';
+import { INITIAL_STATE_UNITS } from './world-state-constants';
 
 export function createWorldState({
   playerStateName,
@@ -33,7 +34,7 @@ export function createWorldState({
   const units: Unit[] = [];
 
   for (const state of states) {
-    units.push(...dislocateStateUnits(sectors, state, 1000));
+    units.push(...dislocateStateUnits(sectors, state, INITIAL_STATE_UNITS));
   }
 
   return {

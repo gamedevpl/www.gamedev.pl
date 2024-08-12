@@ -10,7 +10,7 @@ import {
   Interceptor,
 } from '../world-state-types';
 import { distance } from '../../math/position-utils';
-import { EXPLOSION_RADIUS, CITY_RADIUS } from '../world-state-constants';
+import { EXPLOSION_RADIUS, CITY_RADIUS, LAUNCH_GENERATION_INTERVAL } from '../world-state-constants';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -20,6 +20,14 @@ import { EXPLOSION_RADIUS, CITY_RADIUS } from '../world-state-constants';
  * @returns A list of new missiles and their corresponding explosions.
  */
 export function generateLaunches(worldState: WorldState): WorldState {
+  if (
+    worldState.lastLaunchGenerationTimestamp &&
+    worldState.timestamp - worldState.lastLaunchGenerationTimestamp > LAUNCH_GENERATION_INTERVAL
+  ) {
+    return worldState;
+  }
+  worldState.lastLaunchGenerationTimestamp = worldState.timestamp;
+
   const citySectors = worldState.sectors.filter((sector) => sector.cityId && sector.population! > 0);
   for (const state of worldState.states) {
     const myCities = worldState.cities.filter((city) => city.stateId === state.id);

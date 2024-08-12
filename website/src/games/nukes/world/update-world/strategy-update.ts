@@ -1,9 +1,22 @@
 import { WorldState, Strategy, State } from '../world-state-types';
-import { EXPLOSION_RADIUS, CITY_RADIUS, STRATEGY_UPDATE_COOLDOWN } from '../world-state-constants';
+import {
+  EXPLOSION_RADIUS,
+  CITY_RADIUS,
+  STRATEGY_UPDATE_COOLDOWN,
+  STRATEGY_UPDATE_INTERVAL,
+} from '../world-state-constants';
 import { distance } from '../../math/position-utils';
 
 /** Updates strategy of states depending on the situation */
 export function strategyUpdate(worldState: WorldState): WorldState {
+  if (
+    worldState.lastStrategyUpdateTimestamp &&
+    worldState.timestamp - worldState.lastStrategyUpdateTimestamp > STRATEGY_UPDATE_INTERVAL
+  ) {
+    return worldState;
+  }
+  worldState.lastStrategyUpdateTimestamp = worldState.timestamp;
+
   // Iterate over all the missiles in the world state which were just launched
   for (const missile of worldState.missiles.filter((missile) => missile.launchTimestamp === worldState.timestamp)) {
     const launchingState = worldState.states.find((state) => state.id === missile.stateId);

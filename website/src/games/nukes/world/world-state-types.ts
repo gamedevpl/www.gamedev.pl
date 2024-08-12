@@ -18,6 +18,8 @@ export type SectorId = string;
 
 export type ExplosionId = string;
 
+export type UnitId = string;
+
 /** World structure */
 export type State = {
   id: StateId;
@@ -66,6 +68,7 @@ export type Sector = {
 };
 
 export type Unit = {
+  id: UnitId;
   quantity: number;
   position: Position;
   stateId: StateId; // unit belongs to a state
@@ -77,7 +80,7 @@ export type UnitOrder =
   | {
       type: 'stay';
     }
-  | { type: 'move'; adjacentSectorId: SectorId };
+  | { type: 'move'; targetPosition: Position };
 
 export enum LaunchSiteMode {
   ATTACK = 'ATTACK',
@@ -142,6 +145,8 @@ export type Explosion = {
 export type WorldState = {
   // timestamp in seconds
   timestamp: number;
+  lastStrategyUpdateTimestamp?: number;
+  lastLaunchGenerationTimestamp?: number;
 
   states: State[];
   cities: City[];

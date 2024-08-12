@@ -14,7 +14,8 @@ export function handleExplosions(state: WorldState, prevState: WorldState, world
     state.explosions.push(explosion);
     state = applyExplosionDamage(state, explosion);
     state = destroyMissilesAndInterceptorsInExplosion(state, explosion, prevState);
-    state = damagelaunchSitesInExplosion(state, explosion, prevState);
+    state = damageLaunchSitesInExplosion(state, explosion, prevState);
+    state = damageUnitsinExplosion(state, explosion, prevState);
   }
 
   // Remove explosions which already finished
@@ -87,7 +88,7 @@ function destroyMissilesAndInterceptorsInExplosion(
   return state;
 }
 
-function damagelaunchSitesInExplosion(state: WorldState, explosion: Explosion, prevState: WorldState): WorldState {
+function damageLaunchSitesInExplosion(state: WorldState, explosion: Explosion, prevState: WorldState): WorldState {
   // Add damage to launch sites
   const affectedLaunchSites = prevState.launchSites.filter(
     (launchSite) =>
@@ -95,5 +96,28 @@ function damagelaunchSitesInExplosion(state: WorldState, explosion: Explosion, p
       explosion.radius,
   );
   state.launchSites = state.launchSites.filter((ls) => !affectedLaunchSites.some((als) => als.id === ls.id));
+  return state;
+}
+
+function damageUnitsinExplosion(state: WorldState, explosion: Explosion, prevState: WorldState): WorldState {
+  // Find units which are in range of explosion, and reduce their quantity
+  const affectedUnits = prevState.units.filter(
+    (unit) =>
+      distance(unit.position.x, unit.position.y, explosion.position.x, explosion.position.y) <= explosion.radius,
+  );
+
+  state.units = state.units.map((unit) => {
+    const affectedUnit = affectedUnits.find((au) => au.id === unit.id);
+    if (affectedUnit) {
+      const damage = Math.max(MIN_EXPLOSION_DAMAGE, unit.quantity * EXPLOSION_DAMAGE_RATIO);
+      const newQuantity = Math.max(0, unit.quantity - damage);
+      return { ...unit, quantity: newQuantity };
+    }
+    return unit;
+  });
+
+  // Remove units which quantity is zero or below zero
+  state.units = state.units.filter((unit) => unit.quantity > 0);
+
   return state;
 }

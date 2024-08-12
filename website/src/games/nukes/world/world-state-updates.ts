@@ -9,6 +9,7 @@ import { handleExplosions } from './update-world/handle-explosions';
 import { updateLaunchSiteModes } from './update-world/update-launch-site-modes';
 import { launchNewMissilesAndInterceptors } from './update-world/launch-new-missiles-and-interceptors';
 import { updateCityAndStatePopulations } from './update-world/update-city-and-state-populations';
+import { updateUnits } from './update-world/units-update';
 
 export function updateWorldState(state: WorldState, deltaTime: number): WorldState {
   while (deltaTime > 0) {
@@ -35,6 +36,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     sectors: state.sectors,
   };
 
+  result = updateUnits(result, deltaTime);
   result = updateMissilePositions(result, worldTimestamp);
   result = updateInterceptorPositions(result, deltaTime);
   result = handleMissileInterceptions(result);

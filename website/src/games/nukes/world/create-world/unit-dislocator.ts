@@ -1,6 +1,8 @@
 import { State, Unit, Sector, StateId } from '../world-state-types';
 import { findBorderSectors } from '../world-state-utils';
 
+let unitIdCounter = 0;
+
 export function dislocateStateUnits(sectors: Sector[], state: State, totalQuantity: number): Unit[] {
   const units: Unit[] = [];
 
@@ -24,9 +26,10 @@ export function dislocateStateUnits(sectors: Sector[], state: State, totalQuanti
         0,
       );
       const borderRatio = accBorderLength / totalBorderLength;
-      const unitsInSector = Math.round(totalQuantity * borderRatio) / accBorderLength;
+      const unitsInSector = (Math.round(totalQuantity * borderRatio) / accBorderLength) * (Math.random() * 0.1 + 0.9);
       if (unitsInSector > 0) {
         units.push({
+          id: String(unitIdCounter++),
           quantity: unitsInSector,
           position: sector.position,
           stateId: state.id,
