@@ -27,7 +27,7 @@ export type State = {
   strategies: Record<StateId, Strategy>;
   lastStrategyUpdate: number;
   generalStrategy: Strategy | undefined;
-  population: number; // Field to store the total population of the state
+  population: number; // thousands of inhabitiants, this number is auto calculated
 };
 
 export enum Strategy {
@@ -41,7 +41,7 @@ export type City = {
   stateId: StateId;
   name: string;
   position: Position;
-  population: number;
+  population: number; // thousands of inhabitiants, this number is auto calculated
 };
 
 export enum EntityType {
@@ -61,7 +61,13 @@ export type Sector = {
   depth?: number; // water depth
   height?: number; // ground height
   stateId?: StateId; // New property to represent sector ownership
-} & ({ cityId: CityId; population: number } | { population?: number; cityId?: CityId });
+} & (
+  | {
+      cityId: CityId;
+      population: number; // thousands of inhabitiants
+    }
+  | { population?: number; cityId?: CityId }
+);
 
 export enum LaunchSiteMode {
   ATTACK = 'ATTACK',

@@ -6,6 +6,7 @@ import { GameStatePlaying } from './state-playing/state-playing';
 import playerLostBackground from '../assets/player-lost-background.png';
 import playerWonBackground from '../assets/player-won-background.png';
 import drawBackground from '../assets/draw-background.png';
+import { formatPopulation } from '../world/world-state-utils';
 
 const Container = styled.div<{ backgroundImage: string }>`
   height: 100vh;
@@ -98,10 +99,10 @@ const PlayedComponent: GameStateComponent = ({ setGameState }) => {
     message = "It's a draw! The world is partially destroyed, but there's still hope.";
   } else if (result.winner === result.playerStateId) {
     backgroundImage = playerWonBackground;
-    message = `Congratulations! ${result.stateNames[result.playerStateId]} has won with ${result.populations[result.playerStateId] << 0} population alive.`;
+    message = `Congratulations! ${result.stateNames[result.playerStateId]} has won with ${formatPopulation(result.populations[result.playerStateId])} population alive.`;
   } else if (result.winner !== undefined) {
     backgroundImage = playerLostBackground;
-    message = `${result.stateNames[result.winner]} has won with ${result.populations[result.winner] << 0} population alive. Your state has fallen.`;
+    message = `${result.stateNames[result.winner]} has won with ${formatPopulation(result.populations[result.winner])} population alive. Your state has fallen.`;
   } else {
     // Fallback message if winner is undefined
     backgroundImage = drawBackground;

@@ -22,3 +22,12 @@ export function getClosestCity(worldState: WorldState, position: { x: number; y:
     return closest;
   }, undefined);
 }
+
+// Function to format population
+export function formatPopulation(population: number): string {
+  if (population >= 1000) {
+    return `${(population / 1000).toFixed(1)}M`;
+  } else {
+    return `${population.toFixed(0)}K`;
+  }
+}

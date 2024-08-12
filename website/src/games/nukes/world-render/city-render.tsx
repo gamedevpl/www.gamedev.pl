@@ -2,6 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 
 import { City } from '../world/world-state-types';
+import { formatPopulation } from '../world/world-state-utils';
 import { useObjectPointer } from '../controls/pointer';
 
 export function CityRender({ city }: { city: City }) {
@@ -12,6 +13,8 @@ export function CityRender({ city }: { city: City }) {
   if (!currentPopulation) {
     return null;
   }
+
+  const formattedPopulation = formatPopulation(currentPopulation);
 
   return (
     <CityContainer
@@ -25,7 +28,7 @@ export function CityRender({ city }: { city: City }) {
       }
     >
       <span>{city.name}</span>
-      <CityTooltip>{currentPopulation << 0} population</CityTooltip>
+      <CityTooltip>{formattedPopulation} population</CityTooltip>
     </CityContainer>
   );
 }

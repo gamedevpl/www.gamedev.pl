@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import { StateId, WorldState, Strategy, State } from '../../world/world-state-types';
 import { dispatchTranslateEvent } from './viewport';
-import { calculateAllStatePopulations } from '../../world/world-state-utils';
+import { calculateAllStatePopulations, formatPopulation } from '../../world/world-state-utils';
 
 /** A component that allows user to control the player controlled state */
 export function StateControl({ worldState }: { worldState: WorldState }) {
@@ -126,7 +126,7 @@ export function StateControl({ worldState }: { worldState: WorldState }) {
           <StateFlag style={{ color: state.color }}>{state.name.charAt(0)}</StateFlag>
           <StateDetails>
             <StateName>{state.name}</StateName>
-            <StatePopulation>{statePopulation[state.id] << 0}</StatePopulation>
+            <StatePopulation>{formatPopulation(statePopulation[state.id])}</StatePopulation>
             {state.id !== playerState.id ? (
               renderRelationshipButtons(state)
             ) : (
