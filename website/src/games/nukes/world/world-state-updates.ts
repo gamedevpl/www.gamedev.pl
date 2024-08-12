@@ -48,6 +48,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     launchSites: state.launchSites,
     missiles: state.missiles,
     interceptors: state.interceptors,
+    units: state.units,
     explosions: state.explosions,
     sectors: state.sectors,
   };

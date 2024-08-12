@@ -60,14 +60,23 @@ export type Sector = {
   type: SectorType;
   depth?: number; // water depth
   height?: number; // ground height
-  stateId?: StateId; // New property to represent sector ownership
-} & (
+  stateId?: StateId; // sector ownership
+  cityId?: CityId;
+  population: number; // thousands of inhabitiants
+};
+
+export type Unit = {
+  quantity: number;
+  stateId: StateId; // unit belongs to a state
+  order: UnitOrder; // current order
+  lastOrderTimestamp?: number; // timestamp of the moment when the last order was given
+};
+
+export type UnitOrder =
   | {
-      cityId: CityId;
-      population: number; // thousands of inhabitiants
+      type: 'stay';
     }
-  | { population?: number; cityId?: CityId }
-);
+  | { type: 'move'; adjacentSectorId: SectorId };
 
 export enum LaunchSiteMode {
   ATTACK = 'ATTACK',
@@ -139,6 +148,7 @@ export type WorldState = {
 
   sectors: Sector[];
 
+  units: Unit[];
   missiles: Missile[];
   interceptors: Interceptor[];
   explosions: Explosion[];

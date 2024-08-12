@@ -1,7 +1,8 @@
-import { Explosion, Missile, Sector, WorldState, Interceptor } from './world-state-types';
+import { Explosion, Missile, Sector, WorldState, Interceptor, Unit } from './world-state-types';
 import { calculateWaterDepthAndGroundHeight } from './create-world/sector-generation';
 import { generateStates } from './create-world/state-generation';
 import { initializeSectors } from './create-world/sector-generation';
+import { dislocateStateUnits } from './create-world/unit-dislocator';
 
 export function createWorldState({
   playerStateName,
@@ -29,6 +30,11 @@ export function createWorldState({
   const missiles: Missile[] = [];
   const explosions: Explosion[] = [];
   const interceptors: Interceptor[] = [];
+  const units: Unit[] = [];
+
+  for (const state of states) {
+    units.push(...dislocateStateUnits(sectors, state, 1000));
+  }
 
   return {
     timestamp: 0,
@@ -36,6 +42,7 @@ export function createWorldState({
     cities,
     launchSites,
     sectors,
+    units,
     missiles,
     explosions,
     interceptors,
