@@ -73,42 +73,25 @@ export const UnitCanvas: React.FC<UnitCanvasProps> = ({ worldStateRef }) => {
     Object.entries(unitsByState).forEach(([stateId, units]) => {
       const state = worldState.states.find((s) => s.id === stateId);
       const color = state ? state.color : '#000000';
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
 
       units.forEach((unit) => {
-        const canvas = getOffscreenUnitCanvas(color);
-        ctx.drawImage(canvas, unit.position.x - UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2);
+        // Draw rectangle
+        ctx.fillRect(unit.position.x - UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2, UNIT_SIZE, UNIT_SIZE);
+        ctx.strokeRect(unit.position.x - UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2, UNIT_SIZE, UNIT_SIZE);
+
+        // Draw diagonals
+        ctx.beginPath();
+        ctx.moveTo(unit.position.x - UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2);
+        ctx.lineTo(unit.position.x + UNIT_SIZE / 2, unit.position.y + UNIT_SIZE / 2);
+        ctx.moveTo(unit.position.x + UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2);
+        ctx.lineTo(unit.position.x - UNIT_SIZE / 2, unit.position.y + UNIT_SIZE / 2);
+        ctx.stroke();
       });
     });
   };
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0 }} />;
 };
-
-const canvasCache: Record<string, HTMLCanvasElement> = {};
-function getOffscreenUnitCanvas(color: string) {
-  if (!canvasCache[color]) {
-    const canvas = document.createElement('canvas');
-    canvas.width = UNIT_SIZE;
-    canvas.height = UNIT_SIZE;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = color;
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1;
-
-      // Draw rectangle and diagonals once
-      ctx.fillRect(0, 0, UNIT_SIZE, UNIT_SIZE);
-      ctx.strokeRect(0, 0, UNIT_SIZE, UNIT_SIZE);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(UNIT_SIZE, UNIT_SIZE);
-      ctx.moveTo(UNIT_SIZE, 0);
-      ctx.lineTo(0, UNIT_SIZE);
-      ctx.stroke();
-
-      canvasCache[color] = canvas;
-    }
-  }
-
-  return canvasCache[color];
-}
