@@ -30,10 +30,12 @@ export const UnitCanvas: React.FC<UnitCanvasProps> = ({ worldStateRef }) => {
 
     const width = maxX - minX;
     const height = maxY - minY;
-    canvas.width = width;
-    canvas.height = height;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
 
     const render = () => {
       const worldState = worldStateRef.current;
@@ -41,9 +43,9 @@ export const UnitCanvas: React.FC<UnitCanvasProps> = ({ worldStateRef }) => {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      worldState.units.forEach((unit) => {
-        drawUnit(ctx, unit, worldState);
-      });
+      ctx.save();
+      drawUnits(ctx, worldState);
+      ctx.restore();
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -55,26 +57,58 @@ export const UnitCanvas: React.FC<UnitCanvasProps> = ({ worldStateRef }) => {
     };
   }, [worldStateRef]);
 
-  const drawUnit = (ctx: CanvasRenderingContext2D, unit: Unit, worldState: WorldState) => {
-    const { x, y } = unit.position;
-    const state = worldState.states.find((s) => s.id === unit.stateId);
-    const color = state ? state.color : '#000000';
+  const drawUnits = (ctx: CanvasRenderingContext2D, worldState: WorldState) => {
+    const unitsByState: Record<string, Unit[]> = {};
 
-    // Draw rectangle
-    ctx.fillStyle = color;
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
-    ctx.fillRect(x - UNIT_SIZE / 2, y - UNIT_SIZE / 2, UNIT_SIZE, UNIT_SIZE);
-    ctx.strokeRect(x - UNIT_SIZE / 2, y - UNIT_SIZE / 2, UNIT_SIZE, UNIT_SIZE);
+    // Group units by their stateId
+    worldState.units.forEach((unit) => {
+      const stateId = unit.stateId;
+      if (!unitsByState[stateId]) {
+        unitsByState[stateId] = [];
+      }
+      unitsByState[stateId].push(unit);
+    });
 
-    // Draw diagonals
-    ctx.beginPath();
-    ctx.moveTo(x - UNIT_SIZE / 2, y - UNIT_SIZE / 2);
-    ctx.lineTo(x + UNIT_SIZE / 2, y + UNIT_SIZE / 2);
-    ctx.moveTo(x + UNIT_SIZE / 2, y - UNIT_SIZE / 2);
-    ctx.lineTo(x - UNIT_SIZE / 2, y + UNIT_SIZE / 2);
-    ctx.stroke();
+    // Draw units grouped by state
+    Object.entries(unitsByState).forEach(([stateId, units]) => {
+      const state = worldState.states.find((s) => s.id === stateId);
+      const color = state ? state.color : '#000000';
+
+      units.forEach((unit) => {
+        const canvas = getOffscreenUnitCanvas(color);
+        ctx.drawImage(canvas, unit.position.x - UNIT_SIZE / 2, unit.position.y - UNIT_SIZE / 2);
+      });
+    });
   };
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0 }} />;
 };
+
+const canvasCache: Record<string, HTMLCanvasElement> = {};
+function getOffscreenUnitCanvas(color: string) {
+  if (!canvasCache[color]) {
+    const canvas = document.createElement('canvas');
+    canvas.width = UNIT_SIZE;
+    canvas.height = UNIT_SIZE;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
+
+      // Draw rectangle and diagonals once
+      ctx.fillRect(0, 0, UNIT_SIZE, UNIT_SIZE);
+      ctx.strokeRect(0, 0, UNIT_SIZE, UNIT_SIZE);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(UNIT_SIZE, UNIT_SIZE);
+      ctx.moveTo(UNIT_SIZE, 0);
+      ctx.lineTo(0, UNIT_SIZE);
+      ctx.stroke();
+
+      canvasCache[color] = canvas;
+    }
+  }
+
+  return canvasCache[color];
+}
