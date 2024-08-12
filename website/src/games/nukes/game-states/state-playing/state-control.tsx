@@ -126,7 +126,7 @@ export function StateControl({ worldState }: { worldState: WorldState }) {
           <StateFlag style={{ color: state.color }}>{state.name.charAt(0)}</StateFlag>
           <StateDetails>
             <StateName>{state.name}</StateName>
-            <StatePopulation>{formatPopulation(statePopulation[state.id])}</StatePopulation>
+            <StatePopulation>👤 {formatPopulation(statePopulation[state.id])}</StatePopulation>
             {state.id !== playerState.id ? (
               renderRelationshipButtons(state)
             ) : (
