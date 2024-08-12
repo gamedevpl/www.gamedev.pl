@@ -19,7 +19,6 @@ export function initializeSectors(worldWidth: number, worldHeight: number): Sect
         depth: 0, // Initialize depth to 0
         height: 0, // Initialize height to 0 for water sectors
         population: 0, // Initialize population to 0
-        cityId: '', // Initialize cityId to empty
       });
     }
   }

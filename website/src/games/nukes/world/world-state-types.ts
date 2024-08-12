@@ -67,6 +67,7 @@ export type Sector = {
 
 export type Unit = {
   quantity: number;
+  position: Position;
   stateId: StateId; // unit belongs to a state
   order: UnitOrder; // current order
   lastOrderTimestamp?: number; // timestamp of the moment when the last order was given

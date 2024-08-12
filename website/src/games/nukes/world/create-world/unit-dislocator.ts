@@ -9,8 +9,8 @@ export function dislocateStateUnits(sectors: Sector[], state: State, totalQuanti
   const stateBorderLength: Record<StateId, number> = {};
   // Calculate the border length for each neighboring state
   borderSectors.forEach((sector) => {
-    if (sector.stateId && sector.stateId !== state.id) {
-      stateBorderLength[sector.stateId] = (stateBorderLength[sector.stateId] || 0) + 1;
+    for (const adjacentStateId of sector.adjacentStateIds) {
+      stateBorderLength[adjacentStateId] = (stateBorderLength[adjacentStateId] || 0) + 1;
     }
   });
 
@@ -18,12 +18,17 @@ export function dislocateStateUnits(sectors: Sector[], state: State, totalQuanti
 
   // Distribute units proportionally to the length of the border with other states
   borderSectors.forEach((sector) => {
-    if (sector.stateId && sector.stateId !== state.id) {
-      const borderRatio = stateBorderLength[sector.stateId] / totalBorderLength;
-      const unitsInSector = Math.round(totalQuantity * borderRatio) / stateBorderLength[sector.stateId];
+    if (sector.stateId && sector.stateId === state.id) {
+      const accBorderLength = Array.from(sector.adjacentStateIds).reduce(
+        (acc, stateId) => acc + stateBorderLength[stateId],
+        0,
+      );
+      const borderRatio = accBorderLength / totalBorderLength;
+      const unitsInSector = Math.round(totalQuantity * borderRatio) / accBorderLength;
       if (unitsInSector > 0) {
         units.push({
           quantity: unitsInSector,
+          position: sector.position,
           stateId: state.id,
           order: { type: 'stay' },
         });

@@ -1,3 +1,4 @@
+import React, { useRef } from 'react';
 import styled from 'styled-components';
 
 import { WorldState } from '../world/world-state-types';
@@ -9,9 +10,16 @@ import { StateRender } from './state-render';
 import { CityRender } from './city-render';
 import { LaunchSiteRender } from './launch-site-render';
 import { EffectsCanvas } from './effects-canvas';
+import { UnitCanvas } from './unit-render';
 
 export function WorldStateRender({ state }: { state: WorldState }) {
   const pointerMove = usePointerMove();
+  const worldStateRef = useRef<WorldState>(state);
+
+  // Update the ref when the state changes
+  React.useEffect(() => {
+    worldStateRef.current = state;
+  }, [state]);
 
   return (
     <WorldStateContainer
@@ -43,6 +51,9 @@ export function WorldStateRender({ state }: { state: WorldState }) {
 
       {/* dynamic content, changes with time */}
       <EffectsCanvas state={state} />
+
+      {/* New UnitCanvas component for rendering units */}
+      <UnitCanvas worldStateRef={worldStateRef} />
     </WorldStateContainer>
   );
 }
