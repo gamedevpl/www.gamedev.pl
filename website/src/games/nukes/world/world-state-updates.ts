@@ -25,7 +25,7 @@ export function updateWorldState(state: WorldState, deltaTime: number): WorldSta
 function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState {
   const worldTimestamp = state.timestamp + deltaTime;
 
-  let result = indexWorldState({
+  const result = indexWorldState({
     timestamp: worldTimestamp,
     states: state.states,
     cities: state.cities,

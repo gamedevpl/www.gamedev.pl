@@ -30,6 +30,7 @@ export function indexWorldState(worldState: WorldState): IndexedWorldState {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const indexCache: Record<string, IndexType<any>> = {};
 function indexItems<T extends { id: string } & ({ position: { x: number; y: number } } | { rect: Rect })>(
   items: T[],
@@ -60,6 +61,7 @@ function indexItems<T extends { id: string } & ({ position: { x: number; y: numb
         const valueMap = propertyCache.set(propertyName, new Map()).get(propertyName);
         items.forEach((item) => {
           if (propertyName in item) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const value = (item as unknown as any)[propertyName];
             if (!valueMap.has(value)) {
               valueMap.set(value, []);
