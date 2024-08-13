@@ -25,7 +25,9 @@ export function updateUnits(worldState: IndexedWorldState, deltaTime: number): v
 function findBattles(worldState: IndexedWorldState): Record<string, Unit[]> {
   const battles = {} as Record<string, Unit[]>;
 
-  for (const sector of worldState.sectors.filter((sector) => sector.stateId)) {
+  for (const sector of worldState.states
+    .map((state) => worldState.searchSector.byProperty('stateId', state.id))
+    .flat()) {
     const unitsInSector = worldState.searchUnit.byRect(sector.rect);
     const hostileUnits = unitsInSector.filter(
       (unit) =>

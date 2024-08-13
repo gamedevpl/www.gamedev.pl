@@ -4,6 +4,9 @@ import { City, Interceptor, LaunchSite, Missile, Position, Rect, Sector, Unit, W
 type IndexType<T> = {
   byRect: (rect: Rect) => T[];
   byRadius: (position: Position, distance: number) => T[];
+
+  byProperty: (propertyName: string, propertyValue: unknown) => T[];
+  resetPropertyCache: () => void;
 };
 
 export type IndexedWorldState = WorldState & {
@@ -28,7 +31,7 @@ export function indexWorldState(worldState: WorldState): IndexedWorldState {
 }
 
 const indexCache: Record<string, IndexType<any>> = {};
-function indexItems<T extends { position: { x: number; y: number } } | { rect: Rect }>(
+function indexItems<T extends { id: string } & ({ position: { x: number; y: number } } | { rect: Rect })>(
   items: T[],
   cacheKey?: string,
 ): IndexType<T> {
@@ -46,10 +49,31 @@ function indexItems<T extends { position: { x: number; y: number } } | { rect: R
   }
   index?.finish();
 
+  const propertyCache = new Map();
+
   const result = {
     byRect: (rect: Rect) => index?.search(rect.left, rect.top, rect.right, rect.bottom).map((i) => items[i]) ?? [],
     byRadius: (position: Position, distance: number) =>
       index?.neighbors(position.x, position.y, undefined, distance).map((i) => items[i]) ?? [],
+    byProperty: (propertyName: string, propertyValue: unknown) => {
+      if (!propertyCache.has(propertyName)) {
+        const valueMap = propertyCache.set(propertyName, new Map()).get(propertyName);
+        items.forEach((item) => {
+          if (propertyName in item) {
+            const value = (item as unknown as any)[propertyName];
+            if (!valueMap.has(value)) {
+              valueMap.set(value, []);
+            }
+            valueMap.get(value).push(item);
+          }
+        });
+      }
+
+      return propertyCache.get(propertyName).get(propertyValue) ?? [];
+    },
+    resetPropertyCache: () => {
+      propertyCache.clear();
+    },
   };
 
   if (cacheKey) {
