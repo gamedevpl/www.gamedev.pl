@@ -2,15 +2,15 @@ import { SECTOR_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
 import { Unit, Sector } from '../world-state-types';
 
-export function updateUnitOrders(worldState: IndexedWorldState) {
-  worldState.units.forEach((unit) => {
+export function updateUnitOrders(worldState: IndexedWorldState): void {
+  for (const unit of worldState.units) {
     if (unit.lastOrderTimestamp && worldState.timestamp - unit.lastOrderTimestamp < 10) {
-      return unit; // Don't update orders too frequently
+      return; // Don't update orders too frequently
     }
 
     const currentSector = worldState.searchSector.byRadius(unit.position, 1)[0];
     if (!currentSector) {
-      return unit;
+      return;
     }
 
     const adjacentSectors = worldState.searchSector.byRect({
@@ -49,8 +49,7 @@ export function updateUnitOrders(worldState: IndexedWorldState) {
     }
 
     unit.lastOrderTimestamp = worldState.timestamp;
-    return unit;
-  });
+  }
 }
 
 export function findNearestHostilePopulatedSector(unit: Unit, sectors: Sector[]): Sector | undefined {
