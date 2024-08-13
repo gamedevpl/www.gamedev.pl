@@ -1,7 +1,8 @@
 import { SECTOR_SIZE, UNIT_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Unit, Sector, Position, SectorType, LaunchSite } from '../world-state-types';
+import { Unit, Sector, Position, SectorType } from '../world-state-types';
 import { Battles, isUnitInBattle } from './unit-battles';
+import { countUnitsInSector, evaluateStrategicValue, MAX_UNITS_PER_SECTOR } from './unit-strategic-evaluation';
 
 export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles): void {
   for (const unit of worldState.units) {
@@ -54,29 +55,43 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
     const hostileSectors = adjacentSectors.filter((sector) => sector.stateId !== unit.stateId);
 
     if (hostileSectors.length > 0) {
-      // New logic: calculate how many hostile sectors would be left behind if we move towards a sector
-      const targetSector = selectBestHostileSector(unit, hostileSectors, adjacentSectors, worldState);
+      // New logic: evaluate strategic value of sectors and choose the best one
+      const targetSector = selectBestStrategicSector(unit, hostileSectors, adjacentSectors, worldState);
       unit.order = {
         type: 'move',
         targetPosition: getSectorCenter(targetSector),
       };
     } else {
-      // High-level decision: find nearest hostile populated sector or launch site
-      const nearestTarget = findNearestHostileTarget(
-        unit,
-        worldState,
-        worldState.searchSector
-          .byRadius(unit.position, SECTOR_SIZE * 5)
-          // units dont move on water
-          .filter((sector) => sector.type === SectorType.GROUND),
-      );
-      if (nearestTarget) {
-        unit.order = {
-          type: 'move',
-          targetPosition: nearestTarget.position,
-        };
+      // Implement spreading behavior when not in battle
+      const overcrowdedSector = isOvercrowded(currentSector, worldState);
+      if (overcrowdedSector) {
+        const spreadTarget = findSpreadTarget(unit, adjacentSectors, worldState);
+        if (spreadTarget) {
+          unit.order = {
+            type: 'move',
+            targetPosition: getSectorCenter(spreadTarget),
+          };
+        } else {
+          unit.order = { type: 'stay' };
+        }
       } else {
-        unit.order = { type: 'stay' };
+        // High-level decision: find nearest strategic target
+        const nearestTarget = findNearestStrategicTarget(
+          unit,
+          worldState,
+          worldState.searchSector
+            .byRadius(unit.position, SECTOR_SIZE * 5)
+            // units dont move on water
+            .filter((sector) => sector.type === SectorType.GROUND),
+        );
+        if (nearestTarget) {
+          unit.order = {
+            type: 'move',
+            targetPosition: nearestTarget.position,
+          };
+        } else {
+          unit.order = { type: 'stay' };
+        }
       }
     }
 
@@ -110,64 +125,24 @@ function findNearestFriendlySector(unit: Unit, worldState: IndexedWorldState): S
     )?.sector;
 }
 
-function selectBestHostileSector(
+function selectBestStrategicSector(
   unit: Unit,
   hostileSectors: Sector[],
   allSectors: Sector[],
   worldState: IndexedWorldState,
 ): Sector {
   let bestSector = hostileSectors[0];
-  let highestPriority = -1;
-  let leastHostilesLeft = Infinity;
+  let highestStrategicValue = -Infinity;
 
   for (const sector of hostileSectors) {
-    const hostilesLeft = countHostilesLeftBehind(unit, sector, allSectors);
-    let priority = 0;
-
-    // Check if the sector contains a launch site
-    const launchSite = findLaunchSiteInSector(sector, worldState);
-    if (launchSite) {
-      priority += 3; // Highest priority for launch sites
-    }
-
-    // Check if the sector is a populated city sector
-    if (sector.population > 0) {
-      priority += 2; // High priority for populated sectors
-    }
-
-    // If priorities are equal, choose the sector with fewer hostiles left behind
-    if (priority > highestPriority || (priority === highestPriority && hostilesLeft < leastHostilesLeft)) {
-      highestPriority = priority;
-      leastHostilesLeft = hostilesLeft;
+    const strategicValue = evaluateStrategicValue(sector, unit, allSectors, worldState);
+    if (strategicValue > highestStrategicValue) {
+      highestStrategicValue = strategicValue;
       bestSector = sector;
     }
   }
 
   return bestSector;
-}
-
-function findLaunchSiteInSector(sector: Sector, worldState: IndexedWorldState): LaunchSite | undefined {
-  return worldState.searchLaunchSite.byRect(sector.rect).filter((site) => site.stateId !== sector.stateId)[0];
-}
-
-function countHostilesLeftBehind(unit: Unit, targetSector: Sector, allSectors: Sector[]): number {
-  const unitPosition = unit.position;
-  const targetPosition = getSectorCenter(targetSector);
-  const moveVector = {
-    x: targetPosition.x - unitPosition.x,
-    y: targetPosition.y - unitPosition.y,
-  };
-
-  return allSectors.filter((sector) => {
-    if (sector.stateId === unit.stateId) return false;
-    const sectorCenter = getSectorCenter(sector);
-    const sectorVector = {
-      x: sectorCenter.x - unitPosition.x,
-      y: sectorCenter.y - unitPosition.y,
-    };
-    // Check if the sector is "behind" the movement vector using dot product
-    return moveVector.x * sectorVector.x + moveVector.y * sectorVector.y < 0;
-  }).length;
 }
 
 function getSectorCenter(sector: Sector): Position {
@@ -177,57 +152,44 @@ function getSectorCenter(sector: Sector): Position {
   };
 }
 
-function findNearestHostileTarget(
+function findNearestStrategicTarget(
   unit: Unit,
   worldState: IndexedWorldState,
   sectors: Sector[],
 ): { position: Position; type: 'sector' | 'launchSite' } | undefined {
-  const hostileLaunchSites = worldState.launchSites.filter((site) => site.stateId !== unit.stateId);
-
-  if (hostileLaunchSites.length > 0) {
-    // Select the closest launch site
-    const closestLaunchSite = hostileLaunchSites.reduce(
-      (closest, site) => {
-        const distance = Math.sqrt((unit.position.x - site.position.x) ** 2 + (unit.position.y - site.position.y) ** 2);
-        return closest.distance < distance ? closest : { site, distance };
-      },
-      { site: hostileLaunchSites[0], distance: Infinity },
-    );
-
-    return { position: closestLaunchSite.site.position, type: 'launchSite' as const };
-  }
-
   const hostileSectors = sectors.filter((sector) => sector.stateId !== unit.stateId);
-  // Find the closest populated hostile sector
-  const closestPopulatedSector = hostileSectors.reduce(
-    (closest, sector) => {
-      if (sector.population > 0) {
-        const distance = Math.sqrt(
-          (unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2,
-        );
-        return closest.distance < distance ? closest : { sector, distance };
-      }
-      return closest;
-    },
-    { sector: null, distance: Infinity } as { sector: Sector | null; distance: number },
-  );
 
-  if (closestPopulatedSector.sector) {
-    return { position: getSectorCenter(closestPopulatedSector.sector), type: 'sector' as const };
+  // Evaluate all hostile sectors
+  const evaluatedSectors = hostileSectors.map((sector) => ({
+    sector,
+    value: evaluateStrategicValue(sector, unit, sectors, worldState),
+    distance: Math.sqrt((unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2),
+  }));
+
+  // Sort by strategic value (descending) and then by distance (ascending)
+  evaluatedSectors.sort((a, b) => {
+    if (b.value !== a.value) return b.value - a.value;
+    return a.distance - b.distance;
+  });
+
+  const bestTarget = evaluatedSectors[0];
+  if (bestTarget) {
+    return { position: getSectorCenter(bestTarget.sector), type: 'sector' as const };
   }
 
-  // If no populated sectors, fall back to the closest hostile sector
-  const closestHostileSector = hostileSectors.reduce(
-    (closest, sector) => {
-      const distance = Math.sqrt(
-        (unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2,
-      );
-      return closest.distance < distance ? closest : { sector, distance };
-    },
-    { sector: null, distance: Infinity } as { sector: Sector | null; distance: number },
-  );
+  return undefined;
+}
 
-  return closestHostileSector.sector
-    ? { position: getSectorCenter(closestHostileSector.sector), type: 'sector' as const }
-    : undefined;
+function isOvercrowded(sector: Sector, worldState: IndexedWorldState): boolean {
+  return countUnitsInSector(sector, worldState) > MAX_UNITS_PER_SECTOR;
+}
+
+function findSpreadTarget(unit: Unit, adjacentSectors: Sector[], worldState: IndexedWorldState): Sector | undefined {
+  const friendlySectors = adjacentSectors.filter((sector) => sector.stateId === unit.stateId);
+
+  // Sort sectors by unit count (ascending)
+  friendlySectors.sort((a, b) => countUnitsInSector(a, worldState) - countUnitsInSector(b, worldState));
+
+  // Find the first sector that is not overcrowded
+  return friendlySectors.find((sector) => !isOvercrowded(sector, worldState));
 }

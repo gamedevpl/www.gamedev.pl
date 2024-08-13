@@ -72,3 +72,6 @@ export const STRATEGY_UPDATE_INTERVAL = 0.1;
 
 /** Size of the unit rectangle */
 export const UNIT_SIZE = SECTOR_SIZE * 0.7;
+
+/** Distance for unit spread */
+export const UNIT_SPREAD_DISTANCE = SECTOR_SIZE * 2;
