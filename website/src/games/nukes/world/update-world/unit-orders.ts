@@ -181,14 +181,33 @@ function findNearestStrategicTarget(
 }
 
 function isOvercrowded(sector: Sector, worldState: IndexedWorldState): boolean {
-  return countUnitsInSector(sector, worldState) > MAX_UNITS_PER_SECTOR;
+  return countUnitsInSector(sector, worldState) + countUnitsMovingIntoSector(sector, worldState) > MAX_UNITS_PER_SECTOR;
+}
+
+function countUnitsMovingIntoSector(sector: Sector, worldState: IndexedWorldState): number {
+  return worldState.units.filter(
+    (unit) => unit.order.type === 'move' && isPositionInSector(unit.order.targetPosition, sector),
+  ).length;
+}
+
+function isPositionInSector(position: Position, sector: Sector): boolean {
+  return (
+    position.x >= sector.rect.left &&
+    position.x <= sector.rect.right &&
+    position.y >= sector.rect.top &&
+    position.y <= sector.rect.bottom
+  );
 }
 
 function findSpreadTarget(unit: Unit, adjacentSectors: Sector[], worldState: IndexedWorldState): Sector | undefined {
   const friendlySectors = adjacentSectors.filter((sector) => sector.stateId === unit.stateId);
 
-  // Sort sectors by unit count (ascending)
-  friendlySectors.sort((a, b) => countUnitsInSector(a, worldState) - countUnitsInSector(b, worldState));
+  // Sort sectors by total unit count (current + moving in), ascending
+  friendlySectors.sort((a, b) => {
+    const totalUnitsA = countUnitsInSector(a, worldState) + countUnitsMovingIntoSector(a, worldState);
+    const totalUnitsB = countUnitsInSector(b, worldState) + countUnitsMovingIntoSector(b, worldState);
+    return totalUnitsA - totalUnitsB;
+  });
 
   // Find the first sector that is not overcrowded
   return friendlySectors.find((sector) => !isOvercrowded(sector, worldState));

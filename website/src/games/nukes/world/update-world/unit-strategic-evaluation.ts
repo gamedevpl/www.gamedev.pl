@@ -1,8 +1,8 @@
 import { SECTOR_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Sector, Unit, LaunchSite } from '../world-state-types';
+import { Sector, Unit, LaunchSite, Position } from '../world-state-types';
 
-export const MAX_UNITS_PER_SECTOR = 5;
+export const MAX_UNITS_PER_SECTOR = 2;
 
 export function evaluateStrategicValue(
   sector: Sector,
@@ -35,8 +35,9 @@ export function evaluateStrategicValue(
   const strategicPosition = evaluateStrategicPosition(sector, unit.stateId, allSectors);
   value += strategicPosition * 20; // High priority for strategically important positions
 
-  // Adjust value based on unit density
-  const unitDensity = countUnitsInSector(sector, worldState) / MAX_UNITS_PER_SECTOR;
+  // Adjust value based on unit density (including units moving into the sector)
+  const totalUnits = countUnitsInSector(sector, worldState) + countUnitsMovingIntoSector(sector, worldState);
+  const unitDensity = totalUnits / MAX_UNITS_PER_SECTOR;
   value -= unitDensity * 30; // Discourage overcrowding
 
   return value;
@@ -83,4 +84,19 @@ function findLaunchSiteInSector(sector: Sector, worldState: IndexedWorldState): 
 
 export function countUnitsInSector(sector: Sector, worldState: IndexedWorldState): number {
   return worldState.searchUnit.byRect(sector.rect).length;
+}
+
+export function countUnitsMovingIntoSector(sector: Sector, worldState: IndexedWorldState): number {
+  return worldState.units.filter(
+    (unit) => unit.order.type === 'move' && isPositionInSector(unit.order.targetPosition, sector),
+  ).length;
+}
+
+function isPositionInSector(position: Position, sector: Sector): boolean {
+  return (
+    position.x >= sector.rect.left &&
+    position.x <= sector.rect.right &&
+    position.y >= sector.rect.top &&
+    position.y <= sector.rect.bottom
+  );
 }
