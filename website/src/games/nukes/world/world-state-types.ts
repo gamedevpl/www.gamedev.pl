@@ -71,6 +71,7 @@ export type Unit = {
   id: UnitId;
   quantity: number;
   position: Position;
+  rect: Rect;
   stateId: StateId; // unit belongs to a state
   order: UnitOrder; // current order
   lastOrderTimestamp?: number; // timestamp of the moment when the last order was given

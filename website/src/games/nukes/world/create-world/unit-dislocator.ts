@@ -33,6 +33,12 @@ export function dislocateStateUnits(sectors: Sector[], state: State, totalQuanti
           id: String(unitIdCounter++),
           quantity: unitsInSector,
           position: { x: sector.position.x + SECTOR_SIZE / 2, y: sector.position.y + SECTOR_SIZE / 2 },
+          rect: {
+            left: sector.position.x - SECTOR_SIZE / 2,
+            top: sector.position.y - SECTOR_SIZE / 2,
+            right: sector.position.x + SECTOR_SIZE / 2,
+            bottom: sector.position.y + SECTOR_SIZE / 2,
+          },
           stateId: state.id,
           order: { type: 'stay' },
         });

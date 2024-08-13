@@ -56,7 +56,13 @@ export const STRATEGY_UPDATE_COOLDOWN = 10;
 export const UNIT_MOVEMENT_SPEED = MISSILE_SPEED / 10;
 
 /** Default total amount of unit capacity for state */
-export const INITIAL_STATE_UNITS = 0;
+export const INITIAL_STATE_UNITS = 1000;
+
+/** Minimum damage in battle per second */
+export const BATTLE_MIN_DAMAGE = 1;
+
+/** Percentage of quantity lost during battle per second */
+export const BATTLE_DAMAGE_RATIO = 0.1;
 
 /** Launch generation interval (in seconds) */
 export const LAUNCH_GENERATION_INTERVAL = 0.1;
@@ -65,4 +71,4 @@ export const LAUNCH_GENERATION_INTERVAL = 0.1;
 export const STRATEGY_UPDATE_INTERVAL = 0.1;
 
 /** Size of the unit rectangle */
-export const UNIT_SIZE = 10;
+export const UNIT_SIZE = SECTOR_SIZE * 0.7;

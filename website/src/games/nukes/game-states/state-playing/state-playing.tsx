@@ -14,10 +14,10 @@ import { StateControl } from './state-control';
 
 const PlayingComponent: GameStateComponent = ({ setGameState }) => {
   const {
-    state: { stateName },
+    state: { stateName, numberOfOpponents, groundWarfare },
   } = useLocation();
 
-  const { worldState, setWorldState, updateWorldState } = useWorldStore(stateName);
+  const { worldState, setWorldState, updateWorldState } = useWorldStore(stateName, numberOfOpponents, groundWarfare);
 
   return (
     <>

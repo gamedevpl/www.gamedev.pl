@@ -8,9 +8,11 @@ import { INITIAL_STATE_UNITS } from './world-state-constants';
 export function createWorldState({
   playerStateName,
   numberOfStates = 3,
+  groundWarfare,
 }: {
   playerStateName: string;
   numberOfStates: number;
+  groundWarfare: boolean;
 }): WorldState {
   const worldWidth = Math.max(200, Math.ceil(Math.sqrt(numberOfStates) * 10));
   const worldHeight = worldWidth;
@@ -33,8 +35,10 @@ export function createWorldState({
   const interceptors: Interceptor[] = [];
   const units: Unit[] = [];
 
-  for (const state of states) {
-    units.push(...dislocateStateUnits(sectors, state, INITIAL_STATE_UNITS));
+  if (groundWarfare) {
+    for (const state of states) {
+      units.push(...dislocateStateUnits(sectors, state, INITIAL_STATE_UNITS));
+    }
   }
 
   return {

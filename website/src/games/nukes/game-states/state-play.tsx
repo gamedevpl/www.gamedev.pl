@@ -40,7 +40,8 @@ const Container = styled.div`
     box-shadow: 0px 0px 5px black;
   }
 
-  input {
+  input,
+  select {
     font-size: 1.2rem;
     padding: 10px;
     margin-bottom: 20px;
@@ -85,21 +86,34 @@ const Container = styled.div`
 
 const PlayComponent: GameStateComponent = ({ setGameState }) => {
   const [stateName, setStateName] = useState(getRandomStateNames(1)[0]);
+  const [numberOfOpponents, setNumberOfOpponents] = useState(2);
+  const [groundWarfare, setGroundWarfare] = useState(false);
 
   const handlePlay = () => {
-    setGameState(GameStatePlaying, { stateName });
+    setGameState(GameStatePlaying, { stateName, numberOfOpponents, groundWarfare });
   };
 
   return (
     <Container>
       <div>
-        <h1>Name your state:</h1>
+        <h2>Name your state:</h2>
         <input
           type="text"
           placeholder="Type your state name here"
           value={stateName}
           onChange={(event) => setStateName(event.currentTarget.value)}
         />
+        <br />
+        <h2>How many opponents?</h2>
+        <select value={numberOfOpponents} onChange={(event) => setNumberOfOpponents(Number(event.currentTarget.value))}>
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+          <option value={3}>3</option>
+          <option value={4}>4</option>
+        </select>
+        <h2>Ground warfare? (WIP)</h2>
+        <input type="checkbox" checked={groundWarfare} onChange={() => setGroundWarfare(!groundWarfare)} />
+        <br />
         <br />
         <button onClick={handlePlay} disabled={!stateName}>
           Start game

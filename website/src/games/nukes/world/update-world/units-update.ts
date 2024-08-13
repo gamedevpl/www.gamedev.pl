@@ -1,6 +1,8 @@
-import { Sector, Unit, Strategy, StateId } from '../world-state-types';
-import { UNIT_MOVEMENT_SPEED, SECTOR_SIZE } from '../world-state-constants';
+import { Unit } from '../world-state-types';
+import { UNIT_MOVEMENT_SPEED, UNIT_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
+import { Battles, findBattles, isUnitInBattle, resolveBattles } from './unit-battles';
+import { updateUnitOrders } from './unit-orders';
 
 export function updateUnits(worldState: IndexedWorldState, deltaTime: number): void {
   // Find battles: two hostile state units are in the same sector
@@ -22,47 +24,7 @@ export function updateUnits(worldState: IndexedWorldState, deltaTime: number): v
   worldState.units = worldState.units.filter((unit) => unit.quantity > 0);
 }
 
-function findBattles(worldState: IndexedWorldState): Record<string, Unit[]> {
-  const battles = {} as Record<string, Unit[]>;
-
-  for (const sector of worldState.states
-    .map((state) => worldState.searchSector.byProperty('stateId', state.id))
-    .flat()) {
-    const unitsInSector = worldState.searchUnit.byRect(sector.rect);
-    const hostileUnits = unitsInSector.filter(
-      (unit) =>
-        worldState.states.find((state) => state.id === unit.stateId)?.strategies[sector.stateId!] === Strategy.HOSTILE,
-    );
-    const stateUnits = unitsInSector.filter((unit) => unit.stateId === sector.stateId);
-
-    if (hostileUnits.length > 0 && stateUnits.length > 0) {
-      battles[sector.id] = [...hostileUnits, ...stateUnits];
-    }
-  }
-
-  return battles;
-}
-
-function resolveBattles(units: Unit[], battles: Record<string, Unit[]>, deltaTime: number): Unit[] {
-  for (const [, battleUnits] of Object.entries(battles)) {
-    const quantities = battleUnits.reduce(
-      (acc, unit) => ((acc[unit.stateId] = (acc[unit.stateId] ?? 0) + unit.quantity), acc),
-      {} as Record<StateId, number>,
-    );
-    const totalQuantity = Object.values(quantities).reduce((acc, quantity) => (acc = acc + quantity), 0);
-    if (!totalQuantity) {
-      continue;
-    }
-
-    battleUnits.forEach((unit) => {
-      unit.quantity -= (quantities[unit.stateId] / totalQuantity) * deltaTime;
-    });
-  }
-
-  return units;
-}
-
-function updateUnitPositions(units: Unit[], deltaTime: number, battles: Record<string, Unit[]>): Unit[] {
+function updateUnitPositions(units: Unit[], deltaTime: number, battles: Battles): Unit[] {
   return units.map((unit) => {
     if (unit.order.type === 'move' && !isUnitInBattle(unit, battles)) {
       const direction = {
@@ -85,18 +47,15 @@ function updateUnitPositions(units: Unit[], deltaTime: number, battles: Record<s
           y: unit.position.y + normalizedDirection.y * movement,
         };
       }
+      unit.rect = {
+        left: unit.position.x - UNIT_SIZE / 2,
+        top: unit.position.y - UNIT_SIZE / 2,
+        right: unit.position.x + UNIT_SIZE / 2,
+        bottom: unit.position.y + UNIT_SIZE / 2,
+      };
     }
     return unit;
   });
-}
-
-function isUnitInBattle(unit: Unit, battles: Record<string, Unit[]>): boolean {
-  for (const [, battleUnits] of Object.entries(battles)) {
-    if (battleUnits.find((u) => u.id === unit.id)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function updateSectorOwnership(worldState: IndexedWorldState) {
@@ -114,69 +73,4 @@ function updateSectorOwnership(worldState: IndexedWorldState) {
       sector.stateId = unit.stateId;
     }
   });
-}
-
-function updateUnitOrders(worldState: IndexedWorldState) {
-  worldState.units.forEach((unit) => {
-    if (unit.lastOrderTimestamp && worldState.timestamp - unit.lastOrderTimestamp < 5) {
-      return unit; // Don't update orders too frequently
-    }
-
-    const currentSector = worldState.searchSector.byRadius(unit.position, 1)[0];
-    if (!currentSector) {
-      return unit;
-    }
-
-    const adjacentSectors = worldState.searchSector.byRect({
-      left: currentSector.rect.left - SECTOR_SIZE,
-      top: currentSector.rect.top - SECTOR_SIZE,
-      right: currentSector.rect.right + SECTOR_SIZE,
-      bottom: currentSector.rect.bottom + SECTOR_SIZE,
-    });
-
-    const hostileSectors = adjacentSectors.filter((sector) => sector.stateId !== unit.stateId);
-
-    if (hostileSectors.length > 0) {
-      // Low-level decision: attack adjacent hostile sector
-      const targetSector = hostileSectors[Math.floor(Math.random() * hostileSectors.length)];
-      unit.order = {
-        type: 'move',
-        targetPosition: {
-          x: (targetSector.rect.left + targetSector.rect.right) / 2,
-          y: (targetSector.rect.top + targetSector.rect.bottom) / 2,
-        },
-      };
-    } else {
-      // High-level decision: find nearest hostile populated sector
-      const nearestHostileSector = findNearestHostilePopulatedSector(unit, worldState.sectors);
-      if (nearestHostileSector) {
-        unit.order = {
-          type: 'move',
-          targetPosition: {
-            x: (nearestHostileSector.rect.left + nearestHostileSector.rect.right) / 2,
-            y: (nearestHostileSector.rect.top + nearestHostileSector.rect.bottom) / 2,
-          },
-        };
-      } else {
-        unit.order = { type: 'stay' };
-      }
-    }
-
-    unit.lastOrderTimestamp = worldState.timestamp;
-    return unit;
-  });
-}
-
-function findNearestHostilePopulatedSector(unit: Unit, sectors: Sector[]): Sector | undefined {
-  return sectors
-    .filter((sector) => sector.stateId !== unit.stateId && sector.population > 0)
-    .reduce(
-      (nearest, sector) => {
-        const distance = Math.sqrt(
-          (unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2,
-        );
-        return nearest && nearest.distance < distance ? nearest : { sector, distance };
-      },
-      undefined as { sector: Sector; distance: number } | undefined,
-    )?.sector;
 }
