@@ -1,4 +1,4 @@
-import { WorldState, LaunchSite, LaunchSiteMode, Missile, Interceptor, Position } from '../world-state-types';
+import { LaunchSite, LaunchSiteMode, Missile, Interceptor, Position } from '../world-state-types';
 import {
   LAUNCH_COOLDOWN,
   INTERCEPTOR_LAUNCH_COOLDOWN,
@@ -6,8 +6,9 @@ import {
   INTERCEPTOR_MAX_RANGE,
 } from '../world-state-constants';
 import { distance } from '../../math/position-utils';
+import { IndexedWorldState } from '../world-state-index';
 
-export function launchNewMissilesAndInterceptors(state: WorldState): void {
+export function launchNewMissilesAndInterceptors(state: IndexedWorldState): void {
   for (const launchSite of state.launchSites) {
     if (!launchSite.nextLaunchTarget) {
       // No target
@@ -26,8 +27,9 @@ export function launchNewMissilesAndInterceptors(state: WorldState): void {
       state.missiles.push(createMissile(launchSite, launchSite.nextLaunchTarget.position, state.timestamp));
     } else if (launchSite.mode === LaunchSiteMode.DEFENCE && launchSite.nextLaunchTarget?.type === 'missile') {
       const targetMissileId = launchSite.nextLaunchTarget.missileId;
-      if (targetMissileId) {
-        state.interceptors.push(createInterceptor(launchSite, state.timestamp, targetMissileId));
+      const targetMissile = state.searchMissile.byProperty('id', targetMissileId)[0];
+      if (targetMissile) {
+        state.interceptors.push(createInterceptor(launchSite, state.timestamp, targetMissile));
       }
     }
 
@@ -51,7 +53,7 @@ function createMissile(launchSite: LaunchSite, targetPosition: Position, worldTi
   };
 }
 
-function createInterceptor(launchSite: LaunchSite, worldTimestamp: number, targetMissileId: string): Interceptor {
+function createInterceptor(launchSite: LaunchSite, worldTimestamp: number, targetMissile: Missile): Interceptor {
   return {
     id: Math.random() + '',
     stateId: launchSite.stateId,
@@ -59,9 +61,12 @@ function createInterceptor(launchSite: LaunchSite, worldTimestamp: number, targe
     launch: launchSite.position,
     launchTimestamp: worldTimestamp,
     position: launchSite.position,
-    direction: 0,
+    direction: Math.atan2(
+      launchSite.position.y - targetMissile.position.y,
+      launchSite.position.x - targetMissile.position.x,
+    ),
     tail: [],
-    targetMissileId: targetMissileId,
+    targetMissileId: targetMissile.id,
     maxRange: INTERCEPTOR_MAX_RANGE,
   };
 }

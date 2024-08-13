@@ -40,6 +40,8 @@ function indexItems<T extends { id: string } & ({ position: { x: number; y: numb
     return indexCache[cacheKey];
   }
 
+  items = [...items];
+
   const index = items.length === 0 ? undefined : new Flatbush(items.length);
   for (const item of items) {
     if ('rect' in item) {

@@ -1,6 +1,5 @@
 import {
   Position,
-  WorldState,
   Strategy,
   LaunchSiteMode,
   Missile,
@@ -11,6 +10,7 @@ import {
 } from '../world-state-types';
 import { distance } from '../../math/position-utils';
 import { EXPLOSION_RADIUS, CITY_RADIUS, LAUNCH_GENERATION_INTERVAL } from '../world-state-constants';
+import { IndexedWorldState } from '../world-state-index';
 
 /**
  * Plan launches for each state to eliminate other states' populations,
@@ -18,7 +18,7 @@ import { EXPLOSION_RADIUS, CITY_RADIUS, LAUNCH_GENERATION_INTERVAL } from '../wo
  *
  * @param state The current world state.
  */
-export function generateLaunches(worldState: WorldState): void {
+export function generateLaunches(worldState: IndexedWorldState): void {
   if (
     worldState.lastLaunchGenerationTimestamp &&
     worldState.timestamp - worldState.lastLaunchGenerationTimestamp > LAUNCH_GENERATION_INTERVAL
