@@ -89,7 +89,11 @@ const PlayedComponent: GameStateComponent = ({ setGameState }) => {
   } = useLocation() as { state: { result: GameResult } };
 
   const handlePlayAgain = () => {
-    setGameState(GameStatePlaying, { stateName: result.stateNames[result.playerStateId] });
+    setGameState(GameStatePlaying, {
+      stateName: result.stateNames[result.playerStateId],
+      numberOfOpponents: Object.values(result.stateNames).length - 1,
+      groundWarfare: false,
+    });
   };
 
   let backgroundImage;

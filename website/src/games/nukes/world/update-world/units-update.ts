@@ -1,5 +1,5 @@
 import { Unit } from '../world-state-types';
-import { UNIT_MOVEMENT_SPEED, UNIT_SIZE } from '../world-state-constants';
+import { CITY_RADIUS, UNIT_MOVEMENT_SPEED, UNIT_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
 import { Battles, findBattles, isUnitInBattle, resolveBattles } from './unit-battles';
 import { updateUnitOrders } from './unit-orders';
@@ -19,7 +19,7 @@ export function updateUnits(worldState: IndexedWorldState, deltaTime: number): v
   updateSectorOwnership(worldState);
 
   // Update unit orders
-  updateUnitOrders(worldState);
+  updateUnitOrders(worldState, battles);
 
   worldState.units = worldState.units.filter((unit) => unit.quantity > 0);
 }
@@ -74,7 +74,31 @@ function updateSectorOwnership(worldState: IndexedWorldState) {
       Object.values(sectorUnits.reduce((r, unit) => ((r[unit.stateId] = true), r), { [unit.stateId]: true })).length ===
       1;
     if (sameState) {
+      // take over the sector
       sector.stateId = unit.stateId;
+
+      // if sector is a city sector, check if all sectors of the city belong to new state
+      if (sector.cityId) {
+        const city = worldState.cities.find((c) => c.id === sector.cityId);
+        if (city && city.stateId !== unit.stateId) {
+          const citySectors = worldState.searchSector
+            .byRadius(city.position, CITY_RADIUS)
+            .filter((sector) => sector.cityId === city.id && sector.population > 0);
+          const allCitySectorsBelongToNewState = citySectors.every((s) => s.stateId === unit.stateId);
+          if (allCitySectorsBelongToNewState) {
+            // change state of the city
+            city.stateId = unit.stateId;
+          }
+        }
+      }
+
+      // if there is launch site on the sector, the launch site changes owner as well
+      const launchSite = worldState.searchLaunchSite
+        .byRect(sector.rect)
+        .filter((site) => site.stateId !== unit.stateId)[0];
+      if (launchSite) {
+        launchSite.stateId = unit.stateId;
+      }
     }
   });
 }
