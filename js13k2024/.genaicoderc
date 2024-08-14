@@ -1,4 +1,4 @@
 {
     "rootDir": ".",
-    "ignorePaths": ["dist", "prompts", "node_modules"]
+    "ignorePaths": ["dist", "prompts", "node_modules", "ideas", "node_modules", "package-lock.json"]
 }
