@@ -1,4 +1,4 @@
-import { SECTOR_SIZE, UNIT_SIZE } from '../world-state-constants';
+import { SECTOR_SIZE, UNIT_SIZE, UNIT_ORDER_COOLDOWN } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
 import { Unit, Sector, Position, SectorType, Strategy } from '../world-state-types';
 import { Battles, isUnitInBattle } from './unit-battles';
@@ -6,18 +6,34 @@ import { countUnitsInSector, evaluateStrategicValue, MAX_UNITS_PER_SECTOR } from
 
 export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles): void {
   for (const unit of worldState.units) {
-    if (unit.lastOrderTimestamp && worldState.timestamp - unit.lastOrderTimestamp < 10) {
-      return; // Don't update orders too frequently
+    if (unit.lastOrderTimestamp && worldState.timestamp - unit.lastOrderTimestamp < UNIT_ORDER_COOLDOWN) {
+      continue;
     }
 
     const currentSector = worldState.searchSector.byRadius(unit.position, 1)[0];
     if (!currentSector) {
-      return;
+      continue;
     }
 
     const unitState = worldState.states.find((state) => state.id === unit.stateId);
     if (!unitState) {
-      return;
+      continue;
+    }
+
+    // Priority decision: if you are participating in a battle, and you are losing, move away from the battle, towards your own sector
+    if (isUnitInBattle(unit, battles)) {
+      const battle = battles.find((b) => b.units.includes(unit));
+      if (battle && isUnitLosing(unit, battle)) {
+        const safeSector = findNearestFriendlySector(unit, worldState, battles);
+        if (safeSector) {
+          unit.order = {
+            type: 'move',
+            targetPosition: getSectorCenter(safeSector),
+          };
+          unit.lastOrderTimestamp = worldState.timestamp;
+          continue;
+        }
+      }
     }
 
     // Higher priority decision: if there is a nearby (very close) hostile unit, and it is smaller, move towards it
@@ -29,22 +45,6 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
       };
       unit.lastOrderTimestamp = worldState.timestamp;
       continue;
-    }
-
-    // Priority decision: if you are participating in a battle, and you are losing, move away from the battle, towards your own sector
-    if (isUnitInBattle(unit, battles)) {
-      const battle = battles.find((b) => b.units.includes(unit));
-      if (battle && isUnitLosing(unit, battle)) {
-        const safeSector = findNearestFriendlySector(unit, worldState);
-        if (safeSector) {
-          unit.order = {
-            type: 'move',
-            targetPosition: getSectorCenter(safeSector),
-          };
-          unit.lastOrderTimestamp = worldState.timestamp;
-          continue;
-        }
-      }
     }
 
     const adjacentSectors = worldState.searchSector
@@ -127,19 +127,39 @@ function isUnitLosing(unit: Unit, battle: { units: Unit[] }): boolean {
   return unitStrength < 0.4; // Assuming a unit is losing if it represents less than 40% of the total force
 }
 
-function findNearestFriendlySector(unit: Unit, worldState: IndexedWorldState): Sector | undefined {
-  return worldState.searchSector
+function findNearestFriendlySector(unit: Unit, worldState: IndexedWorldState, battles: Battles): Sector | undefined {
+  const friendlySectors = worldState.searchSector
     .byRadius(unit.position, SECTOR_SIZE * 5)
-    .filter((sector) => sector.stateId === unit.stateId && sector.type === SectorType.GROUND)
-    .reduce(
-      (nearest, sector) => {
-        const distance = Math.sqrt(
-          (unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2,
-        );
-        return nearest && nearest.distance < distance ? nearest : { sector, distance };
-      },
-      undefined as { sector: Sector; distance: number } | undefined,
-    )?.sector;
+    .filter((sector) => sector.stateId === unit.stateId && sector.type === SectorType.GROUND);
+
+  return friendlySectors.reduce(
+    (nearest, sector) => {
+      const distance = Math.sqrt(
+        (unit.position.x - sector.position.x) ** 2 + (unit.position.y - sector.position.y) ** 2,
+      );
+
+      // Check if there are no enemy units in the sector
+      const unitsInSector = worldState.searchUnit.byRect(sector.rect);
+      const hasEnemyUnits = unitsInSector.some((u) => u.stateId !== unit.stateId);
+
+      // Check if there is no ongoing battle in the sector
+      const hasBattle = battles.some((battle) =>
+        battle.units.some(
+          (u) =>
+            u.rect.left < sector.rect.right &&
+            u.rect.right > sector.rect.left &&
+            u.rect.top < sector.rect.bottom &&
+            u.rect.bottom > sector.rect.top,
+        ),
+      );
+
+      if (!hasEnemyUnits && !hasBattle && (!nearest || distance < nearest.distance)) {
+        return { sector, distance };
+      }
+      return nearest;
+    },
+    undefined as { sector: Sector; distance: number } | undefined,
+  )?.sector;
 }
 
 function selectBestStrategicSector(

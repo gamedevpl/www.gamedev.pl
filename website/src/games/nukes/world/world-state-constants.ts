@@ -59,10 +59,10 @@ export const UNIT_MOVEMENT_SPEED = MISSILE_SPEED / 10;
 export const INITIAL_STATE_UNITS = 1000;
 
 /** Minimum damage in battle per second */
-export const BATTLE_MIN_DAMAGE = 1;
+export const BATTLE_MIN_DAMAGE = 0.5;
 
 /** Percentage of quantity lost during battle per second */
-export const BATTLE_DAMAGE_RATIO = 0.1;
+export const BATTLE_DAMAGE_RATIO = 0.05;
 
 /** Launch generation interval (in seconds) */
 export const LAUNCH_GENERATION_INTERVAL = 0.1;
@@ -72,6 +72,9 @@ export const STRATEGY_UPDATE_INTERVAL = 0.1;
 
 /** Size of the unit rectangle */
 export const UNIT_SIZE = SECTOR_SIZE * 0.7;
+
+/** Interval between order updates for a unit */
+export const UNIT_ORDER_COOLDOWN = 5;
 
 /** Distance for unit spread */
 export const UNIT_SPREAD_DISTANCE = SECTOR_SIZE * 2;

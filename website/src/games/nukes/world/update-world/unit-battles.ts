@@ -1,4 +1,4 @@
-import { Rect, StateId, Unit } from '../world-state-types';
+import { Rect, StateId, Unit, Strategy } from '../world-state-types';
 import { IndexedWorldState } from '../world-state-index';
 import { BATTLE_DAMAGE_RATIO, BATTLE_MIN_DAMAGE } from '../world-state-constants';
 
@@ -25,9 +25,11 @@ export function findBattles(worldState: IndexedWorldState): Battles {
       }
     }
 
+    const unitState = worldState.states.find((state) => state.id === unit.stateId);
+
     for (const otherUnit of worldState.searchUnit.byRect(unit.rect)) {
-      if (otherUnit.stateId == unit.stateId) {
-        break;
+      if (otherUnit.stateId === unit.stateId || unitState?.strategies[otherUnit.stateId] !== Strategy.HOSTILE) {
+        continue;
       }
 
       battles.push({
