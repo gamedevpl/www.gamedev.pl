@@ -1,0 +1,4 @@
+{
+    "rootDir": ".",
+    "ignorePaths": ["dist", "prompts", "node_modules"]
+}
