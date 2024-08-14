@@ -12,7 +12,9 @@ Please analyze the description and the images.
 Once the idea is selected please create a new directory(game/) for the selected game idea, and in that directory create following files:
 - design doc for game play (exhaustive description)
 - design doc for game ui (as much details as possible)
-- design doc for game states (intro, main menu, game, game over, etc)
+- design doc for game states
 - technical design of how the game should be implemented (implementation details are essential)
 
 those files could be put into game/design/ subfolder
+
+see placeholder implementation in game/src/, there is a index.html, and main.ts, so the technical design should use it as a fundament
