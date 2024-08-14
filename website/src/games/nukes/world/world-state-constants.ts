@@ -47,7 +47,7 @@ export const CITY_RADIUS = SECTOR_SIZE * 5;
 export const CITY_SECTOR_POPULATION = 1000;
 
 /** Maximum range of interceptors */
-export const INTERCEPTOR_MAX_RANGE = CITY_RADIUS * 4;
+export const INTERCEPTOR_MAX_RANGE = CITY_RADIUS * 6;
 
 /** Strategy update cooldown */
 export const STRATEGY_UPDATE_COOLDOWN = 10;

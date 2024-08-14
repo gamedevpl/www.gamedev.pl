@@ -1,6 +1,6 @@
 import { SECTOR_SIZE, UNIT_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Unit, Sector, Position, SectorType } from '../world-state-types';
+import { Unit, Sector, Position, SectorType, Strategy } from '../world-state-types';
 import { Battles, isUnitInBattle } from './unit-battles';
 import { countUnitsInSector, evaluateStrategicValue, MAX_UNITS_PER_SECTOR } from './unit-strategic-evaluation';
 
@@ -15,8 +15,13 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
       return;
     }
 
+    const unitState = worldState.states.find((state) => state.id === unit.stateId);
+    if (!unitState) {
+      return;
+    }
+
     // Higher priority decision: if there is a nearby (very close) hostile unit, and it is smaller, move towards it
-    const nearbyHostileUnit = findNearbyHostileUnit(unit, worldState);
+    const nearbyHostileUnit = findNearbyHostileUnit(unit, unitState, worldState);
     if (nearbyHostileUnit) {
       unit.order = {
         type: 'move',
@@ -50,9 +55,11 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
         bottom: currentSector.rect.bottom + SECTOR_SIZE,
       })
       // units dont move on water
-      .filter((sector) => sector.type === SectorType.GROUND);
+      .filter((sector) => sector.type === SectorType.GROUND && sector.stateId);
 
-    const hostileSectors = adjacentSectors.filter((sector) => sector.stateId !== unit.stateId);
+    const hostileSectors = adjacentSectors.filter(
+      (sector) => sector.stateId !== unit.stateId && unitState.strategies[sector.stateId!] === Strategy.HOSTILE,
+    );
 
     if (hostileSectors.length > 0) {
       // New logic: evaluate strategic value of sectors and choose the best one
@@ -65,7 +72,7 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
       // Implement spreading behavior when not in battle
       const overcrowdedSector = isOvercrowded(currentSector, worldState);
       if (overcrowdedSector) {
-        const spreadTarget = findSpreadTarget(unit, adjacentSectors, worldState);
+        const spreadTarget = findSpreadTarget(unit, unitState, adjacentSectors, worldState);
         if (spreadTarget) {
           unit.order = {
             type: 'move',
@@ -78,6 +85,7 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
         // High-level decision: find nearest strategic target
         const nearestTarget = findNearestStrategicTarget(
           unit,
+          unitState,
           worldState,
           worldState.searchSector
             .byRadius(unit.position, SECTOR_SIZE * 5)
@@ -99,9 +107,18 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
   }
 }
 
-function findNearbyHostileUnit(unit: Unit, worldState: IndexedWorldState): Unit | undefined {
+function findNearbyHostileUnit(
+  unit: Unit,
+  unitState: { strategies: Record<string, Strategy> },
+  worldState: IndexedWorldState,
+): Unit | undefined {
   const nearbyUnits = worldState.searchUnit.byRadius(unit.position, UNIT_SIZE * 2);
-  return nearbyUnits.find((otherUnit) => otherUnit.stateId !== unit.stateId && otherUnit.quantity < unit.quantity);
+  return nearbyUnits.find(
+    (otherUnit) =>
+      otherUnit.stateId !== unit.stateId &&
+      unitState.strategies[otherUnit.stateId] === Strategy.HOSTILE &&
+      otherUnit.quantity < unit.quantity,
+  );
 }
 
 function isUnitLosing(unit: Unit, battle: { units: Unit[] }): boolean {
@@ -154,10 +171,14 @@ function getSectorCenter(sector: Sector): Position {
 
 function findNearestStrategicTarget(
   unit: Unit,
+  unitState: { strategies: Record<string, Strategy> },
   worldState: IndexedWorldState,
   sectors: Sector[],
 ): { position: Position; type: 'sector' | 'launchSite' } | undefined {
-  const hostileSectors = sectors.filter((sector) => sector.stateId !== unit.stateId);
+  const hostileSectors = sectors.filter(
+    (sector) =>
+      sector.stateId !== unit.stateId && sector.stateId && unitState.strategies[sector.stateId] === Strategy.HOSTILE,
+  );
 
   // Evaluate all hostile sectors
   const evaluatedSectors = hostileSectors.map((sector) => ({
@@ -199,8 +220,16 @@ function isPositionInSector(position: Position, sector: Sector): boolean {
   );
 }
 
-function findSpreadTarget(unit: Unit, adjacentSectors: Sector[], worldState: IndexedWorldState): Sector | undefined {
-  const friendlySectors = adjacentSectors.filter((sector) => sector.stateId === unit.stateId);
+function findSpreadTarget(
+  unit: Unit,
+  unitState: { strategies: Record<string, Strategy> },
+  adjacentSectors: Sector[],
+  worldState: IndexedWorldState,
+): Sector | undefined {
+  const friendlySectors = adjacentSectors.filter(
+    (sector) =>
+      sector.stateId === unit.stateId || (sector.stateId && unitState.strategies[sector.stateId] === Strategy.FRIENDLY),
+  );
 
   // Sort sectors by total unit count (current + moving in), ascending
   friendlySectors.sort((a, b) => {
@@ -209,6 +238,19 @@ function findSpreadTarget(unit: Unit, adjacentSectors: Sector[], worldState: Ind
     return totalUnitsA - totalUnitsB;
   });
 
-  // Find the first sector that is not overcrowded
-  return friendlySectors.find((sector) => !isOvercrowded(sector, worldState));
+  // Find the first sector that is not overcrowded and doesn't contain neutral units
+  return friendlySectors.find(
+    (sector) => !isOvercrowded(sector, worldState) && !hasNeutralUnits(sector, unitState, worldState),
+  );
+}
+
+function hasNeutralUnits(
+  sector: Sector,
+  unitState: { strategies: Record<string, Strategy> },
+  worldState: IndexedWorldState,
+): boolean {
+  const unitsInSector = worldState.searchUnit.byRect(sector.rect);
+  return unitsInSector.some(
+    (unit) => unit.stateId !== sector.stateId && unitState.strategies[unit.stateId] === Strategy.NEUTRAL,
+  );
 }

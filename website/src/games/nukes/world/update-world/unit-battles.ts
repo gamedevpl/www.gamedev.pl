@@ -1,6 +1,6 @@
 import { Rect, StateId, Unit } from '../world-state-types';
 import { IndexedWorldState } from '../world-state-index';
-import { BATTLE_DAMAGE_RATIO, BATTLE_MIN_DAMAGE, UNIT_SIZE } from '../world-state-constants';
+import { BATTLE_DAMAGE_RATIO, BATTLE_MIN_DAMAGE } from '../world-state-constants';
 
 type Battle = {
   units: Array<Unit>;
@@ -25,7 +25,7 @@ export function findBattles(worldState: IndexedWorldState): Battles {
       }
     }
 
-    for (const otherUnit of worldState.searchUnit.byRadius(unit.position, UNIT_SIZE)) {
+    for (const otherUnit of worldState.searchUnit.byRect(unit.rect)) {
       if (otherUnit.stateId == unit.stateId) {
         break;
       }

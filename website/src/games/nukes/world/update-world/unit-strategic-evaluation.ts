@@ -1,6 +1,6 @@
 import { SECTOR_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Sector, Unit, LaunchSite, Position } from '../world-state-types';
+import { Sector, Unit, LaunchSite, Position, Strategy } from '../world-state-types';
 
 export const MAX_UNITS_PER_SECTOR = 2;
 
@@ -10,6 +10,18 @@ export function evaluateStrategicValue(
   allSectors: Sector[],
   worldState: IndexedWorldState,
 ): number {
+  const unitState = worldState.states.find((state) => state.id === unit.stateId);
+  if (!unitState || !sector.stateId) {
+    return 0; // If we can't find the unit's state, return 0 value
+  }
+
+  const sectorStrategy = unitState.strategies[sector.stateId];
+
+  // If the sector belongs to a non-hostile state, return a very low value
+  if (sectorStrategy !== Strategy.HOSTILE && sector.stateId !== unit.stateId) {
+    return -1000;
+  }
+
   let value = 0;
 
   // Check if the sector contains a launch site
@@ -24,11 +36,16 @@ export function evaluateStrategicValue(
   }
 
   // Evaluate connectivity
-  const connectedFriendlySectors = countConnectedFriendlySectors(sector, unit.stateId, allSectors);
+  const connectedFriendlySectors = countConnectedFriendlySectors(
+    sector,
+    unit.stateId,
+    allSectors,
+    unitState.strategies,
+  );
   value += connectedFriendlySectors * 10; // Encourage connecting to friendly sectors
 
   // Evaluate border strength
-  const borderStrength = evaluateBorderStrength(sector, unit.stateId, allSectors);
+  const borderStrength = evaluateBorderStrength(sector, unit.stateId, allSectors, unitState.strategies);
   value += borderStrength * 5; // Encourage strengthening borders
 
   // Evaluate strategic position
@@ -40,26 +57,51 @@ export function evaluateStrategicValue(
   const unitDensity = totalUnits / MAX_UNITS_PER_SECTOR;
   value -= unitDensity * 30; // Discourage overcrowding
 
+  // Adjust value based on the sector's strategy
+  switch (sectorStrategy) {
+    case Strategy.HOSTILE:
+      value *= 1.5; // Increase value for hostile sectors
+      break;
+    case Strategy.FRIENDLY:
+      value *= 0.5; // Decrease value for friendly sectors
+      break;
+    case Strategy.NEUTRAL:
+      value *= 0.25; // Significantly decrease value for neutral sectors
+      break;
+  }
+
   return value;
 }
 
-function countConnectedFriendlySectors(sector: Sector, stateId: string, allSectors: Sector[]): number {
+function countConnectedFriendlySectors(
+  sector: Sector,
+  stateId: string,
+  allSectors: Sector[],
+  strategies: Record<string, Strategy>,
+): number {
   const adjacentSectors = allSectors.filter(
     (s) =>
       Math.abs(s.position.x - sector.position.x) <= SECTOR_SIZE &&
       Math.abs(s.position.y - sector.position.y) <= SECTOR_SIZE &&
-      s.stateId === stateId,
+      (s.stateId === stateId || (s.stateId && strategies[s.stateId] === Strategy.FRIENDLY)),
   );
   return adjacentSectors.length;
 }
 
-function evaluateBorderStrength(sector: Sector, stateId: string, allSectors: Sector[]): number {
+function evaluateBorderStrength(
+  sector: Sector,
+  stateId: string,
+  allSectors: Sector[],
+  strategies: Record<string, Strategy>,
+): number {
   const adjacentSectors = allSectors.filter(
     (s) =>
       Math.abs(s.position.x - sector.position.x) <= SECTOR_SIZE &&
       Math.abs(s.position.y - sector.position.y) <= SECTOR_SIZE,
   );
-  const friendlySectors = adjacentSectors.filter((s) => s.stateId === stateId);
+  const friendlySectors = adjacentSectors.filter(
+    (s) => s.stateId === stateId || (s.stateId && strategies[s.stateId] === Strategy.FRIENDLY),
+  );
   return friendlySectors.length / adjacentSectors.length;
 }
 
