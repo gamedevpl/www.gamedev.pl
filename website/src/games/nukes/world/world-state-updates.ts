@@ -35,6 +35,7 @@ function worldUpdateIteration(state: WorldState, deltaTime: number): WorldState 
     units: state.units,
     explosions: state.explosions,
     sectors: state.sectors,
+    battles: state.battles,
   });
 
   updateUnits(result, deltaTime);

@@ -1,7 +1,7 @@
 import { SECTOR_SIZE, UNIT_SIZE, UNIT_ORDER_COOLDOWN } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Unit, Sector, Position, SectorType, Strategy } from '../world-state-types';
-import { Battles, isUnitInBattle } from './unit-battles';
+import { Battles, Unit, Sector, Position, SectorType, Strategy } from '../world-state-types';
+import { isUnitInBattle } from './unit-battles';
 import { countUnitsInSector, evaluateStrategicValue, MAX_UNITS_PER_SECTOR } from './unit-strategic-evaluation';
 
 export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles): void {

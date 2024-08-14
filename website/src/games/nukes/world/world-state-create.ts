@@ -1,4 +1,4 @@
-import { Explosion, Missile, Sector, WorldState, Interceptor, Unit } from './world-state-types';
+import { Explosion, Missile, Sector, WorldState, Interceptor, Unit, Battle } from './world-state-types';
 import { calculateWaterDepthAndGroundHeight } from './create-world/sector-generation';
 import { generateStates } from './create-world/state-generation';
 import { initializeSectors } from './create-world/sector-generation';
@@ -34,6 +34,7 @@ export function createWorldState({
   const explosions: Explosion[] = [];
   const interceptors: Interceptor[] = [];
   const units: Unit[] = [];
+  const battles: Battle[] = [];
 
   if (groundWarfare) {
     for (const state of states) {
@@ -51,5 +52,6 @@ export function createWorldState({
     missiles,
     explosions,
     interceptors,
+    battles,
   };
 }

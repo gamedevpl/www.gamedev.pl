@@ -1,13 +1,6 @@
-import { Rect, StateId, Unit, Strategy } from '../world-state-types';
+import { Battle, Battles, StateId, Unit, Strategy } from '../world-state-types';
 import { IndexedWorldState } from '../world-state-index';
 import { BATTLE_DAMAGE_RATIO, BATTLE_MIN_DAMAGE } from '../world-state-constants';
-
-type Battle = {
-  units: Array<Unit>;
-  rect: Rect;
-};
-
-export type Battles = Array<Battle>;
 
 export function findBattles(worldState: IndexedWorldState): Battles {
   const battles: Battles = [];
@@ -21,6 +14,18 @@ export function findBattles(worldState: IndexedWorldState): Battles {
         unit.rect.bottom > battle.rect.top
       ) {
         battle.units.push(unit);
+        // Update battle rect and position
+        battle.rect = {
+          left: Math.min(battle.rect.left, unit.rect.left),
+          top: Math.min(battle.rect.top, unit.rect.top),
+          right: Math.max(battle.rect.right, unit.rect.right),
+          bottom: Math.max(battle.rect.bottom, unit.rect.bottom),
+        };
+        battle.position = {
+          x: (battle.rect.left + battle.rect.right) / 2,
+          y: (battle.rect.top + battle.rect.bottom) / 2,
+        };
+        battle.size = Math.max(battle.rect.right - battle.rect.left, battle.rect.bottom - battle.rect.top);
         break;
       }
     }
@@ -32,7 +37,7 @@ export function findBattles(worldState: IndexedWorldState): Battles {
         continue;
       }
 
-      battles.push({
+      const newBattle: Battle = {
         units: [unit, otherUnit],
         rect: {
           left: Math.min(unit.rect.left, otherUnit.rect.left),
@@ -40,7 +45,16 @@ export function findBattles(worldState: IndexedWorldState): Battles {
           right: Math.max(unit.rect.right, otherUnit.rect.right),
           bottom: Math.max(unit.rect.bottom, otherUnit.rect.bottom),
         },
-      });
+        position: {
+          x: (Math.min(unit.rect.left, otherUnit.rect.left) + Math.max(unit.rect.right, otherUnit.rect.right)) / 2,
+          y: (Math.min(unit.rect.top, otherUnit.rect.top) + Math.max(unit.rect.bottom, otherUnit.rect.bottom)) / 2,
+        },
+        size: Math.max(
+          Math.abs(unit.rect.right - otherUnit.rect.left),
+          Math.abs(unit.rect.bottom - otherUnit.rect.top),
+        ),
+      };
+      battles.push(newBattle);
       break;
     }
   }

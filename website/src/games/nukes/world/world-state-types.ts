@@ -143,6 +143,15 @@ export type Explosion = {
   radius: number;
 };
 
+export type Battle = {
+  units: Array<Unit>;
+  rect: Rect;
+  position: Position; // Center position of the battle
+  size: number; // Size of the battle (can be used for rendering)
+};
+
+export type Battles = Array<Battle>;
+
 export type WorldState = {
   // timestamp in seconds
   timestamp: number;
@@ -159,4 +168,5 @@ export type WorldState = {
   missiles: Missile[];
   interceptors: Interceptor[];
   explosions: Explosion[];
+  battles: Battle[]; // New property to store current battles
 };

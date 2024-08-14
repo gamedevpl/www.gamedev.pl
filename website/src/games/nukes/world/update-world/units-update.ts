@@ -1,7 +1,7 @@
-import { Unit } from '../world-state-types';
+import { Battles, Unit } from '../world-state-types';
 import { CITY_RADIUS, UNIT_MOVEMENT_SPEED, UNIT_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Battles, findBattles, isUnitInBattle, resolveBattles } from './unit-battles';
+import { findBattles, isUnitInBattle, resolveBattles } from './unit-battles';
 import { updateUnitOrders } from './unit-orders';
 
 export function updateUnits(worldState: IndexedWorldState, deltaTime: number): void {
@@ -22,6 +22,15 @@ export function updateUnits(worldState: IndexedWorldState, deltaTime: number): v
   updateUnitOrders(worldState, battles);
 
   worldState.units = worldState.units.filter((unit) => unit.quantity > 0);
+
+  // Save battles to world state
+  worldState.battles = battles.map((battle) => ({
+    ...battle,
+    position: {
+      x: (battle.rect.left + battle.rect.right) / 2,
+      y: (battle.rect.top + battle.rect.bottom) / 2,
+    },
+  }));
 }
 
 function updateUnitPositions(worldState: IndexedWorldState, deltaTime: number, battles: Battles): void {

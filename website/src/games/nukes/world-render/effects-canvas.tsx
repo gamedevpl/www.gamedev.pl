@@ -1,7 +1,7 @@
 import { useRef, useLayoutEffect } from 'react';
 import { useRafLoop } from 'react-use';
 import styled from 'styled-components';
-import { WorldState } from '../world/world-state-types';
+import { WorldState, Battle } from '../world/world-state-types';
 import { renderExplosion } from './explosion-render';
 import { renderMissile, renderChemtrail, renderInterceptor, renderInterceptorDisintegration } from './missile-render';
 import { INTERCEPTOR_MAX_RANGE, INTERCEPTOR_SPEED } from '../world/world-state-constants';
@@ -76,10 +76,51 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
       .forEach((explosion) => {
         renderExplosion(ctx, explosion, state.timestamp);
       });
+
+    // Render battles
+    state.battles.forEach((battle) => {
+      renderBattle(ctx, battle);
+    });
   };
 
   useRafLoop(renderFrame);
   return <Canvas ref={canvasRef} />;
+}
+
+function renderBattle(ctx: CanvasRenderingContext2D, battle: Battle) {
+  const { position, size } = battle;
+
+  // Set up battle rendering style
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.lineWidth = 2;
+
+  // Draw a pulsating circle to represent the battle
+  const pulseFactor = 1 + 0.2 * Math.sin(Date.now() / 200); // Pulsate every 200ms
+  const radius = (size / 2) * pulseFactor;
+
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI);
+  ctx.stroke();
+
+  // Draw crossed swords icon in the center of the battle
+  const swordLength = size / 4;
+  const swordWidth = swordLength / 10;
+
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+
+  // First sword
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillRect(-swordWidth / 2, -swordLength / 2, swordWidth, swordLength);
+  ctx.restore();
+
+  // Second sword
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(-Math.PI / 4);
+  ctx.fillRect(-swordWidth / 2, -swordLength / 2, swordWidth, swordLength);
+  ctx.restore();
 }
 
 const Canvas = styled.canvas`
