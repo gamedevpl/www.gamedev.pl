@@ -1,4 +1,5 @@
 {
     "rootDir": ".",
-    "ignorePaths": ["dist", "prompts", "node_modules", "ideas", "node_modules", "package-lock.json"]
+    "ignorePaths": ["dist", "prompts", "node_modules", "ideas", "node_modules", "package-lock.json"],
+    "lintCommand": "npm run build --prefix=game"
 }

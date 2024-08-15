@@ -11,15 +11,24 @@ This document outlines the technical implementation details for the "Monster Ste
 ## Project Structure
 ```
 /game
+  /dist             # Minified version of the game
   /src
-    main.ts         # Entry point and game loop
-    game.ts         # Game state and logic
+    main.ts         # Entry point and game loop    
     renderer.ts     # Canvas rendering
     input.ts        # Input handling
-    levels.ts       # Level definitions
     constants.ts    # Game constants and configurations
+    /game-states    # Each of game states has their dedicated directory
+      /intro        # Intro splash screen
+      /instructions # Instructions screen
+      /gameplay     # The main state where the player can actually play
+      /pause        # Pause screen
+      /game-over    # Game over screen
+      /level-complete # Displayed when player reached the goal
   index.html        # Main HTML file
   styles.css        # Minimal CSS for layout
+  README.md         # Short readme with info about the project and how tun develop/build
+  package.jon       # package.json file
+  tsconfig.json     # TypeScript configuration file
 ```
 
 ## Game Loop
