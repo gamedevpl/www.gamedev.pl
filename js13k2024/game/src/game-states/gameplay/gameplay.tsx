@@ -234,9 +234,9 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
 
   return (
     <div className="gameplay">
-      <h2>Level: {level}</h2>
-      <h3>Score: {score}</h3>
-      <h3>Steps: {gameState.steps}</h3>
+      <div className="hud">
+        Level: {level}, Score: {score}, Steps: {gameState.steps}
+      </div>
       <canvas
         ref={canvasRef}
         style={{ border: '1px solid white' }}
