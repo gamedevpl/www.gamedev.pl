@@ -4,3 +4,4 @@ dist
 .publish
 .idea
 /app/sass/.sass-cache
+.vscode/settings.json
