@@ -5,7 +5,7 @@ This document outlines the technical implementation details for the "Monster Ste
 
 ## Core Technologies
 - Preact app structure
-- HTML5 Canvas for rendering the main game
+- HTML5 Canvas for rendering the gameplay
 - TypeScript for game logic (compiling to minimal JavaScript)
 - Minimal CSS for layout and styling
 
@@ -14,27 +14,28 @@ This document outlines the technical implementation details for the "Monster Ste
 /game
   /dist             # Minified version of the game
   /src
-    main.ts         # Entry point, should render the game states
-    /utils
-      types.ts
+    main.tsx         # Entry point, should render the game states
+    global-styles.css # Global styles that ensure we have correct look and feel aligned with the designs
     /game-states    # Each of game states has their dedicated directory
       /intro        # Intro splash screen, transitions to instructions
-        intro.ts
+        intro.tsx
       /instructions # Instructions screen, transitions to game play
-        instructions.ts
+        instructions.tsx
       /gameplay     # The main state where the player can actually play the game (transitions to pause, game-over, or level-complete)
-        gameplay.ts # main component of the gameplay
+        gameplay.tsx # main component of the gameplay, initialises the game, renders the grid canvas, the hud
+        gameplay-types.ts # types that represent the state of the gameplay (level, monsters, player, score etc.)
         grid-render.ts # a component to display grid on canvas
         object-render.ts # functions for rendering objects on grid like the player or monsters
+        effects-render.ts # functions that render special effects on the canvas
         hud.ts # display HUD for the gameplay
         level-generator.ts # function that generates the level
         monsters.ts # monster logic
       /pause        # Pause screen (transitions to gameplay, or to intro)
-        pause.ts
+        pause.tsx
       /game-over    # Game over screen (transitions to intro or game-play)
-        game-over.ts
+        game-over.tsx
       /level-complete # Displayed when player reached the goal (tansitions to gameplay or to intro)
-        level-complete.ts
+        level-complete.tsx
   index.html        # Main HTML file
   styles.css        # Minimal CSS for layout
   README.md         # Short readme with info about the project and how tun develop/build
@@ -49,12 +50,3 @@ This document outlines the technical implementation details for the "Monster Ste
 3. **Procedural Generation**: Generate levels procedurally to save space.
 4. **Simplified Physics**: Use basic collision detection instead of complex physics.
 5. **Reusable Functions**: Create utility functions for common operations.
-6. **Efficient Data Structures**: Use typed arrays for performance and memory efficiency.
-
-## Performance Considerations
-
-1. **Object Pooling**: Reuse object instances to reduce garbage collection.
-2. **Minimal DOM Manipulation**: Update game state in memory, render to canvas.
-3. **Efficient Loops**: Optimize loops for performance, especially in the game loop.
-4. **Caching**: Cache frequently used values and DOM references.
-
