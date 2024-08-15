@@ -14,15 +14,27 @@ This document outlines the technical implementation details for the "Monster Ste
 /game
   /dist             # Minified version of the game
   /src
-    main.ts         # Entry point, should render the first game state (intro)   
+    main.ts         # Entry point, should render the game states
     /utils
+      types.ts
     /game-states    # Each of game states has their dedicated directory
       /intro        # Intro splash screen, transitions to instructions
+        intro.ts
       /instructions # Instructions screen, transitions to game play
+        instructions.ts
       /gameplay     # The main state where the player can actually play the game (transitions to pause, game-over, or level-complete)
+        gameplay.ts # main component of the gameplay
+        grid-render.ts # a component to display grid on canvas
+        object-render.ts # functions for rendering objects on grid like the player or monsters
+        hud.ts # display HUD for the gameplay
+        level-generator.ts # function that generates the level
+        monsters.ts # monster logic
       /pause        # Pause screen (transitions to gameplay, or to intro)
+        pause.ts
       /game-over    # Game over screen (transitions to intro or game-play)
+        game-over.ts
       /level-complete # Displayed when player reached the goal (tansitions to gameplay or to intro)
+        level-complete.ts
   index.html        # Main HTML file
   styles.css        # Minimal CSS for layout
   README.md         # Short readme with info about the project and how tun develop/build
