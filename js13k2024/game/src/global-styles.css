@@ -10,6 +10,15 @@
   --highlight-color: #FFFF00;
   --button-color: #4CAF50;
   --button-hover-color: #45a049;
+  --bonus-cap-of-invisibility: #8A2BE2;
+  --bonus-confused-monsters: #FFA500;
+  --bonus-land-mine: #8B4513;
+  --bonus-time-bomb: #000000;
+  --bonus-crusher: #FF69B4;
+  --bonus-builder: #00FFFF;
+  --explosion-color: rgba(255, 165, 0, 0.7);
+  --tooltip-background: rgba(0, 0, 0, 0.7);
+  --tooltip-text: #FFFFFF;
 }
 
 body, html {
@@ -91,9 +100,14 @@ button:hover {
 
 /* Gameplay screen styles */
 .gameplay {
+  position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50);
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 }
 
 .hud {
@@ -102,10 +116,57 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 10px;
 }
 
 canvas {
   border: 1px solid var(--grid-color);
+}
+
+/* Bonus styles */
+.bonus {
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: var(--ui-text-color);
+}
+
+.bonus-cap-of-invisibility { background-color: var(--bonus-cap-of-invisibility); }
+.bonus-confused-monsters { background-color: var(--bonus-confused-monsters); }
+.bonus-land-mine { background-color: var(--bonus-land-mine); }
+.bonus-time-bomb { background-color: var(--bonus-time-bomb); }
+.bonus-crusher { background-color: var(--bonus-crusher); }
+.bonus-builder { background-color: var(--bonus-builder); }
+
+/* Explosion animation */
+@keyframes explosion {
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.explosion {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: var(--explosion-color);
+  border-radius: 50%;
+  animation: explosion 0.5s ease-out forwards;
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: absolute;
+  background-color: var(--tooltip-background);
+  color: var(--tooltip-text);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 100;
 }
 
 /* Pause screen styles */

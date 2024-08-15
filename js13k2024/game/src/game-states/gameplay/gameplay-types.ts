@@ -8,12 +8,41 @@ export interface Monster {
   path: Position[];
 }
 
+export enum BonusType {
+  CapOfInvisibility = 'CapOfInvisibility',
+  ConfusedMonsters = 'ConfusedMonsters',
+  LandMine = 'LandMine',
+  TimeBomb = 'TimeBomb',
+  Crusher = 'Crusher',
+  Builder = 'Builder'
+}
+
+export interface Bonus {
+  type: BonusType;
+  position: Position;
+}
+
 export interface GameState {
   playerPosition: Position;
   goal: Position;
   obstacles: Position[];
   monsters: Monster[];
   steps: number;
+  bonuses: Bonus[];
+  activeBonuses: ActiveBonus[];
+  explosions: Explosion[];
+  timeBombs: { position: Position, timer: number }[];
+  crusherActive: boolean;
+  builderActive: boolean;
+}
+
+export type Explosion = {
+  position: Position;
+};
+
+export type ActiveBonus = {
+  type: BonusType;
+  duration: number;
 }
 
 export enum Direction {
@@ -32,6 +61,7 @@ export interface LevelConfig {
   gridSize: GridSize;
   initialMonsterCount: number;
   obstacleCount: number;
+  initialBonusCount: number;
 }
 
 export interface Score {
@@ -70,4 +100,5 @@ export interface GameConfig {
   baseObstacleCount: number;
   maxObstacleCount: number;
   levelIncreaseFactor: number;
+  bonusDuration: number;
 }
