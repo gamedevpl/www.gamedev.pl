@@ -37,8 +37,12 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
 
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.width = levelConfig.gridSize.width * CELL_SIZE;
-      canvas.height = levelConfig.gridSize.height * CELL_SIZE;
+      // Adjust canvas size for isometric view
+      const isometricWidth = (levelConfig.gridSize.width + levelConfig.gridSize.height) * CELL_SIZE;
+      const isometricHeight = (levelConfig.gridSize.width + levelConfig.gridSize.height) * CELL_SIZE / 2;
+      canvas.width = isometricWidth;
+      canvas.height = isometricHeight + 100; // Add extra space for the platform
+
       const ctx = canvas.getContext('2d');
       if (ctx) {
         drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
@@ -94,7 +98,9 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
   return (
     <div className="gameplay">
       <HUD level={level} score={score} steps={gameState?.steps || 0} />
-      <canvas ref={canvasRef} style={{ border: '1px solid white' }} />
+      <div className="canvas-container">
+        <canvas ref={canvasRef} />
+      </div>
     </div>
   );
 };

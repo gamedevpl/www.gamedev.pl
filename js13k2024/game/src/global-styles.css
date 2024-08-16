@@ -2,10 +2,10 @@
 
 :root {
   --background-color: #1a1a1a;
-  --grid-color: #404040;
-  --player-color: #00ff00;
+  --grid-color: #8B7D6B;
+  --player-color: #00FF00;
   --monster-color: #800080;
-  --goal-color: #ff0000;
+  --goal-color: #FFD700;
   --ui-text-color: #ffffff;
   --highlight-color: #ffff00;
   --button-color: #4caf50;
@@ -19,6 +19,11 @@
   --explosion-color: rgba(255, 165, 0, 0.7);
   --tooltip-background: rgba(0, 0, 0, 0.7);
   --tooltip-text: #ffffff;
+  --platform-top: #C4A484;
+  --platform-side: #8B4513;
+  --obstacle-top: #8B4513;
+  --obstacle-side1: #5D2E0C;
+  --obstacle-side2: #734A12;
 }
 
 body,
@@ -64,11 +69,16 @@ button:hover {
 /* Intro screen styles */
 .intro-screen {
   text-align: center;
+  background-color: #2C3E50;
+  padding: 20px;
+  border-radius: 10px;
 }
 
 .game-title {
   font-size: 48px;
   margin-bottom: 20px;
+  color: #E67E22;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
 .intro-grid {
@@ -83,7 +93,7 @@ button:hover {
 }
 
 .grid-cell {
-  background-color: var(--background-color);
+  background-color: var(--platform-top);
 }
 
 .player {
@@ -116,14 +126,16 @@ button:hover {
   height: 40px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   margin-bottom: 10px;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 5px;
+}
 
-  > div:not(:last-child) {
-    margin-right: 15px;
-    border-right: 1px solid;
-    padding-right: 15px;
-  }
+.hud > div {
+  margin: 0 10px;
 }
 
 canvas {
@@ -144,35 +156,17 @@ canvas {
   color: var(--ui-text-color);
 }
 
-.bonus-cap-of-invisibility {
-  background-color: var(--bonus-cap-of-invisibility);
-}
-.bonus-confused-monsters {
-  background-color: var(--bonus-confused-monsters);
-}
-.bonus-land-mine {
-  background-color: var(--bonus-land-mine);
-}
-.bonus-time-bomb {
-  background-color: var(--bonus-time-bomb);
-}
-.bonus-crusher {
-  background-color: var(--bonus-crusher);
-}
-.bonus-builder {
-  background-color: var(--bonus-builder);
-}
+.bonus-cap-of-invisibility { background-color: var(--bonus-cap-of-invisibility); }
+.bonus-confused-monsters { background-color: var(--bonus-confused-monsters); }
+.bonus-land-mine { background-color: var(--bonus-land-mine); }
+.bonus-time-bomb { background-color: var(--bonus-time-bomb); }
+.bonus-crusher { background-color: var(--bonus-crusher); }
+.bonus-builder { background-color: var(--bonus-builder); }
 
 /* Explosion animation */
 @keyframes explosion {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
 }
 
 .explosion {
@@ -203,14 +197,16 @@ canvas {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  background-color: rgba(0, 0, 0, 0.8);
 }
 
 .game-over-title {
   font-size: 48px;
+  margin-bottom: 20px;
 }
 
 .game-over-title .over {
-  color: var(--goal-color);
+  color: #FF0000;
 }
 
 /* Level Complete screen styles */
@@ -220,11 +216,13 @@ canvas {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  background-color: rgba(0, 0, 0, 0.8);
 }
 
 .level-complete-title {
   font-size: 36px;
   color: var(--highlight-color);
+  margin-bottom: 20px;
 }
 
 /* Responsive design */
