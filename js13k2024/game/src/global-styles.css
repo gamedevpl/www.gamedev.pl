@@ -3,25 +3,26 @@
 :root {
   --background-color: #1a1a1a;
   --grid-color: #404040;
-  --player-color: #00FF00;
+  --player-color: #00ff00;
   --monster-color: #800080;
-  --goal-color: #FF0000;
-  --ui-text-color: #FFFFFF;
-  --highlight-color: #FFFF00;
-  --button-color: #4CAF50;
+  --goal-color: #ff0000;
+  --ui-text-color: #ffffff;
+  --highlight-color: #ffff00;
+  --button-color: #4caf50;
   --button-hover-color: #45a049;
-  --bonus-cap-of-invisibility: #8A2BE2;
-  --bonus-confused-monsters: #FFA500;
-  --bonus-land-mine: #8B4513;
+  --bonus-cap-of-invisibility: #8a2be2;
+  --bonus-confused-monsters: #ffa500;
+  --bonus-land-mine: #8b4513;
   --bonus-time-bomb: #000000;
-  --bonus-crusher: #FF69B4;
-  --bonus-builder: #00FFFF;
+  --bonus-crusher: #ff69b4;
+  --bonus-builder: #00ffff;
   --explosion-color: rgba(255, 165, 0, 0.7);
   --tooltip-background: rgba(0, 0, 0, 0.7);
-  --tooltip-text: #FFFFFF;
+  --tooltip-text: #ffffff;
 }
 
-body, html {
+body,
+html {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', Courier, monospace;
@@ -117,10 +118,18 @@ button:hover {
   align-items: center;
   justify-content: center;
   margin-bottom: 10px;
+
+  > div:not(:last-child) {
+    margin-right: 15px;
+    border-right: 1px solid;
+    padding-right: 15px;
+  }
 }
 
 canvas {
   border: 1px solid var(--grid-color);
+  max-height: 80vh;
+  max-width: 80vh;
 }
 
 /* Bonus styles */
@@ -135,17 +144,35 @@ canvas {
   color: var(--ui-text-color);
 }
 
-.bonus-cap-of-invisibility { background-color: var(--bonus-cap-of-invisibility); }
-.bonus-confused-monsters { background-color: var(--bonus-confused-monsters); }
-.bonus-land-mine { background-color: var(--bonus-land-mine); }
-.bonus-time-bomb { background-color: var(--bonus-time-bomb); }
-.bonus-crusher { background-color: var(--bonus-crusher); }
-.bonus-builder { background-color: var(--bonus-builder); }
+.bonus-cap-of-invisibility {
+  background-color: var(--bonus-cap-of-invisibility);
+}
+.bonus-confused-monsters {
+  background-color: var(--bonus-confused-monsters);
+}
+.bonus-land-mine {
+  background-color: var(--bonus-land-mine);
+}
+.bonus-time-bomb {
+  background-color: var(--bonus-time-bomb);
+}
+.bonus-crusher {
+  background-color: var(--bonus-crusher);
+}
+.bonus-builder {
+  background-color: var(--bonus-builder);
+}
 
 /* Explosion animation */
 @keyframes explosion {
-  0% { transform: scale(0); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .explosion {

@@ -1,33 +1,14 @@
-import { Position, Monster, GridSize, PathfindingNode, Explosion } from "./gameplay-types";
+import { Position, Monster, GridSize, PathfindingNode, Explosion } from './gameplay-types';
 
-export const generateMonsters = (count: number, gridSize: GridSize, obstacles: Position[], existingMonsters: Position[], playerPosition: Position): Monster[] => {
-  const monsters: Monster[] = [];
-  const occupiedPositions = [...obstacles, ...existingMonsters, playerPosition];
-
-  for (let i = 0; i < count; i++) {
-    let pos: Position;
-    do {
-      pos = {
-        x: Math.floor(Math.random() * gridSize.width),
-        y: Math.floor(Math.random() * gridSize.height)
-      };
-    } while (
-      isPositionOccupied(pos, occupiedPositions) ||
-      isAdjacentTo(pos, playerPosition)
-    );
-
-    monsters.push({
-      position: pos,
-      path: []
-    });
-    occupiedPositions.push(pos);
-  }
-
-  return monsters;
-};
-
-export const moveMonsters = (monsters: Monster[], playerPosition: Position, gridSize: GridSize, obstacles: Position[], isPlayerInvisible: boolean, isConfused: boolean): Monster[] => {
-  return monsters.map(monster => {
+export const moveMonsters = (
+  monsters: Monster[],
+  playerPosition: Position,
+  gridSize: GridSize,
+  obstacles: Position[],
+  isPlayerInvisible: boolean,
+  isConfused: boolean,
+): Monster[] => {
+  return monsters.map((monster) => {
     let path: Position[];
     if (isPlayerInvisible) {
       // If the player is invisible, move randomly
@@ -36,7 +17,7 @@ export const moveMonsters = (monsters: Monster[], playerPosition: Position, grid
       // If the player is visible, use pathfinding
       path = findPath(monster.position, playerPosition, gridSize, obstacles, monsters);
     }
-    
+
     let newPosition: Position;
     if (isConfused) {
       // If monsters are confused, move in the opposite direction
@@ -44,41 +25,64 @@ export const moveMonsters = (monsters: Monster[], playerPosition: Position, grid
     } else {
       newPosition = path.length > 1 ? path[1] : monster.position;
     }
-    
+
     return { ...monster, position: newPosition, path };
   });
 };
 
-const getConfusedPosition = (currentPosition: Position, intendedPosition: Position, gridSize: GridSize, obstacles: Position[], monsters: Monster[]): Position => {
+const getConfusedPosition = (
+  currentPosition: Position,
+  intendedPosition: Position,
+  gridSize: GridSize,
+  obstacles: Position[],
+  monsters: Monster[],
+): Position => {
   const dx = intendedPosition.x - currentPosition.x;
   const dy = intendedPosition.y - currentPosition.y;
-  
+
   // Calculate the opposite direction
   const oppositePosition: Position = {
     x: Math.max(0, Math.min(gridSize.width - 1, currentPosition.x - dx)),
-    y: Math.max(0, Math.min(gridSize.height - 1, currentPosition.y - dy))
+    y: Math.max(0, Math.min(gridSize.height - 1, currentPosition.y - dy)),
   };
-  
+
   // Check if the opposite position is valid (not occupied by obstacles or other monsters)
-  if (!isPositionOccupied(oppositePosition, obstacles) && !isPositionOccupied(oppositePosition, monsters.map(m => m.position))) {
+  if (
+    !isPositionOccupied(oppositePosition, obstacles) &&
+    !isPositionOccupied(
+      oppositePosition,
+      monsters.map((m) => m.position),
+    )
+  ) {
     return oppositePosition;
   }
-  
+
   // If the opposite position is not valid, stay in the current position
   return currentPosition;
 };
 
-const getRandomAdjacentPosition = (position: Position, gridSize: GridSize, obstacles: Position[], monsters: Monster[]): Position[] => {
+const getRandomAdjacentPosition = (
+  position: Position,
+  gridSize: GridSize,
+  obstacles: Position[],
+  monsters: Monster[],
+): Position[] => {
   const adjacentPositions = [
     { x: position.x - 1, y: position.y },
     { x: position.x + 1, y: position.y },
     { x: position.x, y: position.y - 1 },
-    { x: position.x, y: position.y + 1 }
-  ].filter(pos => 
-    pos.x >= 0 && pos.x < gridSize.width && 
-    pos.y >= 0 && pos.y < gridSize.height &&
-    !isPositionOccupied(pos, obstacles) &&
-    !isPositionOccupied(pos, monsters.map(m => m.position))
+    { x: position.x, y: position.y + 1 },
+  ].filter(
+    (pos) =>
+      pos.x >= 0 &&
+      pos.x < gridSize.width &&
+      pos.y >= 0 &&
+      pos.y < gridSize.height &&
+      !isPositionOccupied(pos, obstacles) &&
+      !isPositionOccupied(
+        pos,
+        monsters.map((m) => m.position),
+      ),
   );
 
   if (adjacentPositions.length > 0) {
@@ -89,11 +93,17 @@ const getRandomAdjacentPosition = (position: Position, gridSize: GridSize, obsta
   return [position];
 };
 
-const findPath = (start: Position, goal: Position, gridSize: GridSize, obstacles: Position[], monsters: Monster[]): Position[] => {
+const findPath = (
+  start: Position,
+  goal: Position,
+  gridSize: GridSize,
+  obstacles: Position[],
+  monsters: Monster[],
+): Position[] => {
   const openSet: PathfindingNode[] = [];
   const closedSet: PathfindingNode[] = [];
   const startNode: PathfindingNode = { position: start, g: 0, h: 0, f: 0, parent: null };
-  
+
   openSet.push(startNode);
 
   while (openSet.length > 0) {
@@ -118,8 +128,11 @@ const findPath = (start: Position, goal: Position, gridSize: GridSize, obstacles
     for (const neighbor of neighbors) {
       if (
         isPositionOccupied(neighbor, obstacles) ||
-        isPositionOccupied(neighbor, monsters.map(m => m.position)) ||
-        closedSet.some(node => isPositionEqual(node.position, neighbor))
+        isPositionOccupied(
+          neighbor,
+          monsters.map((m) => m.position),
+        ) ||
+        closedSet.some((node) => isPositionEqual(node.position, neighbor))
       ) {
         continue;
       }
@@ -128,7 +141,7 @@ const findPath = (start: Position, goal: Position, gridSize: GridSize, obstacles
       const hScore = manhattanDistance(neighbor, goal);
       const fScore = gScore + hScore;
 
-      const openNode = openSet.find(node => isPositionEqual(node.position, neighbor));
+      const openNode = openSet.find((node) => isPositionEqual(node.position, neighbor));
       if (openNode) {
         if (gScore < openNode.g) {
           openNode.g = gScore;
@@ -141,7 +154,7 @@ const findPath = (start: Position, goal: Position, gridSize: GridSize, obstacles
           g: gScore,
           h: hScore,
           f: fScore,
-          parent: currentNode
+          parent: currentNode,
         });
       }
     }
@@ -165,12 +178,10 @@ const getNeighbors = (position: Position, gridSize: GridSize): Position[] => {
     { x: position.x - 1, y: position.y },
     { x: position.x + 1, y: position.y },
     { x: position.x, y: position.y - 1 },
-    { x: position.x, y: position.y + 1 }
+    { x: position.x, y: position.y + 1 },
   ];
 
-  return neighbors.filter(pos =>
-    pos.x >= 0 && pos.x < gridSize.width && pos.y >= 0 && pos.y < gridSize.height
-  );
+  return neighbors.filter((pos) => pos.x >= 0 && pos.x < gridSize.width && pos.y >= 0 && pos.y < gridSize.height);
 };
 
 const manhattanDistance = (pos1: Position, pos2: Position): number => {
@@ -182,45 +193,41 @@ const isPositionEqual = (pos1: Position, pos2: Position): boolean => {
 };
 
 const isPositionOccupied = (pos: Position, occupiedPositions: Position[]): boolean => {
-  return occupiedPositions.some(p => isPositionEqual(p, pos));
-};
-
-const isAdjacentTo = (pos1: Position, pos2: Position): boolean => {
-  const dx = Math.abs(pos1.x - pos2.x);
-  const dy = Math.abs(pos1.y - pos2.y);
-  return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+  return occupiedPositions.some((p) => isPositionEqual(p, pos));
 };
 
 export const checkCollision = (playerPosition: Position, monsters: Monster[]): boolean => {
-  return monsters.some(monster => 
-    isPositionEqual(monster.position, playerPosition)
-  );
+  return monsters.some((monster) => isPositionEqual(monster.position, playerPosition));
 };
 
-export const checkLandMineCollision = (monsters: Monster[], landMines: Position[], explosions: Explosion[]): Monster[] => {
-  return monsters.filter(monster =>  {
-    const landMine = landMines.find(mine => isPositionEqual(mine, monster.position))
+export const checkLandMineCollision = (monsters: Monster[], landMines: Position[]): [Monster[], Explosion[]] => {
+  const newExplosions: Explosion[] = [];
+  const newMonsters = monsters.filter((monster) => {
+    const landMine = landMines.find((mine) => isPositionEqual(mine, monster.position));
     if (landMine) {
-      explosions.push({position:landMine})
+      newExplosions.push({ position: landMine });
+      removeLandMine(landMines, landMine);
       return false;
     } else {
       return true;
     }
-});
+  });
+  return [newMonsters, newExplosions];
 };
 
-export const removeLandMine = (landMines: Position[], position: Position): Position[] => {
-  return landMines.filter(mine => !isPositionEqual(mine, position));
+export const removeLandMine = (landMines: Position[], landMine: Position): void => {
+  landMines.splice(landMines.indexOf(landMine), 1);
 };
 
 export const checkTimeBombExplosion = (monster: Monster, explosion: Explosion): boolean => {
-  return Math.abs(monster.position.x - explosion.position.x) <= 1 && 
-      Math.abs(monster.position.y - explosion.position.y) <= 1;
+  return (
+    Math.abs(monster.position.x - explosion.position.x) <= 1 && Math.abs(monster.position.y - explosion.position.y) <= 1
+  );
 };
 
 export const isPlayerInExplosionRange = (playerPosition: Position, explosions: Explosion[]): boolean => {
-  return explosions.some(explosion => 
-    Math.abs(playerPosition.x - explosion.position.x) <= 1 && 
-    Math.abs(playerPosition.y - explosion.position.y) <= 1
+  return explosions.some(
+    (explosion) =>
+      Math.abs(playerPosition.x - explosion.position.x) <= 1 && Math.abs(playerPosition.y - explosion.position.y) <= 1,
   );
 };

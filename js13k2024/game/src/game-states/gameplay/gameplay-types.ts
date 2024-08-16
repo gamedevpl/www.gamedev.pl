@@ -14,7 +14,7 @@ export enum BonusType {
   LandMine = 'LandMine',
   TimeBomb = 'TimeBomb',
   Crusher = 'Crusher',
-  Builder = 'Builder'
+  Builder = 'Builder',
 }
 
 export interface Bonus {
@@ -28,12 +28,17 @@ export interface GameState {
   obstacles: Position[];
   monsters: Monster[];
   steps: number;
+  monsterSpawnSteps: number; // New property to track steps for monster spawning
   bonuses: Bonus[];
   activeBonuses: ActiveBonus[];
   explosions: Explosion[];
-  timeBombs: { position: Position, timer: number }[];
+  timeBombs: { position: Position; timer: number }[];
+  landMines: Position[];
   crusherActive: boolean;
   builderActive: boolean;
+  score: number;
+  isLevelComplete: boolean;
+  isGameOver: boolean;
 }
 
 export type Explosion = {
@@ -43,13 +48,13 @@ export type Explosion = {
 export type ActiveBonus = {
   type: BonusType;
   duration: number;
-}
+};
 
 export enum Direction {
   Up,
   Down,
   Left,
-  Right
+  Right,
 }
 
 export interface GridSize {

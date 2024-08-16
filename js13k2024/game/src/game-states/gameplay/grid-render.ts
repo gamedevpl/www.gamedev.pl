@@ -1,4 +1,4 @@
-import { Position, Monster, GridSize, Bonus, BonusType, Explosion } from "./gameplay-types";
+import { Position, Monster, GridSize, Bonus, BonusType, Explosion, GameState } from './gameplay-types';
 
 export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number, cellSize: number) => {
   ctx.strokeStyle = '#ccc';
@@ -6,7 +6,7 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: n
 
   for (let i = 0; i <= width; i++) {
     const pos = i * cellSize;
-    
+
     // Draw vertical line
     ctx.beginPath();
     ctx.moveTo(pos, 0);
@@ -16,7 +16,7 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: n
 
   for (let j = 0; j <= height; j++) {
     const pos = j * cellSize;
-    
+
     // Draw horizontal line
     ctx.beginPath();
     ctx.moveTo(0, pos);
@@ -25,10 +25,15 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: n
   }
 };
 
-export const drawPlayer = (ctx: CanvasRenderingContext2D, position: Position, cellSize: number, isInvisible: boolean = false) => {
+export const drawPlayer = (
+  ctx: CanvasRenderingContext2D,
+  position: Position,
+  cellSize: number,
+  isInvisible: boolean = false,
+) => {
   const x = position.x * cellSize;
   const y = position.y * cellSize;
-  
+
   ctx.fillStyle = 'blue';
   if (isInvisible) {
     ctx.globalAlpha = 0.5; // Make player semi-transparent when invisible
@@ -41,11 +46,11 @@ export const drawPlayer = (ctx: CanvasRenderingContext2D, position: Position, ce
 
 export const drawMonsters = (ctx: CanvasRenderingContext2D, monsters: Monster[], cellSize: number) => {
   ctx.fillStyle = 'red';
-  
-  monsters.forEach(monster => {
+
+  monsters.forEach((monster) => {
     const x = monster.position.x * cellSize;
     const y = monster.position.y * cellSize;
-    
+
     ctx.beginPath();
     ctx.moveTo(x + cellSize / 2, y);
     ctx.lineTo(x + cellSize, y + cellSize);
@@ -58,21 +63,21 @@ export const drawMonsters = (ctx: CanvasRenderingContext2D, monsters: Monster[],
 export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cellSize: number) => {
   const x = position.x * cellSize;
   const y = position.y * cellSize;
-  
+
   ctx.fillStyle = 'green';
   ctx.fillRect(x, y, cellSize, cellSize);
 };
 
 export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position[], cellSize: number) => {
   ctx.fillStyle = 'gray';
-  
-  obstacles.forEach(obstacle => {
+
+  obstacles.forEach((obstacle) => {
     const x = obstacle.x * cellSize;
     const y = obstacle.y * cellSize;
-    
+
     // Fill the obstacle
     ctx.fillRect(x, y, cellSize, cellSize);
-    
+
     // Add a cross pattern to make obstacles more visible
     ctx.strokeStyle = 'darkgray';
     ctx.lineWidth = 2;
@@ -86,20 +91,20 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position
 };
 
 export const drawBonuses = (ctx: CanvasRenderingContext2D, bonuses: Bonus[], cellSize: number) => {
-  bonuses.forEach(bonus => {
+  bonuses.forEach((bonus) => {
     const x = bonus.position.x * cellSize;
     const y = bonus.position.y * cellSize;
-    
+
     ctx.fillStyle = getBonusColor(bonus.type);
     ctx.beginPath();
     ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 4, 0, Math.PI * 2);
     ctx.fill();
-    
+
     ctx.fillStyle = 'white';
     ctx.font = `${cellSize / 3}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
+
     ctx.fillText(getBonusSymbol(bonus.type), x + cellSize / 2, y + cellSize / 2);
   });
 };
@@ -144,34 +149,38 @@ const getBonusSymbol = (bonusType: BonusType): string => {
 
 export const drawLandMines = (ctx: CanvasRenderingContext2D, landMines: Position[], cellSize: number) => {
   ctx.fillStyle = 'brown';
-  
-  landMines.forEach(mine => {
+
+  landMines.forEach((mine) => {
     const x = mine.x * cellSize;
     const y = mine.y * cellSize;
-    
+
     ctx.beginPath();
     ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 4, 0, Math.PI * 2);
     ctx.fill();
-    
+
     ctx.fillStyle = 'white';
     ctx.font = `${cellSize / 3}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('L', x + cellSize / 2, y + cellSize / 2);
+    ctx.fillText('LA', x + cellSize / 2, y + cellSize / 2);
   });
 };
 
-export const drawTimeBombs = (ctx: CanvasRenderingContext2D, timeBombs: { position: Position, timer: number }[], cellSize: number) => {
+export const drawTimeBombs = (
+  ctx: CanvasRenderingContext2D,
+  timeBombs: { position: Position; timer: number }[],
+  cellSize: number,
+) => {
   ctx.fillStyle = 'black';
-  
-  timeBombs.forEach(bomb => {
+
+  timeBombs.forEach((bomb) => {
     const x = bomb.position.x * cellSize;
     const y = bomb.position.y * cellSize;
-    
+
     ctx.beginPath();
     ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 4, 0, Math.PI * 2);
     ctx.fill();
-    
+
     ctx.fillStyle = 'white';
     ctx.font = `${cellSize / 3}px Arial`;
     ctx.textAlign = 'center';
@@ -183,7 +192,7 @@ export const drawTimeBombs = (ctx: CanvasRenderingContext2D, timeBombs: { positi
 export const drawExplosions = (ctx: CanvasRenderingContext2D, explosions: Explosion[], cellSize: number) => {
   ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; // Semi-transparent orange
 
-  for (const {position} of explosions) {
+  for (const { position } of explosions) {
     const x = position.x * cellSize;
     const y = position.y * cellSize;
 
@@ -196,30 +205,17 @@ export const drawExplosions = (ctx: CanvasRenderingContext2D, explosions: Explos
       ctx.beginPath();
       ctx.moveTo(x + cellSize / 2, y + cellSize / 2);
       const angle = (Math.PI / 4) * i;
-      ctx.lineTo(
-        x + cellSize / 2 + Math.cos(angle) * cellSize,
-        y + cellSize / 2 + Math.sin(angle) * cellSize
-      );
+      ctx.lineTo(x + cellSize / 2 + Math.cos(angle) * cellSize, y + cellSize / 2 + Math.sin(angle) * cellSize);
       ctx.stroke();
     }
   }
 };
 
 export const drawGameState = (
-  ctx: CanvasRenderingContext2D, 
-  gameState: {
-    playerPosition: Position;
-    goal: Position;
-    obstacles: Position[];
-    monsters: Monster[];
-    powerUps?: { type: string; position: Position }[];
-    bonuses: Bonus[];
-    landMines: Position[];
-    timeBombs: { position: Position, timer: number }[];
-    activeBonus: BonusType | null;
-  },
+  ctx: CanvasRenderingContext2D,
+  gameState: GameState,
   gridSize: GridSize,
-  cellSize: number
+  cellSize: number,
 ) => {
   ctx.clearRect(0, 0, gridSize.width * cellSize, gridSize.height * cellSize);
   drawGrid(ctx, gridSize.width, gridSize.height, cellSize);
@@ -227,23 +223,26 @@ export const drawGameState = (
   drawBonuses(ctx, gameState.bonuses, cellSize);
   drawLandMines(ctx, gameState.landMines, cellSize);
   drawTimeBombs(ctx, gameState.timeBombs, cellSize);
-  if (gameState.powerUps) {
-    gameState.powerUps.forEach(powerUp => drawPowerUp(ctx, powerUp.position, cellSize, powerUp.type));
-  }
   drawMonsters(ctx, gameState.monsters, cellSize);
-  drawPlayer(ctx, gameState.playerPosition, cellSize, gameState.activeBonus === BonusType.CapOfInvisibility);
+  drawPlayer(
+    ctx,
+    gameState.playerPosition,
+    cellSize,
+    gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
+  );
   drawGoal(ctx, gameState.goal, cellSize);
+  drawExplosions(ctx, gameState.explosions, cellSize);
 };
 
 export const drawPowerUp = (ctx: CanvasRenderingContext2D, position: Position, cellSize: number, type: string) => {
   const x = position.x * cellSize;
   const y = position.y * cellSize;
-  
+
   ctx.fillStyle = 'yellow';
   ctx.beginPath();
   ctx.arc(x + cellSize / 2, y + cellSize / 2, cellSize / 4, 0, Math.PI * 2);
   ctx.fill();
-  
+
   ctx.fillStyle = 'black';
   ctx.font = `${cellSize / 3}px Arial`;
   ctx.textAlign = 'center';
