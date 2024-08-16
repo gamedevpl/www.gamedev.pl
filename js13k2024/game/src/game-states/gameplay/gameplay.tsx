@@ -1,7 +1,7 @@
 import { FunctionComponent } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { GameState } from './gameplay-types';
-import { drawGameState } from './grid-render';
+import { drawGameState } from './game-render';
 import { handleKeyPress } from './game-logic';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
