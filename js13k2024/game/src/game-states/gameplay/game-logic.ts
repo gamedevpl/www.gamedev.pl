@@ -1,16 +1,12 @@
-import { GameState, Position, Monster, LevelConfig, Direction, BonusType, Bonus, ActiveBonus } from './gameplay-types';
+import { GameState, Position, LevelConfig, Direction, BonusType, ActiveBonus } from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
   checkLandMineCollision,
   checkTimeBombExplosion,
-  isPlayerInExplosionRange,
+  isInExplosionRange,
 } from './monster-logic';
-
-const generateRandomPosition = (width: number, height: number): Position => ({
-  x: Math.floor(Math.random() * width),
-  y: Math.floor(Math.random() * height),
-});
+import { generateLevel } from './level-generator';
 
 const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
 
@@ -18,74 +14,7 @@ const isPositionOccupied = (position: Position, occupiedPositions: Position[]): 
   occupiedPositions.some((pos) => isPositionEqual(pos, position));
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
-  const config = getLevelConfig(level);
-  const { width, height } = config.gridSize;
-
-  const playerPosition = generateRandomPosition(0, height - 1);
-  const obstacles: Position[] = [];
-  const monsters: Monster[] = [];
-  const bonuses: Bonus[] = [];
-
-  // Generate goal on the opposite end of the grid
-  const goal: Position = {
-    x: width - 2 - playerPosition.x,
-    y: height - 2 - playerPosition.y,
-  };
-
-  // Generate obstacles
-  for (let i = 0; i < config.obstacleCount; i++) {
-    let obstaclePosition;
-    do {
-      obstaclePosition = generateRandomPosition(width, height);
-    } while (
-      isPositionEqual(obstaclePosition, playerPosition) ||
-      isPositionEqual(obstaclePosition, goal) ||
-      isPositionOccupied(obstaclePosition, obstacles)
-    );
-    obstacles.push(obstaclePosition);
-  }
-
-  // Generate bonuses
-  for (let i = 0; i < config.initialBonusCount; i++) {
-    let bonusPosition;
-    do {
-      bonusPosition = generateRandomPosition(width, height);
-    } while (
-      isPositionEqual(bonusPosition, playerPosition) ||
-      isPositionEqual(bonusPosition, goal) ||
-      isPositionOccupied(bonusPosition, obstacles) ||
-      isPositionOccupied(
-        bonusPosition,
-        bonuses.map((b) => b.position),
-      )
-    );
-    bonuses.push({ position: bonusPosition, type: getRandomBonusType() });
-  }
-
-  const gameState = {
-    playerPosition,
-    goal,
-    obstacles,
-    monsters,
-    steps: 0,
-    monsterSpawnSteps: 0,
-    bonuses,
-    activeBonuses: [],
-    explosions: [],
-    timeBombs: [],
-    landMines: [],
-    crusherActive: false,
-    builderActive: false,
-    score: 0,
-    isLevelComplete: false,
-    isGameOver: false,
-  };
-
-  // Spawn monsters
-  for (let i = 0; i < config.initialMonsterCount; i++) {
-    spawnMonster(gameState, config.gridSize);
-  }
-
+  const [gameState, config] = generateLevel(level);
   return [gameState, config];
 };
 
@@ -163,15 +92,15 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       );
       // Explosions destroy obstacles
       newGameState.obstacles = newGameState.obstacles.filter(
-        (obstacle) => !newGameState.explosions.some((explosion) => isPositionEqual(explosion.position, obstacle)),
+        (obstacle) => !isInExplosionRange(obstacle, newGameState.explosions),
       );
       // Explosions destroy bonuses
       newGameState.bonuses = newGameState.bonuses.filter(
-        (bonus) => !newGameState.explosions.some((explosion) => isPositionEqual(explosion.position, bonus.position)),
+        (bonus) => !isInExplosionRange(bonus.position, newGameState.explosions),
       );
 
       // Check if player is in explosion range
-      if (isPlayerInExplosionRange(newGameState.playerPosition, newGameState.explosions)) {
+      if (isInExplosionRange(newGameState.playerPosition, newGameState.explosions)) {
         newGameState.isGameOver = true;
         return newGameState;
       }
@@ -243,11 +172,6 @@ const isValidMove = (
   );
 };
 
-const getRandomBonusType = (): BonusType => {
-  const bonusTypes = Object.values(BonusType);
-  return bonusTypes[Math.floor(Math.random() * bonusTypes.length)];
-};
-
 export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
   const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 }; // Duration set to 13 turns
   gameState.activeBonuses.push(newActiveBonus);
@@ -279,16 +203,6 @@ const calculateLevelScore = (gameState: GameState): number => {
   return 100 - gameState.steps + gameState.monsters.length * 10;
 };
 
-const getLevelConfig = (level: number): LevelConfig => {
-  // Implement level configuration logic here
-  return {
-    gridSize: { width: 10 + level, height: 10 + level },
-    initialMonsterCount: Math.max(level / 3),
-    obstacleCount: 10 + level * 6,
-    initialBonusCount: 1 + level,
-  };
-};
-
 const spawnMonster = (gameState: GameState, gridSize: { width: number; height: number }) => {
   let monsterPosition;
   do {
@@ -304,3 +218,8 @@ const spawnMonster = (gameState: GameState, gridSize: { width: number; height: n
   );
   gameState.monsters.push({ position: monsterPosition, path: [] });
 };
+
+const generateRandomPosition = (width: number, height: number): Position => ({
+  x: Math.floor(Math.random() * width),
+  y: Math.floor(Math.random() * height),
+});

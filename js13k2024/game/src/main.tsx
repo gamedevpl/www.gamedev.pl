@@ -15,18 +15,25 @@ enum GameState {
   Pause,
   GameOver,
   LevelComplete,
+  GameComplete,
 }
 
 function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.Intro);
-  const [level, setLevel] = useState(13);
+  const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
   const [steps, setSteps] = useState(0);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' && gameState === GameState.Intro) {
+        startGame();
+      }
       if (e.key === 'Escape' && gameState === GameState.Gameplay) {
         setGameState(GameState.Pause);
+      }
+      if (e.key === 'ArrowRight' && gameState === GameState.LevelComplete) {
+        nextLevel();
       }
     };
 
@@ -50,6 +57,7 @@ function App() {
     setGameState(GameState.LevelComplete);
   };
   const nextLevel = () => setGameState(GameState.Gameplay);
+  const gameComplete = () => setGameState(GameState.GameComplete);
 
   const updateScore = (newScore: number) => setScore(newScore);
   const updateSteps = (newSteps: number) => setSteps(newSteps);
@@ -64,6 +72,7 @@ function App() {
           score={score}
           onGameOver={gameOver}
           onLevelComplete={levelComplete}
+          onGameComplete={gameComplete}
           updateScore={updateScore}
           updateSteps={updateSteps}
         />
@@ -75,8 +84,32 @@ function App() {
       {gameState === GameState.LevelComplete && (
         <LevelComplete level={level} onNextLevel={nextLevel} onQuit={quitGame} />
       )}
+      {gameState === GameState.GameComplete && (
+        <GameComplete score={score} steps={steps} onPlayAgain={restartGame} onQuit={quitGame} />
+      )}
     </div>
   );
 }
 
 render(<App />, document.body);
+
+// GameComplete component
+interface GameCompleteProps {
+  score: number;
+  steps: number;
+  onPlayAgain: () => void;
+  onQuit: () => void;
+}
+
+function GameComplete({ score, steps, onPlayAgain, onQuit }: GameCompleteProps) {
+  return (
+    <div className="game-complete">
+      <h1>Congratulations!</h1>
+      <p>You've completed all 13 levels!</p>
+      <p>Final Score: {score}</p>
+      <p>Total Steps: {steps}</p>
+      <button onClick={onPlayAgain}>Play Again</button>
+      <button onClick={onQuit}>Quit</button>
+    </div>
+  );
+}

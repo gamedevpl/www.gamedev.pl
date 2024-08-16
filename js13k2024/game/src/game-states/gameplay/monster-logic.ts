@@ -225,9 +225,8 @@ export const checkTimeBombExplosion = (monster: Monster, explosion: Explosion): 
   );
 };
 
-export const isPlayerInExplosionRange = (playerPosition: Position, explosions: Explosion[]): boolean => {
+export const isInExplosionRange = (position: Position, explosions: Explosion[]): boolean => {
   return explosions.some(
-    (explosion) =>
-      Math.abs(playerPosition.x - explosion.position.x) <= 1 && Math.abs(playerPosition.y - explosion.position.y) <= 1,
+    (explosion) => Math.abs(position.x - explosion.position.x) <= 1 && Math.abs(position.y - explosion.position.y) <= 1,
   );
 };

@@ -28,7 +28,7 @@ export interface GameState {
   obstacles: Position[];
   monsters: Monster[];
   steps: number;
-  monsterSpawnSteps: number; // New property to track steps for monster spawning
+  monsterSpawnSteps: number;
   bonuses: Bonus[];
   activeBonuses: ActiveBonus[];
   explosions: Explosion[];
@@ -67,6 +67,8 @@ export interface LevelConfig {
   initialMonsterCount: number;
   obstacleCount: number;
   initialBonusCount: number;
+  levelName: string; // New property for level name
+  levelStory: string; // New property for level story
 }
 
 export interface Score {
@@ -85,6 +87,7 @@ export interface GameplayProps {
   score: number;
   onGameOver: () => void;
   onLevelComplete: () => void;
+  onGameComplete: () => void; // New property for game completion
   updateScore: (newScore: number) => void;
   updateSteps: (newSteps: number) => void;
 }
@@ -106,4 +109,15 @@ export interface GameConfig {
   maxObstacleCount: number;
   levelIncreaseFactor: number;
   bonusDuration: number;
+  maxLevel: number; // New property for maximum level
+}
+
+// New type for level generation function
+export type LevelGeneratorFunction = () => [GameState, LevelConfig, string];
+
+// New interface for level data
+export interface LevelData {
+  gameState: GameState;
+  levelConfig: LevelConfig;
+  story: string;
 }
