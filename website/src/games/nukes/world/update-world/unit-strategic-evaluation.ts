@@ -1,6 +1,6 @@
 import { SECTOR_SIZE } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Sector, Unit, LaunchSite, Position, Strategy } from '../world-state-types';
+import { Sector, Unit, LaunchSite, Position, Strategy, State } from '../world-state-types';
 
 export const MAX_UNITS_PER_SECTOR = 2;
 
@@ -69,6 +69,10 @@ export function evaluateStrategicValue(
       value *= 0.25; // Significantly decrease value for neutral sectors
       break;
   }
+
+  // Consider defence lines
+  const defenceLineValue = evaluateDefenceLineValue(sector, unitState);
+  value += defenceLineValue;
 
   return value;
 }
@@ -141,4 +145,21 @@ function isPositionInSector(position: Position, sector: Sector): boolean {
     position.y >= sector.rect.top &&
     position.y <= sector.rect.bottom
   );
+}
+
+function evaluateDefenceLineValue(sector: Sector, state: State): number {
+  const currentDefenceLine = state.defenceLines[state.currentDefenceLineIndex];
+  if (currentDefenceLine.sectors.includes(sector)) {
+    return 50; // High value for sectors in the current defence line
+  }
+
+  // Check if the sector is in any of the defence lines
+  for (let i = 0; i < state.defenceLines.length; i++) {
+    if (state.defenceLines[i].sectors.includes(sector)) {
+      // Higher value for sectors in earlier defence lines
+      return 30 * (state.defenceLines.length - i);
+    }
+  }
+
+  return 0; // No additional value if not in any defence line
 }

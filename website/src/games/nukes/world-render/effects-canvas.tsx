@@ -1,10 +1,17 @@
 import { useRef, useLayoutEffect } from 'react';
 import { useRafLoop } from 'react-use';
 import styled from 'styled-components';
-import { WorldState, Battle } from '../world/world-state-types';
+import { WorldState, Battle, State, Sector } from '../world/world-state-types';
 import { renderExplosion } from './explosion-render';
 import { renderMissile, renderChemtrail, renderInterceptor, renderInterceptorDisintegration } from './missile-render';
-import { INTERCEPTOR_MAX_RANGE, INTERCEPTOR_SPEED } from '../world/world-state-constants';
+import {
+  INTERCEPTOR_MAX_RANGE,
+  INTERCEPTOR_SPEED,
+  DEFENCE_LINE_COLORS,
+  ACTIVE_DEFENCE_LINE_COLOR,
+  DEFENCE_LINE_WIDTH,
+  SECTOR_SIZE,
+} from '../world/world-state-constants';
 
 export function EffectsCanvas({ state }: { state: WorldState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,6 +44,12 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
 
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Render defence lines
+    const playerState = state.states.find((s) => s.isPlayerControlled);
+    if (playerState) {
+      renderDefenceLines(ctx, playerState);
+    }
 
     // Render chemtrails for missiles
     state.missiles.forEach((missile) => {
@@ -85,6 +98,46 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
 
   useRafLoop(renderFrame);
   return <Canvas ref={canvasRef} />;
+}
+
+function renderDefenceLines(ctx: CanvasRenderingContext2D, playerState: State) {
+  playerState.defenceLines.forEach((defenceLine, index) => {
+    const isActive = index === playerState.currentDefenceLineIndex;
+    const color = isActive ? ACTIVE_DEFENCE_LINE_COLOR : DEFENCE_LINE_COLORS[index % DEFENCE_LINE_COLORS.length];
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = DEFENCE_LINE_WIDTH;
+    ctx.beginPath();
+
+    let isNewSegment = true;
+    for (let i = 0; i < defenceLine.sectors.length; i++) {
+      const currentSector = defenceLine.sectors[i];
+      const nextSector = defenceLine.sectors[i + 1];
+
+      if (isNewSegment) {
+        ctx.moveTo(currentSector.position.x, currentSector.position.y);
+        isNewSegment = false;
+      }
+
+      if (nextSector && areAdjacent(currentSector, nextSector)) {
+        ctx.lineTo(nextSector.position.x, nextSector.position.y);
+      } else {
+        ctx.lineTo(currentSector.position.x, currentSector.position.y);
+        ctx.stroke();
+        isNewSegment = true;
+      }
+    }
+
+    if (!isNewSegment) {
+      ctx.stroke();
+    }
+  });
+}
+
+function areAdjacent(sector1: Sector, sector2: Sector): boolean {
+  const dx = Math.abs(sector1.position.x - sector2.position.x);
+  const dy = Math.abs(sector1.position.y - sector2.position.y);
+  return dx <= SECTOR_SIZE * 3 && dy <= SECTOR_SIZE * 3;
 }
 
 function renderBattle(ctx: CanvasRenderingContext2D, battle: Battle) {

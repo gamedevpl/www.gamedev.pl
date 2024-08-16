@@ -4,6 +4,8 @@ import { generateStates } from './create-world/state-generation';
 import { initializeSectors } from './create-world/sector-generation';
 import { dislocateStateUnits } from './create-world/unit-dislocator';
 import { INITIAL_STATE_UNITS } from './world-state-constants';
+import { createDefenceLines } from './create-world/defence-line-generation';
+import { indexWorldState } from './world-state-index';
 
 export function createWorldState({
   playerStateName,
@@ -36,13 +38,7 @@ export function createWorldState({
   const units: Unit[] = [];
   const battles: Battle[] = [];
 
-  if (groundWarfare) {
-    for (const state of states) {
-      units.push(...dislocateStateUnits(sectors, state, INITIAL_STATE_UNITS));
-    }
-  }
-
-  return {
+  const result = {
     timestamp: 0,
     states,
     cities,
@@ -54,4 +50,21 @@ export function createWorldState({
     interceptors,
     battles,
   };
+
+  if (groundWarfare) {
+    const indexedResult = indexWorldState(result, true);
+
+    // Initialize strategic defence lines for each state
+    states.forEach((state) => {
+      state.defenceLines = createDefenceLines(state, indexedResult);
+      state.currentDefenceLineIndex = 0;
+    });
+
+    // Dislocate units
+    for (const state of states) {
+      units.push(...dislocateStateUnits(sectors, state, INITIAL_STATE_UNITS));
+    }
+  }
+
+  return result;
 }

@@ -30,6 +30,9 @@ export type State = {
   lastStrategyUpdate: number;
   generalStrategy: Strategy | undefined;
   population: number; // thousands of inhabitiants, this number is auto calculated
+  defenceLines: DefenceLine[]; // New property for strategic defence lines
+  currentDefenceLineIndex: number; // Index of the current active defence line
+  lastDefenceEvaluationTimestamp: number; // Timestamp of the last defence line evaluation
 };
 
 export enum Strategy {
@@ -81,7 +84,7 @@ export type UnitOrder =
   | {
       type: 'stay';
     }
-  | { type: 'move'; targetPosition: Position };
+  | { type: 'move'; targetPosition: Position; isFallback?: boolean };
 
 export enum LaunchSiteMode {
   ATTACK = 'ATTACK',
@@ -169,4 +172,11 @@ export type WorldState = {
   interceptors: Interceptor[];
   explosions: Explosion[];
   battles: Battle[]; // New property to store current battles
+};
+
+// New type for strategic defence lines
+export type DefenceLine = {
+  id: string;
+  sectors: Sector[];
+  isBreach: boolean;
 };

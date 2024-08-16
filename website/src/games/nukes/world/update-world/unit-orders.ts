@@ -1,12 +1,16 @@
 import { SECTOR_SIZE, UNIT_SIZE, UNIT_ORDER_COOLDOWN } from '../world-state-constants';
 import { IndexedWorldState } from '../world-state-index';
-import { Battles, Unit, Sector, Position, SectorType, Strategy } from '../world-state-types';
+import { Battles, Unit, Sector, Position, SectorType, Strategy, State } from '../world-state-types';
 import { isUnitInBattle } from './unit-battles';
 import { countUnitsInSector, evaluateStrategicValue, MAX_UNITS_PER_SECTOR } from './unit-strategic-evaluation';
 
 export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles): void {
   for (const unit of worldState.units) {
     if (unit.lastOrderTimestamp && worldState.timestamp - unit.lastOrderTimestamp < UNIT_ORDER_COOLDOWN) {
+      continue;
+    }
+
+    if (unit.order.type === 'move' && unit.order.isFallback) {
       continue;
     }
 
@@ -63,7 +67,7 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
 
     if (hostileSectors.length > 0) {
       // New logic: evaluate strategic value of sectors and choose the best one
-      const targetSector = selectBestStrategicSector(unit, hostileSectors, adjacentSectors, worldState);
+      const targetSector = selectBestStrategicSector(unit, hostileSectors, adjacentSectors, worldState, unitState);
       unit.order = {
         type: 'move',
         targetPosition: getSectorCenter(targetSector),
@@ -107,11 +111,7 @@ export function updateUnitOrders(worldState: IndexedWorldState, battles: Battles
   }
 }
 
-function findNearbyHostileUnit(
-  unit: Unit,
-  unitState: { strategies: Record<string, Strategy> },
-  worldState: IndexedWorldState,
-): Unit | undefined {
+function findNearbyHostileUnit(unit: Unit, unitState: State, worldState: IndexedWorldState): Unit | undefined {
   const nearbyUnits = worldState.searchUnit.byRadius(unit.position, UNIT_SIZE * 2);
   return nearbyUnits.find(
     (otherUnit) =>
@@ -167,14 +167,21 @@ function selectBestStrategicSector(
   hostileSectors: Sector[],
   allSectors: Sector[],
   worldState: IndexedWorldState,
+  unitState: State,
 ): Sector {
   let bestSector = hostileSectors[0];
   let highestStrategicValue = -Infinity;
 
   for (const sector of hostileSectors) {
     const strategicValue = evaluateStrategicValue(sector, unit, allSectors, worldState);
-    if (strategicValue > highestStrategicValue) {
-      highestStrategicValue = strategicValue;
+    // Add bonus for sectors in the current defence line
+    const defenceLineBonus = unitState.defenceLines[unitState.currentDefenceLineIndex].sectors.includes(sector)
+      ? 50
+      : 0;
+    const totalValue = strategicValue + defenceLineBonus;
+
+    if (totalValue > highestStrategicValue) {
+      highestStrategicValue = totalValue;
       bestSector = sector;
     }
   }
@@ -191,7 +198,7 @@ function getSectorCenter(sector: Sector): Position {
 
 function findNearestStrategicTarget(
   unit: Unit,
-  unitState: { strategies: Record<string, Strategy> },
+  unitState: State,
   worldState: IndexedWorldState,
   sectors: Sector[],
 ): { position: Position; type: 'sector' | 'launchSite' } | undefined {
@@ -242,7 +249,7 @@ function isPositionInSector(position: Position, sector: Sector): boolean {
 
 function findSpreadTarget(
   unit: Unit,
-  unitState: { strategies: Record<string, Strategy> },
+  unitState: State,
   adjacentSectors: Sector[],
   worldState: IndexedWorldState,
 ): Sector | undefined {
@@ -258,17 +265,26 @@ function findSpreadTarget(
     return totalUnitsA - totalUnitsB;
   });
 
-  // Find the first sector that is not overcrowded and doesn't contain neutral units
+  // Prioritize sectors in the current defence line
+  const currentDefenceLineSectors = unitState.defenceLines[unitState.currentDefenceLineIndex].sectors;
+  const defenceLineSector = friendlySectors.find(
+    (sector) =>
+      currentDefenceLineSectors.includes(sector) &&
+      !isOvercrowded(sector, worldState) &&
+      !hasNeutralUnits(sector, unitState, worldState),
+  );
+
+  if (defenceLineSector) {
+    return defenceLineSector;
+  }
+
+  // If no suitable sector in the defence line, fall back to the previous logic
   return friendlySectors.find(
     (sector) => !isOvercrowded(sector, worldState) && !hasNeutralUnits(sector, unitState, worldState),
   );
 }
 
-function hasNeutralUnits(
-  sector: Sector,
-  unitState: { strategies: Record<string, Strategy> },
-  worldState: IndexedWorldState,
-): boolean {
+function hasNeutralUnits(sector: Sector, unitState: State, worldState: IndexedWorldState): boolean {
   const unitsInSector = worldState.searchUnit.byRect(sector.rect);
   return unitsInSector.some(
     (unit) => unit.stateId !== sector.stateId && unitState.strategies[unit.stateId] === Strategy.NEUTRAL,

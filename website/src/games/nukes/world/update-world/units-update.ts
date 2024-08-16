@@ -3,6 +3,7 @@ import { CITY_RADIUS, UNIT_MOVEMENT_SPEED, UNIT_SIZE } from '../world-state-cons
 import { IndexedWorldState } from '../world-state-index';
 import { findBattles, isUnitInBattle, resolveBattles } from './unit-battles';
 import { updateUnitOrders } from './unit-orders';
+import { evaluateDefenceLineStatus, relocateUnitsToNextDefenceLine } from './defence-line-evaluation';
 
 export function updateUnits(worldState: IndexedWorldState, deltaTime: number): void {
   // Find battles: two hostile state units are in the same sector
@@ -17,6 +18,9 @@ export function updateUnits(worldState: IndexedWorldState, deltaTime: number): v
 
   // Update sector ownership
   updateSectorOwnership(worldState);
+
+  // Update defence line status and relocate units if necessary
+  updateDefenceLinesAndRelocateUnits(worldState);
 
   // Update unit orders
   updateUnitOrders(worldState, battles);
@@ -140,4 +144,21 @@ function isMovingToSafeSector(unit: Unit, worldState: IndexedWorldState): boolea
 
   // If we've made it this far, the sector is safe
   return true;
+}
+
+function updateDefenceLinesAndRelocateUnits(worldState: IndexedWorldState) {
+  for (const state of worldState.states) {
+    if (worldState.timestamp - state.lastDefenceEvaluationTimestamp < 5) {
+      continue;
+    }
+    state.lastDefenceEvaluationTimestamp = worldState.timestamp;
+
+    // Check if the current defence line is breached
+    const currentDefenceLine = state.defenceLines[state.currentDefenceLineIndex];
+    if (currentDefenceLine && evaluateDefenceLineStatus(state, currentDefenceLine, worldState)) {
+      // If breached, move to the next defence line
+      state.currentDefenceLineIndex = Math.min(state.currentDefenceLineIndex + 1, state.defenceLines.length - 1);
+      relocateUnitsToNextDefenceLine(state, worldState);
+    }
+  }
 }

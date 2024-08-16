@@ -91,6 +91,9 @@ function createState(stateId: string, stateName: string, isPlayerControlled: boo
       ? undefined
       : [Strategy.NEUTRAL, Strategy.HOSTILE, Strategy.FRIENDLY].sort(() => Math.random() - 0.5)[0],
     population: 0, // Initialize population with 0
+    defenceLines: [], // Initialize with an empty array
+    currentDefenceLineIndex: 0, // Initialize with 0
+    lastDefenceEvaluationTimestamp: 0,
   };
 }
 

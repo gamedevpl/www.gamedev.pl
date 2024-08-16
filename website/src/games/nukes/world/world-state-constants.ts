@@ -78,3 +78,17 @@ export const UNIT_ORDER_COOLDOWN = 5;
 
 /** Distance for unit spread */
 export const UNIT_SPREAD_DISTANCE = SECTOR_SIZE * 2;
+
+/** Colors for defence lines */
+export const DEFENCE_LINE_COLORS = [
+  'rgba(0, 255, 0, 0.5)', // Light green
+  'rgba(0, 0, 255, 0.5)', // Light blue
+  'rgba(255, 255, 0, 0.5)', // Yellow
+  'rgba(255, 0, 255, 0.5)', // Magenta
+];
+
+/** Color for the active defence line */
+export const ACTIVE_DEFENCE_LINE_COLOR = 'rgba(255, 165, 0, 0.8)'; // Bright orange
+
+/** Width of the defence line */
+export const DEFENCE_LINE_WIDTH = 3;

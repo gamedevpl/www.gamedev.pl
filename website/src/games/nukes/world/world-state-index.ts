@@ -18,11 +18,11 @@ export type IndexedWorldState = WorldState & {
   searchInterceptor: IndexType<Interceptor>;
 };
 
-export function indexWorldState(worldState: WorldState): IndexedWorldState {
+export function indexWorldState(worldState: WorldState, skipCache = false): IndexedWorldState {
   return {
     ...worldState,
     searchUnit: indexItems(worldState.units),
-    searchSector: indexItems(worldState.sectors, 'sectors'),
+    searchSector: indexItems(worldState.sectors, skipCache ? undefined : 'sectors'),
     searchCity: indexItems(worldState.cities),
     searchLaunchSite: indexItems(worldState.launchSites),
     searchMissile: indexItems(worldState.missiles),
