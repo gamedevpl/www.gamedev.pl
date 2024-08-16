@@ -3,9 +3,9 @@
 :root {
   --background-color: #1a1a1a;
   --grid-color: #4a4a4a;
-  --player-color: #00FF00;
+  --player-color: #00ff00;
   --monster-color: #800080;
-  --goal-color: #FFD700;
+  --goal-color: #ffd700;
   --ui-text-color: #ffffff;
   --highlight-color: #ffff00;
   --button-color: #4caf50;
@@ -69,7 +69,7 @@ button:hover {
 /* Intro screen styles */
 .intro-screen {
   text-align: center;
-  background-color: #2C3E50;
+  background-color: #2c3e50;
   padding: 20px;
   border-radius: 10px;
 }
@@ -77,8 +77,8 @@ button:hover {
 .game-title {
   font-size: 48px;
   margin-bottom: 20px;
-  color: #E67E22;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  color: #e67e22;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .intro-grid {
@@ -141,7 +141,7 @@ button:hover {
 canvas {
   border: 1px solid var(--grid-color);
   max-height: 80vh;
-  max-width: 80vh;
+  max-width: 90vw;
 }
 
 /* Bonus styles */
@@ -156,17 +156,35 @@ canvas {
   color: var(--ui-text-color);
 }
 
-.bonus-cap-of-invisibility { background-color: var(--bonus-cap-of-invisibility); }
-.bonus-confused-monsters { background-color: var(--bonus-confused-monsters); }
-.bonus-land-mine { background-color: var(--bonus-land-mine); }
-.bonus-time-bomb { background-color: var(--bonus-time-bomb); }
-.bonus-crusher { background-color: var(--bonus-crusher); }
-.bonus-builder { background-color: var(--bonus-builder); }
+.bonus-cap-of-invisibility {
+  background-color: var(--bonus-cap-of-invisibility);
+}
+.bonus-confused-monsters {
+  background-color: var(--bonus-confused-monsters);
+}
+.bonus-land-mine {
+  background-color: var(--bonus-land-mine);
+}
+.bonus-time-bomb {
+  background-color: var(--bonus-time-bomb);
+}
+.bonus-crusher {
+  background-color: var(--bonus-crusher);
+}
+.bonus-builder {
+  background-color: var(--bonus-builder);
+}
 
 /* Explosion animation */
 @keyframes explosion {
-  0% { transform: scale(0); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .explosion {
@@ -206,7 +224,7 @@ canvas {
 }
 
 .game-over-title .over {
-  color: #FF0000;
+  color: #ff0000;
 }
 
 /* Level Complete screen styles */

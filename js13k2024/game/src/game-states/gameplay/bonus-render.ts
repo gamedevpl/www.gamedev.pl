@@ -9,7 +9,7 @@ export const drawBonuses = (ctx: CanvasRenderingContext2D, bonuses: Bonus[], cel
     const { x: isoX, y: isoY } = toIsometric(bonus.position.x, bonus.position.y);
 
     // Draw shadow
-    drawShadow(ctx, isoX - TILE_WIDTH / 2, isoY, TILE_WIDTH, TILE_HEIGHT);
+    drawShadow(ctx, isoX - TILE_WIDTH / 4, isoY - TILE_HEIGHT / 4, TILE_WIDTH / 2, TILE_HEIGHT);
 
     // Draw bonus base
     ctx.fillStyle = getBonusColor(bonus.type);
@@ -92,7 +92,12 @@ export const drawTimeBombs = (
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(isoX, isoY - BONUS_HEIGHT);
-    ctx.quadraticCurveTo(isoX + TILE_WIDTH / 8, isoY - BONUS_HEIGHT * 1.5, isoX + TILE_WIDTH / 4, isoY - BONUS_HEIGHT * 1.25);
+    ctx.quadraticCurveTo(
+      isoX + TILE_WIDTH / 8,
+      isoY - BONUS_HEIGHT * 1.5,
+      isoX + TILE_WIDTH / 4,
+      isoY - BONUS_HEIGHT * 1.25,
+    );
     ctx.stroke();
 
     // Draw timer

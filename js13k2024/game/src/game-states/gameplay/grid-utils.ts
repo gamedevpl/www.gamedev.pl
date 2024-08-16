@@ -1,6 +1,5 @@
 import { Position } from './gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
-import { drawShadow } from './game-render';
 
 export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
   ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
@@ -33,7 +32,10 @@ export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cell
   const { x: isoX, y: isoY } = toIsometric(position.x, position.y);
 
   // Draw shadow
-  drawShadow(ctx, isoX - TILE_WIDTH / 2, isoY, TILE_WIDTH, TILE_HEIGHT);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.beginPath();
+  ctx.ellipse(isoX, isoY + TILE_HEIGHT / 2, TILE_WIDTH / 2, TILE_HEIGHT / 4, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // Draw goal
   ctx.fillStyle = '#FFD700'; // Gold color for the goal
@@ -55,12 +57,20 @@ export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cell
 
 export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position[], cellSize: number) => {
   const obstacleHeight = cellSize * 0.8; // Height of the obstacle
+  const shadowOffset = cellSize * 0.1; // Offset for the shadow
 
   obstacles.forEach((obstacle) => {
     const { x: isoX, y: isoY } = toIsometric(obstacle.x, obstacle.y);
 
-    // Draw shadow
-    drawShadow(ctx, isoX - TILE_WIDTH / 2, isoY, TILE_WIDTH, TILE_HEIGHT);
+    // Draw rectangular shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Slightly transparent black
+    ctx.beginPath();
+    ctx.moveTo(isoX - TILE_WIDTH / 2 + shadowOffset, isoY + TILE_HEIGHT / 2 + shadowOffset);
+    ctx.lineTo(isoX + shadowOffset, isoY + TILE_HEIGHT + shadowOffset);
+    ctx.lineTo(isoX + TILE_WIDTH / 2 + shadowOffset, isoY + TILE_HEIGHT / 2 + shadowOffset);
+    ctx.lineTo(isoX + shadowOffset, isoY + shadowOffset);
+    ctx.closePath();
+    ctx.fill();
 
     // Draw top face
     ctx.fillStyle = '#8e24aa'; // Updated to match the bright purple color in the image
