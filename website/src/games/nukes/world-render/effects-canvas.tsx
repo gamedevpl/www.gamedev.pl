@@ -4,14 +4,11 @@ import styled from 'styled-components';
 import { WorldState, Battle, State, Sector } from '../world/world-state-types';
 import { renderExplosion } from './explosion-render';
 import { renderMissile, renderChemtrail, renderInterceptor, renderInterceptorDisintegration } from './missile-render';
-import {
-  INTERCEPTOR_MAX_RANGE,
-  INTERCEPTOR_SPEED,
-  DEFENCE_LINE_COLORS,
-  ACTIVE_DEFENCE_LINE_COLOR,
-  DEFENCE_LINE_WIDTH,
-  SECTOR_SIZE,
-} from '../world/world-state-constants';
+import { INTERCEPTOR_MAX_RANGE, INTERCEPTOR_SPEED, SECTOR_SIZE } from '../world/world-state-constants';
+
+// New constant for the active defence line
+const ACTIVE_DEFENCE_LINE_COLOR = 'rgba(0, 255, 255, 0.1)'; // Subtle cyan color
+const ACTIVE_DEFENCE_LINE_WIDTH = 1; // Reduced line width for subtlety
 
 export function EffectsCanvas({ state }: { state: WorldState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,10 +42,10 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Render defence lines
+    // Render active defence line
     const playerState = state.states.find((s) => s.isPlayerControlled);
     if (playerState) {
-      renderDefenceLines(ctx, playerState);
+      renderDefenceLine(ctx, playerState);
     }
 
     // Render chemtrails for missiles
@@ -100,38 +97,40 @@ export function EffectsCanvas({ state }: { state: WorldState }) {
   return <Canvas ref={canvasRef} />;
 }
 
-function renderDefenceLines(ctx: CanvasRenderingContext2D, playerState: State) {
-  playerState.defenceLines.forEach((defenceLine, index) => {
-    const isActive = index === playerState.currentDefenceLineIndex;
-    const color = isActive ? ACTIVE_DEFENCE_LINE_COLOR : DEFENCE_LINE_COLORS[index % DEFENCE_LINE_COLORS.length];
+function renderDefenceLine(ctx: CanvasRenderingContext2D, playerState: State) {
+  const activeDefenceLine = playerState.defenceLines[playerState.currentDefenceLineIndex];
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = DEFENCE_LINE_WIDTH;
-    ctx.beginPath();
+  if (!activeDefenceLine) return;
 
-    let isNewSegment = true;
-    for (let i = 0; i < defenceLine.sectors.length; i++) {
-      const currentSector = defenceLine.sectors[i];
-      const nextSector = defenceLine.sectors[i + 1];
+  ctx.strokeStyle = ACTIVE_DEFENCE_LINE_COLOR;
+  ctx.lineWidth = ACTIVE_DEFENCE_LINE_WIDTH;
+  ctx.setLineDash([5, 15]);
+  ctx.beginPath();
 
-      if (isNewSegment) {
-        ctx.moveTo(currentSector.position.x, currentSector.position.y);
-        isNewSegment = false;
-      }
+  let isNewSegment = true;
+  for (let i = 0; i < activeDefenceLine.sectors.length; i++) {
+    const currentSector = activeDefenceLine.sectors[i];
+    const nextSector = activeDefenceLine.sectors[i + 1];
 
-      if (nextSector && areAdjacent(currentSector, nextSector)) {
-        ctx.lineTo(nextSector.position.x, nextSector.position.y);
-      } else {
-        ctx.lineTo(currentSector.position.x, currentSector.position.y);
-        ctx.stroke();
-        isNewSegment = true;
-      }
+    if (isNewSegment) {
+      ctx.moveTo(currentSector.position.x, currentSector.position.y);
+      isNewSegment = false;
     }
 
-    if (!isNewSegment) {
+    if (nextSector && areAdjacent(currentSector, nextSector)) {
+      ctx.lineTo(nextSector.position.x, nextSector.position.y);
+    } else {
+      ctx.lineTo(currentSector.position.x, currentSector.position.y);
       ctx.stroke();
+      isNewSegment = true;
     }
-  });
+  }
+
+  if (!isNewSegment) {
+    ctx.stroke();
+  }
+
+  ctx.setLineDash([]);
 }
 
 function areAdjacent(sector1: Sector, sector2: Sector): boolean {
