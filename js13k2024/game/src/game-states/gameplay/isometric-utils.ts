@@ -11,10 +11,10 @@ export const TILE_HEIGHT = 30;
  * @returns Isometric screen coordinates
  */
 export function toIsometric(x: number, y: number): Position {
-    return {
-        x: (x - y) * TILE_WIDTH / 2,
-        y: (x + y) * TILE_HEIGHT / 2
-    };
+  return {
+    x: ((x - y) * TILE_WIDTH) / 2,
+    y: ((x + y) * TILE_HEIGHT) / 2,
+  };
 }
 
 /**
@@ -24,9 +24,9 @@ export function toIsometric(x: number, y: number): Position {
  * @returns Grid coordinates
  */
 export function toGrid(screenX: number, screenY: number): Position {
-    const x = (screenX / (TILE_WIDTH / 2) + screenY / (TILE_HEIGHT / 2)) / 2;
-    const y = (screenY / (TILE_HEIGHT / 2) - screenX / (TILE_WIDTH / 2)) / 2;
-    return { x: Math.round(x), y: Math.round(y) };
+  const x = (screenX / (TILE_WIDTH / 2) + screenY / (TILE_HEIGHT / 2)) / 2;
+  const y = (screenY / (TILE_HEIGHT / 2) - screenX / (TILE_WIDTH / 2)) / 2;
+  return { x: Math.round(x), y: Math.round(y) };
 }
 
 /**
@@ -38,23 +38,23 @@ export function toGrid(screenX: number, screenY: number): Position {
  * @param height Height of the rectangle (in grid units)
  */
 export function drawIsometricRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
 ): void {
-    const topLeft = toIsometric(x, y);
-    const topRight = toIsometric(x + width, y);
-    const bottomRight = toIsometric(x + width, y + height);
-    const bottomLeft = toIsometric(x, y + height);
+  const topLeft = toIsometric(x, y);
+  const topRight = toIsometric(x + width, y);
+  const bottomRight = toIsometric(x + width, y + height);
+  const bottomLeft = toIsometric(x, y + height);
 
-    ctx.beginPath();
-    ctx.moveTo(topLeft.x, topLeft.y);
-    ctx.lineTo(topRight.x, topRight.y);
-    ctx.lineTo(bottomRight.x, bottomRight.y);
-    ctx.lineTo(bottomLeft.x, bottomLeft.y);
-    ctx.closePath();
+  ctx.beginPath();
+  ctx.moveTo(topLeft.x, topLeft.y);
+  ctx.lineTo(topRight.x, topRight.y);
+  ctx.lineTo(bottomRight.x, bottomRight.y);
+  ctx.lineTo(bottomLeft.x, bottomLeft.y);
+  ctx.closePath();
 }
 
 /**
@@ -67,48 +67,65 @@ export function drawIsometricRect(
  * @param depth Depth of the cube (in pixels)
  */
 export function drawIsometricCube(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    depth: number
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depth: number,
 ): void {
-    const base = toIsometric(x, y);
-    const top = { x: base.x, y: base.y - depth };
-    const right = toIsometric(x + width, y);
-    const back = toIsometric(x, y + height);
+  const base = toIsometric(x, y);
+  const top = { x: base.x, y: base.y - depth };
+  const right = toIsometric(x + width, y);
+  const back = toIsometric(x, y + height);
 
-    // Draw top face
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(top.x + (right.x - base.x), top.y + (right.y - base.y));
-    ctx.lineTo(top.x + (right.x - base.x) + (back.x - base.x), top.y + (right.y - base.y) + (back.y - base.y));
-    ctx.lineTo(top.x + (back.x - base.x), top.y + (back.y - base.y));
-    ctx.closePath();
+  // Draw top face
+  ctx.beginPath();
+  ctx.moveTo(top.x, top.y);
+  ctx.lineTo(top.x + (right.x - base.x), top.y + (right.y - base.y));
+  ctx.lineTo(top.x + (right.x - base.x) + (back.x - base.x), top.y + (right.y - base.y) + (back.y - base.y));
+  ctx.lineTo(top.x + (back.x - base.x), top.y + (back.y - base.y));
+  ctx.closePath();
 
-    // Draw right face
-    ctx.beginPath();
-    ctx.moveTo(right.x, right.y);
-    ctx.lineTo(right.x, right.y + depth);
-    ctx.lineTo(right.x + (back.x - base.x), right.y + depth + (back.y - base.y));
-    ctx.lineTo(right.x + (back.x - base.x), right.y + (back.y - base.y));
-    ctx.closePath();
+  // Draw right face
+  ctx.beginPath();
+  ctx.moveTo(right.x, right.y);
+  ctx.lineTo(right.x, right.y + depth);
+  ctx.lineTo(right.x + (back.x - base.x), right.y + depth + (back.y - base.y));
+  ctx.lineTo(right.x + (back.x - base.x), right.y + (back.y - base.y));
+  ctx.closePath();
 
-    // Draw left face
-    ctx.beginPath();
-    ctx.moveTo(base.x, base.y);
-    ctx.lineTo(base.x, base.y - depth);
-    ctx.lineTo(base.x + (back.x - base.x), base.y - depth + (back.y - base.y));
-    ctx.lineTo(back.x, back.y);
-    ctx.closePath();
+  // Draw left face
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(base.x, base.y - depth);
+  ctx.lineTo(base.x + (back.x - base.x), base.y - depth + (back.y - base.y));
+  ctx.lineTo(back.x, back.y);
+  ctx.closePath();
 }
 
 /**
  * Calculate the drawing order for isometric objects
- * @param objects Array of objects with x and y properties
+ * @param objects Array of objects with x and y properties and an optional z property
  * @returns Sorted array of objects in the correct drawing order
  */
-export function calculateDrawingOrder<T extends Position>(objects: T[]): T[] {
-    return objects.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+export function calculateDrawingOrder<T extends { position: Position & { z?: number; type?: string } }>(
+  objects: T[],
+): T[] {
+  return objects.sort((a, b) => {
+    // First, compare x + y
+    const sumA = a.position.x + a.position.y;
+    const sumB = b.position.x + b.position.y;
+    if (sumA !== sumB) {
+      return sumA - sumB;
+    }
+
+    // If x + y is equal, compare z values (if present)
+    if (a.position.z !== undefined && b.position.z !== undefined) {
+      return a.position.z - b.position.z;
+    }
+
+    // If z is not present or equal, maintain original order
+    return 0;
+  });
 }

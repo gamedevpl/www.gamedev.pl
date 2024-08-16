@@ -32,7 +32,7 @@ export interface GameState {
   bonuses: Bonus[];
   activeBonuses: ActiveBonus[];
   explosions: Explosion[];
-  timeBombs: { position: Position; timer: number }[];
+  timeBombs: TimeBomb[];
   landMines: Position[];
   crusherActive: boolean;
   builderActive: boolean;
@@ -44,6 +44,8 @@ export interface GameState {
 export type Explosion = {
   position: Position;
 };
+
+export type TimeBomb = { position: Position; timer: number };
 
 export type ActiveBonus = {
   type: BonusType;

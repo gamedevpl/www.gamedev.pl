@@ -1,11 +1,11 @@
-import { GridSize, BonusType, GameState } from './gameplay-types';
+import { GridSize, BonusType, GameState, Position, Bonus, TimeBomb, Monster, Explosion } from './gameplay-types';
 import { drawGrid, drawObstacles } from './grid-utils';
 import { drawPlayer } from './player-render';
 import { drawMonsters } from './monster-render';
 import { drawGoal } from './grid-utils';
 import { drawBonuses, drawLandMines, drawTimeBombs } from './bonus-render';
 import { drawExplosions } from './explosion-render';
-import { toIsometric } from './isometric-utils';
+import { toIsometric, calculateDrawingOrder } from './isometric-utils';
 
 const PLATFORM_HEIGHT = 20;
 const SHADOW_OFFSET = 5;
@@ -28,20 +28,64 @@ export const drawGameState = (
   // Draw the grid
   drawGrid(ctx, gridSize.width, gridSize.height);
 
-  // Draw game elements
-  drawObstacles(ctx, gameState.obstacles, cellSize);
-  drawBonuses(ctx, gameState.bonuses, cellSize);
-  drawLandMines(ctx, gameState.landMines, cellSize);
-  drawTimeBombs(ctx, gameState.timeBombs, cellSize);
-  drawMonsters(ctx, gameState.monsters, cellSize);
-  drawPlayer(
-    ctx,
-    gameState.playerPosition,
-    cellSize,
-    gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
-  );
-  drawGoal(ctx, gameState.goal, cellSize);
-  drawExplosions(ctx, gameState.explosions, cellSize);
+  // Prepare all game objects for sorting
+  const allObjects: ({ position: Position } & (
+    | { type: 'obstacle'; obj: Position }
+    | { type: 'bonus'; obj: Bonus }
+    | { type: 'landMine'; obj: Position }
+    | { type: 'timeBomb'; obj: TimeBomb }
+    | { type: 'monster'; obj: Monster }
+    | { type: 'player'; obj: Position }
+    | { type: 'goal'; obj: Position }
+    | { type: 'explosion'; obj: Explosion }
+  ))[] = [
+    ...gameState.obstacles.map((obj) => ({ position: obj, type: 'obstacle', obj } as const)),
+    ...gameState.bonuses.map((obj) => ({ position: obj.position, type: 'bonus', obj } as const)),
+    ...gameState.landMines.map((obj) => ({ position: obj, type: 'landMine', obj } as const)),
+    ...gameState.timeBombs.map((obj) => ({ position: obj.position, type: 'timeBomb', obj } as const)),
+    ...gameState.monsters.map((obj) => ({ position: obj.position, type: 'monster', obj } as const)),
+    { position: gameState.playerPosition, type: 'player', obj: gameState.playerPosition } as const,
+    { position: gameState.goal, type: 'goal', obj: gameState.goal } as const,
+    ...gameState.explosions.map((obj) => ({ position: obj.position, type: 'explosion', obj } as const)),
+  ];
+
+  // Sort all objects using calculateDrawingOrder
+  const sortedObjects = calculateDrawingOrder(allObjects);
+
+  // Draw game elements in sorted order
+  for (const { type, obj } of sortedObjects) {
+    switch (type) {
+      case 'obstacle':
+        drawObstacles(ctx, [obj], cellSize);
+        break;
+      case 'bonus':
+        drawBonuses(ctx, [obj], cellSize);
+        break;
+      case 'landMine':
+        drawLandMines(ctx, [obj], cellSize);
+        break;
+      case 'timeBomb':
+        drawTimeBombs(ctx, [obj], cellSize);
+        break;
+      case 'monster':
+        drawMonsters(ctx, [obj], cellSize);
+        break;
+      case 'player':
+        drawPlayer(
+          ctx,
+          obj,
+          cellSize,
+          gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
+        );
+        break;
+      case 'goal':
+        drawGoal(ctx, obj, cellSize);
+        break;
+      case 'explosion':
+        drawExplosions(ctx, [obj], cellSize);
+        break;
+    }
+  }
 
   ctx.restore();
 };
@@ -64,7 +108,7 @@ const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
   ctx.fill();
 
   // Draw right side
-  ctx.fillStyle = '#5D2E0C'; // Darker brown
+  ctx.fillStyle = '#734A12'; // Medium brown
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -73,13 +117,13 @@ const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
   ctx.closePath();
   ctx.fill();
 
-  // Draw left side
-  ctx.fillStyle = '#734A12'; // Medium brown
+  // Draw front side
+  ctx.fillStyle = '#5D2E0C'; // Darker brown
   ctx.beginPath();
-  ctx.moveTo(bottomLeft.x, bottomLeft.y);
-  ctx.lineTo(bottomLeft.x, bottomLeft.y + PLATFORM_HEIGHT);
-  ctx.lineTo(topLeft.x, topLeft.y + PLATFORM_HEIGHT);
-  ctx.lineTo(topLeft.x, topLeft.y);
+  ctx.moveTo(bottomRight.x, bottomRight.y);
+  ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
+  ctx.lineTo(topRight.x, topRight.y + PLATFORM_HEIGHT);
+  ctx.lineTo(topRight.x, topRight.y);
   ctx.closePath();
   ctx.fill();
 };
