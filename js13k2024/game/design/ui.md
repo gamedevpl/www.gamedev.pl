@@ -11,13 +11,14 @@ The UI for Monster Steps will be minimalistic and clean, focusing on essential i
 - Goal: Red (#FF0000)
 - UI elements: Black (#000000)
 - Highlight/Warning: Yellow (#FFFF00)
+- Bonuses: Cyan (#00FFFF)
 
 ## Screens
 
 ### 1. Title Screen
 - Game title "Monster Steps" in large, pixelated font
 - "Press Any Key to Start" text pulsating slowly
-- Simplified 13x13 grid in the background with animated player and monster
+- Simplified grid in the background with animated player and monster
 
 ### 2. Main Game Screen
 - Grid-based play area (majority of the screen)
@@ -36,7 +37,15 @@ The UI for Monster Steps will be minimalistic and clean, focusing on essential i
 ### 5. Level Complete Screen
 - "Level Complete!" text
 - Score for the level
+- Total score
 - "Next Level" and "Quit" options
+
+### 6. Game Complete Screen
+- "Congratulations!" text
+- "You've completed all 13 levels!" message
+- Final score
+- Total steps taken
+- "Play Again" and "Quit" options
 
 ## HUD Elements
 
@@ -47,7 +56,7 @@ The UI for Monster Steps will be minimalistic and clean, focusing on essential i
 
 2. Level Indicator
    - Top left corner
-   - Format: "Level X"
+   - Format: "Level X/13"
 
 3. Score
    - Top right corner
@@ -58,9 +67,13 @@ The UI for Monster Steps will be minimalistic and clean, focusing on essential i
    - Appears when 1-2 steps away from spawning a monster
    - Text: "Monster incoming!"
 
-2. Power-up Indicators (if implemented)
-   - Small icons for available power-ups
-   - Greyed out when unavailable
+2. Active Bonus Indicators
+   - Small icons representing active bonuses
+   - Countdown timer for each active bonus
+
+3. Level Name
+   - Displays the current level's name
+   - Positioned at the bottom center
 
 ## Game Grid
 - White lines forming a square grid
@@ -69,6 +82,15 @@ The UI for Monster Steps will be minimalistic and clean, focusing on essential i
 - Monsters represented by purple squares with eyes
 - Goal represented by a red flag
 - Obstacles represented by dark gray cells
+- Bonuses represented by cyan icons
+
+## Bonus Representations
+1. Cap of Invisibility: Hat icon
+2. Confused Monsters: Swirl icon
+3. Land Mine: Mine icon
+4. Time Bomb: Bomb icon
+5. Crusher: Hammer icon
+6. Builder: Brick icon
 
 ## Animations
 To keep the file size small, animations will be simple and programmatic:
@@ -76,13 +98,14 @@ To keep the file size small, animations will be simple and programmatic:
 2. Monster spawning: Quick fade-in effect
 3. Step counter: Subtle pulse when incrementing
 4. Monster warning: Flashing text
+5. Bonus activation: Brief glow effect
+6. Bonus deactivation: Fade-out effect
 
 ## User Interaction Points
 1. Arrow keys / WASD: Player movement
 2. Space / Enter: Confirm selections
 3. Escape: Pause game
 4. R: Quick restart (during gameplay)
-5. M: Mute/unmute (if sound is implemented)
 
 ## Responsive Design
 - The game grid will scale to fit the available screen space
@@ -92,16 +115,20 @@ To keep the file size small, animations will be simple and programmatic:
 
 ## Loading and Transitions
 - Use simple fade effects for transitions between screens
-- Display a "Loading..." text with a spinning animation for level generation
+- Display a "Loading..." text for level generation
 
 ## Tutorial Elements
 - Overlay tooltips pointing to UI elements
 - Highlighted cells on the grid to guide initial movements
-- Fading text boxes for instructions
+- Fading text boxes for instructions on new bonuses
+
+## Level Information Display
+- Brief level description or hint displayed at the start of each level
+- Fades out after a few seconds or when the player makes their first move
 
 ## Accessibility Considerations
 - High contrast mode option: Increases contrast between grid, player, and monsters
 - Colorblind mode: Uses patterns in addition to colors to distinguish elements
 - Scalable UI: Option to increase size of UI elements and grid numbers
 
-This UI design focuses on presenting essential information clearly while maintaining a minimalist aesthetic suitable for the 13KB size constraint. The use of simple geometric shapes and a limited color palette will allow for efficient implementation and a cohesive visual style.
+This UI design focuses on presenting essential information clearly while maintaining a minimalist aesthetic suitable for the 13KB size constraint. The use of simple geometric shapes and a limited color palette will allow for efficient implementation and a cohesive visual style. The addition of bonus representations and level information enhances the player's understanding of the game mechanics and progression.

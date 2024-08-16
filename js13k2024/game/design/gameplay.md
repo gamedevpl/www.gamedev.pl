@@ -8,7 +8,7 @@
 ### Grid System
 - The game takes place on a grid-based map.
 - Each cell on the grid represents one step.
-- The grid size can vary per level, typically ranging from 8x8 to 15x15.
+- The grid size varies per level, ranging from 7x7 to 16x16.
 
 ### Player Movement
 - Players can move in four directions: up, down, left, and right.
@@ -21,15 +21,15 @@
 
 ### Monster Summoning
 - A monster is summoned every time the step counter reaches a multiple of 13.
-- The monster appears on the last cell the player occupied before the 13th step.
+- The monster appears on a predetermined position based on the level design.
 
 ### Monster Behavior
-- Monsters follow the exact path the player took, starting from their spawn point.
+- Monsters follow a predetermined path or behavior based on the level design.
 - They move one step for every step the player takes.
 - If a monster reaches the player's current position, the game ends.
 
 ### Obstacles
-- Some grid cells may contain obstacles that cannot be passed through.
+- Some grid cells contain obstacles that cannot be passed through.
 - Obstacles can be used strategically to block monster paths.
 
 ### Goal
@@ -37,9 +37,35 @@
 - The player must reach this cell to complete the level.
 
 ### Level Design
-- Levels progressively increase in difficulty.
-- Early levels introduce core concepts (movement, monster spawning).
-- Later levels incorporate more complex layouts and multiple monsters.
+- The game features 13 deterministically generated levels.
+- Each level has a unique layout, set of obstacles, monsters, and bonuses.
+- Levels progressively increase in difficulty and complexity.
+
+## Bonus Types and Effects
+
+### Cap of Invisibility
+- Makes the player invisible to monsters for a limited time.
+- Monsters will not chase the player while this bonus is active.
+
+### Confused Monsters
+- Causes monsters to move erratically or in opposite directions.
+- Lasts for a limited number of turns.
+
+### Land Mine
+- Allows the player to place a land mine on their current position.
+- Destroys any monster that steps on it.
+
+### Time Bomb
+- Places a bomb that explodes after a set number of turns.
+- Destroys monsters and obstacles in its blast radius.
+
+### Crusher
+- Allows the player to destroy obstacles by moving into them.
+- Active for a limited number of turns.
+
+### Builder
+- Enables the player to create new obstacles.
+- Can be used to block monster paths or create safe zones.
 
 ## Scoring System
 
@@ -47,15 +73,11 @@
 - Base points are awarded for completing a level.
 - Bonus points are given for:
   - Completing the level in fewer steps
-  - Narrowly avoiding monsters (passing adjacent to them)
+  - Effectively using bonuses
 
 ### Time Bonus
 - A timer runs during gameplay.
 - Completing levels quickly awards additional bonus points.
-
-### Streak Bonus
-- Completing multiple levels without failing increases a multiplier.
-- This encourages extended play sessions and mastery.
 
 ## Player Interactions
 
@@ -65,46 +87,27 @@
 - Escape key to pause the game
 
 ### Planning Mode
-- Players can enter a "planning mode" where they can plot their path without actually moving.
-- This allows for strategy development without the risk of summoning monsters.
-
-### Undo Feature
-- Limited "undo" moves are available per level.
-- This adds a strategic element and allows for some error correction.
-
-## Power-ups (Optional, if space allows)
-
-### Step Eraser
-- Removes the last step from the counter, potentially delaying monster spawns.
-
-### Monster Freeze
-- Temporarily stops all monsters for a few moves.
-
-### Teleport
-- Allows the player to jump to a nearby cell without incrementing the step counter.
+- Players can strategize their moves based on the level layout and available bonuses.
 
 ## Challenge Modes
 
-### Endless Mode
-- Continuous play on a large or procedurally generated grid.
-- The goal is to survive as long as possible with an ever-increasing number of monsters.
-
-### Speed Run
-- Complete a series of levels as quickly as possible.
-- Emphasizes quick thinking and efficient pathing.
+### Progressive Difficulty
+- Each of the 13 levels introduces new challenges and combinations of bonuses.
+- The final level (13th) is designed to be particularly challenging, requiring mastery of all game mechanics.
 
 ## Tutorial
 
-- An interactive tutorial level introduces core mechanics.
-- Pop-up hints appear in early levels to guide new players.
+- The first level serves as an interactive tutorial, introducing core mechanics.
+- Each new bonus type is introduced gradually through the levels, allowing players to learn their effects.
 
 ## Difficulty Progression
 
 1. Introduction of basic movement and goal reaching.
 2. Introduction of the 13-step monster spawn mechanic.
 3. Introduction of obstacles and more complex grid layouts.
-4. Multiple monsters and limited "safe" paths.
-5. Timed levels with multiple goals to reach.
-6. Complex layouts requiring precise planning and execution.
+4. Introduction of various bonus types one by one.
+5. Combining multiple bonus types and increasing monster count.
+6. Complex layouts requiring precise planning and execution of bonus usage.
+7. The final level combining all learned mechanics in a challenging setup.
 
-This gameplay design aims to create a tense, strategic experience that constantly reminds players of the "13" threat, embodying the theme of triskaidekaphobia while providing engaging and progressively challenging gameplay.
+This gameplay design creates a tense, strategic experience that constantly reminds players of the "13" threat, embodying the theme of triskaidekaphobia while providing engaging and progressively challenging gameplay through 13 unique levels.

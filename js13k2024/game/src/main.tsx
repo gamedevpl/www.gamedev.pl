@@ -3,7 +3,6 @@ import { useState, useEffect } from 'preact/hooks';
 import { Intro } from './game-states/intro/intro';
 import { Instructions } from './game-states/instructions/instructions';
 import { Gameplay } from './game-states/gameplay/gameplay';
-import { Pause } from './game-states/pause/pause';
 import { GameOver } from './game-states/game-over/game-over';
 import { LevelComplete } from './game-states/level-complete/level-complete';
 import './global-styles.css';
@@ -12,7 +11,6 @@ enum GameState {
   Intro,
   Instructions,
   Gameplay,
-  Pause,
   GameOver,
   LevelComplete,
   GameComplete,
@@ -29,9 +27,6 @@ function App() {
       if (e.key === 'ArrowRight' && gameState === GameState.Intro) {
         startGame();
       }
-      if (e.key === 'Escape' && gameState === GameState.Gameplay) {
-        setGameState(GameState.Pause);
-      }
       if (e.key === 'ArrowRight' && gameState === GameState.LevelComplete) {
         nextLevel();
       }
@@ -43,7 +38,6 @@ function App() {
 
   const startGame = () => setGameState(GameState.Gameplay);
   const showInstructions = () => setGameState(GameState.Instructions);
-  const resumeGame = () => setGameState(GameState.Gameplay);
   const restartGame = () => {
     setLevel(1);
     setScore(0);
@@ -77,7 +71,6 @@ function App() {
           updateSteps={updateSteps}
         />
       )}
-      {gameState === GameState.Pause && <Pause onResume={resumeGame} onRestart={restartGame} onQuit={quitGame} />}
       {gameState === GameState.GameOver && (
         <GameOver score={score} steps={steps} onTryAgain={restartGame} onQuit={quitGame} />
       )}

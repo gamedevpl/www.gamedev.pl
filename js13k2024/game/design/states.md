@@ -14,7 +14,7 @@ This document outlines the various game states in "Monster Steps", their charact
 
 #### UI Elements
 - Game title in large, pixelated font
-- Animated 5x5 grid showing a simplified version of gameplay
+- Animated grid showing a simplified version of gameplay
 - "Start Game" button
 - "Instructions" button
 
@@ -40,40 +40,24 @@ This document outlines the various game states in "Monster Steps", their charact
 
 #### Description
 - The main state where the player navigates the grid
-- Displays the game grid, player, monsters, and UI elements
+- Displays the game grid, player, monsters, obstacles, bonuses, and UI elements
 
 #### UI Elements
 - Game grid with numbered cells
-- Player character (green circle)
-- Monsters (purple squares)
+- Player character
+- Monsters
+- Obstacles
+- Bonuses
 - Step counter
 - Score display
 - Level indicator
+- Active bonus indicators
 
 #### Transitions
-- To Pause State: When Escape key is pressed
 - To Game Over State: When player is caught by a monster
 - To Level Complete State: When player reaches the goal
 
-### 4. Pause State
-
-#### Description
-- Overlays the current game state
-- Provides options to resume, restart, or quit the game
-
-#### UI Elements
-- Semi-transparent dark overlay on the game grid
-- "Paused" text
-- "Resume" button
-- "Restart" button
-- "Quit" button
-
-#### Transitions
-- To Gameplay State: When "Resume" is clicked or Escape is pressed again
-- To Gameplay State (reset): When "Restart" is clicked
-- To Intro Splash Screen: When "Quit" is clicked
-
-### 5. Game Over State
+### 4. Game Over State
 
 #### Description
 - Displays when the player is caught by a monster
@@ -87,14 +71,15 @@ This document outlines the various game states in "Monster Steps", their charact
 - "Quit" button
 
 #### Transitions
-- To Gameplay State (reset): When "Try Again" is clicked
+- To Gameplay State (reset current level): When "Try Again" is clicked
 - To Intro Splash Screen: When "Quit" is clicked
 
-### 6. Level Complete State
+### 5. Level Complete State
 
 #### Description
 - Displays when the player reaches the goal
 - Shows the level score and total score
+- Provides option to proceed to the next level
 
 #### UI Elements
 - "Level Complete!" text
@@ -107,27 +92,42 @@ This document outlines the various game states in "Monster Steps", their charact
 - To Gameplay State (next level): When "Next Level" is clicked
 - To Intro Splash Screen: When "Quit" is clicked
 
+### 6. Game Complete State
+
+#### Description
+- Displays when the player completes all 13 levels
+- Shows the final score and total steps taken
+
+#### UI Elements
+- "Congratulations!" text
+- "You've completed all 13 levels!" message
+- Final score
+- Total steps taken
+- "Play Again" button
+- "Quit" button
+
+#### Transitions
+- To Gameplay State (reset to level 1): When "Play Again" is clicked
+- To Intro Splash Screen: When "Quit" is clicked
+
 ## State Transition Triggers
 
 1. Intro Splash Screen to Gameplay:
    - User clicks "Start Game"
 
-2. Gameplay to Pause:
-   - User presses the Escape key
-
-3. Pause to Gameplay:
-   - User clicks "Resume" or presses Escape key again
-
-4. Gameplay to Game Over:
+2. Gameplay to Game Over:
    - Player's position coincides with a monster's position
 
-5. Gameplay to Level Complete:
+3. Gameplay to Level Complete:
    - Player's position coincides with the goal position
 
-6. Game Over/Level Complete to Gameplay:
-   - User chooses to play again or proceed to the next level
+4. Level Complete to Gameplay (next level):
+   - User chooses to proceed to the next level
 
-7. Any State to Intro Splash Screen:
+5. Level Complete to Game Complete:
+   - User completes the 13th and final level
+
+6. Any State to Intro Splash Screen:
    - User chooses to quit the current game
 
 ## Additional Considerations
@@ -137,7 +137,6 @@ This document outlines the various game states in "Monster Steps", their charact
    - Keep transitions minimal to conserve file size
 
 2. State Persistence:
-   - Gameplay State should persist underneath the Pause State
    - Consider saving game progress to allow resuming from the last completed level
 
 3. Responsive Design:
@@ -148,4 +147,12 @@ This document outlines the various game states in "Monster Steps", their charact
    - Optimize state transitions to prevent lag, especially on lower-end devices
    - Minimize memory usage by efficiently managing active and inactive states
 
-By clearly defining these states and their transitions, we ensure a coherent and engaging user experience while maintaining the simplicity required by the 13KB size constraint of the js13k competition.
+5. Level Progression:
+   - Each level is deterministically generated based on the level number
+   - Ensure smooth transition between levels, updating the grid size, monster positions, and available bonuses
+
+6. Bonus State Management:
+   - Track active bonuses and their duration within the Gameplay State
+   - Update UI to reflect current active bonuses and their remaining duration
+
+By clearly defining these states and their transitions, we ensure a coherent and engaging user experience while maintaining the simplicity required by the 13KB size constraint of the js13k competition. The addition of the Game Complete State provides a satisfying conclusion to the game's progression through all 13 levels.
