@@ -89,7 +89,8 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
       createPosition(7, 2),
       createPosition(7, 3),
       createPosition(7, 4),
-      createPosition(8, 4),
+      createPosition(7, 5),
+      createPosition(8, 5),
     ];
     for (let i = 2; i < 7; i++) {
       state.obstacles.push(createPosition(i, 3));
