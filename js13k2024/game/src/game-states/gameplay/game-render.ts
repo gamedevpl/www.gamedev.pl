@@ -82,7 +82,7 @@ export const drawGameState = (
         drawGoal(ctx, obj, cellSize);
         break;
       case 'explosion':
-        drawExplosions(ctx, [obj], cellSize);
+        drawExplosions(ctx, [obj]);
         break;
     }
   }
