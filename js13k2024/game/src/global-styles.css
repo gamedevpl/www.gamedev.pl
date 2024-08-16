@@ -2,7 +2,7 @@
 
 :root {
   --background-color: #1a1a1a;
-  --grid-color: #8B7D6B;
+  --grid-color: #4a4a4a;
   --player-color: #00FF00;
   --monster-color: #800080;
   --goal-color: #FFD700;
@@ -19,11 +19,11 @@
   --explosion-color: rgba(255, 165, 0, 0.7);
   --tooltip-background: rgba(0, 0, 0, 0.7);
   --tooltip-text: #ffffff;
-  --platform-top: #C4A484;
-  --platform-side: #8B4513;
-  --obstacle-top: #8B4513;
-  --obstacle-side1: #5D2E0C;
-  --obstacle-side2: #734A12;
+  --platform-top: #c2b280;
+  --platform-side: #5d4037;
+  --obstacle-top: #8e24aa;
+  --obstacle-side1: #6a1b9a;
+  --obstacle-side2: #4a148c;
 }
 
 body,

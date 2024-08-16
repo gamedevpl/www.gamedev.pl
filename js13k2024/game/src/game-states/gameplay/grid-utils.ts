@@ -3,7 +3,7 @@ import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
 import { drawShadow } from './game-render';
 
 export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-  ctx.strokeStyle = '#8B7D6B'; // Light brown for grid lines
+  ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
   ctx.lineWidth = 1;
 
   for (let y = 0; y <= height; y++) {
@@ -63,7 +63,7 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position
     drawShadow(ctx, isoX - TILE_WIDTH / 2, isoY, TILE_WIDTH, TILE_HEIGHT);
 
     // Draw top face
-    ctx.fillStyle = '#8B4513'; // Saddle Brown
+    ctx.fillStyle = '#8e24aa'; // Updated to match the bright purple color in the image
     ctx.beginPath();
     ctx.moveTo(isoX, isoY - obstacleHeight);
     ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
@@ -73,7 +73,7 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position
     ctx.fill();
 
     // Draw right face
-    ctx.fillStyle = '#5D2E0C'; // Darker brown
+    ctx.fillStyle = '#6a1b9a'; // Updated to a slightly darker purple for the right face
     ctx.beginPath();
     ctx.moveTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
     ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
@@ -83,7 +83,7 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position
     ctx.fill();
 
     // Draw left face
-    ctx.fillStyle = '#734A12'; // Medium brown
+    ctx.fillStyle = '#4a148c'; // Updated to the darkest purple for the left face
     ctx.beginPath();
     ctx.moveTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
     ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);

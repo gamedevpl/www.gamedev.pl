@@ -98,7 +98,7 @@ const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
   const bottomRight = toIsometric(width, height);
 
   // Draw top surface
-  ctx.fillStyle = '#8B4513'; // Saddle Brown
+  ctx.fillStyle = '#c2b280'; // Updated to match the beige color in the image
   ctx.beginPath();
   ctx.moveTo(topLeft.x, topLeft.y);
   ctx.lineTo(topRight.x, topRight.y);
@@ -108,7 +108,7 @@ const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
   ctx.fill();
 
   // Draw right side
-  ctx.fillStyle = '#734A12'; // Medium brown
+  ctx.fillStyle = '#8d6e63'; // Updated to match the darker brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -118,7 +118,7 @@ const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
   ctx.fill();
 
   // Draw front side
-  ctx.fillStyle = '#5D2E0C'; // Darker brown
+  ctx.fillStyle = '#5d4037'; // Updated to match the darkest brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
