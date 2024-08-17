@@ -1,10 +1,11 @@
 import { FunctionComponent } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { GameState } from './gameplay-types';
-import { drawGameState } from './game-render';
-import { handleKeyPress } from './game-logic';
+import { drawGameState, drawMoveArrows } from './game-render';
+import { doGameUpdate, getValidMoves, handleKeyPress } from './game-logic';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
+import { toGrid } from './isometric-utils';
 
 interface GameplayProps {
   level: number;
@@ -50,6 +51,9 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
           // Draw the game state
           drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
 
+          // Draw move arrows
+          drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), gameState.player.position, CELL_SIZE);
+
           animationFrameId = requestAnimationFrame(animate);
         };
         animate();
@@ -76,9 +80,32 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       updateGameState(newGameState);
     };
 
-    const handleClick = () => {
+    const handleClick = (e: MouseEvent) => {
       if (showStory) {
         setShowStory(false);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      // Calculate the click position relative to the canvas, accounting for scaling
+      const canvasX = (e.clientX - rect.left) * scaleX - canvas.width / 2;
+      const canvasY = (e.clientY - rect.top) * scaleY - 100;
+
+      // Convert screen coordinates to grid coordinates
+      const { x: gridX, y: gridY } = toGrid(canvasX, canvasY);
+
+      const clickedMove = getValidMoves(gameState, levelConfig).find(
+        ({ position: move }) => move.x === gridX && move.y === gridY,
+      );
+
+      if (clickedMove) {
+        updateGameState(doGameUpdate(clickedMove.direction, gameState, levelConfig));
       }
     };
 

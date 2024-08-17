@@ -23,7 +23,7 @@ export const Instructions: FunctionComponent<InstructionsProps> = ({ onBack }) =
     <div className="instructions">
       <h1>How to Play Monster Steps</h1>
       <ul>
-        <li>Use arrow keys or touch controls to move your character</li>
+        <li>Use arrow keys, touch controls, or mouse clicks to move your character</li>
         <li>Avoid obstacles and monsters</li>
         <li>Reach the goal (green square) to complete the level</li>
         <li>New monsters appear every 13 steps</li>

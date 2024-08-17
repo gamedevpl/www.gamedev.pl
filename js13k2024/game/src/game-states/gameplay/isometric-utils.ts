@@ -26,7 +26,7 @@ export function toIsometric(x: number, y: number): Position {
 export function toGrid(screenX: number, screenY: number): Position {
   const x = (screenX / (TILE_WIDTH / 2) + screenY / (TILE_HEIGHT / 2)) / 2;
   const y = (screenY / (TILE_HEIGHT / 2) - screenX / (TILE_WIDTH / 2)) / 2;
-  return { x: Math.round(x), y: Math.round(y) };
+  return { x: Math.floor(x), y: Math.floor(y) };
 }
 
 /**
@@ -131,9 +131,7 @@ function getZIndex(type: string): number {
  * @param objects Array of objects with x and y properties and an optional z property
  * @returns Sorted array of objects in the correct drawing order
  */
-export function calculateDrawingOrder<T extends { position: Position; type: string }>(
-  objects: T[],
-): T[] {
+export function calculateDrawingOrder<T extends { position: Position; type: string }>(objects: T[]): T[] {
   return objects.sort((a, b) => {
     // First, compare x + y
     const sumA = a.position.x + a.position.y;

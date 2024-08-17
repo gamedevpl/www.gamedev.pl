@@ -76,6 +76,8 @@ function App() {
           startGame();
         } else if (gameState === GameState.LevelComplete) {
           nextLevel();
+        } else if (gameState === GameState.GameOver) {
+          restartLevel();
         }
       } else if (e.key === 'Escape') {
         if (gameState === GameState.Instructions || gameState === GameState.GameOver) {

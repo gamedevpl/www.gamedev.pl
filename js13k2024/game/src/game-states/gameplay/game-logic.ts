@@ -23,10 +23,10 @@ export const initializeGame = (level: number): [GameState, LevelConfig] => {
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
   const direction = getDirectionFromKey(e.key);
 
-  return direction ? doGameUpdate(direction, gameState, levelConfig) : { ...gameState };
+  return direction !== null ? doGameUpdate(direction, gameState, levelConfig) : { ...gameState };
 };
 
-const doGameUpdate = (direction: Direction, gameState: GameState, levelConfig: LevelConfig): GameState => {
+export const doGameUpdate = (direction: Direction, gameState: GameState, levelConfig: LevelConfig): GameState => {
   const newGameState = { ...gameState };
 
   const oldPosition = newGameState.player.position;
@@ -297,3 +297,16 @@ const generateRandomPosition = (width: number, height: number): Position => ({
   x: Math.floor(Math.random() * width),
   y: Math.floor(Math.random() * height),
 });
+
+export const getValidMoves = (
+  gameState: GameState,
+  levelConfig: LevelConfig,
+): { position: Position; direction: Direction }[] => {
+  const { player } = gameState;
+  const { gridSize } = levelConfig;
+  const directions = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
+
+  return directions
+    .map((direction) => ({ position: getNewPosition(player.position, direction), direction }))
+    .filter(({ position }) => isValidMove(position, gameState, gridSize));
+};
