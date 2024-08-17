@@ -1,5 +1,5 @@
 import { render } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'preact/hooks';
 import { Intro } from './game-states/intro/intro';
 import { Instructions } from './game-states/instructions/instructions';
 import { Gameplay } from './game-states/gameplay/gameplay';
@@ -23,30 +23,9 @@ function App() {
   const [score, setScore] = useState(0);
   const [steps, setSteps] = useState(0);
 
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' && gameState === GameState.Intro) {
-        startGame();
-      }
-      if (e.key === 'ArrowRight' && gameState === GameState.LevelComplete) {
-        nextLevel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [gameState]);
-
-  useEffect(() => {
-    // Play state transition sound when game state changes
-    if (gameState !== GameState.Gameplay) {
-      soundEngine.playStateTransition();
-    }
-  }, [gameState]);
-
-  const startGame = () => {
+  const startGame = useCallback(() => {
     setGameState(GameState.Gameplay);
-  };
+  }, []);
 
   const showInstructions = () => {
     setGameState(GameState.Instructions);
@@ -56,6 +35,10 @@ function App() {
     setLevel(1);
     setScore(0);
     setSteps(0);
+    setGameState(GameState.Gameplay);
+  };
+
+  const restartLevel = () => {
     setGameState(GameState.Gameplay);
   };
 
@@ -74,9 +57,9 @@ function App() {
     setGameState(GameState.LevelComplete);
   };
 
-  const nextLevel = () => {
+  const nextLevel = useCallback(() => {
     setGameState(GameState.Gameplay);
-  };
+  }, []);
 
   const gameComplete = () => {
     soundEngine.playLevelComplete(); // We can reuse the level complete sound for game completion
@@ -86,10 +69,31 @@ function App() {
   const updateScore = (newScore: number) => setScore(newScore);
   const updateSteps = (newSteps: number) => setSteps(newSteps);
 
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        if (gameState === GameState.Intro) {
+          startGame();
+        } else if (gameState === GameState.LevelComplete) {
+          nextLevel();
+        }
+      } else if (e.key === 'Escape') {
+        if (gameState === GameState.Instructions || gameState === GameState.GameOver) {
+          quitGame();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [gameState, startGame, nextLevel]);
+
   return (
     <div className="game-container">
       {gameState === GameState.Intro && <Intro onStart={startGame} onInstructions={showInstructions} />}
-      {gameState === GameState.Instructions && <Instructions onBack={() => setGameState(GameState.Intro)} />}
+      {gameState === GameState.Instructions && <Instructions onBack={quitGame} />}
       {gameState === GameState.Gameplay && (
         <Gameplay
           level={level}
@@ -102,7 +106,7 @@ function App() {
         />
       )}
       {gameState === GameState.GameOver && (
-        <GameOver score={score} steps={steps} onTryAgain={restartGame} onQuit={quitGame} />
+        <GameOver score={score} steps={steps} onTryAgain={restartLevel} onQuit={quitGame} />
       )}
       {gameState === GameState.LevelComplete && (
         <LevelComplete level={level} onNextLevel={nextLevel} onQuit={quitGame} />

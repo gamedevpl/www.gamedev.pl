@@ -21,128 +21,129 @@ export const initializeGame = (level: number): [GameState, LevelConfig] => {
 };
 
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
-  const newGameState = { ...gameState };
   const direction = getDirectionFromKey(e.key);
 
-  if (direction !== null) {
-    const oldPosition = newGameState.player.position;
-    const newPosition = getNewPosition(newGameState.player.position, direction);
+  return direction ? doGameUpdate(direction, gameState, levelConfig) : { ...gameState };
+};
 
-    if (
-      gameState.crusherActive &&
-      gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
-    ) {
-      newGameState.obstacles = gameState.obstacles.filter(
-        (obstacle) => !isPositionEqual(newPosition, obstacle.position),
-      );
-      soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
+const doGameUpdate = (direction: Direction, gameState: GameState, levelConfig: LevelConfig): GameState => {
+  const newGameState = { ...gameState };
+
+  const oldPosition = newGameState.player.position;
+  const newPosition = getNewPosition(newGameState.player.position, direction);
+
+  if (
+    gameState.crusherActive &&
+    gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
+  ) {
+    newGameState.obstacles = gameState.obstacles.filter((obstacle) => !isPositionEqual(newPosition, obstacle.position));
+    soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
+  }
+
+  if (isValidMove(newPosition, newGameState, levelConfig.gridSize)) {
+    soundEngine.playStep(); // Play step sound
+    newGameState.player.position = newPosition;
+    if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
+      newGameState.player.previousPosition = oldPosition;
+      newGameState.player.moveTimestamp = Date.now();
+    }
+    newGameState.steps++;
+    newGameState.monsterSpawnSteps++;
+
+    // Check for goal
+    if (isPositionEqual(newPosition, newGameState.goal)) {
+      newGameState.isLevelComplete = true;
+      newGameState.score += calculateLevelScore(newGameState);
+      return newGameState;
     }
 
-    if (isValidMove(newPosition, newGameState, levelConfig.gridSize)) {
-      soundEngine.playStep(); // Play step sound
-      newGameState.player.position = newPosition;
-      if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
-        newGameState.player.previousPosition = oldPosition;
-        newGameState.player.moveTimestamp = Date.now();
-      }
-      newGameState.steps++;
-      newGameState.monsterSpawnSteps++;
+    // Check for bonuses
+    const collectedBonus = newGameState.bonuses.find((bonus) => isPositionEqual(bonus.position, newPosition));
+    if (collectedBonus) {
+      soundEngine.playBonusCollected(); // Play bonus collected sound
+      newGameState.bonuses = newGameState.bonuses.filter((bonus) => !isPositionEqual(bonus.position, newPosition));
+      applyBonus(newGameState, collectedBonus.type);
+    }
 
-      // Check for goal
-      if (isPositionEqual(newPosition, newGameState.goal)) {
-        newGameState.isLevelComplete = true;
-        newGameState.score += calculateLevelScore(newGameState);
-        return newGameState;
-      }
+    // Spawn monster every 13th step
+    if (newGameState.monsterSpawnSteps >= 13) {
+      spawnMonster(newGameState, levelConfig.gridSize);
+      newGameState.monsterSpawnSteps = 0;
+      soundEngine.playMonsterSpawn(); // Play monster spawn sound
+    }
 
-      // Check for bonuses
-      const collectedBonus = newGameState.bonuses.find((bonus) => isPositionEqual(bonus.position, newPosition));
-      if (collectedBonus) {
-        soundEngine.playBonusCollected(); // Play bonus collected sound
-        newGameState.bonuses = newGameState.bonuses.filter((bonus) => !isPositionEqual(bonus.position, newPosition));
-        applyBonus(newGameState, collectedBonus.type);
-      }
+    // Move monsters
+    newGameState.monsters = moveMonsters(
+      newGameState.monsters,
+      newGameState.player.position,
+      levelConfig.gridSize,
+      newGameState.obstacles,
+      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
+      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.ConfusedMonsters),
+    );
 
-      // Spawn monster every 13th step
-      if (newGameState.monsterSpawnSteps >= 13) {
-        spawnMonster(newGameState, levelConfig.gridSize);
-        newGameState.monsterSpawnSteps = 0;
-        soundEngine.playMonsterSpawn(); // Play monster spawn sound
-      }
+    // Check for collisions with monsters
+    if (checkCollision(newGameState.player.position, newGameState.monsters)) {
+      newGameState.isGameOver = true;
+      return newGameState;
+    }
 
-      // Move monsters
-      newGameState.monsters = moveMonsters(
-        newGameState.monsters,
-        newGameState.player.position,
-        levelConfig.gridSize,
-        newGameState.obstacles,
-        newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
-        newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.ConfusedMonsters),
-      );
+    // Check for land mine collisions
+    const [newMonsters, newExplosions] = checkLandMineCollision(newGameState.monsters, newGameState.landMines);
 
-      // Check for collisions with monsters
-      if (checkCollision(newGameState.player.position, newGameState.monsters)) {
-        newGameState.isGameOver = true;
-        return newGameState;
-      }
+    newGameState.monsters = newMonsters;
+    newGameState.explosions = newExplosions;
 
-      // Check for land mine collisions
-      const [newMonsters, newExplosions] = checkLandMineCollision(newGameState.monsters, newGameState.landMines);
+    // Update time bombs
+    newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
+    const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
+    if (explodedBombs.length > 0 || newExplosions.length > 0) {
+      soundEngine.playExplosion(); // Play explosion sound
+    }
+    newGameState.explosions = [
+      ...newGameState.explosions,
+      ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
+    ];
+    newGameState.timeBombs = newGameState.timeBombs.filter((bomb) => bomb.timer > 0);
 
-      newGameState.monsters = newMonsters;
-      newGameState.explosions = newExplosions;
+    // Check for monster-explosion collisions
+    newGameState.monsters = newGameState.monsters.filter(
+      (monster) => !newGameState.explosions.some((explosion) => checkTimeBombExplosion(monster, explosion)),
+    );
+    // Explosions destroy obstacles
+    newGameState.obstacles = newGameState.obstacles.filter(
+      (obstacle) => !isInExplosionRange(obstacle.position, newGameState.explosions),
+    );
+    // Explosions destroy bonuses
+    newGameState.bonuses = newGameState.bonuses.filter(
+      (bonus) => !isInExplosionRange(bonus.position, newGameState.explosions),
+    );
 
-      // Update time bombs
-      newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
-      const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
-      if (explodedBombs.length > 0 || newExplosions.length > 0) {
-        soundEngine.playExplosion(); // Play explosion sound
-      }
-      newGameState.explosions = [
-        ...newGameState.explosions,
-        ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
-      ];
-      newGameState.timeBombs = newGameState.timeBombs.filter((bomb) => bomb.timer > 0);
+    // Check if player is in explosion range
+    if (isInExplosionRange(newGameState.player.position, newGameState.explosions)) {
+      newGameState.isGameOver = true;
+      return newGameState;
+    }
 
-      // Check for monster-explosion collisions
-      newGameState.monsters = newGameState.monsters.filter(
-        (monster) => !newGameState.explosions.some((explosion) => checkTimeBombExplosion(monster, explosion)),
-      );
-      // Explosions destroy obstacles
-      newGameState.obstacles = newGameState.obstacles.filter(
-        (obstacle) => !isInExplosionRange(obstacle.position, newGameState.explosions),
-      );
-      // Explosions destroy bonuses
-      newGameState.bonuses = newGameState.bonuses.filter(
-        (bonus) => !isInExplosionRange(bonus.position, newGameState.explosions),
-      );
+    // Update active bonuses
+    newGameState.activeBonuses = newGameState.activeBonuses
+      .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
+      .filter((bonus) => bonus.duration > 0);
 
-      // Check if player is in explosion range
-      if (isInExplosionRange(newGameState.player.position, newGameState.explosions)) {
-        newGameState.isGameOver = true;
-        return newGameState;
-      }
+    newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
+    newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
 
-      // Update active bonuses
-      newGameState.activeBonuses = newGameState.activeBonuses
-        .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
-        .filter((bonus) => bonus.duration > 0);
-
-      newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
-      newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
-
-      // Handle builder bonus
-      if (gameState.builderActive) {
-        const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true };
-        if (
-          !isPositionOccupied(
-            newObstacle.position,
-            newGameState.obstacles.map(({ position }) => position),
-          )
-        ) {
-          newGameState.obstacles.push(newObstacle);
-          soundEngine.playElectricalDischarge(); // Play sound for builder creating obstacle
-        }
+    // Handle builder bonus
+    if (gameState.builderActive) {
+      const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true };
+      if (
+        !isPositionOccupied(
+          newObstacle.position,
+          newGameState.obstacles.map(({ position }) => position),
+        )
+      ) {
+        newGameState.obstacles.push(newObstacle);
+        soundEngine.playElectricalDischarge(); // Play sound for builder creating obstacle
       }
     }
   }

@@ -76,8 +76,18 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       updateGameState(newGameState);
     };
 
+    const handleClick = () => {
+      if (showStory) {
+        setShowStory(false);
+      }
+    };
+
+    window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [gameState, levelConfig, showStory, onGameOver, onLevelComplete, updateScore, updateSteps]);
 
   const updateGameState = (newGameState: GameState) => {

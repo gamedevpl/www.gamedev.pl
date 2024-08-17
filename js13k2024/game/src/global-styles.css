@@ -25,6 +25,9 @@
   --obstacle-top: #8e24aa;
   --obstacle-side1: #6a1b9a;
   --obstacle-side2: #4a148c;
+  --intro-background: #2c3e50;
+  --intro-text-shadow: rgba(0, 0, 0, 0.5);
+  --intro-title-color: #e67e22;
 }
 
 body,
@@ -68,46 +71,80 @@ button:hover {
 }
 
 /* Intro screen styles */
-.intro-screen {
+.intro {
   text-align: center;
-  background-color: #2c3e50;
+  background-color: var(--intro-background);
   padding: 20px;
   border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 80vh;
+  width: 80vw;
+  max-width: 600px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 .game-title {
   font-size: 48px;
   margin-bottom: 20px;
-  color: #e67e22;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  color: var(--intro-title-color);
+  text-shadow: 2px 2px 4px var(--intro-text-shadow);
+  letter-spacing: 2px;
 }
 
-.intro-grid {
+.intro-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.intro-buttons button {
+  margin: 10px 0;
   width: 200px;
-  height: 200px;
+  border-radius: 5px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.intro-tip {
+  font-size: 18px;
+  margin-top: 20px;
+  color: var(--highlight-color);
+}
+
+.author-name {
+  font-size: 14px;
+  margin-top: 20px;
+  color: var(--ui-text-color);
+  opacity: 0.7;
+}
+
+/* Instructions screen styles */
+.instructions {
+  background-color: var(--intro-background);
+  padding: 20px;
+  border-radius: 10px;
+  max-width: 600px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, 1fr);
-  gap: 2px;
-  background-color: var(--grid-color);
+  overflow-y: auto;
+  max-height: 80vh;
 }
 
-.grid-cell {
-  background-color: var(--platform-top);
+.instructions h1 {
+  color: var(--intro-title-color);
+  text-align: center;
 }
 
-.player {
-  background-color: var(--player-color);
-  border-radius: 50%;
+.instructions ul {
+  padding-left: 20px;
 }
 
-.monster {
-  background-color: var(--monster-color);
-}
-
-.goal {
-  background-color: var(--goal-color);
+.instructions-tip {
+  text-align: center;
+  color: var(--highlight-color);
+  margin-top: 20px;
 }
 
 /* Gameplay screen styles */
@@ -145,114 +182,22 @@ canvas {
   max-width: 90vw;
 }
 
-/* Bonus styles */
-.bonus {
-  width: 80%;
-  height: 80%;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  color: var(--ui-text-color);
-}
-
-.bonus-cap-of-invisibility {
-  background-color: var(--bonus-cap-of-invisibility);
-}
-.bonus-confused-monsters {
-  background-color: var(--bonus-confused-monsters);
-}
-.bonus-land-mine {
-  background-color: var(--bonus-land-mine);
-}
-.bonus-time-bomb {
-  background-color: var(--bonus-time-bomb);
-}
-.bonus-crusher {
-  background-color: var(--bonus-crusher);
-}
-.bonus-builder {
-  background-color: var(--bonus-builder);
-}
-
-/* Explosion animation */
-@keyframes explosion {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
-}
-
-.explosion {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  background-color: var(--explosion-color);
-  border-radius: 50%;
-  animation: explosion 0.5s ease-out forwards;
-}
-
-/* Updated Tooltip styles for speech bubble appearance with inverted colors */
-.tooltip {
-  position: absolute;
-  background-color: var(--tooltip-background);
-  color: var(--tooltip-text);
-  padding: 12px;
-  border-radius: 16px;
-  font-size: 14px;
-  pointer-events: none;
-  z-index: 100;
-  border: 2px solid var(--tooltip-border);
-  box-shadow: 0 4px 8px rgba(255, 255, 255, 0.2);
-  max-width: 180px;
-  width: 100%;
-  text-align: center;
-}
-
-.tooltip::after {
-  content: '';
-  position: absolute;
-  bottom: -15px;
-  left: 50%;
-  border-width: 15px 15px 0;
-  border-style: solid;
-  border-color: var(--tooltip-background) transparent transparent transparent;
-  transform: translateX(-50%);
-}
-
-.tooltip-bonus-type {
-  font-weight: bold;
-  color: var(--highlight-color);
-  margin-bottom: 6px;
-  font-size: 16px;
-  text-align: center;
-}
-
-.tooltip-duration {
-  font-style: italic;
-  text-align: center;
-  font-size: 12px;
-  color: var(--tooltip-text);
-  opacity: 0.9;
-}
-
-/* Game Over screen styles */
-.game-over-screen {
+/* Game Over and Level Complete screen styles */
+.game-over-screen,
+.level-complete-screen,
+.game-complete {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100vh;
   background-color: rgba(0, 0, 0, 0.8);
+  text-align: center;
 }
 
-.game-over-title {
-  font-size: 48px;
+.game-over-title,
+.level-complete-title {
+  font-size: 36px;
   margin-bottom: 20px;
 }
 
@@ -260,20 +205,8 @@ canvas {
   color: #ff0000;
 }
 
-/* Level Complete screen styles */
-.level-complete-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.8);
-}
-
 .level-complete-title {
-  font-size: 36px;
   color: var(--highlight-color);
-  margin-bottom: 20px;
 }
 
 /* Responsive design */
@@ -287,22 +220,43 @@ canvas {
     font-size: 14px;
   }
 
-  .intro-grid {
-    width: 150px;
-    height: 150px;
+  .intro {
+    width: 90vw;
+    height: 90vh;
   }
 
-  .tooltip {
-    font-size: 12px;
-    padding: 10px;
-    max-width: 160px;
+  .intro-buttons button {
+    width: 180px;
   }
 
-  .tooltip-bonus-type {
+  .instructions {
+    font-size: 14px;
+    padding: 15px;
+  }
+
+  .hud {
     font-size: 14px;
   }
 
-  .tooltip-duration {
-    font-size: 10px;
+  canvas {
+    max-height: 70vh;
+    max-width: 95vw;
+  }
+
+  .game-over-title,
+  .level-complete-title {
+    font-size: 28px;
+  }
+}
+
+/* Touch-friendly styles */
+@media (hover: none) and (pointer: coarse) {
+  button {
+    padding: 15px 30px;
+    font-size: 18px;
+  }
+
+  .intro-buttons button {
+    margin: 15px 0;
   }
 }

@@ -1,32 +1,53 @@
-import { FunctionComponent } from "preact";
+import { FunctionComponent, useEffect } from "preact/compat";
 
 interface InstructionsProps {
   onBack: () => void;
 }
 
 export const Instructions: FunctionComponent<InstructionsProps> = ({ onBack }) => {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onBack();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onBack]);
+
   return (
     <div className="instructions">
-      <h1>How to Play</h1>
+      <h1>How to Play Monster Steps</h1>
       <ul>
-        <li>Use arrow keys to move your character</li>
-        <li>Avoid obstacles (gray squares with crosses)</li>
-        <li>Beware of monsters (red triangles) and don't get caught!</li>
-        <li><strong>Warning: If a monster catches you, the game is over!</strong></li>
-        <li>New monsters appear every 13 steps, so keep moving</li>
+        <li>Use arrow keys or touch controls to move your character</li>
+        <li>Avoid obstacles and monsters</li>
         <li>Reach the goal (green square) to complete the level</li>
-        <li>Complete all levels to win the game</li>
+        <li>New monsters appear every 13 steps</li>
+        <li>Collect bonuses for special abilities:
+          <ul>
+            <li>Cap of Invisibility: Temporary invisibility</li>
+            <li>Confused Monsters: Monsters move randomly</li>
+            <li>Land Mine: Place a trap for monsters</li>
+            <li>Time Bomb: Delayed explosion</li>
+            <li>Crusher: Destroy nearby obstacles</li>
+            <li>Builder: Create new platforms</li>
+          </ul>
+        </li>
+        <li>Complete all 13 levels to win</li>
       </ul>
       <h2>Tips</h2>
       <ul>
-        <li>Plan your route carefully to avoid getting trapped by monsters or obstacles</li>
-        <li>Use obstacles to your advantage - they block monsters too!</li>
-        <li>Keep an eye on your step count to anticipate new monster spawns</li>
-        <li>Try to stay ahead of the monsters and create distance when possible</li>
-        <li>Remember, monsters will always try to move towards you, use this to predict their movements</li>
-        <li>The game gets harder as you progress, so stay alert and adapt your strategy</li>
+        <li>Plan your route to avoid getting trapped</li>
+        <li>Use obstacles to block monsters</li>
+        <li>Strategically use bonuses to overcome challenges</li>
+        <li>Keep moving to stay ahead of monsters</li>
       </ul>
       <button onClick={onBack}>Back to Menu</button>
+      <p className="instructions-tip">Press Escape to return to the main menu</p>
     </div>
   );
 };
