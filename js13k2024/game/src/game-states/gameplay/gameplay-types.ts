@@ -123,3 +123,23 @@ export interface LevelData {
   levelConfig: LevelConfig;
   story: string;
 }
+
+// New function to get human-readable and fun descriptions for BonusType
+export function getBonusDescription(bonusType: BonusType): string {
+  switch (bonusType) {
+    case BonusType.CapOfInvisibility:
+      return "Now you see me, now you don't!";
+    case BonusType.ConfusedMonsters:
+      return 'Monsters are dizzy!';
+    case BonusType.LandMine:
+      return 'Boom goes the floor!';
+    case BonusType.TimeBomb:
+      return "Tick tock, boom o'clock!";
+    case BonusType.Crusher:
+      return 'Hulk smash!';
+    case BonusType.Builder:
+      return 'Bob the Builder mode: ON';
+    default:
+      return 'Mystery power activated!';
+  }
+}
