@@ -5,6 +5,7 @@ import { Instructions } from './game-states/instructions/instructions';
 import { Gameplay } from './game-states/gameplay/gameplay';
 import { GameOver } from './game-states/game-over/game-over';
 import { LevelComplete } from './game-states/level-complete/level-complete';
+import { soundEngine } from './sound/sound-engine';
 import './global-styles.css';
 
 enum GameState {
@@ -36,22 +37,51 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gameState]);
 
-  const startGame = () => setGameState(GameState.Gameplay);
-  const showInstructions = () => setGameState(GameState.Instructions);
+  useEffect(() => {
+    // Play state transition sound when game state changes
+    if (gameState !== GameState.Gameplay) {
+      soundEngine.playStateTransition();
+    }
+  }, [gameState]);
+
+  const startGame = () => {
+    setGameState(GameState.Gameplay);
+  };
+
+  const showInstructions = () => {
+    setGameState(GameState.Instructions);
+  };
+
   const restartGame = () => {
     setLevel(1);
     setScore(0);
     setSteps(0);
     setGameState(GameState.Gameplay);
   };
-  const quitGame = () => setGameState(GameState.Intro);
-  const gameOver = () => setGameState(GameState.GameOver);
+
+  const quitGame = () => {
+    setGameState(GameState.Intro);
+  };
+
+  const gameOver = () => {
+    soundEngine.playGameOver();
+    setGameState(GameState.GameOver);
+  };
+
   const levelComplete = () => {
+    soundEngine.playLevelComplete();
     setLevel(level + 1);
     setGameState(GameState.LevelComplete);
   };
-  const nextLevel = () => setGameState(GameState.Gameplay);
-  const gameComplete = () => setGameState(GameState.GameComplete);
+
+  const nextLevel = () => {
+    setGameState(GameState.Gameplay);
+  };
+
+  const gameComplete = () => {
+    soundEngine.playLevelComplete(); // We can reuse the level complete sound for game completion
+    setGameState(GameState.GameComplete);
+  };
 
   const updateScore = (newScore: number) => setScore(newScore);
   const updateSteps = (newSteps: number) => setSteps(newSteps);

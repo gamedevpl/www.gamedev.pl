@@ -8,6 +8,7 @@ import {
 } from './monster-logic';
 import { generateLevel } from './level-generator';
 import { MOVE_ANIMATION_DURATION } from './animation-utils';
+import { soundEngine } from '../../sound/sound-engine';
 
 const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
 
@@ -34,9 +35,11 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       newGameState.obstacles = gameState.obstacles.filter(
         (obstacle) => !isPositionEqual(newPosition, obstacle.position),
       );
+      soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
     }
 
     if (isValidMove(newPosition, newGameState, levelConfig.gridSize)) {
+      soundEngine.playStep(); // Play step sound
       newGameState.player.position = newPosition;
       if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
         newGameState.player.previousPosition = oldPosition;
@@ -55,6 +58,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       // Check for bonuses
       const collectedBonus = newGameState.bonuses.find((bonus) => isPositionEqual(bonus.position, newPosition));
       if (collectedBonus) {
+        soundEngine.playBonusCollected(); // Play bonus collected sound
         newGameState.bonuses = newGameState.bonuses.filter((bonus) => !isPositionEqual(bonus.position, newPosition));
         applyBonus(newGameState, collectedBonus.type);
       }
@@ -63,6 +67,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       if (newGameState.monsterSpawnSteps >= 13) {
         spawnMonster(newGameState, levelConfig.gridSize);
         newGameState.monsterSpawnSteps = 0;
+        soundEngine.playMonsterSpawn(); // Play monster spawn sound
       }
 
       // Move monsters
@@ -90,6 +95,9 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       // Update time bombs
       newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
       const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
+      if (explodedBombs.length > 0 || newExplosions.length > 0) {
+        soundEngine.playExplosion(); // Play explosion sound
+      }
       newGameState.explosions = [
         ...newGameState.explosions,
         ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
@@ -133,6 +141,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
           )
         ) {
           newGameState.obstacles.push(newObstacle);
+          soundEngine.playElectricalDischarge(); // Play sound for builder creating obstacle
         }
       }
     }
@@ -155,6 +164,9 @@ export const updateGameState = (gameState: GameState): GameState => {
   // Update time bombs
   newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
   const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
+  if (explodedBombs.length > 0) {
+    soundEngine.playExplosion(); // Play explosion sound for time bombs
+  }
   newGameState.explosions = [
     ...newGameState.explosions,
     ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
