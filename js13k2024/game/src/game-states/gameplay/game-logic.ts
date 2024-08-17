@@ -7,6 +7,7 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
+import { MOVE_ANIMATION_DURATION } from './animation-utils';
 
 const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
 
@@ -23,15 +24,24 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
   const direction = getDirectionFromKey(e.key);
 
   if (direction !== null) {
-    const oldPosition = newGameState.playerPosition;
-    const newPosition = getNewPosition(newGameState.playerPosition, direction);
+    const oldPosition = newGameState.player.position;
+    const newPosition = getNewPosition(newGameState.player.position, direction);
 
-    if (gameState.crusherActive && gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle))) {
-      newGameState.obstacles = gameState.obstacles.filter((obstacle) => !isPositionEqual(newPosition, obstacle));
+    if (
+      gameState.crusherActive &&
+      gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
+    ) {
+      newGameState.obstacles = gameState.obstacles.filter(
+        (obstacle) => !isPositionEqual(newPosition, obstacle.position),
+      );
     }
 
     if (isValidMove(newPosition, newGameState, levelConfig.gridSize)) {
-      newGameState.playerPosition = newPosition;
+      newGameState.player.position = newPosition;
+      if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
+        newGameState.player.previousPosition = oldPosition;
+        newGameState.player.moveTimestamp = Date.now();
+      }
       newGameState.steps++;
       newGameState.monsterSpawnSteps++;
 
@@ -58,7 +68,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       // Move monsters
       newGameState.monsters = moveMonsters(
         newGameState.monsters,
-        newGameState.playerPosition,
+        newGameState.player.position,
         levelConfig.gridSize,
         newGameState.obstacles,
         newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
@@ -66,7 +76,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       );
 
       // Check for collisions with monsters
-      if (checkCollision(newGameState.playerPosition, newGameState.monsters)) {
+      if (checkCollision(newGameState.player.position, newGameState.monsters)) {
         newGameState.isGameOver = true;
         return newGameState;
       }
@@ -82,7 +92,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
       newGameState.explosions = [
         ...newGameState.explosions,
-        ...explodedBombs.map((bomb) => ({ position: bomb.position })),
+        ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
       ];
       newGameState.timeBombs = newGameState.timeBombs.filter((bomb) => bomb.timer > 0);
 
@@ -92,7 +102,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       );
       // Explosions destroy obstacles
       newGameState.obstacles = newGameState.obstacles.filter(
-        (obstacle) => !isInExplosionRange(obstacle, newGameState.explosions),
+        (obstacle) => !isInExplosionRange(obstacle.position, newGameState.explosions),
       );
       // Explosions destroy bonuses
       newGameState.bonuses = newGameState.bonuses.filter(
@@ -100,7 +110,7 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
       );
 
       // Check if player is in explosion range
-      if (isInExplosionRange(newGameState.playerPosition, newGameState.explosions)) {
+      if (isInExplosionRange(newGameState.player.position, newGameState.explosions)) {
         newGameState.isGameOver = true;
         return newGameState;
       }
@@ -115,13 +125,47 @@ export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConf
 
       // Handle builder bonus
       if (gameState.builderActive) {
-        const newObstacle = { ...oldPosition };
-        if (!isPositionOccupied(newObstacle, newGameState.obstacles)) {
+        const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true };
+        if (
+          !isPositionOccupied(
+            newObstacle.position,
+            newGameState.obstacles.map(({ position }) => position),
+          )
+        ) {
           newGameState.obstacles.push(newObstacle);
         }
       }
     }
   }
+
+  return newGameState;
+};
+
+export const updateGameState = (gameState: GameState): GameState => {
+  const newGameState = { ...gameState };
+
+  // Update active bonuses
+  newGameState.activeBonuses = newGameState.activeBonuses
+    .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
+    .filter((bonus) => bonus.duration > 0);
+
+  newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
+  newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
+
+  // Update time bombs
+  newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
+  const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
+  newGameState.explosions = [
+    ...newGameState.explosions,
+    ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
+  ];
+  newGameState.timeBombs = newGameState.timeBombs.filter((bomb) => bomb.timer > 0);
+
+  // Update explosions
+  newGameState.explosions = newGameState.explosions.filter((explosion) => {
+    const elapsedTime = Date.now() - explosion.startTime;
+    return elapsedTime < explosion.duration;
+  });
 
   return newGameState;
 };
@@ -168,7 +212,10 @@ const isValidMove = (
     newPosition.x < gridSize.width &&
     newPosition.y >= 0 &&
     newPosition.y < gridSize.height &&
-    !isPositionOccupied(newPosition, gameState.obstacles)
+    !isPositionOccupied(
+      newPosition,
+      gameState.obstacles.map(({ position }) => position),
+    )
   );
 };
 
@@ -184,10 +231,14 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       // Logic for Confused Monsters is handled in monster movement
       break;
     case BonusType.LandMine:
-      gameState.landMines.push({ ...gameState.playerPosition });
+      gameState.landMines.push({ ...gameState.player.position });
       break;
     case BonusType.TimeBomb:
-      gameState.timeBombs.push({ position: { ...gameState.playerPosition }, timer: 13 });
+      gameState.timeBombs.push({
+        position: gameState.player.position,
+        timer: 13,
+        shakeIntensity: 0,
+      });
       break;
     case BonusType.Crusher:
       gameState.crusherActive = true;
@@ -208,15 +259,25 @@ const spawnMonster = (gameState: GameState, gridSize: { width: number; height: n
   do {
     monsterPosition = generateRandomPosition(gridSize.width, gridSize.height);
   } while (
-    isPositionEqual(monsterPosition, gameState.playerPosition) ||
+    isPositionEqual(monsterPosition, gameState.player.position) ||
     isPositionEqual(monsterPosition, gameState.goal) ||
-    isPositionOccupied(monsterPosition, gameState.obstacles) ||
+    isPositionOccupied(
+      monsterPosition,
+      gameState.obstacles.map(({ position }) => position),
+    ) ||
     isPositionOccupied(
       monsterPosition,
       gameState.monsters.map((m) => m.position),
     )
   );
-  gameState.monsters.push({ position: monsterPosition, path: [] });
+  gameState.monsters.push({
+    position: monsterPosition,
+    previousPosition: monsterPosition,
+    moveTimestamp: Date.now(),
+    path: [],
+    seed: Math.random(),
+    isConfused: false,
+  });
 };
 
 const generateRandomPosition = (width: number, height: number): Position => ({

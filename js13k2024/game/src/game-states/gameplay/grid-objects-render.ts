@@ -1,32 +1,6 @@
-import { Position } from './gameplay-types';
+import { Position, Obstacle } from './gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
-
-export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-  ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
-  ctx.lineWidth = 1;
-
-  for (let y = 0; y <= height; y++) {
-    for (let x = 0; x <= width; x++) {
-      const { x: isoX, y: isoY } = toIsometric(x, y);
-
-      // Draw horizontal line
-      if (x < width) {
-        ctx.beginPath();
-        ctx.moveTo(isoX, isoY);
-        ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
-        ctx.stroke();
-      }
-
-      // Draw vertical line
-      if (y < height) {
-        ctx.beginPath();
-        ctx.moveTo(isoX, isoY);
-        ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
-        ctx.stroke();
-      }
-    }
-  }
-};
+import { calculateObstacleHeight } from './animation-utils';
 
 export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cellSize: number) => {
   const { x: isoX, y: isoY } = toIsometric(position.x, position.y);
@@ -55,12 +29,15 @@ export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cell
   ctx.fillText('★', isoX, isoY + TILE_HEIGHT / 2);
 };
 
-export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position[], cellSize: number) => {
-  const obstacleHeight = cellSize * 0.8; // Height of the obstacle
+export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle[], cellSize: number) => {
   const shadowOffset = cellSize * 0.1; // Offset for the shadow
 
   obstacles.forEach((obstacle) => {
-    const { x: isoX, y: isoY } = toIsometric(obstacle.x, obstacle.y);
+    const { position, creationTime, isRaising } = obstacle;
+    const { x: isoX, y: isoY } = toIsometric(position.x, position.y);
+
+    // Calculate the current height of the obstacle based on animation
+    const height = calculateObstacleHeight(creationTime, isRaising) * cellSize * 0.8;
 
     // Draw rectangular shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Slightly transparent black
@@ -75,30 +52,30 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Position
     // Draw top face
     ctx.fillStyle = '#8e24aa'; // Updated to match the bright purple color in the image
     ctx.beginPath();
-    ctx.moveTo(isoX, isoY - obstacleHeight);
-    ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
-    ctx.lineTo(isoX, isoY + TILE_HEIGHT - obstacleHeight);
-    ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
+    ctx.moveTo(isoX, isoY - height);
+    ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
+    ctx.lineTo(isoX, isoY + TILE_HEIGHT - height);
+    ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
     ctx.closePath();
     ctx.fill();
 
     // Draw right face
     ctx.fillStyle = '#6a1b9a'; // Updated to a slightly darker purple for the right face
     ctx.beginPath();
-    ctx.moveTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
+    ctx.moveTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
     ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
     ctx.lineTo(isoX, isoY + TILE_HEIGHT);
-    ctx.lineTo(isoX, isoY + TILE_HEIGHT - obstacleHeight);
+    ctx.lineTo(isoX, isoY + TILE_HEIGHT - height);
     ctx.closePath();
     ctx.fill();
 
     // Draw left face
     ctx.fillStyle = '#4a148c'; // Updated to the darkest purple for the left face
     ctx.beginPath();
-    ctx.moveTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - obstacleHeight);
+    ctx.moveTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
     ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
     ctx.lineTo(isoX, isoY + TILE_HEIGHT);
-    ctx.lineTo(isoX, isoY + TILE_HEIGHT - obstacleHeight);
+    ctx.lineTo(isoX, isoY + TILE_HEIGHT - height);
     ctx.closePath();
     ctx.fill();
   });

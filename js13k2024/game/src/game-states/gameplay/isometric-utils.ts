@@ -104,12 +104,34 @@ export function drawIsometricCube(
   ctx.closePath();
 }
 
+// Function to get z-index for different object types
+function getZIndex(type: string): number {
+  switch (type) {
+    case 'obstacle':
+      return 1;
+    case 'bonus':
+    case 'landMine':
+    case 'timeBomb':
+      return 2;
+    case 'goal':
+      return 3;
+    case 'monster':
+      return 4;
+    case 'player':
+      return 5;
+    case 'explosion':
+      return 6;
+    default:
+      return 0;
+  }
+}
+
 /**
  * Calculate the drawing order for isometric objects
  * @param objects Array of objects with x and y properties and an optional z property
  * @returns Sorted array of objects in the correct drawing order
  */
-export function calculateDrawingOrder<T extends { position: Position & { z?: number; type?: string } }>(
+export function calculateDrawingOrder<T extends { position: Position; type: string }>(
   objects: T[],
 ): T[] {
   return objects.sort((a, b) => {
@@ -120,12 +142,14 @@ export function calculateDrawingOrder<T extends { position: Position & { z?: num
       return sumA - sumB;
     }
 
-    // If x + y is equal, compare z values (if present)
-    if (a.position.z !== undefined && b.position.z !== undefined) {
-      return a.position.z - b.position.z;
+    // If x + y is equal, compare z-index based on object type
+    const zIndexA = getZIndex(a.type);
+    const zIndexB = getZIndex(b.type);
+    if (zIndexA !== zIndexB) {
+      return zIndexA - zIndexB;
     }
 
-    // If z is not present or equal, maintain original order
+    // If z-index is equal, maintain original order
     return 0;
   });
 }

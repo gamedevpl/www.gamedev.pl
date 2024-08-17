@@ -5,16 +5,20 @@ export interface Position {
 
 export interface Monster {
   position: Position;
+  previousPosition: Position;
+  moveTimestamp: number;
   path: Position[];
+  seed: number; // New property for randomizing tentacle animations
+  isConfused: boolean; // New property for confused state animation
 }
 
 export enum BonusType {
-  CapOfInvisibility = 'CapOfInvisibility',
-  ConfusedMonsters = 'ConfusedMonsters',
-  LandMine = 'LandMine',
-  TimeBomb = 'TimeBomb',
-  Crusher = 'Crusher',
-  Builder = 'Builder',
+  CapOfInvisibility,
+  ConfusedMonsters,
+  LandMine,
+  TimeBomb,
+  Crusher,
+  Builder,
 }
 
 export interface Bonus {
@@ -22,10 +26,24 @@ export interface Bonus {
   position: Position;
 }
 
+export interface Player {
+  position: Position;
+  previousPosition: Position;
+  moveTimestamp: number;
+  isInvisible: boolean; // New property for invisibility animation
+  isVictorious: boolean; // New property for victory animation
+}
+
+export interface Obstacle {
+  position: Position;
+  creationTime: number; // New property for creation/destruction animation
+  isRaising: boolean; // New property to determine if the obstacle is raising or collapsing
+}
+
 export interface GameState {
-  playerPosition: Position;
+  player: Player;
   goal: Position;
-  obstacles: Position[];
+  obstacles: Obstacle[];
   monsters: Monster[];
   steps: number;
   monsterSpawnSteps: number;
@@ -43,9 +61,15 @@ export interface GameState {
 
 export type Explosion = {
   position: Position;
+  startTime: number; // New property for explosion animation timing
+  duration: number; // New property for explosion animation duration
 };
 
-export type TimeBomb = { position: Position; timer: number };
+export type TimeBomb = {
+  position: Position;
+  timer: number;
+  shakeIntensity: number; // New property for bomb shaking animation
+};
 
 export type ActiveBonus = {
   type: BonusType;
@@ -69,8 +93,8 @@ export interface LevelConfig {
   initialMonsterCount: number;
   obstacleCount: number;
   initialBonusCount: number;
-  levelName: string; // New property for level name
-  levelStory: string; // New property for level story
+  levelName: string;
+  levelStory: string;
 }
 
 export interface Score {
@@ -89,7 +113,7 @@ export interface GameplayProps {
   score: number;
   onGameOver: () => void;
   onLevelComplete: () => void;
-  onGameComplete: () => void; // New property for game completion
+  onGameComplete: () => void;
   updateScore: (newScore: number) => void;
   updateSteps: (newSteps: number) => void;
 }
@@ -111,20 +135,17 @@ export interface GameConfig {
   maxObstacleCount: number;
   levelIncreaseFactor: number;
   bonusDuration: number;
-  maxLevel: number; // New property for maximum level
+  maxLevel: number;
 }
 
-// New type for level generation function
 export type LevelGeneratorFunction = () => [GameState, LevelConfig, string];
 
-// New interface for level data
 export interface LevelData {
   gameState: GameState;
   levelConfig: LevelConfig;
   story: string;
 }
 
-// New function to get human-readable and fun descriptions for BonusType
 export function getBonusDescription(bonusType: BonusType): string {
   switch (bonusType) {
     case BonusType.CapOfInvisibility:
@@ -142,4 +163,21 @@ export function getBonusDescription(bonusType: BonusType): string {
     default:
       return 'Mystery power activated!';
   }
+}
+
+// New interfaces for animation effects
+export interface ScreenShake {
+  intensity: number;
+  duration: number;
+}
+
+export interface ElectricalDischarge {
+  position: Position;
+  intensity: number;
+  duration: number;
+}
+
+export interface EntityAnimationState {
+  bounceOffset: number;
+  tentacleAnimationFactor: number;
 }

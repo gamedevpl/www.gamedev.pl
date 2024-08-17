@@ -36,6 +36,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
     if (!gameState || !levelConfig) return;
 
     const canvas = canvasRef.current;
+    let animationFrameId: number;
     if (canvas) {
       // Adjust canvas size for isometric view
       const isometricWidth = (levelConfig.gridSize.width + levelConfig.gridSize.height) * CELL_SIZE;
@@ -45,9 +46,21 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
 
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
+        const animate = () => {
+          // Draw the game state
+          drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
+
+          animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
       }
     }
+
+    return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
   }, [gameState, levelConfig, showStory]);
 
   useEffect(() => {

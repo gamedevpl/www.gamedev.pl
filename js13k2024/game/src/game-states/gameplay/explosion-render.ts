@@ -5,7 +5,11 @@ export const drawExplosions = (ctx: CanvasRenderingContext2D, explosions: Explos
   ctx.save();
   ctx.globalAlpha = 0.7;
 
-  for (const { position } of explosions) {
+  for (const { position, startTime, duration } of explosions) {
+    if (Date.now() - startTime > duration) {
+      continue;
+    }
+
     const center = toIsometric(position.x + 0.5, position.y + 0.5);
     const leftTop = toIsometric(position.x - 1, position.y - 1);
     const topRight = toIsometric(position.x + 1 * 2, position.y - 1);
