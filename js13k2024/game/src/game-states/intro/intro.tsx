@@ -34,9 +34,9 @@ export const Intro: FunctionComponent<IntroProps> = ({ onStart, onInstructions }
             <button onClick={onInstructions}>Instructions</button>
           </div>
           <p className="intro-tip">Press right arrow to start</p>
-          <p className="author-name">Created by Grzegorz Tańczyk</p>
         </div>
       </div>
+      <p className="author-name">Created by <a href="https://x.com/gtanczyk">Grzegorz Tańczyk</a> | <a href="https://github.com/gamedevpl/www.gamedev.pl/tree/master/js13k2024">Source code (GitHub)</a></p>
     </div>
   );
 };

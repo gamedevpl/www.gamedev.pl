@@ -136,6 +136,10 @@ button:hover {
   opacity: 0.7;
 }
 
+.author-name a {
+  color: white;
+}
+
 /* Instructions screen styles */
 .instructions {
   background-color: var(--intro-background);
