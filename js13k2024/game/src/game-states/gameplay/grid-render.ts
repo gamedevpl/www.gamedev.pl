@@ -20,7 +20,7 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) 
   ctx.fill();
 
   // Draw right side
-  ctx.fillStyle = '#8d6e63'; // Updated to match the darker brown color in the image
+  ctx.fillStyle = '#5d4037'; // Updated to match the darkest brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -30,7 +30,7 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) 
   ctx.fill();
 
   // Draw front side
-  ctx.fillStyle = '#5d4037'; // Updated to match the darkest brown color in the image
+  ctx.fillStyle = '#8d6e63'; // Updated to match the darker brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -39,6 +39,7 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) 
   ctx.closePath();
   ctx.fill();
 };
+
 export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
   ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
   ctx.lineWidth = 1;
