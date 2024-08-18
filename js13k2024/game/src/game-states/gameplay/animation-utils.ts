@@ -89,15 +89,16 @@ export const calculateElectricalDischarge = (
   return discharges;
 };
 
+export const OBSTACLE_DESTRUCTION_DURATION = 500; // 0.5 seconds
+
 // Updated function for obstacle raise/collapse animation
 export const calculateObstacleHeight = (creationTime: number, isRaising: boolean, isDestroying: boolean): number => {
-  const animationDuration = 500; // 0.5 seconds
-  const progress = Math.min((Date.now() - creationTime) / animationDuration, 1);
-  
+  const progress = Math.min((Date.now() - creationTime) / OBSTACLE_DESTRUCTION_DURATION, 1);
+
   if (isDestroying) {
     return 1 - progress; // Reverse animation for destruction
   }
-  
+
   return isRaising ? progress : 1;
 };
 

@@ -7,7 +7,7 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
-import { MOVE_ANIMATION_DURATION } from './animation-utils';
+import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
 
 const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
@@ -32,14 +32,18 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   const oldPosition = newGameState.player.position;
   const newPosition = getNewPosition(newGameState.player.position, direction);
 
+  newGameState.obstacles = gameState.obstacles.filter(
+    (obstacle) => !obstacle.isDestroying || Date.now() - obstacle.creationTime < OBSTACLE_DESTRUCTION_DURATION,
+  );
+
   if (
     gameState.crusherActive &&
     gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
   ) {
-    newGameState.obstacles = gameState.obstacles.map(obstacle => 
-      isPositionEqual(newPosition, obstacle.position) 
-        ? { ...obstacle, isDestroying: true, creationTime: Date.now() } 
-        : obstacle
+    newGameState.obstacles = gameState.obstacles.map((obstacle) =>
+      isPositionEqual(newPosition, obstacle.position)
+        ? { ...obstacle, isDestroying: true, creationTime: Date.now() }
+        : obstacle,
     );
     soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
   }
@@ -115,10 +119,10 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       (monster) => !newGameState.explosions.some((explosion) => checkTimeBombExplosion(monster, explosion)),
     );
     // Explosions destroy obstacles
-    newGameState.obstacles = newGameState.obstacles.map(obstacle => 
+    newGameState.obstacles = newGameState.obstacles.map((obstacle) =>
       isInExplosionRange(obstacle.position, newGameState.explosions)
         ? { ...obstacle, isDestroying: true, creationTime: Date.now() }
-        : obstacle
+        : obstacle,
     );
     // Explosions destroy bonuses
     newGameState.bonuses = newGameState.bonuses.filter(
@@ -187,7 +191,7 @@ export const updateGameState = (gameState: GameState): GameState => {
   });
 
   // Remove fully destroyed obstacles
-  newGameState.obstacles = newGameState.obstacles.filter(obstacle => {
+  newGameState.obstacles = newGameState.obstacles.filter((obstacle) => {
     if (obstacle.isDestroying) {
       const elapsedTime = Date.now() - obstacle.creationTime;
       return elapsedTime < MOVE_ANIMATION_DURATION; // Keep the obstacle if it's still being destroyed
@@ -242,7 +246,7 @@ const isValidMove = (
     newPosition.y < gridSize.height &&
     !isPositionOccupied(
       newPosition,
-      gameState.obstacles.filter(obstacle => !obstacle.isDestroying).map(({ position }) => position),
+      gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
     )
   );
 };
@@ -291,7 +295,7 @@ const spawnMonster = (gameState: GameState, gridSize: { width: number; height: n
     isPositionEqual(monsterPosition, gameState.goal) ||
     isPositionOccupied(
       monsterPosition,
-      gameState.obstacles.filter(obstacle => !obstacle.isDestroying).map(({ position }) => position),
+      gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
     ) ||
     isPositionOccupied(
       monsterPosition,

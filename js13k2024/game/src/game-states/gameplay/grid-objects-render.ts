@@ -30,7 +30,7 @@ export const drawGoal = (ctx: CanvasRenderingContext2D, position: Position, cell
 };
 
 export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle[], cellSize: number) => {
-  const shadowOffset = cellSize * 0.1; // Offset for the shadow
+  // const shadowOffset = cellSize * 0.1; // Offset for the shadow
 
   obstacles.forEach((obstacle) => {
     const { position, creationTime, isRaising, isDestroying } = obstacle;
@@ -39,18 +39,30 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle
     // Calculate the current height of the obstacle based on animation
     const height = calculateObstacleHeight(creationTime, isRaising, isDestroying) * cellSize * 0.8;
 
-    // Draw rectangular shadow
+    if (height === 0) {
+      // obstacle is not visible anymore, also don't render the shadow
+      return;
+    }
+
+    // Calculate shadow height based on obstacle height
+    const shadowHeight = (height / cellSize) * 0.2;
+    const { x: shadowIsoX, y: shadowIsoY } = toIsometric(position.x, position.y + 1);
+    const { x: shadowIsoX1, y: shadowIsoY1 } = toIsometric(position.x + 1, position.y + 1);
+    const { x: shadowIsoX2, y: shadowIsoY2 } = toIsometric(position.x + 1, position.y + 1 + shadowHeight);
+    const { x: shadowIsoX3, y: shadowIsoY3 } = toIsometric(position.x, position.y + 1 + shadowHeight);
+
+    // Draw rectangular shadow (now in south direction)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Slightly transparent black
     ctx.beginPath();
-    ctx.moveTo(isoX - TILE_WIDTH / 2 + shadowOffset, isoY + TILE_HEIGHT / 2 + shadowOffset);
-    ctx.lineTo(isoX + shadowOffset, isoY + TILE_HEIGHT + shadowOffset);
-    ctx.lineTo(isoX + TILE_WIDTH / 2 + shadowOffset, isoY + TILE_HEIGHT / 2 + shadowOffset);
-    ctx.lineTo(isoX + shadowOffset, isoY + shadowOffset);
+    ctx.moveTo(shadowIsoX, shadowIsoY);
+    ctx.lineTo(shadowIsoX1, shadowIsoY1);
+    ctx.lineTo(shadowIsoX2, shadowIsoY2);
+    ctx.lineTo(shadowIsoX3, shadowIsoY3);
     ctx.closePath();
     ctx.fill();
 
     // Calculate opacity based on destruction state
-    const opacity = isDestroying ? height : 1;
+    const opacity = isDestroying ? height / (cellSize * 0.8) : 1;
 
     // Draw top face
     ctx.fillStyle = `rgba(142, 36, 170, ${opacity})`; // Updated to match the bright purple color with opacity
