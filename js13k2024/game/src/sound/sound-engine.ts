@@ -2,6 +2,7 @@
 
 class SoundEngine {
   private audioContext: AudioContext;
+  private masterVolume: number = 0.025; // Default low volume
 
   constructor() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,8 +20,9 @@ class SoundEngine {
 
   private createGain(attackTime: number, releaseTime: number, peakValue: number = 1): GainNode {
     const gain = this.audioContext.createGain();
+    const adjustedPeakValue = peakValue * this.masterVolume;
     gain.gain.setValueAtTime(0, this.audioContext.currentTime);
-    gain.gain.linearRampToValueAtTime(peakValue, this.audioContext.currentTime + attackTime);
+    gain.gain.linearRampToValueAtTime(adjustedPeakValue, this.audioContext.currentTime + attackTime);
     gain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + attackTime + releaseTime);
     return gain;
   }
