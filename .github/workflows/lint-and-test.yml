@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v2-beta
         with:
           node-version: ${{ matrix.nodejs }}
-      - run: npm install
+      - run: npm install && npm install --prefix=../js13k2024/game/
       - run: npm run lint
       - run: npm run test
       - run: npm run build
