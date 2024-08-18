@@ -33,11 +33,11 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle
   const shadowOffset = cellSize * 0.1; // Offset for the shadow
 
   obstacles.forEach((obstacle) => {
-    const { position, creationTime, isRaising } = obstacle;
+    const { position, creationTime, isRaising, isDestroying } = obstacle;
     const { x: isoX, y: isoY } = toIsometric(position.x, position.y);
 
     // Calculate the current height of the obstacle based on animation
-    const height = calculateObstacleHeight(creationTime, isRaising) * cellSize * 0.8;
+    const height = calculateObstacleHeight(creationTime, isRaising, isDestroying) * cellSize * 0.8;
 
     // Draw rectangular shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Slightly transparent black
@@ -49,8 +49,11 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle
     ctx.closePath();
     ctx.fill();
 
+    // Calculate opacity based on destruction state
+    const opacity = isDestroying ? height : 1;
+
     // Draw top face
-    ctx.fillStyle = '#8e24aa'; // Updated to match the bright purple color in the image
+    ctx.fillStyle = `rgba(142, 36, 170, ${opacity})`; // Updated to match the bright purple color with opacity
     ctx.beginPath();
     ctx.moveTo(isoX, isoY - height);
     ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
@@ -60,7 +63,7 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle
     ctx.fill();
 
     // Draw right face
-    ctx.fillStyle = '#6a1b9a'; // Updated to a slightly darker purple for the right face
+    ctx.fillStyle = `rgba(106, 27, 154, ${opacity})`; // Updated to a slightly darker purple for the right face with opacity
     ctx.beginPath();
     ctx.moveTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
     ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
@@ -70,7 +73,7 @@ export const drawObstacles = (ctx: CanvasRenderingContext2D, obstacles: Obstacle
     ctx.fill();
 
     // Draw left face
-    ctx.fillStyle = '#4a148c'; // Updated to the darkest purple for the left face
+    ctx.fillStyle = `rgba(74, 20, 140, ${opacity})`; // Updated to the darkest purple for the left face with opacity
     ctx.beginPath();
     ctx.moveTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - height);
     ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);

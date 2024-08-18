@@ -28,6 +28,7 @@ const createObstacle = (x: number, y: number): Obstacle => ({
   position: createPosition(x, y),
   creationTime: Date.now(),
   isRaising: false,
+  isDestroying: false,
 });
 
 const generateBaseState = (): GameState => ({
@@ -257,9 +258,11 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
     ];
     state.bonuses = [
       createBonus(2, 7, BonusType.LandMine),
+      createBonus(2, 8, BonusType.CapOfInvisibility),
       createBonus(5, 7, BonusType.Crusher),
       createBonus(8, 7, BonusType.ConfusedMonsters),
-      createBonus(11, 7, BonusType.Builder),
+      createBonus(1, 6, BonusType.Builder),
+      createBonus(2, 6, BonusType.TimeBomb),
     ];
     for (let i = 4; i < 14; i++) {
       if (i !== 5 && i !== 8 && i !== 11) {
@@ -281,7 +284,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
     state.player = createPlayer(0, 8);
     state.goal = createPosition(15, 8);
     state.monsters = [
-      createMonster(3, 8),
+      createMonster(5, 8),
       createMonster(6, 8),
       createMonster(9, 8),
       createMonster(12, 8),
@@ -294,8 +297,8 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
       createBonus(2, 8, BonusType.CapOfInvisibility),
       createBonus(5, 8, BonusType.TimeBomb),
       createBonus(8, 8, BonusType.LandMine),
-      createBonus(11, 8, BonusType.Crusher),
-      createBonus(14, 8, BonusType.ConfusedMonsters),
+      createBonus(11, 1, BonusType.Crusher),
+      createBonus(14, 14, BonusType.ConfusedMonsters),
     ];
     for (let i = 4; i < 15; i++) {
       if (i !== 5 && i !== 8 && i !== 11 && i !== 14) {
@@ -309,6 +312,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
         state.obstacles.push(createObstacle(9, i));
       }
     }
+    state.obstacles.push(createObstacle(14, 8));
     return [state, config, config.levelStory];
   },
 };

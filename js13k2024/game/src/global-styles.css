@@ -209,6 +209,27 @@ canvas {
   color: var(--highlight-color);
 }
 
+/* Game Complete styles */
+.game-complete {
+  background-color: var(--intro-background);
+  height: 80vh;
+}
+
+.game-complete-subtitle {
+  font-size: 36px;
+  color: var(--highlight-color);
+  margin-bottom: 20px;
+}
+
+.game-complete-stats {
+  font-size: 24px;
+  margin-bottom: 30px;
+}
+
+.game-complete-stats p {
+  margin: 10px 0;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .game-title {
@@ -220,7 +241,8 @@ canvas {
     font-size: 14px;
   }
 
-  .intro {
+  .intro,
+  .game-complete {
     width: 90vw;
     height: 90vh;
   }
@@ -244,8 +266,13 @@ canvas {
   }
 
   .game-over-title,
-  .level-complete-title {
+  .level-complete-title,
+  .game-complete-subtitle {
     font-size: 28px;
+  }
+
+  .game-complete-stats {
+    font-size: 20px;
   }
 }
 

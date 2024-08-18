@@ -19,7 +19,7 @@ enum GameState {
 
 function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.Intro);
-  const [level, setLevel] = useState(1);
+  const [level, setLevel] = useState(parseInt(document.location.hash.split('level')[1] ?? '1'));
   const [score, setScore] = useState(0);
   const [steps, setSteps] = useState(0);
 
@@ -78,9 +78,11 @@ function App() {
           nextLevel();
         } else if (gameState === GameState.GameOver) {
           restartLevel();
+        } else if (gameState === GameState.GameComplete) {
+          restartGame();
         }
       } else if (e.key === 'Escape') {
-        if (gameState === GameState.Instructions || gameState === GameState.GameOver) {
+        if (gameState === GameState.Instructions || gameState === GameState.GameOver || gameState === GameState.GameComplete) {
           quitGame();
         }
       }
@@ -132,13 +134,18 @@ interface GameCompleteProps {
 
 function GameComplete({ score, steps, onPlayAgain, onQuit }: GameCompleteProps) {
   return (
-    <div className="game-complete">
-      <h1>Congratulations!</h1>
-      <p>You've completed all 13 levels!</p>
-      <p>Final Score: {score}</p>
-      <p>Total Steps: {steps}</p>
-      <button onClick={onPlayAgain}>Play Again</button>
-      <button onClick={onQuit}>Quit</button>
+    <div className="game-complete intro">
+      <h1 className="game-title">Monster Steps</h1>
+      <h2 className="game-complete-subtitle">Congratulations!</h2>
+      <div className="game-complete-stats">
+        <p>Final Score: {score}</p>
+        <p>Total Steps: {steps}</p>
+      </div>
+      <div className="intro-buttons">
+        <button onClick={onPlayAgain}>Play Again</button>
+        <button onClick={onQuit}>Quit</button>
+      </div>
+      <p className="intro-tip">Press right arrow to play again</p>
     </div>
   );
 }

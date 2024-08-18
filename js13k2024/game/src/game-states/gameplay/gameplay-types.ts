@@ -38,6 +38,7 @@ export interface Obstacle {
   position: Position;
   creationTime: number; // New property for creation/destruction animation
   isRaising: boolean; // New property to determine if the obstacle is raising or collapsing
+  isDestroying: boolean; // New property to determine if the obstacle is being destroyed
 }
 
 export interface GameState {
