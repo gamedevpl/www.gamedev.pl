@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v2-beta
         with:
           node-version: '20'
-      - run: npm install && npm install --prefix=../js13k2024/game/
+      - run: npm install
       - run: npm run build
 
       - name: Deploy website
