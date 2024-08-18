@@ -11,6 +11,9 @@
 # production
 /build
 
+# symlink contents
+/src/games/monster-steps/*
+
 # misc
 .DS_Store
 .env.local
