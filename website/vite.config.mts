@@ -8,6 +8,9 @@ export default defineConfig({
   build: {
     outDir: 'build',
   },
+  resolve: {
+    preserveSymlinks: true
+  },
   plugins: [
     react(),
     checker({ typescript: true }),
