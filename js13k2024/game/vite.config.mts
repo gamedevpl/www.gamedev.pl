@@ -1,14 +1,11 @@
-import { defineConfig } from "vite";
-import preact from "@preact/preset-vite";
-import checker from "vite-plugin-checker";
+import { defineConfig } from 'vite';
+import preact from '@preact/preset-vite';
+import checker from 'vite-plugin-checker';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   build: {
-    outDir: "dist",
+    outDir: 'dist',
   },
-  plugins: [
-    preact(),
-    checker({ typescript: true }),
-  ],
+  plugins: [preact(), checker({ typescript: true })],
 });

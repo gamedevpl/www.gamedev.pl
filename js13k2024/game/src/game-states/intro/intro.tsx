@@ -1,4 +1,4 @@
-import { FunctionComponent, useEffect } from 'preact/compat';
+import { FunctionComponent, useEffect } from 'react';
 import { GamePreview } from './game-preview';
 
 interface IntroProps {

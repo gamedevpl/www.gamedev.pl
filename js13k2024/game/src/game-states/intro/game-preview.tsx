@@ -1,4 +1,4 @@
-import { FunctionComponent, useEffect, useRef } from 'preact/compat';
+import { FunctionComponent, useEffect, useRef } from 'react';
 import { drawGameState } from '../gameplay/game-render';
 import { drawGrid } from '../gameplay/grid-render';
 import { GameState, GridSize, BonusType } from '../gameplay/gameplay-types';

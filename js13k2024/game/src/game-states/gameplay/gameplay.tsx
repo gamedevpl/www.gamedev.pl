@@ -1,5 +1,4 @@
-import { FunctionComponent } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { FunctionComponent, useState, useRef, useEffect } from 'react';
 import { GameState } from './gameplay-types';
 import { drawGameState, drawMoveArrows } from './game-render';
 import { doGameUpdate, getValidMoves, handleKeyPress } from './game-logic';

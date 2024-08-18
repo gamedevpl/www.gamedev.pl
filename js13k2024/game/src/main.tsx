@@ -1,5 +1,4 @@
-import { render } from 'preact';
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'react';
 import { Intro } from './game-states/intro/intro';
 import { Instructions } from './game-states/instructions/instructions';
 import { Gameplay } from './game-states/gameplay/gameplay';
@@ -17,7 +16,7 @@ enum GameState {
   GameComplete,
 }
 
-function App() {
+export function MonsterStepsApp() {
   const [gameState, setGameState] = useState<GameState>(GameState.Intro);
   const [level, setLevel] = useState(parseInt(document.location.hash.split('level')[1] ?? '1'));
   const [score, setScore] = useState(0);
@@ -82,7 +81,11 @@ function App() {
           restartGame();
         }
       } else if (e.key === 'Escape') {
-        if (gameState === GameState.Instructions || gameState === GameState.GameOver || gameState === GameState.GameComplete) {
+        if (
+          gameState === GameState.Instructions ||
+          gameState === GameState.GameOver ||
+          gameState === GameState.GameComplete
+        ) {
           quitGame();
         }
       }
@@ -121,8 +124,6 @@ function App() {
     </div>
   );
 }
-
-render(<App />, document.body);
 
 // GameComplete component
 interface GameCompleteProps {

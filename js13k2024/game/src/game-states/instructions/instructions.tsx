@@ -1,4 +1,4 @@
-import { FunctionComponent, useEffect } from "preact/compat";
+import { FunctionComponent, useEffect } from 'react';
 
 interface InstructionsProps {
   onBack: () => void;
@@ -27,7 +27,8 @@ export const Instructions: FunctionComponent<InstructionsProps> = ({ onBack }) =
         <li>Avoid obstacles and monsters</li>
         <li>Reach the goal (green square) to complete the level</li>
         <li>New monsters appear every 13 steps</li>
-        <li>Collect bonuses for special abilities:
+        <li>
+          Collect bonuses for special abilities:
           <ul>
             <li>Cap of Invisibility: Temporary invisibility</li>
             <li>Confused Monsters: Monsters move randomly</li>
