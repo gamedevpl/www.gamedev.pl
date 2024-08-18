@@ -1,0 +1,3 @@
+Your task is to read and analyze game design from game/design/ directory, and then generage high quality images that will show me a sketch of each designed game states. Save those images to game/design/game-states/ directory. I want to see how each game state will potentially look like. This will help me during implementation.
+
+When it comes to graphic style I would probably prefer a pixel art retro style.
