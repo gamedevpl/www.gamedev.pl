@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nodejs: [20]
+        nodejs: [18]
 
     steps:
       - uses: actions/checkout@v2
