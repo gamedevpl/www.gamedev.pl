@@ -1,6 +1,6 @@
 import { Position, Bonus, BonusType } from './gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
-import { drawShadow } from './game-render';
+import { drawShadow } from './grid-render';
 
 const BONUS_HEIGHT = TILE_HEIGHT * 0.4;
 

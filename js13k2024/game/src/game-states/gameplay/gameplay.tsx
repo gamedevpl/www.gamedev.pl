@@ -1,6 +1,7 @@
 import { FunctionComponent, useState, useRef, useEffect } from 'react';
 import { GameState } from './gameplay-types';
-import { drawGameState, drawMoveArrows } from './game-render';
+import { drawGameState } from './game-render';
+import { drawMoveArrows } from './move-arrows-render';
 import { doGameUpdate, getValidMoves, handleKeyPress } from './game-logic';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
