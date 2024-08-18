@@ -1,12 +1,12 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import checker from "vite-plugin-checker";
-import { viteStaticCopy } from "vite-plugin-static-copy";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import checker from 'vite-plugin-checker';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   build: {
-    outDir: "build",
+    outDir: 'build',
   },
   plugins: [
     react(),
@@ -14,9 +14,13 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: "build/index.html",
-          dest: "games/nukes",
-        }
+          src: 'build/index.html',
+          dest: 'games/nukes',
+        },
+        {
+          src: 'build/index.html',
+          dest: 'games/monster-steps',
+        },
       ],
     }),
   ],
