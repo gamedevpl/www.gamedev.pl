@@ -79,11 +79,26 @@ button:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  height: 80vh;
+  justify-content: center;
   width: 80vw;
   max-width: 600px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.game-intro-responsive {
+  display: flex;
+  flex-direction: row;
+}
+
+@media (max-width: 600px) {
+  .game-intro-responsive {
+    flex-direction: column;
+  }
+}
+
+.game-preview-container canvas {
+  max-width: 90%;
+  max-height: 90%;
 }
 
 .game-title {
@@ -285,5 +300,9 @@ canvas {
 
   .intro-buttons button {
     margin: 15px 0;
+  }
+
+  .intro-tip {
+    display: none;
   }
 }

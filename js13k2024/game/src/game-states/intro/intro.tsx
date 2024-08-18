@@ -1,4 +1,5 @@
-import { FunctionComponent, useEffect } from "preact/compat";
+import { FunctionComponent, useEffect } from 'preact/compat';
+import { GamePreview } from './game-preview';
 
 interface IntroProps {
   onStart: () => void;
@@ -23,12 +24,19 @@ export const Intro: FunctionComponent<IntroProps> = ({ onStart, onInstructions }
   return (
     <div className="intro">
       <h1 className="game-title">Monster Steps</h1>
-      <div className="intro-buttons">
-        <button onClick={onStart}>Start Game</button>
-        <button onClick={onInstructions}>Instructions</button>
+      <div className="game-intro-responsive">
+        <div className="game-preview-container">
+          <GamePreview />
+        </div>
+        <div className="game-intro-column">
+          <div className="intro-buttons">
+            <button onClick={onStart}>Start Game</button>
+            <button onClick={onInstructions}>Instructions</button>
+          </div>
+          <p className="intro-tip">Press right arrow to start</p>
+          <p className="author-name">Created by Grzegorz Tańczyk</p>
+        </div>
       </div>
-      <p className="intro-tip">Press right arrow to start</p>
-      <p className="author-name">Created by Grzegorz Tańczyk</p>
     </div>
   );
 };
