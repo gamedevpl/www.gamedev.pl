@@ -13,6 +13,7 @@
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
     "@types/node": "^18.15.11",
+    "genaicode": "^0.0.35",
     "preact-iso": "^2.6.3",
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
