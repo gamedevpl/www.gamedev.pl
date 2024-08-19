@@ -56,6 +56,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
         }
       }, ANIMATION_DURATION);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.gameEndingState]);
 
   useEffect(() => {
@@ -140,6 +141,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, levelConfig, showStory, onGameOver, onLevelComplete, updateScore, updateSteps]);
 
   if (showStory) {

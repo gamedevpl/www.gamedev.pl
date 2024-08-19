@@ -12,6 +12,7 @@ export const drawPlayer = (
 ) => {
   const { position, previousPosition, moveTimestamp, isVanishing, isVictorious } = player;
   const interpolatedPosition = interpolatePosition(position, previousPosition, moveTimestamp);
+  // eslint-disable-next-line prefer-const
   let { x: isoX, y: isoY } = toIsometric(interpolatedPosition.x, interpolatedPosition.y);
 
   // Apply victory jump if player is victorious
