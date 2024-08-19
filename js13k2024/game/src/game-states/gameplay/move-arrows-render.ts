@@ -1,4 +1,4 @@
-import { Position, Direction } from './gameplay-types';
+import { Position, Direction, GridSize } from './gameplay-types';
 import { toIsometric } from './isometric-utils';
 import { getNewPosition, getOrthogonalDirection } from './move-utils';
 
@@ -7,14 +7,14 @@ import { getNewPosition, getOrthogonalDirection } from './move-utils';
 export const drawMoveArrows = (
   ctx: CanvasRenderingContext2D,
   validMoves: { position: Position; direction: Direction }[],
-  playerPosition: Position,
+  gridSize: GridSize,
   cellSize: number,
 ) => {
   ctx.save();
   ctx.translate(ctx.canvas.width / 2, 100); // Center the isometric view
 
-  validMoves.forEach(({ position: move, direction }) => {
-    const shape = getArrowShape(playerPosition, direction, move, cellSize);
+  validMoves.forEach(({ direction }) => {
+    const shape = getArrowShape(gridSize, cellSize, direction);
 
     // Draw the curved arrow
     ctx.beginPath();
@@ -28,20 +28,22 @@ export const drawMoveArrows = (
   ctx.restore();
 };
 
-export function getArrowShape(playerPosition: Position, direction: Direction, move: Position, cellSize: number) {
-  const c = { x: playerPosition.x + 0.5, y: playerPosition.y + 0.5 };
-  const l = getNewPosition(c, getOrthogonalDirection(direction, -1));
-  const r = getNewPosition(c, getOrthogonalDirection(direction, 1));
+export function getArrowShape(gridSize: GridSize, cellSize: number, direction: Direction) {
+  const arrowSize = gridSize.width / 3;
+  const c = getNewPosition({ x: gridSize.width / 2, y: gridSize.width / 2 }, direction, gridSize.width / 1.5);
+  const l = getNewPosition(c, getOrthogonalDirection(direction, -1), arrowSize);
+  const r = getNewPosition(c, getOrthogonalDirection(direction, 1), arrowSize);
   const cIso = toIsometric(c.x, c.y);
   const startL = toIsometric(l.x, l.y);
   const startR = toIsometric(r.x, r.y);
-  const end = toIsometric(move.x + 0.5, move.y + 0.5);
-  const angle = Math.atan2(end.y - cIso.y, end.x - cIso.x);
+  const end = getNewPosition(c, direction, arrowSize);
+  const endIso = toIsometric(end.x, end.y);
+  const angle = Math.atan2(endIso.y - cIso.y, endIso.x - cIso.x);
   const dx = Math.cos(angle) * cellSize;
   const dy = Math.sin(angle) * cellSize;
 
   return [
-    { x: end.x + dx, y: end.y + dy },
+    { x: endIso.x + dx, y: endIso.y + dy },
     { x: startL.x + dx, y: startL.y + dy },
     { x: startR.x + dx, y: startR.y + dy },
   ];

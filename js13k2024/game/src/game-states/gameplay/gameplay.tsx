@@ -79,7 +79,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
 
           // Draw move arrows only if the game is not ending
           if (!isGameEnding(gameState)) {
-            drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), gameState.player.position, CELL_SIZE);
+            drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), levelConfig.gridSize, CELL_SIZE);
           }
 
           animationFrameId = requestAnimationFrame(animate);

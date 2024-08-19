@@ -25,16 +25,16 @@ export const getDirectionFromKey = (key: string): Direction | null => {
   }
 };
 
-export const getNewPosition = (currentPosition: Position, direction: Direction): Position => {
+export const getNewPosition = (currentPosition: Position, direction: Direction, movement = 1): Position => {
   switch (direction) {
     case Direction.Up:
-      return { ...currentPosition, y: currentPosition.y - 1 };
+      return { ...currentPosition, y: currentPosition.y - movement };
     case Direction.Down:
-      return { ...currentPosition, y: currentPosition.y + 1 };
+      return { ...currentPosition, y: currentPosition.y + movement };
     case Direction.Left:
-      return { ...currentPosition, x: currentPosition.x - 1 };
+      return { ...currentPosition, x: currentPosition.x - movement };
     case Direction.Right:
-      return { ...currentPosition, x: currentPosition.x + 1 };
+      return { ...currentPosition, x: currentPosition.x + movement };
   }
 };
 
@@ -89,7 +89,7 @@ export function getMoveFromClick(
   cellSize: number,
 ) {
   return getValidMoves(gameState, levelConfig).find((move) =>
-    isPointInShape(canvasX, canvasY, getArrowShape(gameState.player.position, move.direction, move.position, cellSize)),
+    isPointInShape(canvasX, canvasY, getArrowShape(levelConfig.gridSize, cellSize, move.direction)),
   );
 }
 
