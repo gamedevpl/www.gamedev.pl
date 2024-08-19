@@ -17,7 +17,6 @@ interface GameplayProps {
   updateSteps: (newSteps: number) => void;
 }
 
-const CELL_SIZE = 40;
 const MAX_LEVEL = 13;
 const ANIMATION_DURATION = 2000; // 2 seconds for ending animations
 
@@ -66,8 +65,8 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
     let animationFrameId: number;
     if (canvas) {
       // Adjust canvas size for isometric view
-      const isometricWidth = (levelConfig.gridSize.width + levelConfig.gridSize.height) * CELL_SIZE;
-      const isometricHeight = ((levelConfig.gridSize.width + levelConfig.gridSize.height) * CELL_SIZE) / 2;
+      const isometricWidth = (levelConfig.gridSize + levelConfig.gridSize) * levelConfig.cellSize;
+      const isometricHeight = ((levelConfig.gridSize + levelConfig.gridSize) * levelConfig.cellSize) / 2;
       canvas.width = isometricWidth;
       canvas.height = isometricHeight + 100; // Add extra space for the platform
 
@@ -75,11 +74,11 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       if (ctx) {
         const animate = () => {
           // Draw the game state
-          drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
+          drawGameState(ctx, gameState, levelConfig);
 
           // Draw move arrows only if the game is not ending
           if (!isGameEnding(gameState)) {
-            drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), levelConfig.gridSize, CELL_SIZE);
+            drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), levelConfig.gridSize, levelConfig.cellSize);
           }
 
           animationFrameId = requestAnimationFrame(animate);
@@ -127,7 +126,6 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
         (e.clientY - rect.top) * (canvas.height / rect.height) - 100,
         gameState,
         levelConfig,
-        CELL_SIZE,
       );
 
       if (clickedMove) {

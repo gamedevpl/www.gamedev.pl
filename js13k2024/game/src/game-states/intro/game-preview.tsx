@@ -1,12 +1,12 @@
 import { FunctionComponent, useEffect, useRef } from 'react';
 import { drawGameState } from '../gameplay/game-render';
 import { drawGrid } from '../gameplay/grid-render';
-import { GameState, GridSize, BonusType } from '../gameplay/gameplay-types';
+import { GameState, BonusType } from '../gameplay/gameplay-types';
 
 const PREVIEW_WIDTH = 300;
 const PREVIEW_HEIGHT = 200;
-const GRID_SIZE: GridSize = { width: 5, height: 5 };
-const CELL_SIZE = Math.min(PREVIEW_WIDTH / GRID_SIZE.width, PREVIEW_HEIGHT / GRID_SIZE.height) / 2;
+const GRID_SIZE = 5;
+const CELL_SIZE = Math.min(PREVIEW_WIDTH / GRID_SIZE, PREVIEW_HEIGHT / GRID_SIZE) / 2;
 
 const createPreviewGameState = (): GameState => ({
   player: {
@@ -74,8 +74,16 @@ export const GamePreview: FunctionComponent = () => {
       ctx.scale(0.8, 0.8);
       ctx.translate(PREVIEW_WIDTH * 0.1, PREVIEW_HEIGHT * 0.1);
 
-      drawGrid(ctx, GRID_SIZE.width, GRID_SIZE.height);
-      drawGameState(ctx, gameStateRef.current, GRID_SIZE, CELL_SIZE);
+      drawGrid(ctx, GRID_SIZE);
+      drawGameState(ctx, gameStateRef.current, {
+        gridSize: GRID_SIZE,
+        cellSize: CELL_SIZE,
+        initialMonsterCount: 0,
+        obstacleCount: 0,
+        initialBonusCount: 0,
+        levelName: 'Preview',
+        levelStory: 'Preview',
+      });
 
       ctx.restore();
 
@@ -85,8 +93,8 @@ export const GamePreview: FunctionComponent = () => {
         const newY = monster.position.y + (Math.random() - 0.5) * 0.1;
         monster.previousPosition = { ...monster.position };
         monster.position = {
-          x: Math.max(0, Math.min(GRID_SIZE.width - 1, newX)),
-          y: Math.max(0, Math.min(GRID_SIZE.height - 1, newY)),
+          x: Math.max(0, Math.min(GRID_SIZE - 1, newX)),
+          y: Math.max(0, Math.min(GRID_SIZE - 1, newY)),
         };
         monster.moveTimestamp = Date.now();
       });

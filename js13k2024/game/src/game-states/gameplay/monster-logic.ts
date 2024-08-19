@@ -1,9 +1,9 @@
-import { Position, Monster, GridSize, PathfindingNode, Explosion, Obstacle } from './gameplay-types';
+import { Position, Monster, PathfindingNode, Explosion, Obstacle } from './gameplay-types';
 
 export const moveMonsters = (
   monsters: Monster[],
   playerPosition: Position,
-  gridSize: GridSize,
+  gridSize: number,
   obstacles: Obstacle[],
   isPlayerInvisible: boolean,
   isConfused: boolean,
@@ -41,7 +41,7 @@ export const moveMonsters = (
 const getConfusedPosition = (
   currentPosition: Position,
   intendedPosition: Position,
-  gridSize: GridSize,
+  gridSize: number,
   obstacles: Obstacle[],
   monsters: Monster[],
 ): Position => {
@@ -50,8 +50,8 @@ const getConfusedPosition = (
 
   // Calculate the opposite direction
   const oppositePosition: Position = {
-    x: Math.max(0, Math.min(gridSize.width - 1, currentPosition.x - dx)),
-    y: Math.max(0, Math.min(gridSize.height - 1, currentPosition.y - dy)),
+    x: Math.max(0, Math.min(gridSize - 1, currentPosition.x - dx)),
+    y: Math.max(0, Math.min(gridSize - 1, currentPosition.y - dy)),
   };
 
   // Check if the opposite position is valid (not occupied by obstacles or other monsters)
@@ -74,7 +74,7 @@ const getConfusedPosition = (
 
 const getRandomAdjacentPosition = (
   position: Position,
-  gridSize: GridSize,
+  gridSize: number,
   obstacles: Obstacle[],
   monsters: Monster[],
 ): Position[] => {
@@ -86,9 +86,9 @@ const getRandomAdjacentPosition = (
   ].filter(
     (pos) =>
       pos.x >= 0 &&
-      pos.x < gridSize.width &&
+      pos.x < gridSize &&
       pos.y >= 0 &&
-      pos.y < gridSize.height &&
+      pos.y < gridSize &&
       !isPositionOccupied(
         pos,
         obstacles.map(({ position }) => position),
@@ -110,7 +110,7 @@ const getRandomAdjacentPosition = (
 const findPath = (
   start: Position,
   goal: Position,
-  gridSize: GridSize,
+  gridSize: number,
   obstacles: Obstacle[],
   monsters: Monster[],
 ): Position[] => {
@@ -190,7 +190,7 @@ const reconstructPath = (node: PathfindingNode): Position[] => {
   return path;
 };
 
-const getNeighbors = (position: Position, gridSize: GridSize): Position[] => {
+const getNeighbors = (position: Position, gridSize: number): Position[] => {
   const neighbors: Position[] = [
     { x: position.x - 1, y: position.y },
     { x: position.x + 1, y: position.y },
@@ -198,7 +198,7 @@ const getNeighbors = (position: Position, gridSize: GridSize): Position[] => {
     { x: position.x, y: position.y + 1 },
   ];
 
-  return neighbors.filter((pos) => pos.x >= 0 && pos.x < gridSize.width && pos.y >= 0 && pos.y < gridSize.height);
+  return neighbors.filter((pos) => pos.x >= 0 && pos.x < gridSize && pos.y >= 0 && pos.y < gridSize);
 };
 
 const manhattanDistance = (pos1: Position, pos2: Position): number => {

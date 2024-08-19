@@ -50,7 +50,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
   }
 
-  if (isValidMove(newPosition, newGameState, levelConfig.gridSize)) {
+  if (isValidMove(newPosition, newGameState, levelConfig)) {
     soundEngine.playStep(); // Play step sound
     newGameState.player.position = newPosition;
     if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
@@ -78,7 +78,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
     // Spawn monster every 13th step
     if (newGameState.monsterSpawnSteps >= 13) {
-      spawnMonster(newGameState, levelConfig.gridSize);
+      spawnMonster(newGameState, levelConfig);
       newGameState.monsterSpawnSteps = 0;
       soundEngine.playMonsterSpawn();
     }
@@ -200,10 +200,10 @@ const calculateLevelScore = (gameState: GameState): number => {
   return 100 - gameState.steps + gameState.monsters.length * 10;
 };
 
-const spawnMonster = (gameState: GameState, gridSize: { width: number; height: number }) => {
+const spawnMonster = (gameState: GameState, { gridSize }: LevelConfig) => {
   let monsterPosition;
   do {
-    monsterPosition = generateRandomPosition(gridSize.width, gridSize.height);
+    monsterPosition = generateRandomPosition(gridSize, gridSize);
   } while (
     isPositionEqual(monsterPosition, gameState.player.position) ||
     isPositionEqual(monsterPosition, gameState.goal) ||

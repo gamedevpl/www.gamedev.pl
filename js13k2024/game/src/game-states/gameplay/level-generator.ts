@@ -50,8 +50,11 @@ const generateBaseState = (): GameState => ({
   gameEndingState: 'none',
 });
 
-const generateBaseConfig = (width: number, height: number, levelName: string, levelStory: string): LevelConfig => ({
-  gridSize: { width, height },
+const CELL_SIZE = 40;
+
+const generateBaseConfig = (gridSize: number, levelName: string, levelStory: string): LevelConfig => ({
+  gridSize,
+  cellSize: CELL_SIZE,
   initialMonsterCount: 0,
   obstacleCount: 0,
   initialBonusCount: 0,
@@ -62,7 +65,7 @@ const generateBaseConfig = (width: number, height: number, levelName: string, le
 const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   1: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(7, 7, 'The First Step', 'Avoid the lone monster and reach the goal in 13 steps!');
+    const config = generateBaseConfig(7, 'The First Step', 'Avoid the lone monster and reach the goal in 13 steps!');
     state.player = createPlayer(0, 3);
     state.goal = createPosition(6, 3);
     state.monsters = [createMonster(3, 0)];
@@ -71,7 +74,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   2: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(8, 8, 'Now You See Me', 'Use the invisibility cap to sneak past the monsters!');
+    const config = generateBaseConfig(8, 'Now You See Me', 'Use the invisibility cap to sneak past the monsters!');
     state.player = createPlayer(0, 4);
     state.goal = createPosition(7, 4);
     state.monsters = [createMonster(3, 2), createMonster(5, 4)];
@@ -81,7 +84,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   3: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(9, 9, 'Bridge the Gap', 'Build your way to victory!');
+    const config = generateBaseConfig(9, 'Bridge the Gap', 'Build your way to victory!');
     state.player = createPlayer(0, 4);
     state.goal = createPosition(8, 4);
     state.monsters = [createMonster(4, 4)];
@@ -98,7 +101,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   4: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(9, 9, 'Crush and Rush', 'Clear the path with your crushing power!');
+    const config = generateBaseConfig(9, 'Crush and Rush', 'Clear the path with your crushing power!');
     state.player = createPlayer(0, 4);
     state.goal = createPosition(8, 4);
     state.monsters = [createMonster(4, 4)];
@@ -119,7 +122,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   5: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(10, 10, 'Tick Tock Boom', 'Time your bomb perfectly to clear the way!');
+    const config = generateBaseConfig(10, 'Tick Tock Boom', 'Time your bomb perfectly to clear the way!');
     state.player = createPlayer(0, 5);
     state.goal = createPosition(9, 5);
     state.monsters = [createMonster(3, 5)];
@@ -147,7 +150,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   6: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(10, 10, "Minesweeper's Revenge", 'Plant a surprise for your pursuers!');
+    const config = generateBaseConfig(10, "Minesweeper's Revenge", 'Plant a surprise for your pursuers!');
     state.player = createPlayer(0, 5);
     state.goal = createPosition(9, 5);
     state.monsters = [createMonster(6, 5), createMonster(4, 8), createMonster(8, 8)];
@@ -162,7 +165,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   7: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(11, 11, "Monsters' Mayhem", 'Confuse them all and make your escape!');
+    const config = generateBaseConfig(11, "Monsters' Mayhem", 'Confuse them all and make your escape!');
     state.player = createPlayer(0, 5);
     state.goal = createPosition(10, 5);
     state.monsters = [
@@ -181,7 +184,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   8: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(12, 12, 'Tunnel Vision', 'Build a path and set a trap!');
+    const config = generateBaseConfig(12, 'Tunnel Vision', 'Build a path and set a trap!');
     state.player = createPlayer(0, 6);
     state.goal = createPosition(11, 6);
     state.monsters = [createMonster(3, 10), createMonster(8, 8)];
@@ -196,7 +199,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   9: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(12, 12, 'Ghost Bomber', 'Vanish, plant, and detonate!');
+    const config = generateBaseConfig(12, 'Ghost Bomber', 'Vanish, plant, and detonate!');
     state.player = createPlayer(0, 6);
     state.goal = createPosition(11, 6);
     state.monsters = [createMonster(3, 6), createMonster(7, 6), createMonster(10, 6)];
@@ -211,7 +214,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   10: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(13, 13, 'Crush, Confuse, Conquer', 'A symphony of chaos!');
+    const config = generateBaseConfig(13, 'Crush, Confuse, Conquer', 'A symphony of chaos!');
     state.player = createPlayer(0, 6);
     state.goal = createPosition(12, 6);
     state.monsters = [createMonster(4, 6), createMonster(8, 6), createMonster(11, 6)];
@@ -226,7 +229,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   11: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(14, 14, 'The Triple Threat', 'Build, Bomb, and Vanish!');
+    const config = generateBaseConfig(14, 'The Triple Threat', 'Build, Bomb, and Vanish!');
     state.player = createPlayer(0, 7);
     state.goal = createPosition(13, 7);
     state.monsters = [createMonster(3, 7), createMonster(6, 7), createMonster(9, 7), createMonster(12, 7)];
@@ -245,7 +248,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   12: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(15, 15, 'The Gauntlet', "Use everything you've learned!");
+    const config = generateBaseConfig(15, 'The Gauntlet', "Use everything you've learned!");
     state.player = createPlayer(0, 7);
     state.goal = createPosition(14, 7);
     state.monsters = [
@@ -280,7 +283,7 @@ const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
   },
   13: () => {
     const state = generateBaseState();
-    const config = generateBaseConfig(16, 16, 'The Final Countdown', 'Can you outsmart them all?');
+    const config = generateBaseConfig(16, 'The Final Countdown', 'Can you outsmart them all?');
     state.player = createPlayer(0, 8);
     state.goal = createPosition(15, 8);
     state.monsters = [

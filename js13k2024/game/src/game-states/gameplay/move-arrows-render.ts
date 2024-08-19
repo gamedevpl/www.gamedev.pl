@@ -1,4 +1,4 @@
-import { Position, Direction, GridSize } from './gameplay-types';
+import { Position, Direction } from './gameplay-types';
 import { toIsometric } from './isometric-utils';
 import { getNewPosition, getOrthogonalDirection } from './move-utils';
 
@@ -7,7 +7,7 @@ import { getNewPosition, getOrthogonalDirection } from './move-utils';
 export const drawMoveArrows = (
   ctx: CanvasRenderingContext2D,
   validMoves: { position: Position; direction: Direction }[],
-  gridSize: GridSize,
+  gridSize: number,
   cellSize: number,
 ) => {
   ctx.save();
@@ -28,9 +28,9 @@ export const drawMoveArrows = (
   ctx.restore();
 };
 
-export function getArrowShape(gridSize: GridSize, cellSize: number, direction: Direction) {
-  const arrowSize = gridSize.width / 3;
-  const c = getNewPosition({ x: gridSize.width / 2, y: gridSize.width / 2 }, direction, gridSize.width / 1.5);
+export function getArrowShape(gridSize: number, cellSize: number, direction: Direction) {
+  const arrowSize = gridSize / 3;
+  const c = getNewPosition({ x: gridSize / 2, y: gridSize / 2 }, direction, gridSize / 1.5);
   const l = getNewPosition(c, getOrthogonalDirection(direction, -1), arrowSize);
   const r = getNewPosition(c, getOrthogonalDirection(direction, 1), arrowSize);
   const cIso = toIsometric(c.x, c.y);

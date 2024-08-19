@@ -51,16 +51,12 @@ export function getOrthogonalDirection(direction: Direction, side: -1 | 1): Dire
   }
 }
 
-export const isValidMove = (
-  newPosition: Position,
-  gameState: GameState,
-  gridSize: { width: number; height: number },
-): boolean => {
+export const isValidMove = (newPosition: Position, gameState: GameState, { gridSize }: LevelConfig): boolean => {
   return (
     newPosition.x >= 0 &&
-    newPosition.x < gridSize.width &&
+    newPosition.x < gridSize &&
     newPosition.y >= 0 &&
-    newPosition.y < gridSize.height &&
+    newPosition.y < gridSize &&
     !isPositionOccupied(
       newPosition,
       gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
@@ -73,23 +69,16 @@ export const getValidMoves = (
   levelConfig: LevelConfig,
 ): { position: Position; direction: Direction }[] => {
   const { player } = gameState;
-  const { gridSize } = levelConfig;
   const directions = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
 
   return directions
     .map((direction) => ({ position: getNewPosition(player.position, direction), direction }))
-    .filter(({ position }) => isValidMove(position, gameState, gridSize));
+    .filter(({ position }) => isValidMove(position, gameState, levelConfig));
 };
 
-export function getMoveFromClick(
-  canvasX: number,
-  canvasY: number,
-  gameState: GameState,
-  levelConfig: LevelConfig,
-  cellSize: number,
-) {
+export function getMoveFromClick(canvasX: number, canvasY: number, gameState: GameState, levelConfig: LevelConfig) {
   return getValidMoves(gameState, levelConfig).find((move) =>
-    isPointInShape(canvasX, canvasY, getArrowShape(levelConfig.gridSize, cellSize, move.direction)),
+    isPointInShape(canvasX, canvasY, getArrowShape(levelConfig.gridSize, levelConfig.cellSize, move.direction)),
   );
 }
 

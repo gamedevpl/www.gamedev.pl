@@ -1,4 +1,4 @@
-import { GridSize, BonusType, GameState } from './gameplay-types';
+import { BonusType, GameState, LevelConfig } from './gameplay-types';
 import { drawObstacles, drawGoal } from './grid-objects-render';
 import { drawGrid } from './grid-render';
 import { drawPlayer } from './player-render';
@@ -16,8 +16,7 @@ export const PLATFORM_HEIGHT = 20;
 export const drawGameState = (
   ctx: CanvasRenderingContext2D,
   gameState: GameState,
-  gridSize: GridSize,
-  cellSize: number,
+  { gridSize, cellSize }: LevelConfig,
 ) => {
   ctx.save();
 
@@ -40,7 +39,7 @@ export const drawGameState = (
   drawPlatform(ctx, gridSize);
 
   // Draw the grid
-  drawGrid(ctx, gridSize.width, gridSize.height);
+  drawGrid(ctx, gridSize);
 
   // Draw electrical discharges
   drawElectricalDischarges(ctx, gridSize, gameState.monsterSpawnSteps, gameState.player.moveTimestamp, cellSize);

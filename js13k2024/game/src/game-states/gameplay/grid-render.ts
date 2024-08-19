@@ -1,13 +1,11 @@
 import { PLATFORM_HEIGHT } from './game-render';
-import { GridSize } from './gameplay-types';
 import { TILE_HEIGHT, TILE_WIDTH, toIsometric } from './isometric-utils';
 
-export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) => {
-  const { width, height } = gridSize;
+export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) => {
   const topLeft = toIsometric(0, 0);
-  const topRight = toIsometric(width, 0);
-  const bottomLeft = toIsometric(0, height);
-  const bottomRight = toIsometric(width, height);
+  const topRight = toIsometric(gridSize, 0);
+  const bottomLeft = toIsometric(0, gridSize);
+  const bottomRight = toIsometric(gridSize, gridSize);
 
   // Draw top surface
   ctx.fillStyle = '#c2b280'; // Updated to match the beige color in the image
@@ -40,16 +38,16 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: GridSize) 
   ctx.fill();
 };
 
-export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+export const drawGrid = (ctx: CanvasRenderingContext2D, gridSize: number) => {
   ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
   ctx.lineWidth = 1;
 
-  for (let y = 0; y <= height; y++) {
-    for (let x = 0; x <= width; x++) {
+  for (let y = 0; y <= gridSize; y++) {
+    for (let x = 0; x <= gridSize; x++) {
       const { x: isoX, y: isoY } = toIsometric(x, y);
 
       // Draw horizontal line
-      if (x < width) {
+      if (x < gridSize) {
         ctx.beginPath();
         ctx.moveTo(isoX, isoY);
         ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);
@@ -57,7 +55,7 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: n
       }
 
       // Draw vertical line
-      if (y < height) {
+      if (y < gridSize) {
         ctx.beginPath();
         ctx.moveTo(isoX, isoY);
         ctx.lineTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2);

@@ -1,21 +1,15 @@
 import { calculateElectricalDischarge } from './animation-utils';
-import { GridSize } from './gameplay-types';
 import { toIsometric } from './isometric-utils';
 
 // New function to draw electrical discharges
 export const drawElectricalDischarges = (
   ctx: CanvasRenderingContext2D,
-  gridSize: GridSize,
+  gridSize: number,
   spawnSteps: number,
   lastMoveTime: number,
   cellSize: number,
 ) => {
-  const discharges = calculateElectricalDischarge(
-    Math.max(gridSize.width, gridSize.height),
-    spawnSteps,
-    lastMoveTime,
-    Date.now(),
-  );
+  const discharges = calculateElectricalDischarge(Math.max(gridSize, gridSize), spawnSteps, lastMoveTime, Date.now());
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
   ctx.lineWidth = 2;

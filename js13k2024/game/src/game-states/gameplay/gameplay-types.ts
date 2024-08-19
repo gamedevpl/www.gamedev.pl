@@ -86,13 +86,9 @@ export enum Direction {
   Right,
 }
 
-export interface GridSize {
-  width: number;
-  height: number;
-}
-
 export interface LevelConfig {
-  gridSize: GridSize;
+  gridSize: number;
+  cellSize: number;
   initialMonsterCount: number;
   obstacleCount: number;
   initialBonusCount: number;
@@ -132,8 +128,8 @@ export interface PathfindingNode {
 export interface GameConfig {
   cellSize: number;
   monsterSpawnInterval: number;
-  baseGridSize: GridSize;
-  maxGridSize: GridSize;
+  baseGridSize: number;
+  maxGridSize: number;
   baseObstacleCount: number;
   maxObstacleCount: number;
   levelIncreaseFactor: number;
