@@ -9,11 +9,7 @@ import {
 import { generateLevel } from './level-generator';
 import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
-
-const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
-
-const isPositionOccupied = (position: Position, occupiedPositions: Position[]): boolean =>
-  occupiedPositions.some((pos) => isPositionEqual(pos, position));
+import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
   const [gameState, config] = generateLevel(level);
@@ -202,55 +198,6 @@ export const updateGameState = (gameState: GameState): GameState => {
   return newGameState;
 };
 
-const getDirectionFromKey = (key: string): Direction | null => {
-  switch (key) {
-    case 'ArrowUp':
-    case 'w':
-      return Direction.Up;
-    case 'ArrowDown':
-    case 's':
-      return Direction.Down;
-    case 'ArrowLeft':
-    case 'a':
-      return Direction.Left;
-    case 'ArrowRight':
-    case 'd':
-      return Direction.Right;
-    default:
-      return null;
-  }
-};
-
-const getNewPosition = (currentPosition: Position, direction: Direction): Position => {
-  switch (direction) {
-    case Direction.Up:
-      return { ...currentPosition, y: currentPosition.y - 1 };
-    case Direction.Down:
-      return { ...currentPosition, y: currentPosition.y + 1 };
-    case Direction.Left:
-      return { ...currentPosition, x: currentPosition.x - 1 };
-    case Direction.Right:
-      return { ...currentPosition, x: currentPosition.x + 1 };
-  }
-};
-
-const isValidMove = (
-  newPosition: Position,
-  gameState: GameState,
-  gridSize: { width: number; height: number },
-): boolean => {
-  return (
-    newPosition.x >= 0 &&
-    newPosition.x < gridSize.width &&
-    newPosition.y >= 0 &&
-    newPosition.y < gridSize.height &&
-    !isPositionOccupied(
-      newPosition,
-      gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
-    )
-  );
-};
-
 export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
   const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 }; // Duration set to 13 turns
   gameState.activeBonuses.push(newActiveBonus);
@@ -316,16 +263,3 @@ const generateRandomPosition = (width: number, height: number): Position => ({
   x: Math.floor(Math.random() * width),
   y: Math.floor(Math.random() * height),
 });
-
-export const getValidMoves = (
-  gameState: GameState,
-  levelConfig: LevelConfig,
-): { position: Position; direction: Direction }[] => {
-  const { player } = gameState;
-  const { gridSize } = levelConfig;
-  const directions = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
-
-  return directions
-    .map((direction) => ({ position: getNewPosition(player.position, direction), direction }))
-    .filter(({ position }) => isValidMove(position, gameState, gridSize));
-};

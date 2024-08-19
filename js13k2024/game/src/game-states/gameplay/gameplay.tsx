@@ -2,10 +2,10 @@ import { FunctionComponent, useState, useRef, useEffect } from 'react';
 import { GameState } from './gameplay-types';
 import { drawGameState } from './game-render';
 import { drawMoveArrows } from './move-arrows-render';
-import { doGameUpdate, getValidMoves, handleKeyPress } from './game-logic';
+import { doGameUpdate, handleKeyPress } from './game-logic';
+import { getMoveFromClick, getValidMoves } from './move-utils';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
-import { toGrid } from './isometric-utils';
 
 interface GameplayProps {
   level: number;
@@ -90,18 +90,12 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      // Calculate the click position relative to the canvas, accounting for scaling
-      const canvasX = (e.clientX - rect.left) * scaleX - canvas.width / 2;
-      const canvasY = (e.clientY - rect.top) * scaleY - 100;
-
-      // Convert screen coordinates to grid coordinates
-      const { x: gridX, y: gridY } = toGrid(canvasX, canvasY);
-
-      const clickedMove = getValidMoves(gameState, levelConfig).find(
-        ({ position: move }) => move.x === gridX && move.y === gridY,
+      const clickedMove = getMoveFromClick(
+        (e.clientX - rect.left) * (canvas.width / rect.width) - canvas.width / 2,
+        (e.clientY - rect.top) * (canvas.height / rect.height) - 100,
+        gameState,
+        levelConfig,
+        CELL_SIZE,
       );
 
       if (clickedMove) {
