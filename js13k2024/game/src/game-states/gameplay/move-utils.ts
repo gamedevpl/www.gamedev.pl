@@ -57,10 +57,11 @@ export const isValidMove = (newPosition: Position, gameState: GameState, { gridS
     newPosition.x < gridSize &&
     newPosition.y >= 0 &&
     newPosition.y < gridSize &&
-    !isPositionOccupied(
-      newPosition,
-      gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
-    )
+    (gameState.crusherActive ||
+      !isPositionOccupied(
+        newPosition,
+        gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+      ))
   );
 };
 
