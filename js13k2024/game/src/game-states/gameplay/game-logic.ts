@@ -13,16 +13,22 @@ import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupie
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
   const [gameState, config] = generateLevel(level);
-  return [gameState, config];
+  return [{ ...gameState, gameEndingState: 'none' }, config];
 };
 
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
+  if (isGameEnding(gameState)) {
+    return gameState;
+  }
   const direction = getDirectionFromKey(e.key);
-
   return direction !== null ? doGameUpdate(direction, gameState, levelConfig) : { ...gameState };
 };
 
 export const doGameUpdate = (direction: Direction, gameState: GameState, levelConfig: LevelConfig): GameState => {
+  if (isGameEnding(gameState)) {
+    return gameState;
+  }
+
   const newGameState = { ...gameState };
 
   const oldPosition = newGameState.player.position;
@@ -56,7 +62,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
     // Check for goal
     if (isPositionEqual(newPosition, newGameState.goal)) {
-      newGameState.isLevelComplete = true;
+      newGameState.gameEndingState = 'levelComplete';
+      startLevelCompleteAnimation(newGameState);
       newGameState.score += calculateLevelScore(newGameState);
       return newGameState;
     }
@@ -64,7 +71,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     // Check for bonuses
     const collectedBonus = newGameState.bonuses.find((bonus) => isPositionEqual(bonus.position, newPosition));
     if (collectedBonus) {
-      soundEngine.playBonusCollected(); // Play bonus collected sound
+      soundEngine.playBonusCollected();
       newGameState.bonuses = newGameState.bonuses.filter((bonus) => !isPositionEqual(bonus.position, newPosition));
       applyBonus(newGameState, collectedBonus.type);
     }
@@ -73,7 +80,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     if (newGameState.monsterSpawnSteps >= 13) {
       spawnMonster(newGameState, levelConfig.gridSize);
       newGameState.monsterSpawnSteps = 0;
-      soundEngine.playMonsterSpawn(); // Play monster spawn sound
+      soundEngine.playMonsterSpawn();
     }
 
     // Move monsters
@@ -88,7 +95,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
     // Check for collisions with monsters
     if (checkCollision(newGameState.player.position, newGameState.monsters)) {
-      newGameState.isGameOver = true;
+      newGameState.gameEndingState = 'gameOver';
+      startGameOverAnimation(newGameState);
       return newGameState;
     }
 
@@ -102,7 +110,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
     const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
     if (explodedBombs.length > 0 || newExplosions.length > 0) {
-      soundEngine.playExplosion(); // Play explosion sound
+      soundEngine.playExplosion();
     }
     newGameState.explosions = [
       ...newGameState.explosions,
@@ -127,7 +135,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
     // Check if player is in explosion range
     if (isInExplosionRange(newGameState.player.position, newGameState.explosions)) {
-      newGameState.isGameOver = true;
+      newGameState.gameEndingState = 'gameOver';
+      startGameOverAnimation(newGameState);
       return newGameState;
     }
 
@@ -149,7 +158,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
         )
       ) {
         newGameState.obstacles.push(newObstacle);
-        soundEngine.playElectricalDischarge(); // Play sound for builder creating obstacle
+        soundEngine.playElectricalDischarge();
       }
     }
   }
@@ -157,49 +166,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   return newGameState;
 };
 
-export const updateGameState = (gameState: GameState): GameState => {
-  const newGameState = { ...gameState };
-
-  // Update active bonuses
-  newGameState.activeBonuses = newGameState.activeBonuses
-    .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
-    .filter((bonus) => bonus.duration > 0);
-
-  newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
-  newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
-
-  // Update time bombs
-  newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
-  const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
-  if (explodedBombs.length > 0) {
-    soundEngine.playExplosion(); // Play explosion sound for time bombs
-  }
-  newGameState.explosions = [
-    ...newGameState.explosions,
-    ...explodedBombs.map((bomb) => ({ position: bomb.position, startTime: Date.now(), duration: 1000 })),
-  ];
-  newGameState.timeBombs = newGameState.timeBombs.filter((bomb) => bomb.timer > 0);
-
-  // Update explosions
-  newGameState.explosions = newGameState.explosions.filter((explosion) => {
-    const elapsedTime = Date.now() - explosion.startTime;
-    return elapsedTime < explosion.duration;
-  });
-
-  // Remove fully destroyed obstacles
-  newGameState.obstacles = newGameState.obstacles.filter((obstacle) => {
-    if (obstacle.isDestroying) {
-      const elapsedTime = Date.now() - obstacle.creationTime;
-      return elapsedTime < MOVE_ANIMATION_DURATION; // Keep the obstacle if it's still being destroyed
-    }
-    return true; // Keep non-destroying obstacles
-  });
-
-  return newGameState;
-};
-
 export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
-  const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 }; // Duration set to 13 turns
+  const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 };
   gameState.activeBonuses.push(newActiveBonus);
 
   switch (bonusType) {
@@ -229,7 +197,6 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
 };
 
 const calculateLevelScore = (gameState: GameState): number => {
-  // Implement level score calculation logic here
   return 100 - gameState.steps + gameState.monsters.length * 10;
 };
 
@@ -263,3 +230,17 @@ const generateRandomPosition = (width: number, height: number): Position => ({
   x: Math.floor(Math.random() * width),
   y: Math.floor(Math.random() * height),
 });
+
+export const isGameEnding = (gameState: GameState): boolean => {
+  return gameState.gameEndingState !== 'none';
+};
+
+export const startGameOverAnimation = (gameState: GameState): void => {
+  gameState.player.isVanishing = true;
+  soundEngine.playGameOver();
+};
+
+export const startLevelCompleteAnimation = (gameState: GameState): void => {
+  gameState.player.isVictorious = true;
+  soundEngine.playLevelComplete();
+};

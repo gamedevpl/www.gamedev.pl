@@ -1,11 +1,11 @@
 import { FunctionComponent, useState, useRef, useEffect } from 'react';
-import { GameState } from './gameplay-types';
 import { drawGameState } from './game-render';
 import { drawMoveArrows } from './move-arrows-render';
-import { doGameUpdate, handleKeyPress } from './game-logic';
+import { doGameUpdate, handleKeyPress, isGameEnding } from './game-logic';
 import { getMoveFromClick, getValidMoves } from './move-utils';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
+import { GameState } from './gameplay-types';
 
 interface GameplayProps {
   level: number;
@@ -19,6 +19,7 @@ interface GameplayProps {
 
 const CELL_SIZE = 40;
 const MAX_LEVEL = 13;
+const ANIMATION_DURATION = 2000; // 2 seconds for ending animations
 
 export const Gameplay: FunctionComponent<GameplayProps> = ({
   level,
@@ -32,6 +33,30 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [[gameState, levelConfig, levelStory], setGameState] = useState(() => generateLevel(level));
   const [showStory, setShowStory] = useState(true);
+
+  const updateGameState = (newGameState: GameState) => {
+    setGameState([newGameState, levelConfig, levelStory]);
+    updateScore(newGameState.score);
+    updateSteps(newGameState.steps);
+  };
+
+  useEffect(() => {
+    if (gameState.gameEndingState !== 'none') {
+      setTimeout(() => {
+        if (gameState.gameEndingState === 'levelComplete') {
+          if (level === MAX_LEVEL) {
+            onGameComplete();
+          } else {
+            onLevelComplete();
+          }
+        }
+
+        if (gameState.gameEndingState === 'gameOver') {
+          onGameOver();
+        }
+      }, ANIMATION_DURATION);
+    }
+  }, [gameState.gameEndingState]);
 
   useEffect(() => {
     if (!gameState || !levelConfig) return;
@@ -51,8 +76,10 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
           // Draw the game state
           drawGameState(ctx, gameState, levelConfig.gridSize, CELL_SIZE);
 
-          // Draw move arrows
-          drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), gameState.player.position, CELL_SIZE);
+          // Draw move arrows only if the game is not ending
+          if (!isGameEnding(gameState)) {
+            drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), gameState.player.position, CELL_SIZE);
+          }
 
           animationFrameId = requestAnimationFrame(animate);
         };
@@ -76,8 +103,10 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
         return;
       }
 
-      const newGameState = handleKeyPress(e, gameState, levelConfig);
-      updateGameState(newGameState);
+      if (!isGameEnding(gameState)) {
+        const newGameState = handleKeyPress(e, gameState, levelConfig);
+        updateGameState(newGameState);
+      }
     };
 
     const handleClick = (e: MouseEvent) => {
@@ -85,6 +114,8 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
         setShowStory(false);
         return;
       }
+
+      if (isGameEnding(gameState)) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -109,26 +140,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, levelConfig, showStory, onGameOver, onLevelComplete, updateScore, updateSteps]);
-
-  const updateGameState = (newGameState: GameState) => {
-    setGameState([newGameState, levelConfig, levelStory]);
-    updateScore(newGameState.score);
-    updateSteps(newGameState.steps);
-
-    if (newGameState.isLevelComplete) {
-      if (level === MAX_LEVEL) {
-        onGameComplete();
-      } else {
-        onLevelComplete();
-      }
-    }
-
-    if (newGameState.isGameOver) {
-      onGameOver();
-    }
-  };
 
   if (showStory) {
     return (

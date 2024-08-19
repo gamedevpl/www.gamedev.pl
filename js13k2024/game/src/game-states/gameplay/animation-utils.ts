@@ -123,12 +123,12 @@ export const calculateConfusedShake = (): Position => {
 // New function for player victory jump animation
 export const calculateVictoryJump = (elapsedTime: number): number => {
   const jumpDuration = 1000; // 1 second jump
-  const progress = Math.min(elapsedTime / jumpDuration, 1);
+  const progress = (elapsedTime % jumpDuration) / jumpDuration;
   return Math.sin(progress * Math.PI) * 20; // Adjust multiplier for jump height
 };
 
 // New function for player vanishing animation
-export const calculateVanishingAlpha = (elapsedTime: number): number => {
-  const vanishDuration = 1000; // 1 second vanish
-  return 1 - Math.min(elapsedTime / vanishDuration, 1);
+export const calculateVanishingOpacity = (elapsedTime: number): number => {
+  const vanishDuration = 2000; // 2 seconds vanish
+  return Math.max(0, 1 - elapsedTime / vanishDuration);
 };

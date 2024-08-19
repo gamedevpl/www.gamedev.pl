@@ -15,6 +15,7 @@ const createPreviewGameState = (): GameState => ({
     moveTimestamp: Date.now(),
     isInvisible: false,
     isVictorious: false,
+    isVanishing: false,
   },
   goal: { x: 4, y: 4 },
   obstacles: [
@@ -52,8 +53,7 @@ const createPreviewGameState = (): GameState => ({
   crusherActive: false,
   builderActive: false,
   score: 0,
-  isLevelComplete: false,
-  isGameOver: false,
+  gameEndingState: 'none',
 });
 
 export const GamePreview: FunctionComponent = () => {

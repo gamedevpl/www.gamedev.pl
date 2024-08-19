@@ -8,8 +8,8 @@ export interface Monster {
   previousPosition: Position;
   moveTimestamp: number;
   path: Position[];
-  seed: number; // New property for randomizing tentacle animations
-  isConfused: boolean; // New property for confused state animation
+  seed: number;
+  isConfused: boolean;
 }
 
 export enum BonusType {
@@ -30,16 +30,19 @@ export interface Player {
   position: Position;
   previousPosition: Position;
   moveTimestamp: number;
-  isInvisible: boolean; // New property for invisibility animation
+  isInvisible: boolean;
   isVictorious: boolean; // New property for victory animation
+  isVanishing: boolean; // New property for game over animation
 }
 
 export interface Obstacle {
   position: Position;
-  creationTime: number; // New property for creation/destruction animation
-  isRaising: boolean; // New property to determine if the obstacle is raising or collapsing
-  isDestroying: boolean; // New property to determine if the obstacle is being destroyed
+  creationTime: number;
+  isRaising: boolean;
+  isDestroying: boolean;
 }
+
+export type GameEndingState = 'none' | 'gameOver' | 'levelComplete'; // New type definition
 
 export interface GameState {
   player: Player;
@@ -56,20 +59,19 @@ export interface GameState {
   crusherActive: boolean;
   builderActive: boolean;
   score: number;
-  isLevelComplete: boolean;
-  isGameOver: boolean;
+  gameEndingState: GameEndingState;
 }
 
 export type Explosion = {
   position: Position;
-  startTime: number; // New property for explosion animation timing
-  duration: number; // New property for explosion animation duration
+  startTime: number;
+  duration: number;
 };
 
 export type TimeBomb = {
   position: Position;
   timer: number;
-  shakeIntensity: number; // New property for bomb shaking animation
+  shakeIntensity: number;
 };
 
 export type ActiveBonus = {

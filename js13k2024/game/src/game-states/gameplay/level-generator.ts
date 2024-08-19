@@ -22,6 +22,7 @@ const createPlayer = (x: number, y: number): Player => ({
   moveTimestamp: Date.now(),
   isInvisible: false,
   isVictorious: false,
+  isVanishing: false,
 });
 
 const createObstacle = (x: number, y: number): Obstacle => ({
@@ -46,8 +47,7 @@ const generateBaseState = (): GameState => ({
   crusherActive: false,
   builderActive: false,
   score: 0,
-  isLevelComplete: false,
-  isGameOver: false,
+  gameEndingState: 'none',
 });
 
 const generateBaseConfig = (width: number, height: number, levelName: string, levelStory: string): LevelConfig => ({

@@ -46,12 +46,10 @@ export function MonsterStepsApp() {
   };
 
   const gameOver = () => {
-    soundEngine.playGameOver();
     setGameState(GameState.GameOver);
   };
 
   const levelComplete = () => {
-    soundEngine.playLevelComplete();
     setLevel(level + 1);
     setGameState(GameState.LevelComplete);
   };
