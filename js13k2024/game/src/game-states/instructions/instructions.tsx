@@ -36,6 +36,7 @@ export const Instructions: FunctionComponent<InstructionsProps> = ({ onBack }) =
             <li>Time Bomb: Delayed explosion</li>
             <li>Crusher: Destroy nearby obstacles</li>
             <li>Builder: Create new platforms</li>
+            <li>Climber: Climb on walls</li>
           </ul>
         </li>
         <li>Complete all 13 levels to win</li>

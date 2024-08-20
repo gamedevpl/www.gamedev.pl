@@ -19,6 +19,7 @@ export enum BonusType {
   TimeBomb,
   Crusher,
   Builder,
+  Climber,
 }
 
 export interface Bonus {
@@ -31,8 +32,9 @@ export interface Player {
   previousPosition: Position;
   moveTimestamp: number;
   isInvisible: boolean;
-  isVictorious: boolean; // New property for victory animation
-  isVanishing: boolean; // New property for game over animation
+  isVictorious: boolean;
+  isVanishing: boolean;
+  isClimbing: boolean;
 }
 
 export interface Obstacle {
@@ -42,7 +44,7 @@ export interface Obstacle {
   isDestroying: boolean;
 }
 
-export type GameEndingState = 'none' | 'gameOver' | 'levelComplete'; // New type definition
+export type GameEndingState = 'none' | 'gameOver' | 'levelComplete';
 
 export interface GameState {
   player: Player;
@@ -159,6 +161,8 @@ export function getBonusDescription(bonusType: BonusType): string {
       return 'Hulk smash!';
     case BonusType.Builder:
       return 'Bob the Builder mode: ON';
+    case BonusType.Climber:
+      return 'Walk on walls like a pro!';
     default:
       return 'Mystery power activated!';
   }

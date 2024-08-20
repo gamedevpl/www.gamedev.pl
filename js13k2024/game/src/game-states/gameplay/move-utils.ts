@@ -52,17 +52,23 @@ export function getOrthogonalDirection(direction: Direction, side: -1 | 1): Dire
 }
 
 export const isValidMove = (newPosition: Position, gameState: GameState, { gridSize }: LevelConfig): boolean => {
-  return (
-    newPosition.x >= 0 &&
-    newPosition.x < gridSize &&
-    newPosition.y >= 0 &&
-    newPosition.y < gridSize &&
-    (gameState.crusherActive ||
-      !isPositionOccupied(
-        newPosition,
-        gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
-      ))
+  const isWithinGrid = newPosition.x >= 0 && newPosition.x < gridSize && newPosition.y >= 0 && newPosition.y < gridSize;
+  
+  if (!isWithinGrid) {
+    return false;
+  }
+
+  const isObstaclePresent = isPositionOccupied(
+    newPosition,
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position)
   );
+
+  // Allow movement onto obstacles if the player has the Climber bonus active
+  if (isObstaclePresent && !gameState.player.isClimbing && !gameState.crusherActive) {
+    return false;
+  }
+
+  return true;
 };
 
 export const getValidMoves = (

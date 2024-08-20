@@ -46,14 +46,14 @@ export const drawGameState = (
 
   // Prepare all game objects for sorting
   const allObjects = [
-    ...gameState.obstacles.map((obj) => ({ position: obj.position, type: 'obstacle', obj } as const)),
-    ...gameState.bonuses.map((obj) => ({ position: obj.position, type: 'bonus', obj } as const)),
-    ...gameState.landMines.map((obj) => ({ position: obj, type: 'landMine' } as const)),
-    ...gameState.timeBombs.map((obj) => ({ position: obj.position, type: 'timeBomb', obj } as const)),
-    ...gameState.monsters.map((obj) => ({ position: obj.position, type: 'monster', obj } as const)),
+    ...gameState.obstacles.map((obj) => ({ position: obj.position, type: 'obstacle', obj }) as const),
+    ...gameState.bonuses.map((obj) => ({ position: obj.position, type: 'bonus', obj }) as const),
+    ...gameState.landMines.map((obj) => ({ position: obj, type: 'landMine' }) as const),
+    ...gameState.timeBombs.map((obj) => ({ position: obj.position, type: 'timeBomb', obj }) as const),
+    ...gameState.monsters.map((obj) => ({ position: obj.position, type: 'monster', obj }) as const),
     { position: gameState.player.position, type: 'player', obj: gameState.player } as const,
     { position: gameState.goal, type: 'goal' } as const,
-    ...gameState.explosions.map((obj) => ({ position: obj.position, type: 'explosion', obj } as const)),
+    ...gameState.explosions.map((obj) => ({ position: obj.position, type: 'explosion', obj }) as const),
   ];
 
   // Sort all objects using calculateDrawingOrder
@@ -84,6 +84,7 @@ export const drawGameState = (
           sortedObject.obj,
           cellSize,
           gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
+          gameState.obstacles,
         );
         break;
       case 'goal':

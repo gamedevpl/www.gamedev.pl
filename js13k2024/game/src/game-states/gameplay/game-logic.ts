@@ -147,6 +147,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
     newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
     newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
+    newGameState.player.isClimbing = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Climber);
 
     // Handle builder bonus
     if (gameState.builderActive) {
@@ -192,6 +193,9 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       break;
     case BonusType.Builder:
       gameState.builderActive = true;
+      break;
+    case BonusType.Climber:
+      gameState.player.isClimbing = true;
       break;
   }
 };

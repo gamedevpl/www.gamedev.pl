@@ -1,15 +1,18 @@
 # Monster Steps - Technical Design Document
 
 ## Overview
+
 This document outlines the technical implementation details for the "Monster Steps" game, focusing on a lightweight approach to meet the 13KB size limit of the js13k competition.
 
 ## Core Technologies
+
 - Preact for app structure and component management
 - HTML5 Canvas for rendering the gameplay
 - TypeScript for game logic (compiling to minimal JavaScript)
 - Minimal CSS for layout and styling
 
 ## Project Structure
+
 ```
 /game
   /dist             # Minified version of the game
@@ -31,14 +34,6 @@ This document outlines the technical implementation details for the "Monster Ste
         hud.ts # Heads-up display rendering
         level-generator.ts # Deterministic level generation
         monster-logic.ts # Monster behavior implementation
-      /pause
-        pause.tsx
-      /game-over
-        game-over.tsx
-      /level-complete
-        level-complete.tsx
-      /game-complete
-        game-complete.tsx
   index.html        # Main HTML file
   styles.css        # Minimal CSS for layout
   README.md         # Project information and development instructions
@@ -49,37 +44,44 @@ This document outlines the technical implementation details for the "Monster Ste
 ## Key Technical Components
 
 ### 1. Deterministic Level Generation
+
 - Implemented in `level-generator.ts`
 - Each level (1-13) has a predefined generation function
 - Levels are created with specific layouts, obstacles, monsters, and bonuses
 - Ensures consistent gameplay experience across sessions
 
 ### 2. Game State Management
+
 - Uses Preact's state management to handle different game states
 - Main states: Intro, Instructions, Gameplay, Pause, Game Over, Level Complete, Game Complete
 - State transitions managed in `main.tsx`
 
 ### 3. Gameplay Logic
+
 - Core game mechanics implemented in `game-logic.ts`
 - Handles player movement, collision detection, bonus activation, and monster behavior
 - Uses a step-based system for game progression
 
 ### 4. Bonus System
-- Various bonus types implemented: Cap of Invisibility, Confused Monsters, Land Mine, Time Bomb, Crusher, Builder
+
+- Various bonus types implemented: Cap of Invisibility, Confused Monsters, Land Mine, Time Bomb, Crusher, Builder, Climber
 - Bonuses are represented as objects with type and duration properties
 - Bonus effects are applied in the game logic based on active bonuses
 
 ### 5. Monster AI
+
 - Basic pathfinding for monsters implemented in `monster-logic.ts`
 - Monsters follow predetermined paths or behaviors based on level design
 - Special behaviors (e.g., confusion) handled by modifying monster movement patterns
 
 ### 6. Rendering
+
 - Uses HTML5 Canvas for efficient rendering
 - Separate rendering functions for grid, objects, and effects
 - HUD elements rendered using a combination of Canvas and HTML/CSS
 
 ### 7. Input Handling
+
 - Keyboard input for player movement and game control
 - Event listeners set up in `main.tsx` and `gameplay.tsx`
 
@@ -100,6 +102,7 @@ This document outlines the technical implementation details for the "Monster Ste
 4. **Time Bomb**: Implements countdown and area effect destruction
 5. **Crusher**: Modifies collision detection to allow obstacle destruction
 6. **Builder**: Allows player to add new obstacles to the game grid
+7. **Climber**: Modifies movement logic and rendering to allow player to move over obstacles
 
 ## Level Progression
 

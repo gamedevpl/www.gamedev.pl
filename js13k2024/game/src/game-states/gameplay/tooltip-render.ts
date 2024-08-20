@@ -58,5 +58,32 @@ export const drawTooltip = (
 
   ctx.font = '14px Arial';
   ctx.fillText(`${activeBonus.duration} steps left`, tooltipX + tooltipWidth / 2, tooltipY + 55);
+
+  // Add a small icon for the Climber bonus
+  if (activeBonus.type === BonusType.Climber) {
+    const iconSize = 20;
+    const iconX = tooltipX + tooltipWidth - 30;
+    const iconY = tooltipY + 25;
+
+    ctx.strokeStyle = '#FFD700'; // Gold color
+    ctx.lineWidth = 2;
+
+    // Draw a simple ladder icon
+    ctx.beginPath();
+    ctx.moveTo(iconX, iconY);
+    ctx.lineTo(iconX, iconY + iconSize);
+    ctx.moveTo(iconX + iconSize, iconY);
+    ctx.lineTo(iconX + iconSize, iconY + iconSize);
+
+    // Draw rungs
+    for (let i = 0; i < 3; i++) {
+      const y = iconY + (i + 1) * (iconSize / 3);
+      ctx.moveTo(iconX, y);
+      ctx.lineTo(iconX + iconSize, y);
+    }
+
+    ctx.stroke();
+  }
+
   ctx.restore();
 };

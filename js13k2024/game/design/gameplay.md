@@ -67,6 +67,16 @@
 - Enables the player to create new obstacles.
 - Can be used to block monster paths or create safe zones.
 
+### Climber
+- Allows the player to move over obstacles for a limited time.
+- Duration: 13 steps (like other bonuses).
+- Strategic considerations:
+  - Enables access to previously unreachable areas.
+  - Can be used to escape monsters by climbing over obstacles.
+  - Allows for shortcuts through the level, potentially reducing the number of steps taken.
+  - Can be combined with other bonuses (e.g., Builder) for advanced strategies.
+  - Players must plan carefully to make the most of the limited duration.
+
 ## Scoring System
 
 ### Points

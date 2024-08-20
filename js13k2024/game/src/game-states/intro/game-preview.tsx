@@ -16,6 +16,7 @@ const createPreviewGameState = (): GameState => ({
     isInvisible: false,
     isVictorious: false,
     isVanishing: false,
+    isClimbing: false,
   },
   goal: { x: 4, y: 4 },
   obstacles: [

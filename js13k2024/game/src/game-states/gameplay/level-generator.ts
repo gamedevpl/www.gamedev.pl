@@ -23,6 +23,7 @@ const createPlayer = (x: number, y: number): Player => ({
   isInvisible: false,
   isVictorious: false,
   isVanishing: false,
+  isClimbing: false,
 });
 
 const createObstacle = (x: number, y: number): Obstacle => ({
