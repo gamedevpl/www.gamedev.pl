@@ -20,6 +20,7 @@ export enum BonusType {
   Crusher,
   Builder,
   Climber,
+  Teleport, // New Teleport bonus type
 }
 
 export interface Bonus {
@@ -31,6 +32,7 @@ export interface Player {
   position: Position;
   previousPosition: Position;
   moveTimestamp: number;
+  teleportTimestamp?: number;
   isInvisible: boolean;
   isVictorious: boolean;
   isVanishing: boolean;
@@ -163,6 +165,8 @@ export function getBonusDescription(bonusType: BonusType): string {
       return 'Bob the Builder mode: ON';
     case BonusType.Climber:
       return 'Walk on walls like a pro!';
+    case BonusType.Teleport:
+      return 'Beam me up, Scotty!'; // New description for Teleport bonus
     default:
       return 'Mystery power activated!';
   }

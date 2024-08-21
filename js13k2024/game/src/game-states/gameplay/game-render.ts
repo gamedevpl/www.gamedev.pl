@@ -108,3 +108,51 @@ export const drawGameState = (
 
   ctx.restore();
 };
+
+// const drawTeleportPoint = (ctx: CanvasRenderingContext2D, teleportPoint: TeleportPoint, cellSize: number) => {
+//   const { x, y } = teleportPoint.position;
+//   const isoX = ((x - y) * cellSize) / 2;
+//   const isoY = ((x + y) * cellSize) / 4;
+
+//   ctx.save();
+//   ctx.translate(isoX, isoY);
+
+//   // Draw the base of the teleport point
+//   ctx.beginPath();
+//   ctx.moveTo(0, -cellSize / 4);
+//   ctx.lineTo(cellSize / 2, 0);
+//   ctx.lineTo(0, cellSize / 4);
+//   ctx.lineTo(-cellSize / 2, 0);
+//   ctx.closePath();
+//   ctx.fillStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan with transparency
+//   ctx.fill();
+
+//   // Draw the energy field
+//   const time = Date.now() / 1000;
+//   const waveHeight = (cellSize / 8) * Math.sin(time * 5);
+
+//   ctx.beginPath();
+//   ctx.moveTo(-cellSize / 2, 0);
+//   ctx.quadraticCurveTo(0, -waveHeight, cellSize / 2, 0);
+//   ctx.quadraticCurveTo(0, cellSize / 4 + waveHeight, -cellSize / 2, 0);
+//   ctx.closePath();
+
+//   const gradient = ctx.createLinearGradient(0, -cellSize / 4, 0, cellSize / 4);
+//   gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
+//   gradient.addColorStop(1, 'rgba(0, 128, 255, 0.4)');
+//   ctx.fillStyle = gradient;
+//   ctx.fill();
+
+//   // Draw sparkles
+//   for (let i = 0; i < 5; i++) {
+//     const sparkleX = (Math.random() - 0.5) * cellSize;
+//     const sparkleY = ((Math.random() - 0.5) * cellSize) / 2;
+//     const sparkleSize = (Math.random() * cellSize) / 10;
+//     ctx.beginPath();
+//     ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
+//     ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.5 + Math.random() * 0.5) + ')';
+//     ctx.fill();
+//   }
+
+//   ctx.restore();
+// };

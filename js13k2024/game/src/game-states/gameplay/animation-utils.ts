@@ -1,6 +1,7 @@
 import { ElectricalDischarge } from './gameplay-types';
 
 export const MOVE_ANIMATION_DURATION = 250; // 1/4 second
+export const TELEPORT_ANIMATION_DURATION = 500; // 1/2 second
 
 export const calculateAnimationFactor = (): number => {
   return Math.cos((Date.now() / 1000) * Math.PI);
@@ -36,6 +37,18 @@ export const interpolatePosition = (
     x: previousPosition.x + (currentPosition.x - previousPosition.x) * moveProgress,
     y: previousPosition.y + (currentPosition.y - previousPosition.y) * moveProgress,
   };
+};
+
+export const interpolateTeleportPosition = (
+  currentPosition: Position,
+  previousPosition: Position,
+  teleportTimestamp: number,
+): Position => {
+  if (Date.now() - teleportTimestamp < TELEPORT_ANIMATION_DURATION / 2) {
+    return previousPosition;
+  } else {
+    return currentPosition;
+  }
 };
 
 // New function for bouncing animation
@@ -131,4 +144,12 @@ export const calculateVictoryJump = (elapsedTime: number): number => {
 export const calculateVanishingOpacity = (elapsedTime: number): number => {
   const vanishDuration = 2000; // 2 seconds vanish
   return Math.max(0, 1 - elapsedTime / vanishDuration);
+};
+
+export const calculateTeleportingOpacity = (elapsedTime: number): number => {
+  if (elapsedTime < TELEPORT_ANIMATION_DURATION / 2) {
+    return Math.max(0, 1 - (elapsedTime / 2 / (TELEPORT_ANIMATION_DURATION / 2)) * 2);
+  } else {
+    return Math.min(1, (elapsedTime / 2 / (TELEPORT_ANIMATION_DURATION / 2) - 0.5) * 2);
+  }
 };

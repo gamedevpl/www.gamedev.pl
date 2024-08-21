@@ -97,6 +97,29 @@ class SoundEngine {
     oscillator.frequency.exponentialRampToValueAtTime(300, this.audioContext.currentTime + 0.3);
     oscillator.connect(gain).connect(this.audioContext.destination);
   }
+
+  playTeleport() {
+    // Create a sweeping sound for teleportation
+    const oscillator1 = this.createOscillator(100, 'sine', 0.5);
+    const oscillator2 = this.createOscillator(200, 'sine', 0.5);
+    const gain1 = this.createGain(0.01, 0.49);
+    const gain2 = this.createGain(0.01, 0.49);
+
+    // Frequency sweep
+    oscillator1.frequency.exponentialRampToValueAtTime(1000, this.audioContext.currentTime + 0.25);
+    oscillator2.frequency.exponentialRampToValueAtTime(2000, this.audioContext.currentTime + 0.25);
+
+    oscillator1.connect(gain1).connect(this.audioContext.destination);
+    oscillator2.connect(gain2).connect(this.audioContext.destination);
+
+    // Add a "shimmer" effect
+    setTimeout(() => {
+      const shimmer = this.createOscillator(2000, 'sine', 0.2);
+      const shimmerGain = this.createGain(0.01, 0.19);
+      shimmer.frequency.exponentialRampToValueAtTime(4000, this.audioContext.currentTime + 0.2);
+      shimmer.connect(shimmerGain).connect(this.audioContext.destination);
+    }, 100);
+  }
 }
 
 export const soundEngine = new SoundEngine();

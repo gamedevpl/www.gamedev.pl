@@ -76,6 +76,11 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       applyBonus(newGameState, collectedBonus.type);
     }
 
+    // Check for teleport points
+    if (collectedBonus?.type === BonusType.Teleport) {
+      performTeleportation(newGameState, collectedBonus.position);
+    }
+
     // Spawn monster every 13th step
     if (newGameState.monsterSpawnSteps >= 13) {
       spawnMonster(newGameState, levelConfig);
@@ -197,6 +202,9 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
     case BonusType.Climber:
       gameState.player.isClimbing = true;
       break;
+    case BonusType.Teleport:
+      // Teleport is handled immediately when collected
+      break;
   }
 };
 
@@ -247,4 +255,16 @@ export const startGameOverAnimation = (gameState: GameState): void => {
 export const startLevelCompleteAnimation = (gameState: GameState): void => {
   gameState.player.isVictorious = true;
   soundEngine.playLevelComplete();
+};
+
+const performTeleportation = (gameState: GameState, teleportPoint: Position): void => {
+  const destinationPoint = gameState.bonuses.find(
+    (bonus) => bonus.type === BonusType.Teleport && !isPositionEqual(bonus.position, teleportPoint),
+  );
+  if (destinationPoint) {
+    gameState.player.previousPosition = gameState.player.position;
+    gameState.player.position = destinationPoint.position;
+    gameState.player.teleportTimestamp = Date.now();
+    soundEngine.playTeleport();
+  }
 };
