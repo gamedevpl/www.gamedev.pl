@@ -5,7 +5,9 @@ import { toIsometric } from './isometric-utils';
 type TsunamiWave = {
   tsunamiLevel: number;
   grid: Position;
-  iso: [Position, Position, Position, Position];
+  isoTop: Position[];
+  isoFront: Position[] | undefined;
+  isoSide: Position[] | undefined;
 };
 
 export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cellSize: number): TsunamiWave[] => {
@@ -28,12 +30,30 @@ export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cel
       waves.push({
         tsunamiLevel,
         grid: { x, y },
-        iso: [
+        isoTop: [
           { x: topL.x, y: topL.y - wave1 },
           { x: bottomL.x, y: bottomL.y - wave2 },
           { x: bottomR.x, y: bottomR.y - wave2 },
           { x: topR.x, y: topR.y - wave1 },
         ],
+        isoFront:
+          y === gridSize - 1
+            ? [
+                { x: bottomL.x, y: bottomL.y - wave2 },
+                { x: bottomL.x, y: bottomL.y },
+                { x: bottomR.x, y: bottomR.y },
+                { x: bottomR.x, y: bottomR.y - wave2 },
+              ]
+            : undefined,
+        isoSide:
+          x === gridSize - 1
+            ? [
+                { x: bottomR.x, y: bottomR.y - wave2 },
+                { x: bottomR.x, y: bottomR.y },
+                { x: topR.x, y: topR.y },
+                { x: topR.x, y: topR.y - wave1 },
+              ]
+            : undefined,
       });
     }
   }
@@ -45,17 +65,27 @@ export const drawTsunamiWave = (ctx: CanvasRenderingContext2D, wave: TsunamiWave
   ctx.save();
   ctx.globalAlpha = 0.6; // Make the water slightly transparent
 
-  ctx.fillStyle = `rgba(0, 100, 255, ${wave.tsunamiLevel / 13})`; // Blue color with increasing opacity
-  ctx.beginPath();
-  ctx.moveTo(wave.iso[0].x, wave.iso[0].y);
-  for (let i = 1; i < wave.iso.length; i++) {
-    ctx.lineTo(wave.iso[i].x, wave.iso[i].y);
+  drawTsunamieWavePlane(ctx, wave.isoTop, `rgba(0, 100, 255, ${wave.tsunamiLevel / 13})`);
+  if (wave.isoFront) {
+    drawTsunamieWavePlane(ctx, wave.isoFront, `rgba(0, 39, 98, ${wave.tsunamiLevel / 13})`);
   }
-  ctx.closePath();
-  ctx.fill();
+  if (wave.isoSide) {
+    drawTsunamieWavePlane(ctx, wave.isoSide, `rgba(0, 63, 157, ${wave.tsunamiLevel / 13})`);
+  }
 
   ctx.restore();
 };
+
+function drawTsunamieWavePlane(ctx: CanvasRenderingContext2D, plane: Position[], fillStyle: string) {
+  ctx.fillStyle = fillStyle;
+  ctx.beginPath();
+  ctx.moveTo(plane[0].x, plane[0].y);
+  for (let i = 1; i < plane.length; i++) {
+    ctx.lineTo(plane[i].x, plane[i].y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
 
 export const drawSlideTrail = (ctx: CanvasRenderingContext2D, start: Position, end: Position) => {
   const { x: startX, y: startY } = toIsometric(start.x, start.y);

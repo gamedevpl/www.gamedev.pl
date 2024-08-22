@@ -107,6 +107,7 @@ export function drawIsometricCube(
 // Function to get z-index for different object types
 function getZIndex(type: string): number {
   switch (type) {
+    case 'wave':
     case 'obstacle':
       return 3;
     case 'bonus':
