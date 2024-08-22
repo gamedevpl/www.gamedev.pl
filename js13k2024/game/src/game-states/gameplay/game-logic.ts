@@ -11,6 +11,7 @@ import { BLASTER_SHOT_DURATION, MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DU
 import { soundEngine } from '../../sound/sound-engine';
 import {
   getDirectionFromKey,
+  getDirectionFromPositions,
   getNewPosition,
   isPositionEqual,
   isPositionOccupied,
@@ -390,19 +391,38 @@ const handleBlasterShot = (gameState: GameState, direction: Direction, levelConf
   gameState.blasterShots.push(shot);
   // Play the blaster sound effect
   soundEngine.playBlasterSound();
-  // Check if the shot hits a monster
-  const hitMonster = gameState.monsters.find((monster) => isPositionEqual(monster.position, shot.endPosition));
-  if (hitMonster) {
-    gameState.monsters = gameState.monsters.filter((monster) => monster !== hitMonster);
-  }
+
+  // Check if the shot hits monsters along its path
+  gameState.monsters = gameState.monsters.filter((monster) => {
+    const isHit = isMonsterOnBlasterPath(monster.position, start, end, direction);
+    return !isHit;
+  });
+
   if (gameState.player.hasBlaster && gameState.player.blasterSteps!-- <= 0) {
     gameState.player.hasBlaster = false;
   }
 };
 
-const getDirectionFromPositions = (from: Position, to: Position): Direction => {
-  if (to.x > from.x) return Direction.Right;
-  if (to.x < from.x) return Direction.Left;
-  if (to.y > from.y) return Direction.Down;
-  return Direction.Up;
+const isMonsterOnBlasterPath = (
+  monsterPos: Position,
+  start: Position,
+  end: Position,
+  direction: Direction,
+): boolean => {
+  switch (direction) {
+    case Direction.Up:
+    case Direction.Down:
+      return (
+        monsterPos.x === start.x &&
+        ((direction === Direction.Up && monsterPos.y <= start.y && monsterPos.y >= end.y) ||
+          (direction === Direction.Down && monsterPos.y >= start.y && monsterPos.y <= end.y))
+      );
+    case Direction.Left:
+    case Direction.Right:
+      return (
+        monsterPos.y === start.y &&
+        ((direction === Direction.Left && monsterPos.x <= start.x && monsterPos.x >= end.x) ||
+          (direction === Direction.Right && monsterPos.x >= start.x && monsterPos.x <= end.x))
+      );
+  }
 };

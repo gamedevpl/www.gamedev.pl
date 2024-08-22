@@ -123,7 +123,8 @@ export const drawGameState = (
   // Draw tooltip if there's an active bonus
   const tooltipBonus = gameState.activeBonuses.find(
     (bonus) =>
-      bonus.duration === 13 || [BonusType.Builder, BonusType.CapOfInvisibility, BonusType.Crusher].includes(bonus.type),
+      bonus.duration === 13 ||
+      [BonusType.Builder, BonusType.CapOfInvisibility, BonusType.Crusher, BonusType.Blaster].includes(bonus.type),
   );
 
   if (tooltipBonus) {

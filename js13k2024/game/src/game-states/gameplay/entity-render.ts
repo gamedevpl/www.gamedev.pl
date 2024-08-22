@@ -149,7 +149,7 @@ export const drawEntityTentacles = (
   }
 };
 
-export const renderEntity = (params: EntityRenderParams) => {
+export const renderEntity = (params: EntityRenderParams): { bounceOffset: number } => {
   const {
     ctx,
     isoX,
@@ -245,4 +245,6 @@ export const renderEntity = (params: EntityRenderParams) => {
   drawEntityMouth(ctx, renderX, renderY, entityHeight, headRadius, bounceOffset);
 
   ctx.restore();
+
+  return { bounceOffset };
 };
