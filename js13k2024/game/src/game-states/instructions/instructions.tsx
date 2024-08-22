@@ -37,7 +37,12 @@ export const Instructions: FunctionComponent<InstructionsProps> = ({ onBack }) =
             <li>Crusher: Destroy nearby obstacles</li>
             <li>Builder: Create new platforms</li>
             <li>Climber: Climb on walls</li>
-            <li>Teleport: Jump from point A to point B</li>
+            <li>Teleport: ...</li>
+            <li>Tsunami: ...</li>
+            <li>Monster: ...</li>
+            <li>Slide: ...</li>
+            <li>Sokoban: ...</li>
+            <li>Blaster: ...</li>
           </ul>
         </li>
         <li>Complete all 13 levels to win</li>
