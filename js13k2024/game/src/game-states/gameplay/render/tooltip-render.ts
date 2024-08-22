@@ -1,4 +1,4 @@
-import { Position, BonusType, getBonusDescription } from './gameplay-types';
+import { Position, BonusType, getBonusDescription } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
 export const drawTooltip = (
@@ -118,7 +118,7 @@ const drawTsunamiIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.beginPath();
   ctx.moveTo(x, y + size);
   ctx.quadraticCurveTo(x + size / 4, y, x + size / 2, y + size / 2);
-  ctx.quadraticCurveTo(x + size * 3 / 4, y + size, x + size, y);
+  ctx.quadraticCurveTo(x + (size * 3) / 4, y + size, x + size, y);
   ctx.stroke();
 
   ctx.fillStyle = 'rgba(0, 100, 255, 0.5)';
@@ -136,7 +136,7 @@ const drawMonsterIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.fillStyle = 'red';
   ctx.beginPath();
   ctx.arc(x + size / 3, y + size / 3, size / 10, 0, Math.PI * 2);
-  ctx.arc(x + size * 2 / 3, y + size / 3, size / 10, 0, Math.PI * 2);
+  ctx.arc(x + (size * 2) / 3, y + size / 3, size / 10, 0, Math.PI * 2);
   ctx.fill();
 };
 
@@ -163,27 +163,27 @@ const drawSokobanIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.beginPath();
   ctx.moveTo(x, y + size / 2);
   ctx.lineTo(x + size, y + size / 2);
-  ctx.lineTo(x + size * 3 / 4, y + size / 4);
+  ctx.lineTo(x + (size * 3) / 4, y + size / 4);
   ctx.moveTo(x + size, y + size / 2);
-  ctx.lineTo(x + size * 3 / 4, y + size * 3 / 4);
+  ctx.lineTo(x + (size * 3) / 4, y + (size * 3) / 4);
   ctx.stroke();
 };
 
 const drawBlasterIcon = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
   // Draw blaster body
   ctx.fillStyle = '#808080';
-  ctx.fillRect(x, y + size / 3, size * 2 / 3, size / 3);
+  ctx.fillRect(x, y + size / 3, (size * 2) / 3, size / 3);
 
   // Draw blaster nozzle
   ctx.beginPath();
-  ctx.arc(x + size * 2 / 3, y + size / 2, size / 6, 0, Math.PI * 2);
+  ctx.arc(x + (size * 2) / 3, y + size / 2, size / 6, 0, Math.PI * 2);
   ctx.fill();
 
   // Draw "laser" beam
   ctx.strokeStyle = 'red';
   ctx.setLineDash([size / 10, size / 20]);
   ctx.beginPath();
-  ctx.moveTo(x + size * 2 / 3, y + size / 2);
+  ctx.moveTo(x + (size * 2) / 3, y + size / 2);
   ctx.lineTo(x + size, y + size / 2);
   ctx.stroke();
   ctx.setLineDash([]);

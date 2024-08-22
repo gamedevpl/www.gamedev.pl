@@ -1,4 +1,4 @@
-import { BonusType, GameState, LevelConfig } from '../gameplay-types';
+import { GameState, LevelConfig } from '../gameplay-types';
 import {
   createPosition,
   createMonster,
@@ -6,7 +6,6 @@ import {
   createPlayer,
   generateBaseState,
   generateBaseConfig,
-  createBonus,
 } from '../level-generator';
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {

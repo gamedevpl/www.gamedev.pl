@@ -1,6 +1,6 @@
 import { FunctionComponent, useEffect, useRef } from 'react';
 import { drawGameState } from '../gameplay/game-render';
-import { drawGrid } from '../gameplay/grid-render';
+import { drawGrid } from '../gameplay/render/grid-render';
 import { GameState, BonusType } from '../gameplay/gameplay-types';
 
 const PREVIEW_WIDTH = 300;
@@ -13,13 +13,8 @@ const createPreviewGameState = (): GameState => ({
     position: { x: 2, y: 2 },
     previousPosition: { x: 2, y: 2 },
     moveTimestamp: Date.now(),
-    isInvisible: false,
     isVictorious: false,
     isVanishing: false,
-    isClimbing: false,
-    isMonster: false,
-    hasBlaster: false,
-    blasterSteps: undefined,
   },
   goal: { x: 4, y: 4 },
   obstacles: [
@@ -54,8 +49,6 @@ const createPreviewGameState = (): GameState => ({
   explosions: [],
   timeBombs: [],
   landMines: [],
-  crusherActive: false,
-  builderActive: false,
   score: 0,
   gameEndingState: 'none',
   tsunamiLevel: 0,

@@ -1,6 +1,6 @@
-import { Position, Direction } from './gameplay-types';
+import { Position, Direction } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
-import { getNewPosition, getOrthogonalDirection } from './move-utils';
+import { getNewPosition, getOrthogonalDirection } from '../move-utils';
 
 // Updated function to draw move arrows
 

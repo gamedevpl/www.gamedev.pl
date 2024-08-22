@@ -1,4 +1,13 @@
-import { GameState, Position, LevelConfig, Direction, BonusType, ActiveBonus, BlasterShot } from './gameplay-types';
+import {
+  GameState,
+  Position,
+  LevelConfig,
+  Direction,
+  BonusType,
+  ActiveBonus,
+  BlasterShot,
+  isActiveBonus,
+} from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
@@ -7,14 +16,20 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
-import { BLASTER_SHOT_DURATION, MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
+import {
+  BLASTER_SHOT_DURATION,
+  MOVE_ANIMATION_DURATION,
+  OBSTACLE_DESTRUCTION_DURATION,
+} from './render/animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
 import {
   getDirectionFromKey,
+  getDirectionFromPositions,
   getNewPosition,
   isPositionEqual,
   isPositionOccupied,
   isValidMove,
+  isValidObstaclePush,
   manhattanDistance,
 } from './move-utils';
 
@@ -48,7 +63,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
   // Handle Sokoban bonus
   if (newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
-    handleSokobanMovement(newGameState, oldPosition, newPosition);
+    handleSokobanMovement(newGameState, oldPosition, newPosition, levelConfig.gridSize);
   }
 
   newGameState.obstacles = gameState.obstacles.filter(
@@ -56,7 +71,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   );
 
   if (
-    gameState.crusherActive &&
+    isActiveBonus(newGameState, BonusType.Crusher) &&
     gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
   ) {
     newGameState.obstacles = gameState.obstacles.map((obstacle) =>
@@ -116,12 +131,13 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       newGameState.player.position,
       levelConfig.gridSize,
       newGameState.obstacles,
-      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
-      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.ConfusedMonsters),
+      isActiveBonus(newGameState, BonusType.CapOfInvisibility),
+      isActiveBonus(newGameState, BonusType.ConfusedMonsters),
+      isActiveBonus(newGameState, BonusType.Monster),
     );
 
     // Handle Monster bonus
-    if (newGameState.player.isMonster) {
+    if (isActiveBonus(newGameState, BonusType.Monster)) {
       handleMonsterBonus(newGameState);
     } else {
       // Check for collisions with monsters
@@ -133,7 +149,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     }
 
     // Handle Blaster bonus
-    if (newGameState.player.hasBlaster) {
+    if (isActiveBonus(newGameState, BonusType.Blaster)) {
       handleBlasterShot(newGameState, direction, levelConfig);
     }
     newGameState.blasterShots = newGameState.blasterShots.filter(
@@ -185,13 +201,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
       .filter((bonus) => bonus.duration > 0);
 
-    newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
-    newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
-    newGameState.player.isClimbing = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Climber);
-    newGameState.isSliding = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Slide);
-
     // Handle builder bonus
-    if (gameState.builderActive) {
+    if (isActiveBonus(newGameState, BonusType.Builder)) {
       const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true, isDestroying: false };
       if (
         !isPositionOccupied(
@@ -230,13 +241,10 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       });
       break;
     case BonusType.Crusher:
-      gameState.crusherActive = true;
       break;
     case BonusType.Builder:
-      gameState.builderActive = true;
       break;
     case BonusType.Climber:
-      gameState.player.isClimbing = true;
       break;
     case BonusType.Teleport:
       // Teleport is handled immediately when collected
@@ -245,17 +253,13 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       gameState.tsunamiLevel = 1;
       break;
     case BonusType.Monster:
-      gameState.player.isMonster = true;
       break;
     case BonusType.Slide:
       gameState.isSliding = true;
       break;
     case BonusType.Sokoban:
-      // Sokoban logic is handled in movement
       break;
     case BonusType.Blaster:
-      gameState.player.hasBlaster = true;
-      gameState.player.blasterSteps = 13;
       break;
   }
 };
@@ -324,11 +328,12 @@ const performTeleportation = (gameState: GameState, teleportPoint: Position): vo
 const handleTsunamiEffect = (gameState: GameState): void => {
   gameState.tsunamiLevel++;
   if (gameState.tsunamiLevel >= 13) {
-    if (!gameState.player.isClimbing) {
+    if (!isActiveBonus(gameState, BonusType.Climber)) {
       gameState.gameEndingState = 'gameOver';
       startGameOverAnimation(gameState);
     }
     gameState.monsters = [];
+    gameState.tsunamiLevel = 0;
   }
 };
 
@@ -354,14 +359,19 @@ const handleSlideMovement = (gameState: GameState, direction: Direction, levelCo
   return newPosition;
 };
 
-const handleSokobanMovement = (gameState: GameState, oldPosition: Position, newPosition: Position): void => {
+const handleSokobanMovement = (
+  gameState: GameState,
+  oldPosition: Position,
+  newPosition: Position,
+  gridSize: number,
+): void => {
   const pushedObstacle = gameState.obstacles.find((obstacle) => isPositionEqual(obstacle.position, newPosition));
   if (pushedObstacle) {
     const obstacleNewPosition = getNewPosition(
       pushedObstacle.position,
       getDirectionFromPositions(oldPosition, newPosition),
     );
-    if (isValidMove(obstacleNewPosition, gameState, { gridSize: gameState.obstacles.length })) {
+    if (isValidObstaclePush(obstacleNewPosition, gameState, { gridSize })) {
       pushedObstacle.position = obstacleNewPosition;
       // Check if the pushed obstacle crushes a monster
       const crushedMonster = gameState.monsters.find((monster) =>
@@ -390,19 +400,34 @@ const handleBlasterShot = (gameState: GameState, direction: Direction, levelConf
   gameState.blasterShots.push(shot);
   // Play the blaster sound effect
   soundEngine.playBlasterSound();
-  // Check if the shot hits a monster
-  const hitMonster = gameState.monsters.find((monster) => isPositionEqual(monster.position, shot.endPosition));
-  if (hitMonster) {
-    gameState.monsters = gameState.monsters.filter((monster) => monster !== hitMonster);
-  }
-  if (gameState.player.hasBlaster && gameState.player.blasterSteps!-- <= 0) {
-    gameState.player.hasBlaster = false;
-  }
+
+  // Check if the shot hits monsters along its path
+  gameState.monsters = gameState.monsters.filter((monster) => {
+    const isHit = isMonsterOnBlasterPath(monster.position, start, end, direction);
+    return !isHit;
+  });
 };
 
-const getDirectionFromPositions = (from: Position, to: Position): Direction => {
-  if (to.x > from.x) return Direction.Right;
-  if (to.x < from.x) return Direction.Left;
-  if (to.y > from.y) return Direction.Down;
-  return Direction.Up;
+const isMonsterOnBlasterPath = (
+  monsterPos: Position,
+  start: Position,
+  end: Position,
+  direction: Direction,
+): boolean => {
+  switch (direction) {
+    case Direction.Up:
+    case Direction.Down:
+      return (
+        monsterPos.x === start.x &&
+        ((direction === Direction.Up && monsterPos.y <= start.y && monsterPos.y >= end.y) ||
+          (direction === Direction.Down && monsterPos.y >= start.y && monsterPos.y <= end.y))
+      );
+    case Direction.Left:
+    case Direction.Right:
+      return (
+        monsterPos.y === start.y &&
+        ((direction === Direction.Left && monsterPos.x <= start.x && monsterPos.x >= end.x) ||
+          (direction === Direction.Right && monsterPos.x >= start.x && monsterPos.x <= end.x))
+      );
+  }
 };

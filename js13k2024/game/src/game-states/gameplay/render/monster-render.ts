@@ -1,10 +1,15 @@
-import { Monster } from './gameplay-types';
+import { Monster } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 import { interpolatePosition } from './animation-utils';
 import { EntityRenderParams } from './entity-render-utils';
 import { renderEntity } from './entity-render';
 
-export const drawMonsters = (ctx: CanvasRenderingContext2D, monsters: Monster[], cellSize: number, isPlayerMonster: boolean) => {
+export const drawMonsters = (
+  ctx: CanvasRenderingContext2D,
+  monsters: Monster[],
+  cellSize: number,
+  isPlayerMonster: boolean,
+) => {
   monsters.forEach((monster) => {
     const interpolatedPosition = interpolatePosition(monster.position, monster.previousPosition, monster.moveTimestamp);
 

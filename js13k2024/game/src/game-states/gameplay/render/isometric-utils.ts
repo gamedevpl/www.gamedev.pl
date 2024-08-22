@@ -1,4 +1,4 @@
-import { Position } from './gameplay-types';
+import { Position } from '../gameplay-types';
 
 // Constants for isometric tile dimensions
 export const TILE_WIDTH = 60;
@@ -107,14 +107,15 @@ export function drawIsometricCube(
 // Function to get z-index for different object types
 function getZIndex(type: string): number {
   switch (type) {
+    case 'wave':
     case 'obstacle':
-      return 1;
+      return 3;
     case 'bonus':
     case 'landMine':
     case 'timeBomb':
       return 2;
     case 'goal':
-      return 3;
+      return 2;
     case 'monster':
       return 4;
     case 'player':

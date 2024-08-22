@@ -1,4 +1,4 @@
-import { Obstacle, Player } from './gameplay-types';
+import { Obstacle, Player } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 import {
   interpolatePosition,
@@ -18,10 +18,10 @@ export const drawPlayer = (
   isInvisible: boolean = false,
   obstacles: Obstacle[] = [],
   isMonster: boolean = false,
-  hasBlaster: boolean = false
+  hasBlaster: boolean = false,
+  isClimbing: boolean = false,
 ) => {
-  const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious, isClimbing } =
-    player;
+  const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious } = player;
   const isTeleporting = teleportTimestamp && Date.now() - teleportTimestamp < TELEPORT_ANIMATION_DURATION;
 
   const interpolatedPosition = isTeleporting
@@ -70,7 +70,7 @@ export const drawPlayer = (
     ctx.globalAlpha = calculateTeleportingOpacity(Date.now() - teleportTimestamp);
   }
 
-  renderEntity(playerRenderParams);
+  const { bounceOffset } = renderEntity(playerRenderParams);
 
   // Reset global alpha
   ctx.globalAlpha = 1;
@@ -92,7 +92,7 @@ export const drawPlayer = (
 
   // Add blaster visual
   if (hasBlaster) {
-    drawBlaster(ctx, isoX, isoY, cellSize);
+    drawBlaster(ctx, isoX, isoY, cellSize, bounceOffset);
   }
 
   // Add teleportation effect if the player has just teleported
@@ -193,7 +193,7 @@ const drawMonsterEffects = (ctx: CanvasRenderingContext2D, x: number, y: number,
   // Draw glowing eyes
   const eyeSize = cellSize * 0.1;
   const eyeOffset = cellSize * 0.15;
-  
+
   ctx.beginPath();
   ctx.arc(-eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
   ctx.arc(eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
@@ -208,9 +208,9 @@ const drawMonsterEffects = (ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 };
 
-const drawBlaster = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
+const drawBlaster = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number, bounceOffset: number) => {
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(x - cellSize / 10, y - bounceOffset);
 
   const blasterLength = cellSize * 0.4;
   const blasterWidth = cellSize * 0.1;
@@ -233,7 +233,7 @@ const drawBlaster = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSi
   ctx.fill();
 
   // Add an energy charge effect
-  const chargeSize = (Math.sin(Date.now() / 200) + 1) * blasterWidth / 4;
+  const chargeSize = ((Math.sin(Date.now() / 200) + 1) * blasterWidth) / 4;
   ctx.beginPath();
   ctx.arc(0, -blasterLength, chargeSize, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';

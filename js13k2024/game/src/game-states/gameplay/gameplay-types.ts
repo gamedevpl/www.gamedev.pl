@@ -38,13 +38,8 @@ export interface Player {
   previousPosition: Position;
   moveTimestamp: number;
   teleportTimestamp?: number;
-  isInvisible: boolean;
   isVictorious: boolean;
   isVanishing: boolean;
-  isClimbing: boolean;
-  isMonster: boolean;
-  hasBlaster: boolean;
-  blasterSteps: number | undefined;
 }
 
 export interface Obstacle {
@@ -68,8 +63,6 @@ export interface GameState {
   explosions: Explosion[];
   timeBombs: TimeBomb[];
   landMines: Position[];
-  crusherActive: boolean;
-  builderActive: boolean;
   score: number;
   gameEndingState: GameEndingState;
   tsunamiLevel: number;
@@ -216,4 +209,8 @@ export interface ElectricalDischarge {
 export interface EntityAnimationState {
   bounceOffset: number;
   tentacleAnimationFactor: number;
+}
+
+export function isActiveBonus(gameState: GameState, bonusType: BonusType) {
+  return gameState.activeBonuses.some((bonus) => bonus.type === bonusType);
 }

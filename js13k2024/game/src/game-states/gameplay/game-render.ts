@@ -1,16 +1,16 @@
-import { BonusType, GameState, LevelConfig } from './gameplay-types';
-import { drawObstacles, drawGoal } from './grid-objects-render';
-import { drawGrid } from './grid-render';
-import { drawPlayer } from './player-render';
-import { drawMonsters } from './monster-render';
-import { drawBonuses, drawLandMines, drawTimeBombs } from './bonus-render';
-import { drawExplosions } from './explosion-render';
-import { calculateDrawingOrder } from './isometric-utils';
-import { calculateShakeOffset, interpolatePosition } from './animation-utils';
-import { drawTooltip } from './tooltip-render';
-import { drawElectricalDischarges } from './discharges-render';
-import { drawPlatform } from './grid-render';
-import { drawBlasterShot, drawSlideTrail, drawTsunamiEffect } from './bonus-effect-render';
+import { BonusType, GameState, isActiveBonus, LevelConfig } from './gameplay-types';
+import { drawObstacles, drawGoal } from './render/grid-objects-render';
+import { drawGrid } from './render/grid-render';
+import { drawPlayer } from './render/player-render';
+import { drawMonsters } from './render/monster-render';
+import { drawBonuses, drawLandMines, drawTimeBombs } from './render/bonus-render';
+import { drawExplosions } from './render/explosion-render';
+import { calculateDrawingOrder } from './render/isometric-utils';
+import { calculateShakeOffset, interpolatePosition } from './render/animation-utils';
+import { drawTooltip } from './render/tooltip-render';
+import { drawElectricalDischarges } from './render/discharges-render';
+import { drawPlatform } from './render/grid-render';
+import { drawBlasterShot, drawSlideTrail, drawTsunamiWave, generateTsunamiWaves } from './render/bonus-effect-render';
 
 export const PLATFORM_HEIGHT = 20;
 
@@ -42,10 +42,8 @@ export const drawGameState = (
   // Draw the grid
   drawGrid(ctx, gridSize, gameState);
 
-  // Draw tsunami effect
-  if (gameState.tsunamiLevel > 0) {
-    drawTsunamiEffect(ctx, gameState, gridSize, cellSize);
-  }
+  // Generate tsunami effect
+  const tsunamiWaves = gameState.tsunamiLevel > 0 ? generateTsunamiWaves(gameState, gridSize, cellSize) : [];
 
   // Draw electrical discharges
   drawElectricalDischarges(ctx, gridSize, gameState.monsterSpawnSteps, gameState.player.moveTimestamp, cellSize);
@@ -57,6 +55,7 @@ export const drawGameState = (
 
   // Prepare all game objects for sorting
   const allObjects = [
+    ...tsunamiWaves.map((obj) => ({ position: obj.grid, type: 'wave', obj }) as const),
     ...gameState.obstacles.map((obj) => ({ position: obj.position, type: 'obstacle', obj }) as const),
     ...gameState.bonuses.map((obj) => ({ position: obj.position, type: 'bonus', obj }) as const),
     ...gameState.landMines.map((obj) => ({ position: obj, type: 'landMine' }) as const),
@@ -82,6 +81,9 @@ export const drawGameState = (
   for (const sortedObject of sortedObjects) {
     const { type, position } = sortedObject;
     switch (type) {
+      case 'wave':
+        drawTsunamiWave(ctx, sortedObject.obj);
+        break;
       case 'obstacle':
         drawObstacles(ctx, [sortedObject.obj], cellSize);
         break;
@@ -95,7 +97,7 @@ export const drawGameState = (
         drawTimeBombs(ctx, [sortedObject.obj], cellSize);
         break;
       case 'monster':
-        drawMonsters(ctx, [sortedObject.obj], cellSize, gameState.player.isMonster);
+        drawMonsters(ctx, [sortedObject.obj], cellSize, isActiveBonus(gameState, BonusType.Monster));
         break;
       case 'player':
         drawPlayer(
@@ -104,8 +106,9 @@ export const drawGameState = (
           cellSize,
           gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
           gameState.obstacles,
-          gameState.player.isMonster,
-          gameState.player.hasBlaster,
+          isActiveBonus(gameState, BonusType.Monster),
+          isActiveBonus(gameState, BonusType.Blaster),
+          isActiveBonus(gameState, BonusType.Climber),
         );
         break;
       case 'goal':
@@ -123,7 +126,8 @@ export const drawGameState = (
   // Draw tooltip if there's an active bonus
   const tooltipBonus = gameState.activeBonuses.find(
     (bonus) =>
-      bonus.duration === 13 || [BonusType.Builder, BonusType.CapOfInvisibility, BonusType.Crusher].includes(bonus.type),
+      bonus.duration === 13 ||
+      [BonusType.Builder, BonusType.CapOfInvisibility, BonusType.Crusher, BonusType.Blaster].includes(bonus.type),
   );
 
   if (tooltipBonus) {

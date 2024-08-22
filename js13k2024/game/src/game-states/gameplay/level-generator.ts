@@ -34,13 +34,8 @@ const createPlayer = (x: number, y: number): Player => ({
   position: createPosition(x, y),
   previousPosition: createPosition(x, y),
   moveTimestamp: Date.now(),
-  isInvisible: false,
   isVictorious: false,
   isVanishing: false,
-  isClimbing: false,
-  isMonster: false,
-  hasBlaster: false,
-  blasterSteps: undefined,
 });
 
 const createObstacle = (x: number, y: number): Obstacle => ({
@@ -62,8 +57,6 @@ const generateBaseState = (): GameState => ({
   explosions: [],
   timeBombs: [],
   landMines: [],
-  crusherActive: false,
-  builderActive: false,
   score: 0,
   gameEndingState: 'none',
   tsunamiLevel: 0,
