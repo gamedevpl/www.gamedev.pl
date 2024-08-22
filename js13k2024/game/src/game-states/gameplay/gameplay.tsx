@@ -1,6 +1,6 @@
 import { FunctionComponent, useState, useRef, useEffect } from 'react';
 import { drawGameState } from './game-render';
-import { drawMoveArrows } from './move-arrows-render';
+import { drawMoveArrows } from './render/move-arrows-render';
 import { doGameUpdate, handleKeyPress, isGameEnding } from './game-logic';
 import { getMoveFromClick, getValidMoves } from './move-utils';
 import { HUD } from './hud';

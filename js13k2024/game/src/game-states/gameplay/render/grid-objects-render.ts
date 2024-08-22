@@ -1,4 +1,4 @@
-import { Position, Obstacle } from './gameplay-types';
+import { Position, Obstacle } from '../gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
 import { calculateObstacleHeight } from './animation-utils';
 

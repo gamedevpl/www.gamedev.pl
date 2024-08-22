@@ -1,4 +1,4 @@
-import { Position, BonusType, getBonusDescription } from './gameplay-types';
+import { Position, BonusType, getBonusDescription } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
 export const drawTooltip = (

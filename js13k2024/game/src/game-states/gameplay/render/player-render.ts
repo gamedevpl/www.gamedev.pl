@@ -1,4 +1,4 @@
-import { Obstacle, Player } from './gameplay-types';
+import { Obstacle, Player } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 import {
   interpolatePosition,

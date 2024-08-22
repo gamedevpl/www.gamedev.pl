@@ -7,7 +7,11 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
-import { BLASTER_SHOT_DURATION, MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
+import {
+  BLASTER_SHOT_DURATION,
+  MOVE_ANIMATION_DURATION,
+  OBSTACLE_DESTRUCTION_DURATION,
+} from './render/animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
 import {
   getDirectionFromKey,

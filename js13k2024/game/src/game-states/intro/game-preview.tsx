@@ -1,6 +1,6 @@
 import { FunctionComponent, useEffect, useRef } from 'react';
 import { drawGameState } from '../gameplay/game-render';
-import { drawGrid } from '../gameplay/grid-render';
+import { drawGrid } from '../gameplay/render/grid-render';
 import { GameState, BonusType } from '../gameplay/gameplay-types';
 
 const PREVIEW_WIDTH = 300;

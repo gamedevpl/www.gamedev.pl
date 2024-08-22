@@ -1,4 +1,4 @@
-import { Position } from './gameplay-types';
+import { Position } from '../gameplay-types';
 
 // Constants for isometric tile dimensions
 export const TILE_WIDTH = 60;

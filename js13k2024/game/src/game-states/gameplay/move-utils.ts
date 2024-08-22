@@ -1,5 +1,5 @@
 import { BonusType, Direction, GameState, LevelConfig, Position } from './gameplay-types';
-import { getArrowShape } from './move-arrows-render';
+import { getArrowShape } from './render/move-arrows-render';
 
 export const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
 

@@ -1,4 +1,4 @@
-import { Position, Bonus, BonusType } from './gameplay-types';
+import { Position, Bonus, BonusType } from '../gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
 import { drawShadow } from './grid-render';
 

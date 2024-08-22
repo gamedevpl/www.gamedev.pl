@@ -1,6 +1,6 @@
-import { PLATFORM_HEIGHT } from './game-render';
+import { PLATFORM_HEIGHT } from '../game-render';
 import { TILE_HEIGHT, TILE_WIDTH, toIsometric } from './isometric-utils';
-import { GameState } from './gameplay-types';
+import { GameState } from '../gameplay-types';
 
 export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) => {
   const topLeft = toIsometric(0, 0);
@@ -94,7 +94,10 @@ const drawTsunamiTile = (ctx: CanvasRenderingContext2D, x: number, y: number, ts
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(isoX - TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - waterHeight + Math.sin(Date.now() / 200 + x * 0.5) * 3);
-  ctx.lineTo(isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT / 2 - waterHeight + Math.sin(Date.now() / 200 + (x + 1) * 0.5) * 3);
+  ctx.lineTo(
+    isoX + TILE_WIDTH / 2,
+    isoY + TILE_HEIGHT / 2 - waterHeight + Math.sin(Date.now() / 200 + (x + 1) * 0.5) * 3,
+  );
   ctx.stroke();
 };
 
@@ -102,10 +105,7 @@ const drawSlideTile = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   const { x: isoX, y: isoY } = toIsometric(x, y);
 
   // Draw a subtle ice-like effect
-  const gradient = ctx.createLinearGradient(
-    isoX - TILE_WIDTH / 2, isoY,
-    isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT
-  );
+  const gradient = ctx.createLinearGradient(isoX - TILE_WIDTH / 2, isoY, isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT);
   gradient.addColorStop(0, 'rgba(200, 200, 255, 0.2)');
   gradient.addColorStop(0.5, 'rgba(220, 220, 255, 0.3)');
   gradient.addColorStop(1, 'rgba(200, 200, 255, 0.2)');

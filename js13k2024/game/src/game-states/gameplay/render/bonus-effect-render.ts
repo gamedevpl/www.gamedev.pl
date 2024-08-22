@@ -1,5 +1,5 @@
 import { interpolatePosition } from './animation-utils';
-import { BlasterShot, Direction, GameState, Position } from './gameplay-types';
+import { BlasterShot, Direction, GameState, Position } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
 export const drawTsunamiEffect = (

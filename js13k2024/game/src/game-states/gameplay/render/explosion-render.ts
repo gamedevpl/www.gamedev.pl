@@ -1,4 +1,4 @@
-import { Explosion } from './gameplay-types';
+import { Explosion } from '../gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
 
 export const drawExplosions = (ctx: CanvasRenderingContext2D, explosions: Explosion[]) => {

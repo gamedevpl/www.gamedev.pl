@@ -1,16 +1,16 @@
 import { BonusType, GameState, LevelConfig } from './gameplay-types';
-import { drawObstacles, drawGoal } from './grid-objects-render';
-import { drawGrid } from './grid-render';
-import { drawPlayer } from './player-render';
-import { drawMonsters } from './monster-render';
-import { drawBonuses, drawLandMines, drawTimeBombs } from './bonus-render';
-import { drawExplosions } from './explosion-render';
-import { calculateDrawingOrder } from './isometric-utils';
-import { calculateShakeOffset, interpolatePosition } from './animation-utils';
-import { drawTooltip } from './tooltip-render';
-import { drawElectricalDischarges } from './discharges-render';
-import { drawPlatform } from './grid-render';
-import { drawBlasterShot, drawSlideTrail, drawTsunamiEffect } from './bonus-effect-render';
+import { drawObstacles, drawGoal } from './render/grid-objects-render';
+import { drawGrid } from './render/grid-render';
+import { drawPlayer } from './render/player-render';
+import { drawMonsters } from './render/monster-render';
+import { drawBonuses, drawLandMines, drawTimeBombs } from './render/bonus-render';
+import { drawExplosions } from './render/explosion-render';
+import { calculateDrawingOrder } from './render/isometric-utils';
+import { calculateShakeOffset, interpolatePosition } from './render/animation-utils';
+import { drawTooltip } from './render/tooltip-render';
+import { drawElectricalDischarges } from './render/discharges-render';
+import { drawPlatform } from './render/grid-render';
+import { drawBlasterShot, drawSlideTrail, drawTsunamiEffect } from './render/bonus-effect-render';
 
 export const PLATFORM_HEIGHT = 20;
 
