@@ -2,44 +2,57 @@ import { interpolatePosition } from './animation-utils';
 import { BlasterShot, Direction, GameState, Position } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
-export const drawTsunamiEffect = (
-  ctx: CanvasRenderingContext2D,
-  gameState: GameState,
-  gridSize: number,
-  cellSize: number,
-) => {
+type TsunamiWave = {
+  tsunamiLevel: number;
+  grid: Position;
+  iso: [Position, Position, Position, Position];
+};
+
+export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cellSize: number): TsunamiWave[] => {
   const { tsunamiLevel } = gameState;
   const maxWaterHeight = cellSize * 0.8; // Maximum water height when tsunamiLevel reaches 13
 
-  ctx.save();
-  ctx.globalAlpha = 0.6; // Make the water slightly transparent
+  const waves: TsunamiWave[] = [];
 
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
-      const { x: isoX, y: isoY } = toIsometric(x, y);
+      const topL = toIsometric(x, y);
+      const topR = toIsometric(x + 1, y);
+      const bottomL = toIsometric(x, y + 1);
+      const bottomR = toIsometric(x + 1, y + 1);
       const waterHeight = (tsunamiLevel / 13) * maxWaterHeight;
 
-      ctx.fillStyle = `rgba(0, 100, 255, ${tsunamiLevel / 13})`; // Blue color with increasing opacity
-      ctx.beginPath();
-      ctx.moveTo(isoX, isoY);
-      ctx.lineTo(isoX + cellSize / 2, isoY + cellSize / 4);
-      ctx.lineTo(isoX, isoY + cellSize / 2);
-      ctx.lineTo(isoX - cellSize / 2, isoY + cellSize / 4);
-      ctx.closePath();
-      ctx.fill();
+      const wave1 = waterHeight + Math.sin(Date.now() / 200 + x * 0.5) * 5;
+      const wave2 = waterHeight + Math.sin(Date.now() / 200 + (x + 1) * 0.5) * 5;
 
-      // Add wave effect
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(isoX - cellSize / 2, isoY + cellSize / 4 - waterHeight + Math.sin(Date.now() / 200 + x * 0.5) * 5);
-      ctx.lineTo(
-        isoX + cellSize / 2,
-        isoY + cellSize / 4 - waterHeight + Math.sin(Date.now() / 200 + (x + 1) * 0.5) * 5,
-      );
-      ctx.stroke();
+      waves.push({
+        tsunamiLevel,
+        grid: { x, y },
+        iso: [
+          { x: topL.x, y: topL.y - wave1 },
+          { x: bottomL.x, y: bottomL.y - wave2 },
+          { x: bottomR.x, y: bottomR.y - wave2 },
+          { x: topR.x, y: topR.y - wave1 },
+        ],
+      });
     }
   }
+
+  return waves;
+};
+
+export const drawTsunamiWave = (ctx: CanvasRenderingContext2D, wave: TsunamiWave) => {
+  ctx.save();
+  ctx.globalAlpha = 0.6; // Make the water slightly transparent
+
+  ctx.fillStyle = `rgba(0, 100, 255, ${wave.tsunamiLevel / 13})`; // Blue color with increasing opacity
+  ctx.beginPath();
+  ctx.moveTo(wave.iso[0].x, wave.iso[0].y);
+  for (let i = 1; i < wave.iso.length; i++) {
+    ctx.lineTo(wave.iso[i].x, wave.iso[i].y);
+  }
+  ctx.closePath();
+  ctx.fill();
 
   ctx.restore();
 };

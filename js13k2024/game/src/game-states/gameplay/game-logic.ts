@@ -335,6 +335,7 @@ const handleTsunamiEffect = (gameState: GameState): void => {
       startGameOverAnimation(gameState);
     }
     gameState.monsters = [];
+    gameState.tsunamiLevel = 0;
   }
 };
 

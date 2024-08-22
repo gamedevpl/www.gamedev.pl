@@ -10,7 +10,7 @@ import { calculateShakeOffset, interpolatePosition } from './render/animation-ut
 import { drawTooltip } from './render/tooltip-render';
 import { drawElectricalDischarges } from './render/discharges-render';
 import { drawPlatform } from './render/grid-render';
-import { drawBlasterShot, drawSlideTrail, drawTsunamiEffect } from './render/bonus-effect-render';
+import { drawBlasterShot, drawSlideTrail, drawTsunamiWave, generateTsunamiWaves } from './render/bonus-effect-render';
 
 export const PLATFORM_HEIGHT = 20;
 
@@ -42,10 +42,8 @@ export const drawGameState = (
   // Draw the grid
   drawGrid(ctx, gridSize, gameState);
 
-  // Draw tsunami effect
-  if (gameState.tsunamiLevel > 0) {
-    drawTsunamiEffect(ctx, gameState, gridSize, cellSize);
-  }
+  // Generate tsunami effect
+  const tsunamiWaves = gameState.tsunamiLevel > 0 ? generateTsunamiWaves(gameState, gridSize, cellSize) : [];
 
   // Draw electrical discharges
   drawElectricalDischarges(ctx, gridSize, gameState.monsterSpawnSteps, gameState.player.moveTimestamp, cellSize);
@@ -57,6 +55,7 @@ export const drawGameState = (
 
   // Prepare all game objects for sorting
   const allObjects = [
+    ...tsunamiWaves.map((obj) => ({ position: obj.grid, type: 'wave', obj }) as const),
     ...gameState.obstacles.map((obj) => ({ position: obj.position, type: 'obstacle', obj }) as const),
     ...gameState.bonuses.map((obj) => ({ position: obj.position, type: 'bonus', obj }) as const),
     ...gameState.landMines.map((obj) => ({ position: obj, type: 'landMine' }) as const),
@@ -82,6 +81,9 @@ export const drawGameState = (
   for (const sortedObject of sortedObjects) {
     const { type, position } = sortedObject;
     switch (type) {
+      case 'wave':
+        drawTsunamiWave(ctx, sortedObject.obj);
+        break;
       case 'obstacle':
         drawObstacles(ctx, [sortedObject.obj], cellSize);
         break;
