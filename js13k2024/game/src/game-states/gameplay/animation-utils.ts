@@ -2,6 +2,7 @@ import { ElectricalDischarge } from './gameplay-types';
 
 export const MOVE_ANIMATION_DURATION = 250; // 1/4 second
 export const TELEPORT_ANIMATION_DURATION = 500; // 1/2 second
+export const BLASTER_SHOT_DURATION = 250; // 1/2 second
 
 export const calculateAnimationFactor = (): number => {
   return Math.cos((Date.now() / 1000) * Math.PI);
@@ -30,8 +31,9 @@ export const interpolatePosition = (
   currentPosition: Position,
   previousPosition: Position,
   moveTimestamp: number,
+  duration = MOVE_ANIMATION_DURATION,
 ): Position => {
-  const moveProgress = Math.min(Date.now() - moveTimestamp, MOVE_ANIMATION_DURATION) / MOVE_ANIMATION_DURATION;
+  const moveProgress = Math.min(Date.now() - moveTimestamp, duration) / duration;
 
   return {
     x: previousPosition.x + (currentPosition.x - previousPosition.x) * moveProgress,

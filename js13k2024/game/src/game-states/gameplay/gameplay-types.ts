@@ -20,7 +20,12 @@ export enum BonusType {
   Crusher,
   Builder,
   Climber,
-  Teleport, // New Teleport bonus type
+  Teleport,
+  Tsunami,
+  Monster,
+  Slide,
+  Sokoban,
+  Blaster,
 }
 
 export interface Bonus {
@@ -37,6 +42,9 @@ export interface Player {
   isVictorious: boolean;
   isVanishing: boolean;
   isClimbing: boolean;
+  isMonster: boolean;
+  hasBlaster: boolean;
+  blasterSteps: number | undefined;
 }
 
 export interface Obstacle {
@@ -64,6 +72,9 @@ export interface GameState {
   builderActive: boolean;
   score: number;
   gameEndingState: GameEndingState;
+  tsunamiLevel: number;
+  isSliding: boolean;
+  blasterShots: BlasterShot[];
 }
 
 export type Explosion = {
@@ -149,6 +160,13 @@ export interface LevelData {
   story: string;
 }
 
+export interface BlasterShot {
+  startPosition: Position;
+  endPosition: Position;
+  direction: Direction;
+  shotTimestamp: number;
+}
+
 export function getBonusDescription(bonusType: BonusType): string {
   switch (bonusType) {
     case BonusType.CapOfInvisibility:
@@ -166,7 +184,17 @@ export function getBonusDescription(bonusType: BonusType): string {
     case BonusType.Climber:
       return 'Walk on walls like a pro!';
     case BonusType.Teleport:
-      return 'Beam me up, Scotty!'; // New description for Teleport bonus
+      return 'Beam me up, Scotty!';
+    case BonusType.Tsunami:
+      return 'Water, water everywhere!';
+    case BonusType.Monster:
+      return 'Tables have turned!';
+    case BonusType.Slide:
+      return 'Slip and slide!';
+    case BonusType.Sokoban:
+      return 'Push it real good!';
+    case BonusType.Blaster:
+      return 'Pew pew pew!';
     default:
       return 'Mystery power activated!';
   }

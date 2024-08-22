@@ -1,4 +1,4 @@
-import { GameState, Position, LevelConfig, Direction, BonusType, ActiveBonus } from './gameplay-types';
+import { GameState, Position, LevelConfig, Direction, BonusType, ActiveBonus, BlasterShot } from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
@@ -7,13 +7,13 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
-import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
+import { BLASTER_SHOT_DURATION, MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
 import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
   const [gameState, config] = generateLevel(level);
-  return [{ ...gameState, gameEndingState: 'none' }, config];
+  return [{ ...gameState, gameEndingState: 'none', tsunamiLevel: 0, isSliding: false, blasterShots: [] }, config];
 };
 
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
@@ -32,7 +32,17 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   const newGameState = { ...gameState };
 
   const oldPosition = newGameState.player.position;
-  const newPosition = getNewPosition(newGameState.player.position, direction);
+  let newPosition = getNewPosition(newGameState.player.position, direction);
+
+  // Handle Slide bonus
+  if (newGameState.isSliding) {
+    newPosition = handleSlideMovement(newGameState, direction, levelConfig);
+  }
+
+  // Handle Sokoban bonus
+  if (newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
+    handleSokobanMovement(newGameState, oldPosition, newPosition);
+  }
 
   newGameState.obstacles = gameState.obstacles.filter(
     (obstacle) => !obstacle.isDestroying || Date.now() - obstacle.creationTime < OBSTACLE_DESTRUCTION_DURATION,
@@ -47,11 +57,11 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
         ? { ...obstacle, isDestroying: true, creationTime: Date.now() }
         : obstacle,
     );
-    soundEngine.playElectricalDischarge(); // Play sound for crusher destroying obstacle
+    soundEngine.playElectricalDischarge();
   }
 
   if (isValidMove(newPosition, newGameState, levelConfig)) {
-    soundEngine.playStep(); // Play step sound
+    soundEngine.playStep();
     newGameState.player.position = newPosition;
     if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
       newGameState.player.previousPosition = oldPosition;
@@ -59,6 +69,11 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     }
     newGameState.steps++;
     newGameState.monsterSpawnSteps++;
+
+    // Handle Tsunami bonus
+    if (newGameState.tsunamiLevel > 0) {
+      handleTsunamiEffect(newGameState);
+    }
 
     // Check for goal
     if (isPositionEqual(newPosition, newGameState.goal)) {
@@ -98,12 +113,25 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.ConfusedMonsters),
     );
 
-    // Check for collisions with monsters
-    if (checkCollision(newGameState.player.position, newGameState.monsters)) {
-      newGameState.gameEndingState = 'gameOver';
-      startGameOverAnimation(newGameState);
-      return newGameState;
+    // Handle Monster bonus
+    if (newGameState.player.isMonster) {
+      handleMonsterBonus(newGameState);
+    } else {
+      // Check for collisions with monsters
+      if (checkCollision(newGameState.player.position, newGameState.monsters)) {
+        newGameState.gameEndingState = 'gameOver';
+        startGameOverAnimation(newGameState);
+        return newGameState;
+      }
     }
+
+    // Handle Blaster bonus
+    if (newGameState.player.hasBlaster) {
+      handleBlasterShot(newGameState, direction, levelConfig);
+    }
+    newGameState.blasterShots = newGameState.blasterShots.filter(
+      (shot) => Date.now() - shot.shotTimestamp < BLASTER_SHOT_DURATION,
+    );
 
     // Check for land mine collisions
     const [newMonsters, newExplosions] = checkLandMineCollision(newGameState.monsters, newGameState.landMines);
@@ -153,6 +181,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
     newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
     newGameState.player.isClimbing = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Climber);
+    newGameState.isSliding = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Slide);
 
     // Handle builder bonus
     if (gameState.builderActive) {
@@ -204,6 +233,22 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       break;
     case BonusType.Teleport:
       // Teleport is handled immediately when collected
+      break;
+    case BonusType.Tsunami:
+      gameState.tsunamiLevel = 1;
+      break;
+    case BonusType.Monster:
+      gameState.player.isMonster = true;
+      break;
+    case BonusType.Slide:
+      gameState.isSliding = true;
+      break;
+    case BonusType.Sokoban:
+      // Sokoban logic is handled in movement
+      break;
+    case BonusType.Blaster:
+      gameState.player.hasBlaster = true;
+      gameState.player.blasterSteps = 13;
       break;
   }
 };
@@ -267,4 +312,85 @@ const performTeleportation = (gameState: GameState, teleportPoint: Position): vo
     gameState.player.teleportTimestamp = Date.now();
     soundEngine.playTeleport();
   }
+};
+
+const handleTsunamiEffect = (gameState: GameState): void => {
+  gameState.tsunamiLevel++;
+  if (gameState.tsunamiLevel >= 13) {
+    if (!gameState.player.isClimbing) {
+      gameState.gameEndingState = 'gameOver';
+      startGameOverAnimation(gameState);
+    }
+    gameState.monsters = [];
+  }
+};
+
+const handleMonsterBonus = (gameState: GameState): void => {
+  // Check for collisions with monsters (now players)
+  const collidedMonster = gameState.monsters.find((monster) =>
+    isPositionEqual(gameState.player.position, monster.position),
+  );
+  if (collidedMonster) {
+    gameState.monsters = gameState.monsters.filter((monster) => monster !== collidedMonster);
+    if (gameState.monsters.length === 0) {
+      gameState.gameEndingState = 'gameOver';
+      startGameOverAnimation(gameState);
+    }
+  }
+};
+
+const handleSlideMovement = (gameState: GameState, direction: Direction, levelConfig: LevelConfig): Position => {
+  let newPosition = gameState.player.position;
+  while (isValidMove(getNewPosition(newPosition, direction), gameState, levelConfig)) {
+    newPosition = getNewPosition(newPosition, direction);
+  }
+  return newPosition;
+};
+
+const handleSokobanMovement = (gameState: GameState, oldPosition: Position, newPosition: Position): void => {
+  const pushedObstacle = gameState.obstacles.find((obstacle) => isPositionEqual(obstacle.position, newPosition));
+  if (pushedObstacle) {
+    const obstacleNewPosition = getNewPosition(
+      pushedObstacle.position,
+      getDirectionFromPositions(oldPosition, newPosition),
+    );
+    if (isValidMove(obstacleNewPosition, gameState, { gridSize: gameState.obstacles.length })) {
+      pushedObstacle.position = obstacleNewPosition;
+      // Check if the pushed obstacle crushes a monster
+      const crushedMonster = gameState.monsters.find((monster) =>
+        isPositionEqual(monster.position, obstacleNewPosition),
+      );
+      if (crushedMonster) {
+        gameState.monsters = gameState.monsters.filter((monster) => monster !== crushedMonster);
+      }
+    } else {
+      // If the obstacle can't be pushed, the player doesn't move
+      newPosition = oldPosition;
+    }
+  }
+};
+
+const handleBlasterShot = (gameState: GameState, direction: Direction, levelConfig: LevelConfig): void => {
+  const shot: BlasterShot = {
+    startPosition: gameState.player.position,
+    endPosition: handleSlideMovement(gameState, direction, levelConfig),
+    direction: direction,
+    shotTimestamp: Date.now(),
+  };
+  gameState.blasterShots.push(shot);
+  // Check if the shot hits a monster
+  const hitMonster = gameState.monsters.find((monster) => isPositionEqual(monster.position, shot.endPosition));
+  if (hitMonster) {
+    gameState.monsters = gameState.monsters.filter((monster) => monster !== hitMonster);
+  }
+  if (gameState.player.hasBlaster && gameState.player.blasterSteps!-- <= 0) {
+    gameState.player.hasBlaster = false;
+  }
+};
+
+const getDirectionFromPositions = (from: Position, to: Position): Direction => {
+  if (to.x > from.x) return Direction.Right;
+  if (to.x < from.x) return Direction.Left;
+  if (to.y > from.y) return Direction.Down;
+  return Direction.Up;
 };

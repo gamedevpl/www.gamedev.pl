@@ -6,10 +6,11 @@ import { drawMonsters } from './monster-render';
 import { drawBonuses, drawLandMines, drawTimeBombs } from './bonus-render';
 import { drawExplosions } from './explosion-render';
 import { calculateDrawingOrder } from './isometric-utils';
-import { calculateShakeOffset } from './animation-utils';
+import { BLASTER_SHOT_DURATION, calculateShakeOffset, interpolatePosition } from './animation-utils';
 import { drawTooltip } from './tooltip-render';
 import { drawElectricalDischarges } from './discharges-render';
 import { drawPlatform } from './grid-render';
+import { drawBlasterShot, drawSlideTrail, drawTsunamiEffect } from './bonus-effect-render';
 
 export const PLATFORM_HEIGHT = 20;
 
@@ -39,10 +40,20 @@ export const drawGameState = (
   drawPlatform(ctx, gridSize);
 
   // Draw the grid
-  drawGrid(ctx, gridSize);
+  drawGrid(ctx, gridSize, gameState);
+
+  // Draw tsunami effect
+  if (gameState.tsunamiLevel > 0) {
+    drawTsunamiEffect(ctx, gameState, gridSize, cellSize);
+  }
 
   // Draw electrical discharges
   drawElectricalDischarges(ctx, gridSize, gameState.monsterSpawnSteps, gameState.player.moveTimestamp, cellSize);
+
+  // Draw slide movement trail
+  if (gameState.isSliding) {
+    drawSlideTrail(ctx, gameState.player.previousPosition, gameState.player.position);
+  }
 
   // Prepare all game objects for sorting
   const allObjects = [
@@ -54,6 +65,14 @@ export const drawGameState = (
     { position: gameState.player.position, type: 'player', obj: gameState.player } as const,
     { position: gameState.goal, type: 'goal' } as const,
     ...gameState.explosions.map((obj) => ({ position: obj.position, type: 'explosion', obj }) as const),
+    ...gameState.blasterShots.map(
+      (obj) =>
+        ({
+          position: interpolatePosition(obj.endPosition, obj.startPosition, obj.shotTimestamp, BLASTER_SHOT_DURATION),
+          type: 'blasterShot',
+          obj,
+        }) as const,
+    ),
   ];
 
   // Sort all objects using calculateDrawingOrder
@@ -76,7 +95,7 @@ export const drawGameState = (
         drawTimeBombs(ctx, [sortedObject.obj], cellSize);
         break;
       case 'monster':
-        drawMonsters(ctx, [sortedObject.obj], cellSize);
+        drawMonsters(ctx, [sortedObject.obj], cellSize, gameState.player.isMonster);
         break;
       case 'player':
         drawPlayer(
@@ -85,6 +104,8 @@ export const drawGameState = (
           cellSize,
           gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
           gameState.obstacles,
+          gameState.player.isMonster,
+          gameState.player.hasBlaster,
         );
         break;
       case 'goal':
@@ -92,6 +113,9 @@ export const drawGameState = (
         break;
       case 'explosion':
         drawExplosions(ctx, [sortedObject.obj]);
+        break;
+      case 'blasterShot':
+        drawBlasterShot(ctx, sortedObject.obj, cellSize);
         break;
     }
   }
@@ -108,51 +132,3 @@ export const drawGameState = (
 
   ctx.restore();
 };
-
-// const drawTeleportPoint = (ctx: CanvasRenderingContext2D, teleportPoint: TeleportPoint, cellSize: number) => {
-//   const { x, y } = teleportPoint.position;
-//   const isoX = ((x - y) * cellSize) / 2;
-//   const isoY = ((x + y) * cellSize) / 4;
-
-//   ctx.save();
-//   ctx.translate(isoX, isoY);
-
-//   // Draw the base of the teleport point
-//   ctx.beginPath();
-//   ctx.moveTo(0, -cellSize / 4);
-//   ctx.lineTo(cellSize / 2, 0);
-//   ctx.lineTo(0, cellSize / 4);
-//   ctx.lineTo(-cellSize / 2, 0);
-//   ctx.closePath();
-//   ctx.fillStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan with transparency
-//   ctx.fill();
-
-//   // Draw the energy field
-//   const time = Date.now() / 1000;
-//   const waveHeight = (cellSize / 8) * Math.sin(time * 5);
-
-//   ctx.beginPath();
-//   ctx.moveTo(-cellSize / 2, 0);
-//   ctx.quadraticCurveTo(0, -waveHeight, cellSize / 2, 0);
-//   ctx.quadraticCurveTo(0, cellSize / 4 + waveHeight, -cellSize / 2, 0);
-//   ctx.closePath();
-
-//   const gradient = ctx.createLinearGradient(0, -cellSize / 4, 0, cellSize / 4);
-//   gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
-//   gradient.addColorStop(1, 'rgba(0, 128, 255, 0.4)');
-//   ctx.fillStyle = gradient;
-//   ctx.fill();
-
-//   // Draw sparkles
-//   for (let i = 0; i < 5; i++) {
-//     const sparkleX = (Math.random() - 0.5) * cellSize;
-//     const sparkleY = ((Math.random() - 0.5) * cellSize) / 2;
-//     const sparkleSize = (Math.random() * cellSize) / 10;
-//     ctx.beginPath();
-//     ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
-//     ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.5 + Math.random() * 0.5) + ')';
-//     ctx.fill();
-//   }
-
-//   ctx.restore();
-// };

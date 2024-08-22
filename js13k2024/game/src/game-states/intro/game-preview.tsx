@@ -17,6 +17,9 @@ const createPreviewGameState = (): GameState => ({
     isVictorious: false,
     isVanishing: false,
     isClimbing: false,
+    isMonster: false,
+    hasBlaster: false,
+    blasterSteps: undefined,
   },
   goal: { x: 4, y: 4 },
   obstacles: [
@@ -55,6 +58,9 @@ const createPreviewGameState = (): GameState => ({
   builderActive: false,
   score: 0,
   gameEndingState: 'none',
+  tsunamiLevel: 0,
+  isSliding: false,
+  blasterShots: [],
 });
 
 export const GamePreview: FunctionComponent = () => {
@@ -75,7 +81,7 @@ export const GamePreview: FunctionComponent = () => {
       ctx.scale(0.8, 0.8);
       ctx.translate(PREVIEW_WIDTH * 0.1, PREVIEW_HEIGHT * 0.1);
 
-      drawGrid(ctx, GRID_SIZE);
+      drawGrid(ctx, GRID_SIZE, gameStateRef.current);
       drawGameState(ctx, gameStateRef.current, {
         gridSize: GRID_SIZE,
         cellSize: CELL_SIZE,

@@ -17,6 +17,8 @@ export const drawPlayer = (
   cellSize: number,
   isInvisible: boolean = false,
   obstacles: Obstacle[] = [],
+  isMonster: boolean = false,
+  hasBlaster: boolean = false
 ) => {
   const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious, isClimbing } =
     player;
@@ -54,10 +56,10 @@ export const drawPlayer = (
     baseHeight: 0.8,
     widthFactor: 0.6,
     heightAnimationFactor: 0.2,
-    bodyColor: isClimbing ? '#FFA500' : '#00FF00', // Orange when climbing, bright green otherwise
-    headColor: isClimbing ? '#FFD700' : '#32CD32', // Gold when climbing, lime green otherwise
-    eyeColor: 'white',
-    pupilColor: 'black',
+    bodyColor: getPlayerBodyColor(isClimbing, isMonster),
+    headColor: getPlayerHeadColor(isClimbing, isMonster),
+    eyeColor: isMonster ? 'red' : 'white',
+    pupilColor: isMonster ? 'black' : 'black',
     isInvisible,
   };
 
@@ -83,10 +85,30 @@ export const drawPlayer = (
     drawClimbingIndicator(ctx, isoX, isoY, cellSize);
   }
 
+  // Add monster transformation effects
+  if (isMonster) {
+    drawMonsterEffects(ctx, isoX, isoY, cellSize);
+  }
+
+  // Add blaster visual
+  if (hasBlaster) {
+    drawBlaster(ctx, isoX, isoY, cellSize);
+  }
+
   // Add teleportation effect if the player has just teleported
   if (isTeleporting) {
     drawTeleportationEffect(ctx, isoX, isoY, cellSize, Date.now() - teleportTimestamp);
   }
+};
+
+const getPlayerBodyColor = (isClimbing: boolean, isMonster: boolean): string => {
+  if (isMonster) return '#800080'; // Purple for monster
+  return isClimbing ? '#FFA500' : '#00FF00'; // Orange when climbing, bright green otherwise
+};
+
+const getPlayerHeadColor = (isClimbing: boolean, isMonster: boolean): string => {
+  if (isMonster) return '#9932CC'; // Dark orchid for monster
+  return isClimbing ? '#FFD700' : '#32CD32'; // Gold when climbing, lime green otherwise
 };
 
 const drawVictoryEffects = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
@@ -144,6 +166,78 @@ const drawClimbingIndicator = (ctx: CanvasRenderingContext2D, x: number, y: numb
   const bounceOffset = Math.sin(Date.now() / 200) * cellSize * 0.05;
   ctx.translate(0, bounceOffset);
   ctx.stroke();
+
+  ctx.restore();
+};
+
+const drawMonsterEffects = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Draw swirling dark energy around the player
+  const particleCount = 20;
+  const maxRadius = cellSize * 0.8;
+
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (Math.PI * 2 * i) / particleCount + Date.now() / 1000;
+    const radius = maxRadius * (0.5 + Math.sin(Date.now() / 500 + i) * 0.2);
+    const particleX = Math.cos(angle) * radius;
+    const particleY = Math.sin(angle) * radius;
+
+    ctx.beginPath();
+    ctx.arc(particleX, particleY, cellSize * 0.05, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(128, 0, 128, ${0.5 + Math.sin(Date.now() / 200 + i) * 0.3})`;
+    ctx.fill();
+  }
+
+  // Draw glowing eyes
+  const eyeSize = cellSize * 0.1;
+  const eyeOffset = cellSize * 0.15;
+  
+  ctx.beginPath();
+  ctx.arc(-eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
+  ctx.arc(eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+  ctx.fill();
+
+  // Add a pulsing glow effect
+  ctx.shadowColor = 'red';
+  ctx.shadowBlur = 10 + Math.sin(Date.now() / 200) * 5;
+  ctx.fill();
+
+  ctx.restore();
+};
+
+const drawBlaster = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const blasterLength = cellSize * 0.4;
+  const blasterWidth = cellSize * 0.1;
+
+  // Draw the blaster
+  ctx.fillStyle = '#808080'; // Gray color for the blaster
+  ctx.beginPath();
+  ctx.rect(-blasterWidth / 2, -blasterLength, blasterWidth, blasterLength);
+  ctx.fill();
+
+  // Draw the blaster tip
+  ctx.fillStyle = '#FFD700'; // Gold color for the tip
+  ctx.beginPath();
+  ctx.arc(0, -blasterLength, blasterWidth / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Add a glowing effect to the tip
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 5;
+  ctx.fill();
+
+  // Add an energy charge effect
+  const chargeSize = (Math.sin(Date.now() / 200) + 1) * blasterWidth / 4;
+  ctx.beginPath();
+  ctx.arc(0, -blasterLength, chargeSize, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+  ctx.fill();
 
   ctx.restore();
 };

@@ -77,6 +77,67 @@
   - Can be combined with other bonuses (e.g., Builder) for advanced strategies.
   - Players must plan carefully to make the most of the limited duration.
 
+### Teleport
+- Instantly moves the player to another location on the grid.
+- Useful for quick escapes or reaching distant areas.
+- May be strategically placed to help or hinder the player's progress.
+
+### Tsunami
+- Gradually floods the grid with water over 13 steps.
+- Effects:
+  - Step 1-6: Water starts to appear, slowing down player and monster movement slightly.
+  - Step 7-12: Water level rises, further slowing movement and making lower areas dangerous.
+  - Step 13: Full flood, eliminating all entities (player and monsters) not on elevated positions.
+- Interactions:
+  - Climber bonus allows the player to survive on obstacles during a flood.
+  - Can be used strategically to eliminate multiple monsters at once.
+  - Changes the dynamics of the level, forcing players to seek higher ground.
+
+### Monster
+- Transforms the player into a monster for 13 steps.
+- Effects:
+  - Player gains the appearance and some abilities of a monster.
+  - Existing monsters become vulnerable "players" during this time.
+  - The goal changes: eliminate all monster-players to win the level.
+  - If any monster-player reaches the original goal, it's game over.
+- Strategic considerations:
+  - Completely changes the gameplay dynamic for a short period.
+  - Requires quick thinking and adaptation from the player.
+  - Can be used to clear the level of monsters if used skillfully.
+
+### Slide
+- Changes the player's movement to a continuous slide until hitting an obstacle or grid edge.
+- Effects:
+  - Player moves in the chosen direction until stopped by an obstacle or the grid boundary.
+  - Allows for quick traversal of open areas.
+  - Can potentially slide past monsters without being caught.
+- Strategic considerations:
+  - Requires careful planning to avoid sliding into dangerous situations.
+  - Can be combined with other bonuses for interesting effects (e.g., Slide + Crusher).
+  - Useful for quickly reaching distant bonuses or the goal.
+
+### Sokoban
+- Grants the player the ability to push obstacles.
+- Effects:
+  - Player can move obstacles by pushing them.
+  - Pushed obstacles can crush monsters, eliminating them.
+  - Allows for reshaping the level layout.
+- Strategic considerations:
+  - Can be used to create new paths or block existing ones.
+  - Pushing obstacles strategically can help manage monster movements.
+  - Requires spatial awareness and forward-thinking.
+
+### Blaster
+- Equips the player with a blaster that shoots in the direction of movement.
+- Effects:
+  - When the player moves, a blast is fired in the same direction.
+  - Blasts can eliminate monsters in their path.
+  - Does not affect obstacles.
+- Strategic considerations:
+  - Allows for offensive play against monsters.
+  - Requires planning to line up shots effectively.
+  - Can be used to clear a path to the goal.
+
 ## Scoring System
 
 ### Points
@@ -84,6 +145,7 @@
 - Bonus points are given for:
   - Completing the level in fewer steps
   - Effectively using bonuses
+  - Eliminating monsters (with new bonuses like Blaster or Monster transformation)
 
 ### Time Bonus
 - A timer runs during gameplay.
@@ -118,6 +180,12 @@
 4. Introduction of various bonus types one by one.
 5. Combining multiple bonus types and increasing monster count.
 6. Complex layouts requiring precise planning and execution of bonus usage.
-7. The final level combining all learned mechanics in a challenging setup.
+7. Introduction of new bonuses (Tsunami, Monster, Slide, Sokoban, Blaster) in later levels.
+8. Levels designed to specifically challenge players with new bonus mechanics.
+9. Combining new and old bonuses for complex puzzle solutions.
+10. Increased monster spawn rate or initial count to raise difficulty.
+11. Tighter time constraints for achieving higher scores.
+12. Levels with limited bonuses, requiring perfect use of available resources.
+13. The final level combining all learned mechanics in a challenging setup.
 
-This gameplay design creates a tense, strategic experience that constantly reminds players of the "13" threat, embodying the theme of triskaidekaphobia while providing engaging and progressively challenging gameplay through 13 unique levels.
+This gameplay design creates a tense, strategic experience that constantly reminds players of the "13" threat, embodying the theme of triskaidekaphobia while providing engaging and progressively challenging gameplay through 13 unique levels. The addition of new bonuses like Tsunami, Monster, Slide, Sokoban, and Blaster adds layers of complexity and strategic depth to the game, ensuring a rich and varied player experience.

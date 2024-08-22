@@ -1,4 +1,4 @@
-import { Direction, GameState, LevelConfig, Position } from './gameplay-types';
+import { BonusType, Direction, GameState, LevelConfig, Position } from './gameplay-types';
 import { getArrowShape } from './move-arrows-render';
 
 export const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
@@ -51,20 +51,39 @@ export function getOrthogonalDirection(direction: Direction, side: -1 | 1): Dire
   }
 }
 
-export const isValidMove = (newPosition: Position, gameState: GameState, { gridSize }: LevelConfig): boolean => {
+export const isValidMove = (
+  newPosition: Position,
+  gameState: GameState,
+  { gridSize }: Pick<LevelConfig, 'gridSize'>,
+): boolean => {
   const isWithinGrid = newPosition.x >= 0 && newPosition.x < gridSize && newPosition.y >= 0 && newPosition.y < gridSize;
-  
+
   if (!isWithinGrid) {
     return false;
   }
 
   const isObstaclePresent = isPositionOccupied(
     newPosition,
-    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position)
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
   );
 
   // Allow movement onto obstacles if the player has the Climber bonus active
   if (isObstaclePresent && !gameState.player.isClimbing && !gameState.crusherActive) {
+    // Check if Sokoban bonus is active
+    if (gameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
+      const pushDirection = getDirectionFromPositions(gameState.player.position, newPosition);
+      const pushedPosition = getNewPosition(newPosition, pushDirection);
+      // Check if the pushed position is valid
+      if (
+        isWithinGrid &&
+        !isPositionOccupied(
+          pushedPosition,
+          gameState.obstacles.map((o) => o.position),
+        )
+      ) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -78,9 +97,22 @@ export const getValidMoves = (
   const { player } = gameState;
   const directions = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
 
-  return directions
-    .map((direction) => ({ position: getNewPosition(player.position, direction), direction }))
-    .filter(({ position }) => isValidMove(position, gameState, levelConfig));
+  if (gameState.isSliding) {
+    // For sliding, we need to check the entire path until an obstacle or grid edge
+    return directions
+      .map((direction) => {
+        let position = player.position;
+        while (isValidMove(getNewPosition(position, direction), gameState, levelConfig)) {
+          position = getNewPosition(position, direction);
+        }
+        return { position, direction };
+      })
+      .filter((move) => !isPositionEqual(move.position, player.position));
+  } else {
+    return directions
+      .map((direction) => ({ position: getNewPosition(player.position, direction), direction }))
+      .filter(({ position }) => isValidMove(position, gameState, levelConfig));
+  }
 };
 
 export function getMoveFromClick(canvasX: number, canvasY: number, gameState: GameState, levelConfig: LevelConfig) {
@@ -102,4 +134,11 @@ function isPointInShape(canvasX: number, canvasY: number, points: { x: number; y
   }
 
   return inside;
+}
+
+export function getDirectionFromPositions(from: Position, to: Position): Direction {
+  if (to.x > from.x) return Direction.Right;
+  if (to.x < from.x) return Direction.Left;
+  if (to.y > from.y) return Direction.Down;
+  return Direction.Up;
 }

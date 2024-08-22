@@ -38,6 +38,9 @@ const createPlayer = (x: number, y: number): Player => ({
   isVictorious: false,
   isVanishing: false,
   isClimbing: false,
+  isMonster: false,
+  hasBlaster: false,
+  blasterSteps: undefined,
 });
 
 const createObstacle = (x: number, y: number): Obstacle => ({
@@ -63,6 +66,9 @@ const generateBaseState = (): GameState => ({
   builderActive: false,
   score: 0,
   gameEndingState: 'none',
+  tsunamiLevel: 0,
+  isSliding: false,
+  blasterShots: [],
 });
 
 const CELL_SIZE = 40;
