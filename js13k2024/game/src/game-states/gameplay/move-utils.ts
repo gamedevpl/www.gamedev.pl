@@ -55,6 +55,29 @@ export function getOrthogonalDirection(direction: Direction, side: -1 | 1): Dire
   }
 }
 
+export const isValidObstaclePush = (
+  newPosition: Position,
+  gameState: GameState,
+  { gridSize }: Pick<LevelConfig, 'gridSize'>,
+): boolean => {
+  const isWithinGrid = newPosition.x >= 0 && newPosition.x < gridSize && newPosition.y >= 0 && newPosition.y < gridSize;
+
+  if (!isWithinGrid) {
+    return false;
+  }
+
+  const isObstaclePresent = isPositionOccupied(
+    newPosition,
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+  );
+
+  if (isObstaclePresent) {
+    return false;
+  }
+
+  return true;
+};
+
 export const isValidMove = (
   newPosition: Position,
   gameState: GameState,
@@ -77,9 +100,11 @@ export const isValidMove = (
     if (gameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
       const pushDirection = getDirectionFromPositions(gameState.player.position, newPosition);
       const pushedPosition = getNewPosition(newPosition, pushDirection);
+      const pushedWithinGrid =
+        pushedPosition.x >= 0 && pushedPosition.x < gridSize && pushedPosition.y >= 0 && pushedPosition.y < gridSize;
       // Check if the pushed position is valid
       if (
-        isWithinGrid &&
+        pushedWithinGrid &&
         !isPositionOccupied(
           pushedPosition,
           gameState.obstacles.map((o) => o.position),

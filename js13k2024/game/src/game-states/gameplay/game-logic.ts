@@ -20,6 +20,7 @@ import {
   isPositionEqual,
   isPositionOccupied,
   isValidMove,
+  isValidObstaclePush,
   manhattanDistance,
 } from './move-utils';
 
@@ -53,7 +54,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
 
   // Handle Sokoban bonus
   if (newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
-    handleSokobanMovement(newGameState, oldPosition, newPosition);
+    handleSokobanMovement(newGameState, oldPosition, newPosition, levelConfig.gridSize);
   }
 
   newGameState.obstacles = gameState.obstacles.filter(
@@ -359,14 +360,19 @@ const handleSlideMovement = (gameState: GameState, direction: Direction, levelCo
   return newPosition;
 };
 
-const handleSokobanMovement = (gameState: GameState, oldPosition: Position, newPosition: Position): void => {
+const handleSokobanMovement = (
+  gameState: GameState,
+  oldPosition: Position,
+  newPosition: Position,
+  gridSize: number,
+): void => {
   const pushedObstacle = gameState.obstacles.find((obstacle) => isPositionEqual(obstacle.position, newPosition));
   if (pushedObstacle) {
     const obstacleNewPosition = getNewPosition(
       pushedObstacle.position,
       getDirectionFromPositions(oldPosition, newPosition),
     );
-    if (isValidMove(obstacleNewPosition, gameState, { gridSize: gameState.obstacles.length })) {
+    if (isValidObstaclePush(obstacleNewPosition, gameState, { gridSize })) {
       pushedObstacle.position = obstacleNewPosition;
       // Check if the pushed obstacle crushes a monster
       const crushedMonster = gameState.monsters.find((monster) =>

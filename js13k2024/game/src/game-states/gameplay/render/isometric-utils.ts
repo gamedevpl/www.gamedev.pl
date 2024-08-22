@@ -108,13 +108,13 @@ export function drawIsometricCube(
 function getZIndex(type: string): number {
   switch (type) {
     case 'obstacle':
-      return 1;
+      return 3;
     case 'bonus':
     case 'landMine':
     case 'timeBomb':
       return 2;
     case 'goal':
-      return 3;
+      return 2;
     case 'monster':
       return 4;
     case 'player':
