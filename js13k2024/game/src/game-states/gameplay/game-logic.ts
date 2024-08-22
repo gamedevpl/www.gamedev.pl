@@ -1,4 +1,13 @@
-import { GameState, Position, LevelConfig, Direction, BonusType, ActiveBonus, BlasterShot } from './gameplay-types';
+import {
+  GameState,
+  Position,
+  LevelConfig,
+  Direction,
+  BonusType,
+  ActiveBonus,
+  BlasterShot,
+  isActiveBonus,
+} from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
@@ -62,7 +71,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   );
 
   if (
-    gameState.crusherActive &&
+    isActiveBonus(newGameState, BonusType.Crusher) &&
     gameState.obstacles.find((obstacle) => isPositionEqual(newPosition, obstacle.position))
   ) {
     newGameState.obstacles = gameState.obstacles.map((obstacle) =>
@@ -122,12 +131,13 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       newGameState.player.position,
       levelConfig.gridSize,
       newGameState.obstacles,
-      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
-      newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.ConfusedMonsters),
+      isActiveBonus(newGameState, BonusType.CapOfInvisibility),
+      isActiveBonus(newGameState, BonusType.ConfusedMonsters),
+      isActiveBonus(newGameState, BonusType.Monster),
     );
 
     // Handle Monster bonus
-    if (newGameState.player.isMonster) {
+    if (isActiveBonus(newGameState, BonusType.Monster)) {
       handleMonsterBonus(newGameState);
     } else {
       // Check for collisions with monsters
@@ -139,7 +149,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     }
 
     // Handle Blaster bonus
-    if (newGameState.player.hasBlaster) {
+    if (isActiveBonus(newGameState, BonusType.Blaster)) {
       handleBlasterShot(newGameState, direction, levelConfig);
     }
     newGameState.blasterShots = newGameState.blasterShots.filter(
@@ -191,13 +201,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       .map((bonus) => ({ ...bonus, duration: bonus.duration - 1 }))
       .filter((bonus) => bonus.duration > 0);
 
-    newGameState.builderActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Builder);
-    newGameState.crusherActive = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Crusher);
-    newGameState.player.isClimbing = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Climber);
-    newGameState.isSliding = newGameState.activeBonuses.some((bonus) => bonus.type === BonusType.Slide);
-
     // Handle builder bonus
-    if (gameState.builderActive) {
+    if (isActiveBonus(newGameState, BonusType.Builder)) {
       const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true, isDestroying: false };
       if (
         !isPositionOccupied(
@@ -236,13 +241,10 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       });
       break;
     case BonusType.Crusher:
-      gameState.crusherActive = true;
       break;
     case BonusType.Builder:
-      gameState.builderActive = true;
       break;
     case BonusType.Climber:
-      gameState.player.isClimbing = true;
       break;
     case BonusType.Teleport:
       // Teleport is handled immediately when collected
@@ -251,17 +253,13 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
       gameState.tsunamiLevel = 1;
       break;
     case BonusType.Monster:
-      gameState.player.isMonster = true;
       break;
     case BonusType.Slide:
       gameState.isSliding = true;
       break;
     case BonusType.Sokoban:
-      // Sokoban logic is handled in movement
       break;
     case BonusType.Blaster:
-      gameState.player.hasBlaster = true;
-      gameState.player.blasterSteps = 13;
       break;
   }
 };
@@ -330,7 +328,7 @@ const performTeleportation = (gameState: GameState, teleportPoint: Position): vo
 const handleTsunamiEffect = (gameState: GameState): void => {
   gameState.tsunamiLevel++;
   if (gameState.tsunamiLevel >= 13) {
-    if (!gameState.player.isClimbing) {
+    if (!isActiveBonus(gameState, BonusType.Climber)) {
       gameState.gameEndingState = 'gameOver';
       startGameOverAnimation(gameState);
     }
@@ -408,10 +406,6 @@ const handleBlasterShot = (gameState: GameState, direction: Direction, levelConf
     const isHit = isMonsterOnBlasterPath(monster.position, start, end, direction);
     return !isHit;
   });
-
-  if (gameState.player.hasBlaster && gameState.player.blasterSteps!-- <= 0) {
-    gameState.player.hasBlaster = false;
-  }
 };
 
 const isMonsterOnBlasterPath = (

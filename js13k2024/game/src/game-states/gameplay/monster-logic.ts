@@ -8,6 +8,7 @@ export const moveMonsters = (
   obstacles: Obstacle[],
   isPlayerInvisible: boolean,
   isConfused: boolean,
+  isPlayerMonster: boolean,
 ): Monster[] => {
   const newPositions: Position[] = [];
   return monsters.map((monster) => {
@@ -21,8 +22,8 @@ export const moveMonsters = (
     }
 
     let newPosition: Position;
-    if (isConfused) {
-      // If monsters are confused, move in the opposite direction
+    if (isConfused || isPlayerMonster) {
+      // If monsters are confused, or player is the monster, move in the opposite direction
       newPosition = getConfusedPosition(monster.position, path[1] || monster.position, gridSize, obstacles, monsters);
     } else {
       newPosition = path.length > 1 ? path[1] : monster.position;

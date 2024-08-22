@@ -1,4 +1,4 @@
-import { BonusType, Direction, GameState, LevelConfig, Position } from './gameplay-types';
+import { BonusType, Direction, GameState, isActiveBonus, LevelConfig, Position } from './gameplay-types';
 import { getArrowShape } from './render/move-arrows-render';
 
 export const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
@@ -95,7 +95,11 @@ export const isValidMove = (
   );
 
   // Allow movement onto obstacles if the player has the Climber bonus active
-  if (isObstaclePresent && !gameState.player.isClimbing && !gameState.crusherActive) {
+  if (
+    isObstaclePresent &&
+    !isActiveBonus(gameState, BonusType.Climber) &&
+    !isActiveBonus(gameState, BonusType.Crusher)
+  ) {
     // Check if Sokoban bonus is active
     if (gameState.activeBonuses.some((bonus) => bonus.type === BonusType.Sokoban)) {
       const pushDirection = getDirectionFromPositions(gameState.player.position, newPosition);

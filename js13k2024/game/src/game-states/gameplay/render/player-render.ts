@@ -19,9 +19,9 @@ export const drawPlayer = (
   obstacles: Obstacle[] = [],
   isMonster: boolean = false,
   hasBlaster: boolean = false,
+  isClimbing: boolean = false,
 ) => {
-  const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious, isClimbing } =
-    player;
+  const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious } = player;
   const isTeleporting = teleportTimestamp && Date.now() - teleportTimestamp < TELEPORT_ANIMATION_DURATION;
 
   const interpolatedPosition = isTeleporting

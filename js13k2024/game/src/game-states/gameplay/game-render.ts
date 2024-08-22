@@ -1,4 +1,4 @@
-import { BonusType, GameState, LevelConfig } from './gameplay-types';
+import { BonusType, GameState, isActiveBonus, LevelConfig } from './gameplay-types';
 import { drawObstacles, drawGoal } from './render/grid-objects-render';
 import { drawGrid } from './render/grid-render';
 import { drawPlayer } from './render/player-render';
@@ -97,7 +97,7 @@ export const drawGameState = (
         drawTimeBombs(ctx, [sortedObject.obj], cellSize);
         break;
       case 'monster':
-        drawMonsters(ctx, [sortedObject.obj], cellSize, gameState.player.isMonster);
+        drawMonsters(ctx, [sortedObject.obj], cellSize, isActiveBonus(gameState, BonusType.Monster));
         break;
       case 'player':
         drawPlayer(
@@ -106,8 +106,9 @@ export const drawGameState = (
           cellSize,
           gameState.activeBonuses.some((bonus) => bonus.type === BonusType.CapOfInvisibility),
           gameState.obstacles,
-          gameState.player.isMonster,
-          gameState.player.hasBlaster,
+          isActiveBonus(gameState, BonusType.Monster),
+          isActiveBonus(gameState, BonusType.Blaster),
+          isActiveBonus(gameState, BonusType.Climber),
         );
         break;
       case 'goal':
