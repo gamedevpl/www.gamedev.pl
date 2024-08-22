@@ -120,6 +120,41 @@ class SoundEngine {
       shimmer.connect(shimmerGain).connect(this.audioContext.destination);
     }, 100);
   }
+
+  playBlasterSound() {
+    // Create a short, punchy sound with a slight pitch bend
+    const duration = 0.15;
+    const oscillator = this.audioContext.createOscillator();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(1000, this.audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(500, this.audioContext.currentTime + duration);
+
+    const gain = this.audioContext.createGain();
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(this.masterVolume, this.audioContext.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+    // Add a bit of noise for texture
+    const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * duration, this.audioContext.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseBuffer.length; i++) {
+      noiseData[i] = Math.random() * 2 - 1;
+    }
+    const noiseSource = this.audioContext.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+
+    const noiseGain = this.audioContext.createGain();
+    noiseGain.gain.setValueAtTime(this.masterVolume * 0.2, this.audioContext.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+    oscillator.connect(gain).connect(this.audioContext.destination);
+    noiseSource.connect(noiseGain).connect(this.audioContext.destination);
+
+    oscillator.start();
+    noiseSource.start();
+    oscillator.stop(this.audioContext.currentTime + duration);
+    noiseSource.stop(this.audioContext.currentTime + duration);
+  }
 }
 
 export const soundEngine = new SoundEngine();

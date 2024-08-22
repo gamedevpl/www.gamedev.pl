@@ -62,49 +62,58 @@ export const drawSlideTrail = (ctx: CanvasRenderingContext2D, start: Position, e
 };
 
 export const drawBlasterShot = (ctx: CanvasRenderingContext2D, shot: BlasterShot, cellSize: number) => {
+  if (Date.now() - shot.shotTimestamp > BLASTER_SHOT_DURATION) {
+    return;
+  }
+
   const pos = interpolatePosition(shot.endPosition, shot.startPosition, shot.shotTimestamp, BLASTER_SHOT_DURATION);
   const { x: isoX, y: isoY } = toIsometric(pos.x, pos.y);
 
   ctx.save();
-  ctx.fillStyle = 'yellow';
-  ctx.strokeStyle = 'orange';
+
+  // Create a glow effect
+  ctx.shadowColor = 'rgba(255, 0, 0, 0.8)';
+  ctx.shadowBlur = cellSize * 0.2;
+
+  // Set the main color to red
+  ctx.fillStyle = 'red';
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
   ctx.lineWidth = 2;
 
-  const shotSize = cellSize * 0.2;
+  const shotLength = cellSize * 0.6; // Elongated shape
+  const shotWidth = cellSize * 0.1;
 
-  ctx.beginPath();
-  ctx.arc(isoX, isoY, shotSize, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Add a directional indicator
-  const arrowSize = cellSize * 0.3;
-  ctx.beginPath();
+  // Rotate the context based on the shot direction
+  ctx.translate(isoX, isoY);
   switch (shot.direction) {
     case Direction.Up:
-      ctx.moveTo(isoX, isoY - arrowSize);
-      ctx.lineTo(isoX - arrowSize / 2, isoY);
-      ctx.lineTo(isoX + arrowSize / 2, isoY);
+      ctx.rotate(-Math.PI / 4);
       break;
     case Direction.Down:
-      ctx.moveTo(isoX, isoY + arrowSize);
-      ctx.lineTo(isoX - arrowSize / 2, isoY);
-      ctx.lineTo(isoX + arrowSize / 2, isoY);
+      ctx.rotate(Math.PI / 4);
       break;
     case Direction.Left:
-      ctx.moveTo(isoX - arrowSize, isoY);
-      ctx.lineTo(isoX, isoY - arrowSize / 2);
-      ctx.lineTo(isoX, isoY + arrowSize / 2);
+      ctx.rotate((-3 * Math.PI) / 4);
       break;
     case Direction.Right:
-      ctx.moveTo(isoX + arrowSize, isoY);
-      ctx.lineTo(isoX, isoY - arrowSize / 2);
-      ctx.lineTo(isoX, isoY + arrowSize / 2);
+      ctx.rotate((3 * Math.PI) / 4);
       break;
   }
-  ctx.closePath();
+
+  // Draw the elongated laser blast
+  ctx.beginPath();
+  ctx.ellipse(0, 0, shotLength / 2, shotWidth / 2, 0, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
+
+  // Add a trail effect
+  ctx.globalAlpha = 0.5;
+  for (let i = 1; i <= 3; i++) {
+    ctx.globalAlpha *= 0.5;
+    ctx.beginPath();
+    ctx.ellipse(-i * shotLength * 0.2, 0, shotLength / (2 + i), shotWidth / (2 + i), 0, 0, 2 * Math.PI);
+    ctx.fill();
+  }
 
   ctx.restore();
 };

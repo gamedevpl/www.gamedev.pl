@@ -378,6 +378,8 @@ const handleBlasterShot = (gameState: GameState, direction: Direction, levelConf
     shotTimestamp: Date.now(),
   };
   gameState.blasterShots.push(shot);
+  // Play the blaster sound effect
+  soundEngine.playBlasterSound();
   // Check if the shot hits a monster
   const hitMonster = gameState.monsters.find((monster) => isPositionEqual(monster.position, shot.endPosition));
   if (hitMonster) {
