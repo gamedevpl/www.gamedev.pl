@@ -17,7 +17,7 @@ export const generateLevel = (): [GameState, LevelConfig, string] => {
   state.goal = createPosition(6, 3);
   state.monsters = [createMonster(3, 0)];
   state.obstacles = [createObstacle(5, 2), createObstacle(5, 3)];
-  // state.bonuses = [createBonus(1, 3, BonusType.Blaster)];
+  state.bonuses = [createBonus(1, 3, BonusType.Blaster)];
 
   return [state, config, config.levelStory];
 };

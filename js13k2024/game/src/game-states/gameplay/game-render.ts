@@ -6,7 +6,7 @@ import { drawMonsters } from './monster-render';
 import { drawBonuses, drawLandMines, drawTimeBombs } from './bonus-render';
 import { drawExplosions } from './explosion-render';
 import { calculateDrawingOrder } from './isometric-utils';
-import { BLASTER_SHOT_DURATION, calculateShakeOffset, interpolatePosition } from './animation-utils';
+import { calculateShakeOffset, interpolatePosition } from './animation-utils';
 import { drawTooltip } from './tooltip-render';
 import { drawElectricalDischarges } from './discharges-render';
 import { drawPlatform } from './grid-render';
@@ -68,7 +68,7 @@ export const drawGameState = (
     ...gameState.blasterShots.map(
       (obj) =>
         ({
-          position: interpolatePosition(obj.endPosition, obj.startPosition, obj.shotTimestamp, BLASTER_SHOT_DURATION),
+          position: interpolatePosition(obj.endPosition, obj.startPosition, obj.shotTimestamp, obj.duration),
           type: 'blasterShot',
           obj,
         }) as const,

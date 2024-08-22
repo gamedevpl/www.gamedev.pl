@@ -165,6 +165,7 @@ export interface BlasterShot {
   endPosition: Position;
   direction: Direction;
   shotTimestamp: number;
+  duration: number;
 }
 
 export function getBonusDescription(bonusType: BonusType): string {

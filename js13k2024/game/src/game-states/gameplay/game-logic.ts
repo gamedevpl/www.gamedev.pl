@@ -9,7 +9,14 @@ import {
 import { generateLevel } from './level-generator';
 import { BLASTER_SHOT_DURATION, MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
-import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
+import {
+  getDirectionFromKey,
+  getNewPosition,
+  isPositionEqual,
+  isPositionOccupied,
+  isValidMove,
+  manhattanDistance,
+} from './move-utils';
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
   const [gameState, config] = generateLevel(level);
@@ -130,7 +137,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       handleBlasterShot(newGameState, direction, levelConfig);
     }
     newGameState.blasterShots = newGameState.blasterShots.filter(
-      (shot) => Date.now() - shot.shotTimestamp < BLASTER_SHOT_DURATION,
+      (shot) => Date.now() - shot.shotTimestamp < shot.duration,
     );
 
     // Check for land mine collisions
@@ -371,11 +378,14 @@ const handleSokobanMovement = (gameState: GameState, oldPosition: Position, newP
 };
 
 const handleBlasterShot = (gameState: GameState, direction: Direction, levelConfig: LevelConfig): void => {
+  const start = gameState.player.position;
+  const end = handleSlideMovement(gameState, direction, levelConfig);
   const shot: BlasterShot = {
-    startPosition: gameState.player.position,
-    endPosition: handleSlideMovement(gameState, direction, levelConfig),
+    startPosition: start,
+    endPosition: end,
     direction: direction,
     shotTimestamp: Date.now(),
+    duration: BLASTER_SHOT_DURATION * (manhattanDistance(start, end) + 1),
   };
   gameState.blasterShots.push(shot);
   // Play the blaster sound effect

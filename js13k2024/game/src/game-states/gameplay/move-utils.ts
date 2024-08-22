@@ -6,6 +6,10 @@ export const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1
 export const isPositionOccupied = (position: Position, occupiedPositions: Position[]): boolean =>
   occupiedPositions.some((pos) => isPositionEqual(pos, position));
 
+export const manhattanDistance = (pos1: Position, pos2: Position): number => {
+  return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+};
+
 export const getDirectionFromKey = (key: string): Direction | null => {
   switch (key) {
     case 'ArrowUp':

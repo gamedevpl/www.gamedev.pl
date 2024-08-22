@@ -1,4 +1,4 @@
-import { BLASTER_SHOT_DURATION, interpolatePosition } from './animation-utils';
+import { interpolatePosition } from './animation-utils';
 import { BlasterShot, Direction, GameState, Position } from './gameplay-types';
 import { toIsometric } from './isometric-utils';
 
@@ -62,11 +62,11 @@ export const drawSlideTrail = (ctx: CanvasRenderingContext2D, start: Position, e
 };
 
 export const drawBlasterShot = (ctx: CanvasRenderingContext2D, shot: BlasterShot, cellSize: number) => {
-  if (Date.now() - shot.shotTimestamp > BLASTER_SHOT_DURATION) {
+  if (Date.now() - shot.shotTimestamp > shot.duration) {
     return;
   }
 
-  const pos = interpolatePosition(shot.endPosition, shot.startPosition, shot.shotTimestamp, BLASTER_SHOT_DURATION);
+  const pos = interpolatePosition(shot.endPosition, shot.startPosition, shot.shotTimestamp, shot.duration);
   const { x: isoX, y: isoY } = toIsometric(pos.x, pos.y);
 
   ctx.save();
@@ -90,13 +90,13 @@ export const drawBlasterShot = (ctx: CanvasRenderingContext2D, shot: BlasterShot
       ctx.rotate(-Math.PI / 4);
       break;
     case Direction.Down:
-      ctx.rotate(Math.PI / 4);
+      ctx.rotate((3 * Math.PI) / 4);
       break;
     case Direction.Left:
       ctx.rotate((-3 * Math.PI) / 4);
       break;
     case Direction.Right:
-      ctx.rotate((3 * Math.PI) / 4);
+      ctx.rotate(Math.PI / 4);
       break;
   }
 

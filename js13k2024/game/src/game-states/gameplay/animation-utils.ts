@@ -2,7 +2,7 @@ import { ElectricalDischarge } from './gameplay-types';
 
 export const MOVE_ANIMATION_DURATION = 250; // 1/4 second
 export const TELEPORT_ANIMATION_DURATION = 500; // 1/2 second
-export const BLASTER_SHOT_DURATION = 250; // 1/2 second
+export const BLASTER_SHOT_DURATION = 50; // speed per cell
 
 export const calculateAnimationFactor = (): number => {
   return Math.cos((Date.now() / 1000) * Math.PI);

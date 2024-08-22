@@ -1,4 +1,5 @@
 import { Position, Monster, PathfindingNode, Explosion, Obstacle } from './gameplay-types';
+import { isPositionEqual, isPositionOccupied, manhattanDistance } from './move-utils';
 
 export const moveMonsters = (
   monsters: Monster[],
@@ -199,18 +200,6 @@ const getNeighbors = (position: Position, gridSize: number): Position[] => {
   ];
 
   return neighbors.filter((pos) => pos.x >= 0 && pos.x < gridSize && pos.y >= 0 && pos.y < gridSize);
-};
-
-const manhattanDistance = (pos1: Position, pos2: Position): number => {
-  return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
-};
-
-const isPositionEqual = (pos1: Position, pos2: Position): boolean => {
-  return pos1.x === pos2.x && pos1.y === pos2.y;
-};
-
-const isPositionOccupied = (pos: Position, occupiedPositions: Position[]): boolean => {
-  return occupiedPositions.some((p) => isPositionEqual(p, pos));
 };
 
 export const checkCollision = (playerPosition: Position, monsters: Monster[]): boolean => {
