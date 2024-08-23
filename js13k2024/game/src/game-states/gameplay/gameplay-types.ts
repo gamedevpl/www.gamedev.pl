@@ -49,7 +49,7 @@ export interface Obstacle {
   isDestroying: boolean;
 }
 
-export type GameEndingState = 'none' | 'gameOver' | 'levelComplete';
+type GameEndingState = 'none' | 'gameOver' | 'levelComplete';
 
 export interface GameState {
   player: Player;
@@ -75,7 +75,7 @@ export type Explosion = {
   duration: number;
 };
 
-export type TimeBomb = {
+type TimeBomb = {
   position: Position;
   timer: number;
   shakeIntensity: number;
@@ -105,53 +105,12 @@ export interface LevelConfig {
   levelUpdater: (state: GameState, levelConfig: LevelConfig) => void;
 }
 
-export interface Score {
-  points: number;
-  steps: number;
-  timeBonus: number;
-}
-
-export interface PowerUp {
-  type: 'StepEraser' | 'MonsterFreeze' | 'Teleport';
-  position: Position;
-}
-
-export interface GameplayProps {
-  level: number;
-  score: number;
-  onGameOver: () => void;
-  onLevelComplete: () => void;
-  onGameComplete: () => void;
-  updateScore: (newScore: number) => void;
-  updateSteps: (newSteps: number) => void;
-}
-
 export interface PathfindingNode {
   position: Position;
   g: number;
   h: number;
   f: number;
   parent: PathfindingNode | null;
-}
-
-export interface GameConfig {
-  cellSize: number;
-  monsterSpawnInterval: number;
-  baseGridSize: number;
-  maxGridSize: number;
-  baseObstacleCount: number;
-  maxObstacleCount: number;
-  levelIncreaseFactor: number;
-  bonusDuration: number;
-  maxLevel: number;
-}
-
-export type LevelGeneratorFunction = () => [GameState, LevelConfig, string];
-
-export interface LevelData {
-  gameState: GameState;
-  levelConfig: LevelConfig;
-  story: string;
 }
 
 export interface BlasterShot {
@@ -195,21 +154,10 @@ export function getBonusDescription(bonusType: BonusType): string {
   }
 }
 
-// New interfaces for animation effects
-export interface ScreenShake {
-  intensity: number;
-  duration: number;
-}
-
 export interface ElectricalDischarge {
   position: Position;
   intensity: number;
   duration: number;
-}
-
-export interface EntityAnimationState {
-  bounceOffset: number;
-  tentacleAnimationFactor: number;
 }
 
 export function isActiveBonus(gameState: GameState, bonusType: BonusType) {

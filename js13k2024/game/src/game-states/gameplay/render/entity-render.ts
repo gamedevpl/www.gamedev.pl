@@ -2,7 +2,7 @@ import { TILE_HEIGHT } from './isometric-utils';
 import { calculateEntityDimensions, EntityRenderParams } from './entity-render-utils';
 import { calculateBounceOffset, calculateConfusedShake } from './animation-utils';
 
-export const drawEntityBody = (
+const drawEntityBody = (
   ctx: CanvasRenderingContext2D,
   isoX: number,
   isoY: number,
@@ -21,7 +21,7 @@ export const drawEntityBody = (
   ctx.fill();
 };
 
-export const drawEntityHead = (
+const drawEntityHead = (
   ctx: CanvasRenderingContext2D,
   isoX: number,
   isoY: number,
@@ -36,7 +36,7 @@ export const drawEntityHead = (
   ctx.fill();
 };
 
-export const drawEntityEyes = (
+const drawEntityEyes = (
   ctx: CanvasRenderingContext2D,
   isoX: number,
   isoY: number,
@@ -60,7 +60,7 @@ export const drawEntityEyes = (
   ctx.fill();
 };
 
-export const drawEntityMouth = (
+const drawEntityMouth = (
   ctx: CanvasRenderingContext2D,
   isoX: number,
   isoY: number,
@@ -75,7 +75,7 @@ export const drawEntityMouth = (
   ctx.stroke();
 };
 
-export const drawEntityTentacles = (
+const drawEntityTentacles = (
   ctx: CanvasRenderingContext2D,
   isoX: number,
   isoY: number,

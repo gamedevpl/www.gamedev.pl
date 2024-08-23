@@ -6,7 +6,6 @@ import {
   checkTimeBombExplosion,
   isInExplosionRange,
 } from './monster-logic';
-import { generateLevel } from './level-generator';
 import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './render/animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
 import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
@@ -19,11 +18,6 @@ import {
   handleTsunamiEffect,
   performTeleportation,
 } from './bonus-logic';
-
-export const initializeGame = (level: number): [GameState, LevelConfig] => {
-  const [gameState, config] = generateLevel(level);
-  return [{ ...gameState, gameEndingState: 'none', tsunamiLevel: 0, blasterShots: [] }, config];
-};
 
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
   if (isGameEnding(gameState)) {
@@ -215,7 +209,7 @@ export const startGameOverAnimation = (gameState: GameState): void => {
   soundEngine.playGameOver();
 };
 
-export const startLevelCompleteAnimation = (gameState: GameState): void => {
+const startLevelCompleteAnimation = (gameState: GameState): void => {
   gameState.player.isVictorious = true;
   soundEngine.playLevelComplete();
 };

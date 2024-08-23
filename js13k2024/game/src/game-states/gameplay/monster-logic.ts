@@ -222,7 +222,7 @@ export const checkLandMineCollision = (monsters: Monster[], landMines: Position[
   return [newMonsters, newExplosions];
 };
 
-export const removeLandMine = (landMines: Position[], landMine: Position): void => {
+const removeLandMine = (landMines: Position[], landMine: Position): void => {
   landMines.splice(landMines.indexOf(landMine), 1);
 };
 

@@ -21,7 +21,7 @@ export interface AnimationParams {
   heightAnimationFactor: number;
 }
 
-export interface Position {
+interface Position {
   x: number;
   y: number;
 }
@@ -115,19 +115,6 @@ export const calculateObstacleHeight = (creationTime: number, isRaising: boolean
   }
 
   return isRaising ? progress : 1;
-};
-
-// New function for bomb shaking animation
-export const calculateBombShake = (remainingTime: number, maxTime: number): Position => {
-  const intensity = (1 - remainingTime / maxTime) * 5; // Increase intensity as time runs out
-  return calculateShakeOffset(intensity);
-};
-
-// New function for player blinking animation when invisibility is ending
-export const calculateInvisibilityAlpha = (remainingTime: number, maxTime: number): number => {
-  if (remainingTime > maxTime * 0.2) return 0.5; // Normal invisibility alpha
-  const blinkSpeed = 10; // Adjust for faster/slower blinking
-  return 0.5 + 0.5 * Math.sin(remainingTime * blinkSpeed);
 };
 
 // New function for confused monster shaking

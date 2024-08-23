@@ -216,7 +216,7 @@ export const handleBlasterShot = (gameState: GameState, direction: Direction, le
   });
 };
 
-export const isMonsterOnBlasterPath = (
+const isMonsterOnBlasterPath = (
   monsterPos: Position,
   start: Position,
   end: Position,

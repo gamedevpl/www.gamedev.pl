@@ -1,3 +1,4 @@
+import { spawnDynamicBonus } from '../bonus-logic';
 import { GameState, LevelConfig, BonusType, Position } from '../gameplay-types';
 import {
   createPosition,
@@ -86,7 +87,7 @@ export const generateLevel = (): [GameState, LevelConfig, string] => {
 };
 
 // This function should be called from the main game loop to update the level
-const updateDynamicLevel = (state: GameState): void => {
+const updateDynamicLevel = (state: GameState, levelConfig: LevelConfig): void => {
   // Spawn a new monster every 13 steps
   if (state.steps % 13 === 0) {
     let pos;
@@ -96,16 +97,6 @@ const updateDynamicLevel = (state: GameState): void => {
     state.monsters.push(createMonster(pos.x, pos.y));
 
     // Spawn a new bonus alongside the monster
-    spawnBonus(state);
-  }
-
-  // Occasionally add new obstacles
-  if (state.steps % 50 === 0) {
-    spawnObstacles(state, 1);
-  }
-
-  // Ensure there are always at least 3 bonuses on the board
-  while (state.bonuses.length < 3) {
-    spawnBonus(state);
+    spawnDynamicBonus(state, levelConfig);
   }
 };
