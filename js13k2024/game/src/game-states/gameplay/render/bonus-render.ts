@@ -123,7 +123,6 @@ const getBonusColor = (bonusType: BonusType): string => {
       return '#FF69B4'; // Hot Pink
     case BonusType.Builder:
       return '#00FFFF'; // Cyan
-    // @CODEGEN: Add color for other bonus types
     default:
       return '#FFFF00'; // Yellow
   }
@@ -143,7 +142,6 @@ const getBonusSymbol = (bonusType: BonusType): string => {
       return 'X';
     case BonusType.Builder:
       return 'B';
-    // @CODEGEN: Add letters for other bonus types
     default:
       return '?';
   }
