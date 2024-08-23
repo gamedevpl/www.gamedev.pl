@@ -1,6 +1,6 @@
 import { PLATFORM_HEIGHT } from '../game-render';
 import { TILE_HEIGHT, TILE_WIDTH, toIsometric } from './isometric-utils';
-import { GameState } from '../gameplay-types';
+import { BonusType, GameState, isActiveBonus } from '../gameplay-types';
 
 export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) => {
   const topLeft = toIsometric(0, 0);
@@ -64,7 +64,7 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, gridSize: number, gameSt
       }
 
       // Draw Slide effect if active
-      if (gameState.isSliding) {
+      if (isActiveBonus(gameState, BonusType.Slide)) {
         drawSlideTile(ctx, x, y);
       }
     }

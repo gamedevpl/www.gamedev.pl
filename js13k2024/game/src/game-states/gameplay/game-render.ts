@@ -49,7 +49,7 @@ export const drawGameState = (
   drawElectricalDischarges(ctx, gridSize, gameState.monsterSpawnSteps, gameState.player.moveTimestamp, cellSize);
 
   // Draw slide movement trail
-  if (gameState.isSliding) {
+  if (isActiveBonus(gameState, BonusType.Slide)) {
     drawSlideTrail(ctx, gameState.player.previousPosition, gameState.player.position);
   }
 

@@ -130,7 +130,7 @@ export const getValidMoves = (
   const { player } = gameState;
   const directions = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
 
-  if (gameState.isSliding) {
+  if (isActiveBonus(gameState, BonusType.Slide)) {
     // For sliding, we need to check the entire path until an obstacle or grid edge
     return directions
       .map((direction) => {

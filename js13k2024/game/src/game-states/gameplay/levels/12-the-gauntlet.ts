@@ -11,40 +11,59 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(15, 'The Gauntlet', "Use everything you've learned!");
+  const config = generateBaseConfig(15, 'The Gauntlet', 'Master all your skills to conquer the final challenge!');
   
   state.player = createPlayer(0, 7);
   state.goal = createPosition(14, 7);
   state.monsters = [
-    createMonster(3, 7),
-    createMonster(6, 7),
-    createMonster(9, 7),
-    createMonster(12, 7),
-    createMonster(7, 3),
-    createMonster(7, 11),
+    createMonster(5, 2),
+    createMonster(5, 12),
+    createMonster(10, 4),
+    createMonster(10, 10),
+    createMonster(14, 0),
+    createMonster(14, 14)
   ];
   state.bonuses = [
-    createBonus(2, 7, BonusType.LandMine),
-    createBonus(2, 8, BonusType.CapOfInvisibility),
-    createBonus(5, 7, BonusType.Crusher),
-    createBonus(8, 7, BonusType.ConfusedMonsters),
-    createBonus(1, 6, BonusType.Builder),
-    createBonus(2, 6, BonusType.TimeBomb),
+    createBonus(2, 7, BonusType.CapOfInvisibility),
+    createBonus(4, 7, BonusType.Crusher),
+    createBonus(7, 3, BonusType.TimeBomb),
+    createBonus(7, 11, BonusType.LandMine),
+    createBonus(10, 7, BonusType.Blaster),
+    createBonus(12, 7, BonusType.Climber)
   ];
   
-  for (let i = 4; i < 14; i++) {
-    if (i !== 5 && i !== 8 && i !== 11) {
+  // Create a central path with obstacles
+  for (let i = 1; i < 14; i++) {
+    if (i % 3 !== 1) { // Leave gaps for bonuses and movement
       state.obstacles.push(createObstacle(i, 6));
       state.obstacles.push(createObstacle(i, 8));
     }
   }
   
-  for (let i = 4; i < 11; i++) {
-    if (i !== 7) {
-      state.obstacles.push(createObstacle(6, i));
-      state.obstacles.push(createObstacle(8, i));
+  // Create vertical barriers
+  for (let i = 0; i < 15; i += 3) {
+    if (i !== 6 && i !== 9) { // Leave central area open
+      for (let j = 0; j < 15; j++) {
+        if (j !== 7) { // Leave central path open
+          state.obstacles.push(createObstacle(i, j));
+        }
+      }
     }
   }
   
-  return [state, config, config.levelStory];
+  // Add some strategic single obstacles
+  state.obstacles.push(createObstacle(3, 5));
+  state.obstacles.push(createObstacle(3, 9));
+  state.obstacles.push(createObstacle(7, 5));
+  state.obstacles.push(createObstacle(7, 9));
+  state.obstacles.push(createObstacle(11, 5));
+  state.obstacles.push(createObstacle(11, 9));
+  
+  // Create a challenging area near the goal
+  state.obstacles.push(createObstacle(13, 6));
+  state.obstacles.push(createObstacle(13, 8));
+  state.obstacles.push(createObstacle(14, 6));
+  state.obstacles.push(createObstacle(14, 8));
+
+  return [state, config, "This is your final test! Use all the skills you've learned to navigate through the gauntlet. Collect bonuses strategically, avoid or eliminate monsters, and make your way to the goal. Good luck!"];
 };

@@ -1,4 +1,5 @@
 import { GameState, LevelConfig, Position, Monster, Player, BonusType, Obstacle } from './gameplay-types';
+import { simpleLevelUpdater } from './level-updater';
 
 import { generateLevel as generateLevel1 } from './levels/01-the-first-step';
 import { generateLevel as generateLevel2 } from './levels/02-now-you-see-me';
@@ -9,8 +10,8 @@ import { generateLevel as generateLevel6 } from './levels/06-minesweepers-reveng
 import { generateLevel as generateLevel7 } from './levels/07-monsters-mayhem';
 import { generateLevel as generateLevel8 } from './levels/08-tunnel-vision';
 import { generateLevel as generateLevel9 } from './levels/09-ghost-bomber';
-import { generateLevel as generateLevel10 } from './levels/10-crush-confuse-conquer';
-import { generateLevel as generateLevel11 } from './levels/11-the-triple-threat';
+import { generateLevel as generateLevel10 } from './levels/10-surf-and-climb';
+import { generateLevel as generateLevel11 } from './levels/11-slide-and-blast';
 import { generateLevel as generateLevel12 } from './levels/12-the-gauntlet';
 import { generateLevel as generateLevel13 } from './levels/13-the-final-countdown';
 
@@ -60,20 +61,26 @@ const generateBaseState = (): GameState => ({
   score: 0,
   gameEndingState: 'none',
   tsunamiLevel: 0,
-  isSliding: false,
   blasterShots: [],
 });
 
 const CELL_SIZE = 40;
 
-const generateBaseConfig = (gridSize: number, levelName: string, levelStory: string): LevelConfig => ({
+const generateBaseConfig = (
+  gridSize: number,
+  levelName: string,
+  levelStory: string,
+  levelUpdater = simpleLevelUpdater,
+): LevelConfig => ({
   gridSize,
   cellSize: CELL_SIZE,
   initialMonsterCount: 0,
+  monsterSpawnSectors: [],
   obstacleCount: 0,
   initialBonusCount: 0,
   levelName,
   levelStory,
+  levelUpdater,
 });
 
 const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {

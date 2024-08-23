@@ -12,7 +12,7 @@ import {
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
   const config = generateBaseConfig(9, 'Crush and Rush', 'Clear the path with your crushing power!');
-  
+
   state.player = createPlayer(0, 4);
   state.goal = createPosition(8, 4);
   state.monsters = [createMonster(4, 4)];
@@ -25,11 +25,11 @@ export const generateLevel = (): [GameState, LevelConfig, string] => {
     createObstacle(7, 5),
     createObstacle(8, 5),
   ];
-  
+
   for (let i = 2; i < 7; i++) {
     state.obstacles.push(createObstacle(i, 3));
     state.obstacles.push(createObstacle(i - 1, 5));
   }
-  
+
   return [state, config, config.levelStory];
 };

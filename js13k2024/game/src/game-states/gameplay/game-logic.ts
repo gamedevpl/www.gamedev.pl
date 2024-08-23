@@ -1,13 +1,4 @@
-import {
-  GameState,
-  Position,
-  LevelConfig,
-  Direction,
-  BonusType,
-  ActiveBonus,
-  BlasterShot,
-  isActiveBonus,
-} from './gameplay-types';
+import { GameState, LevelConfig, Direction, BonusType, isActiveBonus } from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
@@ -16,26 +7,22 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { generateLevel } from './level-generator';
-import {
-  BLASTER_SHOT_DURATION,
-  MOVE_ANIMATION_DURATION,
-  OBSTACLE_DESTRUCTION_DURATION,
-} from './render/animation-utils';
+import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './render/animation-utils';
 import { soundEngine } from '../../sound/sound-engine';
+import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
 import {
-  getDirectionFromKey,
-  getDirectionFromPositions,
-  getNewPosition,
-  isPositionEqual,
-  isPositionOccupied,
-  isValidMove,
-  isValidObstaclePush,
-  manhattanDistance,
-} from './move-utils';
+  applyBonus,
+  handleBlasterShot,
+  handleMonsterBonus,
+  handleSlideMovement,
+  handleSokobanMovement,
+  handleTsunamiEffect,
+  performTeleportation,
+} from './bonus-logic';
 
 export const initializeGame = (level: number): [GameState, LevelConfig] => {
   const [gameState, config] = generateLevel(level);
-  return [{ ...gameState, gameEndingState: 'none', tsunamiLevel: 0, isSliding: false, blasterShots: [] }, config];
+  return [{ ...gameState, gameEndingState: 'none', tsunamiLevel: 0, blasterShots: [] }, config];
 };
 
 export const handleKeyPress = (e: KeyboardEvent, gameState: GameState, levelConfig: LevelConfig): GameState => {
@@ -57,7 +44,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   let newPosition = getNewPosition(newGameState.player.position, direction);
 
   // Handle Slide bonus
-  if (newGameState.isSliding) {
+  if (isActiveBonus(newGameState, BonusType.Slide)) {
     newPosition = handleSlideMovement(newGameState, direction, levelConfig);
   }
 
@@ -118,12 +105,8 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
       performTeleportation(newGameState, collectedBonus.position);
     }
 
-    // Spawn monster every 13th step
-    if (newGameState.monsterSpawnSteps >= 13) {
-      spawnMonster(newGameState, levelConfig);
-      newGameState.monsterSpawnSteps = 0;
-      soundEngine.playMonsterSpawn();
-    }
+    // spawn bonuses, monsters, and do other updates according to current game situation
+    levelConfig.levelUpdater(newGameState, levelConfig);
 
     // Move monsters
     newGameState.monsters = moveMonsters(
@@ -219,85 +202,9 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
   return newGameState;
 };
 
-export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
-  const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 };
-  gameState.activeBonuses.push(newActiveBonus);
-
-  switch (bonusType) {
-    case BonusType.CapOfInvisibility:
-      // Logic for Cap of Invisibility is handled in monster movement
-      break;
-    case BonusType.ConfusedMonsters:
-      // Logic for Confused Monsters is handled in monster movement
-      break;
-    case BonusType.LandMine:
-      gameState.landMines.push({ ...gameState.player.position });
-      break;
-    case BonusType.TimeBomb:
-      gameState.timeBombs.push({
-        position: gameState.player.position,
-        timer: 13,
-        shakeIntensity: 0,
-      });
-      break;
-    case BonusType.Crusher:
-      break;
-    case BonusType.Builder:
-      break;
-    case BonusType.Climber:
-      break;
-    case BonusType.Teleport:
-      // Teleport is handled immediately when collected
-      break;
-    case BonusType.Tsunami:
-      gameState.tsunamiLevel = 1;
-      break;
-    case BonusType.Monster:
-      break;
-    case BonusType.Slide:
-      gameState.isSliding = true;
-      break;
-    case BonusType.Sokoban:
-      break;
-    case BonusType.Blaster:
-      break;
-  }
-};
-
 const calculateLevelScore = (gameState: GameState): number => {
   return 100 - gameState.steps + gameState.monsters.length * 10;
 };
-
-const spawnMonster = (gameState: GameState, { gridSize }: LevelConfig) => {
-  let monsterPosition;
-  do {
-    monsterPosition = generateRandomPosition(gridSize, gridSize);
-  } while (
-    isPositionEqual(monsterPosition, gameState.player.position) ||
-    isPositionEqual(monsterPosition, gameState.goal) ||
-    isPositionOccupied(
-      monsterPosition,
-      gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
-    ) ||
-    isPositionOccupied(
-      monsterPosition,
-      gameState.monsters.map((m) => m.position),
-    )
-  );
-  gameState.monsters.push({
-    position: monsterPosition,
-    previousPosition: monsterPosition,
-    moveTimestamp: Date.now(),
-    path: [],
-    seed: Math.random(),
-    isConfused: false,
-  });
-};
-
-const generateRandomPosition = (width: number, height: number): Position => ({
-  x: Math.floor(Math.random() * width),
-  y: Math.floor(Math.random() * height),
-});
 
 export const isGameEnding = (gameState: GameState): boolean => {
   return gameState.gameEndingState !== 'none';
@@ -311,123 +218,4 @@ export const startGameOverAnimation = (gameState: GameState): void => {
 export const startLevelCompleteAnimation = (gameState: GameState): void => {
   gameState.player.isVictorious = true;
   soundEngine.playLevelComplete();
-};
-
-const performTeleportation = (gameState: GameState, teleportPoint: Position): void => {
-  const destinationPoint = gameState.bonuses.find(
-    (bonus) => bonus.type === BonusType.Teleport && !isPositionEqual(bonus.position, teleportPoint),
-  );
-  if (destinationPoint) {
-    gameState.player.previousPosition = gameState.player.position;
-    gameState.player.position = destinationPoint.position;
-    gameState.player.teleportTimestamp = Date.now();
-    soundEngine.playTeleport();
-  }
-};
-
-const handleTsunamiEffect = (gameState: GameState): void => {
-  gameState.tsunamiLevel++;
-  if (gameState.tsunamiLevel >= 13) {
-    if (!isActiveBonus(gameState, BonusType.Climber)) {
-      gameState.gameEndingState = 'gameOver';
-      startGameOverAnimation(gameState);
-    }
-    gameState.monsters = [];
-    gameState.tsunamiLevel = 0;
-  }
-};
-
-const handleMonsterBonus = (gameState: GameState): void => {
-  // Check for collisions with monsters (now players)
-  const collidedMonster = gameState.monsters.find((monster) =>
-    isPositionEqual(gameState.player.position, monster.position),
-  );
-  if (collidedMonster) {
-    gameState.monsters = gameState.monsters.filter((monster) => monster !== collidedMonster);
-    if (gameState.monsters.length === 0) {
-      gameState.gameEndingState = 'gameOver';
-      startGameOverAnimation(gameState);
-    }
-  }
-};
-
-const handleSlideMovement = (gameState: GameState, direction: Direction, levelConfig: LevelConfig): Position => {
-  let newPosition = gameState.player.position;
-  while (isValidMove(getNewPosition(newPosition, direction), gameState, levelConfig)) {
-    newPosition = getNewPosition(newPosition, direction);
-  }
-  return newPosition;
-};
-
-const handleSokobanMovement = (
-  gameState: GameState,
-  oldPosition: Position,
-  newPosition: Position,
-  gridSize: number,
-): void => {
-  const pushedObstacle = gameState.obstacles.find((obstacle) => isPositionEqual(obstacle.position, newPosition));
-  if (pushedObstacle) {
-    const obstacleNewPosition = getNewPosition(
-      pushedObstacle.position,
-      getDirectionFromPositions(oldPosition, newPosition),
-    );
-    if (isValidObstaclePush(obstacleNewPosition, gameState, { gridSize })) {
-      pushedObstacle.position = obstacleNewPosition;
-      // Check if the pushed obstacle crushes a monster
-      const crushedMonster = gameState.monsters.find((monster) =>
-        isPositionEqual(monster.position, obstacleNewPosition),
-      );
-      if (crushedMonster) {
-        gameState.monsters = gameState.monsters.filter((monster) => monster !== crushedMonster);
-      }
-    } else {
-      // If the obstacle can't be pushed, the player doesn't move
-      newPosition = oldPosition;
-    }
-  }
-};
-
-const handleBlasterShot = (gameState: GameState, direction: Direction, levelConfig: LevelConfig): void => {
-  const start = gameState.player.position;
-  const end = handleSlideMovement(gameState, direction, levelConfig);
-  const shot: BlasterShot = {
-    startPosition: start,
-    endPosition: end,
-    direction: direction,
-    shotTimestamp: Date.now(),
-    duration: BLASTER_SHOT_DURATION * (manhattanDistance(start, end) + 1),
-  };
-  gameState.blasterShots.push(shot);
-  // Play the blaster sound effect
-  soundEngine.playBlasterSound();
-
-  // Check if the shot hits monsters along its path
-  gameState.monsters = gameState.monsters.filter((monster) => {
-    const isHit = isMonsterOnBlasterPath(monster.position, start, end, direction);
-    return !isHit;
-  });
-};
-
-const isMonsterOnBlasterPath = (
-  monsterPos: Position,
-  start: Position,
-  end: Position,
-  direction: Direction,
-): boolean => {
-  switch (direction) {
-    case Direction.Up:
-    case Direction.Down:
-      return (
-        monsterPos.x === start.x &&
-        ((direction === Direction.Up && monsterPos.y <= start.y && monsterPos.y >= end.y) ||
-          (direction === Direction.Down && monsterPos.y >= start.y && monsterPos.y <= end.y))
-      );
-    case Direction.Left:
-    case Direction.Right:
-      return (
-        monsterPos.y === start.y &&
-        ((direction === Direction.Left && monsterPos.x <= start.x && monsterPos.x >= end.x) ||
-          (direction === Direction.Right && monsterPos.x >= start.x && monsterPos.x <= end.x))
-      );
-  }
 };

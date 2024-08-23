@@ -66,7 +66,6 @@ export interface GameState {
   score: number;
   gameEndingState: GameEndingState;
   tsunamiLevel: number;
-  isSliding: boolean;
   blasterShots: BlasterShot[];
 }
 
@@ -98,10 +97,12 @@ export interface LevelConfig {
   gridSize: number;
   cellSize: number;
   initialMonsterCount: number;
+  monsterSpawnSectors: Position[];
   obstacleCount: number;
   initialBonusCount: number;
   levelName: string;
   levelStory: string;
+  levelUpdater: (state: GameState, levelConfig: LevelConfig) => void;
 }
 
 export interface Score {

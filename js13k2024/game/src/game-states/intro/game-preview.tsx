@@ -52,7 +52,6 @@ const createPreviewGameState = (): GameState => ({
   score: 0,
   gameEndingState: 'none',
   tsunamiLevel: 0,
-  isSliding: false,
   blasterShots: [],
 });
 
@@ -79,10 +78,12 @@ export const GamePreview: FunctionComponent = () => {
         gridSize: GRID_SIZE,
         cellSize: CELL_SIZE,
         initialMonsterCount: 0,
+        monsterSpawnSectors: [],
         obstacleCount: 0,
         initialBonusCount: 0,
         levelName: 'Preview',
         levelStory: 'Preview',
+        levelUpdater: () => {},
       });
 
       ctx.restore();
