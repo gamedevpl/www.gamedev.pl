@@ -29,6 +29,7 @@ const createPreviewGameState = (): GameState => ({
       path: [],
       seed: Math.random(),
       isConfused: false,
+      spawnPoint: { x: 0, y: 4 },
     },
     {
       position: { x: 4, y: 0 },
@@ -37,6 +38,7 @@ const createPreviewGameState = (): GameState => ({
       path: [],
       seed: Math.random(),
       isConfused: false,
+      spawnPoint: { x: 4, y: 0 },
     },
   ],
   steps: 0,

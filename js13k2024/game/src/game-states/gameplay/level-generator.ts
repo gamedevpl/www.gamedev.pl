@@ -29,6 +29,7 @@ const createMonster = (x: number, y: number): Monster => ({
   path: [],
   seed: Math.random(),
   isConfused: false,
+  spawnPoint: createPosition(x, y),
 });
 
 const createPlayer = (x: number, y: number): Player => ({

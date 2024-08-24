@@ -10,6 +10,7 @@ export interface Monster {
   path: Position[];
   seed: number;
   isConfused: boolean;
+  spawnPoint: Position; // Add this line to store the original spawn point
 }
 
 export enum BonusType {
@@ -152,12 +153,6 @@ export function getBonusDescription(bonusType: BonusType): string {
     default:
       return 'Mystery power activated!';
   }
-}
-
-export interface ElectricalDischarge {
-  position: Position;
-  intensity: number;
-  duration: number;
 }
 
 export function isActiveBonus(gameState: GameState, bonusType: BonusType) {

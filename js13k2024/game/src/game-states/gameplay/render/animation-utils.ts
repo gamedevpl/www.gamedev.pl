@@ -1,4 +1,4 @@
-import { ElectricalDischarge } from '../gameplay-types';
+import { Position } from '../gameplay-types';
 
 export const MOVE_ANIMATION_DURATION = 250; // 1/4 second
 export const TELEPORT_ANIMATION_DURATION = 500; // 1/2 second
@@ -19,11 +19,6 @@ export interface AnimationParams {
   baseHeight: number;
   widthFactor: number;
   heightAnimationFactor: number;
-}
-
-interface Position {
-  x: number;
-  y: number;
 }
 
 // New function to handle move animation interpolation
@@ -66,42 +61,6 @@ export const calculateShakeOffset = (intensity: number): Position => {
     x: Math.sin(time) * intensity,
     y: Math.cos(time * 1.5) * intensity,
   };
-};
-
-// Updated function for electrical discharge animation
-export const calculateElectricalDischarge = (
-  gridSize: number,
-  stepsSinceLastMonster: number,
-  lastMoveTime: number,
-  currentTime: number,
-): ElectricalDischarge[] => {
-  const discharges: ElectricalDischarge[] = [];
-  const timeSinceLastMove = currentTime - lastMoveTime;
-  const dischargeAnimationDuration = 1000; // 1 second
-
-  // Only show discharges for 1 second after a move
-  if (timeSinceLastMove > dischargeAnimationDuration) {
-    return discharges;
-  }
-
-  const spawnProgress = stepsSinceLastMonster / 13; // 13 steps until next monster spawn
-  const timeProgress = timeSinceLastMove / dischargeAnimationDuration;
-  const intensityFactor = Math.sqrt(spawnProgress * (1 - timeProgress));
-
-  const dischargeCount = Math.floor(intensityFactor * 10); // Adjust max discharge count as needed
-
-  for (let i = 0; i < dischargeCount; i++) {
-    discharges.push({
-      position: {
-        x: Math.random() * gridSize,
-        y: Math.random() * gridSize,
-      },
-      intensity: 10 * intensityFactor,
-      duration: 10 * intensityFactor,
-    });
-  }
-
-  return discharges;
 };
 
 export const OBSTACLE_DESTRUCTION_DURATION = 500; // 0.5 seconds

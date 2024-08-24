@@ -1,6 +1,8 @@
 import { Position, Monster, PathfindingNode, Explosion, Obstacle } from './gameplay-types';
 import { isPositionEqual, isPositionOccupied, manhattanDistance } from './move-utils';
 
+const MAX_RANDOM_MOVE_DISTANCE = 3; // Maximum distance for random movement
+
 export const moveMonsters = (
   monsters: Monster[],
   playerPosition: Position,
@@ -13,11 +15,13 @@ export const moveMonsters = (
   const newPositions: Position[] = [];
   return monsters.map((monster) => {
     let path: Position[];
-    if (isPlayerInvisible) {
-      // If the player is invisible, move randomly
-      path = getRandomAdjacentPosition(monster.position, gridSize, obstacles, monsters);
+    const distanceToPlayer = calculateDistanceInSteps(monster.position, playerPosition, gridSize, obstacles);
+
+    if (isPlayerInvisible || distanceToPlayer > 13) {
+      // If the player is invisible or too far, move randomly near spawn point
+      path = getRandomPositionNearSpawn(monster, gridSize, obstacles, monsters);
     } else {
-      // If the player is visible, use pathfinding
+      // If the player is visible and within range, use pathfinding
       path = findPath(monster.position, playerPosition, gridSize, obstacles, monsters);
     }
 
@@ -38,6 +42,55 @@ export const moveMonsters = (
 
     return { ...monster, previousPosition: monster.position, position: newPosition, moveTimestamp: Date.now(), path };
   });
+};
+
+const getRandomPositionNearSpawn = (
+  monster: Monster,
+  gridSize: number,
+  obstacles: Obstacle[],
+  monsters: Monster[],
+): Position[] => {
+  const spawnPoint = monster.spawnPoint || monster.position;
+  const possiblePositions = [];
+
+  for (let dx = -MAX_RANDOM_MOVE_DISTANCE; dx <= MAX_RANDOM_MOVE_DISTANCE; dx++) {
+    for (let dy = -MAX_RANDOM_MOVE_DISTANCE; dy <= MAX_RANDOM_MOVE_DISTANCE; dy++) {
+      const newPos = {
+        x: Math.max(0, Math.min(gridSize - 1, spawnPoint.x + dx)),
+        y: Math.max(0, Math.min(gridSize - 1, spawnPoint.y + dy)),
+      };
+
+      if (
+        !isPositionOccupied(
+          newPos,
+          obstacles.map(({ position }) => position),
+        ) &&
+        !isPositionOccupied(
+          newPos,
+          monsters.map((m) => m.position),
+        )
+      ) {
+        possiblePositions.push(newPos);
+      }
+    }
+  }
+
+  if (possiblePositions.length > 0) {
+    const randomIndex = Math.floor(Math.random() * possiblePositions.length);
+    return [monster.position, possiblePositions[randomIndex]];
+  }
+
+  return [monster.position];
+};
+
+export const calculateDistanceInSteps = (
+  start: Position,
+  end: Position,
+  gridSize: number,
+  obstacles: Obstacle[],
+): number => {
+  const path = findPath(start, end, gridSize, obstacles, []);
+  return path.length - 1; // Subtract 1 because the path includes the starting position
 };
 
 const getConfusedPosition = (
@@ -72,41 +125,6 @@ const getConfusedPosition = (
 
   // If the opposite position is not valid, stay in the current position
   return currentPosition;
-};
-
-const getRandomAdjacentPosition = (
-  position: Position,
-  gridSize: number,
-  obstacles: Obstacle[],
-  monsters: Monster[],
-): Position[] => {
-  const adjacentPositions = [
-    { x: position.x - 1, y: position.y },
-    { x: position.x + 1, y: position.y },
-    { x: position.x, y: position.y - 1 },
-    { x: position.x, y: position.y + 1 },
-  ].filter(
-    (pos) =>
-      pos.x >= 0 &&
-      pos.x < gridSize &&
-      pos.y >= 0 &&
-      pos.y < gridSize &&
-      !isPositionOccupied(
-        pos,
-        obstacles.map(({ position }) => position),
-      ) &&
-      !isPositionOccupied(
-        pos,
-        monsters.map((m) => m.position),
-      ),
-  );
-
-  if (adjacentPositions.length > 0) {
-    const randomIndex = Math.floor(Math.random() * adjacentPositions.length);
-    return [position, adjacentPositions[randomIndex]];
-  }
-
-  return [position];
 };
 
 const findPath = (

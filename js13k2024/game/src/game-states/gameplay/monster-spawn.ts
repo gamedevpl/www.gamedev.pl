@@ -25,6 +25,7 @@ export const spawnMonster = (gameState: GameState, { gridSize, monsterSpawnSecto
         path: [],
         seed: Math.random(),
         isConfused: false,
+        spawnPoint: position,
       };
     }
 
