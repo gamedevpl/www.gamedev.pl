@@ -90,6 +90,10 @@ button:hover {
   flex-direction: row;
 }
 
+.level-story {
+  max-width: 600px;
+}
+
 @media (max-width: 600px) {
   .game-intro-responsive {
     flex-direction: column;
