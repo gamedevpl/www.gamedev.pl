@@ -89,6 +89,11 @@ export const isValidMove = (
     return false;
   }
 
+  const isOnObstacle = isPositionOccupied(
+    gameState.player.position,
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+  );
+
   const isObstaclePresent = isPositionOccupied(
     newPosition,
     gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
@@ -98,6 +103,7 @@ export const isValidMove = (
   if (
     isObstaclePresent &&
     !isActiveBonus(gameState, BonusType.Climber) &&
+    !isOnObstacle &&
     !isActiveBonus(gameState, BonusType.Crusher)
   ) {
     // Check if Sokoban bonus is active

@@ -67,6 +67,7 @@ export interface GameState {
   score: number;
   gameEndingState: GameEndingState;
   tsunamiLevel: number;
+  tsunamiTeardownTimestamp?: number;
   blasterShots: BlasterShot[];
 }
 

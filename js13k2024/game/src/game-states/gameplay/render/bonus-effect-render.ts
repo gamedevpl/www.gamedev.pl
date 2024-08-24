@@ -2,6 +2,8 @@ import { interpolatePosition } from './animation-utils';
 import { BlasterShot, Direction, GameState, Position } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
+export const TSUNAMI_TEARDOWN_DURATION = 1000;
+
 type TsunamiWave = {
   tsunamiLevel: number;
   grid: Position;
@@ -11,7 +13,13 @@ type TsunamiWave = {
 };
 
 export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cellSize: number): TsunamiWave[] => {
-  const { tsunamiLevel } = gameState;
+  let { tsunamiLevel } = gameState;
+  if (gameState.tsunamiTeardownTimestamp) {
+    tsunamiLevel = gameState.player.isVanishing
+      ? 13
+      : (1 - (Date.now() - gameState.tsunamiTeardownTimestamp) / TSUNAMI_TEARDOWN_DURATION) * 13;
+  }
+
   const maxWaterHeight = cellSize * 0.8; // Maximum water height when tsunamiLevel reaches 13
 
   const waves: TsunamiWave[] = [];
@@ -22,7 +30,7 @@ export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cel
       const topR = toIsometric(x + 1, y);
       const bottomL = toIsometric(x, y + 1);
       const bottomR = toIsometric(x + 1, y + 1);
-      const waterHeight = (tsunamiLevel / 13) * maxWaterHeight;
+      const waterHeight = Math.min(Math.max(tsunamiLevel / 13, 0), 1) * maxWaterHeight;
 
       const wave1 = waterHeight + Math.sin(Date.now() / 200 + x * 0.5) * 5;
       const wave2 = waterHeight + Math.sin(Date.now() / 200 + (x + 1) * 0.5) * 5;

@@ -9,7 +9,13 @@ import { calculateDrawingOrder } from './render/isometric-utils';
 import { calculateShakeOffset, interpolatePosition } from './render/animation-utils';
 import { drawTooltip } from './render/tooltip-render';
 import { drawPlatform } from './render/grid-render';
-import { drawBlasterShot, drawSlideTrail, drawTsunamiWave, generateTsunamiWaves } from './render/bonus-effect-render';
+import {
+  drawBlasterShot,
+  drawSlideTrail,
+  drawTsunamiWave,
+  generateTsunamiWaves,
+  TSUNAMI_TEARDOWN_DURATION,
+} from './render/bonus-effect-render';
 import { drawPurpleImpulse } from './render/purple-impulse-render';
 
 export const PLATFORM_HEIGHT = 20;
@@ -43,7 +49,14 @@ export const drawGameState = (
   drawGrid(ctx, gridSize, gameState);
 
   // Generate tsunami effect
-  const tsunamiWaves = gameState.tsunamiLevel > 0 ? generateTsunamiWaves(gameState, gridSize, cellSize) : [];
+  const tsunamiWaves =
+    gameState.tsunamiLevel > 0 || gameState.tsunamiTeardownTimestamp
+      ? generateTsunamiWaves(gameState, gridSize, cellSize)
+      : [];
+
+  if (Date.now() - gameState.tsunamiTeardownTimestamp! > TSUNAMI_TEARDOWN_DURATION && !gameState.player.isVanishing) {
+    gameState.tsunamiTeardownTimestamp = undefined;
+  }
 
   // Draw slide movement trail
   if (isActiveBonus(gameState, BonusType.Slide)) {

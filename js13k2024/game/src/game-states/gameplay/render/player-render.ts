@@ -37,12 +37,12 @@ export const drawPlayer = (
   }
 
   // Adjust rendering position if the player is climbing
-  if (isClimbing) {
-    const isOnObstacle = obstacles.some(
-      (obstacle) =>
-        obstacle.position.x === Math.round(interpolatedPosition.x) &&
-        obstacle.position.y === Math.round(interpolatedPosition.y),
-    );
+  const isOnObstacle = obstacles.some(
+    (obstacle) =>
+      obstacle.position.x === Math.round(interpolatedPosition.x) &&
+      obstacle.position.y === Math.round(interpolatedPosition.y),
+  );
+  if (isClimbing || isOnObstacle) {
     if (isOnObstacle) {
       isoY -= cellSize * 0.5; // Lift the player up by half a cell when on an obstacle
     }

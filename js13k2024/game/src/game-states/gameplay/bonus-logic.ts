@@ -1,15 +1,6 @@
 import { soundEngine } from '../../sound/sound-engine';
 import { startGameOverAnimation } from './game-logic';
-import {
-  GameState,
-  BonusType,
-  ActiveBonus,
-  LevelConfig,
-  Position,
-  isActiveBonus,
-  Direction,
-  BlasterShot,
-} from './gameplay-types';
+import { GameState, BonusType, ActiveBonus, LevelConfig, Position, Direction, BlasterShot } from './gameplay-types';
 import {
   isPositionOccupied,
   isPositionEqual,
@@ -136,12 +127,19 @@ export const performTeleportation = (gameState: GameState, teleportPoint: Positi
 export const handleTsunamiEffect = (gameState: GameState): void => {
   gameState.tsunamiLevel++;
   if (gameState.tsunamiLevel >= 13) {
-    if (!isActiveBonus(gameState, BonusType.Climber)) {
+    if (
+      // player must be standing on a obstacle
+      !isPositionOccupied(
+        gameState.player.position,
+        gameState.obstacles.map((o) => o.position),
+      )
+    ) {
       gameState.gameEndingState = 'gameOver';
       startGameOverAnimation(gameState);
     }
     gameState.monsters = [];
     gameState.tsunamiLevel = 0;
+    gameState.tsunamiTeardownTimestamp = Date.now();
   }
 };
 
