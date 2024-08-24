@@ -10,7 +10,7 @@ export interface Monster {
   path: Position[];
   seed: number;
   isConfused: boolean;
-  spawnPoint: Position; // Add this line to store the original spawn point
+  spawnPoint: Position;
 }
 
 export enum BonusType {

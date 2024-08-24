@@ -2,7 +2,7 @@ import { Position, Bonus, BonusType } from '../gameplay-types';
 import { toIsometric, TILE_WIDTH, TILE_HEIGHT } from './isometric-utils';
 import { drawShadow } from './grid-render';
 
-const BONUS_HEIGHT = TILE_HEIGHT * 0.4;
+const BONUS_HEIGHT = TILE_HEIGHT;
 
 export const drawBonuses = (ctx: CanvasRenderingContext2D, bonuses: Bonus[], cellSize: number) => {
   bonuses.forEach((bonus) => {
@@ -14,16 +14,16 @@ export const drawBonuses = (ctx: CanvasRenderingContext2D, bonuses: Bonus[], cel
     // Draw bonus base
     ctx.fillStyle = getBonusColor(bonus.type);
     ctx.beginPath();
-    ctx.moveTo(isoX, isoY - BONUS_HEIGHT);
-    ctx.lineTo(isoX + TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 2);
-    ctx.lineTo(isoX, isoY);
-    ctx.lineTo(isoX - TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 2);
+    ctx.moveTo(isoX, isoY + BONUS_HEIGHT / 2);
+    ctx.lineTo(isoX + TILE_WIDTH / 4, isoY);
+    ctx.lineTo(isoX, isoY - BONUS_HEIGHT / 2);
+    ctx.lineTo(isoX - TILE_WIDTH / 4, isoY);
     ctx.closePath();
     ctx.fill();
 
     // Draw bonus top
     ctx.beginPath();
-    ctx.arc(isoX, isoY - BONUS_HEIGHT, TILE_WIDTH / 6, 0, Math.PI * 2);
+    ctx.arc(isoX, isoY - BONUS_HEIGHT / 2, TILE_WIDTH / 6, 0, Math.PI * 2);
     ctx.fill();
 
     // Draw bonus symbol
@@ -31,7 +31,7 @@ export const drawBonuses = (ctx: CanvasRenderingContext2D, bonuses: Bonus[], cel
     ctx.font = `bold ${cellSize / 3}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(getBonusSymbol(bonus.type), isoX, isoY - BONUS_HEIGHT);
+    ctx.fillText(getBonusSymbol(bonus.type), isoX, isoY - BONUS_HEIGHT / 2);
   });
 };
 
@@ -45,10 +45,10 @@ export const drawLandMines = (ctx: CanvasRenderingContext2D, landMines: Position
     // Draw mine base
     ctx.fillStyle = 'brown';
     ctx.beginPath();
-    ctx.moveTo(isoX, isoY - BONUS_HEIGHT / 2);
-    ctx.lineTo(isoX + TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 4);
-    ctx.lineTo(isoX, isoY);
-    ctx.lineTo(isoX - TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 4);
+    ctx.moveTo(isoX, isoY + BONUS_HEIGHT / 2);
+    ctx.lineTo(isoX + TILE_WIDTH / 4, isoY);
+    ctx.lineTo(isoX, isoY - BONUS_HEIGHT / 2);
+    ctx.lineTo(isoX - TILE_WIDTH / 4, isoY);
     ctx.closePath();
     ctx.fill();
 
@@ -82,7 +82,7 @@ export const drawTimeBombs = (
     ctx.beginPath();
     ctx.moveTo(isoX, isoY - BONUS_HEIGHT);
     ctx.lineTo(isoX + TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 2);
-    ctx.lineTo(isoX, isoY);
+    ctx.lineTo(isoX, isoY + BONUS_HEIGHT / 2);
     ctx.lineTo(isoX - TILE_WIDTH / 4, isoY - BONUS_HEIGHT / 2);
     ctx.closePath();
     ctx.fill();
@@ -123,6 +123,20 @@ const getBonusColor = (bonusType: BonusType): string => {
       return '#FF69B4'; // Hot Pink
     case BonusType.Builder:
       return '#00FFFF'; // Cyan
+    case BonusType.Climber:
+      return '#32CD32'; // Lime Green
+    case BonusType.Teleport:
+      return '#9400D3'; // Dark Violet
+    case BonusType.Tsunami:
+      return '#1E90FF'; // Dodger Blue
+    case BonusType.Monster:
+      return '#FF4500'; // Orange Red
+    case BonusType.Slide:
+      return '#00CED1'; // Dark Turquoise
+    case BonusType.Sokoban:
+      return '#DAA520'; // Goldenrod
+    case BonusType.Blaster:
+      return '#FF1493'; // Deep Pink
     default:
       return '#FFFF00'; // Yellow
   }
@@ -142,6 +156,20 @@ const getBonusSymbol = (bonusType: BonusType): string => {
       return 'X';
     case BonusType.Builder:
       return 'B';
+    case BonusType.Climber:
+      return '↑';
+    case BonusType.Teleport:
+      return '⊷';
+    case BonusType.Tsunami:
+      return '≋';
+    case BonusType.Monster:
+      return 'M';
+    case BonusType.Slide:
+      return '⇉';
+    case BonusType.Sokoban:
+      return '◊';
+    case BonusType.Blaster:
+      return '⚡';
     default:
       return '?';
   }

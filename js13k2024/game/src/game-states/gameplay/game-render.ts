@@ -124,11 +124,7 @@ export const drawGameState = (
     }
   }
   // Draw tooltip if there's an active bonus
-  const tooltipBonus = gameState.activeBonuses.find(
-    (bonus) =>
-      bonus.duration === 13 ||
-      [BonusType.Builder, BonusType.CapOfInvisibility, BonusType.Crusher, BonusType.Blaster].includes(bonus.type),
-  );
+  const tooltipBonus = gameState.activeBonuses.sort((a, b) => b.duration - a.duration)[0];
 
   if (tooltipBonus) {
     drawTooltip(ctx, gameState.player.position, tooltipBonus, cellSize);
