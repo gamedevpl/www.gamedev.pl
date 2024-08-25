@@ -27,6 +27,6 @@ Partially generated with [genaicode](https://github.com/gtanczyk/genaicode)
 
 - [Play the Game](https://www.gamedev.pl/games/monster-steps/)
 - [js13k Competition](https://js13kgames.com)
-- [Source Code](https://github.com/gamedevpl/www.gamedev.pl/tree/master/js13k2024)
+- [Source Code](https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/monster-steps)
 
 Enjoy playing Monster Steps!

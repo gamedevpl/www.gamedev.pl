@@ -21,7 +21,7 @@ export default defineConfig({
           dest: 'games/nukes',
         },
         {
-          src: '../js13k2024/game/dist',
+          src: '../games/monster-steps/dist',
           dest: 'games/',
           rename: 'monster-steps',
         },

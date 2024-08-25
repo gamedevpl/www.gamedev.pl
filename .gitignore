@@ -5,5 +5,4 @@ dist
 .idea
 /app/sass/.sass-cache
 .vscode/settings.json
-js13k2024/game/.DS_Store
-js13k2024/.DS_Store
+.DS_Store

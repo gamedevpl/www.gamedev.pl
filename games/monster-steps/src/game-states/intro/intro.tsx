@@ -36,7 +36,10 @@ export const Intro: FunctionComponent<IntroProps> = ({ onStart, onInstructions }
           <p className="intro-tip">Press right arrow to start</p>
         </div>
       </div>
-      <p className="author-name">Created by <a href="https://x.com/gtanczyk">Grzegorz Tańczyk</a> | <a href="https://github.com/gamedevpl/www.gamedev.pl/tree/master/js13k2024">Source code (GitHub)</a></p>
+      <p className="author-name">
+        Created by <a href="https://x.com/gtanczyk">Grzegorz Tańczyk</a> |{' '}
+        <a href="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/monster-steps/">Source code (GitHub)</a>
+      </p>
     </div>
   );
 };
