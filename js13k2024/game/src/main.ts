@@ -1,5 +1,6 @@
 import { Intro } from './game-states/intro/intro';
-import { Instructions } from './game-states/instructions/instructions';
+// Instructions are removed from the UI for now
+// import { Instructions } from './game-states/instructions/instructions';
 import { Gameplay } from './game-states/gameplay/gameplay';
 import { GameOver } from './game-states/game-over/game-over';
 import { LevelComplete } from './game-states/level-complete/level-complete';
@@ -10,12 +11,12 @@ import './global-styles.css';
 
 enum GameState {
   Intro,
-  Instructions,
+  // Instructions,
   LevelStory,
   Gameplay,
   GameOver,
   LevelComplete,
-  GameComplete
+  GameComplete,
 }
 
 export class MonsterStepsApp {
@@ -59,7 +60,7 @@ export class MonsterStepsApp {
         }
       } else if (e.key === 'Escape') {
         if (
-          this.gameState === GameState.Instructions ||
+          // this.gameState === GameState.Instructions ||
           this.gameState === GameState.GameOver ||
           this.gameState === GameState.GameComplete
         ) {
@@ -75,16 +76,13 @@ export class MonsterStepsApp {
 
     switch (this.gameState) {
       case GameState.Intro:
-        this.currentScreen = new Intro(this.startGame.bind(this), this.showInstructions.bind(this));
+        this.currentScreen = new Intro(this.startGame.bind(this) /*, this.showInstructions.bind(this)*/);
         break;
-      case GameState.Instructions:
-        this.currentScreen = new Instructions(this.quitGame.bind(this));
-        break;
+      // case GameState.Instructions:
+      //   this.currentScreen = new Instructions(this.quitGame.bind(this));
+      //   break;
       case GameState.LevelStory:
-        this.currentScreen = new LevelStory(
-          this.level,
-          this.startGameplay.bind(this)
-        );
+        this.currentScreen = new LevelStory(this.level, this.startGameplay.bind(this));
         break;
       case GameState.Gameplay:
         this.currentScreen = new Gameplay(
@@ -94,7 +92,7 @@ export class MonsterStepsApp {
           this.levelComplete.bind(this),
           this.gameComplete.bind(this),
           this.updateScore.bind(this),
-          this.updateSteps.bind(this)
+          this.updateSteps.bind(this),
         );
         break;
       case GameState.GameOver:
@@ -102,22 +100,18 @@ export class MonsterStepsApp {
           this.score,
           this.steps,
           this.restartLevel.bind(this),
-          this.quitGame.bind(this)
+          this.quitGame.bind(this),
         );
         break;
       case GameState.LevelComplete:
-        this.currentScreen = new LevelComplete(
-          this.level,
-          this.nextLevel.bind(this),
-          this.quitGame.bind(this)
-        );
+        this.currentScreen = new LevelComplete(this.level, this.nextLevel.bind(this), this.quitGame.bind(this));
         break;
       case GameState.GameComplete:
         this.currentScreen = new GameComplete(
           this.score,
           this.steps,
           this.restartGame.bind(this),
-          this.quitGame.bind(this)
+          this.quitGame.bind(this),
         );
         break;
     }
@@ -136,10 +130,10 @@ export class MonsterStepsApp {
     this.renderCurrentState();
   }
 
-  private showInstructions() {
-    this.gameState = GameState.Instructions;
-    this.renderCurrentState();
-  }
+  // private showInstructions() {
+  //   this.gameState = GameState.Instructions;
+  //   this.renderCurrentState();
+  // }
 
   private restartGame() {
     this.level = 1;
@@ -205,43 +199,43 @@ class GameComplete {
 
   render(): HTMLElement {
     const container = createDiv('game-complete intro');
-    
+
     const title = document.createElement('h1');
     title.className = 'game-title';
     title.textContent = 'Monster Steps';
-    
+
     const subtitle = document.createElement('h2');
     subtitle.className = 'game-complete-subtitle';
     subtitle.textContent = 'Congratulations!';
-    
+
     const stats = createDiv('game-complete-stats');
     stats.innerHTML = `
       <p>Final Score: ${this.score}</p>
       <p>Total Steps: ${this.steps}</p>
     `;
-    
+
     const buttons = createDiv('intro-buttons');
     const playAgainButton = document.createElement('button');
     playAgainButton.textContent = 'Play Again';
     playAgainButton.onclick = this.onPlayAgain;
-    
+
     const quitButton = document.createElement('button');
     quitButton.textContent = 'Quit';
     quitButton.onclick = this.onQuit;
-    
+
     buttons.appendChild(playAgainButton);
     buttons.appendChild(quitButton);
-    
+
     const tip = document.createElement('p');
     tip.className = 'intro-tip';
     tip.textContent = 'Press right arrow to play again';
-    
+
     container.appendChild(title);
     container.appendChild(subtitle);
     container.appendChild(stats);
     container.appendChild(buttons);
     container.appendChild(tip);
-    
+
     return container;
   }
 }
