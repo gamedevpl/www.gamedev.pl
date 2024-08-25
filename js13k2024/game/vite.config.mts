@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import preact from '@preact/preset-vite';
 import checker from 'vite-plugin-checker';
 
 // https://vitejs.dev/config/
@@ -7,5 +6,5 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
-  plugins: [preact(), checker({ typescript: true })],
+  plugins: [checker({ typescript: true })],
 });
