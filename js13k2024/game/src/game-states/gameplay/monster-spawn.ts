@@ -11,7 +11,7 @@ export const spawnMonster = (gameState: GameState, { gridSize, monsterSpawnSecto
   while (attempts < maxAttempts) {
     const position =
       monsterSpawnSectors.length > 0
-        ? monsterSpawnSectors[Math.round(monsterSpawnSectors.length * Math.random())]
+        ? monsterSpawnSectors[Math.floor(monsterSpawnSectors.length * Math.random())]
         : {
             x: Math.floor(Math.random() * gridSize),
             y: Math.floor(Math.random() * gridSize),
