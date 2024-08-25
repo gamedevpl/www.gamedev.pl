@@ -1,5 +1,5 @@
 {
-  "name": "gtanczyk-js13k-2024",
+  "name": "monsters-steps",
   "version": "1.0.0",
   "description": "A triskaidekaphobia-themed game for js13k 2024",
   "main": "dist/index.html",

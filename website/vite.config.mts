@@ -9,7 +9,7 @@ export default defineConfig({
     outDir: 'build',
   },
   resolve: {
-    preserveSymlinks: true
+    preserveSymlinks: true,
   },
   plugins: [
     react(),
@@ -21,8 +21,9 @@ export default defineConfig({
           dest: 'games/nukes',
         },
         {
-          src: 'build/index.html',
-          dest: 'games/monster-steps',
+          src: '../js13k2024/game/dist',
+          dest: 'games/',
+          rename: 'monster-steps',
         },
       ],
     }),

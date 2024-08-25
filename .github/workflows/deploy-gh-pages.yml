@@ -7,7 +7,7 @@ name: Deploy to Github pages
 
 on:
   workflow_run:
-    workflows: ["Lint and test"]
+    workflows: ['Lint and test']
     branches: [master]
     types:
       - completed
@@ -25,8 +25,8 @@ jobs:
       - uses: actions/setup-node@v2-beta
         with:
           node-version: '18'
-      - run: npm install
-      - run: npm run build
+      - run: npm install --prefix=../js13k2024/game && npm install
+      - run: npm run build --prefix=../js13k2024/game && npm run build
 
       - name: Deploy website
         uses: JamesIves/github-pages-deploy-action@releases/v3
