@@ -15,11 +15,11 @@ export const drawPlayer = (
   ctx: CanvasRenderingContext2D,
   player: Player,
   cellSize: number,
-  isInvisible: boolean = false,
+  isInvisible = false,
   obstacles: Obstacle[] = [],
-  isMonster: boolean = false,
-  hasBlaster: boolean = false,
-  isClimbing: boolean = false,
+  isMonster = false,
+  hasBlaster = false,
+  isClimbing = false,
 ) => {
   const { position, previousPosition, moveTimestamp, teleportTimestamp, isVanishing, isVictorious } = player;
   const isTeleporting = teleportTimestamp && Date.now() - teleportTimestamp < TELEPORT_ANIMATION_DURATION;
@@ -27,16 +27,12 @@ export const drawPlayer = (
   const interpolatedPosition = isTeleporting
     ? interpolateTeleportPosition(position, previousPosition, teleportTimestamp)
     : interpolatePosition(position, previousPosition, moveTimestamp);
-  // eslint-disable-next-line prefer-const
   let { x: isoX, y: isoY } = toIsometric(interpolatedPosition.x, interpolatedPosition.y);
 
-  // Apply victory jump if player is victorious
   if (isVictorious) {
-    const jumpOffset = calculateVictoryJump(Date.now() - moveTimestamp);
-    isoY -= jumpOffset;
+    isoY -= calculateVictoryJump(Date.now() - moveTimestamp);
   }
 
-  // Adjust rendering position if the player is climbing
   const isOnObstacle = obstacles.some(
     (obstacle) =>
       obstacle.position.x === Math.round(interpolatedPosition.x) &&
@@ -44,7 +40,7 @@ export const drawPlayer = (
   );
   if (isClimbing || isOnObstacle) {
     if (isOnObstacle) {
-      isoY -= cellSize * 0.5; // Lift the player up by half a cell when on an obstacle
+      isoY -= cellSize * 0.5;
     }
   }
 
@@ -56,14 +52,13 @@ export const drawPlayer = (
     baseHeight: 0.8,
     widthFactor: 0.6,
     heightAnimationFactor: 0.2,
-    bodyColor: getPlayerBodyColor(isClimbing, isMonster),
-    headColor: getPlayerHeadColor(isClimbing, isMonster),
-    eyeColor: isMonster ? 'red' : 'white',
-    pupilColor: isMonster ? 'black' : 'black',
+    bodyColor: isClimbing ? '#FFA500' : isMonster ? '#800080' : '#00FF00',
+    headColor: isClimbing ? '#FFD700' : isMonster ? '#9932CC' : '#32CD32',
+    eyeColor: isMonster ? '#FF0000' : '#FFFFFF',
+    pupilColor: '#000000',
     isInvisible,
   };
 
-  // Apply vanishing effect if player is vanishing
   if (isVanishing) {
     ctx.globalAlpha = calculateVanishingOpacity(Date.now() - moveTimestamp);
   } else if (isTeleporting) {
@@ -72,173 +67,82 @@ export const drawPlayer = (
 
   const { bounceOffset } = renderEntity(playerRenderParams);
 
-  // Reset global alpha
   ctx.globalAlpha = 1;
 
-  // Add additional victory effects
   if (isVictorious) {
     drawVictoryEffects(ctx, isoX, isoY, cellSize);
   }
 
-  // Add visual indicator for climbing ability
   if (isClimbing) {
-    drawClimbingIndicator(ctx, isoX, isoY, cellSize);
+    drawRopeEffect(ctx, isoX, isoY, cellSize);
   }
 
-  // Add monster transformation effects
   if (isMonster) {
     drawMonsterEffects(ctx, isoX, isoY, cellSize);
   }
 
-  // Add blaster visual
   if (hasBlaster) {
-    drawBlaster(ctx, isoX, isoY, cellSize, bounceOffset);
+    drawGlowEffect(ctx, isoX, isoY, cellSize, bounceOffset);
   }
 
-  // Add teleportation effect if the player has just teleported
   if (isTeleporting) {
     drawTeleportationEffect(ctx, isoX, isoY, cellSize, Date.now() - teleportTimestamp);
   }
 };
 
-const getPlayerBodyColor = (isClimbing: boolean, isMonster: boolean): string => {
-  if (isMonster) return '#800080'; // Purple for monster
-  return isClimbing ? '#FFA500' : '#00FF00'; // Orange when climbing, bright green otherwise
-};
-
-const getPlayerHeadColor = (isClimbing: boolean, isMonster: boolean): string => {
-  if (isMonster) return '#9932CC'; // Dark orchid for monster
-  return isClimbing ? '#FFD700' : '#32CD32'; // Gold when climbing, lime green otherwise
-};
-
 const drawVictoryEffects = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
-  // Draw some celebratory particles or effects around the player
   ctx.save();
   ctx.translate(x, y);
-
-  // Draw multiple particles
   for (let i = 0; i < 10; i++) {
     const angle = (Math.PI * 2 * i) / 10;
     const radius = cellSize * (0.5 + Math.sin(Date.now() / 200 + i) * 0.2);
     const particleX = Math.cos(angle) * radius;
     const particleY = Math.sin(angle) * radius;
-
     ctx.beginPath();
     ctx.arc(particleX, particleY, cellSize * 0.1, 0, Math.PI * 2);
     ctx.fillStyle = `hsl(${(Date.now() / 20 + i * 36) % 360}, 100%, 50%)`;
     ctx.fill();
   }
-
   ctx.restore();
 };
 
-const drawClimbingIndicator = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
+const drawRopeEffect = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
   ctx.save();
-  ctx.translate(x, y - cellSize * 0.6); // Position the indicator above the player
-
-  // Draw a small climbing icon or indicator
-  const iconSize = cellSize * 0.3;
-  ctx.strokeStyle = '#FFD700'; // Gold color
+  ctx.strokeStyle = '#8B4513';
   ctx.lineWidth = 2;
-
-  // Draw a simple ladder icon
   ctx.beginPath();
-  ctx.moveTo(-iconSize / 2, -iconSize / 2);
-  ctx.lineTo(-iconSize / 2, iconSize / 2);
-  ctx.moveTo(iconSize / 2, -iconSize / 2);
-  ctx.lineTo(iconSize / 2, iconSize / 2);
-
-  // Draw rungs
-  for (let i = 0; i < 3; i++) {
-    const y = -iconSize / 2 + (i + 1) * (iconSize / 3);
-    ctx.moveTo(-iconSize / 2, y);
-    ctx.lineTo(iconSize / 2, y);
-  }
-
+  ctx.moveTo(x, y - cellSize * 0.5);
+  ctx.lineTo(x, y + cellSize * 0.5);
   ctx.stroke();
-
-  // Draw a glowing effect
-  ctx.shadowColor = '#FFD700';
-  ctx.shadowBlur = 5;
-  ctx.stroke();
-
-  // Add animation to the climbing indicator
-  const bounceOffset = Math.sin(Date.now() / 200) * cellSize * 0.05;
-  ctx.translate(0, bounceOffset);
-  ctx.stroke();
-
   ctx.restore();
 };
 
 const drawMonsterEffects = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number) => {
   ctx.save();
   ctx.translate(x, y);
-
-  // Draw swirling dark energy around the player
-  const particleCount = 20;
-  const maxRadius = cellSize * 0.8;
-
-  for (let i = 0; i < particleCount; i++) {
-    const angle = (Math.PI * 2 * i) / particleCount + Date.now() / 1000;
-    const radius = maxRadius * (0.5 + Math.sin(Date.now() / 500 + i) * 0.2);
+  for (let i = 0; i < 20; i++) {
+    const angle = (Math.PI * 2 * i) / 20 + Date.now() / 1000;
+    const radius = cellSize * 0.8 * (0.5 + Math.sin(Date.now() / 500 + i) * 0.2);
     const particleX = Math.cos(angle) * radius;
     const particleY = Math.sin(angle) * radius;
-
     ctx.beginPath();
     ctx.arc(particleX, particleY, cellSize * 0.05, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(128, 0, 128, ${0.5 + Math.sin(Date.now() / 200 + i) * 0.3})`;
+    ctx.fillStyle = `#800080${Math.floor(128 + Math.sin(Date.now() / 200 + i) * 127).toString(16).padStart(2, '0')}`;
     ctx.fill();
   }
-
-  // Draw glowing eyes
-  const eyeSize = cellSize * 0.1;
-  const eyeOffset = cellSize * 0.15;
-
-  ctx.beginPath();
-  ctx.arc(-eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
-  ctx.arc(eyeOffset, -eyeOffset, eyeSize, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
-  ctx.fill();
-
-  // Add a pulsing glow effect
-  ctx.shadowColor = 'red';
-  ctx.shadowBlur = 10 + Math.sin(Date.now() / 200) * 5;
-  ctx.fill();
-
   ctx.restore();
 };
 
-const drawBlaster = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number, bounceOffset: number) => {
+const drawGlowEffect = (ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number, bounceOffset: number) => {
   ctx.save();
-  ctx.translate(x - cellSize / 10, y - bounceOffset);
-
-  const blasterLength = cellSize * 0.4;
-  const blasterWidth = cellSize * 0.1;
-
-  // Draw the blaster
-  ctx.fillStyle = '#808080'; // Gray color for the blaster
+  ctx.translate(x, y - bounceOffset);
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, cellSize * 0.6);
+  gradient.addColorStop(0, '#FFFF00');
+  gradient.addColorStop(1, '#FFFF0000');
+  ctx.fillStyle = gradient;
   ctx.beginPath();
-  ctx.rect(-blasterWidth / 2, -blasterLength, blasterWidth, blasterLength);
+  ctx.arc(0, 0, cellSize * 0.6, 0, Math.PI * 2);
   ctx.fill();
-
-  // Draw the blaster tip
-  ctx.fillStyle = '#FFD700'; // Gold color for the tip
-  ctx.beginPath();
-  ctx.arc(0, -blasterLength, blasterWidth / 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Add a glowing effect to the tip
-  ctx.shadowColor = '#FFD700';
-  ctx.shadowBlur = 5;
-  ctx.fill();
-
-  // Add an energy charge effect
-  const chargeSize = ((Math.sin(Date.now() / 200) + 1) * blasterWidth) / 4;
-  ctx.beginPath();
-  ctx.arc(0, -blasterLength, chargeSize, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-  ctx.fill();
-
   ctx.restore();
 };
 
@@ -251,66 +155,27 @@ const drawTeleportationEffect = (
 ) => {
   ctx.save();
   ctx.translate(x, y);
-
   const maxRadius = cellSize * 1.5;
   const progress = elapsedTime / TELEPORT_ANIMATION_DURATION;
-
-  // Vanishing effect (first half of the animation)
-  if (progress < 0.5) {
-    const vanishProgress = progress * 2; // 0 to 1 over 250ms
-    const radius = maxRadius * vanishProgress;
-
+  const radius = maxRadius * (progress < 0.5 ? progress * 2 : (1 - progress) * 2);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+  gradient.addColorStop(0, '#00FFFF00');
+  gradient.addColorStop(0.7, '#00FFFFB3');
+  gradient.addColorStop(1, '#00FFFF00');
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  for (let i = 0; i < 10; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * radius;
+    const particleX = Math.cos(angle) * distance;
+    const particleY = Math.sin(angle) * distance;
+    const particleSize = cellSize * 0.05 * (progress < 0.5 ? 1 - progress * 2 : (progress - 0.5) * 2);
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-    gradient.addColorStop(0, 'rgba(0, 255, 255, 0)');
-    gradient.addColorStop(0.7, 'rgba(0, 255, 255, 0.7)');
-    gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-    ctx.fillStyle = gradient;
+    ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
+    ctx.fillStyle = `#00FFFF${Math.floor((progress < 0.5 ? 1 - progress * 2 : (progress - 0.5) * 2) * 255).toString(16).padStart(2, '0')}`;
     ctx.fill();
-
-    // Draw particles
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * radius;
-      const particleX = Math.cos(angle) * distance;
-      const particleY = Math.sin(angle) * distance;
-      const particleSize = cellSize * 0.05 * (1 - vanishProgress);
-
-      ctx.beginPath();
-      ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 255, 255, ' + (1 - vanishProgress) + ')';
-      ctx.fill();
-    }
   }
-  // Reappearing effect (second half of the animation)
-  else {
-    const reappearProgress = (progress - 0.5) * 2; // 0 to 1 over 250ms
-    const radius = maxRadius * (1 - reappearProgress);
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-    gradient.addColorStop(0, 'rgba(0, 255, 255, 0.7)');
-    gradient.addColorStop(0.7, 'rgba(0, 255, 255, 0.3)');
-    gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Draw particles
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * maxRadius;
-      const particleX = Math.cos(angle) * distance;
-      const particleY = Math.sin(angle) * distance;
-      const particleSize = cellSize * 0.05 * reappearProgress;
-
-      ctx.beginPath();
-      ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 255, 255, ' + reappearProgress + ')';
-      ctx.fill();
-    }
-  }
-
   ctx.restore();
 };

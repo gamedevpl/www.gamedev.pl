@@ -1,6 +1,6 @@
-import { playEffect, SoundEffect } from '../../sound/sound-engine';
+import { playEffect, SoundEffect } from '../../../sound/sound-engine';
 import { startGameOverAnimation } from './game-logic';
-import { GameState, BonusType, ActiveBonus, LevelConfig, Position, Direction, BlasterShot } from './gameplay-types';
+import { GameState, BonusType, ActiveBonus, LevelConfig, Position, Direction, BlasterShot } from '../gameplay-types';
 import {
   isPositionOccupied,
   isPositionEqual,
@@ -9,8 +9,8 @@ import {
   isValidMove,
   getDirectionFromPositions,
   isValidObstaclePush,
-} from './move-utils';
-import { BLASTER_SHOT_DURATION } from './render/animation-utils';
+} from '../move-utils';
+import { BLASTER_SHOT_DURATION } from '../render/animation-utils';
 
 export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
   const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 };

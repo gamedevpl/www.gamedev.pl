@@ -1,4 +1,4 @@
-import { generateLevel } from '../gameplay/level-generator';
+import { generateLevel } from '../gameplay/levels/level-generator';
 
 interface LevelStoryResult {
   html: string;
@@ -29,6 +29,6 @@ export function renderLevelStory(level: number, onStoryComplete: () => void): Le
       setTimeout(() => {
         window.addEventListener('keydown', handleKeyPress);
       }, 100);
-    }
+    },
   };
 }

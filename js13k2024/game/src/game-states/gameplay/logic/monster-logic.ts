@@ -1,5 +1,5 @@
-import { Position, Monster, PathfindingNode, Explosion, Obstacle } from './gameplay-types';
-import { isPositionEqual, isPositionOccupied, manhattanDistance } from './move-utils';
+import { Position, Monster, PathfindingNode, Explosion, Obstacle } from '../gameplay-types';
+import { isPositionEqual, isPositionOccupied, manhattanDistance } from '../move-utils';
 
 export const moveMonsters = (
   monsters: Monster[],

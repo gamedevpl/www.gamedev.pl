@@ -1,14 +1,9 @@
 import { GameState, Position, Obstacle, LevelConfig } from '../gameplay-types';
 import { toIsometric } from './isometric-utils';
 
-const IMPULSE_DURATION = 1000; // 1 second duration
-const MAX_IMPULSE_LENGTH = 13; // Maximum length of the impulse in cells
+const IMPULSE_DURATION = 1000;
+const MAX_IMPULSE_LENGTH = 13;
 const IMPULSE_TAIL_LENGTH = 3;
-
-interface ImpulsePath {
-  path: Position[];
-  startTime: number;
-}
 
 export function drawPurpleImpulse(
   ctx: CanvasRenderingContext2D,
@@ -16,33 +11,23 @@ export function drawPurpleImpulse(
   { gridSize }: Pick<LevelConfig, 'gridSize'>,
 ) {
   const { player, obstacles } = gameState;
-  const currentTime = Date.now();
-  const timeSinceLastMove = currentTime - player.moveTimestamp;
+  const timeSinceLastMove = Date.now() - player.moveTimestamp;
 
-  if (timeSinceLastMove > IMPULSE_DURATION) {
-    return; // Don't draw if more than 1 second has passed since the last move
-  }
+  if (timeSinceLastMove > IMPULSE_DURATION) return;
 
-  const impulsePaths = calculateImpulsePaths(player.position, obstacles, MAX_IMPULSE_LENGTH);
+  const impulsePaths = calculateImpulsePaths(player.position, obstacles, gridSize);
 
   ctx.save();
-  ctx.strokeStyle = 'purple';
+  ctx.strokeStyle = '#800080';
   ctx.lineWidth = 2;
 
-  impulsePaths.forEach((impulsePath) => {
+  impulsePaths.forEach((path) => {
     const progress = Math.min(timeSinceLastMove / IMPULSE_DURATION, 1);
-    const pathLength = impulsePath.path.length;
-    const visibleLength = Math.floor(pathLength * progress);
+    const visibleLength = Math.floor(path.length * progress);
 
     ctx.beginPath();
     for (let i = Math.max(visibleLength - IMPULSE_TAIL_LENGTH, 0); i < visibleLength; i++) {
-      const position = impulsePath.path[i];
-
-      if (position.x < 0 || position.y < 0 || position.x >= gridSize || position.y >= gridSize) {
-        continue;
-      }
-
-      const { x: isoX, y: isoY } = toIsometric(position.x + 0.5, position.y + 0.5);
+      const { x: isoX, y: isoY } = toIsometric(path[i].x + 0.5, path[i].y + 0.5);
 
       if (i === 0) {
         ctx.moveTo(isoX, isoY);
@@ -50,9 +35,7 @@ export function drawPurpleImpulse(
         ctx.lineTo(isoX, isoY);
       }
 
-      // Calculate opacity based on position in the impulse (fading tail)
-      const opacity = 1 - i / visibleLength;
-      ctx.globalAlpha = opacity;
+      ctx.globalAlpha = 1 - i / visibleLength;
     }
     ctx.stroke();
   });
@@ -60,8 +43,8 @@ export function drawPurpleImpulse(
   ctx.restore();
 }
 
-function calculateImpulsePaths(startPosition: Position, obstacles: Obstacle[], maxLength: number): ImpulsePath[] {
-  const impulsePaths: ImpulsePath[] = [];
+function calculateImpulsePaths(startPosition: Position, obstacles: Obstacle[], gridSize: number): Position[][] {
+  const impulsePaths: Position[][] = [];
   const visited: Set<string> = new Set();
   const directions = [
     { x: 1, y: 0 },
@@ -76,8 +59,8 @@ function calculateImpulsePaths(startPosition: Position, obstacles: Obstacle[], m
   while (queue.length > 0) {
     const { position: currentPosition, path } = queue.shift()!;
 
-    if (path.length > maxLength || isObstacleAt(currentPosition, obstacles)) {
-      impulsePaths.push({ path, startTime: Date.now() });
+    if (path.length > MAX_IMPULSE_LENGTH || isObstacleAt(currentPosition, obstacles)) {
+      impulsePaths.push(path);
     } else {
       for (const direction of directions) {
         const nextPosition = {
@@ -85,15 +68,16 @@ function calculateImpulsePaths(startPosition: Position, obstacles: Obstacle[], m
           y: currentPosition.y + direction.y,
         };
 
-        const key = `${nextPosition.x},${nextPosition.y}`;
-        if (!visited.has(key)) {
-          visited.add(key);
-          const newPath = [...path, nextPosition];
+        if (isValidPosition(nextPosition, gridSize)) {
+          const key = `${nextPosition.x},${nextPosition.y}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            const newPath = [...path, nextPosition];
+            queue.push({ position: nextPosition, path: newPath });
 
-          queue.push({ position: nextPosition, path: newPath });
-
-          if (newPath.length === maxLength) {
-            impulsePaths.push({ path: newPath, startTime: Date.now() });
+            if (newPath.length === MAX_IMPULSE_LENGTH) {
+              impulsePaths.push(newPath);
+            }
           }
         }
       }
@@ -105,4 +89,8 @@ function calculateImpulsePaths(startPosition: Position, obstacles: Obstacle[], m
 
 function isObstacleAt(position: Position, obstacles: Obstacle[]): boolean {
   return obstacles.some((obstacle) => obstacle.position.x === position.x && obstacle.position.y === position.y);
+}
+
+function isValidPosition(position: Position, gridSize: number): boolean {
+  return position.x >= 0 && position.y >= 0 && position.x < gridSize && position.y < gridSize;
 }
