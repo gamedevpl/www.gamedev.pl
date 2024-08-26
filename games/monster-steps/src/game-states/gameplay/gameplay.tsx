@@ -109,7 +109,7 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       }
     };
 
-    const handleInteraction = (e: MouseEvent | TouchEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (showStory) {
         setShowStory(false);
         return;
@@ -120,21 +120,10 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      let clientX, clientY;
-      if (e instanceof MouseEvent) {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      } else {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-      }
-      // so that onclick is not triggered
-      e.preventDefault();
-
       const rect = canvas.getBoundingClientRect();
       const clickedMove = getMoveFromClick(
-        (clientX - rect.left) * (canvas.width / rect.width) - canvas.width / 2,
-        (clientY - rect.top) * (canvas.height / rect.height) - 100,
+        (e.clientX - rect.left) * (canvas.width / rect.width) - canvas.width / 2,
+        (e.clientY - rect.top) * (canvas.height / rect.height) - 100,
         gameState,
         levelConfig,
       );
@@ -144,13 +133,17 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       }
     };
 
-    // Add event listeners for both mouse and touch events
-    window.addEventListener('mousedown', handleInteraction, { passive: false });
-    window.addEventListener('touchstart', handleInteraction, { passive: false });
+    const onTouchEnd = () => setShowStory(false);
+    if (showStory) {
+      document.body.addEventListener('touchend', onTouchEnd);
+    }
+    window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      window.removeEventListener('mousedown', handleInteraction);
-      window.removeEventListener('touchstart', handleInteraction);
+      if (showStory) {
+        document.body.removeEventListener('touchend', onTouchEnd);
+      }
+      window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
