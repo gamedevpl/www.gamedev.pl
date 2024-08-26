@@ -11,7 +11,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(12, 'Ghost Bomber', 'Vanish, plant, and detonate!');
+  const config = generateBaseConfig(12, 9, 'Ghost Bomber', 'Vanish, plant, and detonate!');
 
   state.player = createPlayer(0, 6);
   state.goal = createPosition(11, 6);

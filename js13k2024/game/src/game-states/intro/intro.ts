@@ -1,50 +1,33 @@
-// Game preview is removed for now
-// import { GamePreview } from './game-preview';
-import { createElement, createDiv, createButton, appendChildren } from '../../utils/dom';
+interface IntroResult {
+  html: string;
+  setup: () => void;
+}
 
-export class Intro {
-  private onStart: () => void;
-  // private onInstructions: () => void;
+export function renderIntro(onStart: () => void): IntroResult {
+  const introHtml = `
+    <div class="intro">
+      <h1 class="game-title">Monster Steps</h1>
+      <div class="game-intro-responsive">
+        <div class="game-intro-column">
+          <div class="intro-buttons">
+            <button id="startButton">Start Game</button>
+          </div>
+          <p class="intro-tip">Press right arrow to start</p>
+        </div>
+      </div>
+      <p class="author-name">
+        Created by <a href="https://x.com/gtanczyk">Grzegorz Tańczyk</a> | <a href="https://github.com/gamedevpl/www.gamedev.pl/tree/js13k2024-monster-steps-version/js13k2024">Source code (GitHub)</a>
+      </p>
+    </div>
+  `;
 
-  constructor(onStart: () => void /*, onInstructions: () => void*/) {
-    this.onStart = onStart;
-    // this.onInstructions = onInstructions;
-  }
-
-  render(): HTMLElement {
-    const container = createDiv('intro');
-
-    const title = createElement('h1');
-    title.className = 'game-title';
-    title.textContent = 'Monster Steps';
-
-    const introResponsive = createDiv('game-intro-responsive');
-
-    // const previewContainer = createDiv('game-preview-container');
-    // const gamePreview = new GamePreview();
-    // previewContainer.appendChild(gamePreview.render());
-
-    const introColumn = createDiv('game-intro-column');
-
-    const buttonContainer = createDiv('intro-buttons');
-    const startButton = createButton('Start Game', this.onStart);
-    // const instructionsButton = createButton('Instructions', this.onInstructions);
-    appendChildren(buttonContainer, [startButton /*, instructionsButton*/]);
-
-    const tip = createElement('p');
-    tip.className = 'intro-tip';
-    tip.textContent = 'Press right arrow to start';
-
-    appendChildren(introColumn, [buttonContainer, tip]);
-    appendChildren(introResponsive, [/*previewContainer, */ introColumn]);
-
-    const authorInfo = createElement('p');
-    authorInfo.className = 'author-name';
-    authorInfo.innerHTML =
-      'Created by <a href="https://x.com/gtanczyk">Grzegorz Tańczyk</a> | <a href="https://github.com/gamedevpl/www.gamedev.pl/tree/js13k2024-monster-steps-version/js13k2024">Source code (GitHub)</a>';
-
-    appendChildren(container, [title, introResponsive, authorInfo]);
-
-    return container;
-  }
+  return {
+    html: introHtml,
+    setup: () => {
+      const startButton = document.getElementById('startButton');
+      if (startButton) {
+        startButton.addEventListener('click', onStart);
+      }
+    }
+  };
 }

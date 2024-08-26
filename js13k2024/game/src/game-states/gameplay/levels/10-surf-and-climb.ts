@@ -11,7 +11,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(13, 'Surf and Climb', 'Ride the wave and climb to safety!');
+  const config = generateBaseConfig(13, 10, 'Surf and Climb', 'Ride the wave and climb to safety!');
 
   state.player = createPlayer(0, 6);
   state.goal = createPosition(12, 6);

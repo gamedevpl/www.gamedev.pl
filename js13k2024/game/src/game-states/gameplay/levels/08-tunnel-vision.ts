@@ -10,7 +10,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(12, 'Tunnel Vision', 'Build a path and set a trap!');
+  const config = generateBaseConfig(12, 8, 'Tunnel Vision', 'Build a path and set a trap!');
 
   state.player = createPlayer(0, 6);
   state.goal = createPosition(11, 6);

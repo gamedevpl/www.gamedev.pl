@@ -60,6 +60,7 @@ export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
   const config = generateBaseConfig(
     GRID_SIZE,
+    13,
     'The Final Countdown',
     'Survive and thrive in this ever-changing challenge!',
     updateDynamicLevel,

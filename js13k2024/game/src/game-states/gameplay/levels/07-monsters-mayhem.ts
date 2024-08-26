@@ -11,7 +11,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(11, "Monsters' Mayhem", 'Confuse them all and make your escape!');
+  const config = generateBaseConfig(11, 7, "Monsters' Mayhem", 'Confuse them all and make your escape!');
 
   state.player = createPlayer(0, 5);
   state.goal = createPosition(10, 5);

@@ -11,148 +11,138 @@ import { doGameUpdate, handleKeyPress, isGameEnding } from './game-logic';
 import { getMoveFromClick, getValidMoves } from './move-utils';
 import { HUD } from './hud';
 import { generateLevel } from './level-generator';
-import { GameState } from './gameplay-types';
+import { GameState, LevelConfig } from './gameplay-types';
 
 const MAX_LEVEL = 13;
 const ANIMATION_DURATION = 2000; // 2 seconds for ending animations
 
-export class Gameplay {
-  private level: number;
-  private onGameOver: () => void;
-  private onLevelComplete: () => void;
-  private onGameComplete: () => void;
-  private updateScore: (newScore: number) => void;
-  private updateSteps: (newSteps: number) => void;
+let gameState: GameState;
+let levelConfig: LevelConfig;
+let hud: HUD;
+let canvas: HTMLCanvasElement;
+let ctx: CanvasRenderingContext2D;
+let animationFrameId: number | null = null;
+let onGameOver: () => void;
+let onLevelComplete: () => void;
+let onGameComplete: () => void;
+let updateScore: (newScore: number) => void;
+let updateSteps: (newSteps: number) => void;
 
-  private container: HTMLElement;
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private gameState: GameState;
-  private levelConfig: any;
-  private hud: HUD;
-  private animationFrameId: number | null = null;
+export function initializeGameplay(
+  level: number,
+  score: number,
+  gameOverCallback: () => void,
+  levelCompleteCallback: () => void,
+  gameCompleteCallback: () => void,
+  updateScoreCallback: (newScore: number) => void,
+  updateStepsCallback: (newSteps: number) => void,
+): void {
+  [gameState, levelConfig] = generateLevel(level);
+  hud = new HUD(level, score, gameState.monsterSpawnSteps);
+  onGameOver = gameOverCallback;
+  onLevelComplete = levelCompleteCallback;
+  onGameComplete = gameCompleteCallback;
+  updateScore = updateScoreCallback;
+  updateSteps = updateStepsCallback;
 
-  constructor(
-    level: number,
-    score: number,
-    onGameOver: () => void,
-    onLevelComplete: () => void,
-    onGameComplete: () => void,
-    updateScore: (newScore: number) => void,
-    updateSteps: (newSteps: number) => void,
-  ) {
-    this.level = level;
-    this.onGameOver = onGameOver;
-    this.onLevelComplete = onLevelComplete;
-    this.onGameComplete = onGameComplete;
-    this.updateScore = updateScore;
-    this.updateSteps = updateSteps;
+  addWindowEventHandler('keydown', handleKeyDown);
+}
 
-    this.container = createDiv('gameplay');
-    this.canvas = createElement('canvas');
-    this.ctx = this.canvas.getContext('2d')!;
-    [this.gameState, this.levelConfig] = generateLevel(level);
-    this.hud = new HUD(level, score, this.gameState.monsterSpawnSteps);
-    addWindowEventHandler('keydown', this.handleKeyDown);
-  }
+export function renderGameplay() {
+  return {
+    html: '<div class="gameplay"></div>',
+    setup() {
+      const container = document.querySelector('.gameplay')!;
+      container.appendChild(hud.render());
+      const canvasContainer = createDiv('canvas-container');
+      canvas = createElement('canvas');
+      ctx = canvas.getContext('2d')!;
+      canvasContainer.appendChild(canvas);
+      container.appendChild(canvasContainer);
 
-  render(): HTMLElement {
-    this.container.innerHTML = '';
-    this.container.appendChild(this.hud.render());
+      initializeCanvas();
+      startGameLoop();
+      addEventListeners();
+    },
+  };
+}
 
-    const canvasContainer = createDiv('canvas-container');
-    canvasContainer.appendChild(this.canvas);
-    this.container.appendChild(canvasContainer);
+function initializeCanvas() {
+  const isometricWidth = (levelConfig.gridSize + levelConfig.gridSize) * levelConfig.cellSize;
+  const isometricHeight = ((levelConfig.gridSize + levelConfig.gridSize) * levelConfig.cellSize) / 2;
+  canvas.width = isometricWidth;
+  canvas.height = isometricHeight + 100; // Add extra space for the platform
+}
 
-    this.initializeCanvas();
-    this.startGameLoop();
-    this.addEventListeners();
+function startGameLoop() {
+  const animate = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    return this.container;
-  }
+    drawGameState(ctx, gameState, levelConfig);
 
-  private initializeCanvas() {
-    const isometricWidth = (this.levelConfig.gridSize + this.levelConfig.gridSize) * this.levelConfig.cellSize;
-    const isometricHeight = ((this.levelConfig.gridSize + this.levelConfig.gridSize) * this.levelConfig.cellSize) / 2;
-    this.canvas.width = isometricWidth;
-    this.canvas.height = isometricHeight + 100; // Add extra space for the platform
-  }
-
-  private startGameLoop() {
-    const animate = () => {
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-      drawGameState(this.ctx, this.gameState, this.levelConfig);
-
-      if (!isGameEnding(this.gameState)) {
-        drawMoveArrows(
-          this.ctx,
-          getValidMoves(this.gameState, this.levelConfig),
-          this.levelConfig.gridSize,
-          this.levelConfig.cellSize,
-        );
-      }
-
-      this.animationFrameId = requestAnimationFrame(animate);
-    };
-
-    animate();
-  }
-
-  private addEventListeners() {
-    addEventHandler(this.canvas, 'click', this.handleClick.bind(this));
-  }
-
-  handleKeyDown = (e: KeyboardEvent) => {
-    if (!isGameEnding(this.gameState)) {
-      const newGameState = handleKeyPress(e, this.gameState, this.levelConfig);
-      this.updateGameState(newGameState);
+    if (!isGameEnding(gameState)) {
+      drawMoveArrows(ctx, getValidMoves(gameState, levelConfig), levelConfig.gridSize, levelConfig.cellSize);
     }
+
+    animationFrameId = requestAnimationFrame(animate);
   };
 
-  private handleClick(e: MouseEvent) {
-    if (isGameEnding(this.gameState)) return;
+  animate();
+}
 
-    const rect = this.canvas.getBoundingClientRect();
-    const clickedMove = getMoveFromClick(
-      (e.clientX - rect.left) * (this.canvas.width / rect.width) - this.canvas.width / 2,
-      (e.clientY - rect.top) * (this.canvas.height / rect.height) - 100,
-      this.gameState,
-      this.levelConfig,
-    );
+function addEventListeners() {
+  addEventHandler(canvas, 'click', handleClick);
+}
 
-    if (clickedMove) {
-      this.updateGameState(doGameUpdate(clickedMove.direction, this.gameState, this.levelConfig));
-    }
+function handleKeyDown(e: KeyboardEvent) {
+  if (!isGameEnding(gameState)) {
+    const newGameState = handleKeyPress(e, gameState, levelConfig);
+    updateGameState(newGameState);
   }
+}
 
-  private updateGameState(newGameState: GameState) {
-    this.gameState = newGameState;
-    this.updateScore(newGameState.score);
-    this.updateSteps(newGameState.steps);
-    this.hud.update(this.level, newGameState.score, newGameState.monsterSpawnSteps);
+function handleClick(e: MouseEvent) {
+  if (isGameEnding(gameState)) return;
 
-    if (newGameState.gameEndingState !== 'none') {
-      setTimeout(() => {
-        if (newGameState.gameEndingState === 'levelComplete') {
-          if (this.level === MAX_LEVEL) {
-            this.onGameComplete();
-          } else {
-            this.onLevelComplete();
-          }
+  const rect = canvas.getBoundingClientRect();
+  const clickedMove = getMoveFromClick(
+    (e.clientX - rect.left) * (canvas.width / rect.width) - canvas.width / 2,
+    (e.clientY - rect.top) * (canvas.height / rect.height) - 100,
+    gameState,
+    levelConfig,
+  );
+
+  if (clickedMove) {
+    updateGameState(doGameUpdate(clickedMove.direction, gameState, levelConfig));
+  }
+}
+
+function updateGameState(newGameState: GameState) {
+  gameState = newGameState;
+  updateScore(newGameState.score);
+  updateSteps(newGameState.steps);
+  hud.update(levelConfig.levelNumber, newGameState.score, newGameState.monsterSpawnSteps);
+
+  if (newGameState.gameEndingState !== 'none') {
+    setTimeout(() => {
+      if (newGameState.gameEndingState === 'levelComplete') {
+        if (levelConfig.levelNumber === MAX_LEVEL) {
+          onGameComplete();
+        } else {
+          onLevelComplete();
         }
+      }
 
-        if (newGameState.gameEndingState === 'gameOver') {
-          this.onGameOver();
-        }
-      }, ANIMATION_DURATION);
-    }
+      if (newGameState.gameEndingState === 'gameOver') {
+        onGameOver();
+      }
+    }, ANIMATION_DURATION);
   }
+}
 
-  destroy() {
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
-    removeWindowEventHandler('keydown', this.handleKeyDown);
+export function destroyGameplay() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
   }
+  removeWindowEventHandler('keydown', handleKeyDown);
 }

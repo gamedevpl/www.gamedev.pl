@@ -43,6 +43,7 @@ export class GamePreview {
         monsterSpawnSectors: [],
         obstacleCount: 0,
         initialBonusCount: 0,
+        levelNumber: 1,
         levelName: 'Preview',
         levelStory: 'Preview',
         levelUpdater: () => {},

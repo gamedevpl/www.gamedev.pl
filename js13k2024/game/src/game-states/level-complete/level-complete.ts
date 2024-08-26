@@ -1,35 +1,30 @@
-import { createElement, createDiv, createButton, appendChildren } from '../../utils/dom';
+interface LevelCompleteResult {
+  html: string;
+  setup: () => void;
+}
 
-export class LevelComplete {
-  private level: number;
-  private onNextLevel: () => void;
-  private onQuit: () => void;
+export function renderLevelComplete(level: number, onNextLevel: () => void, onQuit: () => void): LevelCompleteResult {
+  const levelCompleteHtml = `
+    <div class="level-complete">
+      <h1>Level ${level} Complete!</h1>
+      <p>Congratulations! You've completed the level.</p>
+      <button id="nextLevelButton">Next Level</button>
+      <button id="quitButton">Quit</button>
+    </div>
+  `;
 
-  constructor(level: number, onNextLevel: () => void, onQuit: () => void) {
-    this.level = level;
-    this.onNextLevel = onNextLevel;
-    this.onQuit = onQuit;
-  }
-
-  render(): HTMLElement {
-    const container = createDiv('level-complete');
-
-    const title = createElement('h1');
-    title.textContent = `Level ${this.level} Complete!`;
-
-    const message = createElement('p');
-    message.textContent = "Congratulations! You've completed the level.";
-
-    const nextLevelButton = createButton('Next Level', this.onNextLevel);
-    const quitButton = createButton('Quit', this.onQuit);
-
-    appendChildren(container, [
-      title,
-      message,
-      nextLevelButton,
-      quitButton
-    ]);
-
-    return container;
-  }
+  return {
+    html: levelCompleteHtml,
+    setup: () => {
+      const nextLevelButton = document.getElementById('nextLevelButton');
+      const quitButton = document.getElementById('quitButton');
+      
+      if (nextLevelButton) {
+        nextLevelButton.addEventListener('click', onNextLevel);
+      }
+      if (quitButton) {
+        quitButton.addEventListener('click', onQuit);
+      }
+    }
+  };
 }
