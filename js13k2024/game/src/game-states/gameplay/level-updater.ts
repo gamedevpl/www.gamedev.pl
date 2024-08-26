@@ -1,4 +1,4 @@
-import { soundEngine } from '../../sound/sound-engine';
+import { playEffect, SoundEffect } from '../../sound/sound-engine';
 import { GameState, LevelConfig } from './gameplay-types';
 import { spawnMonster } from './monster-spawn';
 
@@ -8,7 +8,7 @@ export function simpleLevelUpdater(gameState: GameState, levelConfig: LevelConfi
     if (newMonster) {
       gameState.monsters.push(newMonster);
       gameState.monsterSpawnSteps = 0;
-      soundEngine.playMonsterSpawn();
+      playEffect(SoundEffect.MonsterSpawn);
     }
   }
 }

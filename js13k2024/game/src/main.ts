@@ -5,7 +5,7 @@ import { Gameplay } from './game-states/gameplay/gameplay';
 import { GameOver } from './game-states/game-over/game-over';
 import { LevelComplete } from './game-states/level-complete/level-complete';
 import { LevelStory } from './game-states/level-story/level-story';
-import { soundEngine } from './sound/sound-engine';
+import { playEffect, SoundEffect } from './sound/sound-engine';
 import { clearElement, createDiv } from './utils/dom';
 import './global-styles.css';
 
@@ -170,7 +170,7 @@ export class MonsterStepsApp {
   }
 
   private gameComplete() {
-    soundEngine.playLevelComplete(); // We can reuse the level complete sound for game completion
+    playEffect(SoundEffect.LevelComplete); // We can reuse the level complete sound for game completion
     this.gameState = GameState.GameComplete;
     this.renderCurrentState();
   }

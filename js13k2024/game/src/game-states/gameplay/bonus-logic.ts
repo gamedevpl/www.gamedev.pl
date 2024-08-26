@@ -1,4 +1,4 @@
-import { soundEngine } from '../../sound/sound-engine';
+import { playEffect, SoundEffect } from '../../sound/sound-engine';
 import { startGameOverAnimation } from './game-logic';
 import { GameState, BonusType, ActiveBonus, LevelConfig, Position, Direction, BlasterShot } from './gameplay-types';
 import {
@@ -120,7 +120,7 @@ export const performTeleportation = (gameState: GameState, teleportPoint: Positi
     gameState.player.previousPosition = gameState.player.position;
     gameState.player.position = destinationPoint.position;
     gameState.player.teleportTimestamp = Date.now();
-    soundEngine.playTeleport();
+    playEffect(SoundEffect.Teleport);
   }
 };
 
@@ -205,7 +205,7 @@ export const handleBlasterShot = (gameState: GameState, direction: Direction, le
   };
   gameState.blasterShots.push(shot);
   // Play the blaster sound effect
-  soundEngine.playBlasterSound();
+  playEffect(SoundEffect.BlasterSound);
 
   // Check if the shot hits monsters along its path
   gameState.monsters = gameState.monsters.filter((monster) => {

@@ -7,7 +7,7 @@ import {
   isInExplosionRange,
 } from './monster-logic';
 import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './render/animation-utils';
-import { soundEngine } from '../../sound/sound-engine';
+import { playEffect, SoundEffect } from '../../sound/sound-engine';
 import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
 import {
   applyBonus,
@@ -60,11 +60,11 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
         ? { ...obstacle, isDestroying: true, creationTime: Date.now() }
         : obstacle,
     );
-    soundEngine.playElectricalDischarge();
+    playEffect(SoundEffect.ElectricalDischarge);
   }
 
   if (isValidMove(newPosition, newGameState, levelConfig)) {
-    soundEngine.playStep();
+    playEffect(SoundEffect.Step);
     newGameState.player.position = newPosition;
     if (Date.now() - newGameState.player.moveTimestamp > MOVE_ANIMATION_DURATION) {
       newGameState.player.previousPosition = oldPosition;
@@ -89,7 +89,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     // Check for bonuses
     const collectedBonus = newGameState.bonuses.find((bonus) => isPositionEqual(bonus.position, newPosition));
     if (collectedBonus) {
-      soundEngine.playBonusCollected();
+      playEffect(SoundEffect.BonusCollected);
       newGameState.bonuses = newGameState.bonuses.filter((bonus) => !isPositionEqual(bonus.position, newPosition));
       applyBonus(newGameState, collectedBonus.type);
     }
@@ -143,7 +143,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     newGameState.timeBombs = newGameState.timeBombs.map((bomb) => ({ ...bomb, timer: bomb.timer - 1 }));
     const explodedBombs = newGameState.timeBombs.filter((bomb) => bomb.timer === 0);
     if (explodedBombs.length > 0 || newExplosions.length > 0) {
-      soundEngine.playExplosion();
+      playEffect(SoundEffect.Explosion);
     }
     newGameState.explosions = [
       ...newGameState.explosions,
@@ -188,7 +188,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
         )
       ) {
         newGameState.obstacles.push(newObstacle);
-        soundEngine.playElectricalDischarge();
+        playEffect(SoundEffect.ElectricalDischarge);
       }
     }
   }
@@ -206,10 +206,10 @@ export const isGameEnding = (gameState: GameState): boolean => {
 
 export const startGameOverAnimation = (gameState: GameState): void => {
   gameState.player.isVanishing = true;
-  soundEngine.playGameOver();
+  playEffect(SoundEffect.GameOver);
 };
 
 const startLevelCompleteAnimation = (gameState: GameState): void => {
   gameState.player.isVictorious = true;
-  soundEngine.playLevelComplete();
+  playEffect(SoundEffect.LevelComplete);
 };
