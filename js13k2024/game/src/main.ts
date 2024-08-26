@@ -26,38 +26,43 @@ const gameState = {
 
 function updateGameState(newState: Partial<typeof gameState>) {
   Object.assign(gameState, newState);
-  renderCurrentState();
+  if (newState.currentState) {
+    renderCurrentState();
+  }
 }
 
+let currentState: { html: string; setup: () => void; cleanup?: () => void };
 function renderCurrentState() {
   if (!gameState.container) return;
 
   clearElement(gameState.container);
-  let content: { html: string; setup: () => void };
+  if (currentState?.cleanup) {
+    currentState.cleanup();
+  }
 
   switch (gameState.currentState) {
     case GameState.Intro:
-      content = renderIntro(startGame);
+      currentState = renderIntro(startGame);
       break;
     case GameState.LevelStory:
-      content = renderLevelStory(gameState.level, startGameplay);
+      currentState = renderLevelStory(gameState.level, startGameplay);
       break;
     case GameState.Gameplay:
-      content = renderGameplay();
+      currentState = renderGameplay();
       break;
     case GameState.GameOver:
-      content = renderGameOver(gameState.score, gameState.steps, restartLevel, quitGame);
+      currentState = renderGameOver(gameState.score, gameState.steps, restartLevel, quitGame);
       break;
     case GameState.LevelComplete:
-      content = renderLevelComplete(gameState.level, nextLevel, quitGame);
+      currentState = renderLevelComplete(gameState.level, nextLevel, quitGame);
       break;
     case GameState.GameComplete:
-      content = renderGameComplete();
+      currentState = renderGameComplete();
       break;
   }
 
-  gameState.container.innerHTML = content.html;
-  content.setup();
+  gameState.container.innerHTML = currentState.html;
+  currentState.setup();
 }
 
 function startGame() {

@@ -9,7 +9,6 @@ import { drawGameState } from './game-render';
 import { drawMoveArrows } from './render/move-arrows-render';
 import { doGameUpdate, handleKeyPress, isGameEnding } from './game-logic';
 import { getMoveFromClick, getValidMoves } from './move-utils';
-import { HUD } from './hud';
 import { generateLevel } from './level-generator';
 import { GameState, LevelConfig } from './gameplay-types';
 
@@ -18,7 +17,6 @@ const ANIMATION_DURATION = 2000; // 2 seconds for ending animations
 
 let gameState: GameState;
 let levelConfig: LevelConfig;
-let hud: HUD;
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
 let animationFrameId: number | null = null;
@@ -30,7 +28,7 @@ let updateSteps: (newSteps: number) => void;
 
 export function initializeGameplay(
   level: number,
-  score: number,
+  _score: number,
   gameOverCallback: () => void,
   levelCompleteCallback: () => void,
   gameCompleteCallback: () => void,
@@ -38,7 +36,6 @@ export function initializeGameplay(
   updateStepsCallback: (newSteps: number) => void,
 ): void {
   [gameState, levelConfig] = generateLevel(level);
-  hud = new HUD(level, score, gameState.monsterSpawnSteps);
   onGameOver = gameOverCallback;
   onLevelComplete = levelCompleteCallback;
   onGameComplete = gameCompleteCallback;
@@ -53,7 +50,6 @@ export function renderGameplay() {
     html: '<div class="gameplay"></div>',
     setup() {
       const container = document.querySelector('.gameplay')!;
-      container.appendChild(hud.render());
       const canvasContainer = createDiv('canvas-container');
       canvas = createElement('canvas');
       ctx = canvas.getContext('2d')!;
@@ -64,6 +60,7 @@ export function renderGameplay() {
       startGameLoop();
       addEventListeners();
     },
+    cleanup: destroyGameplay,
   };
 }
 
@@ -121,7 +118,6 @@ function updateGameState(newGameState: GameState) {
   gameState = newGameState;
   updateScore(newGameState.score);
   updateSteps(newGameState.steps);
-  hud.update(levelConfig.levelNumber, newGameState.score, newGameState.monsterSpawnSteps);
 
   if (newGameState.gameEndingState !== 'none') {
     setTimeout(() => {
