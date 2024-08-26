@@ -6,32 +6,16 @@
   --player-color: #00ff00;
   --monster-color: #800080;
   --goal-color: #ffd700;
-  --ui-text-color: #ffffff;
-  --highlight-color: #ffff00;
+  --ui-text-color: #fff;
+  --highlight-color: #ff0;
   --button-color: #4caf50;
   --button-hover-color: #45a049;
-  --bonus-cap-of-invisibility: #8a2be2;
-  --bonus-confused-monsters: #ffa500;
-  --bonus-land-mine: #8b4513;
-  --bonus-time-bomb: #000000;
-  --bonus-crusher: #ff69b4;
-  --bonus-builder: #00ffff;
-  --explosion-color: rgba(255, 165, 0, 0.7);
-  --tooltip-background: rgba(0, 0, 0, 0.9);
-  --tooltip-text: #ffffff;
-  --tooltip-border: #ffffff;
-  --platform-top: #c2b280;
-  --platform-side: #5d4037;
-  --obstacle-top: #8e24aa;
-  --obstacle-side1: #6a1b9a;
-  --obstacle-side2: #4a148c;
   --intro-background: #2c3e50;
   --intro-text-shadow: rgba(0, 0, 0, 0.5);
   --intro-title-color: #e67e22;
 }
 
-body,
-html {
+body, html {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', Courier, monospace;
@@ -51,7 +35,6 @@ html {
   height: 100vh;
 }
 
-/* Common button styles */
 button {
   background-color: var(--button-color);
   border: none;
@@ -70,8 +53,7 @@ button:hover {
   background-color: var(--button-hover-color);
 }
 
-/* Intro screen styles */
-.intro {
+.intro, .game-complete {
   text-align: center;
   background-color: var(--intro-background);
   padding: 20px;
@@ -83,26 +65,6 @@ button:hover {
   width: 80vw;
   max-width: 600px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-.game-intro-responsive {
-  display: flex;
-  flex-direction: row;
-}
-
-.level-story {
-  max-width: 600px;
-}
-
-@media (max-width: 600px) {
-  .game-intro-responsive {
-    flex-direction: column;
-  }
-}
-
-.game-preview-container canvas {
-  max-width: 90%;
-  max-height: 90%;
 }
 
 .game-title {
@@ -124,7 +86,6 @@ button:hover {
   width: 200px;
   border-radius: 5px;
   font-weight: bold;
-  text-transform: uppercase;
 }
 
 .intro-tip {
@@ -136,7 +97,6 @@ button:hover {
 .author-name {
   font-size: 14px;
   margin-top: 20px;
-  color: var(--ui-text-color);
   opacity: 0.7;
 }
 
@@ -144,33 +104,6 @@ button:hover {
   color: white;
 }
 
-/* Instructions screen styles */
-.instructions {
-  background-color: var(--intro-background);
-  padding: 20px;
-  border-radius: 10px;
-  max-width: 600px;
-  margin: 0 auto;
-  overflow-y: auto;
-  max-height: 80vh;
-}
-
-.instructions h1 {
-  color: var(--intro-title-color);
-  text-align: center;
-}
-
-.instructions ul {
-  padding-left: 20px;
-}
-
-.instructions-tip {
-  text-align: center;
-  color: var(--highlight-color);
-  margin-top: 20px;
-}
-
-/* Gameplay screen styles */
 .gameplay {
   position: absolute;
   top: 50%;
@@ -205,10 +138,7 @@ canvas {
   max-width: 90vw;
 }
 
-/* Game Over and Level Complete screen styles */
-.game-over-screen,
-.level-complete-screen,
-.game-complete {
+.game-over-screen, .level-complete-screen, .game-complete {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -218,30 +148,17 @@ canvas {
   text-align: center;
 }
 
-.game-over-title,
-.level-complete-title {
+.game-over-title, .level-complete-title, .game-complete-subtitle {
   font-size: 36px;
   margin-bottom: 20px;
 }
 
 .game-over-title .over {
-  color: #ff0000;
+  color: #f00;
 }
 
-.level-complete-title {
+.level-complete-title, .game-complete-subtitle {
   color: var(--highlight-color);
-}
-
-/* Game Complete styles */
-.game-complete {
-  background-color: var(--intro-background);
-  height: 80vh;
-}
-
-.game-complete-subtitle {
-  font-size: 36px;
-  color: var(--highlight-color);
-  margin-bottom: 20px;
 }
 
 .game-complete-stats {
@@ -253,7 +170,6 @@ canvas {
   margin: 10px 0;
 }
 
-/* Responsive design */
 @media (max-width: 768px) {
   .game-title {
     font-size: 36px;
@@ -264,19 +180,13 @@ canvas {
     font-size: 14px;
   }
 
-  .intro,
-  .game-complete {
+  .intro, .game-complete {
     width: 90vw;
     height: 90vh;
   }
 
   .intro-buttons button {
     width: 180px;
-  }
-
-  .instructions {
-    font-size: 14px;
-    padding: 15px;
   }
 
   .hud {
@@ -288,9 +198,7 @@ canvas {
     max-width: 95vw;
   }
 
-  .game-over-title,
-  .level-complete-title,
-  .game-complete-subtitle {
+  .game-over-title, .level-complete-title, .game-complete-subtitle {
     font-size: 28px;
   }
 
@@ -299,7 +207,6 @@ canvas {
   }
 }
 
-/* Touch-friendly styles */
 @media (hover: none) and (pointer: coarse) {
   button {
     padding: 15px 30px;
