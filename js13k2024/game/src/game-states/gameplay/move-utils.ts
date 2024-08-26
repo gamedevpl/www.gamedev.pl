@@ -3,8 +3,13 @@ import { getArrowShape } from './render/move-arrows-render';
 
 export const isPositionEqual = (pos1: Position, pos2: Position): boolean => pos1.x === pos2.x && pos1.y === pos2.y;
 
-export const isPositionOccupied = (position: Position, occupiedPositions: Position[]): boolean =>
-  occupiedPositions.some((pos) => isPositionEqual(pos, position));
+export const isPositionOccupied = (
+  position: Position | { position: Position },
+  occupiedPositions: ({ position: Position } | Position)[],
+): boolean => {
+  position = 'x' in position ? position : position.position;
+  return occupiedPositions.some((o) => isPositionEqual('x' in o ? o : o.position, position));
+};
 
 export const manhattanDistance = (pos1: Position, pos2: Position): number => {
   return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
@@ -68,7 +73,7 @@ export const isValidObstaclePush = (
 
   const isObstaclePresent = isPositionOccupied(
     newPosition,
-    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying),
   );
 
   if (isObstaclePresent) {
@@ -90,13 +95,13 @@ export const isValidMove = (
   }
 
   const isOnObstacle = isPositionOccupied(
-    gameState.player.position,
-    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+    gameState.player,
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying),
   );
 
   const isObstaclePresent = isPositionOccupied(
     newPosition,
-    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying).map(({ position }) => position),
+    gameState.obstacles.filter((obstacle) => !obstacle.isDestroying),
   );
 
   // Allow movement onto obstacles if the player has the Climber bonus active
@@ -113,13 +118,7 @@ export const isValidMove = (
       const pushedWithinGrid =
         pushedPosition.x >= 0 && pushedPosition.x < gridSize && pushedPosition.y >= 0 && pushedPosition.y < gridSize;
       // Check if the pushed position is valid
-      if (
-        pushedWithinGrid &&
-        !isPositionOccupied(
-          pushedPosition,
-          gameState.obstacles.map((o) => o.position),
-        )
-      ) {
+      if (pushedWithinGrid && !isPositionOccupied(pushedPosition, gameState.obstacles)) {
         return true;
       }
     }

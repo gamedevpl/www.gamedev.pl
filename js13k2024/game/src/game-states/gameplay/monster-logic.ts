@@ -65,16 +65,7 @@ const getConfusedPosition = (
   };
 
   // Check if the opposite position is valid (not occupied by obstacles or other monsters)
-  if (
-    !isPositionOccupied(
-      oppositePosition,
-      obstacles.map(({ position }) => position),
-    ) &&
-    !isPositionOccupied(
-      oppositePosition,
-      monsters.map((m) => m.position),
-    )
-  ) {
+  if (!isPositionOccupied(oppositePosition, obstacles) && !isPositionOccupied(oppositePosition, monsters)) {
     return oppositePosition;
   }
 
@@ -116,14 +107,8 @@ const findPath = (
     const neighbors = getNeighbors(currentNode.position, gridSize);
     for (const neighbor of neighbors) {
       if (
-        isPositionOccupied(
-          neighbor,
-          obstacles.map(({ position }) => position),
-        ) ||
-        isPositionOccupied(
-          neighbor,
-          monsters.map((m) => m.position),
-        ) ||
+        isPositionOccupied(neighbor, obstacles) ||
+        isPositionOccupied(neighbor, monsters) ||
         closedSet.some((node) => isPositionEqual(node.position, neighbor))
       ) {
         continue;

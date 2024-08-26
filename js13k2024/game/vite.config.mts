@@ -6,6 +6,7 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
+    minify: 'terser',
   },
   plugins: [checker({ typescript: true })],
 });

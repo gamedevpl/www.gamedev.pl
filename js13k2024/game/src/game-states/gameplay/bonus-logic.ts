@@ -16,13 +16,8 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
   const newActiveBonus: ActiveBonus = { type: bonusType, duration: 13 };
   gameState.activeBonuses.push(newActiveBonus);
 
+  // side effects
   switch (bonusType) {
-    case BonusType.CapOfInvisibility:
-      // Logic for Cap of Invisibility is handled in monster movement
-      break;
-    case BonusType.ConfusedMonsters:
-      // Logic for Confused Monsters is handled in monster movement
-      break;
     case BonusType.LandMine:
       gameState.landMines.push({ ...gameState.player.position });
       break;
@@ -33,25 +28,8 @@ export const applyBonus = (gameState: GameState, bonusType: BonusType) => {
         shakeIntensity: 0,
       });
       break;
-    case BonusType.Crusher:
-      break;
-    case BonusType.Builder:
-      break;
-    case BonusType.Climber:
-      break;
-    case BonusType.Teleport:
-      // Teleport is handled immediately when collected
-      break;
     case BonusType.Tsunami:
       gameState.tsunamiLevel = 1;
-      break;
-    case BonusType.Monster:
-      break;
-    case BonusType.Slide:
-      break;
-    case BonusType.Sokoban:
-      break;
-    case BonusType.Blaster:
       break;
   }
 };
@@ -88,18 +66,9 @@ export const spawnDynamicBonus = (gameState: GameState, levelConfig: LevelConfig
       y: Math.floor(Math.random() * levelConfig.gridSize),
     };
   } while (
-    isPositionOccupied(
-      position,
-      gameState.obstacles.map((o) => o.position),
-    ) ||
-    isPositionOccupied(
-      position,
-      gameState.monsters.map((m) => m.position),
-    ) ||
-    isPositionOccupied(
-      position,
-      gameState.bonuses.map((b) => b.position),
-    ) ||
+    isPositionOccupied(position, gameState.obstacles) ||
+    isPositionOccupied(position, gameState.monsters) ||
+    isPositionOccupied(position, gameState.bonuses) ||
     isPositionEqual(position, gameState.player.position) ||
     isPositionEqual(position, gameState.goal) ||
     manhattanDistance(position, gameState.player.position) < 3
@@ -129,10 +98,7 @@ export const handleTsunamiEffect = (gameState: GameState): void => {
   if (gameState.tsunamiLevel >= 13) {
     if (
       // player must be standing on a obstacle
-      !isPositionOccupied(
-        gameState.player.position,
-        gameState.obstacles.map((o) => o.position),
-      )
+      !isPositionOccupied(gameState.player.position, gameState.obstacles)
     ) {
       gameState.gameEndingState = 'gameOver';
       startGameOverAnimation(gameState);

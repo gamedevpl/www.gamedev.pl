@@ -181,12 +181,7 @@ export const doGameUpdate = (direction: Direction, gameState: GameState, levelCo
     // Handle builder bonus
     if (isActiveBonus(newGameState, BonusType.Builder)) {
       const newObstacle = { position: oldPosition, creationTime: Date.now(), isRaising: true, isDestroying: false };
-      if (
-        !isPositionOccupied(
-          newObstacle.position,
-          newGameState.obstacles.map(({ position }) => position),
-        )
-      ) {
+      if (!isPositionOccupied(newObstacle, newGameState.obstacles)) {
         newGameState.obstacles.push(newObstacle);
         playEffect(SoundEffect.ElectricalDischarge);
       }
