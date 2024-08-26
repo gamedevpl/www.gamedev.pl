@@ -12,7 +12,6 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^18.15.11",
-    "genaicode": "^0.0.35",
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
     "vite-plugin-checker": "^0.6.4"

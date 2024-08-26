@@ -14,7 +14,7 @@ export enum SoundEffect {
   LevelComplete,
   MonsterSpawn,
   Teleport,
-  BlasterSound
+  BlasterSound,
 }
 
 function createOscillator(frequency: number, type: OscillatorType, duration: number): OscillatorNode {
@@ -35,7 +35,14 @@ function createGain(attackTime: number, releaseTime: number, peakValue: number =
   return gain;
 }
 
-function playSimpleSound(frequency: number, type: OscillatorType, duration: number, attackTime: number, releaseTime: number, frequencyEnd?: number) {
+function playSimpleSound(
+  frequency: number,
+  type: OscillatorType,
+  duration: number,
+  attackTime: number,
+  releaseTime: number,
+  frequencyEnd?: number,
+) {
   const oscillator = createOscillator(frequency, type, duration);
   const gain = createGain(attackTime, releaseTime);
   if (frequencyEnd) {
@@ -119,8 +126,3 @@ export function playEffect(effect: SoundEffect): void {
       break;
   }
 }
-
-// Export the soundEngine object
-export const soundEngine = {
-  playEffect
-};

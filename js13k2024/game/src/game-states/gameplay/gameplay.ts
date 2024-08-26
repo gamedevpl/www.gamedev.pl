@@ -136,7 +136,7 @@ function updateGameState(newGameState: GameState) {
   }
 }
 
-export function destroyGameplay() {
+function destroyGameplay() {
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
   }

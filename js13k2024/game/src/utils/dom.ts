@@ -12,17 +12,6 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(tagName: K)
 }
 
 /**
- * Sets multiple attributes on an HTML element
- * @param element - The element to set attributes on
- * @param attributes - An object containing attribute key-value pairs
- */
-export function setAttributes(element: HTMLElement, attributes: Record<string, string>): void {
-  Object.entries(attributes).forEach(([key, value]) => {
-    element.setAttribute(key, value);
-  });
-}
-
-/**
  * Adds an event listener to an element
  * @param element - The element to add the event listener to
  * @param eventType - The type of event to listen for
@@ -61,28 +50,6 @@ export function removeWindowEventHandler<K extends keyof GlobalEventHandlersEven
 }
 
 /**
- * Updates the text content of an element
- * @param element - The element to update
- * @param text - The new text content
- */
-export function updateText(element: HTMLElement, text: string): void {
-  element.textContent = text;
-}
-
-/**
- * Creates a button element with text and click handler
- * @param text - The text content of the button
- * @param onClick - The function to call when the button is clicked
- * @returns The created button element
- */
-export function createButton(text: string, onClick: () => void): HTMLButtonElement {
-  const button = createElement('button');
-  updateText(button, text);
-  addEventHandler(button, 'click', onClick);
-  return button;
-}
-
-/**
  * Removes all child nodes from an element
  * @param element - The element to clear
  */
@@ -90,15 +57,6 @@ export function clearElement(element: HTMLElement): void {
   while (element.firstChild) {
     element.removeChild(element.firstChild);
   }
-}
-
-/**
- * Appends multiple child elements to a parent element
- * @param parent - The parent element
- * @param children - The child elements to append
- */
-export function appendChildren(parent: HTMLElement, children: HTMLElement[]): void {
-  children.forEach((child) => parent.appendChild(child));
 }
 
 /**
@@ -112,13 +70,4 @@ export function createDiv(className?: string): HTMLDivElement {
     div.className = className;
   }
   return div;
-}
-
-/**
- * Sets the display style of an element
- * @param element - The element to update
- * @param display - The display value to set
- */
-export function setDisplayStyle(element: HTMLElement, display: string): void {
-  element.style.display = display;
 }
