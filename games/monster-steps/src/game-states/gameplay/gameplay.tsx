@@ -133,16 +133,9 @@ export const Gameplay: FunctionComponent<GameplayProps> = ({
       }
     };
 
-    const onTouchEnd = () => setShowStory(false);
-    if (showStory) {
-      document.body.addEventListener('touchend', onTouchEnd);
-    }
     window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      if (showStory) {
-        document.body.removeEventListener('touchend', onTouchEnd);
-      }
       window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
