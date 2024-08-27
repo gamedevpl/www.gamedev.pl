@@ -9,26 +9,32 @@ export const drawTooltip = (
 ) => {
   ctx.save();
   ctx.globalAlpha = activeBonus.duration === 12 ? 1 : 0.5;
+  // Measure description text
   ctx.font = 'bold 16px Arial';
 
   const { x, y } = toIsometric(playerPosition.x, playerPosition.y);
-  const description = getBonusDescription(activeBonus.type);
-  const tooltipWidth = ctx.measureText(description).width + 20;
-  const tooltipHeight = 90;
+  const tooltipWidth = ctx.measureText(getBonusDescription(activeBonus.type)).width + 20;
+  const tooltipHeight = 90; // Increased height to accommodate icon
   const arrowSize = 15;
   const cornerRadius = 10;
 
+  // Position the tooltip above the player
   const tooltipX = x - tooltipWidth / 2;
   const tooltipY = y - cellSize - tooltipHeight - arrowSize;
 
-  // Draw speech bubble
-  ctx.fillStyle = '#000000E6';
+  // Draw the speech bubble background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
   ctx.beginPath();
   ctx.moveTo(tooltipX + cornerRadius, tooltipY);
   ctx.lineTo(tooltipX + tooltipWidth - cornerRadius, tooltipY);
   ctx.quadraticCurveTo(tooltipX + tooltipWidth, tooltipY, tooltipX + tooltipWidth, tooltipY + cornerRadius);
   ctx.lineTo(tooltipX + tooltipWidth, tooltipY + tooltipHeight - cornerRadius);
-  ctx.quadraticCurveTo(tooltipX + tooltipWidth, tooltipY + tooltipHeight, tooltipX + tooltipWidth - cornerRadius, tooltipY + tooltipHeight);
+  ctx.quadraticCurveTo(
+    tooltipX + tooltipWidth,
+    tooltipY + tooltipHeight,
+    tooltipX + tooltipWidth - cornerRadius,
+    tooltipY + tooltipHeight,
+  );
   ctx.lineTo(tooltipX + tooltipWidth / 2 + arrowSize, tooltipY + tooltipHeight);
   ctx.lineTo(tooltipX + tooltipWidth / 2, tooltipY + tooltipHeight + arrowSize);
   ctx.lineTo(tooltipX + tooltipWidth / 2 - arrowSize, tooltipY + tooltipHeight);
@@ -39,15 +45,15 @@ export const drawTooltip = (
   ctx.closePath();
   ctx.fill();
 
-  // Draw border
-  ctx.strokeStyle = '#FFFFFF80';
+  // Draw the speech bubble border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Draw text
-  ctx.fillStyle = '#FFFFFF';
+  // Draw the tooltip text
+  ctx.fillStyle = 'white';
   ctx.textAlign = 'center';
-  ctx.fillText(description, tooltipX + tooltipWidth / 2, tooltipY + 30);
+  ctx.fillText(getBonusDescription(activeBonus.type), tooltipX + tooltipWidth / 2, tooltipY + 30);
 
   ctx.font = '14px Arial';
   ctx.fillText(`${activeBonus.duration} steps left`, tooltipX + tooltipWidth / 2, tooltipY + 55);

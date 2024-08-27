@@ -1,4 +1,4 @@
-import { GameState, LevelConfig, Direction, BonusType, isActiveBonus } from '../gameplay-types';
+import { GameState, LevelConfig, Direction, BonusType, isActiveBonus } from './gameplay-types';
 import {
   moveMonsters,
   checkCollision,
@@ -6,9 +6,9 @@ import {
   checkTimeBombExplosion,
   isInExplosionRange,
 } from './monster-logic';
-import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from '../render/animation-utils';
-import { playEffect, SoundEffect } from '../../../sound/sound-engine';
-import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from '../move-utils';
+import { MOVE_ANIMATION_DURATION, OBSTACLE_DESTRUCTION_DURATION } from './render/animation-utils';
+import { playEffect, SoundEffect } from '../../sound/sound-engine';
+import { getDirectionFromKey, getNewPosition, isPositionEqual, isPositionOccupied, isValidMove } from './move-utils';
 import {
   applyBonus,
   handleBlasterShot,

@@ -7,9 +7,9 @@ import {
 } from '../../utils/dom';
 import { drawGameState } from './game-render';
 import { drawMoveArrows } from './render/move-arrows-render';
-import { doGameUpdate, handleKeyPress, isGameEnding } from './logic/game-logic';
+import { doGameUpdate, handleKeyPress, isGameEnding } from './game-logic';
 import { getMoveFromClick, getValidMoves } from './move-utils';
-import { generateLevel } from './levels/level-generator';
+import { generateLevel } from './level-generator';
 import { GameState, LevelConfig } from './gameplay-types';
 
 const MAX_LEVEL = 13;

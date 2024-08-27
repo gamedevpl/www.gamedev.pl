@@ -1,6 +1,19 @@
-import { GameState, LevelConfig, Position, Monster, Player, BonusType, Obstacle } from '../gameplay-types';
+import { GameState, LevelConfig, Position, Monster, Player, BonusType, Obstacle } from './gameplay-types';
 import { simpleLevelUpdater } from './level-updater';
-import { getLevelData } from './level-data';
+
+import { generateLevel as generateLevel1 } from './levels/01-the-first-step';
+import { generateLevel as generateLevel2 } from './levels/02-now-you-see-me';
+import { generateLevel as generateLevel3 } from './levels/03-bridge-the-gap';
+import { generateLevel as generateLevel4 } from './levels/04-crush-and-rush';
+import { generateLevel as generateLevel5 } from './levels/05-tick-tock-boom';
+import { generateLevel as generateLevel6 } from './levels/06-minesweepers-revenge';
+import { generateLevel as generateLevel7 } from './levels/07-monsters-mayhem';
+import { generateLevel as generateLevel8 } from './levels/08-tunnel-vision';
+import { generateLevel as generateLevel9 } from './levels/09-ghost-bomber';
+import { generateLevel as generateLevel10 } from './levels/10-surf-and-climb';
+import { generateLevel as generateLevel11 } from './levels/11-slide-and-blast';
+import { generateLevel as generateLevel12 } from './levels/12-the-gauntlet';
+import { generateLevel as generateLevel13 } from './levels/13-the-final-countdown';
 
 const createPosition = (x: number, y: number): Position => ({ x, y });
 
@@ -73,49 +86,35 @@ const generateBaseConfig = (
   levelUpdater,
 });
 
-const levels: Array<() => [GameState, LevelConfig, string]> = Array.from({ length: 13 }).map((_value, idx) => () => {
-  const [
-    [
-      [gridSizeX, gridSizeY],
-      [playerX, playerY],
-      [goalX, goalY],
-      monsters,
-      obstacles,
-      bonuses,
-      monsterSpawnSectors,
-      levelName,
-      levelStory,
-    ],
-    updater,
-  ] = getLevelData(idx + 1);
-
-  const gameState: GameState = generateBaseState();
-  gameState.player = createPlayer(playerX, playerY);
-  gameState.goal = createPosition(goalX, goalY);
-  gameState.monsters = monsters.map(([x, y]) => createMonster(x, y));
-  gameState.obstacles = obstacles.map(([x, y]) => createObstacle(x, y));
-  gameState.bonuses = bonuses.map(([x, y, type]) => createBonus(x, y, type as BonusType));
-
-  const levelConfig: LevelConfig = generateBaseConfig(
-    Math.max(gridSizeX, gridSizeY),
-    idx + 1,
-    levelName,
-    levelStory,
-    updater,
-  );
-  levelConfig.initialMonsterCount = monsters.length;
-  levelConfig.monsterSpawnSectors = monsterSpawnSectors.map(([x, y]) => createPosition(x, y));
-  levelConfig.obstacleCount = obstacles.length;
-  levelConfig.initialBonusCount = bonuses.length;
-
-  return [gameState, levelConfig, levelStory];
-});
+const levels: { [key: number]: () => [GameState, LevelConfig, string] } = {
+  1: generateLevel1,
+  2: generateLevel2,
+  3: generateLevel3,
+  4: generateLevel4,
+  5: generateLevel5,
+  6: generateLevel6,
+  7: generateLevel7,
+  8: generateLevel8,
+  9: generateLevel9,
+  10: generateLevel10,
+  11: generateLevel11,
+  12: generateLevel12,
+  13: generateLevel13,
+};
 
 export const generateLevel = (level: number): [GameState, LevelConfig, string] => {
   if (level < 1 || level > 13) {
     throw new Error(`Invalid level number: ${level}`);
   }
-  return levels[level - 1]();
+  return levels[level]();
 };
 
-export { createMonster };
+export {
+  createPosition,
+  createBonus,
+  createMonster,
+  createPlayer,
+  createObstacle,
+  generateBaseState,
+  generateBaseConfig,
+};

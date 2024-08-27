@@ -1,5 +1,5 @@
-import { GameState, Monster, Position, BonusType, LevelConfig } from '../gameplay-types';
-import { isPositionOccupied, isPositionEqual, manhattanDistance } from '../move-utils';
+import { GameState, Monster, Position, BonusType, LevelConfig } from './gameplay-types';
+import { isPositionOccupied, isPositionEqual, manhattanDistance } from './move-utils';
 
 const MIN_SPAWN_DISTANCE_FROM_PLAYER = 10;
 const MIN_SPAWN_DISTANCE_FROM_BONUS = 10;

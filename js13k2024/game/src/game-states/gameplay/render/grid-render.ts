@@ -8,7 +8,8 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) =>
   const bottomLeft = toIsometric(0, gridSize);
   const bottomRight = toIsometric(gridSize, gridSize);
 
-  ctx.fillStyle = '#c2b280';
+  // Draw top surface
+  ctx.fillStyle = '#c2b280'; // Updated to match the beige color in the image
   ctx.beginPath();
   ctx.moveTo(topLeft.x, topLeft.y);
   ctx.lineTo(topRight.x, topRight.y);
@@ -17,7 +18,8 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) =>
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#5d4037';
+  // Draw right side
+  ctx.fillStyle = '#5d4037'; // Updated to match the darkest brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -26,7 +28,8 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) =>
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#8d6e63';
+  // Draw front side
+  ctx.fillStyle = '#8d6e63'; // Updated to match the darker brown color in the image
   ctx.beginPath();
   ctx.moveTo(bottomRight.x, bottomRight.y);
   ctx.lineTo(bottomRight.x, bottomRight.y + PLATFORM_HEIGHT);
@@ -37,13 +40,14 @@ export const drawPlatform = (ctx: CanvasRenderingContext2D, gridSize: number) =>
 };
 
 export const drawGrid = (ctx: CanvasRenderingContext2D, gridSize: number, gameState: GameState) => {
-  ctx.strokeStyle = '#4a4a4a';
+  ctx.strokeStyle = '#4a4a4a'; // Updated to a darker gray for better visibility
   ctx.lineWidth = 1;
 
   for (let y = 0; y <= gridSize; y++) {
     for (let x = 0; x <= gridSize; x++) {
       const { x: isoX, y: isoY } = toIsometric(x, y);
 
+      // Draw horizontal line
       if (x < gridSize) {
         ctx.beginPath();
         ctx.moveTo(isoX, isoY);
@@ -51,6 +55,7 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, gridSize: number, gameSt
         ctx.stroke();
       }
 
+      // Draw vertical line
       if (y < gridSize) {
         ctx.beginPath();
         ctx.moveTo(isoX, isoY);
@@ -58,18 +63,22 @@ export const drawGrid = (ctx: CanvasRenderingContext2D, gridSize: number, gameSt
         ctx.stroke();
       }
 
+      // Draw Slide effect if active
       if (isActiveBonus(gameState, BonusType.Slide)) {
-        drawSlideTile(ctx, isoX, isoY);
+        drawSlideTile(ctx, x, y);
       }
     }
   }
 };
 
-const drawSlideTile = (ctx: CanvasRenderingContext2D, isoX: number, isoY: number) => {
+const drawSlideTile = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
+  const { x: isoX, y: isoY } = toIsometric(x, y);
+
+  // Draw a subtle ice-like effect
   const gradient = ctx.createLinearGradient(isoX - TILE_WIDTH / 2, isoY, isoX + TILE_WIDTH / 2, isoY + TILE_HEIGHT);
-  gradient.addColorStop(0, '#c8c8ff33');
-  gradient.addColorStop(0.5, '#dcdcff4d');
-  gradient.addColorStop(1, '#c8c8ff33');
+  gradient.addColorStop(0, 'rgba(200, 200, 255, 0.2)');
+  gradient.addColorStop(0.5, 'rgba(220, 220, 255, 0.3)');
+  gradient.addColorStop(1, 'rgba(200, 200, 255, 0.2)');
 
   ctx.fillStyle = gradient;
   ctx.beginPath();
@@ -80,21 +89,25 @@ const drawSlideTile = (ctx: CanvasRenderingContext2D, isoX: number, isoY: number
   ctx.closePath();
   ctx.fill();
 
+  // Add some sparkle effects
   for (let i = 0; i < 3; i++) {
     const sparkleX = isoX + (Math.random() - 0.5) * TILE_WIDTH;
     const sparkleY = isoY + (Math.random() - 0.5) * TILE_HEIGHT;
     const sparkleSize = Math.random() * 2 + 1;
 
-    ctx.fillStyle = '#ffffffb3';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.beginPath();
     ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
     ctx.fill();
   }
 };
 
+// Helper function to draw shadows
 export const drawShadow = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) => {
-  ctx.fillStyle = '#0000004d';
+  const SHADOW_OFFSET = 5;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
   ctx.beginPath();
-  ctx.ellipse(x + width / 2, y + height / 2 + 5, width / 2, height / 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + width / 2, y + height / 2 + SHADOW_OFFSET, width / 2, height / 4, 0, 0, Math.PI * 2);
   ctx.fill();
 };

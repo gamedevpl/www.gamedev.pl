@@ -20,7 +20,8 @@ export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cel
       : (1 - (Date.now() - gameState.tsunamiTeardownTimestamp) / TSUNAMI_TEARDOWN_DURATION) * 13;
   }
 
-  const maxWaterHeight = cellSize * 0.8;
+  const maxWaterHeight = cellSize * 0.8; // Maximum water height when tsunamiLevel reaches 13
+
   const waves: TsunamiWave[] = [];
 
   for (let y = 0; y < gridSize; y++) {
@@ -43,22 +44,24 @@ export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cel
           { x: bottomR.x, y: bottomR.y - wave2 },
           { x: topR.x, y: topR.y - wave1 },
         ],
-        isoFront: y === gridSize - 1
-          ? [
-              { x: bottomL.x, y: bottomL.y - wave2 },
-              { x: bottomL.x, y: bottomL.y },
-              { x: bottomR.x, y: bottomR.y },
-              { x: bottomR.x, y: bottomR.y - wave2 },
-            ]
-          : undefined,
-        isoSide: x === gridSize - 1
-          ? [
-              { x: bottomR.x, y: bottomR.y - wave2 },
-              { x: bottomR.x, y: bottomR.y },
-              { x: topR.x, y: topR.y },
-              { x: topR.x, y: topR.y - wave1 },
-            ]
-          : undefined,
+        isoFront:
+          y === gridSize - 1
+            ? [
+                { x: bottomL.x, y: bottomL.y - wave2 },
+                { x: bottomL.x, y: bottomL.y },
+                { x: bottomR.x, y: bottomR.y },
+                { x: bottomR.x, y: bottomR.y - wave2 },
+              ]
+            : undefined,
+        isoSide:
+          x === gridSize - 1
+            ? [
+                { x: bottomR.x, y: bottomR.y - wave2 },
+                { x: bottomR.x, y: bottomR.y },
+                { x: topR.x, y: topR.y },
+                { x: topR.x, y: topR.y - wave1 },
+              ]
+            : undefined,
       });
     }
   }
@@ -68,15 +71,14 @@ export const generateTsunamiWaves = (gameState: GameState, gridSize: number, cel
 
 export const drawTsunamiWave = (ctx: CanvasRenderingContext2D, wave: TsunamiWave) => {
   ctx.save();
-  ctx.globalAlpha = 0.6;
+  ctx.globalAlpha = 0.6; // Make the water slightly transparent
 
-  const alpha = Math.floor((wave.tsunamiLevel / 13) * 255).toString(16).padStart(2, '0');
-  drawTsunamieWavePlane(ctx, wave.isoTop, `#0064FF${alpha}`);
+  drawTsunamieWavePlane(ctx, wave.isoTop, `rgba(0, 100, 255, ${wave.tsunamiLevel / 13})`);
   if (wave.isoFront) {
-    drawTsunamieWavePlane(ctx, wave.isoFront, `#002762${alpha}`);
+    drawTsunamieWavePlane(ctx, wave.isoFront, `rgba(0, 39, 98, ${wave.tsunamiLevel / 13})`);
   }
   if (wave.isoSide) {
-    drawTsunamieWavePlane(ctx, wave.isoSide, `#003F9D${alpha}`);
+    drawTsunamieWavePlane(ctx, wave.isoSide, `rgba(0, 63, 157, ${wave.tsunamiLevel / 13})`);
   }
 
   ctx.restore();
@@ -98,9 +100,9 @@ export const drawSlideTrail = (ctx: CanvasRenderingContext2D, start: Position, e
   const { x: endX, y: endY } = toIsometric(end.x, end.y);
 
   ctx.save();
-  ctx.strokeStyle = '#00FFFF80';
+  ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // Cyan color with transparency
   ctx.lineWidth = 3;
-  ctx.setLineDash([5, 5]);
+  ctx.setLineDash([5, 5]); // Create a dashed line effect
 
   ctx.beginPath();
   ctx.moveTo(startX, startY);
@@ -120,16 +122,19 @@ export const drawBlasterShot = (ctx: CanvasRenderingContext2D, shot: BlasterShot
 
   ctx.save();
 
-  ctx.shadowColor = '#FF0000CC';
+  // Create a glow effect
+  ctx.shadowColor = 'rgba(255, 0, 0, 0.8)';
   ctx.shadowBlur = cellSize * 0.2;
 
-  ctx.fillStyle = '#FF0000';
-  ctx.strokeStyle = '#FF6464CC';
+  // Set the main color to red
+  ctx.fillStyle = 'red';
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
   ctx.lineWidth = 2;
 
-  const shotLength = cellSize * 0.6;
+  const shotLength = cellSize * 0.6; // Elongated shape
   const shotWidth = cellSize * 0.1;
 
+  // Rotate the context based on the shot direction
   ctx.translate(isoX, isoY);
   switch (shot.direction) {
     case Direction.Up:
@@ -146,11 +151,13 @@ export const drawBlasterShot = (ctx: CanvasRenderingContext2D, shot: BlasterShot
       break;
   }
 
+  // Draw the elongated laser blast
   ctx.beginPath();
   ctx.ellipse(0, 0, shotLength / 2, shotWidth / 2, 0, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
 
+  // Add a trail effect
   ctx.globalAlpha = 0.5;
   for (let i = 1; i <= 3; i++) {
     ctx.globalAlpha *= 0.5;
