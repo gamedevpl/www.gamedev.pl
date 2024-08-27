@@ -5,7 +5,8 @@
   "main": "dist/index.html",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "type-check": "tsc",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "author": "Grzegorz Tańczyk",

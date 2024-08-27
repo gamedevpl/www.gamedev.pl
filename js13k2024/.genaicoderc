@@ -8,5 +8,5 @@
     "node_modules",
     "package-lock.json"
   ],
-  "lintCommand": "npm run build --prefix=game"
+  "lintCommand": "npm run type-check --prefix=game"
 }
