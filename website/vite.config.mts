@@ -22,7 +22,7 @@ export default defineConfig({
           rename: 'monster-steps',
         },
         {
-          src: '../games/nukes/dist',
+          src: '../games/nukes/build',
           dest: 'games/',
           rename: 'nukes',
         },
