@@ -17,13 +17,14 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: 'build/index.html',
-          dest: 'games/nukes',
-        },
-        {
           src: '../games/monster-steps/dist',
           dest: 'games/',
           rename: 'monster-steps',
+        },
+        {
+          src: '../games/nukes/dist',
+          dest: 'games/',
+          rename: 'nukes',
         },
       ],
     }),

@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v2-beta
         with:
           node-version: ${{ matrix.nodejs }}
-      - run: npm install --prefix=../games/monster-steps && npm install
+      - run: npm install --prefix=../games/monster-steps && npm install --prefix=../games/nukes && npm install
       - run: npm run lint
       - run: npm run test
-      - run: npm run build --prefix=../games/monster-steps && npm run build
+      - run: npm run build --prefix=../games/monster-steps && npm run build --prefix=../games/nukes && npm run build
