@@ -15,7 +15,8 @@
   --intro-title-color: #e67e22;
 }
 
-body, html {
+body,
+html {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', Courier, monospace;
@@ -53,7 +54,8 @@ button:hover {
   background-color: var(--button-hover-color);
 }
 
-.intro, .game-complete {
+.intro,
+.game-complete {
   text-align: center;
   background-color: var(--intro-background);
   padding: 20px;
@@ -65,6 +67,33 @@ button:hover {
   width: 80vw;
   max-width: 600px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.game-intro-responsive {
+  display: flex;
+  flex-direction: row;
+}
+
+.level-story {
+  max-width: 600px;
+}
+
+@media (max-width: 600px) {
+  .game-intro-responsive {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 600px) {
+  .game-intro-responsive {
+    justify-content: space-between;
+    width: 90%;
+  }
+}
+
+.game-preview-container canvas {
+  max-width: 90%;
+  max-height: 90%;
 }
 
 .game-title {
@@ -138,7 +167,9 @@ canvas {
   max-width: 90vw;
 }
 
-.game-over-screen, .level-complete-screen, .game-complete {
+.game-over-screen,
+.level-complete-screen,
+.game-complete {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -148,7 +179,9 @@ canvas {
   text-align: center;
 }
 
-.game-over-title, .level-complete-title, .game-complete-subtitle {
+.game-over-title,
+.level-complete-title,
+.game-complete-subtitle {
   font-size: 36px;
   margin-bottom: 20px;
 }
@@ -157,7 +190,8 @@ canvas {
   color: #f00;
 }
 
-.level-complete-title, .game-complete-subtitle {
+.level-complete-title,
+.game-complete-subtitle {
   color: var(--highlight-color);
 }
 
@@ -180,7 +214,8 @@ canvas {
     font-size: 14px;
   }
 
-  .intro, .game-complete {
+  .intro,
+  .game-complete {
     width: 90vw;
     height: 90vh;
   }
@@ -198,7 +233,9 @@ canvas {
     max-width: 95vw;
   }
 
-  .game-over-title, .level-complete-title, .game-complete-subtitle {
+  .game-over-title,
+  .level-complete-title,
+  .game-complete-subtitle {
     font-size: 28px;
   }
 

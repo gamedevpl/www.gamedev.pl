@@ -5,10 +5,12 @@ import { initializeGameplay, renderGameplay } from './game-states/gameplay/gamep
 import { renderGameOver } from './game-states/game-over/game-over';
 import { renderLevelComplete } from './game-states/level-complete/level-complete';
 import { renderLevelStory } from './game-states/level-story/level-story';
+import { renderInstructions } from './game-states/instructions/instructions';
 import './global-styles.css';
 
 enum GameState {
   Intro,
+  Instructions,
   LevelStory,
   Gameplay,
   GameOver,
@@ -26,7 +28,7 @@ const gameState = {
 
 function updateGameState(newState: Partial<typeof gameState>) {
   Object.assign(gameState, newState);
-  if (newState.currentState) {
+  if (newState.currentState !== undefined) {
     renderCurrentState();
   }
 }
@@ -42,7 +44,10 @@ function renderCurrentState() {
 
   switch (gameState.currentState) {
     case GameState.Intro:
-      currentState = renderIntro(startGame);
+      currentState = renderIntro(startGame, showInstructions);
+      break;
+    case GameState.Instructions:
+      currentState = renderInstructions(returnToIntro);
       break;
     case GameState.LevelStory:
       currentState = renderLevelStory(gameState.level, startGameplay);
@@ -67,6 +72,14 @@ function renderCurrentState() {
 
 function startGame() {
   updateGameState({ currentState: GameState.LevelStory });
+}
+
+function showInstructions() {
+  updateGameState({ currentState: GameState.Instructions });
+}
+
+function returnToIntro() {
+  updateGameState({ currentState: GameState.Intro });
 }
 
 function startGameplay() {

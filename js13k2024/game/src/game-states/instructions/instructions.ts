@@ -1,46 +1,24 @@
-import { createElement, createDiv, createButton, addWindowEventHandler } from '../../utils/dom';
+import { createElement, createDiv, addWindowEventHandler, removeWindowEventHandler } from '../../utils/dom';
 
-export class Instructions {
-  private onBack: () => void;
+interface InstructionsResult {
+  html: string;
+  setup: () => void;
+  cleanup: () => void;
+}
 
-  constructor(onBack: () => void) {
-    this.onBack = onBack;
-  }
+export function renderInstructions(onBack: () => void): InstructionsResult {
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      onBack();
+    }
+  };
 
-  render(): HTMLElement {
-    const container = createDiv('instructions');
-
-    const title = createElement('h1');
-    title.textContent = 'How to Play Monster Steps';
-
-    const instructionsList = this.createInstructionsList();
-    const bonusDetails = this.createBonusDetails();
-    const tips = this.createTips();
-
-    const backButton = createButton('Back to Menu', this.onBack);
-
-    const escapeInstruction = createElement('p');
-    escapeInstruction.className = 'instructions-tip';
-    escapeInstruction.textContent = 'Press Escape to return to the main menu';
-
-    container.appendChild(title);
-    container.appendChild(instructionsList);
-    container.appendChild(bonusDetails);
-    container.appendChild(tips);
-    container.appendChild(backButton);
-    container.appendChild(escapeInstruction);
-
-    this.addKeyboardListener();
-
-    return container;
-  }
-
-  private createInstructionsList(): HTMLElement {
+  const createInstructionsList = (): HTMLElement => {
     const list = createElement('ul');
     const instructions = [
       'Use arrow keys, touch controls, or mouse clicks to move your character',
       'Avoid obstacles and monsters',
-      'Reach the goal (green square) to complete the level',
+      'Reach the goal (black star on yellow square) to complete the level',
       'New monsters appear every 13 steps',
       'Collect bonuses for special abilities',
       'Complete all 13 levels to win',
@@ -53,81 +31,9 @@ export class Instructions {
     });
 
     return list;
-  }
+  };
 
-  private createBonusDetails(): HTMLElement {
-    const container = createDiv();
-    const title = createElement('h2');
-    title.textContent = 'New Bonus Details';
-
-    const bonusList = createElement('ul');
-    const bonuses = [
-      {
-        name: 'Tsunami',
-        details: [
-          'Water gradually floods the grid over 13 steps',
-          'Movement becomes slower for both you and monsters',
-          'At the 13th step, everything not on an obstacle is eliminated',
-          'Use the Climber bonus to survive on obstacles',
-        ],
-      },
-      {
-        name: 'Monster',
-        details: [
-          'You become a monster for 13 steps',
-          'Monsters become vulnerable "players" during this time',
-          'Eliminate all monster-players to win, but be careful not to let them reach the goal!',
-        ],
-      },
-      {
-        name: 'Slide',
-        details: [
-          'Your movement becomes a slide in the chosen direction',
-          "You'll keep moving until you hit an obstacle or the edge of the grid",
-          'Use this to quickly traverse the grid, but plan your moves carefully!',
-        ],
-      },
-      {
-        name: 'Sokoban',
-        details: [
-          'Gain the ability to push obstacles',
-          'Use this to create new paths or crush monsters',
-          'Strategic obstacle placement can help block monster paths',
-        ],
-      },
-      {
-        name: 'Blaster',
-        details: [
-          "Equip a blaster that shoots in the direction you're moving",
-          'Eliminate monsters in your path',
-          'Use carefully to clear your way to the goal',
-        ],
-      },
-    ];
-
-    bonuses.forEach((bonus) => {
-      const item = createElement('li');
-      const bonusName = createElement('strong');
-      bonusName.textContent = bonus.name + ': ';
-      item.appendChild(bonusName);
-
-      const detailsList = createElement('ul');
-      bonus.details.forEach((detail) => {
-        const detailItem = createElement('li');
-        detailItem.textContent = detail;
-        detailsList.appendChild(detailItem);
-      });
-
-      item.appendChild(detailsList);
-      bonusList.appendChild(item);
-    });
-
-    container.appendChild(title);
-    container.appendChild(bonusList);
-    return container;
-  }
-
-  private createTips(): HTMLElement {
+  const createTips = (): HTMLElement => {
     const container = createDiv();
     const title = createElement('h2');
     title.textContent = 'Tips';
@@ -150,15 +56,34 @@ export class Instructions {
     container.appendChild(title);
     container.appendChild(tipsList);
     return container;
-  }
+  };
 
-  private addKeyboardListener() {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        this.onBack();
-      }
-    };
+  const html = `
+    <div class="instructions">
+      <h1>How to Play Monster Steps</h1>
+      <div id="instructionsList"></div>
+      <div id="tips"></div>
+      <button id="backButton">Back to Menu</button>
+      <p class="instructions-tip">Press Escape to return to the main menu</p>
+    </div>
+  `;
 
+  const setup = () => {
+    const container = document.querySelector('.instructions')!;
+    const instructionsListContainer = container.querySelector('#instructionsList')!;
+    const tipsContainer = container.querySelector('#tips')!;
+    const backButton = container.querySelector('#backButton') as HTMLButtonElement;
+
+    instructionsListContainer.appendChild(createInstructionsList());
+    tipsContainer.appendChild(createTips());
+
+    backButton.addEventListener('click', onBack);
     addWindowEventHandler('keydown', handleKeyDown);
-  }
+  };
+
+  const cleanup = () => {
+    removeWindowEventHandler('keydown', handleKeyDown);
+  };
+
+  return { html, setup, cleanup };
 }
