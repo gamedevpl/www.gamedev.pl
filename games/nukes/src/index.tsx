@@ -12,7 +12,7 @@ root.render(
 
 const router = createBrowserRouter([
   {
-    path: '/',
+    path: '/games/nukes/',
     lazy: async () => ({ Component: (await import('./NukesApp.tsx')).NukesApp }),
   },
 ]);
