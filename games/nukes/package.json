@@ -1,8 +1,10 @@
 {
-  "name": "@gamedevpl/website",
-  "homepage": "https://www.gamedev.pl",
+  "name": "@gamedevpl/nukes",
+  "homepage": "https://www.gamedev.pl/games/nukes/",
   "version": "0.1.0",
   "private": true,
+  "author": "Grzegorz Tańczyk",
+  "license": "MIT",
   "devDependencies": {
     "@fontsource/press-start-2p": "^5.0.20",
     "@testing-library/jest-dom": "^6.4.8",
@@ -50,7 +52,6 @@
   "scripts": {
     "start": "vite",
     "build": "tsc && vite build",
-    "deploy": "gh-pages -d build",
     "test": "jest",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",

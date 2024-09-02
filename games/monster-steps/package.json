@@ -1,5 +1,6 @@
 {
-  "name": "monsters-steps",
+  "name": "@gamedevpl/nukes",
+  "homepage": "https://www.gamedev.pl/games/monster-steps/",
   "version": "1.0.0",
   "description": "Monster Steps game",
   "main": "dist/index.html",
