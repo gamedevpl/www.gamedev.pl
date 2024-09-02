@@ -6,40 +6,47 @@ import {
   createBonus,
   generateBaseState,
   generateBaseConfig,
+  createMonster,
 } from '../level-generator';
+
+const LAYOUT = [
+  '            ',
+  '            ',
+  '            ',
+  '            ',
+  '         ###',
+  '#        ###',
+  '         #  ',
+  '         #  ',
+  '         ###',
+  '            ',
+  '       #####',
+  '            ',
+];
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(12, 'Tunnel Vision', 'Build a path and set a trap!');
+  const config = generateBaseConfig(12, 8, 'Tunnel Vision', 'Build a path and set a trap!');
 
   state.player = createPlayer(0, 6);
   state.goal = createPosition(11, 6);
-  state.monsters = []; // Remove initial monsters
+  state.monsters = [createMonster(11, 11)];
   state.bonuses = [
-    createBonus(2, 6, BonusType.Builder),
-    createBonus(5, 6, BonusType.LandMine),
-    createBonus(5, 5, BonusType.Sokoban),
+    createBonus(1, 6, BonusType.Builder),
+    createBonus(7, 5, BonusType.LandMine),
+    createBonus(8, 3, BonusType.Sokoban),
   ];
 
-  // Create a partial tunnel, leaving space for the player to build
-  for (let i = 3; i < 10; i++) {
-    if (i !== 5 && i !== 8) {
-      state.obstacles.push(createObstacle(i, 5));
-      state.obstacles.push(createObstacle(i, 7));
+  // Place obstacles based on the maze layout
+  for (let y = 0; y < 12; y++) {
+    for (let x = 0; x < 12; x++) {
+      if (LAYOUT[y][x] === '#') {
+        state.obstacles.push(createObstacle(x, y));
+      }
     }
   }
 
-  // Add some obstacles to create a more interesting layout
-  state.obstacles.push(createObstacle(1, 4));
-  state.obstacles.push(createObstacle(1, 8));
-  state.obstacles.push(createObstacle(10, 4));
-  state.obstacles.push(createObstacle(10, 8));
-
-  // Add obstacles near the goal to encourage strategic building
-  state.obstacles.push(createObstacle(11, 5));
-  state.obstacles.push(createObstacle(11, 7));
-
-  config.monsterSpawnSectors = [createPosition(0, 0)];
+  config.monsterSpawnSectors = [createPosition(11, 11)];
 
   return [
     state,

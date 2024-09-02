@@ -11,7 +11,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(14, 'Slide and Blast', 'Slide through danger and blast your way to victory!');
+  const config = generateBaseConfig(14, 11, 'Slide and Blast', 'Slide through danger and blast your way to victory!');
 
   state.player = createPlayer(0, 0);
   state.goal = createPosition(13, 13);

@@ -11,7 +11,7 @@ import {
 
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(9, 'Crush and Rush', 'Clear the path with your crushing power!');
+  const config = generateBaseConfig(9, 4, 'Crush and Rush', 'Clear the path with your crushing power!');
 
   state.player = createPlayer(0, 4);
   state.goal = createPosition(8, 4);

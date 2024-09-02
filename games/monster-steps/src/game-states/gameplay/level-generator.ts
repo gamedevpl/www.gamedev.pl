@@ -69,6 +69,7 @@ const CELL_SIZE = 40;
 
 const generateBaseConfig = (
   gridSize: number,
+  levelNumber: number,
   levelName: string,
   levelStory: string,
   levelUpdater = simpleLevelUpdater,
@@ -79,6 +80,7 @@ const generateBaseConfig = (
   monsterSpawnSectors: [],
   obstacleCount: 0,
   initialBonusCount: 0,
+  levelNumber,
   levelName,
   levelStory,
   levelUpdater,

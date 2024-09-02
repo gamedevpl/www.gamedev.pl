@@ -102,6 +102,7 @@ export interface LevelConfig {
   monsterSpawnSectors: Position[];
   obstacleCount: number;
   initialBonusCount: number;
+  levelNumber: number;
   levelName: string;
   levelStory: string;
   levelUpdater: (state: GameState, levelConfig: LevelConfig) => void;

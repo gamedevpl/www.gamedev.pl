@@ -9,61 +9,83 @@ import {
   generateBaseConfig,
 } from '../level-generator';
 
+const GRID_SIZE = 15;
+
+// Pre-designed maze layout
+const MAZE_LAYOUT = [
+  '###############',
+  '#S  #     #   #',
+  '# # # ### # # #',
+  '# #   #   #   #',
+  '# ##### #### #',
+  '#     # #    #',
+  '##### # # ####',
+  '#   #   #    #',
+  '# # ####### ###',
+  '# #       # # #',
+  '# ####### # # #',
+  '#       # # # #',
+  '####### # # # #',
+  '#         # #  ',
+  '############# G',
+];
+
 export const generateLevel = (): [GameState, LevelConfig, string] => {
   const state = generateBaseState();
-  const config = generateBaseConfig(15, 'The Gauntlet', 'Master all your skills to conquer the final challenge!');
-  
-  state.player = createPlayer(0, 7);
-  state.goal = createPosition(14, 7);
-  state.monsters = [
-    createMonster(5, 2),
-    createMonster(5, 12),
-    createMonster(10, 4),
-    createMonster(10, 10),
-    createMonster(14, 0),
-    createMonster(14, 14)
-  ];
-  state.bonuses = [
-    createBonus(2, 7, BonusType.CapOfInvisibility),
-    createBonus(4, 7, BonusType.Crusher),
-    createBonus(7, 3, BonusType.TimeBomb),
-    createBonus(7, 11, BonusType.LandMine),
-    createBonus(10, 7, BonusType.Blaster),
-    createBonus(12, 7, BonusType.Climber)
-  ];
-  
-  // Create a central path with obstacles
-  for (let i = 1; i < 14; i++) {
-    if (i % 3 !== 1) { // Leave gaps for bonuses and movement
-      state.obstacles.push(createObstacle(i, 6));
-      state.obstacles.push(createObstacle(i, 8));
-    }
-  }
-  
-  // Create vertical barriers
-  for (let i = 0; i < 15; i += 3) {
-    if (i !== 6 && i !== 9) { // Leave central area open
-      for (let j = 0; j < 15; j++) {
-        if (j !== 7) { // Leave central path open
-          state.obstacles.push(createObstacle(i, j));
-        }
+  const config = generateBaseConfig(
+    GRID_SIZE,
+    12,
+    'Maze of Challenges',
+    'Navigate through a treacherous maze using your wit and special abilities!',
+  );
+
+  // Place obstacles based on the maze layout
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (MAZE_LAYOUT[y][x] === '#') {
+        state.obstacles.push(createObstacle(x, y));
       }
     }
   }
-  
-  // Add some strategic single obstacles
-  state.obstacles.push(createObstacle(3, 5));
-  state.obstacles.push(createObstacle(3, 9));
-  state.obstacles.push(createObstacle(7, 5));
-  state.obstacles.push(createObstacle(7, 9));
-  state.obstacles.push(createObstacle(11, 5));
-  state.obstacles.push(createObstacle(11, 9));
-  
-  // Create a challenging area near the goal
-  state.obstacles.push(createObstacle(13, 6));
-  state.obstacles.push(createObstacle(13, 8));
-  state.obstacles.push(createObstacle(14, 6));
-  state.obstacles.push(createObstacle(14, 8));
 
-  return [state, config, "This is your final test! Use all the skills you've learned to navigate through the gauntlet. Collect bonuses strategically, avoid or eliminate monsters, and make your way to the goal. Good luck!"];
+  // Place player at the start
+  const startPos = findPosition('S');
+  state.player = createPlayer(startPos.x, startPos.y);
+
+  // Place goal at the end
+  const goalPos = findPosition('G');
+  state.goal = createPosition(goalPos.x, goalPos.y);
+
+  // Place bonuses
+  state.bonuses = [
+    createBonus(1, 5, BonusType.Teleport),
+    createBonus(13, 1, BonusType.Climber),
+    createBonus(7, 9, BonusType.Sokoban),
+    createBonus(2, 13, BonusType.Blaster),
+    createBonus(1, 13, BonusType.Teleport), // Added second Teleport bonus close to the Blaster
+  ];
+
+  // Place monsters at key junctions
+  state.monsters = [createMonster(5, 5), createMonster(9, 9), createMonster(12, 5), createMonster(6, 13)];
+
+  return [
+    state,
+    config,
+    'Welcome to the Maze of Challenges! Your goal is to navigate through this treacherous maze and reach the exit. ' +
+      'Use your special abilities wisely: Teleport past obstacles (now with two Teleport bonuses!), Climb over walls, Push blocks with Sokoban power, ' +
+      'and Blast through certain walls. The second Teleport bonus is placed near the Blaster for strategic use. ' +
+      'Be cautious of the monsters guarding key junctions. Good luck, adventurer!',
+  ];
 };
+
+// Helper function to find a position of a character in the maze layout
+function findPosition(char: string): { x: number; y: number } {
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (MAZE_LAYOUT[y][x] === char) {
+        return { x, y };
+      }
+    }
+  }
+  throw new Error(`Character ${char} not found in maze layout`);
+}

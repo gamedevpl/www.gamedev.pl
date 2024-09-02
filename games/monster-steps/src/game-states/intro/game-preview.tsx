@@ -83,6 +83,7 @@ export const GamePreview: FunctionComponent = () => {
         monsterSpawnSectors: [],
         obstacleCount: 0,
         initialBonusCount: 0,
+        levelNumber: 0,
         levelName: 'Preview',
         levelStory: 'Preview',
         levelUpdater: () => {},
