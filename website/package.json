@@ -46,13 +46,14 @@
     "typescript": "^5.2.2",
     "vite": "^5.0.0",
     "vite-plugin-checker": "^0.6.4",
-    "vite-plugin-static-copy": "^1.0.6"
+    "vite-plugin-static-copy": "^1.0.6",
+    "vitest": "^2.0.5"
   },
   "scripts": {
     "start": "vite",
     "build": "tsc && vite build",
     "deploy": "gh-pages -d build",
-    "test": "jest",
+    "test": "vitest",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
     "prepare": "cd .. && husky install",
