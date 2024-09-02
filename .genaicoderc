@@ -1,4 +1,10 @@
 {
-  "rootDir": "website/src",
-  "lintCommand": "npm run type-check && npm run lint"
+  "rootDir": "website",
+  "lintCommand": "npm run type-check && npm run lint",
+  "ignorePatterns": [
+    "dist",
+    "build",
+    "node_modules",
+    "package-lock.json"
+  ]
 }

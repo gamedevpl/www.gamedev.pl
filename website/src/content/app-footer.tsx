@@ -1,15 +1,12 @@
-import styled from "styled-components";
+import styled from 'styled-components';
 
 export default function AppFooter() {
   return (
     <FooterContainer>
       <p className="copyrights">
-        Wszelkie prawa zastrzeżone przez{" "}
-        <a href="//www.gamedev.pl">Gamedev.pl</a>
-        {" | "}
-        <a href="https://github.com/gamedevpl/www.gamedev.pl/discussions">
-          Forum
-        </a>
+        Wszelkie prawa zastrzeżone przez <a href="//www.gamedev.pl">Gamedev.pl</a>
+        {' | '}
+        <a href="https://github.com/gamedevpl/www.gamedev.pl/discussions">Forum</a>
       </p>
     </FooterContainer>
   );
@@ -18,7 +15,6 @@ export default function AppFooter() {
 const FooterContainer = styled.footer`
   border-radius: 5px;
   clear: both;
-  background-color: #231f20;
   margin-bottom: 80px;
   height: 60px;
   padding: 0 20px;

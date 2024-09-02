@@ -1,58 +1,66 @@
 .App {
-    margin: 0 auto;
-    max-width: 1546px;
+  margin: 0 auto;
+  max-width: 1546px;
 }
 
 @font-face {
-    font-family: "Proxima Nova";
-    src: url("./font/ProximaNovaLight.eot");
-    src: url("./font/ProximaNovaLight.eot?#iefix") format("embedded-opentype"), url("./font/ProximaNovaLight.woff") format("woff"), url("./font/ProximaNovaLight.ttf") format("truetype"), url("./font/ProximaNovaLight.svg#ProximaNovaLight") format("svg");
-    font-weight: 300;
-    font-style: normal
+  font-family: 'Proxima Nova';
+  src: url('./font/ProximaNovaLight.eot');
+  src:
+    url('./font/ProximaNovaLight.eot?#iefix') format('embedded-opentype'),
+    url('./font/ProximaNovaLight.woff') format('woff'),
+    url('./font/ProximaNovaLight.ttf') format('truetype'),
+    url('./font/ProximaNovaLight.svg#ProximaNovaLight') format('svg');
+  font-weight: 300;
+  font-style: normal;
 }
 
 @font-face {
-    font-family: "Proxima Nova";
-    src: url("./font/ProximaNovaBold.eot");
-    src: url("./font/ProximaNovaBold.eot?#iefix") format("embedded-opentype"), url("./font/ProximaNovaBold.woff") format("woff"), url("./font/ProximaNovaBold.ttf") format("truetype"), url("./font/ProximaNovaBold.svg#ProximaNovaBold") format("svg");
-    font-weight: 700;
-    font-style: normal
+  font-family: 'Proxima Nova';
+  src: url('./font/ProximaNovaBold.eot');
+  src:
+    url('./font/ProximaNovaBold.eot?#iefix') format('embedded-opentype'),
+    url('./font/ProximaNovaBold.woff') format('woff'),
+    url('./font/ProximaNovaBold.ttf') format('truetype'),
+    url('./font/ProximaNovaBold.svg#ProximaNovaBold') format('svg');
+  font-weight: 700;
+  font-style: normal;
 }
 
 .App-header {
-    padding: 10px;
-    background-color: #1d2123;
-    margin-bottom: 25px;
+  padding: 10px;
+  background-color: #1d2123;
+  margin-bottom: 25px;
 }
 
 .App-header .logo {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    left: 20px;
-    top: 20px;
-    text-transform: uppercase;
-    font-family: "Proxima Nova", serif;
-    font-size: 2.93333em;
-    font-weight: 700;
-    line-height: 60px;
-    color: white;
-    display: flex;
-    padding: 10px;
-    text-decoration: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  left: 20px;
+  top: 20px;
+  text-transform: uppercase;
+  font-family: 'Proxima Nova', serif;
+  font-size: 2.93333em;
+  font-weight: 700;
+  line-height: 60px;
+  color: white;
+  display: flex;
+  padding: 10px;
+  text-decoration: none;
 }
 
 .App-header .logo img {
-    margin-right: 10px;
+  margin-right: 10px;
 }
 
 #header .logo .turquoise {
-    font-weight: 300;
+  font-weight: 300;
 }
 
 .turquoise {
-    color: #00e4ac;
+  color: #00e4ac;
 }
 
 .App-link {
-    color: #61dafb;
+  color: #61dafb;
 }
