@@ -1,0 +1,35 @@
+{
+  "name": "@gamedevpl/sword2sword",
+  "homepage": "https://www.gamedev.pl/games/sword2sword/",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Grzegorz Tańczyk",
+  "license": "MIT",
+  "description": "Sword skirmish game",
+  "scripts": {
+    "start": "vite",
+    "build": "tsc && vite build"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d": "^0.14.0",
+    "@fontsource/press-start-2p": "^5.0.21",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-helmet": "^6.1.11",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
+    "@use-gesture/react": "^10.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.9.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-helmet": "^6.1.0",
+    "react-router-dom": "^6.26.1",
+    "react-use": "^17.5.1",
+    "styled-components": "^6.1.13",
+    "three": "^0.168.0",
+    "typescript": "^5.5.4",
+    "vite-plugin-checker": "^0.7.2",
+    "vite-plugin-wasm": "^3.3.0"
+  }
+}

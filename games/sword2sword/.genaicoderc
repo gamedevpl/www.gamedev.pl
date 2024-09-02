@@ -1,0 +1,14 @@
+{
+  "rootDir": ".",
+  "ignorePaths": [
+    "build",
+    "node_modules",
+    "package-lock.json"
+  ],
+  "lintCommand": "npm run build",
+  "importantContext": {
+    "files": [
+      "design/initial_design.md"
+    ]
+  }
+}
