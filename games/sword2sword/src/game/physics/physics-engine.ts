@@ -6,7 +6,7 @@ import {
   ARENA_SIZE,
   WALL_HEIGHT,
   WALL_THICKNESS,
-} from '../shared/geometry-definitions';
+} from '../renderer/geometry-definitions';
 
 export class PhysicsEngine {
   private world: RAPIER.World;
@@ -48,7 +48,8 @@ export class PhysicsEngine {
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(character.position.x, character.position.y, character.position.z)
       .setLinearDamping(0.2)
-      .setAngularDamping(0.5);
+      .setAngularDamping(0.5)
+      .lockRotations();
     const rigidBody = this.world.createRigidBody(bodyDesc);
     const colliderDesc = RAPIER.ColliderDesc.capsule(CHARACTER_HEIGHT / 2 - CHARACTER_RADIUS, CHARACTER_RADIUS);
     this.world.createCollider(colliderDesc, rigidBody);

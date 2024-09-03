@@ -12,7 +12,7 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const rendererRef = useRef<Renderer | null>(null);
-  const inputQueueRef = useRef<GameInput[]>([]);
+  const inputRef = useRef<GameInput>({ playerIndex: 0, input: { actionEnabled: {} } });
   const lastUpdateTimeRef = useRef<number>(0);
 
   useEffect(() => {
@@ -36,70 +36,53 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
       const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Convert to seconds
       lastUpdateTimeRef.current = time;
 
-      const inputs = [...inputQueueRef.current]; // Copy the input queue
-      inputQueueRef.current.splice(0, inputQueueRef.current.length); // Clear the queue after consuming inputs
-
-      const updatedBattleState = updateBattle(
-        battleState,
-        deltaTime,
-        inputs,
-      );
+      const updatedBattleState = updateBattle(battleState, deltaTime, inputRef.current);
       setBattleState(updatedBattleState);
       rendererRef.current.render(updatedBattleState);
     }
   });
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (battleState) {
-        const input: GameInput = { playerIndex: 0, input: { action: CharacterAction.NONE } };
+    const handler = (enabled: boolean) => (event: KeyboardEvent) => {
+      const input = inputRef.current.input;
 
-        switch (event.key) {
-          case 'w':
-          case 'ArrowUp':
-            input.input.action = CharacterAction.MOVE_FORWARD;
-            break;
-          case 's':
-          case 'ArrowDown':
-            input.input.action = CharacterAction.MOVE_BACKWARD;
-            break;
-          case 'a':
-          case 'ArrowLeft':
-            input.input.action = CharacterAction.MOVE_LEFT;
-            break;
-          case 'd':
-          case 'ArrowRight':
-            input.input.action = CharacterAction.MOVE_RIGHT;
-            break;
-          case ' ':
-            input.input.action = CharacterAction.JUMP;
-            break;
-          case 'q':
-            input.input.action = CharacterAction.ROTATE_LEFT;
-            break;
-          case 'e':
-            input.input.action = CharacterAction.ROTATE_RIGHT;
-            break;
-          case 'f':
-            input.input.action = CharacterAction.ATTACK;
-            break;
-          case 'r':
-            input.input.action = CharacterAction.BLOCK;
-            break;
-        }
-
-        if (input.input.action !== CharacterAction.NONE) {
-          inputQueueRef.current.push(input);
-        }
+      switch (event.key) {
+        case 'w':
+        case 'ArrowUp':
+          input.actionEnabled[CharacterAction.MOVE_UP] = enabled;
+          break;
+        case 's':
+        case 'ArrowDown':
+          input.actionEnabled[CharacterAction.MOVE_DOWN] = enabled;
+          break;
+        case 'a':
+        case 'ArrowLeft':
+          input.actionEnabled[CharacterAction.MOVE_LEFT] = enabled;
+          break;
+        case 'd':
+        case 'ArrowRight':
+          input.actionEnabled[CharacterAction.MOVE_RIGHT] = enabled;
+          break;
+        case ' ':
+          input.actionEnabled[CharacterAction.JUMP] = enabled;
+          break;
+        case 'q':
+          input.actionEnabled[CharacterAction.ROTATE_LEFT] = enabled;
+          break;
+        case 'e':
+          input.actionEnabled[CharacterAction.ROTATE_RIGHT] = enabled;
+          break;
+        case 'f':
+          input.actionEnabled[CharacterAction.ATTACK] = enabled;
+          break;
+        case 'r':
+          input.actionEnabled[CharacterAction.BLOCK] = enabled;
+          break;
       }
     };
 
-    const handleKeyUp = () => {
-      if (battleState) {
-        const input: GameInput = { playerIndex: 0, input: { action: CharacterAction.NONE } };
-        inputQueueRef.current.push(input);
-      }
-    };
+    const handleKeyDown = handler(true);
+    const handleKeyUp = handler(false);
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);

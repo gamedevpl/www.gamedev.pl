@@ -1,6 +1,6 @@
-import { BattleState, CharacterState, CharacterAction, GameInput, Position, Rotation } from './battle-types';
+import { BattleState, CharacterState, CharacterAction, GameInput, Position } from './battle-types';
 import { PhysicsEngine } from '../physics/physics-engine';
-import { ARENA_SIZE, CHARACTER_HEIGHT } from '../shared/geometry-definitions';
+import { ARENA_SIZE, CHARACTER_HEIGHT } from '../renderer/geometry-definitions';
 
 const MOVE_SPEED = 2;
 const JUMP_FORCE = 5;
@@ -32,10 +32,11 @@ export async function initializeBattleState(): Promise<BattleState> {
   };
 }
 
-export function updateBattle(battleState: BattleState, timeDelta: number, inputs: GameInput[]): BattleState {
+export function updateBattle(battleState: BattleState, timeDelta: number, characterInput: GameInput): BattleState {
   const updatedCharacters = battleState.characters.map((character, index) => {
-    const characterInput = inputs.find((input) => input.playerIndex === index);
-    return updateCharacter(character, characterInput?.input.action, index, timeDelta);
+    return index === characterInput.playerIndex
+      ? updateCharacter(character, characterInput.input.actionEnabled, index, timeDelta)
+      : character;
   });
 
   physicsEngine.step(timeDelta);
@@ -56,53 +57,40 @@ export function updateBattle(battleState: BattleState, timeDelta: number, inputs
 
 function updateCharacter(
   character: CharacterState,
-  input: CharacterAction | undefined,
+  input: Partial<Record<CharacterAction, boolean | undefined>>,
   index: number,
   timeDelta: number,
 ): CharacterState {
-  const physicsObject = physicsEngine.getCharacterPhysics(index);
-  let velocity = physicsObject.velocity;
-  const rotation = physicsObject.rotation;
+  let velocity = { x: 0, y: 0, z: 0 };
 
-  if (input !== undefined) {
-    const forward = calculateForwardVector(rotation);
-    const right = calculateRightVector(rotation);
-
-    switch (input) {
-      case CharacterAction.MOVE_FORWARD:
-        velocity.x += forward.x * MOVE_SPEED * timeDelta;
-        velocity.z += forward.z * MOVE_SPEED * timeDelta;
-        break;
-      case CharacterAction.MOVE_BACKWARD:
-        velocity.x -= forward.x * MOVE_SPEED * timeDelta;
-        velocity.z -= forward.z * MOVE_SPEED * timeDelta;
-        break;
-      case CharacterAction.MOVE_LEFT:
-        velocity.x -= right.x * MOVE_SPEED * timeDelta;
-        velocity.z -= right.z * MOVE_SPEED * timeDelta;
-        break;
-      case CharacterAction.MOVE_RIGHT:
-        velocity.x += right.x * MOVE_SPEED * timeDelta;
-        velocity.z += right.z * MOVE_SPEED * timeDelta;
-        break;
-      case CharacterAction.JUMP:
-        if (physicsEngine.isCharacterGrounded(index)) {
-          velocity.y = JUMP_FORCE;
-        }
-        break;
-      case CharacterAction.ROTATE_LEFT:
-        physicsEngine.setCharacterAngularVelocity(index, { x: 0, y: -Math.PI, z: 0 });
-        break;
-      case CharacterAction.ROTATE_RIGHT:
-        physicsEngine.setCharacterAngularVelocity(index, { x: 0, y: Math.PI * timeDelta, z: 0 });
-        break;
-      case CharacterAction.ATTACK:
-        character.isAttacking = true;
-        break;
-      case CharacterAction.BLOCK:
-        character.isBlocking = true;
-        break;
+  if (input[CharacterAction.MOVE_UP]) {
+    velocity.z = -MOVE_SPEED;
+  }
+  if (input[CharacterAction.MOVE_DOWN]) {
+    velocity.z = MOVE_SPEED;
+  }
+  if (input[CharacterAction.MOVE_LEFT]) {
+    velocity.x = -MOVE_SPEED;
+  }
+  if (input[CharacterAction.MOVE_RIGHT]) {
+    velocity.x = MOVE_SPEED;
+  }
+  if (input[CharacterAction.JUMP]) {
+    if (physicsEngine.isCharacterGrounded(index)) {
+      velocity.y = JUMP_FORCE;
     }
+  }
+  if (input[CharacterAction.ROTATE_LEFT]) {
+    physicsEngine.setCharacterAngularVelocity(index, { x: 0, y: -Math.PI * timeDelta, z: 0 });
+  }
+  if (input[CharacterAction.ROTATE_RIGHT]) {
+    physicsEngine.setCharacterAngularVelocity(index, { x: 0, y: Math.PI * timeDelta, z: 0 });
+  }
+  if (input[CharacterAction.ATTACK]) {
+    character.isAttacking = true;
+  }
+  if (input[CharacterAction.BLOCK]) {
+    character.isBlocking = true;
   }
 
   physicsEngine.setCharacterVelocity(index, velocity);
@@ -110,8 +98,8 @@ function updateCharacter(
   return {
     ...character,
     isJumping: !physicsEngine.isCharacterGrounded(index),
-    isAttacking: input === CharacterAction.ATTACK ? true : false,
-    isBlocking: input === CharacterAction.BLOCK ? true : false,
+    isAttacking: input[CharacterAction.ATTACK] ?? false,
+    isBlocking: input[CharacterAction.BLOCK] ?? false,
   };
 }
 
@@ -129,21 +117,5 @@ function createCharacter(position: Position): CharacterState {
       shield: false,
       sword: true,
     },
-  };
-}
-
-function calculateForwardVector(rotation: Rotation): Position {
-  return {
-    x: Math.sin(rotation.y),
-    y: 0,
-    z: Math.cos(rotation.y),
-  };
-}
-
-function calculateRightVector(rotation: Rotation): Position {
-  return {
-    x: Math.cos(rotation.y),
-    y: 0,
-    z: -Math.sin(rotation.y),
   };
 }

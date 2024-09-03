@@ -29,8 +29,8 @@ export type BattleState = {
 
 export enum CharacterAction {
   NONE,
-  MOVE_FORWARD,
-  MOVE_BACKWARD,
+  MOVE_UP,
+  MOVE_DOWN,
   MOVE_LEFT,
   MOVE_RIGHT,
   ROTATE_LEFT,
@@ -42,7 +42,7 @@ export enum CharacterAction {
 }
 
 export type CharacterInput = {
-  action: CharacterAction;
+  actionEnabled: Partial<Record<CharacterAction, boolean>>;
   intensity?: number; // For analog inputs like gamepad sticks
 };
 

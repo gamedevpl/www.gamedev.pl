@@ -1,10 +1,6 @@
 import * as THREE from 'three';
 import { BattleState, CharacterState } from '../battle-state/battle-types';
-import {
-  createCharacterThreeGeometry,
-  createArenaThreeGeometry,
-  ARENA_SIZE
-} from '../shared/geometry-definitions';
+import { createCharacterThreeGeometry, createArenaThreeGeometry, ARENA_SIZE } from './geometry-definitions';
 
 export class Renderer {
   private renderer: THREE.WebGLRenderer;
@@ -18,7 +14,7 @@ export class Renderer {
     this.renderer.setSize(width, height);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+    this.scene.background = new THREE.Color(0x87ceeb); // Sky blue background
 
     this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     this.camera.position.set(0, ARENA_SIZE, ARENA_SIZE);
@@ -74,7 +70,7 @@ export class Renderer {
 
   private createCharacterMesh(index: number): THREE.Object3D {
     const characterMesh = createCharacterThreeGeometry();
-    
+
     // Apply player-specific color
     const bodyMesh = characterMesh.children[0] as THREE.Mesh;
     (bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(index === 0 ? 0xff0000 : 0x0000ff);
