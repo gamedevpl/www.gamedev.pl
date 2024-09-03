@@ -8,17 +8,23 @@ import {
   WALL_THICKNESS,
 } from '../renderer/geometry-definitions';
 
+const GROUND_CHECK_TOLERANCE = 0.1; // Tolerance for ground check in meters
+
 export class PhysicsEngine {
   private world: RAPIER.World;
   private characters: Map<number, RAPIER.RigidBody> = new Map();
   private arena: RAPIER.RigidBody;
+  private arenaCollider: RAPIER.Collider;
 
   constructor(gravity: number) {
     this.world = new RAPIER.World(new RAPIER.Vector3(0, gravity, 0));
     const arenaBody = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
 
     // Floor
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(ARENA_SIZE / 2, 0.1, ARENA_SIZE / 2), arenaBody);
+    this.arenaCollider = this.world.createCollider(
+      RAPIER.ColliderDesc.cuboid(ARENA_SIZE / 2, 0.1, ARENA_SIZE / 2),
+      arenaBody,
+    );
 
     // Walls
     const wallDesc = RAPIER.ColliderDesc.cuboid(ARENA_SIZE / 2, WALL_HEIGHT / 2, WALL_THICKNESS / 2);
@@ -101,7 +107,14 @@ export class PhysicsEngine {
   setCharacterVelocity(index: number, velocity: Position) {
     const body = this.characters.get(index);
     if (body) {
-      body.setLinvel(new RAPIER.Vector3(velocity.x, velocity.y, velocity.z), true);
+      body.setLinvel(new RAPIER.Vector3(velocity.x, body.linvel().y, velocity.z), true);
+    }
+  }
+
+  addCharacterImpulse(index: number, impulse: RAPIER.Vector) {
+    const body = this.characters.get(index);
+    if (body) {
+      body.applyImpulse(impulse, true);
     }
   }
 
@@ -117,8 +130,21 @@ export class PhysicsEngine {
     if (body) {
       const position = body.translation();
       const ray = new RAPIER.Ray(position, new RAPIER.Vector3(0, -1, 0));
-      const hit = this.world.castRay(ray, 0.6, true);
-      return hit !== null;
+      const maxToi = CHARACTER_HEIGHT / 2 + GROUND_CHECK_TOLERANCE;
+      const hit = this.world.castRayAndGetNormal(
+        ray,
+        maxToi,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        (colider) => colider === this.arenaCollider,
+      );
+
+      if (hit) {
+        return true;
+      }
     }
     return false;
   }

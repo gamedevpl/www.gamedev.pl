@@ -63,22 +63,23 @@ function updateCharacter(
 ): CharacterState {
   let velocity = { x: 0, y: 0, z: 0 };
 
-  if (input[CharacterAction.MOVE_UP]) {
-    velocity.z = -MOVE_SPEED;
-  }
-  if (input[CharacterAction.MOVE_DOWN]) {
-    velocity.z = MOVE_SPEED;
-  }
-  if (input[CharacterAction.MOVE_LEFT]) {
-    velocity.x = -MOVE_SPEED;
-  }
-  if (input[CharacterAction.MOVE_RIGHT]) {
-    velocity.x = MOVE_SPEED;
-  }
-  if (input[CharacterAction.JUMP]) {
-    if (physicsEngine.isCharacterGrounded(index)) {
-      velocity.y = JUMP_FORCE;
+  if (physicsEngine.isCharacterGrounded(index)) {
+    if (input[CharacterAction.MOVE_UP]) {
+      velocity.z = -MOVE_SPEED;
     }
+    if (input[CharacterAction.MOVE_DOWN]) {
+      velocity.z = MOVE_SPEED;
+    }
+    if (input[CharacterAction.MOVE_LEFT]) {
+      velocity.x = -MOVE_SPEED;
+    }
+    if (input[CharacterAction.MOVE_RIGHT]) {
+      velocity.x = MOVE_SPEED;
+    }
+    if (input[CharacterAction.JUMP]) {
+      physicsEngine.addCharacterImpulse(index, { x: 0, y: JUMP_FORCE / 10, z: 0 });
+    }
+    physicsEngine.setCharacterVelocity(index, velocity);
   }
   if (input[CharacterAction.ROTATE_LEFT]) {
     physicsEngine.setCharacterAngularVelocity(index, { x: 0, y: -Math.PI * timeDelta, z: 0 });
@@ -92,8 +93,6 @@ function updateCharacter(
   if (input[CharacterAction.BLOCK]) {
     character.isBlocking = true;
   }
-
-  physicsEngine.setCharacterVelocity(index, velocity);
 
   return {
     ...character,
