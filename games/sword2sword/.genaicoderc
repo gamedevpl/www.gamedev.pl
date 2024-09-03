@@ -8,7 +8,13 @@
   "lintCommand": "npm run build",
   "importantContext": {
     "files": [
-      "design/initial_design.md"
+      "design/initial_design.md",
+      "node_modules/@dimforge/rapier3d/pipeline/world.d.ts",
+      "node_modules/@dimforge/rapier3d/math.d.ts",
+      "node_modules/@dimforge/rapier3d/dynamics/rigid_body.d.ts"
+    ],
+    "textPrompts": [
+      "There is no init method in RAPIER"
     ]
   }
 }
