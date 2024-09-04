@@ -4,7 +4,7 @@ import { IntroScreen } from './components/intro-screen';
 import { GameScreen } from './components/game-screen';
 import { GameOverScreen } from './components/game-over-screen';
 
-enum GameState {
+enum Component {
   INTRO,
   PLAYING,
   GAME_OVER,
@@ -20,21 +20,21 @@ const AppContainer = styled.div`
 `;
 
 export function Sword2SwordApp() {
-  const [gameState, setGameState] = useState<GameState>(GameState.INTRO);
+  const [component, setComponent] = useState<Component>(Component.INTRO);
 
   const startGame = () => {
-    setGameState(GameState.PLAYING);
+    setComponent(Component.PLAYING);
   };
 
   const restartGame = () => {
-    setGameState(GameState.PLAYING);
+    setComponent(Component.PLAYING);
   };
 
   return (
     <AppContainer>
-      {gameState === GameState.INTRO && <IntroScreen onStart={startGame} />}
-      {gameState === GameState.PLAYING && <GameScreen />}
-      {gameState === GameState.GAME_OVER && <GameOverScreen onRestart={restartGame} />}
+      {component === Component.INTRO && <IntroScreen onStart={startGame} />}
+      {component === Component.PLAYING && <GameScreen />}
+      {component === Component.GAME_OVER && <GameOverScreen onRestart={restartGame} />}
     </AppContainer>
   );
 }
