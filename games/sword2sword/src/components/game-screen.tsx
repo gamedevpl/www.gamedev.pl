@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { useRafLoop } from 'react-use';
 import { GameState, GameInput, WarriorAction } from '../game/game-state/game-state-types';
 import { updateGameState, initGameState } from '../game/game-state/game-state-update';
 import { renderGameState } from '../game/renderer/renderer';
+import { usePixiApp } from '../game/renderer/hooks';
 
 interface GameScreenProps {}
 
@@ -14,18 +15,25 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
   const inputRef = useRef<GameInput>({ playerIndex: 0, input: { actionEnabled: {} } });
   const lastUpdateTimeRef = useRef<number>(0);
 
-  useRafLoop((time) => {
-    if (gameState && canvasRef.current && lastUpdateTimeRef.current) {
-      const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Convert to seconds
+  const { app, loading } = usePixiApp(canvasRef);
 
-      const updatedBattleState = updateGameState(gameState, deltaTime, inputRef.current);
-      setGameState(updatedBattleState);
+  const updateAndRenderGame = useCallback(
+    (time: number) => {
+      if (lastUpdateTimeRef.current && app) {
+        const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Convert to seconds
 
-      renderGameState(canvasRef.current, gameState);
-    }
+        const updatedGameState = updateGameState(gameState, deltaTime, inputRef.current);
+        setGameState(updatedGameState);
 
-    lastUpdateTimeRef.current = time;
-  });
+        renderGameState(app, updatedGameState);
+      }
+
+      lastUpdateTimeRef.current = time;
+    },
+    [gameState, app, loading],
+  );
+
+  useRafLoop(updateAndRenderGame, !!app && !loading);
 
   useEffect(() => {
     const handler = (enabled: boolean) => (event: KeyboardEvent) => {
@@ -60,6 +68,7 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
         const { clientWidth, clientHeight } = containerRef.current;
         canvasRef.current.width = clientWidth;
         canvasRef.current.height = clientHeight;
+        app?.renderer?.resize(clientWidth, clientHeight);
       }
     };
 
@@ -69,7 +78,7 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
     return () => {
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, []);
+  }, [app]);
 
   return (
     <GameScreenContainer ref={containerRef}>

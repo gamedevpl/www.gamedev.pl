@@ -18,6 +18,14 @@ export type GameState = {
   warriors: WarriorState[];
 };
 
+export type Vector2D = {
+  x: number;
+  y: number;
+};
+
 export type WarriorState = {
   position: number;
+  width: number;
+  height: number;
+  velocity: Vector2D;
 };
