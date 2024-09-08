@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { useEffect, useState } from 'react';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from './renderer';
 
 export const usePixiApp = (canvasRef: React.RefObject<HTMLCanvasElement>) => {
   const [app, setApp] = useState<PIXI.Application | null>(null);
@@ -16,6 +17,8 @@ export const usePixiApp = (canvasRef: React.RefObject<HTMLCanvasElement>) => {
         view: canvasRef.current,
         resizeTo: canvasRef.current,
         backgroundColor: 0x000000,
+        width: SCREEN_WIDTH,
+        height: SCREEN_HEIGHT,
       })
       .then(() => {
         setApp(pixiApp);

@@ -20,7 +20,9 @@ const AppContainer = styled.div`
 `;
 
 export function Sword2SwordApp() {
-  const [component, setComponent] = useState<Component>(Component.INTRO);
+  const [component, setComponent] = useState<Component>(() =>
+    window.location.hash === '#play' ? Component.PLAYING : Component.INTRO,
+  );
 
   const startGame = () => {
     setComponent(Component.PLAYING);

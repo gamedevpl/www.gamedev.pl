@@ -1,25 +1,24 @@
-import * as RAPIER from '@dimforge/rapier2d';
-import { PhysicsState } from './physics-types';
+import * as Matter from 'matter-js';
+import { PhysicsState, WarriorPhysicsBody } from './physics-types';
 import { GameInput, WarriorAction } from '../game-state/game-state-types';
 
-const MOVEMENT_FORCE = 5000; // Adjust this value to control the strength of warrior movement
+const MOVEMENT_FORCE = 0.05; // Adjust this value to control the strength of warrior movement
 
 export function updatePhysicsState(physicsState: PhysicsState, timeDelta: number, gameInput: GameInput): PhysicsState {
   // Apply input actions
-  applyWarriorActions(physicsState, gameInput);
+  applyWarriorActions(physicsState.warriorBodies, gameInput);
 
-  // Perform step
-  physicsState.world.timestep = timeDelta;
-  physicsState.world.step();
+  // Update physics simulation
+  Matter.Engine.update(physicsState.engine, timeDelta * 1000);
 
-  //   // Apply additional physics logic
-  //   handleCollisionsAndPushing(physicsState);
-
-  return physicsState;
+  // Wrap the updated Matter.js engine back to our custom PhysicsState
+  return {
+    ...physicsState,
+  };
 }
 
-function applyWarriorActions(physicsState: PhysicsState, gameInput: GameInput) {
-  const warriorBody = physicsState.warriorBodies[gameInput.playerIndex];
+function applyWarriorActions(warriorBodies: WarriorPhysicsBody[], gameInput: GameInput) {
+  const warriorBody = warriorBodies[gameInput.playerIndex];
   if (!warriorBody) return;
 
   let forceX = 0;
@@ -31,5 +30,12 @@ function applyWarriorActions(physicsState: PhysicsState, gameInput: GameInput) {
     forceX += MOVEMENT_FORCE;
   }
 
-  warriorBody.applyImpulse(new RAPIER.Vector2(forceX, 0), true);
+  // Apply movement force to the body
+  Matter.Body.applyForce(warriorBody.body, warriorBody.body.position, { x: forceX, y: 0 });
+}
+
+// Function to update joint constraints (if needed in the future)
+export function updateJointConstraints(_warriorBody: WarriorPhysicsBody) {
+  // This function is left empty for now, as we don't have complex joints in the simplified version
+  // You can implement it later if needed
 }

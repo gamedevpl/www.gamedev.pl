@@ -1,18 +1,28 @@
-import * as RAPIER from '@dimforge/rapier2d';
-import { PhysicsState, PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from './physics-types';
+import * as Matter from 'matter-js';
+import {
+  PhysicsState,
+  PhysicsConfig,
+  DEFAULT_PHYSICS_CONFIG,
+  WarriorPhysicsBody,
+  createBodyPart,
+  Body,
+} from './physics-types';
 import { GameState, WarriorState } from '../game-state/game-state-types';
 
-export function gameStateToPhysicsState(gameState: GameState, config: PhysicsConfig = DEFAULT_PHYSICS_CONFIG): PhysicsState {
-  const gravity = new RAPIER.Vector2(0.0, config.gravity);
-  const world = new RAPIER.World(gravity);
+export function initPhysicsState(gameState: GameState, config: PhysicsConfig = DEFAULT_PHYSICS_CONFIG): PhysicsState {
+  const engine = Matter.Engine.create({
+    gravity: config.gravity,
+  });
+  const world = engine.world;
 
   // Create arena barriers
   const arenaBarriers = createArenaBarriers(world, config);
 
   // Create warrior bodies
-  const warriorBodies = gameState.warriors.map(warrior => createWarriorBody(world, warrior, config));
+  const warriorBodies = gameState.warriors.map((warrior) => createWarriorBody(world, warrior, config));
 
   return {
+    engine,
     world,
     sourceGameState: gameState,
     warriorBodies,
@@ -20,54 +30,77 @@ export function gameStateToPhysicsState(gameState: GameState, config: PhysicsCon
   };
 }
 
-function createArenaBarriers(world: RAPIER.World, config: PhysicsConfig): RAPIER.Collider[] {
-  const groundDesc = RAPIER.ColliderDesc.cuboid(config.arenaWidth / 2, 0.1);
-  const ground = world.createCollider(groundDesc);
+function createArenaBarriers(world: Matter.World, config: PhysicsConfig): Body[] {
+  const arenaVertices = [
+    { x: 0, y: 0 },
+    { x: config.arenaWidth, y: 0 },
+    { x: config.arenaWidth, y: 50 },
+    { x: 0, y: 50 },
+  ];
+  const ground = Matter.Bodies.fromVertices(config.arenaWidth / 2, config.arenaHeight - 25, [arenaVertices], {
+    isStatic: true,
+    label: 'ground',
+  });
 
-  const leftWallDesc = RAPIER.ColliderDesc.cuboid(0.1, config.arenaHeight / 2);
-  const leftWall = world.createCollider(leftWallDesc);
-  leftWall.setTranslation(new RAPIER.Vector2(0, config.arenaHeight / 2));
+  Matter.Composite.add(world, [ground]);
 
-  const rightWallDesc = RAPIER.ColliderDesc.cuboid(0.1, config.arenaHeight / 2);
-  const rightWall = world.createCollider(rightWallDesc);
-  rightWall.setTranslation(new RAPIER.Vector2(config.arenaWidth, config.arenaHeight / 2));
-
-  return [ground, leftWall, rightWall];
+  return [ground];
 }
 
-function createWarriorBody(world: RAPIER.World, warrior: WarriorState, config: PhysicsConfig): RAPIER.RigidBody {
-  const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-    .setTranslation(warrior.position, config.arenaHeight - warrior.height / 2)
-    .setLinearDamping(config.linearDamping);
+function createWarriorBody(world: Matter.World, warrior: WarriorState, config: PhysicsConfig): WarriorPhysicsBody {
+  const bodyVertices = [
+    { x: -20, y: -50 },
+    { x: 20, y: -50 },
+    { x: 20, y: 50 },
+    { x: -20, y: 50 },
+  ];
 
-  const body = world.createRigidBody(bodyDesc);
+  const body = createBodyPart(bodyVertices, {
+    mass: config.warriorMass,
+    friction: config.warriorFriction,
+    restitution: config.warriorRestitution,
+    label: 'warrior',
+  });
 
-  const colliderDesc = RAPIER.ColliderDesc.cuboid(warrior.width / 2, warrior.height / 2)
-    .setDensity(config.warriorMass / (warrior.width * warrior.height))
-    .setFriction(config.warriorFriction)
-    .setRestitution(config.warriorRestitution);
+  Matter.Body.setPosition(body, warrior.position);
 
-  world.createCollider(colliderDesc, body);
+  const composite = Matter.Composite.create();
+  Matter.Composite.add(composite, [body]);
+  Matter.Composite.add(world, composite);
 
-  return body;
+  return {
+    body,
+    composite,
+  };
+}
+
+export function updatePhysicsState(physicsState: PhysicsState, gameState: GameState): PhysicsState {
+  // Update warrior bodies
+  physicsState.warriorBodies.forEach((warriorBody, index) => {
+    updateWarriorBody(warriorBody, gameState.warriors[index]);
+  });
+
+  // Update source game state
+  physicsState.sourceGameState = gameState;
+
+  return physicsState;
+}
+
+function updateWarriorBody(warriorBody: WarriorPhysicsBody, warriorState: WarriorState) {
+  Matter.Body.setPosition(warriorBody.body, warriorState.position);
 }
 
 export function physicsStateToGameState(physicsState: PhysicsState): GameState {
-  const updatedWarriors = physicsState.warriorBodies.map((body, index) => {
-    const position = body.translation();
-    const velocity = body.linvel();
+  const updatedWarriors = physicsState.warriorBodies.map((warriorBody, index) => {
     const originalWarrior = physicsState.sourceGameState.warriors[index];
 
-    return {
+    const newWarrior: WarriorState = {
       ...originalWarrior,
-      position: position.x,
-      height: originalWarrior.height,
-      width: originalWarrior.width,
-      velocity: {
-        x: velocity.x,
-        y: velocity.y,
-      },
+      position: warriorBody.body.position,
+      vertices: warriorBody.body.vertices,
     };
+
+    return newWarrior;
   });
 
   return {

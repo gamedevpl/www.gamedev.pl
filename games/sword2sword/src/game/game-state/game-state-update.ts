@@ -1,31 +1,42 @@
-import { GameState, GameInput } from './game-state-types';
+import { GameState, GameInput, WarriorState, Vector2D, WarriorAction } from './game-state-types';
+import { PhysicsState } from '../physics/physics-types';
 import { updatePhysicsState } from '../physics/physics-update';
-import { gameStateToPhysicsState, physicsStateToGameState } from '../physics/physics-convert';
+import { physicsStateToGameState } from '../physics/physics-convert';
+
+export const ARENA_WIDTH = 800;
+export const ARENA_HEIGHT = 600;
+export const WARRIOR_WIDTH = 40;
+export const WARRIOR_HEIGHT = 100;
 
 export function initGameState(): GameState {
   return {
-    warriors: [
-      {
-        position: 100, // Starting position for the first warrior
-        width: 50, // Width of the warrior rectangle
-        height: 100, // Height of the warrior rectangle
-        velocity: { x: 0, y: 0 },
-      },
-      {
-        position: 300, // Starting position for the second warrior
-        width: 50, // Width of the warrior rectangle
-        height: 100, // Height of the warrior rectangle
-        velocity: { x: 0, y: 0 },
-      },
-    ],
+    warriors: [createWarrior({ x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 })],
     time: 0,
   };
 }
 
-export function updateGameState(gameState: GameState, timeDelta: number, characterInput: GameInput): GameState {
-  // Convert game state to physics state
-  const physicsState = gameStateToPhysicsState(gameState);
+function createWarrior(position: Vector2D): WarriorState {
+  return {
+    position: position,
+    vertices: [],
+  };
+}
 
+const UPDATE_ITERATION = 0.016;
+
+export function updateGameState(physicsState: PhysicsState, timeDelta: number, characterInput: GameInput): GameState {
+  let updatedGameState = physicsStateToGameState(physicsState);
+
+  while (timeDelta > 0) {
+    const iterationTimeDelta = Math.min(timeDelta, UPDATE_ITERATION);
+    updatedGameState = updateGameStateIteration(physicsState, iterationTimeDelta, characterInput);
+    timeDelta -= UPDATE_ITERATION;
+  }
+
+  return updatedGameState;
+}
+
+function updateGameStateIteration(physicsState: PhysicsState, timeDelta: number, characterInput: GameInput): GameState {
   // Update physics state
   const updatedPhysicsState = updatePhysicsState(physicsState, timeDelta, characterInput);
 
@@ -36,4 +47,17 @@ export function updateGameState(gameState: GameState, timeDelta: number, charact
   updatedGameState.time += timeDelta;
 
   return updatedGameState;
+}
+
+// Helper function to apply warrior actions
+export function applyWarriorActions(warriorState: WarriorState, input: GameInput['input']): WarriorState {
+  const updatedWarrior = { ...warriorState };
+
+  if (input.actionEnabled[WarriorAction.MOVE_LEFT]) {
+    updatedWarrior.position.x += -5;
+  } else if (input.actionEnabled[WarriorAction.MOVE_RIGHT]) {
+    updatedWarrior.position.x += 5;
+  }
+
+  return updatedWarrior;
 }

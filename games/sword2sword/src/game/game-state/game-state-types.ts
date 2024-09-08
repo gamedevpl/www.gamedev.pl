@@ -13,19 +13,17 @@ export type GameInput = {
   input: WarriorInput;
 };
 
-export type GameState = {
-  time: number;
-  warriors: WarriorState[];
-};
-
 export type Vector2D = {
   x: number;
   y: number;
 };
 
 export type WarriorState = {
-  position: number;
-  width: number;
-  height: number;
-  velocity: Vector2D;
+  position: Vector2D;
+  vertices: Vector2D[];
+};
+
+export type GameState = {
+  time: number;
+  warriors: WarriorState[];
 };
