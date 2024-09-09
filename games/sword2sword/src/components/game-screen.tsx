@@ -11,7 +11,7 @@ import {
   SCREEN_HEIGHT,
 } from '../game/renderer/renderer';
 import { usePixiApp } from '../game/renderer/hooks';
-import { initPhysicsState, updatePhysicsState } from '../game/physics/physics-convert';
+import { initPhysicsState } from '../game/physics/physics-convert';
 import { PhysicsState } from '../game/physics/physics-types';
 import { renderPhysicsDebug } from '../game/renderer/physics-debug-renderer';
 
@@ -41,12 +41,10 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
       if (lastUpdateTimeRef.current && app && !loading && physicsStateRef.current) {
         const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Convert to seconds
 
-        const updatedPhysicsState = updatePhysicsState(physicsStateRef.current, gameState);
-        const updatedGameState = updateGameState(updatedPhysicsState, deltaTime, inputRef.current);
+        const updatedGameState = updateGameState(physicsStateRef.current, deltaTime, inputRef.current);
         setGameState(updatedGameState);
 
         // Update physics state reference
-        physicsStateRef.current = updatedPhysicsState;
 
         renderGameState(app, updatedGameState);
 

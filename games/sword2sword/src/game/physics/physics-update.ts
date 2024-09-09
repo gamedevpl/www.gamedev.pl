@@ -1,20 +1,19 @@
-import * as Matter from 'matter-js';
+import * as planck from 'planck';
 import { PhysicsState, WarriorPhysicsBody } from './physics-types';
 import { GameInput, WarriorAction } from '../game-state/game-state-types';
 
-const MOVEMENT_FORCE = 0.05; // Adjust this value to control the strength of warrior movement
+const MOVEMENT_FORCE = 500; // Adjust this value to control the strength of warrior movement
+const VELOCITY_ITERATIONS = 8;
+const POSITION_ITERATIONS = 3;
 
 export function updatePhysicsState(physicsState: PhysicsState, timeDelta: number, gameInput: GameInput): PhysicsState {
   // Apply input actions
   applyWarriorActions(physicsState.warriorBodies, gameInput);
 
   // Update physics simulation
-  Matter.Engine.update(physicsState.engine, timeDelta * 1000);
+  physicsState.world.step(timeDelta, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
 
-  // Wrap the updated Matter.js engine back to our custom PhysicsState
-  return {
-    ...physicsState,
-  };
+  return physicsState;
 }
 
 function applyWarriorActions(warriorBodies: WarriorPhysicsBody[], gameInput: GameInput) {
@@ -31,11 +30,7 @@ function applyWarriorActions(warriorBodies: WarriorPhysicsBody[], gameInput: Gam
   }
 
   // Apply movement force to the body
-  Matter.Body.applyForce(warriorBody.body, warriorBody.body.position, { x: forceX, y: 0 });
-}
-
-// Function to update joint constraints (if needed in the future)
-export function updateJointConstraints(_warriorBody: WarriorPhysicsBody) {
-  // This function is left empty for now, as we don't have complex joints in the simplified version
-  // You can implement it later if needed
+  const force = planck.Vec2(0, forceX);
+  warriorBody.sword.applyLinearImpulse(force, { x: 0, y: 0 }, true);
+  //   warriorBody.joint.setMotorSpeed(forceX);
 }

@@ -19,10 +19,11 @@ function createWarrior(position: Vector2D): WarriorState {
   return {
     position: position,
     vertices: [],
+    sword: [], // Initialize sword as an empty array of Vector2D objects
   };
 }
 
-const UPDATE_ITERATION = 0.016;
+const UPDATE_ITERATION = 1 / 60; // 60 Hz update rate
 
 export function updateGameState(physicsState: PhysicsState, timeDelta: number, characterInput: GameInput): GameState {
   let updatedGameState = physicsStateToGameState(physicsState);
@@ -45,6 +46,8 @@ function updateGameStateIteration(physicsState: PhysicsState, timeDelta: number,
 
   // Update time
   updatedGameState.time += timeDelta;
+
+  physicsState.sourceGameState = updatedGameState;
 
   return updatedGameState;
 }

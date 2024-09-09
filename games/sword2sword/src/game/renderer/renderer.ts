@@ -7,6 +7,7 @@ export const SCREEN_HEIGHT = 600;
 // Add color constants
 const GROUND_COLOR = 0x3a5f0b; // Dark green for the ground
 const WARRIOR_COLOR = 0xff0000; // Red for the warrior
+const SWORD_COLOR = 0xc0c0c0; // Silver for the sword
 
 let gameContainer: PIXI.Container;
 let arena: PIXI.Container;
@@ -57,24 +58,51 @@ function createWarrior(): PIXI.Container {
   const warrior = new PIXI.Container();
 
   const body = new PIXI.Graphics();
-  body.beginFill(WARRIOR_COLOR);
-  body.poly([]);
-  body.endFill();
   body.name = 'body';
   warrior.addChild(body);
+
+  const sword = new PIXI.Graphics();
+  sword.name = 'sword';
+  warrior.addChild(sword);
 
   return warrior;
 }
 
 function updateWarrior(warriorContainer: PIXI.Container, warriorState: WarriorState) {
-  warriorContainer.removeChildAt(0);
+  const body = warriorContainer.getChildByName('body') as PIXI.Graphics;
+  const sword = warriorContainer.getChildByName('sword') as PIXI.Graphics;
 
-  const body = new PIXI.Graphics();
+  // Clear previous drawings
+  body.clear();
+  sword.clear();
+
+  // Draw new body shape based on vertices
   body.beginFill(WARRIOR_COLOR);
-  body.poly(warriorState.vertices.flatMap(({ x, y }) => [x, y]));
+  if (warriorState.vertices.length > 0) {
+    body.moveTo(warriorState.vertices[0].x, warriorState.vertices[0].y);
+    for (let i = 1; i < warriorState.vertices.length; i++) {
+      body.lineTo(warriorState.vertices[i].x, warriorState.vertices[i].y);
+    }
+    body.closePath();
+  } else {
+    // Fallback to default rectangle if no vertices
+    body.drawRect(-20, -50, 40, 100);
+  }
   body.endFill();
-  body.name = 'body';
-  warriorContainer.addChild(body);
+
+  // Draw new sword shape based on vertices
+  sword.beginFill(SWORD_COLOR);
+  if (warriorState.sword.length > 0) {
+    sword.moveTo(warriorState.sword[0].x, warriorState.sword[0].y);
+    for (let i = 1; i < warriorState.sword.length; i++) {
+      sword.lineTo(warriorState.sword[i].x, warriorState.sword[i].y);
+    }
+    sword.closePath();
+  } else {
+    // Fallback to default rectangle if no vertices
+    sword.drawRect(0, 0, 20, 20);
+  }
+  sword.endFill();
 }
 
 // Function to clean up renderer resources

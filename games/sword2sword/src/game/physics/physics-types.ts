@@ -1,49 +1,54 @@
-import * as Matter from 'matter-js';
+import * as planck from 'planck';
 import { GameState } from '../game-state/game-state-types';
 
-export type Vector2D = Matter.Vector;
+export type Vector2D = planck.Vec2;
 
-export type Body = Matter.Body;
+export type Body = planck.Body;
 
-export type Composite = Matter.Composite;
+export type Joint = planck.Joint;
 
-export type World = Matter.World;
-
-export type Engine = Matter.Engine;
+export type World = planck.World;
 
 export type PhysicsState = {
-  engine: Engine;
   world: World;
   sourceGameState: GameState;
   warriorBodies: WarriorPhysicsBody[];
-  arenaBarriers: Body[];
+  arenaFixtures: Body[];
 };
 
 export type WarriorPhysicsBody = {
   body: Body;
-  composite: Composite;
+  sword: Body;
+  joint: planck.RevoluteJoint;
 };
 
 export type PhysicsConfig = {
   arenaWidth: number;
   arenaHeight: number;
   gravity: Vector2D;
-  warriorMass: number;
+  warriorDensity: number;
   warriorFriction: number;
   warriorRestitution: number;
-  swordMass: number;
+  swordDensity: number;
 };
 
 export const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
   arenaWidth: 800,
   arenaHeight: 600,
-  gravity: { x: 0, y: 1 },
-  warriorMass: 70,
-  warriorFriction: 0.1,
+  gravity: planck.Vec2(0, 10),
+  warriorDensity: 1,
+  warriorFriction: 0.3,
   warriorRestitution: 0.2,
-  swordMass: 2,
+  swordDensity: 0.8,
 };
 
-export function createBodyPart(vertices: Matter.Vector[], options: Matter.IBodyDefinition): Body {
-  return Matter.Bodies.fromVertices(0, 0, [vertices], options);
+export function createBodyPart(world: World, vertices: planck.Vec2[], options: planck.BodyDef): Body {
+  const body = world.createBody(options);
+  body.createFixture({
+    shape: planck.Polygon(vertices),
+    density: options.type === 'dynamic' ? 1 : 0,
+    friction: 0.3,
+    restitution: 0.2,
+  });
+  return body;
 }

@@ -21,6 +21,7 @@ export type Vector2D = {
 export type WarriorState = {
   position: Vector2D;
   vertices: Vector2D[];
+  sword: Vector2D[];  // New property for sword vertices
 };
 
 export type GameState = {
