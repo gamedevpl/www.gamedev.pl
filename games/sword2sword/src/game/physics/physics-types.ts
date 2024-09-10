@@ -17,9 +17,39 @@ export type PhysicsState = {
 };
 
 export type WarriorPhysicsBody = {
-  body: Body;
+  torso: Body;
+  neck: Body;
+  head: Body;
+  leftUpperArm: Body;
+  leftForearm: Body;
+  leftHand: Body;
+  rightUpperArm: Body;
+  rightForearm: Body;
+  rightHand: Body;
+  leftThigh: Body;
+  leftCalf: Body;
+  leftFoot: Body;
+  rightThigh: Body;
+  rightCalf: Body;
+  rightFoot: Body;
   sword: Body;
-  joint: planck.RevoluteJoint;
+  joints: {
+    head: planck.RevoluteJoint;
+    neck: planck.RevoluteJoint;
+    leftShoulder: planck.RevoluteJoint;
+    rightShoulder: planck.RevoluteJoint;
+    leftElbow: planck.RevoluteJoint;
+    rightElbow: planck.RevoluteJoint;
+    leftWrist: planck.RevoluteJoint;
+    rightWrist: planck.RevoluteJoint;
+    leftHip: planck.RevoluteJoint;
+    rightHip: planck.RevoluteJoint;
+    leftKnee: planck.RevoluteJoint;
+    rightKnee: planck.RevoluteJoint;
+    leftAnkle: planck.RevoluteJoint;
+    rightAnkle: planck.RevoluteJoint;
+    swordJoint: planck.RevoluteJoint;
+  };
 };
 
 export type PhysicsConfig = {

@@ -1,14 +1,7 @@
 import * as planck from 'planck';
-import {
-  PhysicsState,
-  PhysicsConfig,
-  DEFAULT_PHYSICS_CONFIG,
-  WarriorPhysicsBody,
-  createBodyPart,
-  Body,
-  World,
-} from './physics-types';
-import { GameState, WarriorState } from '../game-state/game-state-types';
+import { PhysicsState, PhysicsConfig, DEFAULT_PHYSICS_CONFIG, Body, World } from './physics-types';
+import { GameState, WarriorState, Vector2D, JointState } from '../game-state/game-state-types';
+import { createWarriorBody } from './warrior-body';
 
 export function initPhysicsState(gameState: GameState, config: PhysicsConfig = DEFAULT_PHYSICS_CONFIG): PhysicsState {
   const world = new planck.World(config.gravity);
@@ -17,7 +10,7 @@ export function initPhysicsState(gameState: GameState, config: PhysicsConfig = D
   const arenaFixtures = createArenaBarriers(world, config);
 
   // Create warrior bodies
-  const warriorBodies = gameState.warriors.map((warrior) => createWarriorBody(world, warrior, config));
+  const warriorBodies = gameState.warriors.map(warrior => createWarriorBody(world, warrior.position));
 
   return {
     world,
@@ -42,53 +35,48 @@ function createArenaBarriers(world: World, config: PhysicsConfig): Body[] {
   return [groundBody];
 }
 
-function createWarriorBody(world: World, warrior: WarriorState, _config: PhysicsConfig): WarriorPhysicsBody {
-  const bodyVertices = [planck.Vec2(-20, -50), planck.Vec2(20, -50), planck.Vec2(20, 50), planck.Vec2(-20, 50)];
-
-  const body = createBodyPart(world, bodyVertices, {
-    type: 'dynamic',
-    position: planck.Vec2(warrior.position.x, warrior.position.y),
-    fixedRotation: false,
-  });
-
-  const swordVertices = [planck.Vec2(0, 0), planck.Vec2(10, 0), planck.Vec2(10, 80), planck.Vec2(0, 80)];
-
-  const sword = createBodyPart(world, swordVertices, {
-    type: 'dynamic',
-    position: planck.Vec2(warrior.position.x - 20, warrior.position.y - 50),
-  });
-
-  const joint = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        // lowerAngle: -0.25 * Math.PI,
-        // upperAngle: 0.25 * Math.PI,
-        // enableLimit: true,
-        // enableMotor: true,
-      },
-      body,
-      sword,
-      body.getWorldPoint(planck.Vec2(-20, -50)),
-    ),
-  )!;
-
-  return {
-    body,
-    sword,
-    joint,
-  };
-}
-
 export function physicsStateToGameState(physicsState: PhysicsState): GameState {
   const updatedWarriors = physicsState.warriorBodies.map((warriorBody, index) => {
     const originalWarrior = physicsState.sourceGameState.warriors[index];
-    const position = warriorBody.body.getPosition();
 
     const newWarrior: WarriorState = {
-      ...originalWarrior,
-      position: { x: position.x, y: position.y },
-      vertices: getBodyVertices(warriorBody.body),
-      sword: getBodyVertices(warriorBody.sword), // Add sword vertices
+      position: getBodyPartState(warriorBody.torso).position,
+      torso: getBodyPartState(warriorBody.torso),
+      neck: getBodyPartState(warriorBody.neck),
+      head: getBodyPartState(warriorBody.head),
+      leftUpperArm: getBodyPartState(warriorBody.leftUpperArm),
+      leftForearm: getBodyPartState(warriorBody.leftForearm),
+      leftHand: getBodyPartState(warriorBody.leftHand),
+      rightUpperArm: getBodyPartState(warriorBody.rightUpperArm),
+      rightForearm: getBodyPartState(warriorBody.rightForearm),
+      rightHand: getBodyPartState(warriorBody.rightHand),
+      leftThigh: getBodyPartState(warriorBody.leftThigh),
+      leftCalf: getBodyPartState(warriorBody.leftCalf),
+      leftFoot: getBodyPartState(warriorBody.leftFoot),
+      rightThigh: getBodyPartState(warriorBody.rightThigh),
+      rightCalf: getBodyPartState(warriorBody.rightCalf),
+      rightFoot: getBodyPartState(warriorBody.rightFoot),
+      sword: {
+        ...getBodyPartState(warriorBody.sword),
+        attachedTo: originalWarrior.sword.attachedTo,
+      },
+      joints: {
+        neck: getJointState(warriorBody.joints.neck),
+        head: getJointState(warriorBody.joints.head),
+        leftShoulder: getJointState(warriorBody.joints.leftShoulder),
+        leftElbow: getJointState(warriorBody.joints.leftElbow),
+        leftWrist: getJointState(warriorBody.joints.leftWrist),
+        rightShoulder: getJointState(warriorBody.joints.rightShoulder),
+        rightElbow: getJointState(warriorBody.joints.rightElbow),
+        rightWrist: getJointState(warriorBody.joints.rightWrist),
+        leftHip: getJointState(warriorBody.joints.leftHip),
+        leftKnee: getJointState(warriorBody.joints.leftKnee),
+        leftAnkle: getJointState(warriorBody.joints.leftAnkle),
+        rightHip: getJointState(warriorBody.joints.rightHip),
+        rightKnee: getJointState(warriorBody.joints.rightKnee),
+        rightAnkle: getJointState(warriorBody.joints.rightAnkle),
+        swordJoint: getJointState(warriorBody.joints.swordJoint),
+      },
     };
 
     return newWarrior;
@@ -100,8 +88,16 @@ export function physicsStateToGameState(physicsState: PhysicsState): GameState {
   };
 }
 
-function getBodyVertices(body: Body): { x: number; y: number }[] {
-  const vertices: { x: number; y: number }[] = [];
+function getBodyPartState(body: Body): { position: Vector2D; vertices: Vector2D[] } {
+  const position = body.getPosition();
+  return {
+    position: { x: position.x, y: position.y },
+    vertices: getBodyVertices(body),
+  };
+}
+
+function getBodyVertices(body: Body): Vector2D[] {
+  const vertices: Vector2D[] = [];
   for (let fixture = body.getFixtureList(); fixture; fixture = fixture.getNext()) {
     const shape = fixture.getShape();
     if (shape.getType() === 'polygon') {
@@ -113,4 +109,16 @@ function getBodyVertices(body: Body): { x: number; y: number }[] {
     }
   }
   return vertices;
+}
+
+function getJointState(joint: planck.RevoluteJoint): JointState {
+  return {
+    angle: joint.getJointAngle(),
+    anchorA: vecToVector2D(joint.getAnchorA()),
+    anchorB: vecToVector2D(joint.getAnchorB()),
+  };
+}
+
+function vecToVector2D(vec: planck.Vec2): Vector2D {
+  return { x: vec.x, y: vec.y };
 }
