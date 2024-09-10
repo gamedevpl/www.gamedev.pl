@@ -1,6 +1,7 @@
 import * as planck from 'planck';
-import { PhysicsState, WarriorPhysicsBody, World } from './physics-types';
+import { WarriorPhysicsBody, World } from './physics-types';
 import { Vector2D } from '../game-state/game-state-types';
+import { createBodyPart, createRevoluteJoint } from './physics-utils';
 
 const HEAD_SIZE = 20;
 const NECK_LENGTH = HEAD_SIZE * 0.3;
@@ -12,15 +13,21 @@ const HAND_SIZE = HEAD_SIZE * 0.4;
 const LEG_LENGTH = HEAD_SIZE * 2;
 
 export function createWarriorBody(world: World, initialPosition: Vector2D): WarriorPhysicsBody {
-  const torso = createTorso(world, initialPosition);
-  const head = createHead(
-    world,
-    planck.Vec2(initialPosition.x, initialPosition.y - TORSO_HEIGHT / 2 - HEAD_SIZE / 2 - NECK_LENGTH),
-  );
-  const neck = createNeck(
-    world,
-    planck.Vec2(initialPosition.x, initialPosition.y - TORSO_HEIGHT / 2 - NECK_LENGTH / 2),
-  );
+  const torso = createBodyPart(world, planck.Box(TORSO_WIDTH / 2, TORSO_HEIGHT / 2), {
+    type: 'dynamic',
+    position: planck.Vec2(initialPosition.x, initialPosition.y),
+  });
+
+  const head = createBodyPart(world, planck.Box(HEAD_SIZE / 2, HEAD_SIZE / 2), {
+    type: 'dynamic',
+    position: planck.Vec2(initialPosition.x, initialPosition.y - TORSO_HEIGHT / 2 - HEAD_SIZE / 2 - NECK_LENGTH),
+  });
+
+  const neck = createBodyPart(world, planck.Box(HEAD_SIZE / 4, NECK_LENGTH / 2), {
+    type: 'dynamic',
+    position: planck.Vec2(initialPosition.x, initialPosition.y - TORSO_HEIGHT / 2 - NECK_LENGTH / 2),
+  });
+
   const leftArm = createArm(
     world,
     planck.Vec2(initialPosition.x - TORSO_WIDTH / 2 - ARM_WIDTH / 2, initialPosition.y - TORSO_HEIGHT / 4),
@@ -31,7 +38,16 @@ export function createWarriorBody(world: World, initialPosition: Vector2D): Warr
   );
   const leftLeg = createLeg(world, planck.Vec2(initialPosition.x - TORSO_WIDTH / 4, initialPosition.y + TORSO_HEIGHT));
   const rightLeg = createLeg(world, planck.Vec2(initialPosition.x + TORSO_WIDTH / 4, initialPosition.y + TORSO_HEIGHT));
-  const sword = createSword(world, planck.Vec2(initialPosition.x + TORSO_WIDTH / 2 + ARM_WIDTH / 2, initialPosition.y));
+
+  const sword = createBodyPart(
+    world,
+    planck.Box(HEAD_SIZE * 0.1, HEAD_SIZE * 2),
+    {
+      type: 'dynamic',
+      position: planck.Vec2(initialPosition.x + TORSO_WIDTH / 2 + ARM_WIDTH / 2, initialPosition.y),
+    },
+    { density: 0.8 },
+  );
 
   const joints = createJoints(world, torso, head, neck, leftArm, rightArm, leftLeg, rightLeg, sword);
 
@@ -67,344 +83,167 @@ function createJoints(
   rightLeg: ReturnType<typeof createLeg>,
   sword: planck.Body,
 ): WarriorPhysicsBody['joints'] {
-  const neckJoint = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.25 * Math.PI,
-        upperAngle: 0.25 * Math.PI,
-        enableLimit: true,
-      },
+  return {
+    neck: createRevoluteJoint(
+      world,
       torso,
       neck,
       torso.getWorldPoint(planck.Vec2(0, -TORSO_HEIGHT / 2)),
+      -0.25 * Math.PI,
+      0.25 * Math.PI,
     ),
-  )!;
-
-  const headJoint = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.25 * Math.PI,
-        upperAngle: 0.25 * Math.PI,
-        enableLimit: true,
-      },
+    head: createRevoluteJoint(
+      world,
       neck,
       head,
       neck.getWorldPoint(planck.Vec2(0, -NECK_LENGTH / 2)),
+      -0.25 * Math.PI,
+      0.25 * Math.PI,
     ),
-  )!;
-
-  const leftShoulder = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    leftShoulder: createRevoluteJoint(
+      world,
       torso,
       leftArm.upperArm,
       torso.getWorldPoint(planck.Vec2(-TORSO_WIDTH / 2, -TORSO_HEIGHT / 2 + ARM_WIDTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const leftElbow = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: 0,
-        upperAngle: 0.75 * Math.PI,
-        enableLimit: true,
-      },
+    leftElbow: createRevoluteJoint(
+      world,
       leftArm.upperArm,
       leftArm.forearm,
       leftArm.upperArm.getWorldPoint(planck.Vec2(0, ARM_LENGTH / 2)),
+      0,
+      0.75 * Math.PI,
     ),
-  )!;
-
-  const leftWrist = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    leftWrist: createRevoluteJoint(
+      world,
       leftArm.forearm,
       leftArm.hand,
       leftArm.forearm.getWorldPoint(planck.Vec2(0, ARM_LENGTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const rightShoulder = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    rightShoulder: createRevoluteJoint(
+      world,
       torso,
       rightArm.upperArm,
       torso.getWorldPoint(planck.Vec2(TORSO_WIDTH / 2, -TORSO_HEIGHT / 2 + ARM_WIDTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const rightElbow = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.75 * Math.PI,
-        upperAngle: 0,
-        enableLimit: true,
-      },
+    rightElbow: createRevoluteJoint(
+      world,
       rightArm.upperArm,
       rightArm.forearm,
       rightArm.upperArm.getWorldPoint(planck.Vec2(0, ARM_LENGTH / 2)),
+      -0.75 * Math.PI,
+      0,
     ),
-  )!;
-
-  const rightWrist = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    rightWrist: createRevoluteJoint(
+      world,
       rightArm.forearm,
       rightArm.hand,
       rightArm.forearm.getWorldPoint(planck.Vec2(0, ARM_LENGTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const leftHip = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    leftHip: createRevoluteJoint(
+      world,
       torso,
       leftLeg.thigh,
       torso.getWorldPoint(planck.Vec2(-TORSO_WIDTH / 4, TORSO_HEIGHT / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const leftKnee = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: 0,
-        upperAngle: 0.75 * Math.PI,
-        enableLimit: true,
-      },
+    leftKnee: createRevoluteJoint(
+      world,
       leftLeg.thigh,
       leftLeg.calf,
       leftLeg.thigh.getWorldPoint(planck.Vec2(0, LEG_LENGTH / 2)),
+      0,
+      0.75 * Math.PI,
     ),
-  )!;
-
-  const leftAnkle = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    leftAnkle: createRevoluteJoint(
+      world,
       leftLeg.calf,
       leftLeg.foot,
       leftLeg.calf.getWorldPoint(planck.Vec2(0, LEG_LENGTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const rightHip = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    rightHip: createRevoluteJoint(
+      world,
       torso,
       rightLeg.thigh,
       torso.getWorldPoint(planck.Vec2(TORSO_WIDTH / 4, TORSO_HEIGHT / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const rightKnee = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: 0,
-        upperAngle: 0.75 * Math.PI,
-        enableLimit: true,
-      },
+    rightKnee: createRevoluteJoint(
+      world,
       rightLeg.thigh,
       rightLeg.calf,
       rightLeg.thigh.getWorldPoint(planck.Vec2(0, LEG_LENGTH / 2)),
+      0,
+      0.75 * Math.PI,
     ),
-  )!;
-
-  const rightAnkle = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.5 * Math.PI,
-        upperAngle: 0.5 * Math.PI,
-        enableLimit: true,
-      },
+    rightAnkle: createRevoluteJoint(
+      world,
       rightLeg.calf,
       rightLeg.foot,
       rightLeg.calf.getWorldPoint(planck.Vec2(0, LEG_LENGTH / 2)),
+      -0.5 * Math.PI,
+      0.5 * Math.PI,
     ),
-  )!;
-
-  const swordJoint = world.createJoint(
-    planck.RevoluteJoint(
-      {
-        lowerAngle: -0.75 * Math.PI,
-        upperAngle: 0.75 * Math.PI,
-        enableLimit: true,
-      },
+    swordJoint: createRevoluteJoint(
+      world,
       rightArm.hand,
       sword,
       rightArm.hand.getWorldPoint(planck.Vec2(HAND_SIZE / 2, 0)),
+      -0.75 * Math.PI,
+      0.75 * Math.PI,
     ),
-  )!;
-
-  return {
-    neck: neckJoint,
-    head: headJoint,
-    leftShoulder,
-    leftElbow,
-    leftWrist,
-    rightShoulder,
-    rightElbow,
-    rightWrist,
-    leftHip,
-    leftKnee,
-    leftAnkle,
-    rightHip,
-    rightKnee,
-    rightAnkle,
-    swordJoint,
   };
-}
-
-export function updateWarriorPhysics(physicsState: PhysicsState): PhysicsState {
-  // TODO: Implement physics update logic
-  return physicsState;
-}
-
-function createTorso(world: World, position: Vector2D): planck.Body {
-  const body = world.createBody({
-    type: 'dynamic',
-    position: planck.Vec2(position.x, position.y),
-  });
-  body.createFixture(planck.Box(TORSO_WIDTH / 2, TORSO_HEIGHT / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
-  return body;
-}
-
-function createHead(world: World, position: Vector2D): planck.Body {
-  const body = world.createBody({
-    type: 'dynamic',
-    position: planck.Vec2(position.x, position.y),
-  });
-  body.createFixture(planck.Box(HEAD_SIZE / 2, HEAD_SIZE / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
-  return body;
-}
-
-function createNeck(world: World, position: Vector2D): planck.Body {
-  const body = world.createBody({
-    type: 'dynamic',
-    position: planck.Vec2(position.x, position.y),
-  });
-  body.createFixture(planck.Box(HEAD_SIZE / 4, NECK_LENGTH / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
-  return body;
 }
 
 function createArm(
   world: World,
   position: Vector2D,
 ): { upperArm: planck.Body; forearm: planck.Body; hand: planck.Body } {
-  const upperArm = world.createBody({
+  const upperArm = createBodyPart(world, planck.Box(ARM_WIDTH / 2, ARM_LENGTH / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x, position.y),
   });
-  upperArm.createFixture(planck.Box(ARM_WIDTH / 2, ARM_LENGTH / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
 
-  const forearm = world.createBody({
+  const forearm = createBodyPart(world, planck.Box(ARM_WIDTH / 2, ARM_LENGTH / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x, position.y + ARM_LENGTH),
   });
-  forearm.createFixture(planck.Box(ARM_WIDTH / 2, ARM_LENGTH / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
 
-  const hand = world.createBody({
+  const hand = createBodyPart(world, planck.Box(HAND_SIZE / 2, HAND_SIZE / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x, position.y + ARM_LENGTH * 1.5),
-  });
-  hand.createFixture(planck.Box(HAND_SIZE / 2, HAND_SIZE / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
   });
 
   return { upperArm, forearm, hand };
 }
 
 function createLeg(world: World, position: Vector2D): { thigh: planck.Body; calf: planck.Body; foot: planck.Body } {
-  const thigh = world.createBody({
+  const thigh = createBodyPart(world, planck.Box(ARM_WIDTH / 2, LEG_LENGTH / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x, position.y),
   });
-  thigh.createFixture(planck.Box(ARM_WIDTH / 2, LEG_LENGTH / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
 
-  const calf = world.createBody({
+  const calf = createBodyPart(world, planck.Box(ARM_WIDTH / 2, LEG_LENGTH / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x, position.y + LEG_LENGTH),
   });
-  calf.createFixture(planck.Box(ARM_WIDTH / 2, LEG_LENGTH / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
 
-  const foot = world.createBody({
+  const foot = createBodyPart(world, planck.Box(HAND_SIZE * 1.5, HAND_SIZE / 2), {
     type: 'dynamic',
     position: planck.Vec2(position.x + HAND_SIZE, position.y + LEG_LENGTH * 1.5),
   });
-  foot.createFixture(planck.Box(HAND_SIZE * 1.5, HAND_SIZE / 2), {
-    density: 1,
-    friction: 0.3,
-    restitution: 0,
-  });
 
   return { thigh, calf, foot };
-}
-
-function createSword(world: World, position: Vector2D): planck.Body {
-  const body = world.createBody({
-    type: 'dynamic',
-    position: planck.Vec2(position.x, position.y),
-  });
-  body.createFixture(planck.Box(HEAD_SIZE * 0.1, HEAD_SIZE * 2), {
-    density: 0.8,
-    friction: 0.3,
-    restitution: 0,
-  });
-  return body;
 }
