@@ -10,7 +10,10 @@ export const WARRIOR_HEIGHT = 180; // Updated based on new proportions (9 * HEAD
 
 export function initGameState(): GameState {
   return {
-    warriors: [createWarrior({ x: ARENA_WIDTH / 2, y: ARENA_HEIGHT - WARRIOR_HEIGHT })],
+    warriors: [
+      createWarrior({ x: ARENA_WIDTH / 3, y: ARENA_HEIGHT - WARRIOR_HEIGHT }),
+      createWarrior({ x: (ARENA_WIDTH / 3) * 2, y: ARENA_HEIGHT - WARRIOR_HEIGHT }),
+    ],
     time: 0,
   };
 }
@@ -83,12 +86,12 @@ function createDefaultJointState(): JointState {
   };
 }
 
-const UPDATE_ITERATION = 1 / 30; // 60 Hz update rate
+const UPDATE_ITERATION = 1 / 60; // 60 Hz update rate
 
 export function updateGameState(physicsState: PhysicsState, timeDelta: number, characterInput: GameInput): GameState {
   let updatedGameState = physicsStateToGameState(physicsState);
 
-  while (timeDelta > 0) {
+  while (timeDelta >= UPDATE_ITERATION) {
     const iterationTimeDelta = Math.min(timeDelta, UPDATE_ITERATION);
     updatedGameState = updateGameStateIteration(physicsState, iterationTimeDelta, characterInput);
     timeDelta -= UPDATE_ITERATION;

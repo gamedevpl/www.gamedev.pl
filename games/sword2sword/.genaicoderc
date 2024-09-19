@@ -8,7 +8,8 @@
   "lintCommand": "npm run build",
   "importantContext": {
     "files": [
-      "design/initial_design.md"
+      "design/initial_design.md",
+      "design/balance_control.md"
     ],
     "textPrompts": []
   }

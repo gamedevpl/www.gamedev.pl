@@ -39,7 +39,7 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
   const updateAndRenderGame = useCallback(
     (time: number) => {
       if (lastUpdateTimeRef.current && app && !loading && physicsStateRef.current) {
-        const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Convert to seconds
+        const deltaTime = (time - lastUpdateTimeRef.current) / 500; // Convert to seconds
 
         const updatedGameState = updateGameState(physicsStateRef.current, deltaTime, inputRef.current);
         setGameState(updatedGameState);
@@ -72,6 +72,14 @@ export const GameScreen: React.FC<GameScreenProps> = () => {
         case 'd':
         case 'ArrowRight':
           input.actionEnabled[WarriorAction.MOVE_RIGHT] = enabled;
+          break;
+        case 'w':
+        case 'ArrowUp':
+          input.actionEnabled[WarriorAction.SWORD_UP] = enabled;
+          break;
+        case 's':
+        case 'ArrowDown':
+          input.actionEnabled[WarriorAction.SWORD_DOWN] = enabled;
           break;
         case 'q':
           if (event.type === 'keyup') {

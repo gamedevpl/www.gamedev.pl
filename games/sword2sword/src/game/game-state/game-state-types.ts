@@ -2,6 +2,8 @@ export enum WarriorAction {
   NONE,
   MOVE_LEFT,
   MOVE_RIGHT,
+  SWORD_UP,
+  SWORD_DOWN,
 }
 
 export type WarriorInput = {

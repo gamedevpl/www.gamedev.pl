@@ -3,14 +3,14 @@ import { WarriorPhysicsBody, World } from './physics-types';
 import { Vector2D } from '../game-state/game-state-types';
 import { createBodyPart, createRevoluteJoint } from './physics-utils';
 
-const HEAD_SIZE = 20;
-const NECK_LENGTH = HEAD_SIZE * 0.3;
-const TORSO_WIDTH = HEAD_SIZE * 1.5;
-const TORSO_HEIGHT = HEAD_SIZE * 2.5;
-const ARM_WIDTH = HEAD_SIZE * 0.4;
-const ARM_LENGTH = HEAD_SIZE * 1.5;
-const HAND_SIZE = HEAD_SIZE * 0.4;
-const LEG_LENGTH = HEAD_SIZE * 2;
+export const HEAD_SIZE = 20;
+export const NECK_LENGTH = HEAD_SIZE * 0.3;
+export const TORSO_WIDTH = HEAD_SIZE * 1.5;
+export const TORSO_HEIGHT = HEAD_SIZE * 2.5;
+export const ARM_WIDTH = HEAD_SIZE * 0.4;
+export const ARM_LENGTH = HEAD_SIZE * 1.5;
+export const HAND_SIZE = HEAD_SIZE * 0.4;
+export const LEG_LENGTH = HEAD_SIZE * 2;
 
 export function createWarriorBody(world: World, initialPosition: Vector2D): WarriorPhysicsBody {
   const torso = createBodyPart(world, planck.Box(TORSO_WIDTH / 2, TORSO_HEIGHT / 2), {
@@ -41,12 +41,12 @@ export function createWarriorBody(world: World, initialPosition: Vector2D): Warr
 
   const sword = createBodyPart(
     world,
-    planck.Box(HEAD_SIZE * 0.1, HEAD_SIZE * 2),
+    planck.Box(HEAD_SIZE * 0.1, HEAD_SIZE * 2.5),
     {
       type: 'dynamic',
       position: planck.Vec2(initialPosition.x + TORSO_WIDTH / 2 + ARM_WIDTH / 2, initialPosition.y),
     },
-    { density: 0.8 },
+    { density: 2 },
   );
 
   const joints = createJoints(world, torso, head, neck, leftArm, rightArm, leftLeg, rightLeg, sword);
