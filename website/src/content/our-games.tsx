@@ -4,6 +4,7 @@ import styled from 'styled-components';
 
 import nukesHighlight from '../assets/nukes-highlight.png';
 import monsterStepsHighlight from '../assets/monster-steps-highlight.png';
+import masterplanHighlight from '../assets/masterplan-highlight.png';
 
 export default function OurGames() {
   const { t } = useTranslation();
@@ -22,6 +23,13 @@ export default function OurGames() {
         description={t('Turowa gra logiczna')}
         highlight={monsterStepsHighlight}
         href={'/games/monster-steps/'}
+        inProgress={false}
+      />
+      <GameBox
+        title={t('MasterPlan')}
+        description={t('Offline multiplayer strategy game')}
+        highlight={masterplanHighlight}
+        href={'/games/masterplan/'}
         inProgress={true}
       />
     </Section>
