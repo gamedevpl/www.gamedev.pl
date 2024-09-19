@@ -1,0 +1,42 @@
+@import 'game-intro.css';
+@import 'game-hud.css';
+@import 'designer.css';
+
+html {
+  font-family: sans-serif;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  background: radial-gradient(ellipse at center, #30c530 0%, #30c530 64%, #138c13 100%);
+}
+
+body input,
+body button {
+  font-size: 16px;
+}
+
+body > canvas {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  pointer-events: none;
+}
+
+canvas#layer-default {
+  background: radial-gradient(ellipse at center, #30c530 0%, #30c530 64%, #138c13 100%);
+  z-index: 1;
+}
+
+canvas#layer-water {
+  z-index: 0;
+}
+
+body > img {
+  display: none;
+  visibility: hidden;
+}

@@ -1,0 +1,92 @@
+#game-designer:not(.visible) {
+    display: none;
+}
+
+#game-designer {
+    width: 800px;
+    margin: 0 auto;    
+
+    padding: 10 20;
+    background: #99cccc;
+    box-shadow: -1px -7px 20px 2px #00000075;   
+}
+
+#battle-versus:not(:empty) {
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px 20px;
+    color: white;
+}
+
+#game-designer h3, #game-designer h2, #game-designer p {
+    margin-top: 5px;
+    margin-bottom: 0px;
+}
+
+#designer-field {
+    background: rgb(0, 200, 0);
+    border: 2px solid rgba(0, 100, 0);
+    position: relative;
+    transform: scale(0.5);
+    transform-origin: top left;
+    margin-bottom: -400px;
+}
+
+#designer-field:not(.select) ~ .designer-unit-option {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+#designer-commands, #designer-formation, #designer-actions, #designer-unit-type {
+    display: inline-block;
+}
+
+#designer-actions {
+    float: right;
+    background: rgba(0,0,0,0.25);
+    padding: 10px;
+}
+
+#designer-field.drag {
+    cursor: move;
+}
+
+#designer-field.drag .field-unit {
+    pointer-events: none;
+}
+
+.field-unit {
+    background: rgba(255, 0, 0, 0.5);
+    position: absolute;
+}
+
+.field-unit.drag {
+    opacity: 0.5;    
+}
+
+.field-unit.select {
+    border: 1px solid orange;
+}
+
+.field-unit:not(.select):not(.drag) {
+    cursor: pointer;
+}
+
+.field-unit[data-command]:after {
+    display: block;
+    content: attr(data-command);
+    position: absolute;
+    color: white;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 2px;
+}
+
+.field-unit[data-unit-type]:before {
+    content: attr(data-unit-type);
+    display: block;
+    position: absolute;
+    color: white;
+    background: rgba(0, 0, 0, 0.25);
+    margin-top: -20px;
+    padding: 2px;
+}
