@@ -27,7 +27,7 @@ export default defineConfig({
           rename: 'nukes',
         },
         {
-          src: '../games/masterplan/build',
+          src: '../games/masterplan/dist',
           dest: 'games/',
           rename: 'masterplan',
         },
