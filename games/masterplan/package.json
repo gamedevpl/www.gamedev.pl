@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "preview": "vite preview",
     "start": "vite",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0"
   },
