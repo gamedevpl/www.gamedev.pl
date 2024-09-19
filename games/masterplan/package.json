@@ -7,6 +7,8 @@
     "gulp-serve": "^1.0.0"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "eslint": "^8.54.0",
     "genaicode": "^0.2.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.6",
@@ -14,7 +16,8 @@
   },
   "scripts": {
     "build": "vite build",
-    "start": "vite"
+    "start": "vite",
+    "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "author": "gtanczyk",
   "license": "ISC"

@@ -1,107 +1,110 @@
-class DesignerUnit {
-    constructor(field, col, row, sizeCol, sizeRow, type, command) {
-        this.field = field;
+import { MAX_COL, MAX_ROW, SOLDIER_HEIGHT, SOLDIER_WIDTH } from '../consts';
 
-        this.el = document.createElement('div');
+export class DesignerUnit {
+  constructor(field, col, row, sizeCol, sizeRow, type, command) {
+    this.field = field;
 
-        this.setFormation(sizeCol, sizeRow);
-        this.el.className = "field-unit";
-        this.el.designerUnit = this;
+    this.el = document.createElement('div');
 
-        this.field.appendChild(this.el);
+    this.setFormation(sizeCol, sizeRow);
+    this.el.className = 'field-unit';
+    this.el.designerUnit = this;
 
-        this.setType(type);
-        this.setPosition(col, row);
-        this.setCommand(command);
-    }
+    this.field.appendChild(this.el);
 
-    getDefinition() {
-        return {
-            "sizeCol": this["sizeCol"],
-            "sizeRow": this["sizeRow"],
-            "col": this["col"],
-            "row": this["row"],
-            "type": this["type"],
-            "command": this["command"]
-        }
-    }
+    this.setType(type);
+    this.setPosition(col, row);
+    this.setCommand(command);
+  }
 
-    setFormation(sizeCol, sizeRow) {
-        this["sizeCol"] = sizeCol;
-        this["sizeRow"] = sizeRow;
-        this.el.style.width = this["sizeCol"] * SOLDIER_WIDTH + "px";
-        this.el.style.height = this["sizeRow"] * SOLDIER_HEIGHT + "px";
-    }
+  getDefinition() {
+    return {
+      sizeCol: this['sizeCol'],
+      sizeRow: this['sizeRow'],
+      col: this['col'],
+      row: this['row'],
+      type: this['type'],
+      command: this['command'],
+    };
+  }
 
-    setType(type) {
-        this["type"] = type;
-        this.el.dataset["unitType"] = type;
-    }
+  setFormation(sizeCol, sizeRow) {
+    this['sizeCol'] = sizeCol;
+    this['sizeRow'] = sizeRow;
+    this.el.style.width = this['sizeCol'] * SOLDIER_WIDTH + 'px';
+    this.el.style.height = this['sizeRow'] * SOLDIER_HEIGHT + 'px';
+  }
 
-    setCommand(command) {
-        this["command"] = command;
-        this.el.dataset["command"] = command;
-    }
+  setType(type) {
+    this['type'] = type;
+    this.el.dataset['unitType'] = type;
+  }
 
-    updatePosition() {
-        this.el.style.left = this["col"] * SOLDIER_WIDTH + "px";
-        this.el.style.top = this["row"] * SOLDIER_HEIGHT + "px";
-    }
+  setCommand(command) {
+    this['command'] = command;
+    this.el.dataset['command'] = command;
+  }
 
-    setPosition(col, row) {
-        this["col"] = Math.max(0, Math.min(col, MAX_COL - this["sizeCol"]));
-        this["row"] = Math.max(0, Math.min(row, MAX_ROW - this["sizeRow"]));
+  updatePosition() {
+    this.el.style.left = this['col'] * SOLDIER_WIDTH + 'px';
+    this.el.style.top = this['row'] * SOLDIER_HEIGHT + 'px';
+  }
 
-        this.updatePosition();
-    }
+  setPosition(col, row) {
+    this['col'] = Math.max(0, Math.min(col, MAX_COL - this['sizeCol']));
+    this['row'] = Math.max(0, Math.min(row, MAX_ROW - this['sizeRow']));
 
-    startDrag() {
-        this.field.classList.add("drag");
-        this.el.classList.add("drag");
-    }
+    this.updatePosition();
+  }
 
-    stopDrag() {
-        this.field.classList.remove("drag");
-        this.el.classList.remove("drag");
-    }
+  startDrag() {
+    this.field.classList.add('drag');
+    this.el.classList.add('drag');
+  }
 
-    select() {
-        this.el.classList.add("select");
-        this.field.classList.add("select");
-    }
+  stopDrag() {
+    this.field.classList.remove('drag');
+    this.el.classList.remove('drag');
+  }
 
-    deselect() {
-        this.el.classList.remove("select");
-        this.field.classList.remove("select");
-    }
-};
+  select() {
+    this.el.classList.add('select');
+    this.field.classList.add('select');
+  }
 
-DesignerUnit.of = (field, def) => new DesignerUnit(field, def["col"], def["row"], def["sizeCol"], def["sizeRow"], def["type"], def["command"]);
+  deselect() {
+    this.el.classList.remove('select');
+    this.field.classList.remove('select');
+  }
+}
+
+DesignerUnit.of = (field, def) =>
+  new DesignerUnit(field, def['col'], def['row'], def['sizeCol'], def['sizeRow'], def['type'], def['command']);
 
 DesignerUnit.types = {
-    // name -> index
-    "archer": 1,
-    "warrior": 2,
-    "tank": 3,
-    "artillery": 4,
-    // index -> name
-    1: "archer",
-    2: "warrior",
-    3: "tank",
-    4: "artillery"
+  // name -> index
+  archer: 1,
+  warrior: 2,
+  tank: 3,
+  artillery: 4,
+  // index -> name
+  1: 'archer',
+  2: 'warrior',
+  3: 'tank',
+  4: 'artillery',
 };
 
 DesignerUnit.commands = {
-    // name -> index
-    "wait-advance": 1,
-    "advance": 2,
-    "advance-wait": 3,
-    "flank-left": 4,
-    "flank-right": 5,
-    // index -> name
-    1: "wait-advance",
-    2: "advance",
-    3: "advance-wait",
-    4: "flank-left",
-    5: "flank-right"
+  // name -> index
+  'wait-advance': 1,
+  advance: 2,
+  'advance-wait': 3,
+  'flank-left': 4,
+  'flank-right': 5,
+  // index -> name
+  1: 'wait-advance',
+  2: 'advance',
+  3: 'advance-wait',
+  4: 'flank-left',
+  5: 'flank-right',
 };

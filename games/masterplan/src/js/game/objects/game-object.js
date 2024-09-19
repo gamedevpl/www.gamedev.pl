@@ -1,60 +1,56 @@
-/**
- * @constructor
- */
-function GameObject(x, y, width, height, direction) {
+export class GameObject {
+  constructor(x, y, width, height, direction) {
     this.vec = [x, y];
     this.direction = direction;
     this.objectWidth = width;
-    this.objectHeight = height;    
-}
+    this.objectHeight = height;
+  }
 
-GameObject.prototype.getTargetVelocity = function() {
-    
-};
+  getTargetVelocity() {}
 
-GameObject.prototype.update = function(deltaTime) {
-    
-};
+  update(deltaTime) {}
 
-/**
- * @param {Canvas} canvas
- */
-GameObject.prototype.render = function(canvas) {
-    canvas.save()       
-        .translate(-this.getWidth()/2, -this.getHeight()/2)
-        .fillRect(0, 0, this.getWidth(), this.getHeight())
-        .restore();
-};
+  /**
+   * @param {Canvas} canvas
+   */
+  render(canvas) {
+    canvas
+      .save()
+      .translate(-this.getWidth() / 2, -this.getHeight() / 2)
+      .fillRect(0, 0, this.getWidth(), this.getHeight())
+      .restore();
+  }
 
-GameObject.prototype.getX = function() { 
-    return this.vec[0]; 
-};
-GameObject.prototype.setX = function(x) {
-    this.vec[0] = x; 
-};
+  getX() {
+    return this.vec[0];
+  }
+  setX(x) {
+    this.vec[0] = x;
+  }
 
-GameObject.prototype.getY = function() { 
+  getY() {
     return this.vec[1];
-};
-GameObject.prototype.setY = function(y) {
+  }
+  setY(y) {
     this.vec[1] = y;
-};
+  }
 
-GameObject.prototype.getDirection = function() { 
-    return this.direction; 
-};
-GameObject.prototype.setDirection = function(direction) {
+  getDirection() {
+    return this.direction;
+  }
+  setDirection(direction) {
     this.direction = direction;
-};
-GameObject.prototype.getWidth = function() { 
-    return this.objectWidth; 
-};
-GameObject.prototype.getHeight = function() { 
+  }
+  getWidth() {
+    return this.objectWidth;
+  }
+  getHeight() {
     return this.objectHeight;
-};
-GameObject.prototype.vec = function() {
+  }
+  vec() {
     return this.vec;
-};
-GameObject.prototype.getClass = function() {
-    return "Object";
-};
+  }
+  getClass() {
+    return 'Object';
+  }
+}

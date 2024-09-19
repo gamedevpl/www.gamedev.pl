@@ -18,7 +18,7 @@
  * @author Thomas Vian
  */
 /** @constructor */
-function SfxrParams() {
+export function SfxrParams() {
     //--------------------------------------------------------------------------
     //
     //  Settings String Methods
@@ -65,7 +65,7 @@ function SfxrParams() {
  * @author Thomas Vian
  */
 /** @constructor */
-function SfxrSynth() {
+export function SfxrSynth() {
     // All variables are kept alive through function closures
 
     //--------------------------------------------------------------------------
@@ -416,7 +416,7 @@ function SfxrSynth() {
 // Adapted from http://codebase.es/riffwave/
 var synth = new SfxrSynth();
 // Export for the Closure Compiler
-window['jsfxr'] = function (settings) {
+export const jsfxr = function (settings) {
     // Initialize SfxrParams
     synth._params.setSettings(settings);
     // Synthesize Wave
@@ -450,7 +450,7 @@ window['jsfxr'] = function (settings) {
 }
 
 /** @constructor */
-function ArcadeAudio() {
+export function ArcadeAudio() {
     this.sounds = {};
 }
 
@@ -477,7 +477,7 @@ ArcadeAudio.prototype.play = function (key) {
     soundData.tick < soundData.count - 1 ? soundData.tick++ : soundData.tick = 0;
 };
 
-var aa = new ArcadeAudio();
+export const aa = new ArcadeAudio();
 
 aa.add('arrow', 10, [[0,0.13,0.12,0.21,0.28,0.7097,0.11,0.4399,,,,0.2845,0.6608,,,,,,1,,,,,0.32]]);
 aa.add('hitarrow', 10, [[2,,0.0664,,0.1176,0.7984,,-0.5791,,,,,,,,,,,1,,,0.0922,,0.47]]);

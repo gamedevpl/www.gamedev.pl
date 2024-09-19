@@ -1,51 +1,51 @@
-var eventCounter = 0;
+let eventCounter = 0;
 
 // hash change
-var EVENT_HASHCHANGE = eventCounter++;
+export const EVENT_HASHCHANGE = eventCounter++;
 
 // generic events
 /** @const */
-var EVENT_TIMEOUT = eventCounter++;
-var EVENT_RAF = eventCounter++;
-var EVENT_READYSTATE = eventCounter++;
-var EVENT_DOCUMENT_HIDDEN = eventCounter++;
-var EVENT_DOCUMENT_VISIBLE = eventCounter++;
+export const EVENT_TIMEOUT = eventCounter++;
+export const EVENT_RAF = eventCounter++;
+export const EVENT_READYSTATE = eventCounter++;
+export const EVENT_DOCUMENT_HIDDEN = eventCounter++;
+export const EVENT_DOCUMENT_VISIBLE = eventCounter++;
 
-var EVENT_INTERVAL_100MS = eventCounter++;
-var EVENT_INTERVAL_SECOND = eventCounter++;
+export const EVENT_INTERVAL_100MS = eventCounter++;
+export const EVENT_INTERVAL_SECOND = eventCounter++;
 
-var EVENT_WINDOW_RESIZE = eventCounter++;
+export const EVENT_WINDOW_RESIZE = eventCounter++;
 
 // game events
-var EVENT_RACE_OVER = eventCounter++;
+export const EVENT_RACE_OVER = eventCounter++;
 
 // menu events
 /** @const */
-var EVENT_MENU_PLAY = eventCounter++;
+export const EVENT_MENU_PLAY = eventCounter++;
 
 // controls
-var EVENT_ESCAPE = eventCounter++;
+export const EVENT_ESCAPE = eventCounter++;
 
-var EVENT_MOUSE_DOWN = eventCounter++;
-var EVENT_MOUSE_UP = eventCounter++;
-var EVENT_MOUSE_MOVE = eventCounter++;
-var EVENT_MOUSE_CLICK = eventCounter++;
+export const EVENT_MOUSE_DOWN = eventCounter++;
+export const EVENT_MOUSE_UP = eventCounter++;
+export const EVENT_MOUSE_MOVE = eventCounter++;
+export const EVENT_MOUSE_CLICK = eventCounter++;
 
-var EVENT_KEY_DOWN = eventCounter++;
-var EVENT_KEY_UP = eventCounter++;
+export const EVENT_KEY_DOWN = eventCounter++;
+export const EVENT_KEY_UP = eventCounter++;
 
-var EVENT_ARROW_LEFT_DOWN = eventCounter++;
-var EVENT_ARROW_RIGHT_DOWN = eventCounter++;
-var EVENT_ARROW_UP_DOWN = eventCounter++;
-var EVENT_ARROW_DOWN_DOWN = eventCounter++;
+export const EVENT_ARROW_LEFT_DOWN = eventCounter++;
+export const EVENT_ARROW_RIGHT_DOWN = eventCounter++;
+export const EVENT_ARROW_UP_DOWN = eventCounter++;
+export const EVENT_ARROW_DOWN_DOWN = eventCounter++;
 
-var EVENT_ARROW_LEFT_UP = eventCounter++;
-var EVENT_ARROW_RIGHT_UP = eventCounter++;
-var EVENT_ARROW_UP_UP = eventCounter++;
-var EVENT_ARROW_DOWN_UP = eventCounter++;
+export const EVENT_ARROW_LEFT_UP = eventCounter++;
+export const EVENT_ARROW_RIGHT_UP = eventCounter++;
+export const EVENT_ARROW_UP_UP = eventCounter++;
+export const EVENT_ARROW_DOWN_UP = eventCounter++;
 
-var EVENT_TOUCH_START = eventCounter++; 
+export const EVENT_TOUCH_START = eventCounter++; 
 
 // battle
-var EVENT_DAMAGE = eventCounter++;
-var EVENT_DAMAGE_ARROW = eventCounter++;
+export const EVENT_DAMAGE = eventCounter++;
+export const EVENT_DAMAGE_ARROW = eventCounter++;
