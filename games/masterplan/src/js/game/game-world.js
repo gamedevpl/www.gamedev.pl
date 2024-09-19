@@ -75,14 +75,14 @@ export class GameWorld {
    */
   collisions() {
     var hitArrows = this.queryObjects('Arrow', (arrow) => arrow.isHit());
-    this.queryObjects('Soldier').forEach(function (soldier, idx) {
+    this.queryObjects('Soldier').forEach(function (soldier) {
       if (soldier.life <= 0) {
         return;
       }
 
       // soldier -> soldier
       this.queryObjects('Soldier').forEach((soldierLeft, idxLeft) => {
-        if (idx <= idxLeft || soldierLeft.life <= 0 || soldier === soldierLeft) {
+        if (idxLeft <= this.objectsByType['Soldier'].indexOf(soldier) || soldierLeft.life <= 0 || soldier === soldierLeft) {
           return;
         }
 
@@ -92,7 +92,7 @@ export class GameWorld {
       });
 
       // soldier -> arrow
-      hitArrows.forEach((arrow, idx) => {
+      hitArrows.forEach((arrow) => {
         if (arrow && VMath.withinDistance(soldier.vec, arrow.vec, arrow.type === 'arrow' ? ARROW_RANGE : BALL_RANGE)) {
           this.triggerCollisions(soldier, arrow);
         }
@@ -136,19 +136,19 @@ export class GameWorld {
     // soldiers should bounce off each other
     var distance = VMath.distance(leftSoldier.vec, rightSoldier.vec);
     if (distance === 0) {
-      var sub = VMath.scale(
+      var subVector = VMath.scale(
         [Math.random() - Math.random(), Math.random() - Math.random()],
         1 / Number.MAX_SAFE_INTEGER,
       );
-      leftSoldier.addForce(sub);
-      rightSoldier.addForce(VMath.scale(sub, -1));
+      leftSoldier.addForce(subVector);
+      rightSoldier.addForce(VMath.scale(subVector, -1));
     } else {
-      var sub = VMath.scale(
+      var subVector2 = VMath.scale(
         VMath.normalize(VMath.sub(leftSoldier.vec, rightSoldier.vec)),
         leftSoldier.getWidth() - distance,
       );
-      leftSoldier.addForce(VMath.scale(sub, (1 / leftSoldier.weight) * rightSoldier.weight));
-      rightSoldier.addForce(VMath.scale(sub, (-1 * leftSoldier.weight) / rightSoldier.weight));
+      leftSoldier.addForce(VMath.scale(subVector2, (1 / leftSoldier.weight) * rightSoldier.weight));
+      rightSoldier.addForce(VMath.scale(subVector2, (-1 * leftSoldier.weight) / rightSoldier.weight));
     }
   }
 

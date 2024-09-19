@@ -221,11 +221,11 @@ export function SfxrSynth() {
         var _phaserBuffer = new Array(1024),
             // Buffer of random values used to generate noise
             _noiseBuffer = new Array(32);
-        for (var i = _phaserBuffer.length; i--;) {
+        for (let i = _phaserBuffer.length; i--;) {
             _phaserBuffer[i] = 0;
         }
-        for (var i = _noiseBuffer.length; i--;) {
-            _noiseBuffer[i] = Math.random() * 2 - 1;
+        for (let j = _noiseBuffer.length; j--;) {
+            _noiseBuffer[j] = Math.random() * 2 - 1;
         }
 
         for (var i = 0; i < length; i++) {

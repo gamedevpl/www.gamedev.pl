@@ -53,11 +53,11 @@ export const VMath = {
     return [Math.cos(a) * l, Math.sin(a) * l];
   },
 
-  reflect: function (V, N) {
+  reflect: function () {
     return [0, 0];
   },
 
-  project: function (V, N) {
+  project: function () {
     return [0, 0];
   },
 

@@ -41,10 +41,3 @@ export function renderObject(object) {
   //     canvas.line(object.getX(), object.getY(), object.enemy.getX(), object.enemy.getY());
   // }
 }
-
-export function renderSurface() {
-  /** {Canvas} */
-  var waterCanvas = getCanvas(LAYER_WATER);
-
-  waterCanvas.save().fillStyle('#5599ff').fillRect(0, 0, waterCanvas.getWidth(), waterCanvas.getHeight()).restore();
-}

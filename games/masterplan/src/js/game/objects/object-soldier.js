@@ -13,8 +13,6 @@ import {
   RANGED_ATTACK_RANGE,
   MIN_RANGE_ATTACK,
   RANGED_ATTACK_COOLDOWN,
-  ARROW_RANGE,
-  BALL_RANGE,
   DEFENCE_COOLDOWN,
   SEEK_COOLDOWN,
 } from '../../consts.js';
@@ -259,7 +257,7 @@ export class SoldierObject extends GameObject {
     }
   }
 
-  updatePlan(deltaTime) {
+  updatePlan() {
     if (!this.seekEnemy(this.seekRange)) {
       // stick to the plan
       this.plan.getCommand(this.world.getTime()).execute(this);

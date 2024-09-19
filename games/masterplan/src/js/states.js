@@ -1,3 +1,4 @@
+import { loadBattleString } from './battle-string.js';
 import { DEBUG, NULL } from './consts.js';
 import { EVENT_TIMEOUT, EVENT_READYSTATE, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND } from './events.js';
 import { stateGameDesigner } from './states/state-game-designer.js';
@@ -8,9 +9,7 @@ import { stateIntro } from './states/state-intro.js';
  */
 
 Function.prototype.State = function () {
-  var handler = this;
-
-  return handler;
+  return this;
 };
 
 var stateTimeout;
@@ -21,10 +20,10 @@ Function.prototype.WeakState = function (timeLimit) {
     clearTimeout(stateTimeout);
   }
 
-  let timeout = setTimeout(function () {
+  stateTimeout = setTimeout(function () {
     if (currentState === handler) {
       updateState(EVENT_TIMEOUT);
-      timeout = NULL;
+      stateTimeout = NULL;
     }
   }, timeLimit);
 
@@ -55,7 +54,7 @@ export function stateInit() {
       if (location.hash.indexOf('#vs=') === 0) {
         try {
           return new stateGameDesigner(null, loadBattleString(null, location.hash.substr(4)));
-        } catch (e) {
+        } catch {
           alert('Blue print invalid!');
         }
       }

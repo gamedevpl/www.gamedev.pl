@@ -1,8 +1,12 @@
 import {
   EVENT_ARROW_DOWN_DOWN,
+  EVENT_ARROW_DOWN_UP,
   EVENT_ARROW_LEFT_DOWN,
+  EVENT_ARROW_LEFT_UP,
   EVENT_ARROW_RIGHT_DOWN,
+  EVENT_ARROW_RIGHT_UP,
   EVENT_ARROW_UP_DOWN,
+  EVENT_ARROW_UP_UP,
   EVENT_ESCAPE,
   EVENT_KEY_DOWN,
   EVENT_KEY_UP,
@@ -10,7 +14,7 @@ import {
   EVENT_MOUSE_DOWN,
   EVENT_MOUSE_MOVE,
   EVENT_MOUSE_UP,
-} from './events';
+} from './events.js';
 
 export function initializeControls(updateState) {
   // key events

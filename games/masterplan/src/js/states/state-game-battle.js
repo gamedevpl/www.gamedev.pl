@@ -15,6 +15,7 @@ import {
 import { renderGame } from '../game/game-render.js';
 import { stateGameDesigner } from './state-game-designer.js';
 import { VMath } from '../vmath.js';
+import { LAYER_DEFAULT } from '../consts.js';
 
 export function stateGameBattleInit(definitions, definitionsEnemy) {
   var world = new GameWorld();
@@ -35,14 +36,14 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
     return masterPlan;
   };
 
-  var masterPlanLeft = createMasterPlan(1, '#ff0000', definitions);
-  var masterPlanRight = createMasterPlan(0, '#00ff00', definitionsEnemy);
+  createMasterPlan(1, '#ff0000', definitions);
+  createMasterPlan(0, '#00ff00', definitionsEnemy);
 
   var HUD = new GameHUD(world);
 
   HUD.setNames(definitions.username, definitionsEnemy.username || 'Computer');
 
-  return function GameBattleInitHandler(eventType, eventObject) {
+  return function GameBattleInitHandler(eventType) {
     renderGame(world, HUD);
     HUD.render(world);
 
@@ -101,7 +102,7 @@ export function stateGameBattle(world, HUD, definitions, definitionsEnemy) {
 
 export function stateGameBattleEnd(world, HUD, definitions, definitionsEnemy) {
   var result = HUD.renderResults(world);
-  return function GameBattleEndHandler(eventType, eventObject) {
+  return function GameBattleEndHandler(eventType) {
     renderGame(world);
 
     if (eventType === EVENT_MOUSE_CLICK) {

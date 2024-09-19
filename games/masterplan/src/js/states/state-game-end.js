@@ -1,6 +1,7 @@
 import { renderGame } from '../game/game-render.js';
 import { EVENT_ESCAPE, EVENT_HASHCHANGE } from '../events.js';
 import { stateIntro } from './state-intro.js';
+import { GAME_STATE_END } from '../consts.js';
 
 export function stateGameEnd(world, race, boat, HUD) {
   const CLASS = 'game-end';

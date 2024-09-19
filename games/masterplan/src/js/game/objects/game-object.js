@@ -8,7 +8,7 @@ export class GameObject {
 
   getTargetVelocity() {}
 
-  update(deltaTime) {}
+  update() {}
 
   /**
    * @param {Canvas} canvas

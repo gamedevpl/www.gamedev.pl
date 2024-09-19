@@ -11,9 +11,11 @@ import {
   EVENT_ESCAPE,
   EVENT_DOCUMENT_HIDDEN,
   EVENT_HASHCHANGE,
+  EVENT_ARROW_DOWN_UP,
 } from '../events.js';
 import { stateGamePause } from './state-game-pause.js';
 import { stateIntro } from './state-intro.js';
+import { stateGameEnd } from './state-game-end.js';
 
 export function stateGamePlay(world, race, boat, HUD) {
   return function GamePlayHandler(eventType, eventObject) {
@@ -25,7 +27,7 @@ export function stateGamePlay(world, race, boat, HUD) {
       }
 
       renderGame(world, race, boat);
-      HUD.render(GAME_STATE_PLAY);
+      HUD.render();
     }
 
     if (eventType == EVENT_ARROW_LEFT_DOWN) {

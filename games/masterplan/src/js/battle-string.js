@@ -21,7 +21,9 @@ export function saveBattleString(defs, targetId) {
   document.getElementById(targetId).value = encoded;
   try {
     localStorage[targetId] = encoded;
-  } catch (e) {}
+  } catch {
+    // Silently fail if localStorage is not available
+  }
   $('#sharelink').value = 'http://gtanczyk.warsztat.io/masterplan/index.html#vs=' + encoded;
 }
 

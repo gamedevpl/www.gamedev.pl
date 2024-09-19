@@ -7,9 +7,7 @@ import {
   EVENT_HASHCHANGE,
   EVENT_WINDOW_RESIZE,
 } from './events.js';
-import { GameWorld } from './game/game-world.js';
-import { GameHUD } from './game/game-hud.js';
-import { stateInit, updateState } from './states.js';
+import { updateState } from './states.js';
 import { currentTime } from './util.js';
 
 let lastTick = currentTime();
@@ -43,5 +41,3 @@ window.addEventListener('hashchange', function () {
 window.addEventListener('resize', function () {
   updateState(EVENT_WINDOW_RESIZE);
 });
-
-let currentState = stateInit();

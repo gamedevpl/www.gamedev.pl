@@ -6,7 +6,7 @@ export class Command {
     this.startTime = worldTime;
   }
 
-  execute(soldier) {}
+  execute() {}
 
   isDone() {
     return this.done;

@@ -9,7 +9,9 @@ export function stateGameDesigner(definitions, enemyDefinitions) {
   var stored;
   try {
     stored = localStorage['battle-string'];
-  } catch (e) {}
+  } catch {
+    // Do nothing if localStorage is not available
+  }
   if (!definitions && stored) {
     definitions = loadBattleString(null, stored);
     $('#username').value = definitions.username;

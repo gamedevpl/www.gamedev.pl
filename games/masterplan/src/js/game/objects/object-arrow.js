@@ -1,5 +1,6 @@
 import { GameObject } from './game-object.js';
 import { VMath } from '../../vmath.js';
+import { BALL_RANGE } from '../../consts.js';
 
 const DIMS = {
   arrow: [10, 1],
@@ -48,7 +49,7 @@ export class ArrowObject extends GameObject {
     soldier.hitByArrow(this, distance);
   }
 
-  getAttack(soldier) {
+  getAttack() {
     return this.attackBase;
   }
 
@@ -59,7 +60,7 @@ export class ArrowObject extends GameObject {
 
 export class ExplosionObject extends GameObject {
   constructor(vec, time, world) {
-    super(vec[0], vec[1], BALL_RANGE, BALL_RANGE, 0);
+    super(vec[0], vec[1], BALL_RANGE * 2, BALL_RANGE * 2, 0);
     this.time = time;
     this.world = world;
   }
