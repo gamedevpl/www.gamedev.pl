@@ -4,5 +4,18 @@
     "dist",
     "node_modules",
     "package-lock.json"
-  ]
+  ],
+  "importantContext": {
+    "textPrompts": [
+      {
+        "content": "**About the game**: MasterPlan is a medieval battle simulation game. You can prepare your battle plan, and start the battle to see how it works out."
+      },
+      {
+        "content": "**Project plan**: We are rewriting the old implementatio of the game which was a vanilla js code (see old_src/ dir), to new tech stack in src/ folder. We will be adjusting the game play as well."
+      }
+    ],
+    "files": [
+      "old_src/index.html"
+    ]
+  }
 }
