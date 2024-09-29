@@ -1,22 +1,22 @@
 import { useState } from 'react';
 
-import IntroState from './states/intro-state';
-import BattleInitState from './states/battle-init-state';
-import BattleState from './states/battle-state';
+import { GameStateIntro } from './game-states/game-state-intro';
+import { GameStateBattleInit } from './game-states/game-state-battle-init';
+import { GameStateBattle } from './game-states/game-state-battle';
 
 export function MasterPlanApp() {
-  const [state, setState] = useState('intro');
+  const [state, setState] = useState(() => (window.location.hash === '#battle' ? 'battle' : 'intro'));
 
   const renderState = () => {
     switch (state) {
       case 'intro':
-        return <IntroState onNext={() => setState('battleInit')} />;
+        return <GameStateIntro onNext={() => setState('battleInit')} />;
       case 'battleInit':
-        return <BattleInitState onNext={() => setState('battle')} />;
+        return <GameStateBattleInit onNext={() => setState('battle')} />;
       case 'battle':
-        return <BattleState onEnd={() => setState('intro')} />;
+        return <GameStateBattle onEnd={() => setState('intro')} />;
       default:
-        return <IntroState onNext={() => setState('battleInit')} />;
+        return <GameStateIntro onNext={() => setState('battleInit')} />;
     }
   };
 

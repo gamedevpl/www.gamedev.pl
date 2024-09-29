@@ -1,4 +1,4 @@
-const BattleInitState = ({ onNext }: { onNext: () => void }) => {
+export const GameStateBattleInit = ({ onNext }: { onNext: () => void }) => {
   return (
     <div>
       <h1>Prepare for Battle</h1>
@@ -13,5 +13,3 @@ const BattleInitState = ({ onNext }: { onNext: () => void }) => {
     </div>
   );
 };
-
-export default BattleInitState;

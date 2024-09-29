@@ -1,4 +1,4 @@
-const IntroState = ({ onNext }: { onNext: () => void }) => {
+export const GameStateIntro = ({ onNext }: { onNext: () => void }) => {
   return (
     <div>
       <h1>Welcome to MasterPlan</h1>
@@ -13,5 +13,3 @@ const IntroState = ({ onNext }: { onNext: () => void }) => {
     </div>
   );
 };
-
-export default IntroState;
