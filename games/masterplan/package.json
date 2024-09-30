@@ -2,10 +2,6 @@
   "name": "masterplan",
   "version": "1.0.0",
   "description": "MasterPlan, offline multiplayer game",
-  "dependencies": {
-    "gulp": "^5.0.0",
-    "gulp-serve": "^1.0.0"
-  },
   "devDependencies": {
     "@fontsource/press-start-2p": "^5.1.0",
     "@types/react": "^18.3.10",
