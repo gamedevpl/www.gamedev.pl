@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 import assetSoldierWarrior from './assets/soldier-warrior.png';
 import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';
@@ -12,9 +12,11 @@ import assetSoldierTankDead from './assets/soldier-tank-dead.png';
 import assetSoldierArtillery from './assets/soldier-artillery.png';
 import assetSoldierArtilleryDead from './assets/soldier-artillery-dead.png';
 
-import './js/main';
-
 export function OldApp() {
+  useEffect(() => {
+    import('./js/main');
+  }, []);
+
   return (
     <>
       {/* assets */}
@@ -30,52 +32,6 @@ export function OldApp() {
       <img src={assetSoldierArtillery} id="asset-soldier-artillery" />
       <img src={assetSoldierArtilleryDead} id="asset-soldier-artillery-dead" />
 
-      {/* intro */}
-      <div id="game-intro">
-        <h1>MasterPlan</h1>
-        <p>
-          MasterPlan is a <u>offline multiplayer</u> strategy game. It's battle gameplay is inspired by{' '}
-          <a href="https://en.wikipedia.org/wiki/Legion_Gold">Legion Gold (2002)</a>
-        </p>
-        <h2>How to play?</h2>
-        <ol>
-          <li>Create your master plan</li>
-          <li>Play Battle</li>
-          <li>Share with other player to compete</li>
-        </ol>
-        <p>Available units:</p>
-        <ul>
-          <li>
-            <div className="field-unit" data-unit-type="warrior">
-              {' '}
-            </div>{' '}
-            - Warrior: Fast, Fragile, Deadly
-          </li>
-          <li>
-            <div className="field-unit" data-unit-type="archer">
-              {' '}
-            </div>{' '}
-            - Archer: Kills from distance, dies fast.
-          </li>
-          <li>
-            <div className="field-unit" data-unit-type="tank">
-              {' '}
-            </div>{' '}
-            - Tank: Powerful, and slow.
-          </li>
-          <li>
-            <div className="field-unit" data-unit-type="artillery">
-              {' '}
-            </div>{' '}
-            - Artillery: 2 shots, stationary.
-          </li>
-        </ul>
-        <br />
-        <center>
-          <button>Click here to play</button>
-        </center>
-        <div id="hint" style={{ marginTop: '50px', textAlign: 'center' }}></div>
-      </div>
       {/* HUD */}
       <div id="game-hud">
         <div id="battle-stats">

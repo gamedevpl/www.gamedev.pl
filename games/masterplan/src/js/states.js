@@ -2,7 +2,6 @@ import { loadBattleString } from './battle-string.js';
 import { DEBUG, NULL } from './consts.js';
 import { EVENT_TIMEOUT, EVENT_READYSTATE, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND } from './events.js';
 import { stateGameDesigner } from './states/state-game-designer.js';
-import { stateIntro } from './states/state-intro.js';
 
 /**
  * State machine
@@ -59,7 +58,7 @@ export function stateInit() {
         }
       }
 
-      return stateIntro();
+      return new stateGameDesigner();
     }
   }.State();
 }

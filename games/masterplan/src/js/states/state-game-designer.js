@@ -42,13 +42,6 @@ export function stateGameDesigner(definitions, enemyDefinitions) {
   saveBattleString(definitions);
   saveBattleString(enemyDefinitions || DEFAULT_UNITS(), 'test-battle-string');
 
-  if (enemyDefinitions && enemyDefinitions.username) {
-    $('#battle-versus').innerHTML = `Opened a link from <a href="https://twitter.com/${
-      enemyDefinitions.username + '">' + enemyDefinitions.username
-    }</a>, and you will battle their masterplan! <button id="vs-reset">Click to reset</button><br/><br/>
-        <button id="button-test-battle">Play the battle</button>`;
-  }
-
   return function stateGameDesignerHandler(eventType, eventObject) {
     if (eventType === EVENT_MOUSE_DOWN && eventObject.target.classList.contains('field-unit')) {
       mouseDownUnit = eventObject.target.designerUnit;

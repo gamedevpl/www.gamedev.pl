@@ -23,9 +23,13 @@ requestAnimationFrame(updateAnimation);
 
 initializeControls(updateState);
 
-document.onreadystatechange = function () {
+if (document.readyState === 'complete') {
   updateState(EVENT_READYSTATE, document.readyState);
-};
+} else {
+  document.onreadystatechange = function () {
+    updateState(EVENT_READYSTATE, document.readyState);
+  };
+}
 
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
