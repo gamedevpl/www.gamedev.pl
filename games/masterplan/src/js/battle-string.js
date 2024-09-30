@@ -24,7 +24,7 @@ export function saveBattleString(defs, targetId) {
   } catch {
     // Silently fail if localStorage is not available
   }
-  $('#sharelink').value = 'http://gtanczyk.warsztat.io/masterplan/index.html#vs=' + encoded;
+  $('#sharelink').value = 'https://www.gamedev.pl/games/masterplan/#vs=' + encoded;
 }
 
 export function loadBattleString(targetId, value) {

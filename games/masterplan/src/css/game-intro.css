@@ -1,43 +1,42 @@
 #game-intro {
-    z-index: 5;
-    position: absolute;
-    text-align: center;
-    height: 100%;
-    width: 100%;
-    display: none;
+  z-index: 5;
+  position: absolute;
+  text-align: center;
+  height: 100%;
+  width: 100%;
+  display: none;
 }
 
-#game-intro.visible p, #game-intro.visible li {
-    font-size: 20px;
+#game-intro.visible p,
+#game-intro.visible li {
+  font-size: 20px;
 }
 
 #game-intro.visible button {
-    font-size: 40px;
+  font-size: 40px;
 }
 
 #game-intro.visible {
-    display: block;
+  display: block;
 
-    text-align: left;
-    width: 800px;
-    margin-left: 50%;
-    left: -400px;
-    padding: 10 20;
-    background: #99cccc;
-    box-shadow: -1px -7px 20px 2px #00000075;
+  text-align: left;
+  width: 800px;
+  margin-left: 50%;
+  left: -400px;
+  padding: 10 20;
 }
 
 #game-intro .field-unit[data-unit-type]:before {
-    display: none !important;
+  display: none !important;
 }
 
 #game-intro .field-unit {
-    width: 32px;
-    height: 32px;
-    position: relative;
-    display: inline-block;
+  width: 32px;
+  height: 32px;
+  position: relative;
+  display: inline-block;
 }
 
 #game-intro ul li {
-    list-style: none;
+  list-style: none;
 }
