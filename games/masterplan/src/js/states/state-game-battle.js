@@ -13,9 +13,9 @@ import {
   EVENT_MOUSE_CLICK,
 } from '../events.js';
 import { renderGame } from '../game/game-render.js';
-import { stateGameDesigner } from './state-game-designer.js';
 import { VMath } from '../vmath.js';
 import { LAYER_DEFAULT } from '../consts.js';
+import { dispatchCustomEvent } from '../../../../nukes/src/events';
 
 export function stateGameBattleInit(definitions, definitionsEnemy) {
   var world = new GameWorld();
@@ -111,10 +111,13 @@ export function stateGameBattleEnd(world, HUD, definitions, definitionsEnemy) {
       if (result === '#ff0000' && !definitionsEnemy.username) {
         var newEnemy = JSON.parse(JSON.stringify(definitions));
         delete newEnemy.username;
-        return new stateGameDesigner(definitions, newEnemy);
+        // return new stateGameDesigner(definitions, newEnemy);
+        dispatchCustomEvent('battleEnd');
       } else {
-        return new stateGameDesigner(definitions, definitionsEnemy);
+        // return new stateGameDesigner(definitions, definitionsEnemy);
+        dispatchCustomEvent('battleEnd');
       }
+      return new (function () {})();
     }
   };
 }

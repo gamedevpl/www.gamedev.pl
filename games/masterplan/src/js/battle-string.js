@@ -18,18 +18,17 @@ export function saveBattleString(defs, targetId) {
   defs = new Uint8Array([arr.length].concat(arr.concat(username)));
   var decoder = new TextDecoder('utf8');
   var encoded = btoa(decoder.decode(defs));
-  document.getElementById(targetId).value = encoded;
   try {
     localStorage[targetId] = encoded;
   } catch {
     // Silently fail if localStorage is not available
   }
-  $('#sharelink').value = 'https://www.gamedev.pl/games/masterplan/#vs=' + encoded;
 }
 
 export function loadBattleString(targetId, value) {
+  targetId = targetId || 'battle-string';
   var encoder = new TextEncoder('utf8');
-  var defs = encoder.encode(atob(value || document.getElementById(targetId || 'battle-string').value));
+  var defs = encoder.encode(atob(value ?? localStorage[targetId]));
   var result = [];
   var length = defs[0];
   for (var i = 1; i <= length; ) {
