@@ -6,6 +6,8 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "esModuleInterop": false,
+    "jsx": "react-jsx",
+    "allowJs": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -20,6 +22,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.js", "index.html"],
+  "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.tsx", "index.html"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

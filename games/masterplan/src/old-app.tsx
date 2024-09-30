@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import assetSoldierWarrior from './assets/soldier-warrior.png';
 import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';
