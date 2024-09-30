@@ -102,18 +102,6 @@ export function stateGameDesigner(definitions, enemyDefinitions) {
       saveBattleString(getDefs());
     }
 
-    if (eventType === EVENT_MOUSE_CLICK && eventObject.target.id === 'tweet') {
-      window.open(
-        'https://twitter.com/home?status=' + encodeURIComponent(`#masterplan_js13k ${$('#sharelink').value}`),
-      );
-    }
-
-    if (eventType === EVENT_MOUSE_CLICK && eventObject.target.id === 'email') {
-      location.href = `mailto:${document.querySelector('[type=email').value}?subject=${'Check my MasterPlan'}&body=${
-        $('#sharelink').value
-      }`;
-    }
-
     if (eventType === EVENT_MOUSE_CLICK && eventObject.target.id === 'battle-string-load') {
       return new stateGameDesigner(loadBattleString());
     }
