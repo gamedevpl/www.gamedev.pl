@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "MasterPlan, offline multiplayer game",
   "dependencies": {
-    "gulp": "^3.9.0",
+    "gulp": "^5.0.0",
     "gulp-serve": "^1.0.0"
   },
   "devDependencies": {
