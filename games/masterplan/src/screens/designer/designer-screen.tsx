@@ -8,6 +8,8 @@ import {
   SOLDIER_HEIGHT,
   MAX_COL,
   MAX_ROW,
+  GRID_CENTER_X,
+  GRID_CENTER_Y,
 } from '../../js/consts';
 
 export interface Unit {
@@ -20,6 +22,30 @@ export interface Unit {
   command: string;
 }
 
+const centerAroundZero = (units: Unit[]): Unit[] => {
+  const centerX = Math.floor(MAX_COL / 2);
+  const centerY = Math.floor(MAX_ROW / 2);
+  return units.map((unit) => ({
+    ...unit,
+    col: unit.col - centerX / 2,
+    row: unit.row - centerY / 2,
+  }));
+};
+
+const transformCoordinates = (col: number, row: number): { x: number; y: number } => {
+  return {
+    x: (col + GRID_CENTER_X) * SOLDIER_WIDTH,
+    y: (row + GRID_CENTER_Y) * SOLDIER_HEIGHT,
+  };
+};
+
+const inverseTransformCoordinates = (x: number, y: number): { col: number; row: number } => {
+  return {
+    col: Math.floor(x / SOLDIER_WIDTH) - GRID_CENTER_X,
+    row: Math.floor(y / SOLDIER_HEIGHT) - GRID_CENTER_Y,
+  };
+};
+
 export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[]) => void }) => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
@@ -30,26 +56,18 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
   const designerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load initial units with the new configuration
     const initialUnits: Unit[] = [
-      // Warriors (4 units, 8x2 each)
       { id: 1, col: 0, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
       { id: 2, col: 8, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
       { id: 3, col: 16, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
       { id: 4, col: 24, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-
-      // Tanks (2 units, 4x4 each)
       { id: 5, col: 8, row: 3, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
       { id: 6, col: 20, row: 3, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-
-      // Archers (2 units, 4x2 each)
       { id: 7, col: 8, row: 8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
       { id: 8, col: 20, row: 8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-
-      // Artillery (1 unit, 8x1)
       { id: 9, col: 12, row: 11, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
     ];
-    setUnits(initialUnits);
+    setUnits(centerAroundZero(initialUnits));
   }, []);
 
   const handleCellClick = useCallback(
@@ -60,13 +78,11 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
 
       if (clickedUnit) {
         setSelectedUnit(clickedUnit);
-        const rect = designerRef.current?.getBoundingClientRect();
-        if (rect) {
-          setContextMenuPosition({
-            x: (clickedUnit.col + clickedUnit.sizeCol / 2) * SOLDIER_WIDTH,
-            y: (clickedUnit.row + clickedUnit.sizeRow / 2) * SOLDIER_HEIGHT,
-          });
-        }
+        const { x, y } = transformCoordinates(
+          clickedUnit.col + clickedUnit.sizeCol / 2,
+          clickedUnit.row + clickedUnit.sizeRow / 2,
+        );
+        setContextMenuPosition({ x, y });
       } else {
         setSelectedUnit(null);
         setContextMenuPosition(null);
@@ -81,8 +97,8 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
         u.id === unit.id
           ? {
               ...u,
-              col: Math.max(0, Math.min(newCol, MAX_COL - u.sizeCol)),
-              row: Math.max(0, Math.min(newRow, MAX_ROW - u.sizeRow)),
+              col: Math.max(-GRID_CENTER_X, Math.min(newCol, MAX_COL - GRID_CENTER_X - u.sizeCol)),
+              row: Math.max(-GRID_CENTER_Y, Math.min(newRow, MAX_ROW - GRID_CENTER_Y - u.sizeRow)),
             }
           : u,
       ),
@@ -97,13 +113,21 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
 
   const handleStartBattle = () => {
     console.log('Starting battle with units:', units);
-    onStartBattle(units);
+    const centerX = Math.floor(MAX_COL / 2);
+    const centerY = Math.floor(MAX_ROW / 2);
+
+    onStartBattle(
+      units.map((unit) => ({
+        ...unit,
+        col: unit.col + centerX / 2,
+        row: unit.row + centerY / 2,
+      })),
+    );
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const col = Math.floor((e.clientX - rect.left) / SOLDIER_WIDTH);
-    const row = Math.floor((e.clientY - rect.top) / SOLDIER_HEIGHT);
+    const { col, row } = inverseTransformCoordinates(e.clientX - rect.left, e.clientY - rect.top);
 
     const clickedUnit = units.find(
       (unit) => col >= unit.col && col < unit.col + unit.sizeCol && row >= unit.row && row < unit.row + unit.sizeRow,
@@ -113,8 +137,8 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
       setIsDragging(true);
       setDraggedUnit(clickedUnit);
       setDragOffset({
-        x: e.clientX - rect.left - clickedUnit.col * SOLDIER_WIDTH,
-        y: e.clientY - rect.top - clickedUnit.row * SOLDIER_HEIGHT,
+        x: e.clientX - rect.left - transformCoordinates(clickedUnit.col, clickedUnit.row).x,
+        y: e.clientY - rect.top - transformCoordinates(clickedUnit.col, clickedUnit.row).y,
       });
       setContextMenuPosition(null);
     }
@@ -125,9 +149,11 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
       if (isDragging && draggedUnit) {
         const rect = designerRef.current?.getBoundingClientRect();
         if (rect) {
-          const newCol = Math.floor((e.clientX - rect.left - dragOffset.x) / SOLDIER_WIDTH);
-          const newRow = Math.floor((e.clientY - rect.top - dragOffset.y) / SOLDIER_HEIGHT);
-          handleUnitMove(draggedUnit, newCol, newRow);
+          const { col, row } = inverseTransformCoordinates(
+            e.clientX - rect.left - dragOffset.x,
+            e.clientY - rect.top - dragOffset.y,
+          );
+          handleUnitMove(draggedUnit, col, row);
         }
       }
     },

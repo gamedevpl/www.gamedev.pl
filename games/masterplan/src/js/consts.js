@@ -83,9 +83,20 @@ export const DEFENCE_COOLDOWN = 1500;
 /** @const */
 export const SEEK_COOLDOWN = 1000;
 
-/** const */
-export const DEFAULT_UNITS = () =>
-  loadBattleString(
-    null,
-    'RgYEBAMEAgIGBAQIBAICBgQEDQQCAgYEBBIEAwIGBAQXBAMCBgQEHAQCAgYEBCEEAgIGBAQmBAICBhABEgoBAgYQARcMAQI=',
-  );
+/** @const */
+export const GRID_CENTER_X = Math.floor(MAX_COL / 2);
+/** @const */
+export const GRID_CENTER_Y = Math.floor(MAX_ROW / 2);
+
+import assetSoldierWarrior from '../assets/soldier-warrior.png';
+import assetSoldierArcher from '../assets/soldier-archer.png';
+import assetSoldierTank from '../assets/soldier-tank.png';
+import assetSoldierArtillery from '../assets/soldier-artillery.png';
+
+/** @const */
+export const UNIT_ASSET_PATHS = {
+  warrior: assetSoldierWarrior,
+  archer: assetSoldierArcher,
+  tank: assetSoldierTank,
+  artillery: assetSoldierArtillery,
+};
