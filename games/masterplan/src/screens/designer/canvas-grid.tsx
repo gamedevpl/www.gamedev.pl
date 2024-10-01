@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../../js/consts';
 
 interface Unit {
   id: number;
@@ -21,6 +22,15 @@ interface CanvasGridProps {
   onMouseDown: (e: React.MouseEvent<HTMLCanvasElement>) => void;
 }
 
+const loadImage = (src: string): Promise<HTMLImageElement> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+};
+
 export const CanvasGrid: React.FC<CanvasGridProps> = ({
   width,
   height,
@@ -32,6 +42,23 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
   onCellClick,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [unitImages, setUnitImages] = useState<Record<string, HTMLImageElement>>({});
+
+  useEffect(() => {
+    const loadUnitImages = async () => {
+      const loadedImages: Record<string, HTMLImageElement> = {};
+      for (const [unitType, imagePath] of Object.entries(UNIT_ASSET_PATHS)) {
+        try {
+          loadedImages[unitType] = await loadImage(imagePath);
+        } catch (error) {
+          console.error(`Failed to load image for ${unitType}:`, error);
+        }
+      }
+      setUnitImages(loadedImages);
+    };
+
+    loadUnitImages();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,24 +90,20 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
 
     // Draw the units
     units.forEach((unit) => {
-      const x = unit.col * cellWidth;
-      const y = unit.row * cellHeight;
+      const x = (unit.col + GRID_CENTER_X) * cellWidth;
+      const y = (unit.row + GRID_CENTER_Y) * cellHeight;
       const unitWidth = unit.sizeCol * cellWidth;
       const unitHeight = unit.sizeRow * cellHeight;
 
-      // Set unit color based on type
-      switch (unit.type) {
-        case 'archer':
-          ctx.fillStyle = 'green';
-          break;
-        case 'tank':
-          ctx.fillStyle = 'blue';
-          break;
-        default:
-          ctx.fillStyle = 'red';
+      if (unitImages[unit.type]) {
+        for (let xi = 0; xi < unit.sizeCol; xi++)
+          for (let yi = 0; yi < unit.sizeRow; yi++)
+            ctx.drawImage(unitImages[unit.type], x + xi * cellWidth, y + yi * cellHeight, cellWidth, cellHeight);
+      } else {
+        // Fallback to colored rectangle if image is not loaded
+        ctx.fillStyle = unit.type === 'archer' ? 'green' : unit.type === 'tank' ? 'blue' : 'red';
+        ctx.fillRect(x, y, unitWidth, unitHeight);
       }
-
-      ctx.fillRect(x, y, unitWidth, unitHeight);
 
       // Draw border for selected unit
       if (unit.id === selectedUnitId) {
@@ -96,7 +119,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText(unit.type, x + unitWidth / 2, y + unitHeight / 2);
     });
-  }, [width, height, cellWidth, cellHeight, units, selectedUnitId]);
+  }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -106,8 +129,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    const col = Math.floor(x / cellWidth);
-    const row = Math.floor(y / cellHeight);
+    const col = Math.floor(x / cellWidth) - GRID_CENTER_X;
+    const row = Math.floor(y / cellHeight) - GRID_CENTER_Y;
 
     onCellClick(col, row);
   };
