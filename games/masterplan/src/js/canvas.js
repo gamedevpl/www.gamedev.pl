@@ -1,4 +1,4 @@
-import { LAYER_DEFAULT } from './consts';
+import { LAYER_DEFAULT, EDGE_RADIUS } from './consts';
 
 /**
  * @param {String} layerName
@@ -35,10 +35,9 @@ export function freeCanvas(layerName) {
 export function Canvas(id) {
   this.element = document.createElement('canvas');
   this.element.id = id;
+  this.element.width = EDGE_RADIUS * 3;
+  this.element.height = EDGE_RADIUS * 2;
   this.ctx = this.element.getContext('2d');
-
-  window.addEventListener('resize', this.resize.bind(this));
-  this.resize();
 
   document.body.appendChild(this.element);
 }
@@ -133,10 +132,4 @@ Canvas.prototype.restore = function () {
 
 Canvas.prototype.ctx = function () {
   return this.ctx;
-};
-
-Canvas.prototype.resize = function () {
-  this.element.width = window.innerWidth;
-  this.element.height = window.innerHeight;
-  this.ctx = this.element.getContext('2d');
 };
