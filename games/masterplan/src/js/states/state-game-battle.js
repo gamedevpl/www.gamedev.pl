@@ -16,6 +16,7 @@ import { renderGame } from '../game/game-render.js';
 import { VMath } from '../vmath.js';
 import { LAYER_DEFAULT } from '../consts.js';
 import { dispatchCustomEvent } from '../../../../nukes/src/events';
+import { stateInit } from '../states.js';
 
 export function stateGameBattleInit(definitions, definitionsEnemy) {
   var world = new GameWorld();
@@ -117,7 +118,7 @@ export function stateGameBattleEnd(world, HUD, definitions, definitionsEnemy) {
         // return new stateGameDesigner(definitions, definitionsEnemy);
         dispatchCustomEvent('battleEnd');
       }
-      return new (function () {})();
+      return stateInit();
     }
   };
 }
