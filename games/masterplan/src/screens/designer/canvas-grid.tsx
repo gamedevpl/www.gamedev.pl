@@ -1,16 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../../js/consts';
-
-interface Unit {
-  id: number;
-  col: number;
-  row: number;
-  sizeCol: number;
-  sizeRow: number;
-  type: string;
-  command: string;
-}
+import { Unit } from './designer-screen';
 
 interface CanvasGridProps {
   width: number;
@@ -21,6 +12,8 @@ interface CanvasGridProps {
   selectedUnitId: number | null;
   onCellClick: (col: number, row: number) => void;
   onMouseDown: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  onMouseMove: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  onMouseUp: (e: React.MouseEvent<HTMLCanvasElement>) => void;
 }
 
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -32,7 +25,7 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
   });
 };
 
-export const CanvasGrid: React.FC<CanvasGridProps> = ({
+export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(({
   width,
   height,
   cellWidth,
@@ -40,6 +33,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
   units,
   selectedUnitId,
   onMouseDown,
+  onMouseMove,
+  onMouseUp,
   onCellClick,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,17 +56,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     loadUnitImages();
   }, []);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear the canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Draw the grid
+  const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     ctx.strokeStyle = '#ccc';
     ctx.lineWidth = 1;
 
@@ -88,8 +73,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       ctx.lineTo(width, y);
       ctx.stroke();
     }
+  }, [width, height, cellWidth, cellHeight]);
 
-    // Draw the units
+  const drawUnits = useCallback((ctx: CanvasRenderingContext2D) => {
     units.forEach((unit) => {
       const x = (unit.col + GRID_CENTER_X) * cellWidth;
       const y = (unit.row + GRID_CENTER_Y) * cellHeight;
@@ -120,9 +106,26 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       ctx.textBaseline = 'middle';
       ctx.fillText(unit.type, x + unitWidth / 2, y + unitHeight / 2);
     });
-  }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages]);
+  }, [units, selectedUnitId, unitImages, cellWidth, cellHeight]);
 
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw the grid
+    drawGrid(ctx);
+
+    // Draw the units
+    drawUnits(ctx);
+  }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages, drawGrid, drawUnits]);
+
+  const handleCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -134,7 +137,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     const row = Math.floor(y / cellHeight) - GRID_CENTER_Y;
 
     onCellClick(col, row);
-  };
+  }, [cellWidth, cellHeight, onCellClick]);
 
   return (
     <CanvasContainer
@@ -143,9 +146,13 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
       height={height}
       onClick={handleCanvasClick}
       onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
     />
   );
-};
+});
+
+CanvasGrid.displayName = 'CanvasGrid';
 
 const CanvasContainer = styled.canvas`
   position: absolute;
