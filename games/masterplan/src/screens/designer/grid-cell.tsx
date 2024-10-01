@@ -1,5 +1,5 @@
 import React from 'react';
-import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../js/consts';
+import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../js/consts';
 
 interface GridCellProps {
   col: number;

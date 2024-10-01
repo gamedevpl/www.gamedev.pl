@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ContextMenu } from './ContextMenu';
-import { CanvasGrid } from './CanvasGrid';
-import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT, MAX_COL, MAX_ROW } from '../js/consts';
+import { ContextMenu } from './context-menu';
+import { CanvasGrid } from './canvas-grid';
+import {
+  DESIGN_FIELD_WIDTH,
+  DESIGN_FIELD_HEIGHT,
+  SOLDIER_WIDTH,
+  SOLDIER_HEIGHT,
+  MAX_COL,
+  MAX_ROW,
+} from '../../js/consts';
 
 export interface Unit {
   id: number;
@@ -23,10 +30,24 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
   const designerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load initial units or default configuration
+    // Load initial units with the new configuration
     const initialUnits: Unit[] = [
-      { id: 1, col: 0, row: 0, sizeCol: 1, sizeRow: 1, type: 'archer', command: 'wait-advance' },
-      { id: 2, col: 2, row: 2, sizeCol: 2, sizeRow: 2, type: 'tank', command: 'advance' },
+      // Warriors (4 units, 8x2 each)
+      { id: 1, col: 0, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 2, col: 8, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 3, col: 16, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 4, col: 24, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+
+      // Tanks (2 units, 4x4 each)
+      { id: 5, col: 8, row: 3, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+      { id: 6, col: 20, row: 3, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+
+      // Archers (2 units, 4x2 each)
+      { id: 7, col: 8, row: 8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+      { id: 8, col: 20, row: 8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+
+      // Artillery (1 unit, 8x1)
+      { id: 9, col: 12, row: 11, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
     ];
     setUnits(initialUnits);
   }, []);
