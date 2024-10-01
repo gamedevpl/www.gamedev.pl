@@ -1,5 +1,3 @@
-import { loadBattleString } from './battle-string.js';
-
 /** @define {boolean} */
 export const DEBUG = true;
 

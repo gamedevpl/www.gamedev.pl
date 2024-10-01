@@ -1,6 +1,5 @@
-import { loadBattleString } from './battle-string.js';
 import { DEBUG, NULL } from './consts.js';
-import { EVENT_TIMEOUT, EVENT_READYSTATE, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND } from './events.js';
+import { EVENT_TIMEOUT, EVENT_BATTLE_START, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND } from './events.js';
 import { stateGameBattleInit } from './states/state-game-battle.js';
 
 /**
@@ -35,8 +34,8 @@ Function.prototype.WeakState = function (timeLimit) {
  */
 export function stateInit() {
   return function InitHandler(eventType, eventObject) {
-    if (eventType == EVENT_READYSTATE && eventObject == 'complete') {
-      return new stateGameBattleInit(loadBattleString(), loadBattleString());
+    if (eventType == EVENT_BATTLE_START) {
+      return new stateGameBattleInit(eventObject.units, eventObject.units);
     }
   }.State();
 }
