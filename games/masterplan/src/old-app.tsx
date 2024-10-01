@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 
-import { useCustomEvent } from '../../nukes/src/events';
+import { useCustomEvent, dispatchCustomEvent } from '../../nukes/src/events';
+
+import { Unit } from './components/DesignerScreen';
 
 import assetSoldierWarrior from './assets/soldier-warrior.png';
 import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';
@@ -14,9 +16,11 @@ import assetSoldierTankDead from './assets/soldier-tank-dead.png';
 import assetSoldierArtillery from './assets/soldier-artillery.png';
 import assetSoldierArtilleryDead from './assets/soldier-artillery-dead.png';
 
-export function OldApp({ onBattleEnd }: { onBattleEnd: () => void }) {
+export function OldApp({ onBattleEnd, units }: { onBattleEnd: () => void; units: Unit[] }) {
   useEffect(() => {
-    import('./js/main');
+    import('./js/main').then(() => {
+      dispatchCustomEvent('battleStart', { units });
+    });
   }, []);
 
   useCustomEvent('battleEnd', () => {

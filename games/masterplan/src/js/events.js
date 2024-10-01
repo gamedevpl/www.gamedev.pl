@@ -7,7 +7,7 @@ export const EVENT_HASHCHANGE = eventCounter++;
 /** @const */
 export const EVENT_TIMEOUT = eventCounter++;
 export const EVENT_RAF = eventCounter++;
-export const EVENT_READYSTATE = eventCounter++;
+export const EVENT_BATTLE_START = eventCounter++;
 export const EVENT_DOCUMENT_HIDDEN = eventCounter++;
 export const EVENT_DOCUMENT_VISIBLE = eventCounter++;
 
@@ -44,7 +44,7 @@ export const EVENT_ARROW_RIGHT_UP = eventCounter++;
 export const EVENT_ARROW_UP_UP = eventCounter++;
 export const EVENT_ARROW_DOWN_UP = eventCounter++;
 
-export const EVENT_TOUCH_START = eventCounter++; 
+export const EVENT_TOUCH_START = eventCounter++;
 
 // battle
 export const EVENT_DAMAGE = eventCounter++;

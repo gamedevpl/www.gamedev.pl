@@ -2,7 +2,7 @@ import '../css/main.css';
 import { initializeControls } from './controls.js';
 import {
   EVENT_RAF,
-  EVENT_READYSTATE,
+  EVENT_BATTLE_START,
   EVENT_DOCUMENT_HIDDEN,
   EVENT_DOCUMENT_VISIBLE,
   EVENT_HASHCHANGE,
@@ -23,13 +23,9 @@ requestAnimationFrame(updateAnimation);
 
 initializeControls(updateState);
 
-if (document.readyState === 'complete') {
-  updateState(EVENT_READYSTATE, document.readyState);
-} else {
-  document.onreadystatechange = function () {
-    updateState(EVENT_READYSTATE, document.readyState);
-  };
-}
+document.addEventListener('battleStart', (event) => {
+  updateState(EVENT_BATTLE_START, { units: event.detail.units });
+});
 
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
