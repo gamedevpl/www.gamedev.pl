@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import styled from 'styled-components';
 import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../../js/consts';
 
 interface Unit {
@@ -126,8 +127,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
 
     const col = Math.floor(x / cellWidth) - GRID_CENTER_X;
     const row = Math.floor(y / cellHeight) - GRID_CENTER_Y;
@@ -136,13 +137,21 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
   };
 
   return (
-    <canvas
+    <CanvasContainer
       ref={canvasRef}
       width={width}
       height={height}
       onClick={handleCanvasClick}
       onMouseDown={onMouseDown}
-      style={{ border: '1px solid #000' }}
     />
   );
 };
+
+const CanvasContainer = styled.canvas`
+  position: absolute;
+  transform: translate(-50%, -50%);
+  left: 50%;
+  top: 50%;
+  max-width: 90vw;
+  max-height: 80vh;
+`;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import styled from 'styled-components';
 import { ContextMenu } from './context-menu';
 import { CanvasGrid } from './canvas-grid';
 import {
@@ -127,7 +128,11 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const { col, row } = inverseTransformCoordinates(e.clientX - rect.left, e.clientY - rect.top);
+    const canvas = e.target as HTMLCanvasElement;
+    const { col, row } = inverseTransformCoordinates(
+      (e.clientX - rect.left) * (canvas.width / rect.width),
+      (e.clientY - rect.top) * (canvas.height / rect.height),
+    );
 
     const clickedUnit = units.find(
       (unit) => col >= unit.col && col < unit.col + unit.sizeCol && row >= unit.row && row < unit.row + unit.sizeRow,
@@ -137,8 +142,14 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
       setIsDragging(true);
       setDraggedUnit(clickedUnit);
       setDragOffset({
-        x: e.clientX - rect.left - transformCoordinates(clickedUnit.col, clickedUnit.row).x,
-        y: e.clientY - rect.top - transformCoordinates(clickedUnit.col, clickedUnit.row).y,
+        x:
+          e.clientX -
+          rect.left -
+          transformCoordinates(clickedUnit.col, clickedUnit.row).x / (canvas.width / rect.width),
+        y:
+          e.clientY -
+          rect.top -
+          transformCoordinates(clickedUnit.col, clickedUnit.row).y / (canvas.height / rect.height),
       });
       setContextMenuPosition(null);
     }
@@ -147,11 +158,12 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
   const handleCanvasMouseMove = useCallback(
     (e: MouseEvent) => {
       if (isDragging && draggedUnit) {
-        const rect = designerRef.current?.getBoundingClientRect();
-        if (rect) {
+        const canvas = e.target as HTMLCanvasElement;
+        if (canvas?.tagName === 'CANVAS') {
+          const rect = canvas.getBoundingClientRect();
           const { col, row } = inverseTransformCoordinates(
-            e.clientX - rect.left - dragOffset.x,
-            e.clientY - rect.top - dragOffset.y,
+            (e.clientX - rect.left) * (canvas.width / rect.width) - dragOffset.x,
+            (e.clientY - rect.top) * (canvas.height / rect.height) - dragOffset.y,
           );
           handleUnitMove(draggedUnit, col, row);
         }
@@ -176,12 +188,7 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
   }, [handleCanvasMouseMove, handleCanvasMouseUp]);
 
   return (
-    <div
-      ref={designerRef}
-      style={{
-        position: 'relative',
-      }}
-    >
+    <DesignerContainer ref={designerRef}>
       <CanvasGrid
         width={DESIGN_FIELD_WIDTH}
         height={DESIGN_FIELD_HEIGHT}
@@ -195,24 +202,29 @@ export const DesignerScreen = ({ onStartBattle }: { onStartBattle: (units: Unit[
       {contextMenuPosition && selectedUnit && (
         <ContextMenu unit={selectedUnit} position={contextMenuPosition} onModify={handleUnitModify} />
       )}
-      <button
-        style={{
-          position: 'absolute',
-          top: '-40px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          padding: '10px 20px',
-          fontSize: '16px',
-          backgroundColor: '#4CAF50',
-          color: 'black',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
-        }}
-        onClick={handleStartBattle}
-      >
-        Start Battle
-      </button>
-    </div>
+      <button onClick={handleStartBattle}>Start Battle</button>
+    </DesignerContainer>
   );
 };
+
+const DesignerContainer = styled.div`
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+
+  > button {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4caf50;
+    color: black;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+`;
