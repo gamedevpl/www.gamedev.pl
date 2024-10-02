@@ -4,7 +4,7 @@ import { SoldierPlan } from './soldierplan.js';
 import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts.js';
 
 export class MasterPlan {
-  constructor(initialPosition, units) {
+  constructor(initialPosition, units, direction) {
     var angle = VMath.atan2(initialPosition, [0, 0]);
 
     this.type = [];
@@ -39,9 +39,6 @@ export class MasterPlan {
         }
       }
     });
-    var center = [this.formation.reduce((r, pos) => Math.max(pos[0], r), 0) / 2, 0];
-
-    this.formation = this.formation.map((pos) => VMath.rotate(VMath.sub(pos, center), angle + Math.PI / 2));
   }
 
   getSoldierCount() {

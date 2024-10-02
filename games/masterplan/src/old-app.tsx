@@ -16,10 +16,18 @@ import assetSoldierTankDead from './assets/soldier-tank-dead.png';
 import assetSoldierArtillery from './assets/soldier-artillery.png';
 import assetSoldierArtilleryDead from './assets/soldier-artillery-dead.png';
 
-export function OldApp({ onBattleEnd, units }: { onBattleEnd: () => void; units: Unit[] }) {
+export function OldApp({
+  onBattleEnd,
+  playerUnits,
+  oppositionUnits,
+}: {
+  onBattleEnd: () => void;
+  playerUnits: Unit[];
+  oppositionUnits: Unit[];
+}) {
   useEffect(() => {
     import('./js/main').then(() => {
-      dispatchCustomEvent('battleStart', { units });
+      dispatchCustomEvent('battleStart', { playerUnits, oppositionUnits });
     });
   }, []);
 

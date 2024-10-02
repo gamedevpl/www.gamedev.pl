@@ -18,6 +18,7 @@ interface CanvasGridProps {
   onTouchMove: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onTouchEnd: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onModifyUnit: (unitId: number, changes: Partial<Pick<Unit, 'type' | 'sizeCol' | 'sizeRow'>>) => void;
+  isPlayerArea: boolean;
 }
 
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -44,6 +45,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
     onTouchMove,
     onTouchEnd,
     onCellClick,
+    isPlayerArea,
   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [unitImages, setUnitImages] = useState<Record<string, HTMLImageElement>>({});
@@ -104,8 +106,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
             ctx.fillRect(x, y, unitWidth, unitHeight);
           }
 
-          // Draw border for selected unit
-          if (unit.id === selectedUnitId) {
+          // Draw border for selected unit (only in player area)
+          if (isPlayerArea && unit.id === selectedUnitId) {
             ctx.strokeStyle = 'yellow';
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, unitWidth, unitHeight);
@@ -119,7 +121,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
           ctx.fillText(unit.type, x + unitWidth / 2, y + unitHeight / 2);
         });
       },
-      [units, selectedUnitId, unitImages, cellWidth, cellHeight],
+      [units, selectedUnitId, unitImages, cellWidth, cellHeight, isPlayerArea],
     );
 
     useEffect(() => {
@@ -141,6 +143,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
     const handleCanvasClick = useCallback(
       (event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isPlayerArea) return; // Only allow interactions in the player area
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -153,12 +157,13 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
         onCellClick(col, row);
       },
-      [cellWidth, cellHeight, onCellClick],
+      [cellWidth, cellHeight, onCellClick, isPlayerArea],
     );
 
     return (
       <CanvasContainer
         ref={canvasRef}
+        data-is-player-area={isPlayerArea}
         width={width}
         height={height}
         onClick={handleCanvasClick}
@@ -181,5 +186,5 @@ const CanvasContainer = styled.canvas`
   left: 50%;
   top: 50%;
   max-width: 90vw;
-  max-height: 80vh;
+  max-height: 50vh;
 `;
