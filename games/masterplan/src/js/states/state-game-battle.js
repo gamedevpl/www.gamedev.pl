@@ -14,7 +14,7 @@ import {
 } from '../events.js';
 import { renderGame } from '../game/game-render.js';
 import { VMath } from '../vmath.js';
-import { LAYER_DEFAULT } from '../consts.js';
+import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
 import { dispatchCustomEvent } from '../../../../nukes/src/events';
 import { stateInit } from '../states.js';
 
@@ -22,9 +22,9 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
   var world = new GameWorld();
 
   var createMasterPlan = (direction, color, definitions) => {
-    var angle = direction * Math.PI - Math.PI / 2;
-    var initialPosition = [Math.cos(angle) * 300, Math.sin(angle) * 300];
-    var masterPlan = new MasterPlan(initialPosition, definitions);
+    var angle = (Math.PI / 2) * direction;
+    var initialPosition = [0, (direction * EDGE_RADIUS) / 2];
+    var masterPlan = new MasterPlan(initialPosition, definitions, direction);
 
     for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
       var soldierPlan = masterPlan.getSolderPlan(i);
@@ -38,7 +38,7 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
   };
 
   createMasterPlan(1, '#ff0000', definitions);
-  createMasterPlan(0, '#00ff00', definitionsEnemy);
+  createMasterPlan(-1, '#00ff00', definitionsEnemy);
 
   var HUD = new GameHUD(world);
 

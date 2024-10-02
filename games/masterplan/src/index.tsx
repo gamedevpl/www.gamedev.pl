@@ -9,10 +9,11 @@ type CurrentScreen =
   | {
       name: 'intro';
     }
-  | { name: 'designer' }
+  | { name: 'designer'; playerUnits?: Unit[] }
   | {
       name: 'battle';
-      units: Unit[];
+      playerUnits: Unit[];
+      oppositionUnits: Unit[];
     };
 
 const App: React.FC = () => {
@@ -22,22 +23,33 @@ const App: React.FC = () => {
     setCurrentScreen({ name: 'designer' });
   };
 
-  const handleStartBattle = (units: Unit[]) => {
-    setCurrentScreen({ name: 'battle', units });
+  const handleStartBattle = (playerUnits: Unit[], oppositionUnits: Unit[]) => {
+    setCurrentScreen({ name: 'battle', playerUnits, oppositionUnits });
     // Here you would typically initialize the battle with the designed units
     console.log('Battle started!');
   };
 
   const handleBattleEnd = () => {
-    setCurrentScreen({ name: 'designer' });
+    setCurrentScreen({
+      name: 'designer',
+      playerUnits: currentScreen.name === 'battle' ? currentScreen.playerUnits : undefined,
+    });
   };
 
   return (
     <React.StrictMode>
       <GlobalStyles />
       {currentScreen?.name === 'intro' && <IntroScreen onPlayClick={handlePlayClick} />}
-      {currentScreen?.name === 'designer' && <DesignerScreen onStartBattle={handleStartBattle} />}
-      {currentScreen?.name === 'battle' && <OldApp onBattleEnd={handleBattleEnd} units={currentScreen.units} />}
+      {currentScreen?.name === 'designer' && (
+        <DesignerScreen onStartBattle={handleStartBattle} initialPlayerUnits={currentScreen.playerUnits} />
+      )}
+      {currentScreen?.name === 'battle' && (
+        <OldApp
+          onBattleEnd={handleBattleEnd}
+          playerUnits={currentScreen.playerUnits}
+          oppositionUnits={currentScreen.oppositionUnits}
+        />
+      )}
     </React.StrictMode>
   );
 };

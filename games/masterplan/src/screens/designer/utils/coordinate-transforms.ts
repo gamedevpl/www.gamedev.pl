@@ -1,9 +1,4 @@
-import {
-  SOLDIER_WIDTH,
-  SOLDIER_HEIGHT,
-  GRID_CENTER_X,
-  GRID_CENTER_Y,
-} from '../../../js/consts';
+import { SOLDIER_WIDTH, SOLDIER_HEIGHT, GRID_CENTER_X, GRID_CENTER_Y } from '../../../js/consts';
 
 /**
  * Transforms grid coordinates to canvas coordinates.
@@ -50,7 +45,7 @@ export const clamp = (value: number, min: number, max: number): number => {
  */
 export const rectanglesIntersect = (
   rect1: { x: number; y: number; width: number; height: number },
-  rect2: { x: number; y: number; width: number; height: number }
+  rect2: { x: number; y: number; width: number; height: number },
 ): boolean => {
   return (
     rect1.x < rect2.x + rect2.width &&

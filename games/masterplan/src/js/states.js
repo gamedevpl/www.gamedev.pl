@@ -35,7 +35,7 @@ Function.prototype.WeakState = function (timeLimit) {
 export function stateInit() {
   return function InitHandler(eventType, eventObject) {
     if (eventType == EVENT_BATTLE_START) {
-      return new stateGameBattleInit(eventObject.units, eventObject.units);
+      return new stateGameBattleInit(eventObject.playerUnits, eventObject.oppositionUnits);
     }
   }.State();
 }
@@ -60,5 +60,5 @@ export function updateState(eventType, eventObject) {
   }
 }
 
-setInterval(() => updateState(EVENT_INTERVAL_100MS), 100);
-setInterval(() => updateState(EVENT_INTERVAL_SECOND), 1000);
+window.interval100ms = window.interval100ms ?? setInterval(() => updateState(EVENT_INTERVAL_100MS), 100);
+window.interval1s = window.interval1s ?? setInterval(() => updateState(EVENT_INTERVAL_SECOND), 1000);

@@ -24,7 +24,10 @@ requestAnimationFrame(updateAnimation);
 initializeControls(updateState);
 
 document.addEventListener('battleStart', (event) => {
-  updateState(EVENT_BATTLE_START, { units: event.detail.units });
+  updateState(EVENT_BATTLE_START, {
+    playerUnits: event.detail.playerUnits,
+    oppositionUnits: event.detail.oppositionUnits,
+  });
 });
 
 document.addEventListener('visibilitychange', function () {
