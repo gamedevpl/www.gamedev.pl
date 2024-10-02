@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
 import { CanvasGrid } from './canvas-grid';
 import { useUnitDrag } from './hooks/unit-drag';
@@ -11,6 +11,8 @@ import {
   MAX_COL,
   MAX_ROW,
 } from '../../js/consts';
+import { UnitInfoPanel } from './unit-info-panel';
+import { calculatePanelPosition } from './utils/ui-utils';
 
 export interface Unit {
   id: number;
@@ -18,7 +20,7 @@ export interface Unit {
   row: number;
   sizeCol: number;
   sizeRow: number;
-  type: string;
+  type: 'warrior' | 'archer' | 'tank' | 'artillery';
   command: string;
 }
 
@@ -38,9 +40,12 @@ interface DesignerScreenProps {
 
 export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle }) => {
   const [units, setUnits] = useState<Unit[]>([]);
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [infoPanelPosition, setInfoPanelPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { selectedUnit, handleUnitSelect } = useUnitSelection(units);
-  const { handleDragStart, handleDragMove, handleDragEnd } = useUnitDrag(units, setUnits);
+  const { handleDragStart, handleDragMove, handleDragEnd, isDragging } = useUnitDrag(units, setUnits);
 
   useEffect(() => {
     const initialUnits: Unit[] = [
@@ -81,8 +86,27 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
     [handleUnitSelect],
   );
 
+  useEffect(() => {
+    if (isDragging) {
+      setShowInfoPanel(false);
+    } else {
+      if (selectedUnit && containerRef.current) {
+        const position = calculatePanelPosition(
+          selectedUnit,
+          containerRef.current.querySelector('canvas')! as HTMLCanvasElement,
+          SOLDIER_WIDTH,
+          SOLDIER_HEIGHT,
+        );
+        setInfoPanelPosition(position);
+        setShowInfoPanel(true);
+      } else {
+        setShowInfoPanel(false);
+      }
+    }
+  }, [isDragging, selectedUnit]);
+
   return (
-    <DesignerContainer>
+    <DesignerContainer ref={containerRef}>
       <CanvasGrid
         width={DESIGN_FIELD_WIDTH}
         height={DESIGN_FIELD_HEIGHT}
@@ -96,6 +120,9 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
         onMouseUp={handleDragEnd}
         onModifyUnit={handleUnitModify}
       />
+      {showInfoPanel && selectedUnit && (
+        <UnitInfoPanel unit={selectedUnit} position={infoPanelPosition} onModifyUnit={handleUnitModify} />
+      )}
       <StartBattleButton onClick={handleStartBattle}>Start Battle</StartBattleButton>
     </DesignerContainer>
   );
@@ -107,6 +134,7 @@ const DesignerContainer = styled.div`
   height: 100%;
   left: 0;
   top: 0;
+  overflow: hidden;
 `;
 
 const StartBattleButton = styled.button`
