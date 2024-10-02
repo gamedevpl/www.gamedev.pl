@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { CanvasGrid } from './canvas-grid';
-import { ContextMenu } from './context-menu';
 import { useUnitDrag } from './hooks/unit-drag';
 import { useUnitSelection } from './hooks/unit-selection';
-import { transformCoordinates } from './utils/coordinate-transforms';
 import {
   DESIGN_FIELD_WIDTH,
   DESIGN_FIELD_HEIGHT,
@@ -40,7 +38,6 @@ interface DesignerScreenProps {
 
 export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle }) => {
   const [units, setUnits] = useState<Unit[]>([]);
-  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
   const { selectedUnit, handleUnitSelect } = useUnitSelection(units);
   const { handleDragStart, handleDragMove, handleDragEnd } = useUnitDrag(units, setUnits);
@@ -62,7 +59,6 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
 
   const handleUnitModify = useCallback((unitId: number, changes: Partial<Unit>) => {
     setUnits((prevUnits) => prevUnits.map((u) => (u.id === unitId ? { ...u, ...changes } : u)));
-    setContextMenuPosition(null);
   }, []);
 
   const handleStartBattle = useCallback(() => {
@@ -80,16 +76,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
 
   const handleCellClick = useCallback(
     (col: number, row: number) => {
-      const clickedUnit = handleUnitSelect(col, row);
-      if (clickedUnit) {
-        const { x, y } = transformCoordinates(
-          clickedUnit.col + clickedUnit.sizeCol / 2,
-          clickedUnit.row + clickedUnit.sizeRow / 2,
-        );
-        setContextMenuPosition({ x, y });
-      } else {
-        setContextMenuPosition(null);
-      }
+      handleUnitSelect(col, row);
     },
     [handleUnitSelect],
   );
@@ -99,18 +86,16 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
       <CanvasGrid
         width={DESIGN_FIELD_WIDTH}
         height={DESIGN_FIELD_HEIGHT}
-        cellWidth={SOLDIER_WIDTH}
-        cellHeight={SOLDIER_HEIGHT}
+        cellWidth={SOLDIER_WIDTH * (DESIGN_FIELD_WIDTH / DESIGN_FIELD_WIDTH)}
+        cellHeight={SOLDIER_HEIGHT * (DESIGN_FIELD_HEIGHT / DESIGN_FIELD_HEIGHT)}
         units={units}
         selectedUnitId={selectedUnit?.id || null}
         onCellClick={handleCellClick}
         onMouseDown={handleDragStart}
         onMouseMove={handleDragMove}
         onMouseUp={handleDragEnd}
+        onModifyUnit={handleUnitModify}
       />
-      {contextMenuPosition && selectedUnit && (
-        <ContextMenu unit={selectedUnit} position={contextMenuPosition} onModify={handleUnitModify} />
-      )}
       <StartBattleButton onClick={handleStartBattle}>Start Battle</StartBattleButton>
     </DesignerContainer>
   );
