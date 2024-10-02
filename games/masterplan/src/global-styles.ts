@@ -25,5 +25,6 @@ body {
   align-items: center;
   height: 100vh;
   background-color: #242424;
+  overscroll-behavior: none;
 }
 `;

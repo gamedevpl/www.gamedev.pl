@@ -14,6 +14,9 @@ interface CanvasGridProps {
   onMouseDown: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   onMouseMove: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   onMouseUp: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  onTouchStart: (e: React.TouchEvent<HTMLCanvasElement>) => void;
+  onTouchMove: (e: React.TouchEvent<HTMLCanvasElement>) => void;
+  onTouchEnd: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onModifyUnit: (unitId: number, changes: Partial<Pick<Unit, 'type' | 'sizeCol' | 'sizeRow'>>) => void;
 }
 
@@ -37,6 +40,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
     onMouseDown,
     onMouseMove,
     onMouseUp,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
     onCellClick,
   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -147,7 +153,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
         onCellClick(col, row);
       },
-      [cellWidth, cellHeight, onCellClick, units],
+      [cellWidth, cellHeight, onCellClick],
     );
 
     return (
@@ -159,6 +165,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       />
     );
   },
