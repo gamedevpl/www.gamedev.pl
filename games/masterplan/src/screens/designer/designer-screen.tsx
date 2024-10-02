@@ -118,6 +118,9 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle })
         onMouseDown={handleDragStart}
         onMouseMove={handleDragMove}
         onMouseUp={handleDragEnd}
+        onTouchStart={handleDragStart}
+        onTouchMove={handleDragMove}
+        onTouchEnd={handleDragEnd}
         onModifyUnit={handleUnitModify}
       />
       {showInfoPanel && selectedUnit && (
