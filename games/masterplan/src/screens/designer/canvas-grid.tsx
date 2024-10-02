@@ -98,8 +98,12 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
           if (unitImages[unit.type]) {
             for (let xi = 0; xi < unit.sizeCol; xi++)
-              for (let yi = 0; yi < unit.sizeRow; yi++)
+              for (let yi = 0; yi < unit.sizeRow; yi++) {
                 ctx.drawImage(unitImages[unit.type], x + xi * cellWidth, y + yi * cellHeight, cellWidth, cellHeight);
+                // Draw small rectangle representing unit's life
+                ctx.fillStyle = isPlayerArea ? '#ff0000' : '#00ff00';
+                ctx.fillRect(x + xi * cellWidth, y + yi * cellHeight + 10, 10, 5);
+              }
           } else {
             // Fallback to colored rectangle if image is not loaded
             ctx.fillStyle = unit.type === 'archer' ? 'green' : unit.type === 'tank' ? 'blue' : 'red';
