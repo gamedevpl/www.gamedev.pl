@@ -1,61 +1,83 @@
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
 import { Unit } from './designer-screen';
+import { UNIT_ASSET_PATHS } from '../../js/consts';
 
 interface ContextMenuProps {
   unit: Unit;
   position: { x: number; y: number };
-  onModify: (unitId: number, changes: Partial<Pick<Unit, 'type' | 'command' | 'sizeCol' | 'sizeRow'>>) => void;
+  onModify: (unitId: number, changes: Partial<Pick<Unit, 'type' | 'sizeCol' | 'sizeRow'>>) => void;
+  canvasSize: { width: number; height: number };
+  totalUnitCount: number;
 }
 
 interface MenuOption<T extends keyof Unit> {
   label: string;
   value: Unit[T];
+  imagePath?: string;
 }
 
-const commandOptions: MenuOption<'command'>[] = [
-  { label: 'Wait-Advance', value: 'wait-advance' },
-  { label: 'Advance', value: 'advance' },
-  { label: 'Advance-Wait', value: 'advance-wait' },
-  { label: 'Flank-Left', value: 'flank-left' },
-  { label: 'Flank-Right', value: 'flank-right' },
-];
-
 const typeOptions: MenuOption<'type'>[] = [
-  { label: 'Archer', value: 'archer' },
-  { label: 'Warrior', value: 'warrior' },
-  { label: 'Tank', value: 'tank' },
-  { label: 'Artillery', value: 'artillery' },
+  { label: 'Archer', value: 'archer', imagePath: UNIT_ASSET_PATHS.archer },
+  { label: 'Warrior', value: 'warrior', imagePath: UNIT_ASSET_PATHS.warrior },
+  { label: 'Tank', value: 'tank', imagePath: UNIT_ASSET_PATHS.tank },
+  { label: 'Artillery', value: 'artillery', imagePath: UNIT_ASSET_PATHS.artillery },
 ];
 
-const formationOptions: Array<{ label: string; sizeCol: number; sizeRow: number }> = [
-  { label: '1x4', sizeCol: 1, sizeRow: 4 },
-  { label: '2x2', sizeCol: 2, sizeRow: 2 },
-  { label: '4x1', sizeCol: 4, sizeRow: 1 },
-];
+const getFormationOptions = (unitCount: number): Array<{ label: string; sizeCol: number; sizeRow: number }> => {
+  const options = [
+    { label: '1x1', sizeCol: 1, sizeRow: 1 },
+    { label: '2x1', sizeCol: 2, sizeRow: 1 },
+    { label: '1x2', sizeCol: 1, sizeRow: 2 },
+  ];
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({ unit, position, onModify }) => {
+  if (unitCount >= 4) {
+    options.push({ label: '2x2', sizeCol: 2, sizeRow: 2 });
+  }
+
+  if (unitCount >= 8) {
+    options.push({ label: '4x2', sizeCol: 4, sizeRow: 2 });
+    options.push({ label: '2x4', sizeCol: 2, sizeRow: 4 });
+  }
+
+  return options;
+};
+
+export const ContextMenu: React.FC<ContextMenuProps> = ({ unit, position, onModify, canvasSize, totalUnitCount }) => {
   const handleTypeChange = (newType: Unit['type']) => {
     onModify(unit.id, { type: newType });
-  };
-
-  const handleCommandChange = (newCommand: Unit['command']) => {
-    onModify(unit.id, { command: newCommand });
   };
 
   const handleFormationChange = (newSizeCol: number, newSizeRow: number) => {
     onModify(unit.id, { sizeCol: newSizeCol, sizeRow: newSizeRow });
   };
 
-  const menuStyle = useMemo(
-    () => ({
+  const menuStyle = useMemo(() => {
+    const { x, y } = position;
+    const { width, height } = canvasSize;
+    const menuWidth = 200; // Adjust based on your menu's actual width
+    const menuHeight = 300; // Adjust based on your menu's actual height
+
+    let adjustedX = x;
+    let adjustedY = y;
+
+    // Ensure the menu stays within the canvas bounds
+    if (x + menuWidth > width) {
+      adjustedX = width - menuWidth;
+    }
+    if (y + menuHeight > height) {
+      adjustedY = height - menuHeight;
+    }
+
+    return {
       position: 'absolute' as const,
-      left: `${position.x}px`,
-      top: `${position.y}px`,
+      left: `${adjustedX}px`,
+      top: `${adjustedY}px`,
       zIndex: 1000,
-    }),
-    [position],
-  );
+    };
+  }, [position, canvasSize]);
+
+  const formationOptions = useMemo(() => getFormationOptions(totalUnitCount), [totalUnitCount]);
 
   return (
     <MenuContainer style={menuStyle}>
@@ -64,27 +86,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ unit, position, onModi
         <h4>Type:</h4>
         <OptionGroup>
           {typeOptions.map((option) => (
-            <OptionButton
+            <TypeButton
               key={option.value}
               onClick={() => handleTypeChange(option.value)}
               $isSelected={unit.type === option.value}
             >
-              {option.label}
-            </OptionButton>
-          ))}
-        </OptionGroup>
-      </Section>
-      <Section>
-        <h4>Command:</h4>
-        <OptionGroup>
-          {commandOptions.map((option) => (
-            <OptionButton
-              key={option.value}
-              onClick={() => handleCommandChange(option.value)}
-              $isSelected={unit.command === option.value}
-            >
-              {option.label}
-            </OptionButton>
+              <TypeImage src={option.imagePath} alt={option.label} />
+            </TypeButton>
           ))}
         </OptionGroup>
       </Section>
@@ -107,41 +115,68 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ unit, position, onModi
 };
 
 const MenuContainer = styled.div`
-  background-color: white;
-  border: 1px solid black;
-  padding: 10px;
-  border-radius: 5px;
-  color: black;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 2px solid #4a4a4a;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  color: #333;
+  font-family: Arial, sans-serif;
+  max-width: 250px;
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 18px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+  }
+
+  h4 {
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
 `;
 
 const Section = styled.div`
-  margin-bottom: 10px;
+  margin-bottom: 20px;
 `;
 
 const OptionGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 10px;
 `;
 
-const OptionButton = styled.button<{ $isSelected: boolean }>`
-  margin: 2px;
-  padding: 5px 10px;
+const Button = styled.button<{ $isSelected: boolean }>`
   cursor: pointer;
-  background-color: ${(props) => (props.$isSelected ? 'lightblue' : 'white')};
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  transition: background-color 0.2s;
+  background-color: ${(props) => (props.$isSelected ? '#4a90e2' : '#f0f0f0')};
+  color: ${(props) => (props.$isSelected ? 'white' : '#333')};
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.2s ease-in-out;
 
   &:hover {
-    background-color: ${(props) => (props.$isSelected ? 'lightblue' : '#f0f0f0')};
+    background-color: ${(props) => (props.$isSelected ? '#3a80d2' : '#e0e0e0')};
   }
 `;
 
-const FormationButton = styled(OptionButton)`
-  width: 40px;
-  height: 40px;
+const TypeButton = styled(Button)`
+  width: 50px;
+  height: 50px;
+  padding: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
+`;
+
+const TypeImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+`;
+
+const FormationButton = styled(Button)`
+  padding: 8px 12px;
+  font-size: 14px;
 `;
