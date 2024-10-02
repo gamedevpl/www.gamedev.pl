@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../../js/consts';
 import { Unit } from './designer-screen';
-import { ContextMenu } from './context-menu';
 
 interface CanvasGridProps {
   width: number;
@@ -39,15 +38,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
     onMouseMove,
     onMouseUp,
     onCellClick,
-    onModifyUnit,
   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [unitImages, setUnitImages] = useState<Record<string, HTMLImageElement>>({});
-    const [contextMenuState, setContextMenuState] = useState<{
-      isOpen: boolean;
-      position: { x: number; y: number };
-      unit: Unit | null;
-    }>({ isOpen: false, position: { x: 0, y: 0 }, unit: null });
 
     useEffect(() => {
       const loadUnitImages = async () => {
@@ -152,47 +145,21 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
         const col = Math.floor(x / cellWidth) - GRID_CENTER_X;
         const row = Math.floor(y / cellHeight) - GRID_CENTER_Y;
 
-        const clickedUnit = units.find(
-          (unit) =>
-            col >= unit.col && col < unit.col + unit.sizeCol && row >= unit.row && row < unit.row + unit.sizeRow,
-        );
-
-        if (clickedUnit) {
-          setContextMenuState({
-            isOpen: true,
-            position: { x: event.clientX, y: event.clientY },
-            unit: clickedUnit,
-          });
-        } else {
-          setContextMenuState({ isOpen: false, position: { x: 0, y: 0 }, unit: null });
-        }
-
         onCellClick(col, row);
       },
       [cellWidth, cellHeight, onCellClick, units],
     );
 
     return (
-      <>
-        <CanvasContainer
-          ref={canvasRef}
-          width={width}
-          height={height}
-          onClick={handleCanvasClick}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-        />
-        {contextMenuState.isOpen && contextMenuState.unit && (
-          <ContextMenu
-            unit={contextMenuState.unit}
-            position={contextMenuState.position}
-            onModify={onModifyUnit}
-            canvasSize={{ width, height }}
-            totalUnitCount={units.length}
-          />
-        )}
-      </>
+      <CanvasContainer
+        ref={canvasRef}
+        width={width}
+        height={height}
+        onClick={handleCanvasClick}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+      />
     );
   },
 );
