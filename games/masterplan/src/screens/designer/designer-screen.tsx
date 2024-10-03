@@ -20,16 +20,6 @@ export interface Unit {
   command: string;
 }
 
-const centerAroundZero = (units: Unit[], direction: 1 | -1): Unit[] => {
-  // const centerX = Math.floor(MAX_COL / 2);
-  // const centerY = Math.floor(MAX_ROW / 2);
-  return units.map((unit) => ({
-    ...unit,
-    col: unit.col * direction,
-    row: unit.row * direction,
-  }));
-};
-
 interface DesignerScreenProps {
   onStartBattle: (playerUnits: Unit[], oppositionUnits: Unit[]) => void;
   initialPlayerUnits?: Unit[];
@@ -47,10 +37,10 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   const { generateOppositionPlan, updateOppositionPlan } = useOppositionAI();
 
   useEffect(() => {
-    setPlayerUnits(centerAroundZero(initialPlayerUnits ?? DEFAULT_UNITS, 1));
+    setPlayerUnits(initialPlayerUnits ?? DEFAULT_UNITS);
 
     // Generate initial opposition plan
-    setOppositionUnits(centerAroundZero(generateOppositionPlan(), -1));
+    setOppositionUnits(generateOppositionPlan());
   }, []);
 
   const handleUnitModify = useCallback((unitId: number, changes: Partial<Unit>) => {
