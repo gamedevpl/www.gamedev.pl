@@ -36,6 +36,9 @@ export class MasterPlan {
           case 'flank-right':
             this.plan.push([new FlankRightCommand(angle), new AttackCommand()]);
             break;
+          default:
+            this.plan.push([new AdvanceCommand(), new AttackCommand()]);
+            break;
         }
       }
     });
