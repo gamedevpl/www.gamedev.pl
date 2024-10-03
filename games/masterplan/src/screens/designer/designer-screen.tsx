@@ -79,7 +79,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   useDebounce(
     () => {
-      updateOppositionPlan(playerUnits);
+      setOppositionUnits(updateOppositionPlan(playerUnits));
     },
     1000,
     [playerUnits],
