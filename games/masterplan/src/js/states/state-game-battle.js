@@ -24,17 +24,17 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
   var createMasterPlan = (direction, color, definitions) => {
     var angle = (Math.PI / 2) * direction;
     var initialPosition = [0, (direction * EDGE_RADIUS) / 2];
-    var masterPlan = new MasterPlan(initialPosition, definitions, direction);
+    var masterPlan = new MasterPlan(initialPosition, definitions);
 
     for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
       var soldierPlan = masterPlan.getSolderPlan(i);
-      var pos = VMath.add(soldierPlan.getPosition(), initialPosition);
+      var pos = soldierPlan.getPosition();
+
+      pos = VMath.add(pos, initialPosition);
       world.addObject(
         new SoldierObject(pos[0], pos[1], angle + Math.PI, soldierPlan, world, color, masterPlan.getType(i)),
       );
     }
-
-    return masterPlan;
   };
 
   createMasterPlan(1, '#ff0000', definitions);

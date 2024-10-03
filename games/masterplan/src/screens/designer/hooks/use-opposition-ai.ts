@@ -14,14 +14,14 @@ export const useOppositionAI = () => {
 
     // For now, we'll implement a simple static plan
     const staticPlan: Unit[] = [
-      { id: 101, col: -12, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-      { id: 102, col: 0, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-      { id: 103, col: 12, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-      { id: 104, col: -8, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-      { id: 105, col: 8, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-      { id: 106, col: -10, row: -2, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-      { id: 107, col: 10, row: -2, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-      { id: 108, col: 0, row: -1, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
+      { id: 101, col: -12, row: -0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 102, col: 0, row: -0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 103, col: 12, row: -0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
+      { id: 104, col: -8, row: -4, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+      { id: 105, col: 8, row: -4, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+      { id: 106, col: -10, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+      { id: 107, col: 10, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+      { id: 108, col: 0, row: -9, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
     ];
 
     setOppositionPlan(staticPlan);

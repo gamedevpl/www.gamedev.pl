@@ -4,7 +4,7 @@ import { SoldierPlan } from './soldierplan.js';
 import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts.js';
 
 export class MasterPlan {
-  constructor(initialPosition, units, direction) {
+  constructor(initialPosition, units) {
     var angle = VMath.atan2(initialPosition, [0, 0]);
 
     this.type = [];
