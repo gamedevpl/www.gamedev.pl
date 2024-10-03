@@ -32,6 +32,7 @@ export const useOppositionAI = () => {
     (_playerPlan: Unit[]): Unit[] => {
       // TODO: Implement AI logic to update the opposition plan based on the player's plan
       // For now, we'll just return the current opposition plan without changes
+      setOppositionPlan(oppositionPlan);
       return oppositionPlan;
     },
     [oppositionPlan],

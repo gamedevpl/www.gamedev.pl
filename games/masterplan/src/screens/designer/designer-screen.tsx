@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
+import { useDebounce } from 'react-use';
 import { CanvasGrid } from './canvas-grid';
 import { useUnitDrag } from './hooks/unit-drag';
 import { useUnitSelection } from './hooks/unit-selection';
@@ -43,7 +44,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   const { selectedUnit, handleUnitSelect } = useUnitSelection(playerUnits);
   const { handleDragStart, handleDragMove, handleDragEnd, isDragging } = useUnitDrag(playerUnits, setPlayerUnits);
-  const { generateOppositionPlan } = useOppositionAI();
+  const { generateOppositionPlan, updateOppositionPlan } = useOppositionAI();
 
   useEffect(() => {
     setPlayerUnits(centerAroundZero(initialPlayerUnits ?? DEFAULT_UNITS, 1));
@@ -57,7 +58,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   }, []);
 
   const handleStartBattle = useCallback(() => {
-    onStartBattle(playerUnits, oppositionUnits);
+    onStartBattle(playerUnits, updateOppositionPlan(playerUnits));
   }, [playerUnits, oppositionUnits, onStartBattle]);
 
   const handleCellClick = useCallback(
@@ -85,6 +86,14 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
       }
     }
   }, [isDragging, selectedUnit]);
+
+  useDebounce(
+    () => {
+      updateOppositionPlan(playerUnits);
+    },
+    1000,
+    [playerUnits],
+  );
 
   return (
     <DesignerContainer ref={containerRef}>
