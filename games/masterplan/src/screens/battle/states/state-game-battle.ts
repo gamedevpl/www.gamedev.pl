@@ -11,17 +11,18 @@ import {
   EVENT_DAMAGE,
   EVENT_DAMAGE_ARROW,
   EVENT_MOUSE_CLICK,
-} from '../events';
+} from '../events.js';
 import { renderGame } from '../game/game-render.js';
 import { VMath } from '../util/vmath.js';
-import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
-import { dispatchCustomEvent } from '../../../../../nukes/src/events';
-import { stateInit } from '../states';
+import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
+import { dispatchCustomEvent } from '../../../../../nukes/src/events.js';
+import { stateInit } from '../states.js';
+import { Unit } from '../../designer/designer-screen.js';
 
-export function stateGameBattleInit(definitions, definitionsEnemy) {
+export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[]) {
   var world = new GameWorld();
 
-  var createMasterPlan = (direction, color, definitions) => {
+  var createMasterPlan = (direction: 1 | -1, color: string, definitions: Unit[]) => {
     var angle = (Math.PI / 2) * direction;
     var initialPosition = [0, (direction * EDGE_RADIUS) / 2];
     var masterPlan = new MasterPlan(initialPosition, definitions);
@@ -42,21 +43,21 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
 
   var HUD = new GameHUD(world);
 
-  HUD.setNames(definitions.username, definitionsEnemy.username || 'Computer');
+  HUD.setNames('Player', 'Computer');
 
-  return function GameBattleInitHandler(eventType) {
-    renderGame(world, HUD);
+  return function GameBattleInitHandler(eventType: number) {
+    renderGame(world);
     HUD.render(world);
 
     if (eventType == EVENT_TIMEOUT) {
-      return new stateGameBattle(world, HUD, definitions, definitionsEnemy);
+      return stateGameBattle(world, HUD);
     }
   };
 }
 
-export function stateGameBattle(world, HUD, definitions, definitionsEnemy) {
+export function stateGameBattle(world: GameWorld, HUD: GameHUD) {
   var damageTotal = 0;
-  var damage = {
+  var damageMap: Record<number, Record<string, number>> = {
     [EVENT_DAMAGE]: {
       '#ff0000': 0,
       '#00ff00': 0,
@@ -66,11 +67,11 @@ export function stateGameBattle(world, HUD, definitions, definitionsEnemy) {
       '#00ff00': 0,
     },
   };
-  var damageCount = JSON.parse(JSON.stringify(damage));
+  var damageCount = JSON.parse(JSON.stringify(damageMap));
 
-  return function GameBattleHandler(eventType, eventObject) {
+  return function GameBattleHandler(eventType: number, eventObject: unknown) {
     if (eventType == EVENT_RAF) {
-      var elapsedTime = Math.min(eventObject, 1000);
+      var elapsedTime = Math.min(eventObject as number, 1000);
       while (elapsedTime > 0) {
         elapsedTime = world.update(elapsedTime);
       }
@@ -89,35 +90,29 @@ export function stateGameBattle(world, HUD, definitions, definitionsEnemy) {
 
       var balance = HUD.getBalance(world);
       if (world.getTime() > 60000 || balance === 0 || balance === 1) {
-        return new stateGameBattleEnd(world, HUD, definitions, definitionsEnemy);
+        return stateGameBattleEnd(world, HUD);
       }
     }
 
     if (eventType === EVENT_DAMAGE || eventType === EVENT_DAMAGE_ARROW) {
-      damageTotal += eventObject.damage;
-      damage[eventType][eventObject.soldier.color] += eventObject.damage;
-      damageCount[eventType][eventObject.soldier.color]++;
+      const { damage, soldier } = eventObject as { damage: number; soldier: SoldierObject };
+      damageTotal += damage;
+      damageMap[eventType][soldier.color] += damage;
+      damageCount[eventType][soldier.color]++;
     }
   };
 }
 
-export function stateGameBattleEnd(world, HUD, definitions, definitionsEnemy) {
-  var result = HUD.renderResults(world);
-  return function GameBattleEndHandler(eventType) {
+export function stateGameBattleEnd(world: GameWorld, HUD: GameHUD) {
+  HUD.renderResults(world);
+
+  return function GameBattleEndHandler(eventType: number) {
     renderGame(world);
 
     if (eventType === EVENT_MOUSE_CLICK) {
       freeCanvas(LAYER_DEFAULT);
       HUD.destroy();
-      if (result === '#ff0000' && !definitionsEnemy.username) {
-        var newEnemy = JSON.parse(JSON.stringify(definitions));
-        delete newEnemy.username;
-        // return new stateGameDesigner(definitions, newEnemy);
-        dispatchCustomEvent('battleEnd');
-      } else {
-        // return new stateGameDesigner(definitions, definitionsEnemy);
-        dispatchCustomEvent('battleEnd');
-      }
+      dispatchCustomEvent('battleEnd');
       return stateInit();
     }
   };
