@@ -8,7 +8,7 @@ export class Command {
 
   execute() {}
 
-  isDone() {
+  isDone(_worldTime) {
     return this.done;
   }
 }

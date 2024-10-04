@@ -24,7 +24,7 @@ export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[
 
   var createMasterPlan = (direction: 1 | -1, color: string, definitions: Unit[]) => {
     var angle = (Math.PI / 2) * direction;
-    var initialPosition = [0, (direction * EDGE_RADIUS) / 2];
+    var initialPosition: [number, number] = [0, (direction * EDGE_RADIUS) / 2];
     var masterPlan = new MasterPlan(initialPosition, definitions);
 
     for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
