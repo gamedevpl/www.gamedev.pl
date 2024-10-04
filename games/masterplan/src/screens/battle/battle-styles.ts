@@ -1,3 +1,6 @@
+import { createGlobalStyle } from 'styled-components';
+
+export const BattleStyles = createGlobalStyle`
 #game-hud {
   position: fixed;
   z-index: 2;
@@ -132,3 +135,15 @@
   content: "Winning!";
   margin-left: 3px;
 }
+
+
+
+canvas#layer-default {
+  max-width: 100vw;
+  max-height: 100vh;
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, #30c530 0%, #30c530 64%, #138c13 100%);
+  z-index: 1;
+}
+`;

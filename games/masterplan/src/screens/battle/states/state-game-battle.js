@@ -15,7 +15,7 @@ import {
 import { renderGame } from '../game/game-render.js';
 import { VMath } from '../vmath.js';
 import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
-import { dispatchCustomEvent } from '../../../../nukes/src/events';
+import { dispatchCustomEvent } from '../../../../../nukes/src/events.ts';
 import { stateInit } from '../states.js';
 
 export function stateGameBattleInit(definitions, definitionsEnemy) {

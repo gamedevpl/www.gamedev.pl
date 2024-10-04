@@ -2,7 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { CanvasGrid } from './canvas-grid';
 import { Unit } from './designer-screen';
-import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../js/consts';
+import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../battle/consts';
 
 interface OppositionPlanProps {
   units: Unit[];

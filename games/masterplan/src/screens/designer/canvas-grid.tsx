@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import styled from 'styled-components';
-import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../../js/consts';
+import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../battle/consts';
 import { Unit } from './designer-screen';
 
 interface CanvasGridProps {

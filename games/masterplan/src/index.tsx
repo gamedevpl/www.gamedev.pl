@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { GlobalStyles } from './global-styles';
 import { IntroScreen } from './screens/intro/intro-screen';
 import { DesignerScreen, Unit } from './screens/designer/designer-screen';
-import { OldApp } from './old-app';
+import { OldApp } from './screens/battle/battle-screen';
 
 type CurrentScreen =
   | {

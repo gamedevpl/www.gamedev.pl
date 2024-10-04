@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 
-import { useCustomEvent, dispatchCustomEvent } from '../../nukes/src/events';
+import { useCustomEvent, dispatchCustomEvent } from '../../../../nukes/src/events';
 
-import { Unit } from './screens/designer/designer-screen';
+import { Unit } from '../designer/designer-screen';
 
 import assetSoldierWarrior from './assets/soldier-warrior.png';
 import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';
@@ -15,6 +15,8 @@ import assetSoldierTankDead from './assets/soldier-tank-dead.png';
 
 import assetSoldierArtillery from './assets/soldier-artillery.png';
 import assetSoldierArtilleryDead from './assets/soldier-artillery-dead.png';
+import { BattleStyles } from './battle-styles';
+import './main.js';
 
 export function OldApp({
   onBattleEnd,
@@ -26,9 +28,7 @@ export function OldApp({
   oppositionUnits: Unit[];
 }) {
   useEffect(() => {
-    import('./js/main').then(() => {
-      dispatchCustomEvent('battleStart', { playerUnits, oppositionUnits });
-    });
+    dispatchCustomEvent('battleStart', { playerUnits, oppositionUnits });
   }, []);
 
   useCustomEvent('battleEnd', () => {
@@ -37,19 +37,16 @@ export function OldApp({
 
   return (
     <>
+      <BattleStyles />
       {/* assets */}
       <img src={assetSoldierWarrior} id="asset-soldier-warrior" />
       <img src={assetSoldierWarriorDead} id="asset-soldier-warrior-dead" />
-
       <img src={assetSoldierArcher} id="asset-soldier-archer" />
       <img src={assetSoldierArcherDead} id="asset-soldier-archer-dead" />
-
       <img src={assetSoldierTank} id="asset-soldier-tank" />
       <img src={assetSoldierTankDead} id="asset-soldier-tank-dead" />
-
       <img src={assetSoldierArtillery} id="asset-soldier-artillery" />
       <img src={assetSoldierArtilleryDead} id="asset-soldier-artillery-dead" />
-
       {/* HUD */}
       <div id="game-hud">
         <div id="battle-stats">
