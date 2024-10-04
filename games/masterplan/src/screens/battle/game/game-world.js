@@ -1,4 +1,4 @@
-import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../consts.js';
+import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../consts';
 import { VMath } from '../util/vmath.js';
 import { ArrowObject, ExplosionObject } from './objects/object-arrow.js';
 import { SoldierObject } from './objects/object-soldier.js';

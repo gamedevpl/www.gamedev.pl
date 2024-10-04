@@ -1,5 +1,5 @@
 import { getCanvas } from '../util/canvas.js';
-import { LAYER_DEFAULT } from '../consts.js';
+import { LAYER_DEFAULT } from '../consts';
 
 export function renderGame(world) {
   /** {Canvas} */

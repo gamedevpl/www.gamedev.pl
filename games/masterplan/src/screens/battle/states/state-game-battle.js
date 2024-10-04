@@ -11,10 +11,10 @@ import {
   EVENT_DAMAGE,
   EVENT_DAMAGE_ARROW,
   EVENT_MOUSE_CLICK,
-} from '../events.js';
+} from '../events';
 import { renderGame } from '../game/game-render.js';
 import { VMath } from '../util/vmath.js';
-import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
+import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
 import { dispatchCustomEvent } from '../../../../../nukes/src/events';
 import { stateInit } from '../states';
 
