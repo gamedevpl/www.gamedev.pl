@@ -15,8 +15,8 @@ import {
 import { renderGame } from '../game/game-render.js';
 import { VMath } from '../util/vmath.js';
 import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
-import { dispatchCustomEvent } from '../../../../../nukes/src/events.ts';
-import { stateInit } from '../states.js';
+import { dispatchCustomEvent } from '../../../../../nukes/src/events';
+import { stateInit } from '../states';
 
 export function stateGameBattleInit(definitions, definitionsEnemy) {
   var world = new GameWorld();
@@ -51,7 +51,7 @@ export function stateGameBattleInit(definitions, definitionsEnemy) {
     if (eventType == EVENT_TIMEOUT) {
       return new stateGameBattle(world, HUD, definitions, definitionsEnemy);
     }
-  }.WeakState(1000);
+  };
 }
 
 export function stateGameBattle(world, HUD, definitions, definitionsEnemy) {

@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { GlobalStyles } from './global-styles';
 import { IntroScreen } from './screens/intro/intro-screen';
 import { DesignerScreen, Unit } from './screens/designer/designer-screen';
-import { OldApp } from './screens/battle/battle-screen';
+import { BattleScreen } from './screens/battle/battle-screen';
 
 type CurrentScreen =
   | {
@@ -44,7 +44,7 @@ const App: React.FC = () => {
         <DesignerScreen onStartBattle={handleStartBattle} initialPlayerUnits={currentScreen.playerUnits} />
       )}
       {currentScreen?.name === 'battle' && (
-        <OldApp
+        <BattleScreen
           onBattleEnd={handleBattleEnd}
           playerUnits={currentScreen.playerUnits}
           oppositionUnits={currentScreen.oppositionUnits}

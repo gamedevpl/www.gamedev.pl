@@ -16,7 +16,7 @@ import {
   DEFENCE_COOLDOWN,
   SEEK_COOLDOWN,
 } from '../../consts.js';
-import { updateState } from '../../states.js';
+import { updateState } from '../../states';
 import { ArrowObject } from './object-arrow.js';
 import { $ } from '../../util/dom.js';
 
