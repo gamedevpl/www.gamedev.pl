@@ -1,4 +1,5 @@
 import { Unit } from '../designer-screen';
+import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [
   { id: 801, col: -16, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
@@ -30,34 +31,3 @@ export const probabilityScore = (playerUnits: Unit[]): number => {
   // Combine scores (you can adjust weights as needed)
   return (compositionScore * 0.4 + positionScore * 0.4 + sizeScore * 0.2) * 100;
 };
-
-function countUnitTypes(units: Unit[]): Record<string, number> {
-  return units.reduce((acc, unit) => {
-    acc[unit.type] = (acc[unit.type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-}
-
-function analyzePositions(units: Unit[]): { left: number; center: number; right: number; front: number } {
-  const positions = { left: 0, center: 0, right: 0, front: 0 };
-  units.forEach((unit) => {
-    if (unit.col < -5) positions.left++;
-    else if (unit.col > 5) positions.right++;
-    else positions.center++;
-
-    if (unit.row > -5) positions.front++;
-  });
-  const total = units.length;
-  return {
-    left: positions.left / total,
-    center: positions.center / total,
-    right: positions.right / total,
-    front: positions.front / total,
-  };
-}
-
-function averageUnitSize(units: Unit[]): number {
-  if (units.length === 0) return 0;
-  const totalSize = units.reduce((sum, unit) => sum + unit.sizeCol * unit.sizeRow, 0);
-  return totalSize / (units.length * 16); // Normalize to [0, 1] assuming max size is 4x4
-}
