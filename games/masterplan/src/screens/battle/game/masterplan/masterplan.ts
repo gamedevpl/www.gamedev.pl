@@ -1,10 +1,23 @@
 import { VMath } from '../../util/vmath.js';
-import { AdvanceCommand, WaitCommand, AttackCommand, FlankLeftCommand, FlankRightCommand } from './commands.js';
+import {
+  AdvanceCommand,
+  WaitCommand,
+  AttackCommand,
+  FlankLeftCommand,
+  FlankRightCommand,
+  Command,
+} from './commands.js';
 import { SoldierPlan } from './soldierplan.js';
-import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts';
+import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts.js';
+import { Unit } from '../../../designer/designer-screen.js';
+import { SoldierObject } from '../objects/object-soldier.js';
 
 export class MasterPlan {
-  constructor(initialPosition, units) {
+  type: ('warrior' | 'archer' | 'tank' | 'artillery')[];
+  formation: [number, number][];
+  plan: Command[][];
+  claims: Record<number, SoldierObject[]>;
+  constructor(initialPosition: [number, number], units: Unit[]) {
     var angle = VMath.atan2(initialPosition, [0, 0]);
 
     this.type = [];
@@ -14,9 +27,12 @@ export class MasterPlan {
 
     units.forEach((unit) => {
       var soldierCount = unit['sizeCol'] * unit['sizeRow'];
-      var offset = [unit['col'] * SOLDIER_WIDTH, unit['row'] * SOLDIER_HEIGHT];
+      var offset: [number, number] = [unit['col'] * SOLDIER_WIDTH, unit['row'] * SOLDIER_HEIGHT];
       for (var i = 0; i < soldierCount; i++) {
-        var pos = [(i % unit['sizeCol']) * SOLDIER_WIDTH, ((i / unit['sizeCol']) << 0) * SOLDIER_HEIGHT];
+        var pos: [number, number] = [
+          (i % unit['sizeCol']) * SOLDIER_WIDTH,
+          ((i / unit['sizeCol']) << 0) * SOLDIER_HEIGHT,
+        ];
         this.formation.push(VMath.add(pos, offset));
         this.type.push(unit['type']);
 
@@ -48,11 +64,11 @@ export class MasterPlan {
     return this.formation.length;
   }
 
-  getType(soldierId) {
+  getType(soldierId: number) {
     return this.type[soldierId];
   }
 
-  getSolderPlan(soldierId) {
+  getSolderPlan(soldierId: number) {
     return new SoldierPlan(this, this.formation[soldierId], this.plan[soldierId]);
   }
 }
