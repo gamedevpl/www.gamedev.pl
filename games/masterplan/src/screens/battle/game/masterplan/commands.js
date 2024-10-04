@@ -1,5 +1,5 @@
 import { VMath } from '../../util/vmath.js';
-import { EDGE_RADIUS } from '../../consts.js';
+import { EDGE_RADIUS } from '../../consts';
 
 export class Command {
   start(worldTime) {
