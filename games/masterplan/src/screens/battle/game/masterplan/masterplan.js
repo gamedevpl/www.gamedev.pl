@@ -1,4 +1,4 @@
-import { VMath } from '../../vmath.js';
+import { VMath } from '../../util/vmath.js';
 import { AdvanceCommand, WaitCommand, AttackCommand, FlankLeftCommand, FlankRightCommand } from './commands.js';
 import { SoldierPlan } from './soldierplan.js';
 import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts.js';

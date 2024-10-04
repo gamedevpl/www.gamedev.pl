@@ -8,11 +8,10 @@ import {
   EVENT_WINDOW_RESIZE,
 } from './events.js';
 import { updateState } from './states.js';
-import { currentTime } from './util.js';
 
-let lastTick = currentTime();
+let lastTick = Date.now();
 function updateAnimation() {
-  let newTick = currentTime();
+  let newTick = Date.now();
   updateState(EVENT_RAF, newTick - lastTick);
   lastTick = newTick;
   requestAnimationFrame(updateAnimation);

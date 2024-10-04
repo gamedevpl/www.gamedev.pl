@@ -1,4 +1,4 @@
-import { $ } from '../util';
+import { $ } from '../util/dom';
 
 export class GameHUD {
   constructor(world) {

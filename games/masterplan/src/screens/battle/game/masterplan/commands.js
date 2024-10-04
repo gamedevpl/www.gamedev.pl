@@ -1,4 +1,4 @@
-import { VMath } from '../../vmath.js';
+import { VMath } from '../../util/vmath.js';
 import { EDGE_RADIUS } from '../../consts.js';
 
 export class Command {
