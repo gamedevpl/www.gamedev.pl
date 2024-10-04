@@ -98,7 +98,6 @@ export const BattleStyles = createGlobalStyle`
 }
 
 #battle-balance-left {
-  display: inline-block;
   height: 30px;
   width: 50%;
   background: red;
@@ -107,7 +106,6 @@ export const BattleStyles = createGlobalStyle`
 
 
 #battle-balance-right {
-  display: inline-block;
   height: 30px;
   width: 50%;
   background: #0fde0f;
