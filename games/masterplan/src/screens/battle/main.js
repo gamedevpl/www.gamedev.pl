@@ -1,4 +1,3 @@
-import '../css/main.css';
 import { initializeControls } from './controls.js';
 import {
   EVENT_RAF,

@@ -88,10 +88,10 @@ export const GRID_CENTER_X = Math.floor(MAX_COL / 2);
 /** @const */
 export const GRID_CENTER_Y = Math.floor(MAX_ROW / 2);
 
-import assetSoldierWarrior from '../assets/soldier-warrior.png';
-import assetSoldierArcher from '../assets/soldier-archer.png';
-import assetSoldierTank from '../assets/soldier-tank.png';
-import assetSoldierArtillery from '../assets/soldier-artillery.png';
+import assetSoldierWarrior from './assets/soldier-warrior.png';
+import assetSoldierArcher from './assets/soldier-archer.png';
+import assetSoldierTank from './assets/soldier-tank.png';
+import assetSoldierArtillery from './assets/soldier-artillery.png';
 
 /** @const */
 export const UNIT_ASSET_PATHS = {

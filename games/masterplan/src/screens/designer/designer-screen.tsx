@@ -5,7 +5,7 @@ import { CanvasGrid } from './canvas-grid';
 import { useUnitDrag } from './hooks/unit-drag';
 import { useUnitSelection } from './hooks/unit-selection';
 import { useOppositionAI } from './hooks/use-opposition-ai';
-import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../js/consts';
+import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../battle/consts';
 import { UnitInfoPanel } from './unit-info-panel';
 import { calculatePanelPosition } from './utils/ui-utils';
 import { OppositionPlan } from './opposition-plan';

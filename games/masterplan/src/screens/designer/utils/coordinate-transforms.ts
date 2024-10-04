@@ -1,4 +1,4 @@
-import { SOLDIER_WIDTH, SOLDIER_HEIGHT, GRID_CENTER_X, GRID_CENTER_Y } from '../../../js/consts';
+import { SOLDIER_WIDTH, SOLDIER_HEIGHT, GRID_CENTER_X, GRID_CENTER_Y } from '../../battle/consts';
 
 /**
  * Transforms grid coordinates to canvas coordinates.
