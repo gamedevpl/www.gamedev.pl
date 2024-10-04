@@ -1,8 +1,5 @@
 let eventCounter = 0;
 
-// hash change
-export const EVENT_HASHCHANGE = eventCounter++;
-
 // generic events
 /** @const */
 export const EVENT_TIMEOUT = eventCounter++;

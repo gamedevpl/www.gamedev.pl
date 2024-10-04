@@ -10,7 +10,6 @@ import {
   EVENT_RACE_OVER,
   EVENT_ESCAPE,
   EVENT_DOCUMENT_HIDDEN,
-  EVENT_HASHCHANGE,
   EVENT_ARROW_DOWN_UP,
 } from '../events.js';
 import { stateGamePause } from './state-game-pause.js';
@@ -55,13 +54,6 @@ export function stateGamePlay(world, race, boat, HUD) {
 
     if (eventType == EVENT_ESCAPE || eventType == EVENT_DOCUMENT_HIDDEN) {
       return new stateGamePause(world, race, boat, HUD);
-    }
-
-    if (eventType == EVENT_HASHCHANGE && eventObject == '') {
-      world.destroy();
-      HUD.destroy();
-
-      return new stateIntro();
     }
   }.State();
 }

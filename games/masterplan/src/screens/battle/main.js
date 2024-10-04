@@ -4,7 +4,6 @@ import {
   EVENT_BATTLE_START,
   EVENT_DOCUMENT_HIDDEN,
   EVENT_DOCUMENT_VISIBLE,
-  EVENT_HASHCHANGE,
   EVENT_WINDOW_RESIZE,
 } from './events.js';
 import { updateState } from './states.js';
@@ -34,10 +33,6 @@ document.addEventListener('visibilitychange', function () {
   } else {
     updateState(EVENT_DOCUMENT_VISIBLE);
   }
-});
-
-window.addEventListener('hashchange', function () {
-  updateState(EVENT_HASHCHANGE, document.location.hash);
 });
 
 window.addEventListener('resize', function () {
