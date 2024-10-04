@@ -20,6 +20,7 @@ import './main';
 import { initCurrentState, updateState } from './states';
 import { EVENT_BATTLE_START, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND, EVENT_RAF, EVENT_TIMEOUT } from './events';
 import { useRafLoop } from 'react-use';
+import { BattleControls } from './battle-controls';
 
 export function BattleScreen({
   onBattleEnd,
@@ -65,6 +66,8 @@ export function BattleScreen({
   return (
     <>
       <BattleStyles />
+      <BattleControls />
+
       {/* assets */}
       <img src={assetSoldierWarrior} id="asset-soldier-warrior" />
       <img src={assetSoldierWarriorDead} id="asset-soldier-warrior-dead" />
