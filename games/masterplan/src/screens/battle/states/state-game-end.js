@@ -20,5 +20,5 @@ export function stateGameEnd(world, race, boat, HUD) {
 
       return new stateIntro();
     }
-  }.State();
+  };
 }
