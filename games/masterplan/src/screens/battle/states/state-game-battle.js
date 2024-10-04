@@ -2,7 +2,7 @@ import { GameWorld } from '../game/game-world.js';
 import { MasterPlan } from '../game/masterplan/masterplan.js';
 import { SoldierObject } from '../game/objects/object-soldier.js';
 import { GameHUD } from '../game/game-hud.js';
-import { freeCanvas } from '../canvas.js';
+import { freeCanvas } from '../util/canvas.js';
 import {
   EVENT_TIMEOUT,
   EVENT_RAF,
@@ -13,7 +13,7 @@ import {
   EVENT_MOUSE_CLICK,
 } from '../events.js';
 import { renderGame } from '../game/game-render.js';
-import { VMath } from '../vmath.js';
+import { VMath } from '../util/vmath.js';
 import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
 import { dispatchCustomEvent } from '../../../../../nukes/src/events.ts';
 import { stateInit } from '../states.js';

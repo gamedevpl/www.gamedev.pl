@@ -1,4 +1,4 @@
-import { LAYER_DEFAULT, EDGE_RADIUS } from './consts';
+import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
 
 /**
  * @param {String} layerName

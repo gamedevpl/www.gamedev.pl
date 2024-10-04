@@ -1,5 +1,5 @@
 import { GameObject } from './game-object.js';
-import { VMath } from '../../vmath.js';
+import { VMath } from '../../util/vmath.js';
 import { BALL_RANGE } from '../../consts.js';
 
 const DIMS = {
