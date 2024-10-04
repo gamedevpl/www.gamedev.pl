@@ -13,9 +13,6 @@ export const EVENT_INTERVAL_SECOND = eventCounter++;
 
 export const EVENT_WINDOW_RESIZE = eventCounter++;
 
-// game events
-export const EVENT_RACE_OVER = eventCounter++;
-
 // menu events
 /** @const */
 export const EVENT_MENU_PLAY = eventCounter++;

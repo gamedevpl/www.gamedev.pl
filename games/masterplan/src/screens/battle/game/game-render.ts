@@ -1,7 +1,10 @@
 import { getCanvas } from '../util/canvas.js';
-import { LAYER_DEFAULT } from '../consts';
+import { LAYER_DEFAULT } from '../consts.js';
+import { GameWorld } from './game-world.js';
+import { GameObject } from './objects/game-object.js';
+import { SoldierObject } from './objects/object-soldier.js';
 
-export function renderGame(world) {
+export function renderGame(world: GameWorld) {
   /** {Canvas} */
   var canvas = getCanvas(LAYER_DEFAULT);
 
@@ -15,10 +18,10 @@ export function renderGame(world) {
   canvas.arc(0, 0, world.getEdgeRadius());
 
   // render dead bodies
-  world.queryObjects('Soldier', (soldier) => soldier.life === 0).forEach(renderObject);
+  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.life === 0).forEach(renderObject);
 
   // render soldiers
-  world.queryObjects('Soldier', (soldier) => soldier.life > 0).forEach(renderObject);
+  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.life > 0).forEach(renderObject);
 
   // render other objects
   world.queryObjects('Arrow').forEach(renderObject);
@@ -30,8 +33,8 @@ export function renderGame(world) {
 /**
  * @param {GameObject} object
  */
-export function renderObject(object) {
-  var canvas = getCanvas();
+export function renderObject(object: GameObject) {
+  var canvas = getCanvas(LAYER_DEFAULT);
 
   canvas.save().fillStyle('red').translate(object.getX(), object.getY()).rotate(object.getDirection());
   object.render(canvas);
