@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   EVENT_ARROW_DOWN_DOWN,
   EVENT_ARROW_DOWN_UP,
@@ -15,10 +16,20 @@ import {
   EVENT_MOUSE_MOVE,
   EVENT_MOUSE_UP,
 } from './events.js';
+import { updateState } from './states.js';
 
-export function initializeControls(updateState) {
+function useWindowEvent<T extends Event>(name: keyof WindowEventMap, handler: (event: T) => void) {
+  useEffect(() => {
+    window.addEventListener(name, handler as EventListener);
+    return () => {
+      window.removeEventListener(name, handler as EventListener);
+    };
+  }, [name, handler]);
+}
+
+export function BattleControls() {
   // key events
-  window.addEventListener('keydown', function (event) {
+  useWindowEvent<KeyboardEvent>('keydown', function (event) {
     if (event.keyCode == 37) {
       updateState(EVENT_ARROW_LEFT_DOWN);
     }
@@ -37,7 +48,7 @@ export function initializeControls(updateState) {
     updateState(EVENT_KEY_DOWN, event.keyCode);
   });
 
-  window.addEventListener('keyup', function (event) {
+  useWindowEvent<KeyboardEvent>('keyup', function (event) {
     if (event.keyCode == 37) {
       updateState(EVENT_ARROW_LEFT_UP);
     }
@@ -54,19 +65,21 @@ export function initializeControls(updateState) {
   });
 
   // mouse events
-  window.addEventListener('mousedown', function (event) {
+  useWindowEvent('mousedown', function (event) {
     updateState(EVENT_MOUSE_DOWN, event);
   });
 
-  window.addEventListener('mouseup', function (event) {
+  useWindowEvent('mouseup', function (event) {
     updateState(EVENT_MOUSE_UP, event);
   });
 
-  window.addEventListener('mousemove', function (event) {
+  useWindowEvent('mousemove', function (event) {
     updateState(EVENT_MOUSE_MOVE, event);
   });
 
-  window.addEventListener('click', function (event) {
+  useWindowEvent('click', function (event) {
     updateState(EVENT_MOUSE_CLICK, event);
   });
+
+  return null;
 }
