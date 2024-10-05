@@ -42,7 +42,12 @@ export const VMath = {
   atan2: function (A, B) {
     return Math.atan2(B[1] - A[1], B[0] - A[0]);
   },
-
+  /**
+   *
+   * @param {[number, number]} A
+   * @param {[number, number]} B
+   * @returns {[number, number]}
+   */
   sub: function (A, B) {
     return [A[0] - B[0], A[1] - B[1]];
   },
@@ -55,6 +60,12 @@ export const VMath = {
   add: function (A, B) {
     return [A[0] + B[0], A[1] + B[1]];
   },
+  /**
+   *
+   * @param {[number, number]} V
+   * @param {number} s
+   * @returns {[number, number]}
+   */
   scale: function (V, s) {
     return [V[0] * s, V[1] * s];
   },
