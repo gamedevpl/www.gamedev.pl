@@ -11,6 +11,7 @@ export class Particle {
     public velocityY: number,
     public velocityZ: number,
     public life: number,
+    public type: 'blood' | 'smoke' = 'blood',
   ) {}
 
   update(deltaTime: number) {
@@ -18,9 +19,17 @@ export class Particle {
     this.y += this.velocityY * deltaTime;
     this.z = Math.max(this.z + this.velocityZ * deltaTime, 0);
 
-    this.velocityX *= 0.98;
-    this.velocityY *= 0.98;
-    this.velocityZ -= this.gravity * deltaTime;
+    if (this.type === 'smoke') {
+      // Smoke particles float upwards and dissipate
+      this.velocityX *= 0.99;
+      this.velocityY *= 0.99;
+      this.velocityZ = Math.max(this.velocityZ - 1 * deltaTime, 0.5); // Slower descent for smoke
+    } else {
+      // Blood particles behave as before
+      this.velocityX *= 0.98;
+      this.velocityY *= 0.98;
+      this.velocityZ -= this.gravity * deltaTime;
+    }
 
     this.life -= deltaTime;
   }
@@ -30,7 +39,11 @@ export class Particle {
   }
 
   isDead() {
-    return this.life <= 0 && this.z <= 0 && Math.abs(this.velocityX) < 0.01 && Math.abs(this.velocityY) < 0.01;
+    if (this.type === 'smoke') {
+      return this.life <= 0;
+    } else {
+      return this.life <= 0 && this.z <= 0 && Math.abs(this.velocityX) < 0.01 && Math.abs(this.velocityY) < 0.01;
+    }
   }
 }
 
@@ -44,7 +57,6 @@ export class ParticleSystem {
     this.deadParticlesCanvas.width = width;
     this.deadParticlesCanvas.height = height;
     this.deadParticlesContext = this.deadParticlesCanvas.getContext('2d')!;
-    this.deadParticlesContext.fillStyle = 'red';
     this.deadParticlesContext.translate(width / 2, height / 2);
   }
 
@@ -57,7 +69,9 @@ export class ParticleSystem {
     this.particles = this.particles.filter((p) => {
       p.update(deltaTime);
       if (p.isDead()) {
-        deadParticles.push(p);
+        if (p.type === 'blood') {
+          deadParticles.push(p);
+        }
         return false;
       }
       return true;
@@ -66,13 +80,16 @@ export class ParticleSystem {
   }
 
   renderDeadParticles(deadParticles: Particle[]) {
-    const path = new Path2D();
+    const bloodPath = new Path2D();
     deadParticles.forEach((particle) => {
-      path.moveTo(particle.x, particle.y - particle.z);
-      path.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
-      path.closePath();
+      if (particle.type === 'blood') {
+        bloodPath.moveTo(particle.x, particle.y - particle.z);
+        bloodPath.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
+        bloodPath.closePath();
+      }
     });
-    this.deadParticlesContext.fill(path);
+    this.deadParticlesContext.fillStyle = 'red';
+    this.deadParticlesContext.fill(bloodPath);
   }
 
   renderDead(context: Canvas) {
@@ -88,14 +105,25 @@ export class ParticleSystem {
     context.save();
 
     // Render the active particles
-    context.fillStyle('red');
-    const path = new Path2D();
+    const bloodPath = new Path2D();
+    const smokePath = new Path2D();
     this.particles.forEach((particle) => {
+      const path = particle.type === 'smoke' ? smokePath : bloodPath;
       path.moveTo(particle.x, particle.y - particle.z);
-      path.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
+      path.arc(
+        particle.x,
+        particle.y - particle.z,
+        particle.type === 'smoke' ? Math.min(particle.life, 2) : 1,
+        0,
+        Math.PI * 2,
+      );
       path.closePath();
     });
-    context.fill(path);
+
+    context.fillStyle('red');
+    context.fill(bloodPath);
+    context.fillStyle('rgba(128, 128, 128, 0.5)');
+    context.fill(smokePath);
 
     context.restore();
   }

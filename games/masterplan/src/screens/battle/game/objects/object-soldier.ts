@@ -23,6 +23,7 @@ import { GameWorld } from '../game-world';
 import { SoldierPlan } from '../masterplan/soldierplan';
 import { Canvas } from '../../util/canvas';
 import { spillBlood } from '../particles/effects/blood-effect';
+import { createSmokeEffect } from '../particles/effects/smoke-effect';
 
 let soldierID = 0;
 
@@ -146,9 +147,6 @@ export class SoldierObject extends GameObject {
     this.cooldowns = {};
   }
 
-  /**
-   * @param {Canvas} canvas
-   */
   render(canvas: Canvas) {
     canvas
       .save()
@@ -172,7 +170,6 @@ export class SoldierObject extends GameObject {
     }
   }
 
-  // controls
   setTargetDirection(targetDirection: number) {
     this.targetDirection = targetDirection;
   }
@@ -181,7 +178,6 @@ export class SoldierObject extends GameObject {
     this.targetVelocity = targetVelocity * this.baseSpeed;
   }
 
-  // update
   updateVelocity(deltaTime: number) {
     this.velocity = this.getTargetVelocity() * deltaTime + this.velocity * (1 - deltaTime);
   }
@@ -206,14 +202,12 @@ export class SoldierObject extends GameObject {
     this.setX(this.vec[0] + this.force[0] * deltaTime);
     this.setY(this.vec[1] + this.force[1] * deltaTime);
 
-    // rotate object
     var cx = Math.cos(this.getDirection()) * (1 - deltaTime),
       cy = Math.sin(this.getDirection()) * (1 - deltaTime);
     var dx = Math.cos(this.targetDirection) * deltaTime,
       dy = Math.sin(this.targetDirection) * deltaTime;
     this.setDirection(Math.atan2(cy + dy, cx + dx));
 
-    // move force
     if (this.life > 0) {
       this.addForce(
         VMath.scale(
@@ -223,7 +217,6 @@ export class SoldierObject extends GameObject {
       );
     }
 
-    // degrade force
     this.force = VMath.sub(this.force, VMath.scale(this.force, deltaTime * 0.1));
     if (VMath.length(this.force) < VMath.EPSILON) {
       this.force = [0, 0];
@@ -258,7 +251,6 @@ export class SoldierObject extends GameObject {
   }
 
   seekEnemy(distance: number) {
-    // are there any enemies?
     if (this.enemy && (this.enemy.life <= 0 || this.enemy.distance(this) > distance)) {
       this.setEnemy(null);
     }
@@ -289,6 +281,8 @@ export class SoldierObject extends GameObject {
         aa.play('arrow');
         if (this.type === 'artillery') {
           this.hitBy(50);
+          // Create smoke effect when artillery fires
+          createSmokeEffect(this.vec, this.enemy.vec, this.world.particles);
         }
       }
       if (dist < MELEE_ATTACK_RANGE && this.cooldown('sword', MELEE_ATTACK_COOLDOWN)) {
@@ -301,7 +295,6 @@ export class SoldierObject extends GameObject {
 
   updatePlan() {
     if (!this.seekEnemy(this.seekRange)) {
-      // stick to the plan
       this.plan.getCommand(this.world.getTime()).execute(this);
     }
   }
@@ -330,7 +323,6 @@ export class SoldierObject extends GameObject {
     this.setEnemy(bySoldier);
     aa.play('damage');
 
-    // Trigger blood effect on hit
     spillBlood(this.vec, bySoldier.vec, damage / 5, this.world.particles);
   }
 
@@ -347,7 +339,6 @@ export class SoldierObject extends GameObject {
     updateState(EVENT_DAMAGE_ARROW, { soldier: this, damage: damage });
     aa.play('hitarrow');
 
-    // Trigger blood effect on hit
     spillBlood(this.vec, arrow.vec, damage / 5, this.world.particles);
   }
 

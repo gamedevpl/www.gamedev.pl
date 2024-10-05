@@ -22,7 +22,7 @@ export class GameWorld {
     };
     this.collisionHandlers = [];
     this.edgeRadius = EDGE_RADIUS * 1.5;
-    this.particles = new ParticleSystem(EDGE_RADIUS * 3, EDGE_RADIUS * 2); // Initialize with canvas size
+    this.particles = new ParticleSystem(EDGE_RADIUS * 3, EDGE_RADIUS * 2);
 
     this.worldTime = 0;
 
@@ -71,6 +71,7 @@ export class GameWorld {
 
     this.edgeRadius = Math.max(EDGE_RADIUS * 1.5 * (1 - this.getTime() / 60000), 400);
 
+    // Update particle system
     this.particles.update(deltaTime / UPDATE_TICK);
 
     return elapsedTime;
