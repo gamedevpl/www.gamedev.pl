@@ -1,7 +1,7 @@
 import { GameObject } from './game-object';
 import { VMath } from '../../util/vmath';
 import { EVENT_DAMAGE, EVENT_DAMAGE_ARROW } from '../../events';
-import { aa } from '../../lib/sound';
+import { aa } from '../../util/arcade-audio';
 import {
   MAX_LIFE,
   SOLDIER_WIDTH,
