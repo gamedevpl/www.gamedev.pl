@@ -17,7 +17,7 @@ export class ArrowObject extends GameObject {
   maxDist: number;
   attackBase: number;
   type: string;
-  v: number[];
+  v: [number, number];
   adir: number | undefined;
   ay: number | undefined;
 

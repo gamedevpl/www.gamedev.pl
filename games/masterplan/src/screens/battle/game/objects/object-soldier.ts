@@ -19,11 +19,50 @@ import {
 import { updateState } from '../../states';
 import { ArrowObject } from './object-arrow';
 import { $ } from '../../util/dom';
+import { GameWorld } from '../game-world';
+import { SoldierPlan } from '../masterplan/soldierplan';
+import { Canvas } from '../../util/canvas';
 
 let soldierID = 0;
 
 export class SoldierObject extends GameObject {
-  constructor(x, y, direction, plan, world, color, type) {
+  soldierId: number;
+  plan: SoldierPlan;
+  world: GameWorld;
+  type: string;
+  velocity: number;
+  targetVelocity: number;
+  force: [number, number];
+  targetDirection: number;
+  image: any;
+  imageDead: any;
+  color: string;
+  life: number;
+  newLife: number;
+  defenceCooldown: number;
+  weight: number;
+  baseSpeed: number;
+  seekRange: number = 0;
+  attackRange: number = 0;
+  rangeDefence: number = 0;
+  meleeDefence: number = 0;
+  meleeAttack: number = 0;
+  canCharge: boolean = false;
+  isMelee: boolean = false;
+  rangeAttack: number | undefined;
+  rangedCooldown: number | undefined;
+  rangeType: 'arrow' | 'ball' | undefined;
+  cooldowns: Record<string, number> = {};
+  enemy: any;
+  constructor(
+    x: number,
+    y: number,
+    direction: number,
+    plan: SoldierPlan,
+    world: GameWorld,
+    color: string,
+    type: 'tank' | 'warrior' | 'archer' | 'artillery',
+  ) {
     direction += (Math.random() - Math.random()) / 1000;
     super(x, y, SOLDIER_WIDTH, SOLDIER_HEIGHT, direction);
     this.soldierId = soldierID++;
@@ -108,7 +147,7 @@ export class SoldierObject extends GameObject {
   /**
    * @param {Canvas} canvas
    */
-  render(canvas) {
+  render(canvas: Canvas) {
     canvas
       .save()
       .translate(-this.getWidth() / 2, -this.getHeight() / 2)
@@ -116,7 +155,7 @@ export class SoldierObject extends GameObject {
 
     if (this.life > 0) {
       if (this.life < MAX_LIFE) {
-        canvas.drawText(10, 0, this.life << 0);
+        canvas.drawText(10, 0, String(this.life << 0));
       }
       canvas.fillStyle(this.color).fillRect(0, 10, 10, (5 * this.life) / MAX_LIFE);
     }
@@ -124,7 +163,7 @@ export class SoldierObject extends GameObject {
     canvas.restore();
   }
 
-  cooldown(name, maxValue) {
+  cooldown(name: string, maxValue: number) {
     if (!this.cooldowns[name] || this.world.getTime() > this.cooldowns[name]) {
       this.cooldowns[name] = this.world.getTime() + maxValue;
       return true;
@@ -132,16 +171,16 @@ export class SoldierObject extends GameObject {
   }
 
   // controls
-  setTargetDirection(targetDirection) {
+  setTargetDirection(targetDirection: number) {
     this.targetDirection = targetDirection;
   }
 
-  setTargetVelocity(targetVelocity) {
+  setTargetVelocity(targetVelocity: number) {
     this.targetVelocity = targetVelocity * this.baseSpeed;
   }
 
   // update
-  updateVelocity(deltaTime) {
+  updateVelocity(deltaTime: number) {
     this.velocity = this.getTargetVelocity() * deltaTime + this.velocity * (1 - deltaTime);
   }
 
@@ -153,9 +192,9 @@ export class SoldierObject extends GameObject {
     return this.velocity;
   }
 
-  update(deltaTime) {
+  update(deltaTime: number) {
     if (this.life > 0) {
-      this.updatePlan(deltaTime);
+      this.updatePlan();
     } else if (this.enemy) {
       this.setEnemy(null);
     }
@@ -191,12 +230,12 @@ export class SoldierObject extends GameObject {
     this.life = this.newLife;
   }
 
-  distance(soldier) {
+  distance(soldier: SoldierObject) {
     return VMath.distance(this.vec, soldier.vec);
   }
 
-  queryEnemy(distance) {
-    var enemies = this.world.queryObjects(
+  queryEnemy(distance: number) {
+    var enemies = this.world.queryObjects<SoldierObject>(
       'Soldier',
       (soldier) =>
         soldier.isEnemy(this) &&
@@ -207,15 +246,16 @@ export class SoldierObject extends GameObject {
     if (enemies.length > 0) {
       var fn;
       if (this.type === 'artillery') {
-        fn = (r, soldier) => (soldier.distance(this) > r.distance(this) ? soldier : r);
+        fn = (r: SoldierObject, soldier: SoldierObject) => (soldier.distance(this) > r.distance(this) ? soldier : r);
       } else {
-        fn = (r, soldier) => (soldier.distance(this) < r.distance(this) ? soldier : r);
+        fn = (r: SoldierObject, soldier: SoldierObject) => (soldier.distance(this) < r.distance(this) ? soldier : r);
       }
       return enemies.reduce(fn, enemies[0]);
     }
+    return null;
   }
 
-  seekEnemy(distance) {
+  seekEnemy(distance: number) {
     // are there any enemies?
     if (this.enemy && (this.enemy.life <= 0 || this.enemy.distance(this) > distance)) {
       this.setEnemy(null);
@@ -241,9 +281,9 @@ export class SoldierObject extends GameObject {
         this.rangeAttack &&
         dist < this.attackRange &&
         dist > MIN_RANGE_ATTACK &&
-        this.cooldown('arrow', this.rangedCooldown)
+        this.cooldown('arrow', this.rangedCooldown!)
       ) {
-        this.world.addObject(new ArrowObject(this.vec, this.enemy.vec, this.world, this.rangeAttack, this.rangeType));
+        this.world.addObject(new ArrowObject(this.vec, this.enemy.vec, this.world, this.rangeAttack, this.rangeType!));
         aa.play('arrow');
         if (this.type === 'artillery') {
           this.hitBy(50);
@@ -264,22 +304,22 @@ export class SoldierObject extends GameObject {
     }
   }
 
-  addForce(vec) {
+  addForce(vec: [number, number]) {
     this.force = VMath.add(this.force, vec);
   }
 
-  getDefence(soldier, factor) {
+  getDefence(soldier: SoldierObject | ArrowObject, factor: number) {
     var baseDefence =
       Math.abs(VMath.angle(VMath.sub(soldier.vec, this.vec), [Math.cos(this.direction), Math.sin(this.direction)])) /
       Math.PI;
     return Math.min(baseDefence / factor, 0.3);
   }
 
-  getAttack(soldier) {
+  getAttack(soldier: SoldierObject) {
     return (1 - this.getDefence(soldier, this.meleeDefence)) * this.meleeAttack;
   }
 
-  hit(bySoldier) {
+  hit(bySoldier: SoldierObject) {
     var damage =
       (this.cooldown('defence', this.defenceCooldown) ? this.getDefence(bySoldier, this.meleeDefence) : 1) *
       bySoldier.getAttack(this);
@@ -289,13 +329,13 @@ export class SoldierObject extends GameObject {
     aa.play('damage');
   }
 
-  hitByArrow(arrow, distance) {
+  hitByArrow(arrow: ArrowObject, distance: number) {
     var damage;
     if (arrow.type === 'ball') {
-      damage = arrow.getAttack(arrow) / Math.pow(distance, 1 / 4);
+      damage = arrow.getAttack() / Math.pow(distance, 1 / 4);
     } else {
       damage =
-        arrow.getAttack(arrow) *
+        arrow.getAttack() *
         (this.cooldown('defence', this.defenceCooldown) ? this.getDefence(arrow, this.rangeDefence) : 1);
     }
     this.hitBy(damage);
@@ -303,11 +343,11 @@ export class SoldierObject extends GameObject {
     aa.play('hitarrow');
   }
 
-  hitBy(value) {
+  hitBy(value: number) {
     this.newLife = Math.max(this.newLife - value, 0);
   }
 
-  isEnemy(ofSoldier) {
+  isEnemy(ofSoldier: SoldierObject) {
     return this.plan.masterPlan !== ofSoldier.plan.masterPlan;
   }
 
@@ -315,7 +355,7 @@ export class SoldierObject extends GameObject {
     return 'Soldier';
   }
 
-  setEnemy(enemy) {
+  setEnemy(enemy: SoldierObject | null) {
     if (this.enemy) {
       this.plan.unclaim(this.enemy, this);
       this.enemy = null;

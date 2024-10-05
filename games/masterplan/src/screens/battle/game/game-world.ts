@@ -1,9 +1,16 @@
 import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../consts';
 import { VMath } from '../util/vmath';
+import { GameObject } from './objects/game-object';
 import { ArrowObject, ExplosionObject } from './objects/object-arrow';
 import { SoldierObject } from './objects/object-soldier';
 
 export class GameWorld {
+  objects: GameObject[];
+  objectsByType: { [key: string]: GameObject[] };
+  collisionHandlers: any[];
+  edgeRadius: number;
+  worldTime: number;
+
   constructor() {
     this.objects = [];
     this.objectsByType = {
@@ -30,7 +37,7 @@ export class GameWorld {
     return this.edgeRadius;
   }
 
-  addObject(...args) {
+  addObject(...args: GameObject[]) {
     for (var object of args) {
       this.objects.push(object);
       this.objectsByType[object.getClass()].push(object);
@@ -40,14 +47,14 @@ export class GameWorld {
   /**
    * @param {GameObject} object
    */
-  removeObject(object) {
+  removeObject(object: GameObject) {
     this.objects.splice(this.objects.indexOf(object), 1);
   }
 
-  queryObjects(type, fn) {
-    return this.objectsByType[type].filter(function (object) {
-      return !fn || fn(object);
-    });
+  queryObjects<T extends GameObject>(type: string, fn?: (object: T) => boolean): T[] {
+    return this.objectsByType[type].filter((object) => {
+      return !fn || fn(object as T);
+    }) as T[];
   }
 
   /**
@@ -55,11 +62,11 @@ export class GameWorld {
    * @param elapsedTime how much time elapsed since last update
    * @return {Number} elapsedTime not consumed
    */
-  update(elapsedTime) {
+  update(elapsedTime: number) {
     var deltaTime = Math.min(elapsedTime, MIN_TICK);
-    this.objects.forEach(function (object) {
+    this.objects.forEach((object) => {
       this.updateObject(object, deltaTime / UPDATE_TICK);
-    }, this);
+    });
     elapsedTime -= deltaTime;
     this.worldTime += deltaTime;
 
@@ -74,14 +81,14 @@ export class GameWorld {
    * Collision check
    */
   collisions() {
-    var hitArrows = this.queryObjects('Arrow', (arrow) => arrow.isHit());
-    this.queryObjects('Soldier').forEach(function (soldier) {
+    var hitArrows = this.queryObjects('Arrow', (arrow: ArrowObject) => arrow.isHit());
+    this.queryObjects<SoldierObject>('Soldier').forEach((soldier) => {
       if (soldier.life <= 0) {
         return;
       }
 
       // soldier -> soldier
-      this.queryObjects('Soldier').forEach((soldierLeft, idxLeft) => {
+      this.queryObjects<SoldierObject>('Soldier').forEach((soldierLeft, idxLeft) => {
         if (
           idxLeft <= this.objectsByType['Soldier'].indexOf(soldier) ||
           soldierLeft.life <= 0 ||
@@ -117,7 +124,7 @@ export class GameWorld {
     });
   }
 
-  triggerCollisions(leftObject, rightObject) {
+  triggerCollisions(leftObject: GameObject, rightObject: GameObject) {
     this.collisionHandlers.forEach(function (collisionHandler) {
       if (leftObject instanceof collisionHandler.left && rightObject instanceof collisionHandler.right) {
         collisionHandler.handler(leftObject, rightObject);
@@ -128,7 +135,11 @@ export class GameWorld {
     });
   }
 
-  onCollision(leftObjectType, rightObjectType, handler) {
+  onCollision<L extends GameObject, R extends GameObject>(
+    leftObjectType: new (...args: any[]) => L,
+    rightObjectType: new (...args: any[]) => R,
+    handler: (left: L, right: R) => void,
+  ) {
     this.collisionHandlers.push({
       left: leftObjectType,
       right: rightObjectType,
@@ -136,7 +147,7 @@ export class GameWorld {
     });
   }
 
-  onSoldierCollision(leftSoldier, rightSoldier) {
+  onSoldierCollision(leftSoldier: SoldierObject, rightSoldier: SoldierObject) {
     // soldiers should bounce off each other
     var distance = VMath.distance(leftSoldier.vec, rightSoldier.vec);
     if (distance === 0) {
@@ -156,7 +167,7 @@ export class GameWorld {
     }
   }
 
-  onArrowCollision(soldier, arrow) {
+  onArrowCollision(soldier: SoldierObject, arrow: ArrowObject) {
     var distance = VMath.distance(arrow.vec, soldier.vec);
     if (arrow.type === 'arrow') {
       arrow.hit(soldier, distance);
@@ -172,17 +183,17 @@ export class GameWorld {
    * @param object
    * @param deltaTime
    */
-  updateObject(object, deltaTime) {
+  updateObject(object: GameObject, deltaTime: number) {
     object.update(deltaTime);
   }
 
   getAlive() {
-    return this.queryObjects('Soldier', (soldier) => soldier.life > 0).reduce(
+    return this.queryObjects<SoldierObject>('Soldier', (soldier) => soldier.life > 0).reduce(
       (r, soldier) => ((r[soldier.color] = (r[soldier.color] || 0) + 1), r),
       {
         '#ff0000': 0,
         '#00ff00': 0,
-      },
+      } as Record<string, number>,
     );
   }
 }

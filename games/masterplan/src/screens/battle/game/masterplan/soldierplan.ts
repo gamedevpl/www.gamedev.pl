@@ -34,7 +34,7 @@ export class SoldierPlan {
     return this.currentCommand;
   }
 
-  canClaim(enemy: SoldierObject, soldier: SoldierObject) {
+  canClaim(enemy: SoldierObject, soldier: SoldierObject): boolean {
     if (!this.claims[enemy.soldierId]) {
       this.claims[enemy.soldierId] = [];
     }
@@ -48,6 +48,8 @@ export class SoldierPlan {
     if (distant.length === this.claims[enemy.soldierId].length) {
       return true;
     }
+
+    return false;
   }
 
   unclaim(enemy: SoldierObject, soldier: SoldierObject) {
