@@ -22,6 +22,7 @@ import { $ } from '../../util/dom';
 import { GameWorld } from '../game-world';
 import { SoldierPlan } from '../masterplan/soldierplan';
 import { Canvas } from '../../util/canvas';
+import { spillBlood } from '../particles/effects/blood-effect';
 
 let soldierID = 0;
 
@@ -54,6 +55,7 @@ export class SoldierObject extends GameObject {
   rangeType: 'arrow' | 'ball' | undefined;
   cooldowns: Record<string, number> = {};
   enemy: any;
+
   constructor(
     x: number,
     y: number,
@@ -95,7 +97,7 @@ export class SoldierObject extends GameObject {
       this.rangeDefence = 30;
 
       this.meleeDefence = 50;
-      this.meleeAttack = 45;
+      this.meleeAttack = 25;
       this.baseSpeed = 3;
 
       this.canCharge = true;
@@ -104,10 +106,10 @@ export class SoldierObject extends GameObject {
       this.seekRange = MELEE_SEEK_RANGE;
       this.attackRange = MELEE_ATTACK_RANGE * 1.1;
 
-      this.rangeDefence = 90;
+      this.rangeDefence = 100;
 
-      this.meleeDefence = 90;
-      this.meleeAttack = 20;
+      this.meleeDefence = 100;
+      this.meleeAttack = 15;
       this.life = this.newLife = MAX_LIFE * 2;
 
       this.defenceCooldown = DEFENCE_COOLDOWN / 5;
@@ -327,6 +329,9 @@ export class SoldierObject extends GameObject {
     updateState(EVENT_DAMAGE, { soldier: this, damage: damage });
     this.setEnemy(bySoldier);
     aa.play('damage');
+
+    // Trigger blood effect on hit
+    spillBlood(this.vec, bySoldier.vec, damage / 5, this.world.particles);
   }
 
   hitByArrow(arrow: ArrowObject, distance: number) {
@@ -341,6 +346,9 @@ export class SoldierObject extends GameObject {
     this.hitBy(damage);
     updateState(EVENT_DAMAGE_ARROW, { soldier: this, damage: damage });
     aa.play('hitarrow');
+
+    // Trigger blood effect on hit
+    spillBlood(this.vec, arrow.vec, damage / 5, this.world.particles);
   }
 
   hitBy(value: number) {

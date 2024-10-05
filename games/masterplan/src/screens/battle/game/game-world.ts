@@ -3,6 +3,7 @@ import { VMath } from '../util/vmath';
 import { GameObject } from './objects/game-object';
 import { ArrowObject, ExplosionObject } from './objects/object-arrow';
 import { SoldierObject } from './objects/object-soldier';
+import { ParticleSystem } from './particles/particle-system';
 
 export class GameWorld {
   objects: GameObject[];
@@ -10,6 +11,7 @@ export class GameWorld {
   collisionHandlers: any[];
   edgeRadius: number;
   worldTime: number;
+  particles: ParticleSystem;
 
   constructor() {
     this.objects = [];
@@ -20,6 +22,7 @@ export class GameWorld {
     };
     this.collisionHandlers = [];
     this.edgeRadius = EDGE_RADIUS * 1.5;
+    this.particles = new ParticleSystem(EDGE_RADIUS * 3, EDGE_RADIUS * 2); // Initialize with canvas size
 
     this.worldTime = 0;
 
@@ -27,7 +30,9 @@ export class GameWorld {
     this.onCollision(SoldierObject, ArrowObject, this.onArrowCollision.bind(this));
   }
 
-  destroy() {}
+  destroy() {
+    // Clean up resources if needed
+  }
 
   getTime() {
     return this.worldTime;
@@ -44,9 +49,6 @@ export class GameWorld {
     }
   }
 
-  /**
-   * @param {GameObject} object
-   */
   removeObject(object: GameObject) {
     this.objects.splice(this.objects.indexOf(object), 1);
   }
@@ -57,11 +59,6 @@ export class GameWorld {
     }) as T[];
   }
 
-  /**
-   * Update game state
-   * @param elapsedTime how much time elapsed since last update
-   * @return {Number} elapsedTime not consumed
-   */
   update(elapsedTime: number) {
     var deltaTime = Math.min(elapsedTime, MIN_TICK);
     this.objects.forEach((object) => {
@@ -74,12 +71,11 @@ export class GameWorld {
 
     this.edgeRadius = Math.max(EDGE_RADIUS * 1.5 * (1 - this.getTime() / 60000), 400);
 
+    this.particles.update(deltaTime / UPDATE_TICK);
+
     return elapsedTime;
   }
 
-  /**
-   * Collision check
-   */
   collisions() {
     var hitArrows = this.queryObjects('Arrow', (arrow: ArrowObject) => arrow.isHit());
     this.queryObjects<SoldierObject>('Soldier').forEach((soldier) => {
@@ -178,11 +174,6 @@ export class GameWorld {
     }
   }
 
-  /**
-   * Updates object
-   * @param object
-   * @param deltaTime
-   */
   updateObject(object: GameObject, deltaTime: number) {
     object.update(deltaTime);
   }

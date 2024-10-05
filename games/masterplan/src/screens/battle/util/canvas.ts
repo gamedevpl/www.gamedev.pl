@@ -103,6 +103,10 @@ export class Canvas {
     return this;
   }
 
+  fill(path: Path2D) {
+    this.ctx.fill(path);
+  }
+
   scale(scale: number) {
     this.ctx.scale(scale, scale);
     return this;

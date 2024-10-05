@@ -14,8 +14,8 @@ export function renderGame(world: GameWorld) {
   // set camera
   canvas.save().translate(canvas.getWidth() / 2, canvas.getHeight() / 2);
 
-  // world edge
-  canvas.arc(0, 0, world.getEdgeRadius());
+  // Render dead particles from the offscreen canvas
+  world.particles.renderDead(canvas);
 
   // render dead bodies
   world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.life === 0).forEach(renderObject);
@@ -26,6 +26,9 @@ export function renderGame(world: GameWorld) {
   // render other objects
   world.queryObjects('Arrow').forEach(renderObject);
   world.queryObjects('Explosion').forEach(renderObject);
+
+  // Render active particles
+  world.particles.renderActive(canvas);
 
   canvas.restore();
 }
