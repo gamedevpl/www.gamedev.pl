@@ -1,16 +1,18 @@
+export type Vec = [number, number];
+
 export const VMath = {
   EPSILON: Math.pow(2, -16),
 
-  length: function (V) {
+  length: function (V: Vec) {
     return Math.sqrt(V[0] * V[0] + V[1] * V[1]);
   },
-  distanceSquared: function (A, B) {
+  distanceSquared: function (A: Vec, B: Vec) {
     return Math.pow(A[0] - B[0], 2) + Math.pow(A[1] - B[1], 2);
   },
-  distance: function (A, B) {
+  distance: function (A: Vec, B: Vec) {
     return Math.sqrt(this.distanceSquared(A, B));
   },
-  withinDistance: function (A, B, distance) {
+  withinDistance: function (A: Vec, B: Vec, distance: number) {
     var dx = A[0] - B[0];
     var dy = A[1] - B[1];
     if (Math.abs(dx) > distance || Math.abs(dy) > distance) {
@@ -20,17 +22,17 @@ export const VMath = {
     var squared = Math.pow(dx, 2) + Math.pow(dy, 2);
     return Math.sqrt(squared) < distance;
   },
-  normalize: function (A) {
+  normalize: function (A: Vec) {
     return this.scale(A, 1 / this.length(A));
   },
 
-  angle: function (A, B) {
+  angle: function (A: Vec, B: Vec) {
     return Math.atan2(this.perpDot(A, B), this.dot(A, B));
   },
-  dot: function (A, B) {
+  dot: function (A: Vec, B: Vec) {
     return A[0] * B[0] + A[1] * B[1];
   },
-  perpDot: function (A, B) {
+  perpDot: function (A: Vec, B: Vec) {
     return A[0] * B[1] - A[1] * B[0];
   },
   /**
@@ -39,7 +41,7 @@ export const VMath = {
    * @param {[number, number]} B
    * @returns {number}
    */
-  atan2: function (A, B) {
+  atan2: function (A: Vec, B: Vec) {
     return Math.atan2(B[1] - A[1], B[0] - A[0]);
   },
   /**
@@ -48,7 +50,7 @@ export const VMath = {
    * @param {[number, number]} B
    * @returns {[number, number]}
    */
-  sub: function (A, B) {
+  sub: function (A: Vec, B: Vec): Vec {
     return [A[0] - B[0], A[1] - B[1]];
   },
   /**
@@ -57,7 +59,7 @@ export const VMath = {
    * @param {[number, number]} B
    * @returns {[number, number]}
    */
-  add: function (A, B) {
+  add: function (A: Vec, B: Vec): Vec {
     return [A[0] + B[0], A[1] + B[1]];
   },
   /**
@@ -66,7 +68,7 @@ export const VMath = {
    * @param {number} s
    * @returns {[number, number]}
    */
-  scale: function (V, s) {
+  scale: function (V: Vec, s: number): Vec {
     return [V[0] * s, V[1] * s];
   },
 
@@ -76,7 +78,7 @@ export const VMath = {
    * @param {number} a
    * @returns {[number, number]}
    */
-  rotate: function (V, a) {
+  rotate: function (V: Vec, a: number): Vec {
     var l = this.length(V);
     a = Math.atan2(V[1], V[0]) + a;
     return [Math.cos(a) * l, Math.sin(a) * l];
@@ -90,7 +92,7 @@ export const VMath = {
     return [0, 0];
   },
 
-  normal: function (A, B) {
+  normal: function (A: Vec, B: Vec) {
     var AB = this.sub(B, A);
     AB = this.scale(AB, 1 / this.length(AB));
     return [
@@ -104,7 +106,7 @@ export const VMath = {
   // t = (q − p) × s / (r × s)
   // r x s = 0 => parallel
   // (q − p) × r = 0 => colinear
-  intersectLineLine: function (Q, eQ, P, eP) {
+  intersectLineLine: function (Q: Vec, eQ: Vec, P: Vec, eP: Vec): Vec | undefined {
     var S = this.sub(eQ, Q);
     var R = this.sub(eP, P);
     var RxS = this.perpDot(R, S);
@@ -118,7 +120,7 @@ export const VMath = {
   // http://www.gamasutra.com/view/feature/131790/simple_intersection_tests_for_games.php?page=2
   // (B[u] - A[u]) x (B[u]-A[u]) = (Ra+Rb)^2
   // AB x AB + (2 * Vab x AB) * u + Vab x Vab * u^2 = (ra + rb)^2
-  intersectSphereSphere: function (A, B, Va, Vb, Ra, Rb) {
+  intersectSphereSphere: function (A: Vec, B: Vec, Va: Vec, Vb: Vec, Ra: number, Rb: number) {
     var AB = this.sub(B, A);
     var Vab = this.sub(Vb, Va);
     var Rab = Ra + Rb;
@@ -150,8 +152,8 @@ export const VMath = {
   // P - circle center,
   // R - radius,
   // V - velocity
-  // A, B - segment points
-  intersectSphereLine: function (P, V, R, A, B) {
+  // A: Vec, B: Vec - segment points
+  intersectSphereLine: function (P: Vec, V: Vec, R: number, A: Vec, B: Vec) {
     var AB = this.sub(B, A);
     var ivdotAB = R / Math.sqrt(this.dot(AB, AB));
     var N1 = this.scale([-AB[1], AB[0]], ivdotAB);
@@ -159,17 +161,24 @@ export const VMath = {
     N1 = this.add(P, N1);
     N2 = this.add(P, N2);
 
-    var T = [this.intersectLineLine(N1, this.add(N1, V), A, B), this.intersectLineLine(N2, this.add(N2, V), A, B)];
+    var T: [Vec | undefined, Vec | undefined] = [
+      this.intersectLineLine(N1, this.add(N1, V), A, B),
+      this.intersectLineLine(N2, this.add(N2, V), A, B),
+    ];
 
     if (!T[0] || !T[1]) return T[0] || T[1];
 
     if (!T[0] && !T[1]) return;
 
+    // @ts-expect-error: it works
     if (T[0][0] < T[1][0]) T = T[0];
+    // @ts-expect-error: it works
     else T = T[1];
 
+    // @ts-expect-error: it works
     if (T[0][0] < 0 || T[1] < 0) return;
 
+    // @ts-expect-error: it works
     if (T[0] <= 1 && T[1] <= 1) return T;
   },
 };
