@@ -1,14 +1,33 @@
-import { GameObject } from './game-object.js';
-import { VMath } from '../../util/vmath.js';
+import { GameObject } from './game-object';
+import { VMath } from '../../util/vmath';
 import { BALL_RANGE } from '../../consts';
+import { GameWorld } from '../game-world';
+import { Canvas } from '../../util/canvas';
+import { SoldierObject } from './object-soldier';
 
 const DIMS = {
   arrow: [10, 1],
   ball: [10, 10],
-};
+} as const;
 
 export class ArrowObject extends GameObject {
-  constructor(from, to, world, attackBase, type) {
+  world: GameWorld;
+  from: [number, number];
+  to: [number, number];
+  maxDist: number;
+  attackBase: number;
+  type: string;
+  v: number[];
+  adir: number | undefined;
+  ay: number | undefined;
+
+  constructor(
+    from: [number, number],
+    to: [number, number],
+    world: GameWorld,
+    attackBase: number,
+    type: 'arrow' | 'ball',
+  ) {
     super(from[0], from[1], DIMS[type][0], DIMS[type][1], VMath.atan2(from, to));
     this.world = world;
     this.from = from;
@@ -20,7 +39,7 @@ export class ArrowObject extends GameObject {
     this.v = VMath.normalize(VMath.sub(to, from));
   }
 
-  update(deltaTime) {
+  update(deltaTime: number) {
     var d = VMath.scale(this.v, deltaTime * 20);
     this.vec[0] += d[0];
     this.vec[1] += d[1];
@@ -34,18 +53,18 @@ export class ArrowObject extends GameObject {
   }
 
   getY() {
-    return this.ay;
+    return this.ay!;
   }
 
   getDirection() {
-    return this.adir;
+    return this.adir!;
   }
 
   isHit() {
     return this.maxDist - VMath.distance(this.from, this.vec) < 10;
   }
 
-  hit(soldier, distance) {
+  hit(soldier: SoldierObject, distance: number) {
     soldier.hitByArrow(this, distance);
   }
 
@@ -59,13 +78,15 @@ export class ArrowObject extends GameObject {
 }
 
 export class ExplosionObject extends GameObject {
-  constructor(vec, time, world) {
+  time: number;
+  world: GameWorld;
+  constructor(vec: [number, number], time: number, world: GameWorld) {
     super(vec[0], vec[1], BALL_RANGE * 2, BALL_RANGE * 2, 0);
     this.time = time;
     this.world = world;
   }
 
-  render(canvas) {
+  render(canvas: Canvas) {
     var dt = this.world.getTime() - this.time;
 
     if (dt < 100) {

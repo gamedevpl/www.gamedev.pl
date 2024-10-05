@@ -1,5 +1,11 @@
+import { Canvas } from '../../util/canvas';
+
 export class GameObject {
-  constructor(x, y, width, height, direction) {
+  vec: [number, number];
+  direction: number;
+  objectWidth: number;
+  objectHeight: number;
+  constructor(x: number, y: number, width: number, height: number, direction: number) {
     this.vec = [x, y];
     this.direction = direction;
     this.objectWidth = width;
@@ -8,12 +14,9 @@ export class GameObject {
 
   getTargetVelocity() {}
 
-  update() {}
+  update(_: number) {}
 
-  /**
-   * @param {Canvas} canvas
-   */
-  render(canvas) {
+  render(canvas: Canvas) {
     canvas
       .save()
       .translate(-this.getWidth() / 2, -this.getHeight() / 2)
@@ -24,21 +27,21 @@ export class GameObject {
   getX() {
     return this.vec[0];
   }
-  setX(x) {
+  setX(x: number) {
     this.vec[0] = x;
   }
 
   getY() {
     return this.vec[1];
   }
-  setY(y) {
+  setY(y: number) {
     this.vec[1] = y;
   }
 
   getDirection() {
     return this.direction;
   }
-  setDirection(direction) {
+  setDirection(direction: number) {
     this.direction = direction;
   }
   getWidth() {
@@ -46,9 +49,6 @@ export class GameObject {
   }
   getHeight() {
     return this.objectHeight;
-  }
-  vec() {
-    return this.vec;
   }
   getClass() {
     return 'Object';

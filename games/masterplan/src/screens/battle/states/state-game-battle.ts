@@ -1,8 +1,8 @@
-import { GameWorld } from '../game/game-world.js';
-import { MasterPlan } from '../game/masterplan/masterplan.js';
-import { SoldierObject } from '../game/objects/object-soldier.js';
-import { GameHUD } from '../game/game-hud.js';
-import { freeCanvas } from '../util/canvas.js';
+import { GameWorld } from '../game/game-world';
+import { MasterPlan } from '../game/masterplan/masterplan';
+import { SoldierObject } from '../game/objects/object-soldier';
+import { GameHUD } from '../game/game-hud';
+import { freeCanvas } from '../util/canvas';
 import {
   EVENT_TIMEOUT,
   EVENT_RAF,
@@ -11,13 +11,13 @@ import {
   EVENT_DAMAGE,
   EVENT_DAMAGE_ARROW,
   EVENT_MOUSE_CLICK,
-} from '../events.js';
-import { renderGame } from '../game/game-render.js';
-import { VMath } from '../util/vmath.js';
-import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts.js';
-import { dispatchCustomEvent } from '../../../../../nukes/src/events.js';
-import { stateInit } from '../states.js';
-import { Unit } from '../../designer/designer-screen.js';
+} from '../events';
+import { renderGame } from '../game/game-render';
+import { VMath } from '../util/vmath';
+import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
+import { dispatchCustomEvent } from '../../../../../nukes/src/events';
+import { stateInit } from '../states';
+import { Unit } from '../../designer/designer-screen';
 
 export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[]) {
   var world = new GameWorld();

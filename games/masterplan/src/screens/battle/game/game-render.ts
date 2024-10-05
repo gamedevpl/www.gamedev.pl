@@ -1,8 +1,8 @@
-import { getCanvas } from '../util/canvas.js';
-import { LAYER_DEFAULT } from '../consts.js';
-import { GameWorld } from './game-world.js';
-import { GameObject } from './objects/game-object.js';
-import { SoldierObject } from './objects/object-soldier.js';
+import { getCanvas } from '../util/canvas';
+import { LAYER_DEFAULT } from '../consts';
+import { GameWorld } from './game-world';
+import { GameObject } from './objects/game-object';
+import { SoldierObject } from './objects/object-soldier';
 
 export function renderGame(world: GameWorld) {
   /** {Canvas} */

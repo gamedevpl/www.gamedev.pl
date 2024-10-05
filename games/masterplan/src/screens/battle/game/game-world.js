@@ -1,7 +1,7 @@
 import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../consts';
-import { VMath } from '../util/vmath.js';
-import { ArrowObject, ExplosionObject } from './objects/object-arrow.js';
-import { SoldierObject } from './objects/object-soldier.js';
+import { VMath } from '../util/vmath';
+import { ArrowObject, ExplosionObject } from './objects/object-arrow';
+import { SoldierObject } from './objects/object-soldier';
 
 export class GameWorld {
   constructor() {

@@ -1,7 +1,7 @@
-import { Unit } from '../designer/designer-screen.js';
-import { DEBUG } from './consts.js';
-import { EVENT_BATTLE_START } from './events.js';
-import { stateGameBattleInit } from './states/state-game-battle.js';
+import { Unit } from '../designer/designer-screen';
+import { DEBUG } from './consts';
+import { EVENT_BATTLE_START } from './events';
+import { stateGameBattleInit } from './states/state-game-battle';
 
 /**
  * Initial state

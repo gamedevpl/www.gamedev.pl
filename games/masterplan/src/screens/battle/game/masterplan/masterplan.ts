@@ -1,16 +1,9 @@
-import { VMath } from '../../util/vmath.js';
-import {
-  AdvanceCommand,
-  WaitCommand,
-  AttackCommand,
-  FlankLeftCommand,
-  FlankRightCommand,
-  Command,
-} from './commands.js';
-import { SoldierPlan } from './soldierplan.js';
-import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts.js';
-import { Unit } from '../../../designer/designer-screen.js';
-import { SoldierObject } from '../objects/object-soldier.js';
+import { VMath } from '../../util/vmath';
+import { AdvanceCommand, WaitCommand, AttackCommand, FlankLeftCommand, FlankRightCommand, Command } from './commands';
+import { SoldierPlan } from './soldierplan';
+import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts';
+import { Unit } from '../../../designer/designer-screen';
+import { SoldierObject } from '../objects/object-soldier';
 
 export class MasterPlan {
   type: ('warrior' | 'archer' | 'tank' | 'artillery')[];

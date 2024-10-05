@@ -1,6 +1,6 @@
-import { SoldierObject } from '../objects/object-soldier.js';
-import { Command, WaitCommand } from './commands.js';
-import { MasterPlan } from './masterplan.js';
+import { SoldierObject } from '../objects/object-soldier';
+import { Command, WaitCommand } from './commands';
+import { MasterPlan } from './masterplan';
 
 export class SoldierPlan {
   masterPlan: MasterPlan;
