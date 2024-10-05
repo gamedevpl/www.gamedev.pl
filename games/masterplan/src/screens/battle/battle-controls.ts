@@ -15,8 +15,8 @@ import {
   EVENT_MOUSE_DOWN,
   EVENT_MOUSE_MOVE,
   EVENT_MOUSE_UP,
-} from './events.js';
-import { updateState } from './states.js';
+} from './events';
+import { updateState } from './states';
 
 function useWindowEvent<T extends Event>(name: keyof WindowEventMap, handler: (event: T) => void) {
   useEffect(() => {

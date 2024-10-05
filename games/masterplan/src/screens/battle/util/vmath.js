@@ -33,6 +33,12 @@ export const VMath = {
   perpDot: function (A, B) {
     return A[0] * B[1] - A[1] * B[0];
   },
+  /**
+   *
+   * @param {[number, number]} A
+   * @param {[number, number]} B
+   * @returns {number}
+   */
   atan2: function (A, B) {
     return Math.atan2(B[1] - A[1], B[0] - A[0]);
   },
@@ -53,6 +59,12 @@ export const VMath = {
     return [V[0] * s, V[1] * s];
   },
 
+  /**
+   *
+   * @param {[number, number]} V
+   * @param {number} a
+   * @returns {[number, number]}
+   */
   rotate: function (V, a) {
     var l = this.length(V);
     a = Math.atan2(V[1], V[0]) + a;

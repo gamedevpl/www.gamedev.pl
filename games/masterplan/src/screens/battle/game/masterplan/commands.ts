@@ -1,29 +1,33 @@
-import { VMath } from '../../util/vmath.js';
+import { VMath } from '../../util/vmath';
 import { EDGE_RADIUS } from '../../consts';
+import { SoldierObject } from '../objects/object-soldier';
 
 export class Command {
-  start(worldTime) {
+  startTime: number = -1;
+  done: boolean = false;
+  start(worldTime: number) {
     this.startTime = worldTime;
   }
 
-  execute() {}
+  execute(_soldier: SoldierObject) {}
 
-  isDone(_worldTime) {
+  isDone(_worldTime: number) {
     return this.done;
   }
 }
 
 export class WaitCommand extends Command {
-  constructor(duration) {
+  duration: number | undefined = undefined;
+  constructor(duration?: number) {
     super();
     this.duration = duration;
   }
 
-  isDone(worldTime) {
-    return this.startTime >= 0 && worldTime - this.startTime > this.duration;
+  isDone(worldTime: number) {
+    return !!this.duration && this.startTime >= 0 && worldTime - this.startTime > this.duration;
   }
 
-  execute(soldier) {
+  execute(soldier: SoldierObject) {
     soldier.setTargetVelocity(0);
   }
 }
@@ -33,11 +37,11 @@ export class AdvanceCommand extends Command {
     super();
   }
 
-  getTarget(soldier) {
+  getTarget(soldier: SoldierObject) {
     return soldier.plan.formation;
   }
 
-  execute(soldier) {
+  execute(soldier: SoldierObject) {
     // [0, 0] + formation
     var target = this.getTarget(soldier);
     var dist = VMath.distance(soldier.vec, target);
@@ -54,18 +58,19 @@ export class AdvanceCommand extends Command {
 }
 
 export class FlankLeftCommand extends AdvanceCommand {
-  constructor(angle) {
+  angle: number;
+  constructor(angle: number) {
     super();
     this.angle = angle;
   }
 
-  getTarget(soldier) {
+  getTarget(soldier: SoldierObject) {
     return VMath.add(VMath.rotate([200, 100 * Math.sign(Math.cos(this.angle))], this.angle), soldier.plan.formation);
   }
 }
 
 export class FlankRightCommand extends FlankLeftCommand {
-  getTarget(soldier) {
+  getTarget(soldier: SoldierObject) {
     return VMath.add(VMath.rotate([200, -100 * Math.sign(Math.cos(this.angle))], this.angle), soldier.plan.formation);
   }
 }
@@ -75,7 +80,7 @@ export class AttackCommand extends Command {
     super();
   }
 
-  execute(soldier) {
+  execute(soldier: SoldierObject) {
     if (!soldier.seekEnemy(EDGE_RADIUS)) {
       this.done = true;
     }

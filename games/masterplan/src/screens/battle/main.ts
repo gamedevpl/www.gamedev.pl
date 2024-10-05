@@ -1,5 +1,5 @@
-import { EVENT_DOCUMENT_HIDDEN, EVENT_DOCUMENT_VISIBLE, EVENT_WINDOW_RESIZE } from './events.js';
-import { updateState } from './states.js';
+import { EVENT_DOCUMENT_HIDDEN, EVENT_DOCUMENT_VISIBLE, EVENT_WINDOW_RESIZE } from './events';
+import { updateState } from './states';
 
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {

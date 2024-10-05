@@ -1,7 +1,7 @@
-import { GameObject } from './game-object.js';
-import { VMath } from '../../util/vmath.js';
+import { GameObject } from './game-object';
+import { VMath } from '../../util/vmath';
 import { EVENT_DAMAGE, EVENT_DAMAGE_ARROW } from '../../events';
-import { aa } from '../../lib/sound.js';
+import { aa } from '../../lib/sound';
 import {
   MAX_LIFE,
   SOLDIER_WIDTH,
@@ -17,8 +17,8 @@ import {
   SEEK_COOLDOWN,
 } from '../../consts';
 import { updateState } from '../../states';
-import { ArrowObject } from './object-arrow.js';
-import { $ } from '../../util/dom.js';
+import { ArrowObject } from './object-arrow';
+import { $ } from '../../util/dom';
 
 let soldierID = 0;
 
