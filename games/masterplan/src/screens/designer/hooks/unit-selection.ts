@@ -7,17 +7,13 @@ export const useUnitSelection = (units: Unit[]) => {
   const handleUnitSelect = useCallback(
     (col: number, row: number) => {
       const clickedUnit = units.find(
-        (unit) =>
-          col >= unit.col &&
-          col < unit.col + unit.sizeCol &&
-          row >= unit.row &&
-          row < unit.row + unit.sizeRow
+        (unit) => col >= unit.col && col < unit.col + unit.sizeCol && row >= unit.row && row < unit.row + unit.sizeRow,
       );
 
       setSelectedUnit(clickedUnit || null);
       return clickedUnit;
     },
-    [units]
+    [units],
   );
 
   const clearSelection = useCallback(() => {
@@ -27,6 +23,7 @@ export const useUnitSelection = (units: Unit[]) => {
   return {
     selectedUnit,
     handleUnitSelect,
+    setSelectedUnit,
     clearSelection,
   };
 };

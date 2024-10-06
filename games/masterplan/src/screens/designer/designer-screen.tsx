@@ -32,7 +32,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   const [infoPanelPosition, setInfoPanelPosition] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { selectedUnit, handleUnitSelect } = useUnitSelection(playerUnits);
+  const { selectedUnit, handleUnitSelect, setSelectedUnit } = useUnitSelection(playerUnits);
   const { handleDragStart, handleDragMove, handleDragEnd, isDragging } = useUnitDrag(playerUnits, setPlayerUnits);
   const { generateOppositionPlan, updateOppositionPlan } = useOppositionAI();
 
@@ -45,6 +45,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   const handleUnitModify = useCallback((unitId: number, changes: Partial<Unit>) => {
     setPlayerUnits((prevUnits) => prevUnits.map((u) => (u.id === unitId ? { ...u, ...changes } : u)));
+    setSelectedUnit((prevUnit) => (prevUnit?.id === unitId ? { ...prevUnit, ...changes } : prevUnit));
   }, []);
 
   const handleStartBattle = useCallback(() => {

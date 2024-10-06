@@ -59,14 +59,15 @@ export const UnitInfoPanel: React.FC<UnitInfoPanelProps> = ({ unit, position, on
   );
 };
 
-function getFormations(_sizeCol: number, _sizeRow: number) {
+function getFormations(sizeCol: number, sizeRow: number) {
+  const totalSize = sizeCol * sizeRow;
   return [
-    { sizeCol: 1, sizeRow: 1 },
-    { sizeCol: 2, sizeRow: 1 },
-    { sizeCol: 1, sizeRow: 2 },
-    { sizeCol: 2, sizeRow: 2 },
-    { sizeCol: 4, sizeRow: 2 },
-    { sizeCol: 2, sizeRow: 4 },
+    { sizeCol: totalSize, sizeRow: 1 },
+    ...Array.from({ length: totalSize - 1 }, (_, i) => ({
+      sizeCol: i + 1,
+      sizeRow: Math.ceil(totalSize / (i + 1)),
+    })).filter((formation) => formation.sizeCol * formation.sizeRow <= totalSize),
+    { sizeCol: 1, sizeRow: totalSize },
   ];
 }
 
@@ -120,8 +121,8 @@ const ExpandedOptions = styled.div`
   position: absolute;
   top: 100%;
   left: 0;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 5px;
   padding: 5px;
   background-color: white;
@@ -154,7 +155,7 @@ const OptionIcon = styled.img`
 `;
 
 const FormationOption = styled.div`
-  width: 24px;
+  width: 36px;
   height: 24px;
   display: flex;
   align-items: center;
