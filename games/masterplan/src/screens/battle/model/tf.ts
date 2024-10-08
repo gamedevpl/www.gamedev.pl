@@ -27,7 +27,7 @@ function createModel() {
 }
 
 // const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const MODEL_DIR_PATH = path.join(__dirname, 'tfmodel');
+const MODEL_DIR_PATH = path.join(__dirname, '..', '..', '..', 'public', 'tfmodel');
 
 export async function saveModel() {
   await model.save('file://' + MODEL_DIR_PATH);

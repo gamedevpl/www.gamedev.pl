@@ -9,4 +9,5 @@ export default defineConfig({
     outDir: 'dist',
   },
   plugins: [react(), checker({ typescript: true })],
+  publicDir: './src/public',
 });

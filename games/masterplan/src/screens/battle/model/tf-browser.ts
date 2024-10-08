@@ -1,13 +1,12 @@
 import * as tf from '@tensorflow/tfjs';
 import { ModelInput, INPUT_ROWS, INPUT_COLS, ModelInputCell } from './types';
-import modelJsonUrl from './tfmodel/model.json?url';
 
 let model: tf.LayersModel | null = null;
 
 async function loadModel(): Promise<void> {
   try {
     if (!model) {
-      model = await tf.loadLayersModel(modelJsonUrl);
+      model = await tf.loadLayersModel(window.location.origin + window.location.pathname + '/tfmodel/model.json');
       console.log('Model loaded successfully');
     } else {
       console.log('Model is already loaded');
