@@ -5,6 +5,7 @@
     "node_modules",
     "package-lock.json",
     "tfmodel/weights.bin",
-    "tfmodel/model.json"
+    "tfmodel/model.json",
+    "simulation.cache.json"
   ]
 }

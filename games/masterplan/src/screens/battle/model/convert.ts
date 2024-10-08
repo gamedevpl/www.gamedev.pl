@@ -36,17 +36,20 @@ export function modelInputToUnits(input: ModelInput): Unit[] {
         const u_col = Math.floor(gameCol - MAX_COL / 2);
         const type = Object.keys(CELL_INDEX_MAP)
           .map((k) => [k, input.data[i][j][CELL_INDEX_MAP[k as UnitType]]] as const)
-          .sort((a, b) => b[1] - a[1])[0][0] as UnitType;
+          .sort((a, b) => b[1] - a[1])
+          .filter((cell) => cell[1] > 0.1)?.[0]?.[0] as UnitType | undefined;
 
-        units.push({
-          id: units.length,
-          col: u_col,
-          row: u_row,
-          sizeCol: 1,
-          sizeRow: 1,
-          type,
-          command: 'attack',
-        });
+        if (type) {
+          units.push({
+            id: units.length,
+            col: u_col,
+            row: u_row,
+            sizeCol: 1,
+            sizeRow: 1,
+            type,
+            command: 'attack',
+          });
+        }
       }
     }
   }
