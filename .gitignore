@@ -6,3 +6,4 @@ dist
 /app/sass/.sass-cache
 .vscode/settings.json
 .DS_Store
+.vscode

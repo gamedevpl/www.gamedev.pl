@@ -3,6 +3,8 @@
   "ignorePaths": [
     "dist",
     "node_modules",
-    "package-lock.json"
+    "package-lock.json",
+    "tfmodel/weights.bin",
+    "tfmodel/model.json"
   ]
 }

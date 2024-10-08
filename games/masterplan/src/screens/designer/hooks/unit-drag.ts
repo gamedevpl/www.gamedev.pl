@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import { inverseTransformCoordinates, transformCoordinates } from '../utils/coordinate-transforms';
 import { MAX_COL, MAX_ROW, GRID_CENTER_X, GRID_CENTER_Y } from '../../battle/consts';
 

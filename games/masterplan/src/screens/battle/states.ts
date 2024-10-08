@@ -1,4 +1,4 @@
-import { Unit } from '../designer/designer-screen';
+import { Unit } from '../designer/designer-types';
 import { DEBUG } from './consts';
 import { EVENT_BATTLE_START } from './events';
 import { stateGameBattleInit } from './states/state-game-battle';

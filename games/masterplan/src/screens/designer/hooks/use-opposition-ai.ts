@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import { selectPlan } from '../utils/plan-selection';
 import { allPlans, balancedAssault } from '../plans';
 

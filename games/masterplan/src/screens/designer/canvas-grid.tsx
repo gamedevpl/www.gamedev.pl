@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import styled from 'styled-components';
-import { GRID_CENTER_X, GRID_CENTER_Y, UNIT_ASSET_PATHS } from '../battle/consts';
-import { Unit } from './designer-screen';
+import { GRID_CENTER_X, GRID_CENTER_Y } from '../battle/consts';
+import { UNIT_ASSET_PATHS } from '../battle/assets';
+import { Unit } from './designer-types';
 
 interface CanvasGridProps {
   width: number;

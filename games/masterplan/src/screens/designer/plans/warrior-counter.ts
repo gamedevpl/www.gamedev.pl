@@ -1,4 +1,4 @@
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import { countUnitTypes, calculateSpreadScore, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [

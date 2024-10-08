@@ -2,7 +2,7 @@ import { VMath } from '../../util/vmath';
 import { AdvanceCommand, WaitCommand, AttackCommand, FlankLeftCommand, FlankRightCommand, Command } from './commands';
 import { SoldierPlan } from './soldierplan';
 import { SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../../consts';
-import { Unit } from '../../../designer/designer-screen';
+import { Unit } from '../../../designer/designer-types';
 import { SoldierObject } from '../objects/object-soldier';
 
 export class MasterPlan {

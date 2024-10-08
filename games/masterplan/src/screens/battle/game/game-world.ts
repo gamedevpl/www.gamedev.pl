@@ -188,4 +188,10 @@ export class GameWorld {
       } as Record<string, number>,
     );
   }
+
+  getBalance() {
+    var alive = this.getAlive();
+    var keys = Object.keys(this.getAlive());
+    return alive[keys[0]] / (alive[keys[0]] + alive[keys[1]]);
+  }
 }

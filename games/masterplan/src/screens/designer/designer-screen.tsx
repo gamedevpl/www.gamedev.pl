@@ -9,16 +9,7 @@ import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT 
 import { UnitInfoPanel } from './unit-info-panel';
 import { calculatePanelPosition } from './utils/ui-utils';
 import { OppositionPlan } from './opposition-plan';
-
-export interface Unit {
-  id: number;
-  col: number;
-  row: number;
-  sizeCol: number;
-  sizeRow: number;
-  type: 'warrior' | 'archer' | 'tank' | 'artillery';
-  command: string;
-}
+import { Unit } from './designer-types';
 
 interface DesignerScreenProps {
   onStartBattle: (playerUnits: Unit[], oppositionUnits: Unit[]) => void;

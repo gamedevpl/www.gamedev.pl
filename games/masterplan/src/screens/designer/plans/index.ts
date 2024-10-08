@@ -1,4 +1,4 @@
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import * as balancedAssault from './balanced-assault';
 import * as antiTankDefense from './anti-tank-defense';
 import * as archerCounter from './archer-counter';
@@ -15,7 +15,17 @@ export interface Plan {
   probabilityScore: (playerUnits: Unit[]) => number;
 }
 
-export { balancedAssault, antiTankDefense, archerCounter, warriorBlitz, tankFormation, artilleryStrike, archerAmbush, warriorCounter, artilleryCounter };
+export {
+  balancedAssault,
+  antiTankDefense,
+  archerCounter,
+  warriorBlitz,
+  tankFormation,
+  artilleryStrike,
+  archerAmbush,
+  warriorCounter,
+  artilleryCounter,
+};
 
 export const allPlans: Plan[] = [
   balancedAssault,

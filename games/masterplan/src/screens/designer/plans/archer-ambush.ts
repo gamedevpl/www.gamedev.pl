@@ -1,4 +1,4 @@
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [
@@ -29,5 +29,5 @@ export const probabilityScore = (playerUnits: Unit[]): number => {
   const sizeScore = averageUnitSize(playerUnits);
 
   // Combine scores (you can adjust weights as needed)
-  return (compositionScore * 0.4 + positionScore * 0.4 + sizeScore * 0.2) * 100;
+  return (compositionScore * 0.4 + positionScore * 0.4 + sizeScore * 0.2) * 10000;
 };

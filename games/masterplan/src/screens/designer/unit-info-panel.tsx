@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { Unit } from './designer-screen';
-import { UNIT_ASSET_PATHS } from '../battle/consts';
+import { Unit } from './designer-types';
+import { UNIT_ASSET_PATHS } from '../battle/assets';
 
 interface UnitInfoPanelProps {
   unit: Unit;

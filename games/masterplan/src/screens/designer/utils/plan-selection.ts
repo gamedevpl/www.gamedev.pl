@@ -1,4 +1,4 @@
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 import { Plan } from '../plans';
 
 export function selectPlan(playerUnits: Unit[], availablePlans: Plan[]): Unit[] {

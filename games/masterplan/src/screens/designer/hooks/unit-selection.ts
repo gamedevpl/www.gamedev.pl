@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Unit } from '../designer-screen';
+import { Unit } from '../designer-types';
 
 export const useUnitSelection = (units: Unit[]) => {
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);

@@ -3,5 +3,9 @@ export function $(selector, scope) {
 }
 
 export function $$(selector, scope) {
-  return (scope || document.body).querySelectorAll(selector);
+  if (typeof document !== 'undefined') {
+    return (scope || document.body).querySelectorAll(selector);
+  } else {
+    return [];
+  }
 }

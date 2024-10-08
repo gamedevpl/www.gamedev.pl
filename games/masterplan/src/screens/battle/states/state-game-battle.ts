@@ -17,29 +17,29 @@ import { VMath } from '../util/vmath';
 import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
 import { dispatchCustomEvent } from '../../../../../nukes/src/events';
 import { stateInit } from '../states';
-import { Unit } from '../../designer/designer-screen';
+import { Unit } from '../../designer/designer-types';
+
+export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: string, definitions: Unit[]) {
+  var angle = (Math.PI / 2) * direction;
+  var initialPosition: [number, number] = [0, (direction * EDGE_RADIUS) / 2];
+  var masterPlan = new MasterPlan(initialPosition, definitions);
+
+  for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
+    var soldierPlan = masterPlan.getSolderPlan(i);
+    var pos = soldierPlan.getPosition();
+
+    pos = VMath.add(pos, initialPosition);
+    world.addObject(
+      new SoldierObject(pos[0], pos[1], angle + Math.PI, soldierPlan, world, color, masterPlan.getType(i)),
+    );
+  }
+}
 
 export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[]) {
   var world = new GameWorld();
 
-  var createMasterPlan = (direction: 1 | -1, color: string, definitions: Unit[]) => {
-    var angle = (Math.PI / 2) * direction;
-    var initialPosition: [number, number] = [0, (direction * EDGE_RADIUS) / 2];
-    var masterPlan = new MasterPlan(initialPosition, definitions);
-
-    for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
-      var soldierPlan = masterPlan.getSolderPlan(i);
-      var pos = soldierPlan.getPosition();
-
-      pos = VMath.add(pos, initialPosition);
-      world.addObject(
-        new SoldierObject(pos[0], pos[1], angle + Math.PI, soldierPlan, world, color, masterPlan.getType(i)),
-      );
-    }
-  };
-
-  createMasterPlan(1, '#ff0000', definitions);
-  createMasterPlan(-1, '#00ff00', definitionsEnemy);
+  createMasterPlan(world, 1, '#ff0000', definitions);
+  createMasterPlan(world, -1, '#00ff00', definitionsEnemy);
 
   var HUD = new GameHUD(world);
 

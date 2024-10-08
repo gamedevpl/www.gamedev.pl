@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GlobalStyles } from './global-styles';
 import { IntroScreen } from './screens/intro/intro-screen';
-import { DesignerScreen, Unit } from './screens/designer/designer-screen';
+import { DesignerScreen } from './screens/designer/designer-screen';
+import { Unit } from './screens/designer/designer-types';
 import { BattleScreen } from './screens/battle/battle-screen';
 
 type CurrentScreen =

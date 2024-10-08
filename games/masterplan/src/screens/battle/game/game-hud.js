@@ -19,9 +19,7 @@ export class GameHUD {
   }
 
   getBalance(world) {
-    var alive = world.getAlive();
-    var keys = Object.keys(world.getAlive());
-    return alive[keys[0]] / (alive[keys[0]] + alive[keys[1]]);
+    return world.getBalance();
   }
 
   setNames(left, right) {

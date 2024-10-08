@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { useCustomEvent } from '../../../../nukes/src/events';
 
-import { Unit } from '../designer/designer-screen';
+import { Unit } from '../designer/designer-types';
 
 import assetSoldierWarrior from './assets/soldier-warrior.png';
 import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';

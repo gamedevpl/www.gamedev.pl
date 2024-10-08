@@ -47,24 +47,32 @@ export class Particle {
   }
 }
 
+const isBrowser = typeof window !== 'undefined';
+
 export class ParticleSystem {
   particles: Particle[] = [];
-  deadParticlesCanvas: HTMLCanvasElement;
-  deadParticlesContext: CanvasRenderingContext2D;
+  deadParticlesCanvas: HTMLCanvasElement | undefined;
+  deadParticlesContext: CanvasRenderingContext2D | undefined;
 
   constructor(width: number, height: number) {
-    this.deadParticlesCanvas = document.createElement('canvas');
-    this.deadParticlesCanvas.width = width;
-    this.deadParticlesCanvas.height = height;
-    this.deadParticlesContext = this.deadParticlesCanvas.getContext('2d')!;
-    this.deadParticlesContext.translate(width / 2, height / 2);
+    if (isBrowser) {
+      this.deadParticlesCanvas = document.createElement('canvas');
+      this.deadParticlesCanvas.width = width;
+      this.deadParticlesCanvas.height = height;
+      this.deadParticlesContext = this.deadParticlesCanvas.getContext('2d')!;
+      this.deadParticlesContext.translate(width / 2, height / 2);
+    }
   }
 
   addParticle(particle: Particle) {
-    this.particles.push(particle);
+    if (isBrowser) this.particles.push(particle);
   }
 
   update(deltaTime: number) {
+    if (!isBrowser) {
+      return;
+    }
+
     const deadParticles: Particle[] = [];
     this.particles = this.particles.filter((p) => {
       p.update(deltaTime);
@@ -88,17 +96,22 @@ export class ParticleSystem {
         bloodPath.closePath();
       }
     });
-    this.deadParticlesContext.fillStyle = 'red';
-    this.deadParticlesContext.fill(bloodPath);
+
+    if (this.deadParticlesContext) {
+      this.deadParticlesContext.fillStyle = 'red';
+      this.deadParticlesContext.fill(bloodPath);
+    }
   }
 
   renderDead(context: Canvas) {
-    // Render the dead particles from the offscreen canvas
-    context.drawImage(
-      this.deadParticlesCanvas,
-      -this.deadParticlesCanvas.width / 2,
-      -this.deadParticlesCanvas.height / 2,
-    );
+    if (this.deadParticlesCanvas) {
+      // Render the dead particles from the offscreen canvas
+      context.drawImage(
+        this.deadParticlesCanvas,
+        -this.deadParticlesCanvas.width / 2,
+        -this.deadParticlesCanvas.height / 2,
+      );
+    }
   }
 
   renderActive(context: Canvas) {
