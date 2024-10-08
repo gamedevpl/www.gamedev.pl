@@ -1,4 +1,4 @@
-import { Unit, UnitType } from '../../designer/designer-types';
+import { rotateUnits, Unit, UnitType } from '../../designer/designer-types';
 import { MAX_COL, MAX_ROW } from '../consts';
 import { CELL_INDEX_MAP, INPUT_COLS, INPUT_ROWS, ModelInput, ModelInputCell } from './types';
 
@@ -27,32 +27,41 @@ export function unitsToModelInput(units: Unit[]): ModelInput {
 export function modelInputToUnits(input: ModelInput): Unit[] {
   const units: Unit[] = [];
 
+  const inputMap: Record<string, UnitType> = {};
+
   for (let i = 0; i < input.rows; i++) {
     for (let j = 0; j < input.cols; j++) {
       if (input.data[i][j].some((v) => v > 0)) {
-        const gameRow = ((i + 0.5) * MAX_ROW) / input.rows;
-        const gameCol = ((j + 0.5) * MAX_COL) / input.cols;
-        const u_row = Math.floor(gameRow - MAX_ROW / 2);
-        const u_col = Math.floor(gameCol - MAX_COL / 2);
         const type = Object.keys(CELL_INDEX_MAP)
           .map((k) => [k, input.data[i][j][CELL_INDEX_MAP[k as UnitType]]] as const)
           .sort((a, b) => b[1] - a[1])
           .filter((cell) => cell[1] > 0.1)?.[0]?.[0] as UnitType | undefined;
 
         if (type) {
-          units.push({
-            id: units.length,
-            col: u_col,
-            row: u_row,
-            sizeCol: 1,
-            sizeRow: 1,
-            type,
-            command: 'attack',
-          });
+          inputMap[i + ',' + j] = type;
         }
       }
     }
   }
 
-  return units;
+  for (let x = 0; x < MAX_COL; x++) {
+    for (let y = 0; y < MAX_ROW; y++) {
+      const inputRow = Math.min(Math.floor((y * input.rows) / MAX_ROW), INPUT_ROWS);
+      const inputCol = Math.min(Math.floor((x * input.cols) / MAX_COL), INPUT_COLS);
+      const type = inputMap[inputRow + ',' + inputCol];
+      if (type) {
+        units.push({
+          id: units.length + 1,
+          col: x - MAX_COL / 2,
+          row: y - MAX_ROW / 2,
+          sizeCol: 1,
+          sizeRow: 1,
+          type,
+          command: 'wait',
+        });
+      }
+    }
+  }
+
+  return rotateUnits(units);
 }

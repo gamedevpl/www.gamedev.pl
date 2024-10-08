@@ -10,5 +10,5 @@ export type ModelInput = {
   data: ModelInputCell[][];
 };
 
-export const INPUT_COLS = 20;
+export const INPUT_COLS = 30;
 export const INPUT_ROWS = Math.floor(INPUT_COLS / (MAX_COL / MAX_ROW));

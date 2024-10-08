@@ -1,4 +1,4 @@
-import { Unit } from '../../designer/designer-types';
+import { rotateUnits, Unit } from '../../designer/designer-types';
 import { GameWorld } from '../game/game-world';
 import { initCurrentState } from '../states';
 import { createMasterPlan } from '../states/state-game-battle';
@@ -36,12 +36,4 @@ export function simulate(plan: Unit[], counterPlan: Unit[]): 'plan' | 'counterPl
   writeCache(cache);
 
   return result;
-}
-
-function rotateUnits(units: Unit[]): Unit[] {
-  return units.map((unit) => ({
-    ...unit,
-    col: -unit.col,
-    row: -unit.row,
-  }));
 }
