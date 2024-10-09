@@ -14,7 +14,7 @@ export function unitsToModelInput(units: Unit[]): ModelInput {
         const gameCol = MAX_COL / 2 + u.col + j;
         const inputRow = Math.min(Math.floor((gameRow * rows) / MAX_ROW), INPUT_ROWS);
         const inputCol = Math.min(Math.floor((gameCol * cols) / MAX_COL), INPUT_COLS);
-        if (data[inputRow]) {
+        if (data[inputRow] && data[inputRow][inputCol]) {
           data[inputRow][inputCol][CELL_INDEX_MAP[u.type]] = 1;
         }
       }
