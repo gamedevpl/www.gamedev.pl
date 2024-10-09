@@ -1,5 +1,6 @@
 import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../consts';
 import { VMath } from '../util/vmath';
+import { indexGameWorld } from './game-world-index';
 import { GameObject } from './objects/game-object';
 import { ArrowObject, ExplosionObject } from './objects/object-arrow';
 import { SoldierObject } from './objects/object-soldier';
@@ -78,21 +79,27 @@ export class GameWorld {
   }
 
   collisions() {
-    var hitArrows = this.queryObjects('Arrow', (arrow: ArrowObject) => arrow.isHit());
+    const indexed = indexGameWorld(this);
+    const checkedCollisions: Record<string, boolean> = {};
+    const hitArrows = this.queryObjects<ArrowObject>('Arrow', (arrow) => arrow.isHit());
+
     this.queryObjects<SoldierObject>('Soldier').forEach((soldier) => {
       if (soldier.life <= 0) {
         return;
       }
 
       // soldier -> soldier
-      this.queryObjects<SoldierObject>('Soldier').forEach((soldierLeft, idxLeft) => {
+      indexed.searchSoldiers.byRadius(soldier.vec, soldier.getWidth()).forEach((soldierLeft) => {
         if (
-          idxLeft <= this.objectsByType['Soldier'].indexOf(soldier) ||
           soldierLeft.life <= 0 ||
-          soldier === soldierLeft
+          soldier === soldierLeft ||
+          checkedCollisions[soldier.id + soldierLeft.id] ||
+          checkedCollisions[soldierLeft.id + soldier.id]
         ) {
           return;
         }
+
+        checkedCollisions[soldier.id + soldierLeft.id] = true;
 
         if (VMath.withinDistance(soldier.vec, soldierLeft.vec, soldier.getWidth())) {
           this.triggerCollisions(soldier, soldierLeft);
@@ -100,7 +107,7 @@ export class GameWorld {
       });
 
       // soldier -> arrow
-      hitArrows.forEach((arrow) => {
+      indexed.searchArrows.byRadius(soldier.vec, Math.max(ARROW_RANGE, BALL_RANGE)).forEach((arrow) => {
         if (arrow && VMath.withinDistance(soldier.vec, arrow.vec, arrow.type === 'arrow' ? ARROW_RANGE : BALL_RANGE)) {
           this.triggerCollisions(soldier, arrow);
         }

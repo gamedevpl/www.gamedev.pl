@@ -1,11 +1,15 @@
 import { Canvas } from '../../util/canvas';
 
 export class GameObject {
+  static idCounter = 0;
+
+  id: string;
   vec: [number, number];
   direction: number;
   objectWidth: number;
   objectHeight: number;
   constructor(x: number, y: number, width: number, height: number, direction: number) {
+    this.id = String(GameObject.idCounter++);
     this.vec = [x, y];
     this.direction = direction;
     this.objectWidth = width;
