@@ -9,7 +9,8 @@ import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT 
 import { UnitInfoPanel } from './unit-info-panel';
 import { calculatePanelPosition } from './utils/ui-utils';
 import { OppositionPlan } from './opposition-plan';
-import { Unit } from './designer-types';
+import { rotateUnits, Unit } from './designer-types';
+import { balancedAssault } from './plans';
 
 interface DesignerScreenProps {
   onStartBattle: (playerUnits: Unit[], oppositionUnits: Unit[]) => void;
@@ -107,16 +108,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   );
 };
 
-const DEFAULT_UNITS: Unit[] = [
-  { id: 1, col: -12, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-  { id: 2, col: 0, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-  { id: 3, col: 12, row: -10, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'wait-advance' },
-  { id: 4, col: -8, row: -7, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 5, col: 8, row: -7, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 6, col: -10, row: -2, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-  { id: 7, col: 10, row: -2, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-  { id: 8, col: 0, row: -1, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
-];
+const DEFAULT_UNITS: Unit[] = rotateUnits(balancedAssault.units);
 
 const DesignerContainer = styled.div`
   position: absolute;

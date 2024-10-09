@@ -1,4 +1,4 @@
-import { rotateUnits, Unit } from '../../designer/designer-types';
+import { Unit } from '../../designer/designer-types';
 import { GameWorld } from '../game/game-world';
 import { initCurrentState } from '../states';
 import { createMasterPlan } from '../states/state-game-battle';
@@ -19,7 +19,7 @@ export function simulate(plan: Unit[], counterPlan: Unit[]): 'plan' | 'counterPl
   const world = new GameWorld();
 
   createMasterPlan(world, 1, '#ff0000', plan);
-  createMasterPlan(world, -1, '#00ff00', rotateUnits(counterPlan));
+  createMasterPlan(world, -1, '#00ff00', counterPlan);
 
   for (let i = 0; i < 60 * 1000; i += 10) {
     world.update(10);

@@ -1,6 +1,7 @@
 {
   "name": "masterplan",
   "version": "1.0.0",
+  "type": "module",
   "description": "MasterPlan, offline multiplayer game",
   "devDependencies": {
     "@fontsource/press-start-2p": "^5.1.0",

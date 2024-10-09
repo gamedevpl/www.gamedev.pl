@@ -1,6 +1,7 @@
 {
   "name": "@gamedevpl/nukes",
   "homepage": "https://www.gamedev.pl/games/nukes/",
+  "type": "module",
   "version": "0.1.0",
   "private": true,
   "author": "Grzegorz Tańczyk",

@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as tf from '@tensorflow/tfjs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import '@tensorflow/tfjs-node';
 import { INPUT_COLS, INPUT_ROWS, ModelInput } from './types';
 
@@ -26,7 +28,8 @@ function createModel() {
   model = newModel;
 }
 
-// const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const MODEL_DIR_PATH = path.join(__dirname, '..', '..', '..', 'public', 'tfmodel');
 
 export async function saveModel() {

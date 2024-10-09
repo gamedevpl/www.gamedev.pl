@@ -1,7 +1,9 @@
 {
   "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node",
     "compilerOptions": {
-      "module": "CommonJS",
+      "module": "ESNEXT",
       "moduleResolution": "node",
       "lib": ["ES2022", "DOM", "DOM.Iterable"],
       "noEmit": true

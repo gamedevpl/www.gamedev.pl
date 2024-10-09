@@ -10,6 +10,8 @@ export interface Unit {
 
 export type UnitType = 'warrior' | 'archer' | 'tank' | 'artillery';
 
+export type CommandType = 'advance-wait' | 'advance' | 'wait-advance' | 'flank-left' | 'flank-right';
+
 export function rotateUnits(units: Unit[]): Unit[] {
   return units.map((unit) => ({
     ...unit,

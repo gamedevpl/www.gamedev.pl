@@ -6,8 +6,8 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
     {
       id: startId,
       type: 'warrior',
-      col: centerCol + (Math.random() * 2 - 1),
-      row: centerRow + (Math.random() * 2 - 1),
+      col: centerCol - 1,
+      row: centerRow - 1,
       sizeCol: 2,
       sizeRow: 2,
       command: 'attack',
@@ -15,8 +15,8 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
     {
       id: startId + 1,
       type: 'archer',
-      col: centerCol + (Math.random() * 2 - 1),
-      row: centerRow + (Math.random() * 2 - 1),
+      col: centerCol,
+      row: centerRow,
       sizeCol: 2,
       sizeRow: 2,
       command: 'attack',
@@ -24,8 +24,8 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
     {
       id: startId + 2,
       type: 'tank',
-      col: centerCol + (Math.random() * 2 - 1),
-      row: centerRow + (Math.random() * 2 - 1),
+      col: centerCol + 1,
+      row: centerRow + 1,
       sizeCol: 3,
       sizeRow: 3,
       command: 'attack',
