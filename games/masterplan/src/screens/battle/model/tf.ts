@@ -11,7 +11,7 @@ function createModel() {
 
   newModel.add(
     tf.layers.lstm({
-      units: INPUT_COLS * 2,
+      units: INPUT_COLS,
       returnSequences: true,
       inputShape: [INPUT_ROWS, INPUT_COLS * 4],
     }),

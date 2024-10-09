@@ -20,17 +20,20 @@ loadModel().then(async () => {
 
       const battleResult = simulate(plan.units, counterPlan.units);
       const oppositeResult = simulate(counterPlan.units, plan.units);
+      const instableResult =
+        (battleResult === 'plan' && oppositeResult === 'plan') ||
+        (battleResult === 'draw' && oppositeResult !== 'draw') ||
+        (oppositeResult === 'draw' && battleResult !== 'draw');
       console.log(
         todoCounter--,
         plan.name,
         battleResult === 'plan' ? '>' : battleResult === 'counterPlan' ? '<' : '=',
         counterPlan.name,
-        (battleResult === 'plan' && oppositeResult === 'plan') ||
-          (battleResult === 'draw' && oppositeResult !== 'draw') ||
-          (oppositeResult === 'draw' && battleResult !== 'draw')
-          ? '!'
-          : '',
+        instableResult ? '!' : '',
       );
+      if (instableResult) {
+        continue;
+      }
       if (battleResult === 'plan' || battleResult === 'draw') {
         simulationResults.push([planModelInput, counterPlanModelInput]);
       }

@@ -2,14 +2,15 @@ import { Unit } from '../designer-types';
 import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [
-  { id: 501, col: -12, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 502, col: 12, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 501, col: -12, row: 0, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 502, col: 12, row: 0, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 503, col: -8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'flank-left' },
   { id: 504, col: 8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'flank-right' },
-  { id: 505, col: -16, row: -2, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 506, col: 16, row: -2, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 507, col: 0, row: -6, sizeCol: 8, sizeRow: 4, type: 'artillery', command: 'wait' },
-  { id: 508, col: 0, row: -10, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
+  { id: 505, col: -16, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 506, col: 16, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 507, col: 0, row: -6, sizeCol: 6, sizeRow: 3, type: 'artillery', command: 'wait' },
+  { id: 508, col: -4, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 509, col: 4, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];
 
 export const name = 'Warrior Blitz';

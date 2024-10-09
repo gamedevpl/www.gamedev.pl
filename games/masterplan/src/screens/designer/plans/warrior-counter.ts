@@ -6,10 +6,13 @@ export const units: Unit[] = [
   { id: 302, col: -8, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
   { id: 303, col: 8, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
   { id: 304, col: 16, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 305, col: -12, row: -4, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
-  { id: 306, col: 12, row: -4, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
+  { id: 305, col: -12, row: -4, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
+  { id: 306, col: 12, row: -4, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
   { id: 307, col: -8, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'defend' },
   { id: 308, col: 8, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'defend' },
+  { id: 309, col: 0, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 310, col: -16, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'flank-left' },
+  { id: 311, col: 16, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'flank-right' },
 ];
 
 export const name = 'Warrior Counter';

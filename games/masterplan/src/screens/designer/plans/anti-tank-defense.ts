@@ -4,12 +4,11 @@ import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan
 export const units: Unit[] = [
   { id: 301, col: -16, row: 0, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
   { id: 302, col: 16, row: 0, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-  { id: 303, col: 0, row: -4, sizeCol: 8, sizeRow: 4, type: 'artillery', command: 'advance-wait' },
-  { id: 304, col: -12, row: -2, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 305, col: 12, row: -2, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 306, col: -8, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 307, col: 8, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 308, col: 0, row: -10, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
+  { id: 303, col: 0, row: -4, sizeCol: 8, sizeRow: 3, type: 'artillery', command: 'advance-wait' },
+  { id: 304, col: -12, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 305, col: 12, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 306, col: -8, row: -6, sizeCol: 4, sizeRow: 3, type: 'tank', command: 'advance' },
+  { id: 307, col: 8, row: -6, sizeCol: 4, sizeRow: 3, type: 'tank', command: 'advance' },
 ];
 
 export const name = 'Anti-Tank Defense';

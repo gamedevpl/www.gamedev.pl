@@ -2,14 +2,14 @@ import { Unit } from '../designer-types';
 import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [
-  { id: 701, col: -16, row: -4, sizeCol: 8, sizeRow: 4, type: 'artillery', command: 'advance' },
-  { id: 702, col: 16, row: -4, sizeCol: 8, sizeRow: 4, type: 'artillery', command: 'advance' },
-  { id: 703, col: 0, row: 0, sizeCol: 8, sizeRow: 4, type: 'tank', command: 'advance-wait' },
+  { id: 701, col: -16, row: -4, sizeCol: 6, sizeRow: 3, type: 'artillery', command: 'advance' },
+  { id: 702, col: 16, row: -4, sizeCol: 6, sizeRow: 3, type: 'artillery', command: 'advance' },
+  { id: 703, col: 0, row: 0, sizeCol: 6, sizeRow: 3, type: 'tank', command: 'advance-wait' },
   { id: 704, col: -8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
   { id: 705, col: 8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 706, col: -12, row: -12, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 707, col: 12, row: -12, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 708, col: 0, row: -14, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
+  { id: 706, col: -12, row: -12, sizeCol: 4, sizeRow: 3, type: 'tank', command: 'advance' },
+  { id: 707, col: 12, row: -12, sizeCol: 4, sizeRow: 3, type: 'tank', command: 'advance' },
+  { id: 708, col: 0, row: -6, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];
 
 export const name = 'Artillery Strike';
