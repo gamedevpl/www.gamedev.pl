@@ -43,8 +43,8 @@ export async function predict(input: ModelInput): Promise<ModelInput> {
   return {
     data: result.map((row) =>
       row.reduce((acc, _, index) => {
-        if (index % 4 === 0) {
-          acc.push(row.slice(index, index + 4) as ModelInputCell);
+        if (index % 9 === 0) {
+          acc.push(row.slice(index, index + 9) as ModelInputCell);
         }
 
         return acc;

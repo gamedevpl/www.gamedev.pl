@@ -7,13 +7,24 @@ import { generateMasterplan } from './infer';
 import { rotateUnits, Unit } from '../../designer/designer-types';
 import { trimUnits } from './units-trim';
 
-loadModel().then(async () => {
+const params = process.argv.slice(2);
+
+const genCount = parseInt(params.find((p) => p.startsWith('--gen-count='))?.split('=')[1] || '5', 10);
+const planCount = parseInt(
+  params.find((p) => p.startsWith('--plan-count='))?.split('=')[1] || String(allPlans.length),
+  10,
+);
+const newModel = params.includes('--new-model');
+
+console.log('Training with', genCount, 'generations and', planCount, 'plans', newModel ? 'with new model' : '');
+
+loadModel(newModel).then(async () => {
   const simulationResults: [winnerPlan: ModelInput, loserPlan: ModelInput][] = [];
   const wins = new Map<string, number>();
 
   let todoCounter = allPlans.length ** 2 - allPlans.length;
-  for (const plan of allPlans) {
-    for (const counterPlan of allPlans) {
+  for (const plan of allPlans.slice(0, planCount)) {
+    for (const counterPlan of allPlans.slice(0, planCount)) {
       if (plan.name === counterPlan.name) {
         continue;
       }
@@ -59,7 +70,7 @@ loadModel().then(async () => {
     changes?: string;
   }[] = [{ name: bestPlanName, units: rotateUnits(bestPlan), result: 'won' }];
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < genCount; i++) {
     const generation = await generateMasterplan(resultChain);
     const counterPlan = trimUnits(generation.units, 104);
     const battleResult = simulate(rotateUnits(bestPlan), counterPlan);
