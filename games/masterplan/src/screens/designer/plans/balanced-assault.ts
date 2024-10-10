@@ -9,7 +9,7 @@ export const units: Unit[] = [
   { id: 205, col: 8, row: -4, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
   { id: 206, col: -16, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
   { id: 207, col: 16, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
-  { id: 208, col: 2, row: -8, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait' },
+  { id: 208, col: 2, row: -8, sizeCol: 8, sizeRow: 1, type: 'artillery', command: 'wait-advance' },
 ];
 
 export const name = 'Balanced Assault';

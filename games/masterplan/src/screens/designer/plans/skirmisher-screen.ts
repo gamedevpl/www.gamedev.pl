@@ -3,22 +3,22 @@ import { countUnitTypes, analyzePositions, averageUnitSize, calculateSpreadScore
 
 export const units: Unit[] = [
   // Skirmisher screen (Archers) - reduced from 5 to 4 units
-  { id: 1201, col: -12, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'harass-retreat' },
-  { id: 1202, col: -4, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'harass-retreat' },
-  { id: 1203, col: 4, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'harass-retreat' },
-  { id: 1204, col: 12, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'harass-retreat' },
+  { id: 1201, col: -12, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 1202, col: -4, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 1203, col: 4, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 1204, col: 12, row: 2, sizeCol: 3, sizeRow: 2, type: 'archer', command: 'wait-advance' },
   
   // Mobile support (Warriors) - reduced from 3 to 2 units
-  { id: 1205, col: -8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'mobile-support' },
-  { id: 1206, col: 8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'mobile-support' },
+  { id: 1205, col: -8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 1206, col: 8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
   
   // Main force (Tanks) - reduced from 3 to 2 units
-  { id: 1207, col: -6, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance-cautiously' },
-  { id: 1208, col: 6, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance-cautiously' },
+  { id: 1207, col: -6, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+  { id: 1208, col: 6, row: -6, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
   
   // Long-range support (Artillery) - kept 2 units
-  { id: 1209, col: -8, row: -10, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'selective-fire' },
-  { id: 1210, col: 8, row: -10, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'selective-fire' },
+  { id: 1209, col: -8, row: -10, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'advance' },
+  { id: 1210, col: 8, row: -10, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'advance' },
 ];
 
 export const name = 'Skirmisher Screen';

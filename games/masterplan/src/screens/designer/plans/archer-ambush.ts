@@ -2,16 +2,16 @@ import { Unit } from '../designer-types';
 import { countUnitTypes, analyzePositions, averageUnitSize } from '../utils/plan-utils';
 
 export const units: Unit[] = [
-  { id: 801, col: -16, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 802, col: -8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 803, col: 0, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 804, col: 8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 805, col: 16, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
+  { id: 801, col: -16, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 802, col: -8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 803, col: 0, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 804, col: 8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 805, col: 16, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
   { id: 806, col: -12, row: -10, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
   { id: 807, col: 12, row: -10, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
-  { id: 808, col: 0, row: -14, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
-  { id: 809, col: -20, row: -6, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 810, col: 20, row: -6, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
+  { id: 808, col: 0, row: -14, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait-advance' },
+  { id: 809, col: -20, row: -6, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 810, col: 20, row: -6, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
   { id: 811, col: -4, row: -8, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 812, col: 4, row: -8, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];

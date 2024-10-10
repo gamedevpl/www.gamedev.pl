@@ -10,7 +10,7 @@ export const units: Unit[] = [
   // Center
   { id: 304, col: -4, row: 0, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 305, col: 4, row: 0, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 306, col: 0, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'bombard' },
+  { id: 306, col: 0, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'advance' },
 
   // Right flank
   { id: 307, col: 14, row: -2, sizeCol: 4, sizeRow: 3, type: 'tank', command: 'flank-right' },

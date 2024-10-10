@@ -12,7 +12,7 @@ const units: Unit[] = [
         row: -6 + (i % 2) + Math.floor(i / 2),
         sizeCol: 3,
         sizeRow: 3,
-        command: 'charge',
+        command: 'advance',
       } as Unit),
   ),
 
@@ -26,7 +26,7 @@ const units: Unit[] = [
         row: -2,
         sizeCol: 3,
         sizeRow: 3,
-        command: 'charge',
+        command: 'advance',
       } as Unit),
   ),
 
@@ -40,7 +40,7 @@ const units: Unit[] = [
         row: 2,
         sizeCol: 3,
         sizeRow: 2,
-        command: 'attack',
+        command: 'advance',
       } as Unit),
   ),
 
@@ -54,7 +54,7 @@ const units: Unit[] = [
         row: -4 + (i % 2) * 2,
         sizeCol: 2,
         sizeRow: 2,
-        command: 'attack',
+        command: 'advance',
       } as Unit),
   ),
 ];

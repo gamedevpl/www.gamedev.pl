@@ -6,10 +6,10 @@ export const units: Unit[] = [
   { id: 602, col: 12, row: -4, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance-wait' },
   { id: 603, col: -16, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 604, col: 16, row: 0, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 605, col: 0, row: -8, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
-  { id: 606, col: -8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 607, col: 8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait' },
-  { id: 608, col: 0, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
+  { id: 605, col: 0, row: -8, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait-advance' },
+  { id: 606, col: -8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 607, col: 8, row: -10, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 608, col: 0, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait-advance' },
   { id: 609, col: 0, row: -2, sizeCol: 8, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];
 

@@ -19,8 +19,8 @@ export const units: Unit[] = [
   { id: 310, col: 12, row: -8, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
 
   // Artillery for counter-battery fire (2 units)
-  { id: 311, col: -12, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
-  { id: 312, col: 12, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait' },
+  { id: 311, col: -12, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait-advance' },
+  { id: 312, col: 12, row: -12, sizeCol: 8, sizeRow: 2, type: 'artillery', command: 'wait-advance' },
 ];
 
 export const name = 'Artillery Counter';

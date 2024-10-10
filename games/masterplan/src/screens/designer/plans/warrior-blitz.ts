@@ -8,7 +8,7 @@ export const units: Unit[] = [
   { id: 504, col: 8, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'flank-right' },
   { id: 505, col: -16, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 506, col: 16, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
-  { id: 507, col: 0, row: -6, sizeCol: 6, sizeRow: 3, type: 'artillery', command: 'wait' },
+  { id: 507, col: 0, row: -6, sizeCol: 6, sizeRow: 3, type: 'artillery', command: 'wait-advance' },
   { id: 508, col: -4, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
   { id: 509, col: 4, row: -2, sizeCol: 4, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];

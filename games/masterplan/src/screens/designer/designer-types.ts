@@ -5,7 +5,7 @@ export interface Unit {
   sizeCol: number;
   sizeRow: number;
   type: UnitType;
-  command: string;
+  command: CommandType;
 }
 
 export type UnitType = 'warrior' | 'archer' | 'tank' | 'artillery';

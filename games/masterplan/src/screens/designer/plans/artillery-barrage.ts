@@ -12,7 +12,7 @@ const units: Unit[] = [
         row: 2,
         sizeCol: 3,
         sizeRow: 2,
-        command: 'attack',
+        command: 'advance',
       } as Unit),
   ),
 
@@ -26,7 +26,7 @@ const units: Unit[] = [
         row: 0,
         sizeCol: 3,
         sizeRow: 2,
-        command: 'attack',
+        command: 'advance',
       } as Unit),
   ),
 
@@ -40,7 +40,7 @@ const units: Unit[] = [
         row: -4,
         sizeCol: 4,
         sizeRow: 3,
-        command: 'defend',
+        command: 'wait-advance',
       } as Unit),
   ),
 
@@ -54,7 +54,7 @@ const units: Unit[] = [
         row: -6,
         sizeCol: 3,
         sizeRow: 2,
-        command: 'defend',
+        command: 'wait-advance',
       } as Unit),
   ),
 ];

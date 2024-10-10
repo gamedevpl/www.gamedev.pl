@@ -10,7 +10,7 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
       row: centerRow - 1,
       sizeCol: 2,
       sizeRow: 2,
-      command: 'attack',
+      command: 'advance',
     },
     {
       id: startId + 1,
@@ -19,7 +19,7 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
       row: centerRow,
       sizeCol: 2,
       sizeRow: 2,
-      command: 'attack',
+      command: 'advance',
     },
     {
       id: startId + 2,
@@ -28,7 +28,7 @@ const createScatteredGroup = (startId: number, centerCol: number, centerRow: num
       row: centerRow + 1,
       sizeCol: 3,
       sizeRow: 3,
-      command: 'attack',
+      command: 'advance',
     },
   ];
 };
@@ -51,7 +51,7 @@ const units: Unit[] = [
         row: 8,
         sizeCol: 3,
         sizeRow: 2,
-        command: 'attack',
+        command: 'advance',
       } as Unit),
   ),
 ];

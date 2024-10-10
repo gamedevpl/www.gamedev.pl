@@ -3,22 +3,22 @@ import { countUnitTypes, analyzePositions, averageUnitSize, calculateSpreadScore
 
 export const units: Unit[] = [
   // Tip of the V (Tank)
-  { id: 801, col: 0, row: 2, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'lead' },
+  { id: 801, col: 0, row: 2, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
 
   // Left wing of the V
-  { id: 802, col: -4, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'support-left' },
-  { id: 803, col: -8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'support-left' },
-  { id: 804, col: -12, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'cover-left' },
-  { id: 805, col: -16, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'bombard-left' },
+  { id: 802, col: -4, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+  { id: 803, col: -8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 804, col: -12, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 805, col: -16, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'advance' },
 
   // Right wing of the V
-  { id: 806, col: 4, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'support-right' },
-  { id: 807, col: 8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'support-right' },
-  { id: 808, col: 12, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'cover-right' },
-  { id: 809, col: 16, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'bombard-right' },
+  { id: 806, col: 4, row: 0, sizeCol: 4, sizeRow: 4, type: 'tank', command: 'advance' },
+  { id: 807, col: 8, row: -2, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
+  { id: 808, col: 12, row: -4, sizeCol: 4, sizeRow: 2, type: 'archer', command: 'wait-advance' },
+  { id: 809, col: 16, row: -6, sizeCol: 6, sizeRow: 2, type: 'artillery', command: 'advance' },
 
   // Center support (reduced from 2 to 1 unit)
-  { id: 810, col: 0, row: -4, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'defend-center' },
+  { id: 810, col: 0, row: -4, sizeCol: 6, sizeRow: 2, type: 'warrior', command: 'advance' },
 ];
 
 export const name = 'Flying V';
@@ -33,14 +33,17 @@ export const probabilityScore = (playerUnits: Unit[]): number => {
   const centralizationScore = 1 - (playerPositions.left + playerPositions.right) / 2;
 
   // Favor this plan when the enemy has a balanced unit composition (our V is versatile)
-  const compositionBalance = 1 - Math.max(
-    Math.abs(playerUnitCounts.warrior - playerUnitCounts.archer),
-    Math.abs(playerUnitCounts.warrior - playerUnitCounts.tank),
-    Math.abs(playerUnitCounts.warrior - playerUnitCounts.artillery),
-    Math.abs(playerUnitCounts.archer - playerUnitCounts.tank),
-    Math.abs(playerUnitCounts.archer - playerUnitCounts.artillery),
-    Math.abs(playerUnitCounts.tank - playerUnitCounts.artillery)
-  ) / playerUnits.length;
+  const compositionBalance =
+    1 -
+    Math.max(
+      Math.abs(playerUnitCounts.warrior - playerUnitCounts.archer),
+      Math.abs(playerUnitCounts.warrior - playerUnitCounts.tank),
+      Math.abs(playerUnitCounts.warrior - playerUnitCounts.artillery),
+      Math.abs(playerUnitCounts.archer - playerUnitCounts.tank),
+      Math.abs(playerUnitCounts.archer - playerUnitCounts.artillery),
+      Math.abs(playerUnitCounts.tank - playerUnitCounts.artillery),
+    ) /
+      playerUnits.length;
 
   // Slightly favor this plan when enemy units are more spread out (our V can adapt)
   const spreadOutScore = spreadScore;
@@ -52,5 +55,12 @@ export const probabilityScore = (playerUnits: Unit[]): number => {
   const smallUnitScore = 1 - avgSize;
 
   // Combine scores (adjust weights as needed)
-  return (centralizationScore * 0.3 + compositionBalance * 0.2 + spreadOutScore * 0.15 + frontlineScore * 0.25 + smallUnitScore * 0.1) * 100;
+  return (
+    (centralizationScore * 0.3 +
+      compositionBalance * 0.2 +
+      spreadOutScore * 0.15 +
+      frontlineScore * 0.25 +
+      smallUnitScore * 0.1) *
+    100
+  );
 };
