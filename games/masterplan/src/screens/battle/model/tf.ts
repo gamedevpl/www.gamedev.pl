@@ -29,6 +29,13 @@ function createModel() {
   model = newModel;
 }
 
+function compileModel() {
+  model.compile({
+    optimizer: 'adam',
+    loss: 'meanSquaredError',
+  });
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const MODEL_DIR_PATH = path.join(__dirname, '..', '..', '..', 'public', 'tfmodel');
@@ -46,17 +53,14 @@ export async function loadModel(newModel = false) {
     createModel();
   }
 
-  model.compile({
-    optimizer: 'adam',
-    loss: 'meanSquaredError',
-  });
+  compileModel();
 }
 
 export async function train(inputs: ModelInput[], outputs: ModelInput[]) {
   const xs = tf.tensor3d(flattenInputs(inputs));
   const ys = tf.tensor3d(flattenInputs(outputs));
 
-  await model.fit(xs, ys, { epochs: 100, validationSplit: 0.1 });
+  await model.fit(xs, ys, { epochs: 50, validationSplit: 0.1 });
 }
 
 export function predict(input: number[][]): number[][] {

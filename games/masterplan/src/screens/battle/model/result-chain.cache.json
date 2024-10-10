@@ -1,0 +1,827 @@
+[
+  {
+    "name": "Hammer and Anvil",
+    "units": [
+      {
+        "id": 901,
+        "col": 8,
+        "row": 0,
+        "sizeCol": 8,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "wait-advance"
+      },
+      {
+        "id": 902,
+        "col": -8,
+        "row": 0,
+        "sizeCol": 8,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "wait-advance"
+      },
+      {
+        "id": 903,
+        "col": 4,
+        "row": 2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "type": "tank",
+        "command": "wait-advance"
+      },
+      {
+        "id": 904,
+        "col": -4,
+        "row": 2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "type": "tank",
+        "command": "wait-advance"
+      },
+      {
+        "id": 905,
+        "col": 16,
+        "row": 4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "type": "tank",
+        "command": "advance"
+      },
+      {
+        "id": 906,
+        "col": 20,
+        "row": 6,
+        "sizeCol": 6,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "advance"
+      },
+      {
+        "id": 907,
+        "col": -16,
+        "row": 4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "type": "tank",
+        "command": "advance"
+      },
+      {
+        "id": 908,
+        "col": -20,
+        "row": 6,
+        "sizeCol": 6,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "advance"
+      },
+      {
+        "id": 909,
+        "col": 12,
+        "row": 6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "type": "archer",
+        "command": "wait-advance"
+      },
+      {
+        "id": 910,
+        "col": -12,
+        "row": 6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "type": "archer",
+        "command": "wait-advance"
+      },
+      {
+        "id": 911,
+        "col": 0,
+        "row": 8,
+        "sizeCol": 6,
+        "sizeRow": 2,
+        "type": "artillery",
+        "command": "wait-advance"
+      }
+    ],
+    "result": "won"
+  },
+  {
+    "name": "Counter Hammer and Anvil",
+    "units": [
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -10,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Hammer and Anvil' plan relies on a central anvil of tanks and warriors, with flanking warriors and tanks acting as the hammer. To counter this, we will focus on disrupting their anvil and outflanking their hammer. This involves using artillery to break their central formation, archers to weaken their flanking units, and a combination of tanks and warriors to hold the line and counter-flank.",
+    "changes": "This plan introduces a more dispersed formation with units positioned to counter the flanking maneuvers of the 'Hammer and Anvil' plan. Artillery is placed to target the central anvil, while archers and warriors are positioned to intercept and weaken the flanking units. Tanks are used to hold the line and provide a strong counter-flank.",
+    "result": "lost"
+  },
+  {
+    "name": "Break the Anvil",
+    "units": [
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 4,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -10,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -6,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 6,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": 0,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The previous 'Counter Hammer and Anvil' plan utilized a dispersed formation with focus on flanking. To counter this, a concentrated central force can break through their center, where they are weakest due to the artillery's limited mobility and firing capability. Tanks and warriors will spearhead the attack, supported by artillery to soften enemy defenses, while archers will take out any flanking threats.",
+    "changes": "This plan focuses on creating a concentrated force to break through the center, where the artillery is positioned in the previous 'Counter Hammer and Anvil' plan. The strategy is to use a strong central push with tanks and warriors, supported by artillery, while archers provide cover from the flanks.",
+    "result": "drawed"
+  },
+  {
+    "name": "Divide and Conquer",
+    "units": [
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 8,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 4,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Break the Anvil' plan relies on a strong central push. To counter this, 'Divide and Conquer' aims to break the enemy's formation by isolating their units. By concentrating force on one side, we can break through and encircle the central push, while archers and artillery weaken them from a distance. This strategy disrupts their central force and prevents them from maintaining a cohesive attack.",
+    "changes": "This plan introduces a strategy of dividing the battlefield into segments, focusing on isolating and overpowering smaller enemy groups. The layout is non-symmetrical, with a heavy concentration of tanks and warriors on one side to break through and encircle the enemy, while archers and artillery provide support from a distance.",
+    "result": "drawed"
+  },
+  {
+    "name": "Encircle and Destroy",
+    "units": [
+      {
+        "type": "archer",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 10,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Divide and Conquer' plan focuses on isolating and overpowering smaller enemy groups. To counter this, 'Encircle and Destroy' aims to surround the enemy, cutting off their escape and supply lines. By using flanking maneuvers and long-range attacks, we can weaken their forces from a distance, while tanks and warriors close in for the final blow. This strategy disrupts their ability to maintain a cohesive defense and allows us to control the battlefield.",
+    "changes": "This plan introduces an encirclement strategy, where the focus is on surrounding and cutting off the enemy's escape and supply lines. The layout is non-symmetrical, with a heavy emphasis on flanking maneuvers and long-range attacks to weaken the enemy from a distance before closing in for the final blow.",
+    "result": "drawed"
+  },
+  {
+    "name": "Precision Strike",
+    "units": [
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -9,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 9,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Encircle and Destroy' plan relies on surrounding and cutting off enemy forces, which can be countered by a strategy that emphasizes precision strikes. By using artillery and archers to target key enemy units and formations, we can disrupt their encirclement. Fast-moving warriors will exploit any openings, while tanks hold strategic positions to prevent enemy advancement. This approach aims to weaken the enemy's ability to maintain their strategy and create opportunities for a decisive victory.",
+    "changes": "This plan introduces a precision strike strategy, focusing on hitting key enemy units with high damage while maintaining mobility. The layout is non-symmetrical, with a focus on utilizing artillery and archers for targeted strikes, supported by fast-moving warriors and durable tanks to hold strategic positions.",
+    "result": "won"
+  },
+  {
+    "name": "Adaptive Assault",
+    "units": [
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 10,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Precision Strike' plan relies on targeting key units with high-damage attacks. To counter this, the 'Adaptive Assault' plan focuses on flexibility and resilience. By positioning units to adapt to the enemy's movements, we can minimize the impact of their precision strikes. Warriors and tanks will hold the line and adapt to threats, while archers and artillery provide support and counter-attacks. This strategy aims to maintain a strong defensive posture while exploiting any openings created by the enemy's focused attacks.",
+    "changes": "This plan introduces an adaptive approach, combining flexible unit positioning with a focus on exploiting weaknesses in the enemy's formation. The layout is non-symmetrical, utilizing a mix of unit types to ensure adaptability and resilience against precision strikes.",
+    "result": "lost"
+  },
+  {
+    "name": "Blitz Breaker",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -10,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 10,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Adaptive Assault' plan relies on flexibility and resilience, which can be countered by a strategy that emphasizes speed and overwhelming force. By rapidly deploying warriors and tanks to key positions, we can outmaneuver the enemy and break through their defensive lines. Artillery and archers provide long-range support to weaken the enemy's adaptability and create openings for decisive strikes. This approach aims to disrupt the enemy's ability to adapt and maintain a cohesive defense.",
+    "changes": "This plan introduces a fast-moving, high-impact strategy designed to outmaneuver and outpace the 'Adaptive Assault' plan. The layout is non-symmetrical, focusing on rapid deployment and overwhelming force to break through defensive lines and disrupt enemy formations.",
+    "result": "won"
+  },
+  {
+    "name": "Fortress Formation",
+    "units": [
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "artillery",
+        "col": -6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "artillery",
+        "col": 6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -10,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 4,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Blitz Breaker' plan relies on speed and overwhelming force to disrupt enemy formations. To counter this, 'Fortress Formation' focuses on building a strong defensive core that can absorb the initial onslaught and retaliate effectively. By positioning tanks and artillery in a fortified center, we can hold the line against rapid advances. Archers and warriors on the flanks provide flexibility to counter enemy maneuvers and exploit weaknesses. This strategy aims to withstand the initial blitz and gradually turn the tide of battle.",
+    "changes": "This plan introduces a defensive strategy focused on creating a stronghold that can withstand and counter the rapid advances of the 'Blitz Breaker' plan. The layout is non-symmetrical, with a heavily fortified center and flexible flanks to absorb and retaliate against incoming forces.",
+    "result": "won"
+  },
+  {
+    "name": "Guerrilla Tactics",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Fortress Formation' relies on a strong defensive core, which can be countered by a strategy that emphasizes mobility and unpredictability. By using warriors and archers to execute hit-and-run tactics, we can disrupt their defenses and create openings. Artillery provides long-range harassment, while tanks are positioned to exploit any breakthroughs. This approach aims to dismantle the fortress's defenses through constant pressure and tactical flexibility.",
+    "changes": "This plan introduces a guerrilla warfare strategy, focusing on mobility and surprise attacks to dismantle the 'Fortress Formation'. The layout is non-symmetrical, with a focus on fast-moving units and strategic positioning to exploit the fortress's static nature.",
+    "result": "lost"
+  }
+]

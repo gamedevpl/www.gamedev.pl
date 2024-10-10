@@ -6,10 +6,11 @@ import { ModelInput } from './types';
 import { generateMasterplan } from './infer';
 import { rotateUnits, Unit } from '../../designer/designer-types';
 import { trimUnits } from './units-trim';
+import { getCache } from './cache';
 
 const params = process.argv.slice(2);
 
-const genCount = parseInt(params.find((p) => p.startsWith('--gen-count='))?.split('=')[1] || '5', 10);
+let genCount = parseInt(params.find((p) => p.startsWith('--gen-count='))?.split('=')[1] || '5', 10);
 const planCount = parseInt(
   params.find((p) => p.startsWith('--plan-count='))?.split('=')[1] || String(allPlans.length),
   10,
@@ -62,15 +63,26 @@ loadModel(newModel).then(async () => {
 
   const bestPlanName = [...wins.entries()].reduce((a, b) => (a[1] > b[1] ? a : b))[0];
   let bestPlan = allPlans.find((plan) => plan.name === bestPlanName)!.units;
-  const resultChain: {
-    name: string;
-    units: Unit[];
-    result: 'won' | 'lost' | 'drawed';
-    reasoning?: string;
-    changes?: string;
-  }[] = [{ name: bestPlanName, units: rotateUnits(bestPlan), result: 'won' }];
 
-  for (let i = 0; i < genCount; i++) {
+  const { readCache, writeCache } = getCache<
+    {
+      name: string;
+      units: Unit[];
+      result: 'won' | 'lost' | 'drawed';
+      reasoning?: string;
+      changes?: string;
+    }[]
+  >('result-chain.cache.json', []);
+  let resultChain = readCache();
+
+  if (resultChain.length === 0) {
+    resultChain = [{ name: bestPlanName, units: rotateUnits(bestPlan), result: 'won' }];
+  } else {
+    console.log('Loaded existing resultChain from cache');
+    bestPlan = resultChain[resultChain.length - 1].units;
+  }
+
+  while (resultChain.length < genCount) {
     const generation = await generateMasterplan(resultChain);
     const counterPlan = trimUnits(generation.units, 104);
     const battleResult = simulate(rotateUnits(bestPlan), counterPlan);
@@ -82,19 +94,28 @@ loadModel(newModel).then(async () => {
       (oppositeResult === 'draw' && battleResult !== 'draw');
 
     if (instableResult) {
+      console.log('Skipping instable result');
+      genCount--;
       continue;
     }
 
-    if (battleResult === 'counterPlan') {
-      simulationResults.push([unitsToModelInput(rotateUnits(bestPlan)), unitsToModelInput(counterPlan)]);
-      resultChain.push({ ...generation, units: counterPlan, result: 'lost' });
-    } else if (simulate(counterPlan, bestPlan) === 'plan') {
-      simulationResults.push([unitsToModelInput(rotateUnits(counterPlan)), unitsToModelInput(bestPlan)]);
-      resultChain.push({ ...generation, units: counterPlan, result: 'won' });
-    } else {
-      resultChain.push({ ...generation, units: counterPlan, result: 'drawed' });
-    }
+    const result = battleResult === 'plan' ? 'lost' : battleResult === 'counterPlan' ? 'won' : 'drawed';
+    resultChain.push({ ...generation, units: counterPlan, result });
     bestPlan = counterPlan;
+
+    // Cache the updated resultChain after each generation
+    writeCache(resultChain);
+  }
+
+  for (let i = 1; i < resultChain.length; i++) {
+    const battleResult = resultChain[i].result;
+    const bestPlan = resultChain[i - 1].units;
+    const counterPlan = resultChain[i].units;
+    if (battleResult === 'won') {
+      simulationResults.push([unitsToModelInput(rotateUnits(bestPlan)), unitsToModelInput(counterPlan)]);
+    } else if (battleResult === 'lost') {
+      simulationResults.push([unitsToModelInput(rotateUnits(counterPlan)), unitsToModelInput(bestPlan)]);
+    }
   }
 
   await train(
@@ -103,14 +124,4 @@ loadModel(newModel).then(async () => {
   );
 
   await saveModel();
-
-  // loop
-
-  // generate new plan
-
-  // predict counter plan
-
-  // simulate battle
-
-  // train result
 });

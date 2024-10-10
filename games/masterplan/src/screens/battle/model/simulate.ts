@@ -2,7 +2,11 @@ import { Unit } from '../../designer/designer-types';
 import { GameWorld } from '../game/game-world';
 import { initCurrentState } from '../states';
 import { createMasterPlan } from '../states/state-game-battle';
-import { calculateMD5, readCache, writeCache } from './cache';
+import { calculateMD5, getCache } from './cache';
+
+const { readCache, writeCache } = getCache<
+  Record<string, { balance: number; result: 'plan' | 'counterPlan' | 'draw' }>
+>('simulate.cache.json', {});
 
 export function simulate(plan: Unit[], counterPlan: Unit[]): 'plan' | 'counterPlan' | 'draw' {
   const planHash = calculateMD5(plan);

@@ -54,7 +54,7 @@ I will be able to provide you with feedback on the generated plan based on the r
         .map((result, idx) => [
           {
             type: 'assistant',
-            text: `I have generated a masterplan for you, it\'s name is "${result.name}".`,
+            text: `I have generated a masterplan for you, it\'s name is "${result.name}", could you please check how it performs against "${resultChain[idx].name}"?`,
             functionCalls: [
               {
                 name: 'saveMasterplan',
@@ -75,7 +75,7 @@ I will be able to provide you with feedback on the generated plan based on the r
               },
             ],
             text: `Thank you, I have used the plan "${result.name}" for the next run against the "${resultChain[idx].name}" plan. 
-                FYI: It ${result.result} with the previous plan. You can use the information to learn that the plan you generated is good or bad.
+                FYI: It ${result.result} with "${resultChain[idx].name}" plan. You can use this fact to learn that the plan you generated is good or bad.
                 Now please generate a new plan, which can win with the "${result.name}" plan. Please think about a new strategy you have not thinked so far, consider different layout which does not have to be symetrical, and different balance of unit types.`,
           } as PromptItem,
         ])

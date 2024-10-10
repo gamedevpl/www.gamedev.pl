@@ -50,22 +50,26 @@ export function modelInputToUnits(input: ModelInput): Unit[] {
 
   const inputMap: Record<string, { type: UnitType; command?: Unit['command'] }> = {};
 
+  const unitValues = input.data
+    .map((row) => row.map((col) => Object.values(CELL_INDEX_MAP).map((idx) => col[idx])))
+    .flat(2);
+  const min = Math.min(...unitValues);
+  const max = Math.max(...unitValues);
+  const threshold = min + (max - min) * 0.5;
+
   for (let i = 0; i < input.rows; i++) {
     for (let j = 0; j < input.cols; j++) {
-      if (input.data[i][j].some((v) => v > 0)) {
-        const type = Object.keys(CELL_INDEX_MAP)
-          .map((k) => [k, input.data[i][j][CELL_INDEX_MAP[k as UnitType]]] as const)
-          .sort((a, b) => b[1] - a[1])
-          .filter((cell) => cell[1] > 0.1)?.[0]?.[0] as UnitType | undefined;
+      const type = Object.keys(CELL_INDEX_MAP)
+        .map((k) => [k, input.data[i][j][CELL_INDEX_MAP[k as UnitType]]] as const)
+        .sort((a, b) => b[1] - a[1])
+        .filter((cell) => cell[1] > threshold)?.[0]?.[0] as UnitType | undefined;
 
-        const command = Object.keys(COMMAND_INDEX_MAP)
-          .map((k) => [k, input.data[i][j][COMMAND_INDEX_MAP[k as Unit['command']]]] as const)
-          .sort((a, b) => b[1] - a[1])
-          .filter((cell) => cell[1] > 0.1)?.[0]?.[0] as Unit['command'] | undefined;
+      const command = Object.keys(COMMAND_INDEX_MAP)
+        .map((k) => [k, input.data[i][j][COMMAND_INDEX_MAP[k as Unit['command']]]] as const)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] as Unit['command'] | undefined;
 
-        if (type) {
-          inputMap[i + ',' + j] = { type, command };
-        }
+      if (type) {
+        inputMap[i + ',' + j] = { type, command };
       }
     }
   }

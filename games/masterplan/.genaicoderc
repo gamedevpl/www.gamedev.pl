@@ -6,6 +6,7 @@
     "package-lock.json",
     "tfmodel/weights.bin",
     "tfmodel/model.json",
+    "result-chain.cache.json",
     "simulation.cache.json"
   ]
 }
