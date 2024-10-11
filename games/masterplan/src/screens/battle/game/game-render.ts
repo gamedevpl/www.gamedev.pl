@@ -18,10 +18,10 @@ export function renderGame(world: GameWorld) {
   world.particles.renderDead(canvas);
 
   // render dead bodies
-  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.life === 0).forEach(renderObject);
+  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.state.life === 0).forEach(renderObject);
 
   // render soldiers
-  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.life > 0).forEach(renderObject);
+  world.queryObjects('Soldier', (soldier: SoldierObject) => soldier.state.life > 0).forEach(renderObject);
 
   // render other objects
   world.queryObjects('Arrow').forEach(renderObject);

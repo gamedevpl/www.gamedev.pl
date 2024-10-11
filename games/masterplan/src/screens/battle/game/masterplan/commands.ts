@@ -28,7 +28,7 @@ export class WaitCommand extends Command {
   }
 
   execute(soldier: SoldierObject) {
-    soldier.setTargetVelocity(0);
+    soldier.movement.setTargetVelocity(0);
   }
 }
 
@@ -48,10 +48,10 @@ export class AdvanceCommand extends Command {
     var dir = VMath.atan2(soldier.vec, target);
 
     if (dist > 50) {
-      soldier.setTargetVelocity(1);
-      soldier.setTargetDirection(dir);
+      soldier.movement.setTargetVelocity(1);
+      soldier.movement.setTargetDirection(dir);
     } else {
-      soldier.setTargetVelocity(0);
+      soldier.movement.setTargetVelocity(0);
       this.done = true;
     }
   }
@@ -81,7 +81,7 @@ export class AttackCommand extends Command {
   }
 
   execute(soldier: SoldierObject) {
-    if (!soldier.seekEnemy(EDGE_RADIUS)) {
+    if (!soldier.targeting.seekEnemy(EDGE_RADIUS)) {
       this.done = true;
     }
   }

@@ -2,7 +2,8 @@ import { ARROW_RANGE, BALL_RANGE, EDGE_RADIUS, MIN_TICK, UPDATE_TICK } from '../
 import { VMath } from '../util/vmath';
 import { indexGameWorld } from './game-world-index';
 import { GameObject } from './objects/game-object';
-import { ArrowObject, ExplosionObject } from './objects/object-arrow';
+import { ArrowObject } from './objects/object-arrow';
+import { ExplosionObject } from './objects/object-explosion';
 import { SoldierObject } from './objects/object-soldier';
 import { ParticleSystem } from './particles/particle-system';
 
@@ -84,14 +85,14 @@ export class GameWorld {
     const hitArrows = this.queryObjects<ArrowObject>('Arrow', (arrow) => arrow.isHit());
 
     this.queryObjects<SoldierObject>('Soldier').forEach((soldier) => {
-      if (soldier.life <= 0) {
+      if (soldier.state.life <= 0) {
         return;
       }
 
       // soldier -> soldier
       indexed.searchSoldiers.byRadius(soldier.vec, soldier.getWidth()).forEach((soldierLeft) => {
         if (
-          soldierLeft.life <= 0 ||
+          soldierLeft.state.life <= 0 ||
           soldier === soldierLeft ||
           checkedCollisions[soldier.id + soldierLeft.id] ||
           checkedCollisions[soldierLeft.id + soldier.id]
@@ -115,7 +116,7 @@ export class GameWorld {
 
       // outside of battleground?
       if (!VMath.withinDistance(soldier.vec, [0, 0], this.getEdgeRadius())) {
-        soldier.addForce(VMath.scale(VMath.normalize(soldier.vec), -1));
+        soldier.movement.addForce(VMath.scale(VMath.normalize(soldier.vec), -1));
       }
     }, this);
 
@@ -159,15 +160,19 @@ export class GameWorld {
         [Math.random() - Math.random(), Math.random() - Math.random()],
         1 / Number.MAX_SAFE_INTEGER,
       );
-      leftSoldier.addForce(subVector);
-      rightSoldier.addForce(VMath.scale(subVector, -1));
+      leftSoldier.movement.addForce(subVector);
+      rightSoldier.movement.addForce(VMath.scale(subVector, -1));
     } else {
       var subVector2 = VMath.scale(
         VMath.normalize(VMath.sub(leftSoldier.vec, rightSoldier.vec)),
         leftSoldier.getWidth() - distance,
       );
-      leftSoldier.addForce(VMath.scale(subVector2, (1 / leftSoldier.weight) * rightSoldier.weight));
-      rightSoldier.addForce(VMath.scale(subVector2, (-1 * leftSoldier.weight) / rightSoldier.weight));
+      leftSoldier.movement.addForce(
+        VMath.scale(subVector2, (1 / leftSoldier.state.weight) * rightSoldier.state.weight),
+      );
+      rightSoldier.movement.addForce(
+        VMath.scale(subVector2, (-1 * leftSoldier.state.weight) / rightSoldier.state.weight),
+      );
     }
   }
 
@@ -175,10 +180,10 @@ export class GameWorld {
     var distance = VMath.distance(arrow.vec, soldier.vec);
     if (arrow.type === 'arrow') {
       arrow.hit(soldier, distance);
-    } else if (arrow.type === 'ball' && soldier.cooldown('ballhit', 150)) {
+    } else if (arrow.type === 'ball' && soldier.state.cooldown('ballhit', 150)) {
       arrow.hit(soldier, distance);
       var sub = VMath.scale(VMath.normalize(VMath.sub(soldier.vec, arrow.vec)), soldier.getWidth() - distance);
-      soldier.addForce(VMath.scale(sub, (-0.5 / soldier.weight) * (1 - distance / BALL_RANGE)));
+      soldier.movement.addForce(VMath.scale(sub, (-0.5 / soldier.state.weight) * (1 - distance / BALL_RANGE)));
     }
   }
 
@@ -187,7 +192,7 @@ export class GameWorld {
   }
 
   getAlive() {
-    return this.queryObjects<SoldierObject>('Soldier', (soldier) => soldier.life > 0).reduce(
+    return this.queryObjects<SoldierObject>('Soldier', (soldier) => soldier.state.life > 0).reduce(
       (r, soldier) => ((r[soldier.color] = (r[soldier.color] || 0) + 1), r),
       {
         '#ff0000': 0,
