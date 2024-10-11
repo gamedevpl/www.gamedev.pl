@@ -7,7 +7,17 @@ import { SoldierTargeting } from './object-soldier-targeting';
 import { SoldierAttack } from './object-soldier-attack';
 import { SoldierState } from './object-soldier-state';
 import { SoldierRender } from './object-soldier-render';
-import { SOLDIER_WIDTH, SOLDIER_HEIGHT, MAX_LIFE } from '../../consts';
+import {
+  SOLDIER_WIDTH,
+  SOLDIER_HEIGHT,
+  MAX_LIFE,
+  MELEE_SEEK_RANGE,
+  MELEE_ATTACK_RANGE,
+  DEFENCE_COOLDOWN,
+  RANGED_SEEK_RANGE,
+  RANGED_ATTACK_RANGE,
+  RANGED_ATTACK_COOLDOWN,
+} from '../../consts';
 import { $ } from '../../util/dom';
 import { Canvas } from '../../util/canvas';
 import { UnitType } from '../../../designer/designer-types';
@@ -77,8 +87,8 @@ export class SoldierObject extends GameObject {
 
   private initializeWarrior() {
     this.state.setProperties({
-      seekRange: 600,
-      attackRange: 42,
+      seekRange: MELEE_SEEK_RANGE,
+      attackRange: MELEE_ATTACK_RANGE,
       rangeDefence: 30,
       meleeDefence: 50,
       meleeAttack: 25,
@@ -90,13 +100,14 @@ export class SoldierObject extends GameObject {
 
   private initializeTank() {
     this.state.setProperties({
-      seekRange: 600,
-      attackRange: 46.2,
+      seekRange: MELEE_SEEK_RANGE,
+      attackRange: MELEE_ATTACK_RANGE * 1.1,
       rangeDefence: 100,
       meleeDefence: 100,
       meleeAttack: 15,
       life: MAX_LIFE * 2,
-      defenceCooldown: 300,
+      newLife: MAX_LIFE * 2,
+      defenceCooldown: DEFENCE_COOLDOWN / 5,
       weight: 3,
       canCharge: false,
       isMelee: true,
@@ -105,11 +116,11 @@ export class SoldierObject extends GameObject {
 
   private initializeArcher() {
     this.state.setProperties({
-      seekRange: 500,
-      attackRange: 300,
+      seekRange: RANGED_SEEK_RANGE,
+      attackRange: RANGED_ATTACK_RANGE,
       rangeAttack: 45,
       rangeDefence: 25,
-      rangedCooldown: 1000,
+      rangedCooldown: RANGED_ATTACK_COOLDOWN,
       meleeDefence: 10,
       meleeAttack: 10,
       rangeType: 'arrow',
@@ -118,13 +129,13 @@ export class SoldierObject extends GameObject {
 
   private initializeArtillery() {
     this.state.setProperties({
-      seekRange: 500,
-      attackRange: 1500,
+      seekRange: RANGED_SEEK_RANGE,
+      attackRange: RANGED_ATTACK_RANGE * 5,
       weight: 10,
       baseSpeed: 0.1,
       rangeAttack: 100,
       rangeDefence: 1,
-      rangedCooldown: 10000,
+      rangedCooldown: RANGED_ATTACK_COOLDOWN * 10,
       meleeDefence: 1,
       meleeAttack: 1,
       rangeType: 'ball',

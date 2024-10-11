@@ -10,6 +10,7 @@ interface SoldierProperties {
   rangeAttack?: number;
   rangedCooldown?: number;
   life?: number;
+  newLife?: number;
   defenceCooldown?: number;
   weight?: number;
   baseSpeed?: number;
