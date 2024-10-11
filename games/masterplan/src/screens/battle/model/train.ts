@@ -22,48 +22,10 @@ console.log('Training with', genCount, 'generations and', planCount, 'plans', ne
 
 loadModel(newModel).then(async () => {
   const simulationResults: [winnerPlan: ModelInput, loserPlan: ModelInput][] = [];
-  const wins = new Map<string, number>();
 
-  let todoCounter = allPlans.length ** 2 - allPlans.length;
-  for (const plan of allPlans.slice(0, planCount)) {
-    for (const counterPlan of allPlans.slice(0, planCount)) {
-      if (plan.name === counterPlan.name) {
-        continue;
-      }
-
-      const battleResult = simulate(rotateUnits(plan.units), counterPlan.units);
-      const oppositeResult = simulate(rotateUnits(counterPlan.units), plan.units);
-      const instableResult =
-        (battleResult === 'plan' && oppositeResult === 'plan') ||
-        (battleResult === 'draw' && oppositeResult !== 'draw') ||
-        (oppositeResult === 'draw' && battleResult !== 'draw');
-      console.log(
-        todoCounter--,
-        plan.name,
-        battleResult === 'plan' ? '>' : battleResult === 'counterPlan' ? '<' : '=',
-        counterPlan.name,
-        instableResult ? '!' : '',
-      );
-      if (instableResult) {
-        continue;
-      }
-
-      if (battleResult === 'plan' || battleResult === 'draw') {
-        simulationResults.push([unitsToModelInput(rotateUnits(counterPlan.units)), unitsToModelInput(plan.units)]);
-      }
-      if (battleResult === 'counterPlan' || battleResult === 'draw') {
-        simulationResults.push([unitsToModelInput(rotateUnits(plan.units)), unitsToModelInput(counterPlan.units)]);
-      }
-      if (battleResult === 'plan') {
-        wins.set(plan.name, (wins.get(plan.name) || 0) + 1);
-      } else if (battleResult === 'counterPlan') {
-        wins.set(counterPlan.name, (wins.get(counterPlan.name) || 0) + 1);
-      }
-    }
-  }
-
-  const bestPlanName = [...wins.entries()].reduce((a, b) => (a[1] > b[1] ? a : b))[0];
-  let bestPlan = allPlans.find((plan) => plan.name === bestPlanName)!.units;
+  // First we generate some plans using LLM
+  let bestPlan = allPlans[0].units;
+  const bestPlanName = allPlans[0].name;
 
   const { readCache, writeCache } = getCache<
     {
@@ -108,6 +70,7 @@ loadModel(newModel).then(async () => {
     writeCache(resultChain);
   }
 
+  // Add results to training data
   for (let i = 1; i < resultChain.length; i++) {
     const battleResult = resultChain[i].result;
     const bestPlan = resultChain[i - 1].units;
@@ -119,11 +82,59 @@ loadModel(newModel).then(async () => {
     }
   }
 
+  // Lets simulate some more battles with LLM generated plans, and the hardcoded plans
+  const wins = new Map<string, number>();
+
+  let todoCounter =
+    Math.min(allPlans.length, planCount) * (Math.min(allPlans.length, planCount) + resultChain.length) -
+    Math.min(allPlans.length, planCount);
+  for (const plan of [...allPlans.slice(0, planCount), ...resultChain.map((result) => result)]) {
+    for (const counterPlan of allPlans.slice(0, planCount)) {
+      if (plan.name === counterPlan.name) {
+        continue;
+      }
+
+      const battleResult = simulate(rotateUnits(plan.units), counterPlan.units);
+      const oppositeResult = simulate(rotateUnits(counterPlan.units), plan.units);
+      const instableResult =
+        (battleResult === 'plan' && oppositeResult === 'plan') ||
+        (battleResult === 'draw' && oppositeResult !== 'draw') ||
+        (oppositeResult === 'draw' && battleResult !== 'draw');
+      console.log(
+        todoCounter--,
+        plan.name,
+        battleResult === 'plan' ? '>' : battleResult === 'counterPlan' ? '<' : '=',
+        counterPlan.name,
+        instableResult ? '!' : '',
+      );
+      if (instableResult) {
+        continue;
+      }
+
+      if (battleResult === 'plan' || battleResult === 'draw') {
+        simulationResults.push([unitsToModelInput(rotateUnits(counterPlan.units)), unitsToModelInput(plan.units)]);
+      }
+      if (battleResult === 'counterPlan' || battleResult === 'draw') {
+        simulationResults.push([unitsToModelInput(rotateUnits(plan.units)), unitsToModelInput(counterPlan.units)]);
+      }
+
+      if (battleResult === 'plan') {
+        wins.set(plan.name, (wins.get(plan.name) || 0) + 1);
+      } else if (battleResult === 'counterPlan') {
+        wins.set(counterPlan.name, (wins.get(counterPlan.name) || 0) + 1);
+      }
+    }
+  }
+
+  console.log('Simulation finished, the best plan is:', [...wins.entries()].reduce((a, b) => (a[1] > b[1] ? a : b))[0]);
+
+  // Train the model
   await train(
     simulationResults.map(([, loserPlan]) => loserPlan),
     simulationResults.map(([winnerPlan]) => winnerPlan),
     epochs,
   );
 
+  // Save the model
   await saveModel();
 });
