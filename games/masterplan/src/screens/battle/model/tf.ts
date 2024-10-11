@@ -56,11 +56,11 @@ export async function loadModel(newModel = false) {
   compileModel();
 }
 
-export async function train(inputs: ModelInput[], outputs: ModelInput[]) {
+export async function train(inputs: ModelInput[], outputs: ModelInput[], epochs = 50) {
   const xs = tf.tensor3d(flattenInputs(inputs));
   const ys = tf.tensor3d(flattenInputs(outputs));
 
-  await model.fit(xs, ys, { epochs: 50, validationSplit: 0.1 });
+  await model.fit(xs, ys, { epochs, validationSplit: 0.1 });
 }
 
 export function predict(input: number[][]): number[][] {

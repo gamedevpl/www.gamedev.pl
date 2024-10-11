@@ -16,6 +16,7 @@ const planCount = parseInt(
   10,
 );
 const newModel = params.includes('--new-model');
+const epochs = parseInt(params.find((p) => p.startsWith('--epochs='))?.split('=')[1] || '50', 10);
 
 console.log('Training with', genCount, 'generations and', planCount, 'plans', newModel ? 'with new model' : '');
 
@@ -121,6 +122,7 @@ loadModel(newModel).then(async () => {
   await train(
     simulationResults.map(([, loserPlan]) => loserPlan),
     simulationResults.map(([winnerPlan]) => winnerPlan),
+    epochs,
   );
 
   await saveModel();

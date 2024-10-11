@@ -823,5 +823,1525 @@
     "reasoning": "The 'Fortress Formation' relies on a strong defensive core, which can be countered by a strategy that emphasizes mobility and unpredictability. By using warriors and archers to execute hit-and-run tactics, we can disrupt their defenses and create openings. Artillery provides long-range harassment, while tanks are positioned to exploit any breakthroughs. This approach aims to dismantle the fortress's defenses through constant pressure and tactical flexibility.",
     "changes": "This plan introduces a guerrilla warfare strategy, focusing on mobility and surprise attacks to dismantle the 'Fortress Formation'. The layout is non-symmetrical, with a focus on fast-moving units and strategic positioning to exploit the fortress's static nature.",
     "result": "lost"
+  },
+  {
+    "name": "Phantom Strike",
+    "units": [
+      {
+        "type": "archer",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 10,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Guerrilla Tactics' plan relies on mobility and surprise, which can be countered by a strategy that emphasizes deception and unexpected strikes. By positioning units to create a false sense of security, we can mislead the enemy and exploit their overextension. Warriors and tanks will strike from hidden positions, while archers and artillery provide cover and support. This approach aims to disrupt the enemy's plans through misdirection and concentrated force.",
+    "changes": "This plan introduces a stealth and deception strategy, focusing on misleading the enemy and striking from unexpected angles. The layout is non-symmetrical, with units positioned to create the illusion of a different formation, while the main force prepares for a surprise attack.",
+    "result": "won"
+  },
+  {
+    "name": "Shadow Ambush",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -14,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 14,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Phantom Strike' plan relies on stealth and deception, which can be countered by a strategy that anticipates their movements and sets up an ambush. By using the terrain to our advantage and positioning units for a surprise attack, we can catch the enemy off guard. Tanks and warriors will hold strategic points, while archers and artillery provide cover and unleash a surprise barrage. This approach aims to neutralize the enemy's deceptive tactics and deliver a decisive counterattack.",
+    "changes": "This plan introduces an ambush strategy, focusing on using the terrain and unit positioning to trap and dismantle the 'Phantom Strike' plan. The layout is non-symmetrical, with units hidden and ready to spring a trap on the advancing enemy forces.",
+    "result": "won"
+  },
+  {
+    "name": "Phantom Vortex",
+    "units": [
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": -6,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 6,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": 8,
+        "row": 0,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": 2,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": 4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": -10,
+        "row": 6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      }
+    ],
+    "reasoning": "The 'Shadow Ambush' plan relies on setting up traps and anticipating enemy movements. To counter this, 'Phantom Vortex' creates a constantly shifting battlefield that's hard to predict or trap. By using a mix of fast-moving units in an unconventional, spiral-like formation, we aim to disrupt the enemy's ability to set up effective ambushes. The constant movement and repositioning of our forces will make it difficult for the enemy to pin down our strategy or effectively deploy their traps.",
+    "changes": "This plan introduces a dynamic, swirling strategy that aims to confuse and overwhelm the 'Shadow Ambush' plan. The layout is highly asymmetrical, with units positioned to create a vortex-like movement pattern that constantly shifts the battlefield dynamics.",
+    "result": "won"
+  },
+  {
+    "name": "Adaptive Fortress",
+    "units": [
+      {
+        "type": "tank",
+        "col": -2,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "tank",
+        "col": 2,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "artillery",
+        "col": -4,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "artillery",
+        "col": 4,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Phantom Vortex' plan relies on constant movement and unpredictability to confuse enemies. To counter this, 'Adaptive Fortress' creates a strong, immovable core that can withstand the swirling attacks, while also deploying mobile units to disrupt the vortex pattern. The central fortress, composed of tanks and artillery, provides a stable anchor point and powerful long-range attacks. Meanwhile, warriors and archers on the flanks have the mobility to intercept and counter the enemy's shifting formations. This approach aims to break the rhythm of the vortex while maintaining a solid defensive position.",
+    "changes": "This plan introduces a hybrid strategy combining elements of a strong defensive core with adaptive, mobile units on the periphery. The layout is asymmetrical, with a concentrated defensive formation at the center and flexible, fast-moving units positioned to respond to the dynamic movements of the Phantom Vortex.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Surge",
+    "units": [
+      {
+        "type": "tank",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 8,
+        "row": -7,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 18,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -15,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "artillery",
+        "col": -8,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Adaptive Fortress' plan relies on a strong central core with flexible units on the periphery. To counter this, 'Quantum Surge' aims to create multiple, simultaneous threats that are difficult to predict and respond to effectively. By distributing our forces in an unconventional manner, we seek to overwhelm the enemy's ability to adapt. The plan uses a mix of fast strikes, long-range attacks, and strategic positioning to create a sense of chaos on the battlefield. This approach aims to break down the enemy's defensive structure and create openings for decisive strikes.",
+    "changes": "This plan introduces a highly unconventional and asymmetrical strategy that focuses on rapid, unpredictable bursts of activity across the battlefield. The layout is deliberately chaotic, with units positioned in seemingly random locations, designed to confuse and overwhelm the 'Adaptive Fortress' plan.",
+    "result": "lost"
+  },
+  {
+    "name": "Gravitational Collapse",
+    "units": [
+      {
+        "type": "tank",
+        "col": -16,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": -14,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "artillery",
+        "col": -10,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -6,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -3,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Surge' plan relies on unpredictable, scattered attacks across the battlefield. To counter this, 'Gravitational Collapse' aims to create a singularity of force that's too powerful for the dispersed enemy units to effectively engage. By concentrating our forces in an unconventional, highly dense formation on one side of the field, we seek to overwhelm any enemy units in our path while being too strong for the scattered enemy forces to counter. This approach aims to create a unstoppable 'gravitational pull' that draws in and crushes enemy units, while being resilient enough to withstand attacks from multiple directions.",
+    "changes": "This plan introduces a highly concentrated, asymmetrical strategy that focuses on creating an overwhelming force in a specific area of the battlefield. The layout is deliberately imbalanced, with a dense cluster of units on one side and minimal presence on the other, designed to counter the chaotic nature of the 'Quantum Surge' plan.",
+    "result": "drawed"
+  },
+  {
+    "name": "Elastic Slingshot",
+    "units": [
+      {
+        "type": "archer",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 6,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": 18,
+        "row": 2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": -10,
+        "row": 4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": 6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      }
+    ],
+    "reasoning": "The 'Gravitational Collapse' plan relies on a highly concentrated force on one side of the battlefield. To counter this, 'Elastic Slingshot' aims to use this concentration against itself. By spreading our units in a wide, elastic-like formation, we can absorb the initial impact of the enemy's force, then use that momentum to slingshot our units around and behind them, effectively encircling and cutting off their concentrated force. This approach aims to turn the enemy's strength into a weakness, using their own momentum to disrupt their formation and create opportunities for decisive strikes from multiple angles.",
+    "changes": "This plan introduces a highly dynamic and asymmetrical strategy that focuses on using the momentum of the enemy's concentrated force against them. The layout is deliberately spread out, with units positioned to create a flexible, elastic-like formation that can absorb and redirect the enemy's force.",
+    "result": "lost"
+  },
+  {
+    "name": "Fractal Assault",
+    "units": [
+      {
+        "type": "tank",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -11,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -7,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "artillery",
+        "col": -3,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 9,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 13,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 17,
+        "row": 1,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 1,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Elastic Slingshot' plan relies on a spread-out formation designed to absorb and redirect enemy forces. To counter this, 'Fractal Assault' aims to create multiple, self-similar attack patterns that can effectively engage enemies at various distances and formations. By organizing our units in fractal-like patterns, we create a strategy that is simultaneously spread out and concentrated, making it difficult for the enemy to predict and counter. This approach aims to overwhelm the enemy's ability to adapt by presenting threats at multiple scales and locations simultaneously, while maintaining the flexibility to concentrate force where needed.",
+    "changes": "This plan introduces a highly unconventional, fractal-like strategy that focuses on creating self-similar patterns of units at different scales across the battlefield. The layout is asymmetrical and appears chaotic at first glance, but follows a specific pattern designed to exploit weaknesses in both concentrated and spread-out enemy formations.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Entanglement",
+    "units": [
+      {
+        "type": "tank",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 8,
+        "row": -7,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 10,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": -8,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Fractal Assault' plan relies on self-similar patterns at different scales. To counter this, 'Quantum Entanglement' aims to create unpredictable, instantaneous interactions between distant units that can disrupt these patterns at multiple points simultaneously. By positioning pairs of units in strategic locations, we create a network of 'entangled' forces that can respond to threats across the battlefield in ways that are difficult to anticipate or counter. This approach aims to confuse and overwhelm the enemy by creating unexpected synergies and coordinated actions that don't follow traditional tactical logic.",
+    "changes": "This plan introduces a highly unconventional strategy based on the concept of quantum entanglement. The layout is asymmetrical and seemingly random, with pairs of units positioned in a way that creates unexpected synergies across the battlefield. The formation is designed to create instant, coordinated actions between distant units, countering the fractal patterns of the enemy.",
+    "result": "won"
+  },
+  {
+    "name": "Temporal Flux",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -16,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 16,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -4,
+        "row": 0,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 4,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": 4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": 6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Entanglement' plan relies on creating unexpected synergies between distant units. To counter this, 'Temporal Flux' aims to control the flow of battle by creating zones of varying engagement speeds. By strategically positioning units to create \"fast\" and \"slow\" areas on the battlefield, we can disrupt the enemy's ability to coordinate their entangled units effectively. Artillery and archers create \"slow\" zones with suppressing fire, while tanks and warriors form \"fast\" zones of rapid advancement. This approach aims to desynchronize the enemy's coordinated actions, force them into unfavorable engagements, and create opportunities for our forces to strike at optimal moments.",
+    "changes": "This plan introduces a highly dynamic strategy based on the concept of manipulating the flow of battle through strategic positioning and timing. The layout is asymmetrical and fluid, with units placed to create zones of accelerated and decelerated \"time\" on the battlefield. This formation is designed to control the pace of engagement, countering the unpredictable nature of the Quantum Entanglement strategy.",
+    "result": "won"
+  },
+  {
+    "name": "Dimensional Rift",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -7,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -5,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 2,
+        "row": -1,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 20,
+        "row": 5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      }
+    ],
+    "reasoning": "The 'Temporal Flux' plan relies on controlling the pace of battle through strategic positioning. To counter this, 'Dimensional Rift' aims to completely disrupt the enemy's perception of space and time on the battlefield. By creating the illusion of units phasing in and out of existence at different points, we can negate the enemy's attempts to control the flow of battle. \n\nOur strategy involves:\n1. Positioning artillery units at extreme edges to create \"rifts\" of long-range fire that seem to come from nowhere.\n2. Using fast-moving warriors to quickly appear and disappear, giving the impression of teleportation.\n3. Placing tanks in unexpected locations to suddenly \"materialize\" and break enemy lines.\n4. Utilizing archers to create a constant, shifting presence across the battlefield.\n\nThis approach aims to overwhelm the enemy's ability to predict and respond to our movements, making their attempts to create \"fast\" and \"slow\" zones ineffective. By constantly shifting the perceived battlefield, we force the enemy into a reactive stance, unable to effectively implement their strategy.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of creating and exploiting \"dimensional rifts\" on the battlefield. The layout is highly asymmetrical and unconventional, with units positioned to create the illusion of appearing and disappearing across different parts of the battlefield. This formation is designed to confuse and overwhelm the enemy by making our forces seem to be everywhere and nowhere at once.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Singularity",
+    "units": [
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "artillery",
+        "col": -12,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -6,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 4,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 12,
+        "row": 0,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "row": 4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": 6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Dimensional Rift' plan relies on creating confusion through the illusion of units appearing and disappearing across the battlefield. To counter this, 'Quantum Singularity' aims to create a focal point that disrupts and controls the enemy's movement, negating their ability to exploit perceived dimensional rifts.\n\nOur strategy involves:\n1. Positioning a powerful tank unit at the center to act as the \"singularity\", drawing enemy attention and fire.\n2. Arranging other units in a spiral pattern around this center, creating layers of defense and attack.\n3. Using artillery units at varying distances to create a gravitational-like effect, pulling enemy units towards our center.\n4. Placing fast-moving warriors and archers in strategic positions to exploit any enemy units drawn in by our formation.\n\nThis approach aims to counter the enemy's dimensional tactics by creating a powerful central force that cannot be ignored, while simultaneously attacking from multiple angles. The spiral formation allows for flexible response to enemy movements, adapting to their attempts to appear and disappear across the battlefield. By creating this \"quantum singularity\", we force the enemy to engage on our terms, disrupting their strategy of confusion and misdirection.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of creating a \"quantum singularity\" on the battlefield. The layout is highly asymmetrical and unconventional, with units positioned in a spiral pattern converging towards a central point. This formation is designed to create a gravitational-like pull effect, drawing enemy units into a central \"singularity\" while our forces attack from multiple angles.",
+    "result": "won"
+  },
+  {
+    "name": "Hyperdimensional Lattice",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": -12,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 2,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 12,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "artillery",
+        "col": 6,
+        "row": 1,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -2,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Singularity' plan relies on creating a central focal point that draws in enemy units. To counter this, 'Hyperdimensional Lattice' aims to create a decentralized, adaptive structure that can't be easily pulled into a single point. \n\nOur strategy involves:\n1. Positioning units in a complex, asymmetrical lattice formation that creates multiple interconnected \"nodes\".\n2. Using fast-moving warriors as \"connectors\" between different parts of the lattice, allowing for rapid reconfiguration.\n3. Placing artillery units at key \"intersection points\" to provide long-range support across multiple vectors.\n4. Utilizing tanks as mobile \"anchor points\" that can reinforce different parts of the lattice as needed.\n5. Deploying archers in elevated \"planes\" of the lattice to provide overlapping fields of fire.\n\nThis approach aims to counter the enemy's singularity by creating a structure that is both everywhere and nowhere at once. The lattice formation allows for incredible flexibility, with each unit supporting and being supported by multiple others. By constantly reconfiguring the lattice, we can adapt to the enemy's attempts to create a gravitational pull, while simultaneously launching attacks from unexpected angles.\n\nThe Hyperdimensional Lattice strategy seeks to overwhelm the enemy's singular focus with a multi-faceted, ever-changing threat that can't be pinned down or drawn in. It turns the battlefield into a complex, interconnected space where traditional notions of position and movement are constantly challenged.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of a multi-dimensional lattice structure on the battlefield. The layout is highly asymmetrical and unconventional, with units positioned to form an intricate, interconnected network that spans across different \"planes\" of the battlefield. This formation is designed to create a complex web of support and attack vectors that can adapt and reconfigure in response to the enemy's movements.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Vortex Collapse",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": -12,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 9,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 3,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": -3,
+        "row": 2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": 4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Hyperdimensional Lattice' plan relies on a complex, interconnected network of units. To counter this, 'Quantum Vortex Collapse' aims to create a powerful, dynamic force that can break apart and absorb the enemy's lattice structure.\n\nOur strategy involves:\n1. Positioning units in a large, spiraling formation that gradually contracts towards the center of the battlefield.\n2. Using fast-moving warriors at the outer edges of the spiral to initiate the collapse and draw in enemy units.\n3. Placing artillery units at strategic points along the spiral to create a \"gravitational pull\" effect, disrupting the enemy's lattice connections.\n4. Utilizing tanks as the core of the vortex, providing a strong central force that becomes increasingly powerful as the vortex contracts.\n5. Deploying archers in a staggered pattern throughout the spiral to provide continuous, converging fire as the formation collapses inward.\n\nThis approach aims to counter the enemy's lattice by creating a dynamic, collapsing structure that pulls apart and absorbs the enemy's formation. As our vortex contracts, it gains momentum and force, making it increasingly difficult for the enemy to maintain their lattice structure. The spiral formation allows for a continuous, accelerating attack that overwhelms the enemy from all directions simultaneously.\n\nThe Quantum Vortex Collapse strategy seeks to turn the complexity of the enemy's lattice against them, using the power of a coordinated, collapsing formation to break apart their interconnected units and crush them in a final, overwhelming convergence at the center of the battlefield.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of creating a dynamic, collapsing vortex on the battlefield. The layout is highly asymmetrical and fluid, with units positioned in a spiral pattern that gradually contracts towards the center, creating a powerful inward force that disrupts and overwhelms the enemy's lattice structure.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Mirage Labyrinth",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -7,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 18,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 8,
+        "row": 1,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": -18,
+        "row": 3,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": 5,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Vortex Collapse' plan relies on a spiraling, contracting formation to overwhelm the enemy. To counter this, 'Quantum Mirage Labyrinth' aims to create a battlefield filled with false targets and misleading pathways that disrupt the enemy's ability to focus their collapsing vortex.\n\nOur strategy involves:\n1. Positioning units in a seemingly random, asymmetrical pattern that creates multiple \"mirages\" of potential targets.\n2. Using fast-moving warriors to rapidly shift between positions, creating the illusion of multiple units where there is only one.\n3. Placing artillery units at unexpected locations to create sudden, powerful attacks that appear from nowhere, further confusing the enemy.\n4. Utilizing tanks as \"anchor points\" that occasionally reveal themselves, drawing the enemy's vortex towards false centers.\n5. Deploying archers in elevated positions to create a constantly shifting web of fire that obscures the true layout of our forces.\n\nThis approach aims to counter the enemy's vortex by creating a battlefield where the true positions of our units are constantly in question. As the enemy attempts to contract their vortex, they will find themselves targeting mirages and falling into traps. The labyrinthine nature of our formation means that any attempt to create a focused collapse will be met with confusion and misdirection.\n\nThe Quantum Mirage Labyrinth strategy seeks to turn the enemy's coordinated vortex against them by presenting an battlefield that defies conventional understanding of space and position. By constantly shifting the perceived reality of the battlefield, we aim to fragment and disperse the enemy's vortex, leaving them vulnerable to our precisely coordinated, yet seemingly chaotic attacks.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of creating a complex, ever-shifting labyrinth of quantum mirages on the battlefield. The layout is highly asymmetrical and dynamic, with units positioned to create multiple illusory formations that confuse and misdirect the enemy's vortex collapse.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Resonance Cascade",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -6,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -5,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 18,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": -14,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": 4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Mirage Labyrinth' plan relies on creating confusion through multiple illusory formations. To counter this, 'Quantum Resonance Cascade' aims to generate powerful energy waves that cut through illusions and mirages, revealing the true positions of enemy units and disrupting their ability to maintain the labyrinth.\n\nOur strategy involves:\n1. Positioning artillery units as \"resonance initiators\" at key points to start the cascade effect.\n2. Using tanks as \"wave amplifiers\" to strengthen and direct the resonance waves across the battlefield.\n3. Deploying warriors in a zig-zag pattern to create interference patterns that further disrupt the enemy's mirages.\n4. Placing archers at calculated positions to exploit the gaps created by the resonance waves.\n5. Creating a non-uniform, asymmetrical layout that prevents the enemy from predicting the cascade's pattern.\n\nThis approach aims to counter the enemy's mirage tactics by generating powerful energy waves that reveal true positions and disrupt illusions. As our resonance cascade builds up, it will create a chaotic environment that the enemy can't control, turning their own confusion tactics against them.\n\nThe Quantum Resonance Cascade strategy seeks to overwhelm the enemy's labyrinth by introducing a higher level of controlled chaos. By generating cascading waves of energy, we aim to strip away the enemy's ability to maintain their illusions while simultaneously creating devastating attack opportunities for our forces.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of creating a cascading series of quantum resonances across the battlefield. The layout is highly asymmetrical and dynamic, with units positioned to generate and amplify energy waves that disrupt and overwhelm the enemy's mirage labyrinth.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Entropy Inversion",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 10,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 3,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "artillery",
+        "col": 15,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": 4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Resonance Cascade' plan relies on generating and amplifying energy waves across the battlefield. To counter this, 'Quantum Entropy Inversion' aims to create zones where the normal rules of energy propagation are inverted, effectively nullifying and redirecting the enemy's resonance waves.\n\nOur strategy involves:\n1. Positioning artillery units as \"entropy inverters\" at key points to create zones of reversed causality.\n2. Using tanks as \"temporal anchors\" to stabilize these inverted zones and protect our forces within them.\n3. Deploying warriors in seemingly random patterns to exploit the chaotic boundaries between normal and inverted zones.\n4. Placing archers at strategic points where inverted and normal space intersect, allowing them to attack from unexpected angles.\n5. Creating a highly asymmetrical layout that defies conventional tactical logic, making our strategy unpredictable and hard to counter.\n\nThis approach aims to nullify the enemy's resonance cascade by creating areas where energy behaves in reverse, absorbing and inverting their attacks. As our entropy inversion takes effect, it will create a battlefield where cause and effect are locally reversed, turning the enemy's own energy against them.\n\nThe Quantum Entropy Inversion strategy seeks to fundamentally alter the rules of engagement on the battlefield. By inverting the flow of entropy in localized areas, we aim to create a scenario where the enemy's attempts to build up resonance actually work in our favor, while our forces operate in zones of inverted causality that grant them tactical advantages beyond normal physical limitations.",
+    "changes": "This plan introduces a groundbreaking strategy based on the concept of reversing the flow of entropy on the battlefield. The layout is highly asymmetrical and counterintuitive, with units positioned to create localized areas of reversed causality and inverted energy flow, disrupting the enemy's resonance cascade.",
+    "result": "lost"
+  },
+  {
+    "name": "Quantum Superposition Swarm",
+    "units": [
+      {
+        "type": "warrior",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -7,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 5,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -2,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": 0,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Entropy Inversion' plan relies on creating zones of reversed causality and inverted energy flow. To counter this, 'Quantum Superposition Swarm' aims to create a battlefield presence that exists in multiple states and positions simultaneously, making it immune to localized entropy inversions.\n\nOur strategy involves:\n1. Deploying units in a way that they appear to occupy multiple positions at once, creating a swarm-like effect that's difficult to pin down or affect with entropy inversion.\n2. Using warriors as \"quantum scouts\" that rapidly shift between multiple states, confusing enemy targeting and intelligence gathering.\n3. Positioning artillery to fire from multiple superposed locations, making their attacks unpredictable and hard to counter.\n4. Utilizing tanks as \"probability anchors\" that collapse the wave function of our forces at critical moments, solidifying advantageous positions.\n5. Placing archers in a state of quantum entanglement, allowing them to coordinate attacks across vast distances instantaneously.\n\nThis approach aims to negate the enemy's entropy inversion by creating a force that exists beyond conventional space-time constraints. Our units will appear to be everywhere and nowhere simultaneously, making it impossible for the enemy to effectively apply their localized causality reversals.\n\nThe Quantum Superposition Swarm strategy seeks to transcend the limitations of traditional battlefield tactics. By existing in a state of quantum superposition, our forces become immune to conventional attacks and strategies, while maintaining the ability to collapse into decisive, coordinated strikes at will.",
+    "changes": "This plan introduces a revolutionary strategy based on the concept of quantum superposition applied to battlefield tactics. The layout is highly dynamic and unpredictable, with units positioned to exist in multiple states simultaneously, creating a swarm-like effect that overwhelms and confuses the enemy's entropy inversion tactics.",
+    "result": "lost"
+  },
+  {
+    "name": "Quantum Decoherence Trap",
+    "units": [
+      {
+        "type": "archer",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 5,
+        "row": -9,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 12,
+        "row": -1,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      }
+    ],
+    "reasoning": "The 'Quantum Superposition Swarm' plan relies on units existing in multiple states simultaneously. To counter this, 'Quantum Decoherence Trap' aims to force the enemy units into definite states through strategic observation and interaction, negating their superposition advantage.\n\nOur strategy involves:\n1. Positioning archer units as \"quantum observers\" in a wide, asymmetrical pattern to create a field of continuous measurement that forces enemy units into definite states.\n2. Using tanks as \"decoherence amplifiers\" that increase the rate of wave function collapse in their vicinity, solidifying the positions of nearby enemy units.\n3. Deploying artillery as \"entanglement breakers\" to disrupt the quantum connections between enemy units, isolating them from their swarm.\n4. Utilizing warriors as rapid-response units to exploit the moments of vulnerability when enemy units collapse into definite states.\n5. Creating a dispersed, seemingly random layout that maximizes our ability to observe and interact with the enemy's quantum states across the entire battlefield.\n\nThis approach aims to systematically break down the enemy's quantum superposition advantage by forcing their units into classical, observable states. By strategically positioning our units to act as constant observers and interaction points, we create a battlefield environment where maintaining quantum superposition becomes impossible for the enemy.\n\nThe Quantum Decoherence Trap strategy seeks to turn the fundamental principles of quantum mechanics against the enemy. By leveraging the observer effect and quantum decoherence, we aim to strip away the enemy's quantum advantages and force them to fight on classical terms, where our strategic positioning and rapid response capabilities give us the upper hand.",
+    "changes": "This plan introduces a groundbreaking strategy based on the concept of forced quantum decoherence. The layout is highly asymmetrical and strategically dispersed, designed to create a complex web of observation points that collapse the enemy's quantum superposition states.",
+    "result": "lost"
   }
 ]

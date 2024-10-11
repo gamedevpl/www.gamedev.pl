@@ -5174,5 +5174,201 @@
   "580fe9a7c3633cd2a1a1f44e46849403_cf965ad473be351d8a1dc60921901f42": {
     "balance": 0,
     "result": "counterPlan"
+  },
+  "580fe9a7c3633cd2a1a1f44e46849403_dbd700ac90369ce4b1e275065accba64": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "d2308628f97b1bc091618cf96ce7f3e4_d101cb1e530ad6e1f7fe7b2ac9d32766": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "d2308628f97b1bc091618cf96ce7f3e4_e46bb3c26fa363694647a5d7e2cedcf9": {
+    "balance": 0.23076923076923078,
+    "result": "counterPlan"
+  },
+  "90e1a4596b7b5483d85120d9ffabffc3_dbd700ac90369ce4b1e275065accba64": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "90e1a4596b7b5483d85120d9ffabffc3_a16b537771f6b5c26b3e22c2da4fab46": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "90e1a4596b7b5483d85120d9ffabffc3_9cebf1da79a1d77ffbfa39f67b2775a1": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "7d54cca32e841706000a43e2de066082_e46bb3c26fa363694647a5d7e2cedcf9": {
+    "balance": 0.5714285714285714,
+    "result": "draw"
+  },
+  "90e1a4596b7b5483d85120d9ffabffc3_a2dadd084c2a412241f5244c8b4c6a6b": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "53290fac9d7702e25cb504759c1d23ea_e46bb3c26fa363694647a5d7e2cedcf9": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "53290fac9d7702e25cb504759c1d23ea_5bced8d5ec952e72d436bb99cf7c3c8a": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "11e0d2ec59f00c0dc868758ede49f412_a2dadd084c2a412241f5244c8b4c6a6b": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "11e0d2ec59f00c0dc868758ede49f412_9216ffb63601acaac0afcdca6417005e": {
+    "balance": 0.7777777777777778,
+    "result": "plan"
+  },
+  "ee2984e16bbe4d99080642edf95dc100_5bced8d5ec952e72d436bb99cf7c3c8a": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "ee2984e16bbe4d99080642edf95dc100_0f3e4152a532d3b1cd7fff3c13cfe909": {
+    "balance": 0.6875,
+    "result": "draw"
+  },
+  "dfb96906316a3ac30bf5271572cabbd2_9216ffb63601acaac0afcdca6417005e": {
+    "balance": 0.7222222222222222,
+    "result": "draw"
+  },
+  "dfb96906316a3ac30bf5271572cabbd2_65f3d9d7fa26a3bf4b952976ac480ab2": {
+    "balance": 0.6428571428571429,
+    "result": "draw"
+  },
+  "e30aff125d883b9af989433d60e23266_0f3e4152a532d3b1cd7fff3c13cfe909": {
+    "balance": 0.19047619047619047,
+    "result": "counterPlan"
+  },
+  "dfb96906316a3ac30bf5271572cabbd2_0e6d40dea07eef2d3a95cee4594e50b8": {
+    "balance": 0.8333333333333334,
+    "result": "plan"
+  },
+  "00b3e908101cd82feb4dea11fc409d6f_0f3e4152a532d3b1cd7fff3c13cfe909": {
+    "balance": 0.09090909090909091,
+    "result": "counterPlan"
+  },
+  "00b3e908101cd82feb4dea11fc409d6f_1c2c4af0fe94ee5bbc96f3d39afe4fee": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "1f9ea7666738aaa84333ca446c58c7bc_0e6d40dea07eef2d3a95cee4594e50b8": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "1f9ea7666738aaa84333ca446c58c7bc_5c46bfd87cc15575e461671744eb1868": {
+    "balance": 0.21428571428571427,
+    "result": "counterPlan"
+  },
+  "f4eba3b25505606a02974f883a7e321a_1c2c4af0fe94ee5bbc96f3d39afe4fee": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "f4eba3b25505606a02974f883a7e321a_d6dfe581f2c4ce97eb3bec09de484eaf": {
+    "balance": 0.1111111111111111,
+    "result": "counterPlan"
+  },
+  "8bf4d1a6881bb876577fa6259ae5763b_5c46bfd87cc15575e461671744eb1868": {
+    "balance": 0.07692307692307693,
+    "result": "counterPlan"
+  },
+  "8bf4d1a6881bb876577fa6259ae5763b_4841d40c0bb199d81ff477b9b571603e": {
+    "balance": 0.2,
+    "result": "counterPlan"
+  },
+  "2029a21481804962a469d0e0a4c07f49_d6dfe581f2c4ce97eb3bec09de484eaf": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "2029a21481804962a469d0e0a4c07f49_4ba40c55a861e535129f775e6b066705": {
+    "balance": 0.4117647058823529,
+    "result": "draw"
+  },
+  "073adcf4c1515a44b14e34269e18f39f_4841d40c0bb199d81ff477b9b571603e": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "2029a21481804962a469d0e0a4c07f49_1e7257a8039f913374e4cf93fcb6fdee": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "efbf42fdf9ee562da5b164a216ce5961_4841d40c0bb199d81ff477b9b571603e": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "efbf42fdf9ee562da5b164a216ce5961_441bd21eb34496346067b8b5c0e57a16": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "bd87581c40ba0d2a7aa0b7a75086e00a_1e7257a8039f913374e4cf93fcb6fdee": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "bd87581c40ba0d2a7aa0b7a75086e00a_fc918d955f85c51d01750a9522231816": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "3da131b2755ab7c9f345bc093c370602_441bd21eb34496346067b8b5c0e57a16": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "3da131b2755ab7c9f345bc093c370602_2ac1a0b0a5c683d51befd9ba24d9de9c": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "be1dfa79e8f85c4c85aaaa9bd6cc2410_fc918d955f85c51d01750a9522231816": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "3da131b2755ab7c9f345bc093c370602_a9a53aff5af029c21bcbe41dad1e5669": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "969cd5226bd1858717d2ea5a7b5f08c2_fc918d955f85c51d01750a9522231816": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "969cd5226bd1858717d2ea5a7b5f08c2_8620ab91e1316cb2a5ed28d1b3657772": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "1b05f30ab9751a6e45d66cfcd4fc366b_a9a53aff5af029c21bcbe41dad1e5669": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "1b05f30ab9751a6e45d66cfcd4fc366b_c090ef5264a48fb33a67a44d8f38d375": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "2a03752f4863dbb17a786da6ccb96e1a_8620ab91e1316cb2a5ed28d1b3657772": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "2a03752f4863dbb17a786da6ccb96e1a_89129ad5267458aab9f1fee129cdc844": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "5a790474c1e6d64bdfa24befb9a6aab4_c090ef5264a48fb33a67a44d8f38d375": {
+    "balance": 0,
+    "result": "counterPlan"
+  },
+  "5a790474c1e6d64bdfa24befb9a6aab4_e5b47966c455d57353e3ef1b5121d2fb": {
+    "balance": 1,
+    "result": "plan"
+  },
+  "6ec49b8509556cfb09a2925a5881a3cc_89129ad5267458aab9f1fee129cdc844": {
+    "balance": 0.8571428571428571,
+    "result": "plan"
+  },
+  "5a790474c1e6d64bdfa24befb9a6aab4_f740eef235c03f6c13e292b9c1de3a11": {
+    "balance": 0.875,
+    "result": "plan"
+  },
+  "aff599b2b39903d0cc64d13ae573cfc3_89129ad5267458aab9f1fee129cdc844": {
+    "balance": 0,
+    "result": "counterPlan"
   }
 }
