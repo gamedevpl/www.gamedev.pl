@@ -30,7 +30,7 @@
     "start": "vite",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
     "train": "ts-node src/screens/battle/model/train.ts",
-    "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --imagen=dall-e"
+    "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --allow-directory-create --imagen=dall-e --vision"
   },
   "author": "gtanczyk",
   "license": "ISC"
