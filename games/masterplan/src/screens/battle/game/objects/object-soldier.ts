@@ -39,6 +39,9 @@ export class SoldierObject extends GameObject {
   state: SoldierState;
   soldierRender: SoldierRender;
 
+  lastAttackTime: number = 0;
+  attackDuration: number = 500; // milliseconds
+
   constructor(
     x: number,
     y: number,

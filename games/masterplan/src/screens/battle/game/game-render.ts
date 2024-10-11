@@ -39,7 +39,10 @@ export function renderGame(world: GameWorld) {
 export function renderObject(object: GameObject) {
   var canvas = getCanvas(LAYER_DEFAULT);
 
-  canvas.save().fillStyle('red').translate(object.getX(), object.getY()).rotate(object.getDirection());
+  canvas.save().fillStyle('red').translate(object.getX(), object.getY());
+  if (object.getClass() !== 'Soldier') {
+    canvas.rotate(object.getDirection());
+  }
   object.render(canvas);
   canvas.restore();
   // if (object.enemy && object.life > 0) {
