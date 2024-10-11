@@ -1,7 +1,7 @@
 import { VMath } from '../../util/vmath';
 import { SoldierObject } from './object-soldier';
 import { ArrowObject } from './object-arrow';
-import { SEEK_COOLDOWN, MIN_RANGE_ATTACK } from '../../consts';
+import { SEEK_COOLDOWN, MIN_RANGE_ATTACK, MELEE_ATTACK_RANGE } from '../../consts';
 import { aa } from '../../util/arcade-audio';
 import { createSmokeEffect } from '../particles/effects/smoke-effect';
 
@@ -57,10 +57,7 @@ export class SoldierTargeting {
           createSmokeEffect(this.soldier.vec, this.enemy.vec, this.soldier.world.particles);
         }
       }
-      if (
-        dist < this.soldier.state.attackRange &&
-        this.soldier.state.cooldown('sword', this.soldier.state.meleeAttackCooldown)
-      ) {
+      if (dist < MELEE_ATTACK_RANGE && this.soldier.state.cooldown('sword', this.soldier.state.meleeAttackCooldown)) {
         this.soldier.attack.hit(this.enemy);
       }
 
