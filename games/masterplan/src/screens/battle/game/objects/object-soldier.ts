@@ -18,7 +18,6 @@ import {
   RANGED_ATTACK_RANGE,
   RANGED_ATTACK_COOLDOWN,
 } from '../../consts';
-import { $ } from '../../util/dom';
 import { Canvas } from '../../util/canvas';
 import { UnitType } from '../../../designer/designer-types';
 
@@ -30,8 +29,6 @@ export class SoldierObject extends GameObject {
   world: GameWorld;
   type: UnitType;
   color: string;
-  image: any;
-  imageDead: any;
 
   movement: SoldierMovement;
   targeting: SoldierTargeting;
@@ -58,9 +55,6 @@ export class SoldierObject extends GameObject {
     this.world = world;
     this.type = type;
     this.color = color;
-
-    this.image = $('#asset-soldier-' + this.type);
-    this.imageDead = $('#asset-soldier-' + this.type + '-dead');
 
     this.movement = new SoldierMovement(this);
     this.targeting = new SoldierTargeting(this);

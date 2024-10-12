@@ -4,17 +4,6 @@ import { useCustomEvent } from '../../../../nukes/src/events';
 
 import { Unit } from '../designer/designer-types';
 
-import assetSoldierWarrior from './assets/soldier-warrior.png';
-import assetSoldierWarriorDead from './assets/soldier-warrior-dead.png';
-
-import assetSoldierArcher from './assets/soldier-archer.png';
-import assetSoldierArcherDead from './assets/soldier-archer-dead.png';
-
-import assetSoldierTank from './assets/soldier-tank.png';
-import assetSoldierTankDead from './assets/soldier-tank-dead.png';
-
-import assetSoldierArtillery from './assets/soldier-artillery.png';
-import assetSoldierArtilleryDead from './assets/soldier-artillery-dead.png';
 import { BattleStyles } from './battle-styles';
 import './main';
 import { initCurrentState, updateState } from './states';
@@ -68,15 +57,6 @@ export function BattleScreen({
       <BattleStyles />
       <BattleControls />
 
-      {/* assets */}
-      <img src={assetSoldierWarrior} id="asset-soldier-warrior" />
-      <img src={assetSoldierWarriorDead} id="asset-soldier-warrior-dead" />
-      <img src={assetSoldierArcher} id="asset-soldier-archer" />
-      <img src={assetSoldierArcherDead} id="asset-soldier-archer-dead" />
-      <img src={assetSoldierTank} id="asset-soldier-tank" />
-      <img src={assetSoldierTankDead} id="asset-soldier-tank-dead" />
-      <img src={assetSoldierArtillery} id="asset-soldier-artillery" />
-      <img src={assetSoldierArtilleryDead} id="asset-soldier-artillery-dead" />
       {/* HUD */}
       <div id="game-hud">
         <div id="battle-stats">
