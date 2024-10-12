@@ -14,10 +14,6 @@ export const EVENT_INTERVAL_SECOND = eventCounter++;
 export const EVENT_WINDOW_RESIZE = eventCounter++;
 
 // menu events
-/** @const */
-export const EVENT_MENU_PLAY = eventCounter++;
-
-// controls
 export const EVENT_ESCAPE = eventCounter++;
 
 export const EVENT_MOUSE_DOWN = eventCounter++;
@@ -37,8 +33,6 @@ export const EVENT_ARROW_LEFT_UP = eventCounter++;
 export const EVENT_ARROW_RIGHT_UP = eventCounter++;
 export const EVENT_ARROW_UP_UP = eventCounter++;
 export const EVENT_ARROW_DOWN_UP = eventCounter++;
-
-export const EVENT_TOUCH_START = eventCounter++;
 
 // battle
 export const EVENT_DAMAGE = eventCounter++;

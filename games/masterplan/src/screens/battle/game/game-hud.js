@@ -1,14 +1,12 @@
-import { $ } from '../util/dom';
-
 export class GameHUD {
   constructor(world) {
     this.world = world;
 
-    this.HUD = $('#game-hud');
-    this.battleTime = $('#battle-time');
-    this.battleResult = $('#battle-result');
-    this.balanceLeft = $('#battle-balance-left');
-    this.balanceRight = $('#battle-balance-right');
+    this.HUD = document.querySelector('#game-hud');
+    this.battleTime = document.querySelector('#battle-time');
+    this.battleResult = document.querySelector('#battle-result');
+    this.balanceLeft = document.querySelector('#battle-balance-left');
+    this.balanceRight = document.querySelector('#battle-balance-right');
 
     this.HUD.style.display = 'block';
   }

@@ -36,7 +36,7 @@ export function renderGame(world: GameWorld) {
 /**
  * @param {GameObject} object
  */
-export function renderObject(object: GameObject) {
+function renderObject(object: GameObject) {
   var canvas = getCanvas(LAYER_DEFAULT);
 
   canvas.save().fillStyle('red').translate(object.getX(), object.getY());

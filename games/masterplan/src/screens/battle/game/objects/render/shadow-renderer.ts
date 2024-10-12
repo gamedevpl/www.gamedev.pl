@@ -7,7 +7,7 @@ interface ShadowOptions {
   opacity: number;
 }
 
-export class ShadowRenderer {
+class ShadowRenderer {
   private defaultOptions: ShadowOptions = {
     opacity: 0.3,
   };

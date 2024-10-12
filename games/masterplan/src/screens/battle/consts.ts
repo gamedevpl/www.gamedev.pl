@@ -1,37 +1,12 @@
 /** @define {boolean} */
 export const DEBUG = true;
 
-/** @const */
-export const NULL = null;
-/** @const */
-export const TRUE = true;
-/** @const */
-export const FALSE = false;
-
 /** const */
 export const MIN_TICK = 10;
 export const UPDATE_TICK = 100;
 
 /** @const */
-export const GAME_STATE_INIT = 0;
-/** @const */
-export const GAME_STATE_BATTLE_INIT = 1;
-/** @const */
-export const GAME_STATE_PAUSE = 2;
-/** @const */
-export const GAME_STATE_END = 3;
-
-/** @const */
 export const LAYER_DEFAULT = 'layer-default';
-
-/** @const */
-export const TYPE_ARCHER = 16;
-
-/** @const */
-export const TYPE_WARRIOR = 17;
-
-/** @const */
-export const TYPE_TANK = 18;
 
 /** @const */
 export const EDGE_RADIUS = 800;

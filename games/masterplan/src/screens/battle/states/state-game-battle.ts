@@ -55,7 +55,7 @@ export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[
   };
 }
 
-export function stateGameBattle(world: GameWorld, HUD: GameHUD) {
+function stateGameBattle(world: GameWorld, HUD: GameHUD) {
   var damageTotal = 0;
   var damageMap: Record<number, Record<string, number>> = {
     [EVENT_DAMAGE]: {
@@ -103,7 +103,7 @@ export function stateGameBattle(world: GameWorld, HUD: GameHUD) {
   };
 }
 
-export function stateGameBattleEnd(world: GameWorld, HUD: GameHUD) {
+function stateGameBattleEnd(world: GameWorld, HUD: GameHUD) {
   HUD.renderResults(world);
 
   return function GameBattleEndHandler(eventType: number) {
