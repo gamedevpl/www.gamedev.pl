@@ -23,8 +23,10 @@ export class SoldierRender {
     const ctx = canvas.getCtx();
     ctx.save();
 
-    // Render shadow first
-    renderShadow(canvas, this.soldier);
+    if (this.soldier.state.isAlive()) {
+      // Render shadow first
+      renderShadow(canvas, this.soldier);
+    }
 
     if (!this.soldier.state.isAlive()) {
       ctx.translate(0, this.soldier.getHeight() / 2);
@@ -41,7 +43,7 @@ export class SoldierRender {
     for (const [_part, shape] of sortedShapes) {
       const rotatedPoints = rotate3D(shape.points, rotationAngle + Math.PI / 2);
       const perspectivePoints = rotatedPoints.map((p) => applyPerspective(p));
-      const shadedColor = applyShading(baseColor, rotationAngle);
+      const shadedColor = applyShading(baseColor, rotationAngle, this.soldier.state.isAlive() ? 1 : 0.5);
 
       ctx.fillStyle = shadedColor;
       drawPolygon(canvas, perspectivePoints);

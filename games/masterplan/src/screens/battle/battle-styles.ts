@@ -141,7 +141,6 @@ canvas#layer-default {
   max-height: 100vh;
   position: absolute;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, #30c530 0%, #30c530 64%, #138c13 100%);
   z-index: 1;
 }
 `;

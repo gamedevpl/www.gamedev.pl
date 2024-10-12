@@ -1,4 +1,5 @@
 import { Canvas } from '../../util/canvas';
+import { Terrain } from '../terrain/terrain';
 
 export class Particle {
   gravity = 5;
@@ -7,6 +8,7 @@ export class Particle {
     public x: number,
     public y: number,
     public z: number,
+    private terrain: Terrain,
     public velocityX: number,
     public velocityY: number,
     public velocityZ: number,
@@ -17,7 +19,7 @@ export class Particle {
   update(deltaTime: number) {
     this.x += this.velocityX * deltaTime;
     this.y += this.velocityY * deltaTime;
-    this.z = Math.max(this.z + this.velocityZ * deltaTime, 0);
+    this.z = Math.max(this.z + this.velocityZ * deltaTime, this.terrain.getHeightAt([this.x, this.y]));
 
     if (this.type === 'smoke') {
       // Smoke particles float upwards and dissipate
@@ -42,7 +44,12 @@ export class Particle {
     if (this.type === 'smoke') {
       return this.life <= 0;
     } else {
-      return this.life <= 0 && this.z <= 0 && Math.abs(this.velocityX) < 0.01 && Math.abs(this.velocityY) < 0.01;
+      return (
+        this.life <= 0 &&
+        this.z <= this.terrain.getHeightAt([this.x, this.y]) &&
+        Math.abs(this.velocityX) < 0.01 &&
+        Math.abs(this.velocityY) < 0.01
+      );
     }
   }
 }
@@ -54,7 +61,7 @@ export class ParticleSystem {
   deadParticlesCanvas: HTMLCanvasElement | undefined;
   deadParticlesContext: CanvasRenderingContext2D | undefined;
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, public terrain: Terrain) {
     if (isBrowser) {
       this.deadParticlesCanvas = document.createElement('canvas');
       this.deadParticlesCanvas.width = width;
@@ -98,7 +105,7 @@ export class ParticleSystem {
     });
 
     if (this.deadParticlesContext) {
-      this.deadParticlesContext.fillStyle = 'red';
+      this.deadParticlesContext.fillStyle = 'rgba(255, 0, 0, 0.5)';
       this.deadParticlesContext.fill(bloodPath);
     }
   }
@@ -133,7 +140,7 @@ export class ParticleSystem {
       path.closePath();
     });
 
-    context.fillStyle('red');
+    context.fillStyle('rgba(255, 0, 0, 0.5)');
     context.fill(bloodPath);
     context.fillStyle('rgba(128, 128, 128, 0.5)');
     context.fill(smokePath);

@@ -10,7 +10,16 @@ export function spillBlood([x, y]: Vec, [sourceX, sourceY]: Vec, amount: number,
     const velocityZ = Math.random() * 15;
     const life = 0.5;
 
-    const particle = new Particle(x, y, 0, velocityX, velocityY, velocityZ, life);
+    const particle = new Particle(
+      x,
+      y,
+      particleSystem.terrain.getHeightAt([x, y]),
+      particleSystem.terrain,
+      velocityX,
+      velocityY,
+      velocityZ,
+      life,
+    );
     particleSystem.addParticle(particle);
   }
 }

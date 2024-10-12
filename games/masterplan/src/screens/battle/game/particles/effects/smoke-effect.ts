@@ -12,7 +12,17 @@ export function createSmokeEffect([x, y]: Vec, [sourceX, sourceY]: Vec, particle
     const velocityZ = Math.random() * 10 + 5; // Upward velocity
     const life = 50 + Math.random() * 5;
 
-    const particle = new Particle(x, y, 0, velocityX, velocityY, velocityZ, life, 'smoke');
+    const particle = new Particle(
+      x,
+      y,
+      particleSystem.terrain.getHeightAt([x, y]),
+      particleSystem.terrain,
+      velocityX,
+      velocityY,
+      velocityZ,
+      life,
+      'smoke',
+    );
     particleSystem.addParticle(particle);
   }
 }

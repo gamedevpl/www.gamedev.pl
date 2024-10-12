@@ -25,6 +25,6 @@ body {
   height: 100vh;
   background-color: #242424;
   overscroll-behavior: none;
-  background: radial-gradient(ellipse at center, #30c530 0%, #30c530 64%, #138c13 100%);
+  background: radial-gradient(ellipse at center, #6B8E23 0%, #6B8E23 64%, #5b791e 100%);
 }
 `;
