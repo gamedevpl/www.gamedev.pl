@@ -127,7 +127,7 @@ export class SoldierRender {
     }
   }
 
-  private defineFallenShapes(_unitType: UnitType): { [key: string]: Shape } {
+  private defineFallenShapes(unitType: UnitType): { [key: string]: Shape } {
     const baseFallenShapes = {
       head: {
         points: [
@@ -162,9 +162,70 @@ export class SoldierRender {
       },
     };
 
-    // Add unit-specific fallen shapes here if needed
-
-    return baseFallenShapes;
+    switch (unitType) {
+      case 'warrior':
+        return {
+          ...baseFallenShapes,
+          sword: {
+            points: [
+              { x: 5, y: -8, z: 1 },
+              { x: 15, y: -5, z: 1 },
+              { x: 15, y: -3, z: 1 },
+              { x: 5, y: -6, z: 1 },
+            ],
+            zIndex: 4,
+          },
+        };
+      case 'archer':
+        return {
+          ...baseFallenShapes,
+          bow: {
+            points: [
+              { x: 5, y: -10, z: 1 },
+              { x: 10, y: -8, z: 1 },
+              { x: 10, y: 2, z: 1 },
+              { x: 5, y: 4, z: 1 },
+            ],
+            zIndex: 4,
+          },
+          arrow: {
+            points: [
+              { x: 10, y: -2, z: 2 },
+              { x: 18, y: -1, z: 2 },
+              { x: 18, y: 1, z: 2 },
+            ],
+            zIndex: 5,
+          },
+        };
+      case 'tank':
+        return {
+          ...baseFallenShapes,
+          shield: {
+            points: [
+              { x: -10, y: -8, z: 4 },
+              { x: -6, y: -9, z: 4 },
+              { x: -6, y: 5, z: 4 },
+              { x: -10, y: 4, z: 4 },
+            ],
+            zIndex: 4,
+          },
+        };
+      case 'artillery':
+        return {
+          ...baseFallenShapes,
+          cannon: {
+            points: [
+              { x: 6, y: -5, z: 2 },
+              { x: 16, y: -4, z: 2 },
+              { x: 16, y: 2, z: 2 },
+              { x: 6, y: 1, z: 2 },
+            ],
+            zIndex: 4,
+          },
+        };
+      default:
+        return baseFallenShapes;
+    }
   }
 
   private getUnitColor(unitType: UnitType): string {
