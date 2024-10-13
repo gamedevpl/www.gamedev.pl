@@ -18,15 +18,14 @@ import {
   RANGED_ATTACK_RANGE,
   RANGED_ATTACK_COOLDOWN,
 } from '../../consts';
-import { Canvas } from '../../util/canvas';
 import { UnitType } from '../../../designer/designer-types';
+import { RenderQueue } from '../game-render-queue';
 
 let soldierID = 0;
 
 export class SoldierObject extends GameObject {
   soldierId: number;
   plan: SoldierPlan;
-  world: GameWorld;
   type: UnitType;
   color: string;
 
@@ -49,10 +48,9 @@ export class SoldierObject extends GameObject {
     type: UnitType,
   ) {
     direction += (Math.random() - Math.random()) / 1000;
-    super(x, y, SOLDIER_WIDTH, SOLDIER_HEIGHT, direction);
+    super(x, y, SOLDIER_WIDTH, SOLDIER_HEIGHT, direction, world);
     this.soldierId = soldierID++;
     this.plan = plan;
-    this.world = world;
     this.type = type;
     this.color = color;
 
@@ -156,8 +154,8 @@ export class SoldierObject extends GameObject {
     }
   }
 
-  render(canvas: Canvas) {
-    this.soldierRender.render(canvas);
+  render(queue: RenderQueue) {
+    this.soldierRender.addRenderCommands(queue);
   }
 
   distance(soldier: SoldierObject) {

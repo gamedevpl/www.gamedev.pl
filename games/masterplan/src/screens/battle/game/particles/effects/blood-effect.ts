@@ -8,7 +8,7 @@ export function spillBlood([x, y]: Vec, [sourceX, sourceY]: Vec, amount: number,
     const velocityX = (Math.random() - Math.random()) * 5 + dirX;
     const velocityY = (Math.random() - Math.random()) * 5 + dirY;
     const velocityZ = Math.random() * 15;
-    const life = 0.5;
+    const life = 2;
 
     const particle = new Particle(
       x,

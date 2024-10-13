@@ -2,6 +2,7 @@ import { GameObject } from './game-object';
 import { VMath } from '../../util/vmath';
 import { GameWorld } from '../game-world';
 import { SoldierObject } from './object-soldier';
+import { RenderQueue } from '../game-render-queue';
 
 const DIMS = {
   arrow: [10, 1],
@@ -9,7 +10,6 @@ const DIMS = {
 } as const;
 
 export class ArrowObject extends GameObject {
-  world: GameWorld;
   from: [number, number];
   to: [number, number];
   maxDist: number;
@@ -26,8 +26,7 @@ export class ArrowObject extends GameObject {
     attackBase: number,
     type: 'arrow' | 'ball',
   ) {
-    super(from[0], from[1], DIMS[type][0], DIMS[type][1], VMath.atan2(from, to));
-    this.world = world;
+    super(from[0], from[1], DIMS[type][0], DIMS[type][1], VMath.atan2(from, to), world);
     this.from = from;
     this.to = to;
     this.maxDist = VMath.distance(from, to);
@@ -48,6 +47,17 @@ export class ArrowObject extends GameObject {
     if (VMath.distance(this.from, this.vec) > this.maxDist) {
       this.world.removeObject(this);
     }
+  }
+
+  render(queue: RenderQueue): void {
+    queue.addObjectCommand(this.getZ(), this.getY(), true, 'red', (canvas) => {
+      canvas
+        .save()
+        .translate(this.getX(), this.getY() - this.getZ())
+        .rotate(this.getDirection())
+        .fillRect(-this.getWidth() / 2, -this.getHeight() / 2, this.getWidth(), this.getHeight())
+        .restore();
+    });
   }
 
   getY() {

@@ -1,4 +1,6 @@
 import { Canvas } from '../../util/canvas';
+import { RenderQueue } from '../game-render-queue';
+import { GameWorld } from '../game-world';
 
 export abstract class GameObject {
   static idCounter = 0;
@@ -8,24 +10,30 @@ export abstract class GameObject {
   direction: number;
   objectWidth: number;
   objectHeight: number;
-  constructor(x: number, y: number, width: number, height: number, direction: number) {
+  world: GameWorld;
+
+  constructor(x: number, y: number, width: number, height: number, direction: number, world: GameWorld) {
     this.id = String(GameObject.idCounter++);
     this.vec = [x, y];
     this.direction = direction;
     this.objectWidth = width;
     this.objectHeight = height;
+    this.world = world;
   }
 
   getTargetVelocity() {}
 
   abstract update(deltaTime: number): void;
 
-  render(canvas: Canvas) {
-    canvas
-      .save()
-      .translate(-this.getWidth() / 2, -this.getHeight() / 2)
-      .fillRect(0, 0, this.getWidth(), this.getHeight())
-      .restore();
+  render(queue: RenderQueue) {
+    queue.addObjectCommand(this.getZ(), this.getY(), true, 'red', (canvas: Canvas) => {
+      canvas.fillRect(
+        -this.getWidth() / 2 + this.getX(),
+        -this.getHeight() / 2 + this.getY() - this.getZ(),
+        this.getWidth(),
+        this.getHeight(),
+      );
+    });
   }
 
   getX() {
@@ -40,6 +48,10 @@ export abstract class GameObject {
   }
   setY(y: number) {
     this.vec[1] = y;
+  }
+
+  getZ() {
+    return this.world.terrain.getHeightAt(this.vec);
   }
 
   getDirection() {

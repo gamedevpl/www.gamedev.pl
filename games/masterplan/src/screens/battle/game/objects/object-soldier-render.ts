@@ -1,10 +1,10 @@
 import { SoldierObject } from './object-soldier';
-import { Canvas } from '../../util/canvas';
 import { rotate3D, applyPerspective } from './render/3d-rendering';
 import { applyShading } from './render/shading';
 import { drawPolygon } from './render/polygon-utils';
 import { renderShadow } from './render/shadow-renderer';
 import { defineShapes, defineFallenShapes, Shape } from './render/shape-definitions';
+import { RenderQueue } from '../game-render-queue';
 
 export class SoldierRender {
   private soldier: SoldierObject;
@@ -19,22 +19,29 @@ export class SoldierRender {
     this.unitColor = soldier.color;
   }
 
-  render(canvas: Canvas) {
-    const ctx = canvas.getCtx();
-    ctx.save();
+  addRenderCommands(renderQueue: RenderQueue) {
+    const z = this.soldier.getZ();
+    const y = this.soldier.getY();
+    const isAlive = this.soldier.state.isAlive();
 
-    if (this.soldier.state.isAlive()) {
-      // Render shadow first
-      renderShadow(canvas, this.soldier);
+    if (isAlive) {
+      // Add shadow render command
+      renderQueue.addShadowCommand(z, y, 'rgba(0, 0, 0, 0.3)', (canvas) => {
+        canvas.save().translate(this.soldier.getX(), this.soldier.getY() - this.soldier.getZ());
+        renderShadow(canvas, this.soldier);
+        canvas.restore();
+      });
     }
 
-    if (!this.soldier.state.isAlive()) {
-      ctx.translate(0, this.soldier.getHeight() / 2);
-    }
+    this.renderSoldier(renderQueue);
+  }
 
-    const rotationAngle = this.soldier.state.isAlive() ? this.soldier.getDirection() : Math.PI / 2; // Rotate fallen soldiers
-    const baseColor = this.soldier.state.isAlive() ? this.unitColor : '#808080';
-    const currentShapes = this.soldier.state.isAlive() ? this.shapes : this.fallenShapes;
+  private renderSoldier(renderQueue: RenderQueue) {
+    const isAlive = this.soldier.state.isAlive();
+
+    const rotationAngle = isAlive ? this.soldier.getDirection() : Math.PI / 2; // Rotate fallen soldiers
+    const baseColor = isAlive ? this.unitColor : '#808080';
+    const currentShapes = isAlive ? this.shapes : this.fallenShapes;
 
     // Sort shapes by z-index for proper layering
     const sortedShapes = Object.entries(currentShapes).sort((a, b) => a[1].zIndex - b[1].zIndex);
@@ -45,10 +52,14 @@ export class SoldierRender {
       const perspectivePoints = rotatedPoints.map((p) => applyPerspective(p));
       const shadedColor = applyShading(baseColor, rotationAngle, this.soldier.state.isAlive() ? 1 : 0.5);
 
-      ctx.fillStyle = shadedColor;
-      drawPolygon(canvas, perspectivePoints);
+      renderQueue.addObjectCommand(this.soldier.getZ(), this.soldier.getY(), isAlive, shadedColor, (canvas) => {
+        drawPolygon(
+          this.soldier.getX(),
+          this.soldier.getY() - this.soldier.getZ() + (!isAlive ? this.soldier.getHeight() / 2 : 0),
+          canvas,
+          perspectivePoints,
+        );
+      });
     }
-
-    ctx.restore();
   }
 }

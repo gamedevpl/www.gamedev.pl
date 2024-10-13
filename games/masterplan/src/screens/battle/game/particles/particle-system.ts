@@ -1,5 +1,6 @@
 import { Canvas } from '../../util/canvas';
 import { Terrain } from '../terrain/terrain';
+import { RenderQueue } from '../game-render-queue';
 
 export class Particle {
   gravity = 5;
@@ -41,16 +42,7 @@ export class Particle {
   }
 
   isDead() {
-    if (this.type === 'smoke') {
-      return this.life <= 0;
-    } else {
-      return (
-        this.life <= 0 &&
-        this.z <= this.terrain.getHeightAt([this.x, this.y]) &&
-        Math.abs(this.velocityX) < 0.01 &&
-        Math.abs(this.velocityY) < 0.01
-      );
-    }
+    return this.life <= 0;
   }
 }
 
@@ -121,30 +113,33 @@ export class ParticleSystem {
     }
   }
 
-  renderActive(context: Canvas) {
-    context.save();
+  addRenderCommands(renderQueue: RenderQueue) {
+    // Add active particles render commands
+    const bloodParticles = this.particles.filter((p) => p.type === 'blood');
+    const smokeParticles = this.particles.filter((p) => p.type === 'smoke');
 
-    // Render the active particles
-    const bloodPath = new Path2D();
-    const smokePath = new Path2D();
-    this.particles.forEach((particle) => {
-      const path = particle.type === 'smoke' ? smokePath : bloodPath;
-      path.moveTo(particle.x, particle.y - particle.z);
-      path.arc(
-        particle.x,
-        particle.y - particle.z,
-        particle.type === 'smoke' ? Math.min(particle.life, 2) : 1,
-        0,
-        Math.PI * 2,
-      );
-      path.closePath();
-    });
+    if (bloodParticles.length > 0) {
+      bloodParticles.forEach((particle) => {
+        renderQueue.addParticleCommand(particle.z, particle.y, 'rgba(255, 0, 0, 0.5)', (ctx) => {
+          const bloodPath = new Path2D();
+          bloodPath.moveTo(particle.x, particle.y - particle.z);
+          bloodPath.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
+          bloodPath.closePath();
+          ctx.fill(bloodPath);
+        });
+      });
+    }
 
-    context.fillStyle('rgba(255, 0, 0, 0.5)');
-    context.fill(bloodPath);
-    context.fillStyle('rgba(128, 128, 128, 0.5)');
-    context.fill(smokePath);
-
-    context.restore();
+    if (smokeParticles.length > 0) {
+      smokeParticles.forEach((particle) => {
+        renderQueue.addParticleCommand(particle.z, particle.y, 'rgba(128, 128, 128, 0.5)', (ctx) => {
+          const smokePath = new Path2D();
+          smokePath.moveTo(particle.x, particle.y - particle.z);
+          smokePath.arc(particle.x, particle.y - particle.z, Math.min(particle.life, 2), 0, Math.PI * 2);
+          smokePath.closePath();
+          ctx.fill(smokePath);
+        });
+      });
+    }
   }
 }
