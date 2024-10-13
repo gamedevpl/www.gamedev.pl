@@ -1,7 +1,8 @@
 import { EDGE_RADIUS } from '../../consts';
 import { Canvas } from '../../util/canvas';
 import { Vec } from '../../util/vmath';
-import { generateTerrainTexture } from './terrain-generator';
+import { generateTerrain } from './terrain-generator';
+import { createTerrainTexture } from './terrain-renderer';
 
 export class Terrain {
   tileSize = 32;
@@ -9,11 +10,15 @@ export class Terrain {
   offsetY = EDGE_RADIUS / this.tileSize;
   terrainCanvas: HTMLCanvasElement;
   heightMap: number[][];
+  width: number;
+  height: number;
 
   constructor() {
-    const { canvas, heightMap } = generateTerrainTexture(this.tileSize);
-    this.terrainCanvas = canvas;
+    const { width, height, heightMap } = generateTerrain(this.tileSize);
+    this.width = width;
+    this.height = height;
     this.heightMap = heightMap;
+    this.terrainCanvas = createTerrainTexture(width, height, heightMap, this.tileSize);
   }
 
   render(ctx: Canvas) {
