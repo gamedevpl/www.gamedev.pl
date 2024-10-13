@@ -87,18 +87,15 @@ export class ParticleSystem {
   }
 
   renderDeadParticles(deadParticles: Particle[]) {
-    const bloodPath = new Path2D();
-    deadParticles.forEach((particle) => {
-      if (particle.type === 'blood') {
-        bloodPath.moveTo(particle.x, particle.y - particle.z);
-        bloodPath.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
-        bloodPath.closePath();
-      }
-    });
-
     if (this.deadParticlesContext) {
       this.deadParticlesContext.fillStyle = 'rgba(255, 0, 0, 0.5)';
-      this.deadParticlesContext.fill(bloodPath);
+      deadParticles.forEach((particle) => {
+        if (particle.type === 'blood') {
+          this.deadParticlesContext!.beginPath();
+          this.deadParticlesContext!.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
+          this.deadParticlesContext!.fill();
+        }
+      });
     }
   }
 
@@ -120,25 +117,28 @@ export class ParticleSystem {
 
     if (bloodParticles.length > 0) {
       bloodParticles.forEach((particle) => {
-        renderQueue.addParticleCommand(particle.z, particle.y, 'rgba(255, 0, 0, 0.5)', (ctx) => {
-          const bloodPath = new Path2D();
-          bloodPath.moveTo(particle.x, particle.y - particle.z);
-          bloodPath.arc(particle.x, particle.y - particle.z, 1, 0, Math.PI * 2);
-          bloodPath.closePath();
-          ctx.fill(bloodPath);
-        });
+        renderQueue.renderShape(
+          'particles',
+          particle.x,
+          particle.y,
+          particle.z,
+          [[0, 0], [1, 0], [1, 1], [0, 1]],  // Simple square shape for the particle
+          'rgba(255, 0, 0, 0.5)'
+        );
       });
     }
 
     if (smokeParticles.length > 0) {
       smokeParticles.forEach((particle) => {
-        renderQueue.addParticleCommand(particle.z, particle.y, 'rgba(128, 128, 128, 0.5)', (ctx) => {
-          const smokePath = new Path2D();
-          smokePath.moveTo(particle.x, particle.y - particle.z);
-          smokePath.arc(particle.x, particle.y - particle.z, Math.min(particle.life, 2), 0, Math.PI * 2);
-          smokePath.closePath();
-          ctx.fill(smokePath);
-        });
+        const size = Math.min(particle.life, 2);
+        renderQueue.renderShape(
+          'particles',
+          particle.x - size / 2,
+          particle.y - size / 2,
+          particle.z,
+          [[0, 0], [size, 0], [size, size], [0, size]],  // Square shape with size based on particle life
+          'rgba(128, 128, 128, 0.5)'
+        );
       });
     }
   }

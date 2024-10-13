@@ -1,4 +1,3 @@
-import { Canvas } from '../../util/canvas';
 import { RenderQueue } from '../game-render-queue';
 import { GameWorld } from '../game-world';
 
@@ -26,14 +25,17 @@ export abstract class GameObject {
   abstract update(deltaTime: number): void;
 
   render(queue: RenderQueue) {
-    queue.addObjectCommand(this.getZ(), this.getY(), true, 'red', (canvas: Canvas) => {
-      canvas.fillRect(
-        -this.getWidth() / 2 + this.getX(),
-        -this.getHeight() / 2 + this.getY() - this.getZ(),
-        this.getWidth(),
-        this.getHeight(),
-      );
-    });
+    queue.addObjectCommand(
+      this.getX(),
+      this.getY() - this.world.terrain.getHeightAt(this.vec),
+      this.getZ(),
+      true,
+      'red',
+      [
+        [-this.getWidth() / 2 + this.getX(), -this.getHeight() / 2 + this.getY() - this.getZ()],
+        [this.getWidth(), this.getHeight()],
+      ],
+    );
   }
 
   getX() {

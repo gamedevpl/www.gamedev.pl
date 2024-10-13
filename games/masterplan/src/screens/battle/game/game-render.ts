@@ -4,7 +4,6 @@ import { GameWorld } from './game-world';
 import { RenderQueue } from './game-render-queue';
 
 export function renderGame(world: GameWorld) {
-  /** {Canvas} */
   const canvas = getCanvas(LAYER_DEFAULT);
   const renderQueue = new RenderQueue();
 

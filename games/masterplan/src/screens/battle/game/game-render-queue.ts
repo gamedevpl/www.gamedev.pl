@@ -3,10 +3,11 @@ import { Canvas } from '../util/canvas';
 // Define types for render commands
 type RenderCommand = {
   layer: 'terrain' | 'deadObjects' | 'shadows' | 'objects' | 'particles';
-  z: number;
+  x: number;
   y: number;
-  fillStyle?: string;
-  render: (canvas: Canvas) => void;
+  z: number;
+  fillStyle: string;
+  points: number[][];
 };
 
 // Define layer order for sorting
@@ -21,8 +22,15 @@ const layerOrder: { [key: string]: number } = {
 export class RenderQueue {
   private commands: RenderCommand[] = [];
 
-  addCommand(command: RenderCommand) {
-    this.commands.push(command);
+  renderShape(layer: RenderCommand['layer'], x: number, y: number, z: number, points: number[][], fillStyle: string) {
+    this.commands.push({
+      layer,
+      x,
+      y,
+      z,
+      points,
+      fillStyle,
+    });
   }
 
   private sortCommands(commands: RenderCommand[]): RenderCommand[] {
@@ -31,7 +39,7 @@ export class RenderQueue {
       if (layerOrder[a.layer] !== layerOrder[b.layer]) {
         return layerOrder[a.layer] - layerOrder[b.layer];
       }
-      // Then by Y position ascending
+      // Then by Y position ascending (using 3D y-position)
       if (a.y !== b.y) {
         return a.y - b.y;
       }
@@ -67,12 +75,18 @@ export class RenderQueue {
 
     for (const batch of batchedCommands) {
       canvas.save();
-      if (batch[0].fillStyle) {
-        canvas.fillStyle(batch[0].fillStyle);
-      }
+      canvas.fillStyle(batch[0].fillStyle);
+      const path = new Path2D();
       for (const command of batch) {
-        command.render(canvas);
+        const firstPoint = command.points[0];
+        path.moveTo(command.x + firstPoint[0], command.y + firstPoint[1]);
+        for (let i = 1; i < command.points.length; i++) {
+          const point = command.points[i];
+          path.lineTo(command.x + point[0], command.y + point[1]);
+        }
       }
+      path.closePath();
+      canvas.fill(path);
       canvas.restore();
     }
 
@@ -81,21 +95,15 @@ export class RenderQueue {
   }
 
   // Helper methods for adding specific types of render commands
-  addObjectCommand(
-    z: number,
-    y: number,
-    isAlive: boolean,
-    fillStyle: string | undefined,
-    renderFn: (canvas: Canvas) => void,
-  ) {
-    this.addCommand({ layer: isAlive ? 'objects' : 'deadObjects', z, y, fillStyle, render: renderFn });
+  addObjectCommand(x: number, y: number, z: number, isAlive: boolean, fillStyle: string, points: number[][]) {
+    this.renderShape(isAlive ? 'objects' : 'deadObjects', x, y, z, points, fillStyle);
   }
 
-  addShadowCommand(z: number, y: number, fillStyle: string | undefined, renderFn: (canvas: Canvas) => void) {
-    this.addCommand({ layer: 'shadows', z, y, fillStyle, render: renderFn });
+  addShadowCommand(x: number, y: number, z: number, fillStyle: string, points: number[][]) {
+    this.renderShape('shadows', x, y, z, points, fillStyle);
   }
 
-  addParticleCommand(z: number, y: number, fillStyle: string | undefined, renderFn: (canvas: Canvas) => void) {
-    this.addCommand({ layer: 'particles', z, y, fillStyle, render: renderFn });
+  addParticleCommand(x: number, y: number, z: number, fillStyle: string, points: number[][]) {
+    this.renderShape('particles', x, y, z, points, fillStyle);
   }
 }

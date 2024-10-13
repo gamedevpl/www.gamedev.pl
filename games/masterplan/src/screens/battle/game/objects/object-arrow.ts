@@ -50,14 +50,34 @@ export class ArrowObject extends GameObject {
   }
 
   render(queue: RenderQueue): void {
-    queue.addObjectCommand(this.getZ(), this.getY(), true, 'red', (canvas) => {
-      canvas
-        .save()
-        .translate(this.getX(), this.getY() - this.getZ())
-        .rotate(this.getDirection())
-        .fillRect(-this.getWidth() / 2, -this.getHeight() / 2, this.getWidth(), this.getHeight())
-        .restore();
+    const points =
+      this.type === 'arrow'
+        ? [
+            [-this.getWidth() * 2, 0],
+            [this.getWidth() * 2, 0],
+            [0, -this.getHeight()],
+          ]
+        : [
+            [-this.getWidth() / 2, -this.getHeight() / 2],
+            [this.getWidth() / 2, -this.getHeight() / 2],
+            [this.getWidth() / 2, this.getHeight() / 2],
+            [-this.getWidth() / 2, this.getHeight() / 2],
+          ];
+
+    const rotatedPoints = points.map((point) => {
+      const x = point[0] * Math.cos(this.getDirection()) - point[1] * Math.sin(this.getDirection());
+      const y = point[0] * Math.sin(this.getDirection()) + point[1] * Math.cos(this.getDirection());
+      return [x, y];
     });
+
+    queue.addObjectCommand(
+      this.getX(),
+      this.getY() - this.world.terrain.getHeightAt(this.vec),
+      this.getZ(),
+      true,
+      'red',
+      rotatedPoints,
+    );
   }
 
   getY() {

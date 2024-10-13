@@ -69,7 +69,7 @@ export function renderTerrain(
 
       // Determine the base color based on height
       const averageHeight = (heightTopLeft + heightTopRight + heightBottomLeft + heightBottomRight) / 4;
-      const baseColor = averageHeight > 20 ? COLORS.dirt : COLORS.grass;
+      const baseColor = COLORS.grass;
 
       // Apply shading to the color
       const shadedColor = applyShading(baseColor, rotationAngle, averageHeight);
@@ -85,10 +85,6 @@ export function renderTerrain(
       // Set the fill color with shading
       ctx.fillStyle = shadedColor;
       ctx.fill();
-
-      // Add edge lines for more definition
-      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-      ctx.stroke();
     }
   }
 }

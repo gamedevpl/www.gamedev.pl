@@ -1,7 +1,6 @@
 import { GameObject } from './game-object';
 import { BALL_RANGE } from '../../consts';
 import { GameWorld } from '../game-world';
-import { Canvas } from '../../util/canvas';
 import { RenderQueue } from '../game-render-queue';
 
 export class ExplosionObject extends GameObject {
@@ -16,14 +15,23 @@ export class ExplosionObject extends GameObject {
     const dt = this.world.getTime() - this.time;
 
     if (dt < 100) {
-      queue.addObjectCommand(this.getZ(), this.getY(), true, 'black', (canvas: Canvas) => {
-        canvas
-          .save()
-          .strokeStyle('black')
-          .translate(this.getX(), this.getY() - this.getZ())
-          .arc(0, 0, BALL_RANGE * Math.min(dt / 100, 1))
-          .restore();
-      });
+      const radius = BALL_RANGE * Math.min(dt / 100, 1);
+      const segments = 16; // Number of segments to approximate the circle
+      const points: [number, number][] = [];
+
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        points.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+      }
+
+      queue.addObjectCommand(
+        this.getX(),
+        this.getY() - this.world.terrain.getHeightAt(this.vec),
+        this.getZ(),
+        true,
+        'black',
+        points,
+      );
     }
   }
 

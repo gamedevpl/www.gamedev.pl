@@ -1,11 +1,10 @@
 import { SoldierObject } from './object-soldier';
 import { rotate3D, applyPerspective } from './render/3d-rendering';
 import { applyShading } from './render/shading';
-import { drawPolygon } from './render/polygon-utils';
-import { renderShadow } from './render/shadow-renderer';
 import { defineShapes, defineFallenShapes } from './render/shape-definitions';
 import { RenderQueue } from '../game-render-queue';
 import { UnitType } from '../../../designer/designer-types';
+import { SOLDIER_HEIGHT, SOLDIER_WIDTH } from '../../consts';
 
 const UNIT_TYPES = ['warrior', 'archer', 'tank', 'artillery'] as UnitType[];
 const SHAPES = Object.fromEntries(
@@ -14,6 +13,11 @@ const SHAPES = Object.fromEntries(
 const FALLEN_SHAPES = Object.fromEntries(
   UNIT_TYPES.map((type) => [type, Object.entries(defineFallenShapes(type)).sort((a, b) => a[1].zIndex - b[1].zIndex)]),
 );
+
+const SHADOW_POINTS = Array.from({ length: 20 }, (_, i) => {
+  const angle = (i / 20) * 2 * Math.PI;
+  return [(SOLDIER_WIDTH / 3) * Math.cos(angle), (SOLDIER_HEIGHT / 4) * Math.sin(angle)];
+});
 
 export class SoldierRender {
   private soldier: SoldierObject;
@@ -25,20 +29,21 @@ export class SoldierRender {
   }
 
   addRenderCommands(renderQueue: RenderQueue) {
-    const z = this.soldier.getZ();
-    const y = this.soldier.getY();
-    const isAlive = this.soldier.state.isAlive();
-
-    if (isAlive) {
-      // Add shadow render command
-      renderQueue.addShadowCommand(z, y, 'rgba(0, 0, 0, 0.3)', (canvas) => {
-        canvas.save().translate(this.soldier.getX(), this.soldier.getY() - this.soldier.getZ());
-        renderShadow(canvas, this.soldier);
-        canvas.restore();
-      });
+    if (this.soldier.state.isAlive()) {
+      this.renderShadow(renderQueue);
     }
 
     this.renderSoldier(renderQueue);
+  }
+
+  private renderShadow(renderQueue: RenderQueue) {
+    renderQueue.addShadowCommand(
+      this.soldier.getX(),
+      this.soldier.getY() + this.soldier.getHeight() / 2 - this.soldier.world.terrain.getHeightAt(this.soldier.vec),
+      this.soldier.getZ(),
+      'rgba(0, 0, 0, 0.3)',
+      SHADOW_POINTS,
+    );
   }
 
   private renderSoldier(renderQueue: RenderQueue) {
@@ -56,14 +61,16 @@ export class SoldierRender {
       const perspectivePoints = rotatedPoints.map((p) => applyPerspective(p));
       const shadedColor = applyShading(baseColor, rotationAngle, this.soldier.state.isAlive() ? 1 : 0.5);
 
-      renderQueue.addObjectCommand(this.soldier.getZ(), this.soldier.getY(), isAlive, shadedColor, (canvas) => {
-        drawPolygon(
-          this.soldier.getX(),
-          this.soldier.getY() - this.soldier.getZ() + (!isAlive ? this.soldier.getHeight() / 2 : 0),
-          canvas,
-          perspectivePoints,
-        );
-      });
+      renderQueue.addObjectCommand(
+        this.soldier.getX(),
+        this.soldier.getY() +
+          (isAlive ? 0 : this.soldier.getHeight() / 2) -
+          this.soldier.world.terrain.getHeightAt(this.soldier.vec),
+        this.soldier.getZ(),
+        isAlive,
+        shadedColor,
+        perspectivePoints.map((p) => [p.x, p.y]),
+      );
     }
   }
 }
