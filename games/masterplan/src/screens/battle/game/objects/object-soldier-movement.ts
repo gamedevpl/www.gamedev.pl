@@ -1,5 +1,6 @@
-import { VMath } from '../../util/vmath';
+import { Vec, VMath } from '../../util/vmath';
 import { SoldierObject } from './object-soldier';
+import { Terrain } from '../terrain/terrain';
 
 export class SoldierMovement {
   private soldier: SoldierObject;
@@ -7,10 +8,12 @@ export class SoldierMovement {
   private targetVelocity: number = 1;
   private force: [number, number] = [0, 0];
   private targetDirection: number;
+  private terrain: Terrain;
 
-  constructor(soldier: SoldierObject) {
+  constructor(soldier: SoldierObject, terrain: Terrain) {
     this.soldier = soldier;
     this.targetDirection = soldier.getDirection();
+    this.terrain = terrain;
   }
 
   update(deltaTime: number) {
@@ -20,8 +23,30 @@ export class SoldierMovement {
     this.updateForce(deltaTime);
   }
 
+  private calculateTerrainSlope(): number {
+    const currentHeight = this.terrain.getHeightAt([this.soldier.getX(), this.soldier.getY()]);
+    const aheadPosition: Vec = [
+      this.soldier.getX() + Math.cos(this.soldier.getDirection()) * 0.1,
+      this.soldier.getY() + Math.sin(this.soldier.getDirection()) * 0.1,
+    ];
+    const aheadHeight = this.terrain.getHeightAt(aheadPosition);
+    return aheadHeight - currentHeight;
+  }
+
   private updateVelocity(deltaTime: number) {
-    this.velocity = this.getTargetVelocity() * deltaTime + this.velocity * (1 - deltaTime);
+    const slope = this.calculateTerrainSlope();
+    let velocityMultiplier = 1;
+
+    if (slope < 0) {
+      // Moving downhill
+      velocityMultiplier = 5 / 4;
+    } else if (slope > 0) {
+      // Moving uphill
+      velocityMultiplier = 4 / 5;
+    }
+
+    const adjustedTargetVelocity = this.getTargetVelocity() * velocityMultiplier;
+    this.velocity = adjustedTargetVelocity * deltaTime + this.velocity * (1 - deltaTime);
   }
 
   private updatePosition(deltaTime: number) {

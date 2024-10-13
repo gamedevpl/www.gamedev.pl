@@ -54,7 +54,7 @@ export class SoldierObject extends GameObject {
     this.type = type;
     this.color = color;
 
-    this.movement = new SoldierMovement(this);
+    this.movement = new SoldierMovement(this, world.terrain);
     this.targeting = new SoldierTargeting(this);
     this.attack = new SoldierAttack(this);
     this.state = new SoldierState(this);
