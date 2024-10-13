@@ -10,15 +10,18 @@ import { initCurrentState, updateState } from './states';
 import { EVENT_BATTLE_START, EVENT_INTERVAL_100MS, EVENT_INTERVAL_SECOND, EVENT_RAF, EVENT_TIMEOUT } from './events';
 import { useRafLoop } from 'react-use';
 import { BattleControls } from './battle-controls';
+import { TerrainData } from './game/terrain/terrain-generator';
 
 export function BattleScreen({
   onBattleEnd,
   playerUnits,
   oppositionUnits,
+  terrainData,
 }: {
   onBattleEnd: () => void;
   playerUnits: Unit[];
   oppositionUnits: Unit[];
+  terrainData: TerrainData;
 }) {
   useEffect(() => {
     initCurrentState();
@@ -26,6 +29,7 @@ export function BattleScreen({
     updateState(EVENT_BATTLE_START, {
       playerUnits: playerUnits,
       oppositionUnits: oppositionUnits,
+      terrainData: terrainData,
     });
 
     const timeout = setTimeout(() => updateState(EVENT_TIMEOUT), 1000);

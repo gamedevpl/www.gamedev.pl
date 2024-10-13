@@ -11,9 +11,10 @@ import { calculatePanelPosition } from './utils/ui-utils';
 import { OppositionPlan } from './opposition-plan';
 import { rotateUnits, Unit } from './designer-types';
 import { balancedAssault } from './plans';
+import { generateTerrain, TerrainData } from '../battle/game/terrain/terrain-generator';
 
 interface DesignerScreenProps {
-  onStartBattle: (playerUnits: Unit[], oppositionUnits: Unit[]) => void;
+  onStartBattle: (playerUnits: Unit[], oppositionUnits: Unit[], terrainData: TerrainData) => void;
   initialPlayerUnits?: Unit[];
 }
 
@@ -22,6 +23,9 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   const [oppositionUnits, setOppositionUnits] = useState<Unit[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [infoPanelPosition, setInfoPanelPosition] = useState({ x: 0, y: 0 });
+  const [terrainData] = useState<TerrainData>(() => {
+    return generateTerrain(SOLDIER_WIDTH);
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { selectedUnit, handleUnitSelect, setSelectedUnit } = useUnitSelection(playerUnits);
@@ -41,7 +45,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   }, []);
 
   const handleStartBattle = useCallback(async () => {
-    onStartBattle(playerUnits, await updateOppositionPlan(playerUnits));
+    onStartBattle(playerUnits, await updateOppositionPlan(playerUnits), terrainData);
   }, [playerUnits, oppositionUnits, onStartBattle]);
 
   const handleCellClick = useCallback(
@@ -80,7 +84,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   return (
     <DesignerContainer ref={containerRef}>
-      <OppositionPlan units={oppositionUnits} />
+      <OppositionPlan units={oppositionUnits} terrainData={terrainData} />
       <PlayerPlanContainer>
         <CanvasGrid
           isPlayerArea={true}
@@ -98,6 +102,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
           onTouchMove={handleDragMove}
           onTouchEnd={handleDragEnd}
           onModifyUnit={handleUnitModify}
+          terrainData={terrainData}
         />
       </PlayerPlanContainer>
       {showInfoPanel && selectedUnit && (

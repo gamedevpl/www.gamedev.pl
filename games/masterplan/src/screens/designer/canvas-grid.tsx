@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { GRID_CENTER_X, GRID_CENTER_Y } from '../battle/consts';
 import { UNIT_ASSET_PATHS } from '../battle/assets';
 import { Unit } from './designer-types';
+import { TerrainData } from '../battle/game/terrain/terrain-generator';
 
 interface CanvasGridProps {
   width: number;
@@ -20,6 +21,7 @@ interface CanvasGridProps {
   onTouchEnd: (e: React.TouchEvent<HTMLCanvasElement>) => void;
   onModifyUnit: (unitId: number, changes: Partial<Pick<Unit, 'type' | 'sizeCol' | 'sizeRow'>>) => void;
   isPlayerArea: boolean;
+  terrainData: TerrainData;
 }
 
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -47,6 +49,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
     onTouchEnd,
     onCellClick,
     isPlayerArea,
+    terrainData,
   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [unitImages, setUnitImages] = useState<Record<string, HTMLImageElement>>({});
@@ -84,6 +87,22 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
           ctx.moveTo(0, y);
           ctx.lineTo(width, y);
           ctx.stroke();
+        }
+
+        // Draw terrain height map
+        const terrainHeightMap = terrainData.heightMap;
+        const centerX = terrainHeightMap[0].length / 2;
+        const maxHeight = Math.max(...terrainHeightMap.flat());
+        for (let row = 0; row < terrainHeightMap.length / 2; row++) {
+          for (let col = -centerX; col < centerX; col++) {
+            const x = col * cellWidth;
+            const y = row * cellHeight;
+            const heightValue =
+              terrainHeightMap[row + (isPlayerArea ? (terrainHeightMap.length / 2) << 0 : 0)][centerX + col];
+            const color = `rgb(${140}, ${141}, ${123}, ${heightValue / maxHeight})`;
+            ctx.fillStyle = color;
+            ctx.fillRect(GRID_CENTER_X * cellWidth + x, y, cellWidth, cellHeight);
+          }
         }
       },
       [width, height, cellWidth, cellHeight],
@@ -144,7 +163,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
       // Draw the units
       drawUnits(ctx);
-    }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages, drawGrid, drawUnits]);
+    }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages, drawGrid, drawUnits, terrainData]);
 
     const handleCanvasClick = useCallback(
       (event: React.MouseEvent<HTMLCanvasElement>) => {

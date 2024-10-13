@@ -7,6 +7,7 @@ import { ExplosionObject } from './objects/object-explosion';
 import { SoldierObject } from './objects/object-soldier';
 import { ParticleSystem } from './particles/particle-system';
 import { Terrain } from './terrain/terrain';
+import { TerrainData } from './terrain/terrain-generator';
 
 export class GameWorld {
   objects: GameObject[];
@@ -18,7 +19,7 @@ export class GameWorld {
   particles: ParticleSystem;
   terrain: Terrain;
 
-  constructor() {
+  constructor(terrainData: TerrainData) {
     this.objects = [];
     this.objectsByType = {
       Soldier: [],
@@ -27,7 +28,7 @@ export class GameWorld {
     };
     this.collisionHandlers = [];
     this.edgeRadius = EDGE_RADIUS * 1.5;
-    this.terrain = new Terrain();
+    this.terrain = new Terrain(terrainData);
     this.particles = new ParticleSystem(EDGE_RADIUS * 3, EDGE_RADIUS * 2, this.terrain);
 
     this.worldTime = 0;

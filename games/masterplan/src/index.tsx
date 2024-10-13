@@ -5,6 +5,7 @@ import { IntroScreen } from './screens/intro/intro-screen';
 import { DesignerScreen } from './screens/designer/designer-screen';
 import { Unit } from './screens/designer/designer-types';
 import { BattleScreen } from './screens/battle/battle-screen';
+import { TerrainData } from './screens/battle/game/terrain/terrain-generator';
 
 type CurrentScreen =
   | {
@@ -15,6 +16,7 @@ type CurrentScreen =
       name: 'battle';
       playerUnits: Unit[];
       oppositionUnits: Unit[];
+      terrainData: TerrainData;
     };
 
 const App: React.FC = () => {
@@ -24,9 +26,9 @@ const App: React.FC = () => {
     setCurrentScreen({ name: 'designer' });
   };
 
-  const handleStartBattle = (playerUnits: Unit[], oppositionUnits: Unit[]) => {
-    setCurrentScreen({ name: 'battle', playerUnits, oppositionUnits });
-    // Here you would typically initialize the battle with the designed units
+  const handleStartBattle = (playerUnits: Unit[], oppositionUnits: Unit[], terrainData: TerrainData) => {
+    setCurrentScreen({ name: 'battle', playerUnits, oppositionUnits, terrainData });
+    // Here you would typically initialize the battle with the designed units and terrain
     console.log('Battle started!');
   };
 
@@ -49,6 +51,7 @@ const App: React.FC = () => {
           onBattleEnd={handleBattleEnd}
           playerUnits={currentScreen.playerUnits}
           oppositionUnits={currentScreen.oppositionUnits}
+          terrainData={currentScreen.terrainData}
         />
       )}
     </React.StrictMode>

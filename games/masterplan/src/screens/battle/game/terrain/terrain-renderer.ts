@@ -1,7 +1,7 @@
 // Define colors for terrain elements
 const COLORS = {
   grass: '#6B8E23', // Less saturated green for grass
-  dirt: '#D2B48C', // Dirt color
+  dirt: '#8C8D7B', // Dirt color
 };
 
 // Function to apply shading to a color
@@ -69,7 +69,8 @@ export function renderTerrain(
 
       // Determine the base color based on height
       const averageHeight = (heightTopLeft + heightTopRight + heightBottomLeft + heightBottomRight) / 4;
-      const baseColor = COLORS.grass;
+      const factor = Math.min(Math.max(averageHeight / 50, 0), 1); // Normalize averageHeight to 0-1 range
+      const baseColor = interpolateColor(COLORS.grass, COLORS.dirt, factor);
 
       // Apply shading to the color
       const shadedColor = applyShading(baseColor, rotationAngle, averageHeight);
@@ -105,3 +106,19 @@ export function createTerrainTexture(
 
   return canvas;
 }
+
+const interpolateColor = (color1: string, color2: string, factor: number): string => {
+  const hex = (color: string) => parseInt(color.slice(1), 16);
+  const r1 = (hex(color1) >> 16) & 255;
+  const g1 = (hex(color1) >> 8) & 255;
+  const b1 = hex(color1) & 255;
+  const r2 = (hex(color2) >> 16) & 255;
+  const g2 = (hex(color2) >> 8) & 255;
+  const b2 = hex(color2) & 255;
+
+  const r = Math.round(r1 + factor * (r2 - r1));
+  const g = Math.round(g1 + factor * (g2 - g1));
+  const b = Math.round(b1 + factor * (b2 - b1));
+
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+};

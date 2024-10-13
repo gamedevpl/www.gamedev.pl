@@ -3,12 +3,14 @@ import styled from 'styled-components';
 import { CanvasGrid } from './canvas-grid';
 import { Unit } from './designer-types';
 import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT } from '../battle/consts';
+import { TerrainData } from '../battle/game/terrain/terrain-generator';
 
 interface OppositionPlanProps {
   units: Unit[];
+  terrainData: TerrainData;
 }
 
-export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units }) => {
+export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units, terrainData }) => {
   // Dummy handlers for CanvasGrid props (no interactions allowed for opposition plan)
   const dummyHandler = () => {};
 
@@ -30,6 +32,7 @@ export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units }) => {
         onTouchEnd={dummyHandler}
         onModifyUnit={dummyHandler}
         isPlayerArea={false}
+        terrainData={terrainData}
       />
     </OppositionPlanContainer>
   );

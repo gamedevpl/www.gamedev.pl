@@ -1,5 +1,7 @@
 import { Unit } from '../../designer/designer-types';
+import { SOLDIER_WIDTH } from '../consts';
 import { GameWorld } from '../game/game-world';
+import { generateTerrain } from '../game/terrain/terrain-generator';
 import { initCurrentState } from '../states';
 import { createMasterPlan } from '../states/state-game-battle';
 import { calculateMD5, getCache } from './cache';
@@ -20,7 +22,7 @@ export function simulate(plan: Unit[], counterPlan: Unit[]): 'plan' | 'counterPl
 
   initCurrentState();
 
-  const world = new GameWorld();
+  const world = new GameWorld(generateTerrain(SOLDIER_WIDTH));
 
   createMasterPlan(world, 1, '#ff0000', plan);
   createMasterPlan(world, -1, '#00ff00', counterPlan);

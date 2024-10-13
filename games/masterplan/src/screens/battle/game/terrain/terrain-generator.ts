@@ -1,5 +1,7 @@
 import { EDGE_RADIUS } from '../../consts';
 
+export type TerrainData = { width: number; height: number; heightMap: number[][] };
+
 // Helper function to get the number of active neighbors for a cell
 function getActiveNeighbors(grid: number[][], x: number, y: number): number {
   let count = 0;
@@ -58,7 +60,7 @@ function smoothTerrain(grid: number[][], smoothingFactor: number): number[][] {
 }
 
 // Function to generate terrain using a sinusoidal base and cellular automata
-export function generateTerrainHeightMap(width: number, height: number, tileSize: number): number[][] {
+function generateTerrainHeightMap(width: number, height: number, tileSize: number): number[][] {
   const gridWidth = Math.ceil(width / tileSize);
   const gridHeight = Math.ceil(height / tileSize);
   const heightMap: number[][] = Array.from({ length: gridHeight + 1 }, () => Array(gridWidth + 1).fill(0));
@@ -89,13 +91,13 @@ export function generateTerrainHeightMap(width: number, height: number, tileSize
   }
 
   // Apply smoothing
-  const smoothedMap = smoothTerrain(heightMap, 0.3);
+  const smoothedMap = smoothTerrain(heightMap, 0.5);
 
   return smoothedMap;
 }
 
 // Main function to generate terrain heightmap
-export function generateTerrain(tileSize: number): { width: number; height: number; heightMap: number[][] } {
+export function generateTerrain(tileSize: number): TerrainData {
   const width = EDGE_RADIUS * 3;
   const height = EDGE_RADIUS * 2;
   const heightMap = generateTerrainHeightMap(width, height, tileSize);

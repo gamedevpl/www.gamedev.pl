@@ -18,6 +18,7 @@ import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
 import { dispatchCustomEvent } from '../../../../../nukes/src/events';
 import { stateInit } from '../states';
 import { Unit } from '../../designer/designer-types';
+import { TerrainData } from '../game/terrain/terrain-generator';
 
 export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: string, definitions: Unit[]) {
   const angle = (Math.PI / 2) * direction;
@@ -35,8 +36,8 @@ export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: str
   }
 }
 
-export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[]) {
-  const world = new GameWorld();
+export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[], terrainData: TerrainData) {
+  const world = new GameWorld(terrainData);
 
   createMasterPlan(world, 1, '#ff0000', definitions);
   createMasterPlan(world, -1, '#00ff00', definitionsEnemy);
