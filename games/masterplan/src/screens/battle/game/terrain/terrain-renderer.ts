@@ -5,13 +5,36 @@ const COLORS = {
 };
 
 // Function to apply shading to a color
-function applyShading(color: string, rotationAngle: number, alpha: number = 1): string {
-  const shade = Math.cos(rotationAngle) * 0.3 + 0.7; // Value between 0.4 and 1
+function applyShading(color: string, rotationAngle: number, height: number, alpha: number = 1): string {
+  // Adjust shading based on height and rotation angle
+  const heightFactor = Math.min(Math.max(height / 50, 0), 1); // Normalize height to 0-1 range
+  const shade = (Math.cos(rotationAngle) * 0.3 + 0.7) * (0.8 + heightFactor * 0.4); // Adjust shading based on height
   const rgb = parseInt(color.slice(1), 16);
   const r = Math.floor(((rgb >> 16) & 255) * shade);
   const g = Math.floor(((rgb >> 8) & 255) * shade);
   const b = Math.floor((rgb & 255) * shade);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Helper function to calculate normal vector for a terrain tile
+function calculateNormal(heightMap: number[][], x: number, y: number, tileSize: number): [number, number, number] {
+  const h = heightMap[y][x];
+  const hRight = heightMap[y][Math.min(x + 1, heightMap[0].length - 1)];
+  const hDown = heightMap[Math.min(y + 1, heightMap.length - 1)][x];
+
+  const dx = [tileSize, 0, hRight - h];
+  const dy = [0, tileSize, hDown - h];
+
+  // Calculate cross product
+  const normal: [number, number, number] = [
+    dy[1] * dx[2] - dy[2] * dx[1],
+    dy[2] * dx[0] - dy[0] * dx[2],
+    dy[0] * dx[1] - dy[1] * dx[0]
+  ];
+
+  // Normalize the vector
+  const length = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+  return [normal[0] / length, normal[1] / length, normal[2] / length];
 }
 
 // Function to render terrain based on heightmap
@@ -30,9 +53,9 @@ export function renderTerrain(
     for (let x = 0; x < gridWidth; x++) {
       // Get the height values for the four corners of the current tile
       const heightTopLeft = heightMap[y][x];
-      const heightTopRight = heightMap[y][x + 1];
-      const heightBottomLeft = heightMap[y + 1][x];
-      const heightBottomRight = heightMap[y + 1][x + 1];
+      const heightTopRight = heightMap[y][x + 1] || heightTopLeft;
+      const heightBottomLeft = heightMap[y + 1]?.[x] || heightTopLeft;
+      const heightBottomRight = heightMap[y + 1]?.[x + 1] || heightTopRight;
 
       // Calculate the adjusted y positions based on height values
       const topLeftY = y * tileSize - heightTopLeft;
@@ -40,12 +63,16 @@ export function renderTerrain(
       const bottomLeftY = (y + 1) * tileSize - heightBottomLeft;
       const bottomRightY = (y + 1) * tileSize - heightBottomRight;
 
-      // Calculate the rotation angle for shading
-      const rotationAngle = Math.atan2(heightBottomRight - heightTopLeft, heightBottomLeft - heightTopRight);
+      // Calculate the normal vector for shading
+      const normal = calculateNormal(heightMap, x, y, tileSize);
+      const rotationAngle = Math.atan2(normal[1], normal[0]);
+
+      // Determine the base color based on height
+      const averageHeight = (heightTopLeft + heightTopRight + heightBottomLeft + heightBottomRight) / 4;
+      const baseColor = averageHeight > 20 ? COLORS.dirt : COLORS.grass;
 
       // Apply shading to the color
-      const baseColor = COLORS.grass;
-      const shadedColor = applyShading(baseColor, rotationAngle);
+      const shadedColor = applyShading(baseColor, rotationAngle, averageHeight);
 
       // Draw the tile using a path to represent height variations
       ctx.beginPath();
@@ -58,6 +85,10 @@ export function renderTerrain(
       // Set the fill color with shading
       ctx.fillStyle = shadedColor;
       ctx.fill();
+
+      // Add edge lines for more definition
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.stroke();
     }
   }
 }

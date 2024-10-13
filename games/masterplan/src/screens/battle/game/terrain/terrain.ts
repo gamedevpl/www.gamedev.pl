@@ -25,21 +25,21 @@ export class Terrain {
     ctx.drawImage(this.terrainCanvas, 0, 0);
   }
 
-  getHeightAt(pos: Vec) {
+  getHeightAt(pos: Vec): number {
     // Calculate tile indices and positions within the tile
     const x = pos[0] / this.tileSize + this.offsetX;
     const y = pos[1] / this.tileSize + this.offsetY;
 
     const x0 = Math.floor(x);
-    const x1 = x0 + 1;
+    const x1 = Math.min(x0 + 1, this.heightMap[0].length - 1);
     const y0 = Math.floor(y);
-    const y1 = y0 + 1;
+    const y1 = Math.min(y0 + 1, this.heightMap.length - 1);
 
     // Get heights at the four corners
-    const h00 = this.heightMap[y0]?.[x0] ?? 0;
-    const h10 = this.heightMap[y0]?.[x1] ?? 0;
-    const h01 = this.heightMap[y1]?.[x0] ?? 0;
-    const h11 = this.heightMap[y1]?.[x1] ?? 0;
+    const h00 = this.heightMap[y0][x0];
+    const h10 = this.heightMap[y0][x1];
+    const h01 = this.heightMap[y1][x0];
+    const h11 = this.heightMap[y1][x1];
 
     // Calculate the fractional part of x and y within the tile
     const dx = x - x0;
