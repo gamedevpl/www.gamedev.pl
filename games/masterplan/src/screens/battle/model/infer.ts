@@ -34,7 +34,7 @@ I will be able to provide you with feedback on the generated plan based on the r
       .map((result, idx) => [
         {
           type: 'assistant',
-          text: `I have generated a masterplan for you, it\'s name is "${result.name}", could you please check how it performs against "${resultChain[idx].name}"?`,
+          text: `I have generated a masterplan for you, it's name is "${result.name}", could you please check how it performs against "${resultChain[idx].name}"?`,
           functionCalls: [
             {
               name: 'saveMasterplan',

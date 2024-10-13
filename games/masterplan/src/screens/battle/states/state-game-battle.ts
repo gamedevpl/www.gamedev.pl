@@ -20,13 +20,13 @@ import { stateInit } from '../states';
 import { Unit } from '../../designer/designer-types';
 
 export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: string, definitions: Unit[]) {
-  var angle = (Math.PI / 2) * direction;
-  var initialPosition: [number, number] = [0, (direction * EDGE_RADIUS) / 2];
-  var masterPlan = new MasterPlan(initialPosition, definitions);
+  const angle = (Math.PI / 2) * direction;
+  const initialPosition: [number, number] = [0, (direction * EDGE_RADIUS) / 2];
+  const masterPlan = new MasterPlan(initialPosition, definitions);
 
-  for (var i = 0; i < masterPlan.getSoldierCount(); i++) {
-    var soldierPlan = masterPlan.getSolderPlan(i);
-    var pos = soldierPlan.getPosition();
+  for (let i = 0; i < masterPlan.getSoldierCount(); i++) {
+    const soldierPlan = masterPlan.getSolderPlan(i);
+    let pos = soldierPlan.getPosition();
 
     pos = VMath.add(pos, initialPosition);
     world.addObject(
@@ -36,12 +36,12 @@ export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: str
 }
 
 export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[]) {
-  var world = new GameWorld();
+  const world = new GameWorld();
 
   createMasterPlan(world, 1, '#ff0000', definitions);
   createMasterPlan(world, -1, '#00ff00', definitionsEnemy);
 
-  var HUD = new GameHUD(world);
+  const HUD = new GameHUD(world);
 
   HUD.setNames('Player', 'Computer');
 
@@ -56,8 +56,7 @@ export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[
 }
 
 function stateGameBattle(world: GameWorld, HUD: GameHUD) {
-  var damageTotal = 0;
-  var damageMap: Record<number, Record<string, number>> = {
+  const damageMap: Record<number, Record<string, number>> = {
     [EVENT_DAMAGE]: {
       '#ff0000': 0,
       '#00ff00': 0,
@@ -67,11 +66,11 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
       '#00ff00': 0,
     },
   };
-  var damageCount = JSON.parse(JSON.stringify(damageMap));
+  const damageCount = JSON.parse(JSON.stringify(damageMap));
 
   return function GameBattleHandler(eventType: number, eventObject: unknown) {
     if (eventType == EVENT_RAF) {
-      var elapsedTime = Math.min(eventObject as number, 1000);
+      let elapsedTime = Math.min(eventObject as number, 1000);
       while (elapsedTime > 0) {
         elapsedTime = world.update(elapsedTime);
       }
@@ -84,11 +83,7 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
     }
 
     if (eventType === EVENT_INTERVAL_SECOND) {
-      // console.log("Damage total: " + damageTotal);
-      // console.log("Damage: " + JSON.stringify(damage));
-      // console.log("Damage count: " + JSON.stringify(damageCount));
-
-      var balance = HUD.getBalance(world);
+      const balance = HUD.getBalance(world);
       if (world.getTime() > 60000 || balance === 0 || balance === 1) {
         return stateGameBattleEnd(world, HUD);
       }
@@ -96,7 +91,6 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
 
     if (eventType === EVENT_DAMAGE || eventType === EVENT_DAMAGE_ARROW) {
       const { damage, soldier } = eventObject as { damage: number; soldier: SoldierObject };
-      damageTotal += damage;
       damageMap[eventType][soldier.color] += damage;
       damageCount[eventType][soldier.color]++;
     }

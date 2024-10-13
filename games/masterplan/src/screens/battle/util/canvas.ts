@@ -7,7 +7,7 @@ import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
 export function getCanvas(layerName: string) {
   layerName = layerName || LAYER_DEFAULT;
 
-  var canvas = Canvas.layers[layerName];
+  const canvas = Canvas.layers[layerName];
 
   if (canvas) {
     return canvas;
@@ -19,7 +19,7 @@ export function getCanvas(layerName: string) {
 export function freeCanvas(layerName: string) {
   layerName = layerName || LAYER_DEFAULT;
 
-  var canvas = Canvas.layers[layerName];
+  const canvas = Canvas.layers[layerName];
 
   if (canvas) {
     canvas.destroy();

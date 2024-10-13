@@ -7,7 +7,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export function calculateMD5(data: any): string {
+export function calculateMD5(data: unknown): string {
   const json = JSON.stringify(data);
   return crypto.createHash('md5').update(json).digest('hex');
 }
@@ -21,7 +21,7 @@ function readCache<T>(fileName: string, defaultValue: T): T {
   try {
     const cacheData = fs.readFileSync(cacheFilePath, 'utf-8');
     return JSON.parse(cacheData);
-  } catch (error) {
+  } catch {
     return defaultValue;
   }
 }

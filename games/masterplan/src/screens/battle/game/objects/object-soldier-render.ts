@@ -40,7 +40,7 @@ export class SoldierRender {
     const sortedShapes = Object.entries(currentShapes).sort((a, b) => a[1].zIndex - b[1].zIndex);
 
     // Render each part of the soldier
-    for (const [_part, shape] of sortedShapes) {
+    for (const [, shape] of sortedShapes) {
       const rotatedPoints = rotate3D(shape.points, rotationAngle + Math.PI / 2);
       const perspectivePoints = rotatedPoints.map((p) => applyPerspective(p));
       const shadedColor = applyShading(baseColor, rotationAngle, this.soldier.state.isAlive() ? 1 : 0.5);

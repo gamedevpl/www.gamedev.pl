@@ -15,7 +15,7 @@ export function trimUnits(units: Unit[], maxSoldiers: number): Unit[] {
   // Deep copy to avoid mutating the original units
   const trimmedUnits = units.map((unit) => ({ ...unit }));
 
-  let totalSoldiers = countSoldiers(trimmedUnits);
+  const totalSoldiers = countSoldiers(trimmedUnits);
 
   if (totalSoldiers <= maxSoldiers) {
     return trimmedUnits; // No trimming needed
@@ -29,7 +29,7 @@ export function trimUnits(units: Unit[], maxSoldiers: number): Unit[] {
   while (delta > 0) {
     let trimmed = false;
 
-    for (let unit of trimmedUnits) {
+    for (const unit of trimmedUnits) {
       // Only consider units that can be reduced proportionally
       if (unit.sizeCol > 1 && unit.sizeRow > 1) {
         // Calculate soldiers removed by reducing both dimensions by 1
@@ -50,7 +50,7 @@ export function trimUnits(units: Unit[], maxSoldiers: number): Unit[] {
 
     if (!trimmed) {
       // If no units can be trimmed proportionally, proceed to single-dimension trimming
-      for (let unit of trimmedUnits) {
+      for (const unit of trimmedUnits) {
         // Prefer reducing the dimension that allows for balanced trimming
         if (unit.sizeCol > 1 && unit.sizeRow > 1) {
           // Decide which dimension to reduce based on aspect ratio
@@ -87,7 +87,7 @@ export function trimUnits(units: Unit[], maxSoldiers: number): Unit[] {
     // Sort units again by area descending
     trimmedUnits.sort((a, b) => b.sizeCol * b.sizeRow - a.sizeCol * a.sizeRow);
 
-    for (let unit of trimmedUnits) {
+    for (const unit of trimmedUnits) {
       while (delta > 0) {
         if (unit.sizeCol > 1 && unit.sizeRow > 1) {
           // Prefer reducing both dimensions

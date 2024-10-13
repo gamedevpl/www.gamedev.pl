@@ -43,8 +43,8 @@ export class SoldierPlan {
       return true;
     }
 
-    var dist = soldier.distance(enemy);
-    var distant = this.claims[enemy.soldierId].filter((claimer) => claimer.distance(enemy) > dist);
+    const dist = soldier.distance(enemy);
+    const distant = this.claims[enemy.soldierId].filter((claimer) => claimer.distance(enemy) > dist);
     if (distant.length === this.claims[enemy.soldierId].length) {
       return true;
     }
@@ -53,7 +53,7 @@ export class SoldierPlan {
   }
 
   unclaim(enemy: SoldierObject, soldier: SoldierObject) {
-    var idx = this.claims[enemy.soldierId].indexOf(soldier);
+    const idx = this.claims[enemy.soldierId].indexOf(soldier);
     if (idx >= 0) {
       this.claims[enemy.soldierId].splice(idx, 1);
     }

@@ -6,7 +6,7 @@ import { SoldierObject } from './objects/object-soldier';
 
 export function renderGame(world: GameWorld) {
   /** {Canvas} */
-  var canvas = getCanvas(LAYER_DEFAULT);
+  const canvas = getCanvas(LAYER_DEFAULT);
 
   // clear
   canvas.clear();
@@ -45,7 +45,7 @@ export function renderGame(world: GameWorld) {
  * @param {GameObject} object
  */
 function renderObject(object: GameObject, world: GameWorld) {
-  var canvas = getCanvas(LAYER_DEFAULT);
+  const canvas = getCanvas(LAYER_DEFAULT);
 
   canvas
     .save()

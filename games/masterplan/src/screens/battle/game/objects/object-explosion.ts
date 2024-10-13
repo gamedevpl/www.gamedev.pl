@@ -14,7 +14,7 @@ export class ExplosionObject extends GameObject {
   }
 
   render(canvas: Canvas) {
-    var dt = this.world.getTime() - this.time;
+    const dt = this.world.getTime() - this.time;
 
     if (dt < 100) {
       canvas

@@ -11,7 +11,7 @@ export class MasterPlan {
   plan: Command[][];
   claims: Record<number, SoldierObject[]>;
   constructor(initialPosition: [number, number], units: Unit[]) {
-    var angle = VMath.atan2(initialPosition, [0, 0]);
+    const angle = VMath.atan2(initialPosition, [0, 0]);
 
     this.type = [];
     this.formation = [];
@@ -19,10 +19,10 @@ export class MasterPlan {
     this.claims = {};
 
     units.forEach((unit) => {
-      var soldierCount = unit['sizeCol'] * unit['sizeRow'];
-      var offset: [number, number] = [unit['col'] * SOLDIER_WIDTH, unit['row'] * SOLDIER_HEIGHT];
-      for (var i = 0; i < soldierCount; i++) {
-        var pos: [number, number] = [
+      const soldierCount = unit['sizeCol'] * unit['sizeRow'];
+      const offset: [number, number] = [unit['col'] * SOLDIER_WIDTH, unit['row'] * SOLDIER_HEIGHT];
+      for (let i = 0; i < soldierCount; i++) {
+        const pos: [number, number] = [
           (i % unit['sizeCol']) * SOLDIER_WIDTH,
           ((i / unit['sizeCol']) << 0) * SOLDIER_HEIGHT,
         ];

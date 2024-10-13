@@ -147,7 +147,7 @@ export class SoldierObject extends GameObject {
     }
 
     this.movement.update(deltaTime);
-    this.state.update(deltaTime);
+    this.state.update();
   }
 
   updatePlan() {

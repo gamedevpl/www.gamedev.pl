@@ -11,6 +11,7 @@ import { Terrain } from './terrain/terrain';
 export class GameWorld {
   objects: GameObject[];
   objectsByType: { [key: string]: GameObject[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   collisionHandlers: any[];
   edgeRadius: number;
   worldTime: number;
@@ -48,7 +49,7 @@ export class GameWorld {
   }
 
   addObject(...args: GameObject[]) {
-    for (var object of args) {
+    for (const object of args) {
       this.objects.push(object);
       this.objectsByType[object.getClass()].push(object);
     }
@@ -65,7 +66,7 @@ export class GameWorld {
   }
 
   update(elapsedTime: number) {
-    var deltaTime = Math.min(elapsedTime, MIN_TICK);
+    const deltaTime = Math.min(elapsedTime, MIN_TICK);
     this.objects.forEach((object) => {
       this.updateObject(object, deltaTime / UPDATE_TICK);
     });
@@ -144,7 +145,9 @@ export class GameWorld {
   }
 
   onCollision<L extends GameObject, R extends GameObject>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     leftObjectType: new (...args: any[]) => L,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rightObjectType: new (...args: any[]) => R,
     handler: (left: L, right: R) => void,
   ) {
@@ -157,16 +160,16 @@ export class GameWorld {
 
   onSoldierCollision(leftSoldier: SoldierObject, rightSoldier: SoldierObject) {
     // soldiers should bounce off each other
-    var distance = VMath.distance(leftSoldier.vec, rightSoldier.vec);
+    const distance = VMath.distance(leftSoldier.vec, rightSoldier.vec);
     if (distance === 0) {
-      var subVector = VMath.scale(
+      const subVector = VMath.scale(
         [Math.random() - Math.random(), Math.random() - Math.random()],
         1 / Number.MAX_SAFE_INTEGER,
       );
       leftSoldier.movement.addForce(subVector);
       rightSoldier.movement.addForce(VMath.scale(subVector, -1));
     } else {
-      var subVector2 = VMath.scale(
+      const subVector2 = VMath.scale(
         VMath.normalize(VMath.sub(leftSoldier.vec, rightSoldier.vec)),
         leftSoldier.getWidth() - distance,
       );
@@ -180,12 +183,12 @@ export class GameWorld {
   }
 
   onArrowCollision(soldier: SoldierObject, arrow: ArrowObject) {
-    var distance = VMath.distance(arrow.vec, soldier.vec);
+    const distance = VMath.distance(arrow.vec, soldier.vec);
     if (arrow.type === 'arrow') {
       arrow.hit(soldier, distance);
     } else if (arrow.type === 'ball' && soldier.state.cooldown('ballhit', 150)) {
       arrow.hit(soldier, distance);
-      var sub = VMath.scale(VMath.normalize(VMath.sub(soldier.vec, arrow.vec)), soldier.getWidth() - distance);
+      const sub = VMath.scale(VMath.normalize(VMath.sub(soldier.vec, arrow.vec)), soldier.getWidth() - distance);
       soldier.movement.addForce(VMath.scale(sub, (-0.5 / soldier.state.weight) * (1 - distance / BALL_RANGE)));
     }
   }
@@ -205,8 +208,8 @@ export class GameWorld {
   }
 
   getBalance() {
-    var alive = this.getAlive();
-    var keys = Object.keys(this.getAlive());
+    const alive = this.getAlive();
+    const keys = Object.keys(this.getAlive());
     return alive[keys[0]] / (alive[keys[0]] + alive[keys[1]]);
   }
 }

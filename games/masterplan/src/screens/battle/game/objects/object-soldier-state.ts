@@ -47,7 +47,7 @@ export class SoldierState {
     Object.assign(this, props);
   }
 
-  update(_deltaTime: number) {
+  update() {
     this.life = this.newLife;
   }
 

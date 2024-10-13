@@ -45,7 +45,7 @@ export function BattleScreen({
   const lastTickRef = useRef<number>();
 
   useRafLoop(() => {
-    let newTick = Date.now();
+    const newTick = Date.now();
     if (lastTickRef.current) {
       updateState(EVENT_RAF, newTick - lastTickRef.current);
     }

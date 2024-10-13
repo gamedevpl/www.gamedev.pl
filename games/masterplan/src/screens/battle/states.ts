@@ -27,7 +27,7 @@ export function initCurrentState() {
 }
 
 export function updateState(eventType: number, eventObject?: unknown) {
-  var nextState = currentState(eventType, eventObject);
+  const nextState = currentState(eventType, eventObject);
 
   if (!nextState) {
     return;

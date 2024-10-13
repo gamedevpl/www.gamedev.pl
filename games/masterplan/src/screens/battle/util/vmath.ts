@@ -13,13 +13,13 @@ export const VMath = {
     return Math.sqrt(this.distanceSquared(A, B));
   },
   withinDistance: function (A: Vec, B: Vec, distance: number) {
-    var dx = A[0] - B[0];
-    var dy = A[1] - B[1];
+    const dx = A[0] - B[0];
+    const dy = A[1] - B[1];
     if (Math.abs(dx) > distance || Math.abs(dy) > distance) {
       return false;
     }
 
-    var squared = Math.pow(dx, 2) + Math.pow(dy, 2);
+    const squared = Math.pow(dx, 2) + Math.pow(dy, 2);
     return Math.sqrt(squared) < distance;
   },
   normalize: function (A: Vec) {
@@ -79,7 +79,7 @@ export const VMath = {
    * @returns {[number, number]}
    */
   rotate: function (V: Vec, a: number): Vec {
-    var l = this.length(V);
+    const l = this.length(V);
     a = Math.atan2(V[1], V[0]) + a;
     return [Math.cos(a) * l, Math.sin(a) * l];
   },
@@ -93,7 +93,7 @@ export const VMath = {
   },
 
   normal: function (A: Vec, B: Vec) {
-    var AB = this.sub(B, A);
+    let AB = this.sub(B, A);
     AB = this.scale(AB, 1 / this.length(AB));
     return [
       [-AB[1], AB[0]],
@@ -107,12 +107,12 @@ export const VMath = {
   // r x s = 0 => parallel
   // (q − p) × r = 0 => colinear
   intersectLineLine: function (Q: Vec, eQ: Vec, P: Vec, eP: Vec): Vec | undefined {
-    var S = this.sub(eQ, Q);
-    var R = this.sub(eP, P);
-    var RxS = this.perpDot(R, S);
+    const S = this.sub(eQ, Q);
+    const R = this.sub(eP, P);
+    const RxS = this.perpDot(R, S);
     if (RxS == 0) return;
-    var u = this.perpDot(this.sub(Q, P), R) / RxS;
-    var t = this.perpDot(this.sub(Q, P), S) / RxS;
+    const u = this.perpDot(this.sub(Q, P), R) / RxS;
+    const t = this.perpDot(this.sub(Q, P), S) / RxS;
     if (u < 0 || t < 0 || u > 1 || t > 1) return;
     return [u, t];
   },
@@ -121,30 +121,30 @@ export const VMath = {
   // (B[u] - A[u]) x (B[u]-A[u]) = (Ra+Rb)^2
   // AB x AB + (2 * Vab x AB) * u + Vab x Vab * u^2 = (ra + rb)^2
   intersectSphereSphere: function (A: Vec, B: Vec, Va: Vec, Vb: Vec, Ra: number, Rb: number) {
-    var AB = this.sub(B, A);
-    var Vab = this.sub(Vb, Va);
-    var Rab = Ra + Rb;
-    var dotAB = this.dot(AB, AB);
-    var sqrRab = Rab * Rab;
+    const AB = this.sub(B, A);
+    const Vab = this.sub(Vb, Va);
+    const Rab = Ra + Rb;
+    const dotAB = this.dot(AB, AB);
+    const sqrRab = Rab * Rab;
 
-    var a = this.dot(Vab, Vab);
+    const a = this.dot(Vab, Vab);
 
     if (a == 0) return;
 
-    var b = 2 * this.dot(Vab, AB);
+    const b = 2 * this.dot(Vab, AB);
 
-    var c = dotAB - sqrRab;
+    const c = dotAB - sqrRab;
 
     if (dotAB <= sqrRab) return [0, 0];
 
-    var d = b * b - 4 * a * c;
+    let d = b * b - 4 * a * c;
 
     if (d < 0) return;
 
     d = Math.sqrt(d);
 
-    var T1 = (-b - d) / (2 * a);
-    var T2 = (-b + d) / (2 * a);
+    const T1 = (-b - d) / (2 * a);
+    const T2 = (-b + d) / (2 * a);
 
     return T1 < T2 ? [T1, T2] : [T2, T1];
   },
@@ -154,14 +154,14 @@ export const VMath = {
   // V - velocity
   // A: Vec, B: Vec - segment points
   intersectSphereLine: function (P: Vec, V: Vec, R: number, A: Vec, B: Vec) {
-    var AB = this.sub(B, A);
-    var ivdotAB = R / Math.sqrt(this.dot(AB, AB));
-    var N1 = this.scale([-AB[1], AB[0]], ivdotAB);
-    var N2 = this.scale([AB[1], -AB[0]], ivdotAB);
+    const AB = this.sub(B, A);
+    const ivdotAB = R / Math.sqrt(this.dot(AB, AB));
+    let N1 = this.scale([-AB[1], AB[0]], ivdotAB);
+    let N2 = this.scale([AB[1], -AB[0]], ivdotAB);
     N1 = this.add(P, N1);
     N2 = this.add(P, N2);
 
-    var T: [Vec | undefined, Vec | undefined] = [
+    let T: [Vec | undefined, Vec | undefined] = [
       this.intersectLineLine(N1, this.add(N1, V), A, B),
       this.intersectLineLine(N2, this.add(N2, V), A, B),
     ];

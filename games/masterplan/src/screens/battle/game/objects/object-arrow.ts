@@ -38,10 +38,10 @@ export class ArrowObject extends GameObject {
   }
 
   update(deltaTime: number) {
-    var d = VMath.scale(this.v, deltaTime * 20);
+    const d = VMath.scale(this.v, deltaTime * 20);
     this.vec[0] += d[0];
     this.vec[1] += d[1];
-    var progress = Math.sin((VMath.distance(this.from, this.vec) / this.maxDist) * Math.PI);
+    const progress = Math.sin((VMath.distance(this.from, this.vec) / this.maxDist) * Math.PI);
     this.adir = this.direction - (Math.PI / 3) * (1 - progress);
     this.ay = this.vec[1] - (progress * this.maxDist) / 10;
 
