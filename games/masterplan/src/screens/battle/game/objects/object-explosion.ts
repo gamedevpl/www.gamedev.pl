@@ -24,6 +24,8 @@ export class ExplosionObject extends GameObject {
     }
   }
 
+  update(): void {}
+
   getClass() {
     return 'Explosion';
   }

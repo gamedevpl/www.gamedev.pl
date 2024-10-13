@@ -1,6 +1,6 @@
 import { Canvas } from '../../util/canvas';
 
-export class GameObject {
+export abstract class GameObject {
   static idCounter = 0;
 
   id: string;
@@ -18,7 +18,7 @@ export class GameObject {
 
   getTargetVelocity() {}
 
-  update(_: number) {}
+  abstract update(deltaTime: number): void;
 
   render(canvas: Canvas) {
     canvas
