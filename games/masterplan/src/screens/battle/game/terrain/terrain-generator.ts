@@ -1,6 +1,6 @@
 import { EDGE_RADIUS } from '../../consts';
 
-export type TerrainData = { width: number; height: number; heightMap: number[][] };
+export type TerrainData = { width: number; height: number; tileSize: number; heightMap: number[][] };
 
 // Helper function to get the number of active neighbors for a cell
 function getActiveNeighbors(grid: number[][], x: number, y: number): number {
@@ -107,5 +107,5 @@ export function generateTerrain(tileSize: number): TerrainData {
   const height = EDGE_RADIUS * 2;
   const heightMap = generateTerrainHeightMap(width, height, tileSize);
 
-  return { width, height, heightMap };
+  return { width, height, tileSize, heightMap };
 }

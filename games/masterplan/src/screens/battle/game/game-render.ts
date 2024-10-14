@@ -6,7 +6,7 @@ import { GameWorldRender } from './game-world-render';
 
 export function renderGame(world: GameWorld, worldRender: GameWorldRender) {
   const canvas = getCanvas(LAYER_DEFAULT);
-  const renderQueue = new RenderQueue();
+  const renderQueue = new RenderQueue(worldRender);
 
   // clear
   canvas.clear();

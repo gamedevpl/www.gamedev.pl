@@ -1,4 +1,5 @@
 import { Canvas } from '../util/canvas';
+import { GameWorldRender } from './game-world-render';
 
 // Define types for render commands
 type RenderCommand = {
@@ -20,7 +21,13 @@ const layerOrder: { [key: string]: number } = {
 };
 
 export class RenderQueue {
+  constructor(private worldRender: GameWorldRender) {}
+
   private commands: RenderCommand[] = [];
+
+  getShadingAt(x: number, y: number): number {
+    return this.worldRender.getShadingAt(x, y);
+  }
 
   renderShape(layer: RenderCommand['layer'], x: number, y: number, z: number, points: number[][], fillStyle: string) {
     this.commands.push({

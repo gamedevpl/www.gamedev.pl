@@ -17,30 +17,36 @@ export class Terrain {
   }
 
   getHeightAt(pos: Vec): number {
-    // Calculate tile indices and positions within the tile
-    const x = pos[0] / this.tileSize + this.offsetX;
-    const y = pos[1] / this.tileSize + this.offsetY;
-
-    const x0 = Math.min(Math.max(Math.floor(x), 0), this.heightMap.length - 1);
-    const x1 = Math.min(x0 + 1, this.heightMap[0].length - 1);
-    const y0 = Math.min(Math.max(Math.floor(y), 0), this.heightMap.length - 1);
-    const y1 = Math.max(Math.min(y0 + 1, this.heightMap.length - 1), 0);
-
-    // Get heights at the four corners
-    const h00 = this.heightMap[y0][x0];
-    const h10 = this.heightMap[y0][x1];
-    const h01 = this.heightMap[y1][x0];
-    const h11 = this.heightMap[y1][x1];
-
-    // Calculate the fractional part of x and y within the tile
-    const dx = x - x0;
-    const dy = y - y0;
-
-    // Bilinear interpolation
-    const h0 = h00 * (1 - dx) + h10 * dx;
-    const h1 = h01 * (1 - dx) + h11 * dx;
-    const height = h0 * (1 - dy) + h1 * dy;
-
-    return height;
+    return interpolateGridValue(pos, this.heightMap, this.tileSize, this.offsetX, this.offsetY);
   }
+}
+
+export function interpolateGridValue(
+  pos: Vec,
+  grid: number[][],
+  tileSize: number,
+  offsetX: number,
+  offsetY: number,
+): number {
+  // Calculate tile indices and positions within the tile
+  const x = pos[0] / tileSize + offsetX;
+  const y = pos[1] / tileSize + offsetY;
+
+  const x0 = Math.min(Math.max(Math.floor(x), 0), grid[0].length - 1);
+  const x1 = Math.min(x0 + 1, grid[0].length - 1);
+  const y0 = Math.min(Math.max(Math.floor(y), 0), grid.length - 1);
+  const y1 = Math.max(Math.min(y0 + 1, grid.length - 1), 0);
+
+  const h00 = grid[y0][x0];
+  const h10 = grid[y0][x1];
+  const h01 = grid[y1][x0];
+  const h11 = grid[y1][x1];
+
+  const dx = x - x0;
+  const dy = y - y0;
+
+  const h0 = h00 * (1 - dx) + h10 * dx;
+  const h1 = h01 * (1 - dx) + h11 * dx;
+
+  return h0 * (1 - dy) + h1 * dy;
 }

@@ -55,11 +55,19 @@ export class SoldierRender {
     // Sort shapes by z-index for proper layering
     const shapes = isAlive ? SHAPES[this.soldier.type] : FALLEN_SHAPES[this.soldier.type];
 
+    // Get terrain shading factor
+    const terrainShadingFactor = renderQueue.getShadingAt(...this.soldier.vec);
+
     // Render each part of the soldier
     for (const [, shape] of shapes) {
       const rotatedPoints = rotate3D(shape.points, rotationAngle + Math.PI / 2);
       const perspectivePoints = rotatedPoints.map((p) => applyPerspective(p));
-      const shadedColor = applyShading(baseColor, rotationAngle, this.soldier.state.isAlive() ? 1 : 0.5);
+
+      // Apply shading to both live and fallen soldiers
+      const shadedColor = applyShading(baseColor, rotationAngle, isAlive ? 1 : 0.5);
+
+      // Combine soldier shading with terrain shading
+      const finalColor = this.combineColors(shadedColor, terrainShadingFactor);
 
       renderQueue.addObjectCommand(
         this.soldier.getX(),
@@ -68,9 +76,30 @@ export class SoldierRender {
           this.soldier.world.terrain.getHeightAt(this.soldier.vec),
         this.soldier.getZ(),
         isAlive,
-        shadedColor,
+        finalColor,
         perspectivePoints.map((p) => [p.x, p.y]),
       );
     }
+  }
+
+  private combineColors(soldierColor: string, terrainShadingFactor: number): string {
+    // Parse the soldier color
+    const rgbaMatch = soldierColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
+    if (!rgbaMatch) {
+      return soldierColor;
+    }
+
+    const r = parseInt(rgbaMatch[1], 10);
+    const g = parseInt(rgbaMatch[2], 10);
+    const b = parseInt(rgbaMatch[3], 10);
+    const a = rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1;
+
+    // Apply terrain shading factor
+    const newR = Math.floor(r * terrainShadingFactor);
+    const newG = Math.floor(g * terrainShadingFactor);
+    const newB = Math.floor(b * terrainShadingFactor);
+
+    // Return the combined color
+    return `rgba(${newR},${newG},${newB},${a})`;
   }
 }

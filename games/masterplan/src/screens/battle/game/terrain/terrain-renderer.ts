@@ -37,16 +37,24 @@ function calculateNormal(heightMap: number[][], x: number, y: number, tileSize: 
   return [normal[0] / length, normal[1] / length, normal[2] / length];
 }
 
-// Function to render terrain based on heightmap
+// Function to render terrain based on heightmap and generate shading map
 export function renderTerrain(
-  ctx: CanvasRenderingContext2D,
   heightMap: number[][],
   width: number,
   height: number,
   tileSize: number,
-): void {
+): { terrainCanvas: HTMLCanvasElement; shadingMap: number[][] } {
   const gridWidth = Math.ceil(width / tileSize);
   const gridHeight = Math.ceil(height / tileSize);
+
+  const terrainCanvas = document.createElement('canvas');
+  terrainCanvas.width = width;
+  terrainCanvas.height = height;
+  const terrainCtx = terrainCanvas.getContext('2d')!;
+
+  const shadingMap: number[][] = Array(gridHeight)
+    .fill(0)
+    .map(() => Array(gridWidth).fill(0));
 
   // Draw the terrain based on the heightmap
   for (let y = 0; y < gridHeight; y++) {
@@ -76,18 +84,24 @@ export function renderTerrain(
       const shadedColor = applyShading(baseColor, rotationAngle, averageHeight);
 
       // Draw the tile using a path to represent height variations
-      ctx.beginPath();
-      ctx.moveTo(x * tileSize, topLeftY);
-      ctx.lineTo((x + 1) * tileSize, topRightY);
-      ctx.lineTo((x + 1) * tileSize, bottomRightY);
-      ctx.lineTo(x * tileSize, bottomLeftY);
-      ctx.closePath();
+      terrainCtx.beginPath();
+      terrainCtx.moveTo(x * tileSize, topLeftY);
+      terrainCtx.lineTo((x + 1) * tileSize, topRightY);
+      terrainCtx.lineTo((x + 1) * tileSize, bottomRightY);
+      terrainCtx.lineTo(x * tileSize, bottomLeftY);
+      terrainCtx.closePath();
 
       // Set the fill color with shading
-      ctx.fillStyle = shadedColor;
-      ctx.fill();
+      terrainCtx.fillStyle = shadedColor;
+      terrainCtx.fill();
+
+      // Calculate shading factor for the shading map
+      const shadingFactor = (Math.cos(rotationAngle) * 0.3 + 0.7) * (0.8 + factor * 0.4);
+      shadingMap[y][x] = shadingFactor;
     }
   }
+
+  return { terrainCanvas, shadingMap };
 }
 
 // Function to create a terrain texture
@@ -96,15 +110,8 @@ export function createTerrainTexture(
   height: number,
   heightMap: number[][],
   tileSize: number,
-): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d')!;
-
-  renderTerrain(ctx, heightMap, width, height, tileSize);
-
-  return canvas;
+): { terrainCanvas: HTMLCanvasElement; shadingMap: number[][] } {
+  return renderTerrain(heightMap, width, height, tileSize);
 }
 
 const interpolateColor = (color1: string, color2: string, factor: number): string => {
