@@ -19,6 +19,7 @@ import { dispatchCustomEvent } from '../../../../../nukes/src/events';
 import { stateInit } from '../states';
 import { Unit } from '../../designer/designer-types';
 import { TerrainData } from '../game/terrain/terrain-generator';
+import { GameWorldRender } from '../game/game-world-render';
 
 export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: string, definitions: Unit[]) {
   const angle = (Math.PI / 2) * direction;
@@ -38,6 +39,7 @@ export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: str
 
 export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[], terrainData: TerrainData) {
   const world = new GameWorld(terrainData);
+  const worldRender = new GameWorldRender(world);
 
   createMasterPlan(world, 1, '#ff0000', definitions);
   createMasterPlan(world, -1, '#00ff00', definitionsEnemy);
@@ -47,16 +49,16 @@ export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[
   HUD.setNames('Player', 'Computer');
 
   return function GameBattleInitHandler(eventType: number) {
-    renderGame(world);
+    renderGame(world, worldRender);
     HUD.render(world);
 
     if (eventType == EVENT_TIMEOUT) {
-      return stateGameBattle(world, HUD);
+      return stateGameBattle(world, worldRender, HUD);
     }
   };
 }
 
-function stateGameBattle(world: GameWorld, HUD: GameHUD) {
+function stateGameBattle(world: GameWorld, worldRender: GameWorldRender, HUD: GameHUD) {
   const damageMap: Record<number, Record<string, number>> = {
     [EVENT_DAMAGE]: {
       '#ff0000': 0,
@@ -76,7 +78,7 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
         elapsedTime = world.update(elapsedTime);
       }
 
-      renderGame(world);
+      renderGame(world, worldRender);
     }
 
     if (eventType === EVENT_INTERVAL_100MS) {
@@ -86,7 +88,7 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
     if (eventType === EVENT_INTERVAL_SECOND) {
       const balance = HUD.getBalance(world);
       if (world.getTime() > 60000 || balance === 0 || balance === 1) {
-        return stateGameBattleEnd(world, HUD);
+        return stateGameBattleEnd(world, worldRender, HUD);
       }
     }
 
@@ -98,11 +100,11 @@ function stateGameBattle(world: GameWorld, HUD: GameHUD) {
   };
 }
 
-function stateGameBattleEnd(world: GameWorld, HUD: GameHUD) {
+function stateGameBattleEnd(world: GameWorld, worldRender: GameWorldRender, HUD: GameHUD) {
   HUD.renderResults(world);
 
   return function GameBattleEndHandler(eventType: number) {
-    renderGame(world);
+    renderGame(world, worldRender);
 
     if (eventType === EVENT_MOUSE_CLICK) {
       freeCanvas(LAYER_DEFAULT);

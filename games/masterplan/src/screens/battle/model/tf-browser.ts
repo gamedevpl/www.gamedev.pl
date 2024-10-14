@@ -1,5 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
-import { ModelInput, INPUT_ROWS, INPUT_COLS, ModelInputCell } from './types';
+import { ModelInput, ModelOutput, INPUT_ROWS, INPUT_COLS, ModelOutputCell, OUTPUT_SHAPE } from './types';
 
 let model: tf.LayersModel | null = null;
 
@@ -21,7 +21,7 @@ function flattenInput(input: ModelInput): number[][][] {
   return [input.data.map((row) => row.flat())];
 }
 
-export async function predict(input: ModelInput): Promise<ModelInput> {
+export async function predict(input: ModelInput): Promise<ModelOutput> {
   if (!model) {
     await loadModel();
   }
@@ -43,12 +43,11 @@ export async function predict(input: ModelInput): Promise<ModelInput> {
   return {
     data: result.map((row) =>
       row.reduce((acc, _, index) => {
-        if (index % 9 === 0) {
-          acc.push(row.slice(index, index + 9) as ModelInputCell);
+        if (index % OUTPUT_SHAPE === 0) {
+          acc.push(row.slice(index, index + OUTPUT_SHAPE) as ModelOutputCell);
         }
-
         return acc;
-      }, [] as ModelInputCell[]),
+      }, [] as ModelOutputCell[]),
     ),
     cols: INPUT_COLS,
     rows: INPUT_ROWS,

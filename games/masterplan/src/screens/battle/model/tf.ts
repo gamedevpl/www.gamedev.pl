@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import '@tensorflow/tfjs-node';
-import { INPUT_COLS, INPUT_ROWS, ModelInput } from './types';
+import { INPUT_COLS, INPUT_ROWS, INPUT_SHAPE, ModelInput, ModelOutput, OUTPUT_SHAPE } from './types';
 
 let model: tf.LayersModel;
 
@@ -15,14 +15,14 @@ function createModel() {
     tf.layers.lstm({
       units: INPUT_COLS,
       returnSequences: true,
-      inputShape: [INPUT_ROWS, INPUT_COLS * 9],
+      inputShape: [INPUT_ROWS, INPUT_COLS * INPUT_SHAPE],
       activation: 'relu',
     }),
   );
 
   newModel.add(
     tf.layers.timeDistributed({
-      layer: tf.layers.dense({ units: INPUT_COLS * 9, activation: 'linear' }),
+      layer: tf.layers.dense({ units: INPUT_COLS * OUTPUT_SHAPE, activation: 'linear' }),
     }),
   );
 
@@ -56,9 +56,9 @@ export async function loadModel(newModel = false) {
   compileModel();
 }
 
-export async function train(inputs: ModelInput[], outputs: ModelInput[], epochs = 50) {
-  const xs = tf.tensor3d(flattenInputs(inputs));
-  const ys = tf.tensor3d(flattenInputs(outputs));
+export async function train(inputs: ModelInput[], outputs: ModelOutput[], epochs = 50) {
+  const xs = tf.tensor3d(flattenData(inputs));
+  const ys = tf.tensor3d(flattenData(outputs));
 
   await model.fit(xs, ys, { epochs, validationSplit: 0.1 });
 }
@@ -70,6 +70,6 @@ export function predict(input: number[][]): number[][] {
   return output.arraySync() as number[][];
 }
 
-function flattenInputs(inputs: ModelInput[]): number[][][] {
+function flattenData(inputs: (ModelInput | ModelOutput)[]): number[][][] {
   return inputs.map((input) => input.data.map((row) => row.flat()));
 }

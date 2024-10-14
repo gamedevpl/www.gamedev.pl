@@ -4,15 +4,16 @@ import { selectPlan } from '../utils/plan-selection';
 import { allPlans, balancedAssault } from '../plans';
 import { predictCounterPlan } from '../../battle/model/predict-browser';
 import { countSoldiers } from '../../battle/model/units-trim';
+import { TerrainData } from '../../battle/game/terrain/terrain-generator';
 
 export const useOppositionAI = () => {
   const [oppositionPlan, setOppositionPlan] = useState<Unit[]>([]);
 
-  const updateOppositionPlan = useCallback(async (playerPlan: Unit[]): Promise<Unit[]> => {
+  const updateOppositionPlan = useCallback(async (playerPlan: Unit[], terrainData: TerrainData): Promise<Unit[]> => {
     let selectedPlan: Unit[];
 
     try {
-      selectedPlan = await predictCounterPlan(playerPlan);
+      selectedPlan = await predictCounterPlan(playerPlan, terrainData);
       console.log('Generated counter plan using AI model');
       if (countSoldiers(selectedPlan) < countSoldiers(playerPlan) * 0.7) {
         console.warn('Counter plan has insufficient number of soldiers:', selectedPlan.length, playerPlan.length);

@@ -2,8 +2,9 @@ import { getCanvas } from '../util/canvas';
 import { LAYER_DEFAULT } from '../consts';
 import { GameWorld } from './game-world';
 import { RenderQueue } from './game-render-queue';
+import { GameWorldRender } from './game-world-render';
 
-export function renderGame(world: GameWorld) {
+export function renderGame(world: GameWorld, worldRender: GameWorldRender) {
   const canvas = getCanvas(LAYER_DEFAULT);
   const renderQueue = new RenderQueue();
 
@@ -11,7 +12,7 @@ export function renderGame(world: GameWorld) {
   canvas.clear();
 
   // render terrain
-  world.terrain.render(canvas);
+  canvas.drawImage(worldRender.terrainCanvas, 0, 0);
 
   // set camera
   canvas.save().translate(canvas.getWidth() / 2, canvas.getHeight() / 2);

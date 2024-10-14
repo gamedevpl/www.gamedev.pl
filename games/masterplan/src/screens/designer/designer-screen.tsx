@@ -45,7 +45,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   }, []);
 
   const handleStartBattle = useCallback(async () => {
-    onStartBattle(playerUnits, await updateOppositionPlan(playerUnits), terrainData);
+    onStartBattle(playerUnits, await updateOppositionPlan(playerUnits, terrainData), terrainData);
   }, [playerUnits, oppositionUnits, onStartBattle]);
 
   const handleCellClick = useCallback(
@@ -76,7 +76,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   useDebounce(
     () => {
-      updateOppositionPlan(playerUnits).then(setOppositionUnits);
+      updateOppositionPlan(playerUnits, terrainData).then(setOppositionUnits);
     },
     1000,
     [playerUnits],

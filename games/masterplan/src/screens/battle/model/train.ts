@@ -1,12 +1,15 @@
 import { allPlans } from '../../designer/plans';
-import { unitsToModelInput } from './convert';
+import { unitsToModelInput } from './convert-input';
+import { unitsToModelOutput } from './convert-output';
 import { simulate } from './simulate';
 import { loadModel, saveModel, train } from './tf';
-import { ModelInput } from './types';
+import { ModelInput, ModelOutput } from './types';
 import { generateMasterplan } from './infer';
 import { rotateUnits, Unit } from '../../designer/designer-types';
 import { trimUnits } from './units-trim';
 import { getCache } from './cache';
+import { generateTerrain } from '../game/terrain/terrain-generator';
+import { SOLDIER_WIDTH } from '../consts';
 
 const params = process.argv.slice(2);
 
@@ -21,7 +24,10 @@ const epochs = parseInt(params.find((p) => p.startsWith('--epochs='))?.split('='
 console.log('Training with', genCount, 'generations and', planCount, 'plans', newModel ? 'with new model' : '');
 
 loadModel(newModel).then(async () => {
-  const simulationResults: [winnerPlan: ModelInput, loserPlan: ModelInput][] = [];
+  const simulationResults: [loserPlan: ModelInput, winnerPlan: ModelOutput][] = [];
+
+  // Generate a terrain for all simulations
+  const terrainData = generateTerrain(SOLDIER_WIDTH);
 
   // First we generate some plans using LLM
   let bestPlan = allPlans[0].units;
@@ -48,8 +54,8 @@ loadModel(newModel).then(async () => {
   while (resultChain.length < genCount) {
     const generation = await generateMasterplan(resultChain);
     const counterPlan = trimUnits(generation.units, 104);
-    const battleResult = simulate(rotateUnits(bestPlan), counterPlan);
-    const oppositeResult = simulate(rotateUnits(counterPlan), bestPlan);
+    const battleResult = simulate(rotateUnits(bestPlan), counterPlan, terrainData);
+    const oppositeResult = simulate(rotateUnits(counterPlan), bestPlan, terrainData);
 
     const instableResult =
       (battleResult === 'plan' && oppositeResult === 'plan') ||
@@ -70,32 +76,21 @@ loadModel(newModel).then(async () => {
     writeCache(resultChain);
   }
 
-  // Add results to training data
-  for (let i = 1; i < resultChain.length; i++) {
-    const battleResult = resultChain[i].result;
-    const bestPlan = resultChain[i - 1].units;
-    const counterPlan = resultChain[i].units;
-    if (battleResult === 'won') {
-      simulationResults.push([unitsToModelInput(rotateUnits(bestPlan)), unitsToModelInput(counterPlan)]);
-    } else if (battleResult === 'lost') {
-      simulationResults.push([unitsToModelInput(rotateUnits(counterPlan)), unitsToModelInput(bestPlan)]);
-    }
-  }
-
   // Lets simulate some more battles with LLM generated plans, and the hardcoded plans
   const wins = new Map<string, number>();
 
   let todoCounter =
-    Math.min(allPlans.length, planCount) * (Math.min(allPlans.length, planCount) + resultChain.length) -
+    Math.min(allPlans.length, planCount) *
+      (Math.min(allPlans.length, planCount) + resultChain.slice(0, genCount).length) -
     Math.min(allPlans.length, planCount);
-  for (const plan of [...allPlans.slice(0, planCount), ...resultChain.map((result) => result)]) {
+  for (const plan of [...allPlans.slice(0, planCount), ...resultChain.slice(0, genCount).map((result) => result)]) {
     for (const counterPlan of allPlans.slice(0, planCount)) {
       if (plan.name === counterPlan.name) {
         continue;
       }
 
-      const battleResult = simulate(rotateUnits(plan.units), counterPlan.units);
-      const oppositeResult = simulate(rotateUnits(counterPlan.units), plan.units);
+      const battleResult = simulate(rotateUnits(plan.units), counterPlan.units, terrainData);
+      const oppositeResult = simulate(rotateUnits(counterPlan.units), plan.units, terrainData);
       const instableResult =
         (battleResult === 'plan' && oppositeResult === 'plan') ||
         (battleResult === 'draw' && oppositeResult !== 'draw') ||
@@ -112,10 +107,16 @@ loadModel(newModel).then(async () => {
       }
 
       if (battleResult === 'plan' || battleResult === 'draw') {
-        simulationResults.push([unitsToModelInput(rotateUnits(counterPlan.units)), unitsToModelInput(plan.units)]);
+        simulationResults.push([
+          unitsToModelInput(rotateUnits(counterPlan.units), terrainData),
+          unitsToModelOutput(plan.units),
+        ]);
       }
       if (battleResult === 'counterPlan' || battleResult === 'draw') {
-        simulationResults.push([unitsToModelInput(rotateUnits(plan.units)), unitsToModelInput(counterPlan.units)]);
+        simulationResults.push([
+          unitsToModelInput(rotateUnits(plan.units), terrainData),
+          unitsToModelOutput(counterPlan.units),
+        ]);
       }
 
       if (battleResult === 'plan') {
@@ -130,8 +131,8 @@ loadModel(newModel).then(async () => {
 
   // Train the model
   await train(
-    simulationResults.map(([, loserPlan]) => loserPlan),
-    simulationResults.map(([winnerPlan]) => winnerPlan),
+    simulationResults.map(([loserInput]) => loserInput),
+    simulationResults.map(([, winnerOutput]) => winnerOutput),
     epochs,
   );
 

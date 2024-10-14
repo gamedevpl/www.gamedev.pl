@@ -1,14 +1,11 @@
 import { EDGE_RADIUS } from '../../consts';
-import { Canvas } from '../../util/canvas';
 import { Vec } from '../../util/vmath';
 import { TerrainData } from './terrain-generator';
-import { createTerrainTexture } from './terrain-renderer';
 
 export class Terrain {
   tileSize = 32;
   offsetX = (EDGE_RADIUS * 1.5) / this.tileSize;
   offsetY = EDGE_RADIUS / this.tileSize;
-  terrainCanvas: HTMLCanvasElement;
   heightMap: number[][];
   width: number;
   height: number;
@@ -17,11 +14,6 @@ export class Terrain {
     this.width = terrainData.width;
     this.height = terrainData.height;
     this.heightMap = terrainData.heightMap;
-    this.terrainCanvas = createTerrainTexture(this.width, this.height, this.heightMap, this.tileSize);
-  }
-
-  render(ctx: Canvas) {
-    ctx.drawImage(this.terrainCanvas, 0, 0);
   }
 
   getHeightAt(pos: Vec): number {
@@ -29,10 +21,10 @@ export class Terrain {
     const x = pos[0] / this.tileSize + this.offsetX;
     const y = pos[1] / this.tileSize + this.offsetY;
 
-    const x0 = Math.floor(x);
+    const x0 = Math.min(Math.max(Math.floor(x), 0), this.heightMap.length - 1);
     const x1 = Math.min(x0 + 1, this.heightMap[0].length - 1);
-    const y0 = Math.floor(y);
-    const y1 = Math.min(y0 + 1, this.heightMap.length - 1);
+    const y0 = Math.min(Math.max(Math.floor(y), 0), this.heightMap.length - 1);
+    const y1 = Math.max(Math.min(y0 + 1, this.heightMap.length - 1), 0);
 
     // Get heights at the four corners
     const h00 = this.heightMap[y0][x0];
