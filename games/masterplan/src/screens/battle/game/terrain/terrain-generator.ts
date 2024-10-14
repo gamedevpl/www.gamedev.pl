@@ -64,14 +64,19 @@ function generateTerrainHeightMap(width: number, height: number, tileSize: numbe
   const gridWidth = Math.ceil(width / tileSize);
   const gridHeight = Math.ceil(height / tileSize);
   const heightMap: number[][] = Array.from({ length: gridHeight + 1 }, () => Array(gridWidth + 1).fill(0));
+  const centerX = gridWidth / 2;
+  const centerY = gridHeight / 2;
+  const radius = Math.min(centerX, centerY);
 
   // Create a sinusoidal base
   for (let y = 0; y <= gridHeight; y++) {
     for (let x = 0; x <= gridWidth; x++) {
+      const dx = Math.abs(x - centerX);
+      const dy = Math.abs(y - centerY);
       heightMap[y][x] =
-        (Math.sin((x / gridWidth) * 2 * Math.PI * 2) * 0.25 + Math.cos((y / gridHeight) * Math.PI * 3) * 0.25) *
-        tileSize *
-        3;
+        ((Math.pow(Math.sqrt(dx * dx + dy * dy) / radius, 0.25) + Math.sin((y / gridHeight) * Math.PI) / 2) *
+          tileSize) /
+        2;
     }
   }
 

@@ -99,7 +99,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
             const y = row * cellHeight;
             const heightValue =
               terrainHeightMap[row + (isPlayerArea ? (terrainHeightMap.length / 2) << 0 : 0)][centerX + col];
-            const color = `rgb(${140}, ${141}, ${123}, ${heightValue / maxHeight})`;
+            const color = `rgb(0, 0, 0, ${0.5 - heightValue / maxHeight / 2})`;
             ctx.fillStyle = color;
             ctx.fillRect(GRID_CENTER_X * cellWidth + x, y, cellWidth, cellHeight);
           }

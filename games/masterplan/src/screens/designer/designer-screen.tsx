@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import styled from 'styled-components';
 import { useDebounce } from 'react-use';
 import { CanvasGrid } from './canvas-grid';
@@ -23,9 +23,9 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   const [oppositionUnits, setOppositionUnits] = useState<Unit[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [infoPanelPosition, setInfoPanelPosition] = useState({ x: 0, y: 0 });
-  const [terrainData] = useState<TerrainData>(() => {
+  const terrainData = useMemo<TerrainData>(() => {
     return generateTerrain(SOLDIER_WIDTH);
-  });
+  }, []);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { selectedUnit, handleUnitSelect, setSelectedUnit } = useUnitSelection(playerUnits);

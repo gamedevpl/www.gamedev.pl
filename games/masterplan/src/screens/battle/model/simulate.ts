@@ -12,7 +12,8 @@ const { readCache, writeCache } = getCache<
 export function simulate(plan: Unit[], counterPlan: Unit[], terrainData: TerrainData): 'plan' | 'counterPlan' | 'draw' {
   const planHash = calculateMD5(plan);
   const counterPlanHash = calculateMD5(counterPlan);
-  const cacheKey = `${planHash}_${counterPlanHash}`;
+  const terrainHash = calculateMD5(terrainData);
+  const cacheKey = `${planHash}_${counterPlanHash}_${terrainHash}`;
 
   const cache = readCache();
   if (cache[cacheKey]) {

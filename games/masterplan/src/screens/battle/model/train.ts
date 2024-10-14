@@ -26,8 +26,7 @@ console.log('Training with', genCount, 'generations and', planCount, 'plans', ne
 loadModel(newModel).then(async () => {
   const simulationResults: [loserPlan: ModelInput, winnerPlan: ModelOutput][] = [];
 
-  // Generate a terrain for all simulations
-  const terrainData = generateTerrain(SOLDIER_WIDTH);
+  const getTerrainData = () => generateTerrain(SOLDIER_WIDTH);
 
   // First we generate some plans using LLM
   let bestPlan = allPlans[0].units;
@@ -52,6 +51,7 @@ loadModel(newModel).then(async () => {
   }
 
   while (resultChain.length < genCount) {
+    const terrainData = getTerrainData();
     const generation = await generateMasterplan(resultChain);
     const counterPlan = trimUnits(generation.units, 104);
     const battleResult = simulate(rotateUnits(bestPlan), counterPlan, terrainData);
@@ -88,6 +88,8 @@ loadModel(newModel).then(async () => {
       if (plan.name === counterPlan.name) {
         continue;
       }
+
+      const terrainData = getTerrainData();
 
       const battleResult = simulate(rotateUnits(plan.units), counterPlan.units, terrainData);
       const oppositeResult = simulate(rotateUnits(counterPlan.units), plan.units, terrainData);
