@@ -39,7 +39,7 @@ export class SoldierRender {
   private renderShadow(renderQueue: RenderQueue) {
     renderQueue.addShadowCommand(
       this.soldier.getX(),
-      this.soldier.getY() + this.soldier.getHeight() / 2 - this.soldier.world.terrain.getHeightAt(this.soldier.vec),
+      this.soldier.getY() + this.soldier.getHeight() / 2,
       this.soldier.getZ(),
       'rgba(0, 0, 0, 0.3)',
       SHADOW_POINTS,
@@ -71,9 +71,7 @@ export class SoldierRender {
 
       renderQueue.addObjectCommand(
         this.soldier.getX(),
-        this.soldier.getY() +
-          (isAlive ? 0 : this.soldier.getHeight() / 2) -
-          this.soldier.world.terrain.getHeightAt(this.soldier.vec),
+        this.soldier.getY() + (isAlive ? 0 : this.soldier.getHeight() / 2),
         this.soldier.getZ(),
         isAlive,
         finalColor,

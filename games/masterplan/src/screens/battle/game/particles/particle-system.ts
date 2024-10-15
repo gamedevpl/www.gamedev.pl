@@ -122,22 +122,32 @@ export class ParticleSystem {
           particle.x,
           particle.y,
           particle.z,
-          [[0, 0], [1, 0], [1, 1], [0, 1]],  // Simple square shape for the particle
-          'rgba(255, 0, 0, 0.5)'
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+          ], // Simple square shape for the particle
+          'rgba(255, 0, 0, 0.5)',
         );
       });
     }
 
     if (smokeParticles.length > 0) {
       smokeParticles.forEach((particle) => {
-        const size = Math.min(particle.life, 2);
+        const size = Math.min(particle.life, 2) * 3;
         renderQueue.renderShape(
           'particles',
           particle.x - size / 2,
           particle.y - size / 2,
           particle.z,
-          [[0, 0], [size, 0], [size, size], [0, size]],  // Square shape with size based on particle life
-          'rgba(128, 128, 128, 0.5)'
+          [
+            [0, 0],
+            [size, 0],
+            [size, size],
+            [0, size],
+          ], // Square shape with size based on particle life
+          'rgba(28, 28, 28, 0.5)',
         );
       });
     }

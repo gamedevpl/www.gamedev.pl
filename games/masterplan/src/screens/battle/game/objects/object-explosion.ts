@@ -24,14 +24,7 @@ export class ExplosionObject extends GameObject {
         points.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
       }
 
-      queue.addObjectCommand(
-        this.getX(),
-        this.getY() - this.world.terrain.getHeightAt(this.vec),
-        this.getZ(),
-        true,
-        'black',
-        points,
-      );
+      queue.addObjectCommand(this.getX(), this.getY(), this.getZ(), true, 'black', points);
     }
   }
 

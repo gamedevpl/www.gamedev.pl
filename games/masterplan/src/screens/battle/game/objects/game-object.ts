@@ -25,17 +25,10 @@ export abstract class GameObject {
   abstract update(deltaTime: number): void;
 
   render(queue: RenderQueue) {
-    queue.addObjectCommand(
-      this.getX(),
-      this.getY() - this.world.terrain.getHeightAt(this.vec),
-      this.getZ(),
-      true,
-      'red',
-      [
-        [-this.getWidth() / 2 + this.getX(), -this.getHeight() / 2 + this.getY() - this.getZ()],
-        [this.getWidth(), this.getHeight()],
-      ],
-    );
+    queue.addObjectCommand(this.getX(), this.getY(), this.getZ(), true, 'red', [
+      [-this.getWidth() / 2 + this.getX(), -this.getHeight() / 2 + this.getY() - this.getZ()],
+      [this.getWidth(), this.getHeight()],
+    ]);
   }
 
   getX() {

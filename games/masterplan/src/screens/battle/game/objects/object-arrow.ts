@@ -70,14 +70,7 @@ export class ArrowObject extends GameObject {
       return [x, y];
     });
 
-    queue.addObjectCommand(
-      this.getX(),
-      this.getY() - this.world.terrain.getHeightAt(this.vec),
-      this.getZ(),
-      true,
-      'red',
-      rotatedPoints,
-    );
+    queue.addObjectCommand(this.getX(), this.getY(), this.getZ(), true, 'red', rotatedPoints);
   }
 
   getY() {

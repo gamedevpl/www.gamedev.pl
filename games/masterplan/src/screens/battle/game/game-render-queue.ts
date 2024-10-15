@@ -21,7 +21,7 @@ const layerOrder: { [key: string]: number } = {
 };
 
 export class RenderQueue {
-  constructor(private worldRender: GameWorldRender) {}
+  constructor(public worldRender: GameWorldRender) {}
 
   private commands: RenderCommand[] = [];
 
@@ -86,10 +86,10 @@ export class RenderQueue {
       const path = new Path2D();
       for (const command of batch) {
         const firstPoint = command.points[0];
-        path.moveTo(command.x + firstPoint[0], command.y + firstPoint[1]);
+        path.moveTo(command.x + firstPoint[0], command.y + firstPoint[1] - command.z);
         for (let i = 1; i < command.points.length; i++) {
           const point = command.points[i];
-          path.lineTo(command.x + point[0], command.y + point[1]);
+          path.lineTo(command.x + point[0], command.y + point[1] - command.z);
         }
       }
       path.closePath();
