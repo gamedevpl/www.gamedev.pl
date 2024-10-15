@@ -76,8 +76,6 @@ export class GameWorld {
 
     this.collisions();
 
-    this.edgeRadius = Math.max(EDGE_RADIUS * 1.5 * (1 - this.getTime() / 60000), 400);
-
     // Update particle system
     this.particles.update(deltaTime / UPDATE_TICK);
 

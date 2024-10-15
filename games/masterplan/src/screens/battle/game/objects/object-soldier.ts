@@ -11,6 +11,7 @@ import {
   SOLDIER_WIDTH,
   SOLDIER_HEIGHT,
   MAX_LIFE,
+  MIN_SEEK_RANGE,
   MELEE_SEEK_RANGE,
   MELEE_ATTACK_RANGE,
   DEFENCE_COOLDOWN,
@@ -149,8 +150,10 @@ export class SoldierObject extends GameObject {
   }
 
   updatePlan() {
-    if (!this.targeting.seekEnemy()) {
-      this.plan.getCommand(this.world.getTime()).execute(this);
+    const command = this.plan.getCommand(this.world.getTime());
+    const commandProgress = command.getProgress({ worldTime: this.world.getTime(), soldier: this });
+    if (!this.targeting.seekEnemy(Math.max(this.state.seekRange * commandProgress, MIN_SEEK_RANGE))) {
+      command.execute(this);
     }
   }
 
