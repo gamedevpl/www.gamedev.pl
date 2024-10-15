@@ -9,7 +9,7 @@ import { DESIGN_FIELD_WIDTH, DESIGN_FIELD_HEIGHT, SOLDIER_WIDTH, SOLDIER_HEIGHT 
 import { UnitInfoPanel } from './unit-info-panel';
 import { calculatePanelPosition } from './utils/ui-utils';
 import { OppositionPlan } from './opposition-plan';
-import { rotateUnits, Unit } from './designer-types';
+import { rotateUnits, Unit, CommandType } from './designer-types';
 import { balancedAssault } from './plans';
 import { generateTerrain, TerrainData } from '../battle/game/terrain/terrain-generator';
 
@@ -113,7 +113,10 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   );
 };
 
-const DEFAULT_UNITS: Unit[] = rotateUnits(balancedAssault.units);
+const DEFAULT_UNITS: Unit[] = rotateUnits(balancedAssault.units.map(unit => ({
+  ...unit,
+  command: 'advance-wait' as CommandType // Set a default command
+})));
 
 const DesignerContainer = styled.div`
   position: absolute;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { Unit } from './designer-types';
+import { Unit, CommandType } from './designer-types';
 import { UNIT_ASSET_PATHS } from '../battle/assets';
 
 interface UnitInfoPanelProps {
@@ -10,9 +10,9 @@ interface UnitInfoPanelProps {
 }
 
 export const UnitInfoPanel: React.FC<UnitInfoPanelProps> = ({ unit, position, onModifyUnit }) => {
-  const [expandedIcon, setExpandedIcon] = useState<'type' | 'formation' | null>(null);
+  const [expandedIcon, setExpandedIcon] = useState<'type' | 'formation' | 'command' | null>(null);
 
-  const handleIconClick = (iconType: 'type' | 'formation') => {
+  const handleIconClick = (iconType: 'type' | 'formation' | 'command') => {
     setExpandedIcon(expandedIcon === iconType ? null : iconType);
   };
 
@@ -23,6 +23,11 @@ export const UnitInfoPanel: React.FC<UnitInfoPanelProps> = ({ unit, position, on
 
   const handleFormationChange = (newFormation: { sizeCol: number; sizeRow: number }) => {
     onModifyUnit(unit.id, newFormation);
+    setExpandedIcon(null);
+  };
+
+  const handleCommandChange = (newCommand: CommandType) => {
+    onModifyUnit(unit.id, { command: newCommand });
     setExpandedIcon(null);
   };
 
@@ -51,6 +56,18 @@ export const UnitInfoPanel: React.FC<UnitInfoPanelProps> = ({ unit, position, on
               >
                 {formation.sizeCol}x{formation.sizeRow}
               </FormationOption>
+            ))}
+          </ExpandedOptions>
+        )}
+      </IconWrapper>
+      <IconWrapper onClick={() => handleIconClick('command')}>
+        <CommandIcon>{unit.command}</CommandIcon>
+        {expandedIcon === 'command' && (
+          <ExpandedOptions>
+            {(['advance-wait', 'advance', 'wait-advance', 'flank-left', 'flank-right'] as const).map((command) => (
+              <CommandOption key={command} onClick={() => handleCommandChange(command)}>
+                {command}
+              </CommandOption>
             ))}
           </ExpandedOptions>
         )}
@@ -117,12 +134,25 @@ const FormationIcon = styled.div`
   color: black;
 `;
 
+const CommandIcon = styled.div`
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #ddd;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  color: black;
+  text-align: center;
+`;
+
 const ExpandedOptions = styled.div`
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(1, 1fr);
   gap: 5px;
   padding: 5px;
   background-color: white;
@@ -156,6 +186,25 @@ const OptionIcon = styled.img`
 
 const FormationOption = styled.div`
   width: 36px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #eee;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  color: black;
+
+  &:hover {
+    background-color: #ddd;
+  }
+`;
+
+const CommandOption = styled.div`
+  width: 120px;
   height: 24px;
   display: flex;
   align-items: center;
