@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import checker from 'vite-plugin-checker';
+import genaicodeVite from 'genaicode/vite-plugin';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,6 +9,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
-  plugins: [react(), checker({ typescript: true })],
+  plugins: [react(), checker({ typescript: true }), genaicodeVite()],
   publicDir: './src/public',
 });

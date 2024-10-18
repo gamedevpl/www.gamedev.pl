@@ -108,18 +108,22 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
       {showInfoPanel && selectedUnit && (
         <UnitInfoPanel unit={selectedUnit} position={infoPanelPosition} onModifyUnit={handleUnitModify} />
       )}
-      <StartBattleButton onClick={handleStartBattle}>Start Battle</StartBattleButton>
+      <DesignerControls>
+        <StartBattleButton onClick={handleStartBattle}>Start Battle</StartBattleButton>
+      </DesignerControls>
     </DesignerContainer>
   );
 };
 
-const DEFAULT_UNITS: Unit[] = rotateUnits(balancedAssault.units.map(unit => ({
-  ...unit,
-  command: 'advance-wait' as CommandType // Set a default command
-})));
+const DEFAULT_UNITS: Unit[] = rotateUnits(
+  balancedAssault.units.map((unit) => ({
+    ...unit,
+    command: 'advance-wait' as CommandType, // Set a default command
+  })),
+);
 
 const DesignerContainer = styled.div`
-  position: absolute;
+  position: relative;
   width: 100%;
   height: 100%;
   left: 0;
@@ -134,11 +138,20 @@ const PlayerPlanContainer = styled.div`
   position: relative;
 `;
 
-const StartBattleButton = styled.button`
+const DesignerControls = styled.div`
   position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 0px;
+  left: 0px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 20px;
+  width: 200px;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+`;
+
+const StartBattleButton = styled.button`
   padding: 10px 20px;
   font-size: 16px;
   background-color: #4caf50;

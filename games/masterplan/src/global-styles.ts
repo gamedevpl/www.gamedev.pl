@@ -26,5 +26,15 @@ body {
   background-color: #242424;
   overscroll-behavior: none;
   background: radial-gradient(ellipse at center, #6B8E23 0%, #6B8E23 64%, #5b791e 100%);
+
+  > #root {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+  }
 }
 `;

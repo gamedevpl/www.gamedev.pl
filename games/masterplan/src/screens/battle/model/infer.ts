@@ -1,4 +1,4 @@
-import { FunctionDef, PromptItem } from 'genaicode/dist/ai-service/common';
+import { FunctionDef, PromptItem } from 'genaicode/ai-service/common.js';
 import { Unit } from '../../designer/designer-types';
 import { MAX_COL, MAX_ROW } from '../consts';
 import { countSoldiers } from './units-trim';
@@ -12,7 +12,7 @@ export async function generateMasterplan(
     result: 'won' | 'lost' | 'drawed';
   }[],
 ): Promise<{ reasoning: string; changes: string; name: string; units: Unit[] }> {
-  const { generateContent } = await import('genaicode/dist/ai-service/anthropic.js');
+  const { generateContent } = await import('genaicode/ai-service/anthropic.js');
   const prompt: PromptItem[] = [
     {
       type: 'systemPrompt',
