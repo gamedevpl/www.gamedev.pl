@@ -140,23 +140,26 @@ const PlayerPlanContainer = styled.div`
 
 const DesignerControls = styled.div`
   position: absolute;
-  top: 0px;
-  left: 0px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 20px;
-  width: 200px;
-  height: 100px;
+  top: 20px;
+  right: 20px;
+  border-radius: 4px;
   display: flex;
   justify-content: center;
   align-items: center;
+  pointer-events: all;
 `;
 
 const StartBattleButton = styled.button`
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #4caf50;
-  color: black;
+  padding: 8px 16px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
+  font-family: monospace;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
 `;

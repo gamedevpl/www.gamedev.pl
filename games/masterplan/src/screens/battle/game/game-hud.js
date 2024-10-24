@@ -26,14 +26,24 @@ export class GameHUD {
   }
 
   render(world) {
+    // Update timer display
     var secs = (60 - world.getTime() / 1000) << 0;
-    var ms = (1000 - (world.getTime() % 1000)) << 0;
-    this.battleTime.dataset['time'] = (secs < 10 ? '0' : '') + secs + ':' + ms;
+    var ms = ((1000 - (world.getTime() % 1000)) / 10) << 0;
+    this.battleTime.dataset['time'] = (secs < 10 ? '0' : '') + secs + ':' + (ms >= 10 ? ms : '0' + ms);
 
+    // Update balance display
     var balance = this.getBalance(world);
-    this.balanceLeft.style.width = balance * 100 + '%';
+    var leftPercentage = Math.round(balance * 100);
+    var rightPercentage = Math.round((1 - balance) * 100);
+
+    // Update left balance
+    this.balanceLeft.style.maxWidth = leftPercentage + '%';
+    this.balanceLeft.dataset['percentage'] = leftPercentage + '%';
     this.balanceLeft.dataset['winning'] = balance > 2 / 3;
-    this.balanceRight.style.width = (1 - balance) * 100 + '%';
+
+    // Update right balance
+    this.balanceRight.style.maxWidth = rightPercentage + '%';
+    this.balanceRight.dataset['percentage'] = rightPercentage + '%';
     this.balanceRight.dataset['winning'] = balance < 1 / 3;
   }
 

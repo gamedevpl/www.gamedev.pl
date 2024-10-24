@@ -37,3 +37,8 @@ export const EVENT_ARROW_DOWN_UP = eventCounter++;
 // battle
 export const EVENT_DAMAGE = eventCounter++;
 export const EVENT_DAMAGE_ARROW = eventCounter++;
+
+// battle control
+export const EVENT_BATTLE_PAUSE = eventCounter++;
+export const EVENT_BATTLE_RESUME = eventCounter++;
+export const EVENT_BATTLE_STOP = eventCounter++;

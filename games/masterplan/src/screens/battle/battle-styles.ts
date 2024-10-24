@@ -7,8 +7,40 @@ export const BattleStyles = createGlobalStyle`
   pointer-events: none;
   width: 100%;
   height: 100%;
-  display: none;
+  display: block;
   font-family: monospace;
+}
+
+#hud-top-right {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  pointer-events: all;
+}
+
+#battle-controls {
+  display: flex;
+  gap: 10px;
+
+  button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: monospace;
+    white-space: nowrap;
+    transition: background-color 0.2s ease;
+  }
+
+  button:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
 }
 
 #battle-result:empty {
@@ -18,14 +50,17 @@ export const BattleStyles = createGlobalStyle`
 #battle-result:not(:empty) div {
   width: 404px;
   height: 300px;
-  color: red;
+  color: white;
   left: 50%;
   top: 50%;
   margin: -150px -150px;
   text-align: center;
   position: absolute;
   font-size: 30px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  padding: 20px;
+  backdrop-filter: blur(5px);
 }
 
 #battle-result:not(:empty) {
@@ -34,10 +69,12 @@ export const BattleStyles = createGlobalStyle`
   display: block;
   background: rgba(0, 0, 0, 0.3);
   position: fixed;
+  top: 0;
+  left: 0;
 }
 
 #battle-result span.result {
-  color: black;
+  color: white;
   font-weight: bold;
   animation: blinker 1s linear infinite;
 }
@@ -76,65 +113,103 @@ export const BattleStyles = createGlobalStyle`
 }
 
 #battle-stats {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: white;
+  min-width: 300px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+#battle-time {
+  font-size: 14px;
+  color: white;
+  font-family: monospace;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  min-width: 100px;
 }
 
 #battle-time:before {
   content: 'Timer: ' attr(data-time);
   display: block;
-  font-size: 30px;
-  margin-bottom: 10px;
-  color: white;
 }
 
-#battle-balance:before {
-  display: block;
-  content: "Who is winning?";
-  font-size: 30px;
-  width: 300px;
-  color: white;
-}
-
-#battle-balance-left {
-  height: 30px;
-  width: 50%;
-  background: red;
-  float: left;
-}
-
-
-#battle-balance-right {
-  height: 30px;
-  width: 50%;
-  background: #0fde0f;
-  float: right;
+/* Battle Balance Styles */
+#battle-balance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
 }
 
 #battle-balance-left, #battle-balance-right {
-  overflow: hidden;
-  text-overflow: 'hidden';
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  transition: width 0.3s ease-in-out;
+  position: relative;
 }
 
-#battle-balance-left[data-winning=true], #battle-balance-right[data-winning=true] {
-  border: 1px solid yellow;
-  box-sizing: border-box;
+#battle-balance-left {
+  background: linear-gradient(90deg, #ff0000, #ff4444);
 }
 
-#battle-balance-left[data-username]:before, #battle-balance-right[data-username]:before {
-  display: block;
-  content: attr(data-username);
-  margin-left: 3px;
+#battle-balance-right {
+  background: linear-gradient(90deg, #44ff44, #00ff00);
 }
 
-#battle-balance-left[data-winning=true]:before, #battle-balance-right[data-winning=true]:before {
-  display: block;
-  content: "Winning!";
-  margin-left: 3px;
+#battle-balance-left:after, #battle-balance-right:after {
+  content: attr(data-percentage);
+  position: absolute;
+  top: -18px;
+  font-size: 12px;
+  color: white;
 }
 
+#battle-balance-left:after {
+  right: 0;
+}
 
+#battle-balance-right:after {
+  left: 0;
+}
+
+#battle-balance-left[data-winning="true"] {
+  animation: pulse-red 2s infinite;
+}
+
+#battle-balance-right[data-winning="true"] {
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes pulse-green {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
 
 canvas#layer-default {
   max-width: 100vw;

@@ -11,6 +11,9 @@ import {
   EVENT_DAMAGE,
   EVENT_DAMAGE_ARROW,
   EVENT_MOUSE_CLICK,
+  EVENT_BATTLE_PAUSE,
+  EVENT_BATTLE_RESUME,
+  EVENT_BATTLE_STOP,
 } from '../events';
 import { renderGame } from '../game/game-render';
 import { VMath } from '../util/vmath';
@@ -70,11 +73,12 @@ function stateGameBattle(world: GameWorld, worldRender: GameWorldRender, HUD: Ga
     },
   };
   const damageCount = JSON.parse(JSON.stringify(damageMap));
+  let isPaused = false;
 
   return function GameBattleHandler(eventType: number, eventObject: unknown) {
     if (eventType == EVENT_RAF) {
       let elapsedTime = Math.min(eventObject as number, 1000);
-      while (elapsedTime > 0) {
+      while (elapsedTime > 0 && !isPaused) {
         elapsedTime = world.update(elapsedTime);
       }
 
@@ -96,6 +100,20 @@ function stateGameBattle(world: GameWorld, worldRender: GameWorldRender, HUD: Ga
       const { damage, soldier } = eventObject as { damage: number; soldier: SoldierObject };
       damageMap[eventType][soldier.color] += damage;
       damageCount[eventType][soldier.color]++;
+    }
+
+    if (eventType === EVENT_BATTLE_PAUSE) {
+      isPaused = true;
+    }
+
+    if (eventType === EVENT_BATTLE_RESUME) {
+      isPaused = false;
+    }
+
+    if (eventType === EVENT_BATTLE_STOP) {
+      freeCanvas(LAYER_DEFAULT);
+      HUD.destroy();
+      return stateInit();
     }
   };
 }
