@@ -208,8 +208,34 @@ const StartBattleButton = styled.button`
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  animation: shake 5s cubic-bezier(.36,.07,.19,.97) infinite, grow 5s ease-in-out infinite;
+  transform-origin: center;
 
   &:hover {
     background: rgba(0, 0, 0, 0.8);
+  }
+
+  @keyframes shake {
+    0%, 92%, 96% {
+      transform: translate(0, 0) scale(1);
+    }
+    93% {
+      transform: translate(-2px, 0) scale(1.02);
+    }
+    94% {
+      transform: translate(2px, 0) scale(1.02);
+    }
+    95% {
+      transform: translate(-2px, 0) scale(1.02);
+    }
+  }
+
+  @keyframes grow {
+    0%, 92%, 100% {
+      transform: scale(1);
+    }
+    94% {
+      transform: scale(1.03);
+    }
   }
 `;
