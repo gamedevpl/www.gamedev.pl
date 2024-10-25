@@ -42,3 +42,6 @@ export const EVENT_DAMAGE_ARROW = eventCounter++;
 export const EVENT_BATTLE_PAUSE = eventCounter++;
 export const EVENT_BATTLE_RESUME = eventCounter++;
 export const EVENT_BATTLE_STOP = eventCounter++;
+
+// fast finish
+export const EVENT_BATTLE_FAST_FINISH = eventCounter++;

@@ -16,6 +16,7 @@ import {
   EVENT_BATTLE_PAUSE,
   EVENT_BATTLE_RESUME,
   EVENT_BATTLE_STOP,
+  EVENT_BATTLE_FAST_FINISH,
 } from './events';
 import { useRafLoop } from 'react-use';
 import { BattleControls } from './battle-controls';
@@ -107,6 +108,10 @@ export function BattleScreen({
     onBattleEnd();
   };
 
+  const handleFastFinish = () => {
+    setTimeout(() => updateState(EVENT_BATTLE_FAST_FINISH));
+  };
+
   return (
     <>
       <BattleStyles />
@@ -126,6 +131,7 @@ export function BattleScreen({
           <div id="battle-controls">
             <button onClick={handlePauseResume}>{isPaused ? 'Resume' : 'Pause'}</button>
             <button onClick={handleStop}>Exit</button>
+            <button onClick={handleFastFinish}>Fast Finish</button>
           </div>
         </div>
       </div>

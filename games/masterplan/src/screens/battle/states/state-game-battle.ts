@@ -14,6 +14,7 @@ import {
   EVENT_BATTLE_PAUSE,
   EVENT_BATTLE_RESUME,
   EVENT_BATTLE_STOP,
+  EVENT_BATTLE_FAST_FINISH,
 } from '../events';
 import { renderGame } from '../game/game-render';
 import { VMath } from '../util/vmath';
@@ -83,6 +84,32 @@ function stateGameBattle(world: GameWorld, worldRender: GameWorldRender, HUD: Ga
       }
 
       renderGame(world, worldRender);
+    }
+
+    if (eventType === EVENT_BATTLE_FAST_FINISH) {
+      // Run simulation until completion without rendering
+      const UPDATE_STEP = 16; // 60fps equivalent step
+      let simulationTime = world.getTime();
+
+      while (simulationTime <= 60000) {
+        // Max 60 seconds as per the original time limit
+        world.update(UPDATE_STEP);
+        simulationTime += UPDATE_STEP;
+
+        const balance = world.getBalance();
+
+        // Check win conditions
+        if (balance === 0 || balance === 1 || simulationTime >= 60000) {
+          // Render final state
+          renderGame(world, worldRender);
+          HUD.render(world);
+
+          // Transition to end state
+          return stateGameBattleEnd(world, worldRender, HUD);
+        }
+      }
+
+      return stateGameBattleEnd(world, worldRender, HUD);
     }
 
     if (eventType === EVENT_INTERVAL_100MS) {
