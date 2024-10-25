@@ -21,6 +21,66 @@ function flattenInput(input: ModelInput): number[][][] {
   return [input.data.map((row) => row.flat())];
 }
 
+function flattenOutput(output: ModelOutput): number[][][] {
+  return [output.data.map((row) => row.flat())];
+}
+
+function createTrainingData(inputs: ModelInput[], outputs: ModelOutput[]): [tf.Tensor3D, tf.Tensor3D] {
+  const flattenedInputs = inputs.map(flattenInput).flat();
+  const flattenedOutputs = outputs.map(flattenOutput).flat();
+
+  const xs = tf.tensor3d(flattenedInputs);
+  const ys = tf.tensor3d(flattenedOutputs);
+
+  return [xs, ys];
+}
+
+export async function train(
+  inputs: ModelInput[],
+  outputs: ModelOutput[],
+  options: {
+    epochs?: number;
+    batchSize?: number;
+    learningRate?: number;
+    onProgress?: (epoch: number, logs: tf.Logs) => void;
+  } = {},
+): Promise<void> {
+  if (!model) {
+    await loadModel();
+  }
+
+  if (!model) {
+    throw new Error('Model not loaded. Call loadModel() first.');
+  }
+
+  const { epochs = 5, batchSize = 32, learningRate = 0.001 } = options;
+
+  // Prepare training data
+  const [xs, ys] = createTrainingData(inputs, outputs);
+
+  try {
+    // Configure the model for training
+    model.compile({
+      optimizer: tf.train.adam(learningRate),
+      loss: 'meanSquaredError',
+      metrics: ['accuracy'],
+    });
+
+    // Train the model
+    await model.fit(xs, ys, {
+      epochs,
+      batchSize,
+    });
+  } catch (error) {
+    console.error('Training failed:', error);
+    throw error;
+  } finally {
+    // Clean up tensors
+    xs.dispose();
+    ys.dispose();
+  }
+}
+
 export async function predict(input: ModelInput): Promise<ModelOutput> {
   if (!model) {
     await loadModel();

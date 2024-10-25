@@ -127,7 +127,9 @@ function stateGameBattleEnd(world: GameWorld, worldRender: GameWorldRender, HUD:
     if (eventType === EVENT_MOUSE_CLICK) {
       freeCanvas(LAYER_DEFAULT);
       HUD.destroy();
-      dispatchCustomEvent('battleEnd');
+      dispatchCustomEvent('battleEnd', {
+        winner: world.getBalance() > 0.7 ? 'player' : world.getBalance() < 0.3 ? 'opposition' : 'draw',
+      });
       return stateInit();
     }
   };

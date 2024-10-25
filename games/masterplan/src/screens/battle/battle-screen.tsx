@@ -20,6 +20,7 @@ import {
 import { useRafLoop } from 'react-use';
 import { BattleControls } from './battle-controls';
 import { TerrainData } from './game/terrain/terrain-generator';
+import { trainModel } from './battle-train';
 
 export function BattleScreen({
   onBattleEnd,
@@ -67,7 +68,11 @@ export function BattleScreen({
     if (intervalsRef.current.interval1s) clearInterval(intervalsRef.current.interval1s);
   };
 
-  useCustomEvent('battleEnd', () => {
+  useCustomEvent('battleEnd', ({ winner }: { winner: 'player' | 'opposition' | 'draw' }) => {
+    if (winner !== 'draw') {
+      trainModel(winner, playerUnits, oppositionUnits, terrainData);
+    }
+
     onBattleEnd();
   });
 

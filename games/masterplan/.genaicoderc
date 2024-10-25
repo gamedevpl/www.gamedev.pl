@@ -9,5 +9,8 @@
     "tfmodel/model.json",
     "result-chain.cache.json",
     "simulate.cache.json"
+  ],
+  "plugins": [
+    "./src/testplugin.js"
   ]
 }
