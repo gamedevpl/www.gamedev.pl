@@ -8,7 +8,6 @@ export const BattleStyles = createGlobalStyle`
   width: 100%;
   height: 100%;
   display: block;
-  font-family: monospace;
 }
 
 #hud-top-right {
@@ -33,7 +32,6 @@ export const BattleStyles = createGlobalStyle`
     color: white;
     cursor: pointer;
     font-size: 14px;
-    font-family: monospace;
     white-space: nowrap;
     transition: background-color 0.2s ease;
   }
@@ -116,7 +114,6 @@ export const BattleStyles = createGlobalStyle`
   background: rgba(0, 0, 0, 0.7);
   padding: 6px 16px;
   border-radius: 4px;
-  font-family: monospace;
   color: white;
   min-width: 300px;
   backdrop-filter: blur(5px);
@@ -129,13 +126,12 @@ export const BattleStyles = createGlobalStyle`
 #battle-time {
   font-size: 14px;
   color: white;
-  font-family: monospace;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   min-width: 100px;
 }
 
 #battle-time:before {
-  content: 'Timer: ' attr(data-time);
+  content: attr(data-time);
   display: block;
 }
 

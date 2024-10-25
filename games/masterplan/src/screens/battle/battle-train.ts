@@ -3,7 +3,7 @@ import { unitsToModelInput } from './model/convert-input';
 import { unitsToModelOutput } from './model/convert-output';
 import { ModelInput, ModelOutput } from './model/types';
 import { TerrainData } from './game/terrain/terrain-generator';
-import { Unit } from '../designer/designer-types';
+import { rotateUnits, Unit } from '../designer/designer-types';
 
 // Function to train the model with battle results
 export async function trainModel(
@@ -41,11 +41,11 @@ function prepareBattleDataForTraining(
   const outputs: ModelOutput[] = [];
 
   // Convert initial state to model input
-  const input = unitsToModelInput(winner === 'player' ? oppositionUnits : playerUnits, terrainData);
+  const input = unitsToModelInput(winner === 'player' ? rotateUnits(oppositionUnits) : playerUnits, terrainData);
   inputs.push(input);
 
   // Convert final state to model output (winning configuration)
-  const winningUnits = winner === 'player' ? playerUnits : oppositionUnits;
+  const winningUnits = winner === 'player' ? rotateUnits(playerUnits) : oppositionUnits;
   const output = unitsToModelOutput(winningUnits);
   outputs.push(output);
 

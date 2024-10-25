@@ -16,6 +16,10 @@ export const GlobalStyles = createGlobalStyle`
   -moz-osx-font-smoothing: grayscale;
 }
 
+input, button {
+  font-family: 'Press Start 2P', system-ui;
+}
+
 body {
   margin: 0;
   padding: 0;

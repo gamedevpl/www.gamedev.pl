@@ -157,7 +157,6 @@ const StartBattleButton = styled.button`
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-family: monospace;
 
   &:hover {
     background: rgba(0, 0, 0, 0.8);
