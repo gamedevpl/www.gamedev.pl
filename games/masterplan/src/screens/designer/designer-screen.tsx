@@ -23,6 +23,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
   const [oppositionUnits, setOppositionUnits] = useState<Unit[]>([]);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [infoPanelPosition, setInfoPanelPosition] = useState({ x: 0, y: 0 });
+  const [hasInteracted, setHasInteracted] = useState(false);
   const terrainData = useMemo<TerrainData>(() => {
     return generateTerrain(SOLDIER_WIDTH);
   }, []);
@@ -30,6 +31,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   const { selectedUnit, handleUnitSelect, setSelectedUnit } = useUnitSelection(playerUnits);
   const { handleDragStart, handleDragMove, handleDragEnd, isDragging } = useUnitDrag(playerUnits, setPlayerUnits);
+
   const { generateOppositionPlan, updateOppositionPlan } = useOppositionAI();
 
   useEffect(() => {
@@ -50,9 +52,18 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   const handleCellClick = useCallback(
     (col: number, row: number) => {
+      setHasInteracted(true);
       handleUnitSelect(col, row);
     },
     [handleUnitSelect],
+  );
+
+  const handlePlayerDragStart = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+      setHasInteracted(true);
+      handleDragStart(e);
+    },
+    [handleDragStart],
   );
 
   useEffect(() => {
@@ -84,7 +95,7 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
 
   return (
     <DesignerContainer ref={containerRef}>
-      <OppositionPlan units={oppositionUnits} terrainData={terrainData} />
+      <OppositionPlan units={oppositionUnits} terrainData={terrainData} hasInteracted={hasInteracted} />
       <PlayerPlanContainer>
         <CanvasGrid
           isPlayerArea={true}
@@ -95,15 +106,20 @@ export const DesignerScreen: React.FC<DesignerScreenProps> = ({ onStartBattle, i
           units={playerUnits}
           selectedUnitId={selectedUnit?.id || null}
           onCellClick={handleCellClick}
-          onMouseDown={handleDragStart}
+          onMouseDown={handlePlayerDragStart}
           onMouseMove={handleDragMove}
           onMouseUp={handleDragEnd}
-          onTouchStart={handleDragStart}
+          onTouchStart={handlePlayerDragStart}
           onTouchMove={handleDragMove}
           onTouchEnd={handleDragEnd}
           onModifyUnit={handleUnitModify}
           terrainData={terrainData}
         />
+        {!hasInteracted && (
+          <EditableAreaOverlay>
+            <OverlayText>Click or drag units to edit your battle plan</OverlayText>
+          </EditableAreaOverlay>
+        )}
       </PlayerPlanContainer>
       {showInfoPanel && selectedUnit && (
         <UnitInfoPanel unit={selectedUnit} position={infoPanelPosition} onModifyUnit={handleUnitModify} />
@@ -136,6 +152,41 @@ const DesignerContainer = styled.div`
 const PlayerPlanContainer = styled.div`
   flex: 1;
   position: relative;
+`;
+
+const EditableAreaOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  animation: pulse 2s infinite;
+
+  @keyframes pulse {
+    0% {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    50% {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    100% {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+`;
+
+const OverlayText = styled.div`
+  color: white;
+  font-size: 24px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 16px 32px;
+  border-radius: 8px;
 `;
 
 const DesignerControls = styled.div`

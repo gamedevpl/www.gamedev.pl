@@ -104,6 +104,7 @@ export const BattleStyles = createGlobalStyle`
   font-size: 15px;
   bottom: 5px;
   left: 5px;
+  width: 100%;
 }
 
 #battle-result span {
@@ -127,7 +128,6 @@ export const BattleStyles = createGlobalStyle`
   font-size: 14px;
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  min-width: 100px;
 }
 
 #battle-time:before {

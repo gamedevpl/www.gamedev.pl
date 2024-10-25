@@ -206,9 +206,15 @@ CanvasGrid.displayName = 'CanvasGrid';
 
 const CanvasContainer = styled.canvas`
   position: absolute;
-  transform: translate(-50%, -50%);
+  &[data-is-player-area='false'] {
+    transform: translateX(-50%);
+    bottom: 0;
+  }
+  &[data-is-player-area='true'] {
+    transform: translateX(-50%);
+    top: 0;
+  }
   left: 50%;
-  top: 50%;
   max-width: 90vw;
   max-height: 50vh;
 `;

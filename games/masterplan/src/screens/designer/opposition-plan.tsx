@@ -8,9 +8,10 @@ import { TerrainData } from '../battle/game/terrain/terrain-generator';
 interface OppositionPlanProps {
   units: Unit[];
   terrainData: TerrainData;
+  hasInteracted?: boolean;
 }
 
-export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units, terrainData }) => {
+export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units, terrainData, hasInteracted = true }) => {
   // Dummy handlers for CanvasGrid props (no interactions allowed for opposition plan)
   const dummyHandler = () => {};
 
@@ -34,6 +35,11 @@ export const OppositionPlan: React.FC<OppositionPlanProps> = ({ units, terrainDa
         isPlayerArea={false}
         terrainData={terrainData}
       />
+      {!hasInteracted && (
+        <OppositionOverlay>
+          <OverlayText>Enemy battle plan</OverlayText>
+        </OppositionOverlay>
+      )}
     </OppositionPlanContainer>
   );
 };
@@ -44,9 +50,37 @@ const OppositionPlanContainer = styled.div`
   position: relative;
 `;
 
-// TODO: Implement more advanced AI for opposition plan generation
-// This could include:
-// - Analyzing the player's plan and adapting the opposition's strategy
-// - Implementing different difficulty levels
-// - Adding randomness to make each game unique
-// - Considering various battle strategies and unit combinations
+const OppositionOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 0, 0, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  animation: pulseRed 2s infinite;
+
+  @keyframes pulseRed {
+    0% {
+      background: rgba(255, 0, 0, 0.1);
+    }
+    50% {
+      background: rgba(255, 0, 0, 0.2);
+    }
+    100% {
+      background: rgba(255, 0, 0, 0.1);
+    }
+  }
+`;
+
+const OverlayText = styled.div`
+  color: white;
+  font-size: 24px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 16px 32px;
+  border-radius: 8px;
+`;
