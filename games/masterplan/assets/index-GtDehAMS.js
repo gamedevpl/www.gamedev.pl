@@ -67,6 +67,8 @@ body {
   background-color: #242424;
   overscroll-behavior: none;
   background: radial-gradient(ellipse at center, #6B8E23 0%, #6B8E23 64%, #5b791e 100%);
+  touch-action: none;
+  user-select: none;
 
   > #root {
     display: flex;
@@ -258,8 +260,7 @@ body {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   transition: all 0.3s ease-out;
-  touch-action: none;
-  user-select: none;
+
   box-sizing: border-box;
 `,uP=Yt.h3`
   margin: 0 0 16px 0;
