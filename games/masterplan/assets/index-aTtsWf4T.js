@@ -199,8 +199,16 @@ body {
   border-radius: 8px;
 `,rP=({onStartBattle:t})=>pe.jsx(oP,{children:pe.jsx(iP,{onClick:t,children:"Start Battle"})}),oP=Yt.div`
   position: absolute;
+
   top: 20px;
-  right: 20px;
+  @media (orientation: portrait) {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  @media (orientation: landscape) {
+    right: 20px;
+  }
+
   border-radius: 4px;
   display: flex;
   justify-content: center;
@@ -209,6 +217,9 @@ body {
 `,iP=Yt.button`
   padding: 8px 16px;
   font-size: 14px;
+  @media (pointer: none), (pointer: coarse) {
+    font-size: 18px;
+  }
   background: rgba(0, 0, 0, 0.7);
   color: white;
   border: none;
@@ -20599,11 +20610,18 @@ return a / b;`,Rre=`
 #hud-top-right {
   position: fixed;
   top: 20px;
-  right: 20px;
   display: flex;
-  align-items: flex-start;
   gap: 16px;
   pointer-events: all;
+
+  @media (orientation: landscape) {
+    right: 20px;
+    align-items: flex-start;
+  }
+  @media (orientation: portrait) {
+    justify-content: space-around;
+    width: 100%;
+  }
 }
 
 #battle-controls {
