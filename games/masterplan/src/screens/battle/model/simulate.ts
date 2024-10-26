@@ -1,4 +1,5 @@
 import { Unit } from '../../designer/designer-types';
+import { MIN_TICK } from '../consts';
 import { GameWorld } from '../game/game-world';
 import { TerrainData } from '../game/terrain/terrain-generator';
 import { initCurrentState } from '../states';
@@ -28,7 +29,7 @@ export function simulate(plan: Unit[], counterPlan: Unit[], terrainData: Terrain
   createMasterPlan(world, -1, '#00ff00', counterPlan);
 
   for (let i = 0; i < 60 * 1000; i += 10) {
-    world.update(10);
+    world.update(MIN_TICK);
     if (i % 1000 === 0 && [0, 1].includes(world.getBalance())) {
       break;
     }

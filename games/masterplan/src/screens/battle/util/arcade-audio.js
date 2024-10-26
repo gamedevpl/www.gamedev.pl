@@ -3,6 +3,7 @@ import { jsfxr } from '../lib/jsfxr';
 const isBrowser = typeof window !== 'undefined';
 export class ArcadeAudio {
   constructor() {
+    this.enabled = true;
     this.sounds = {};
     if (isBrowser) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -34,7 +35,7 @@ export class ArcadeAudio {
   }
 
   play(key) {
-    if (!isBrowser) {
+    if (!isBrowser || !this.enabled) {
       return;
     }
 
@@ -66,6 +67,10 @@ export class ArcadeAudio {
       bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes.buffer;
+  }
+
+  setEnabled(enabled) {
+    this.enabled = enabled;
   }
 }
 

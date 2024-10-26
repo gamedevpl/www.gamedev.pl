@@ -18,12 +18,13 @@ import {
 } from '../events';
 import { renderGame } from '../game/game-render';
 import { VMath } from '../util/vmath';
-import { LAYER_DEFAULT, EDGE_RADIUS } from '../consts';
+import { LAYER_DEFAULT, EDGE_RADIUS, MIN_TICK } from '../consts';
 import { dispatchCustomEvent } from '../../../../../nukes/src/events';
 import { stateInit } from '../states';
 import { Unit } from '../../designer/designer-types';
 import { TerrainData } from '../game/terrain/terrain-generator';
 import { GameWorldRender } from '../game/game-world-render';
+import { aa } from '../util/arcade-audio';
 
 export function createMasterPlan(world: GameWorld, direction: 1 | -1, color: string, definitions: Unit[]) {
   const angle = (Math.PI / 2) * direction;
@@ -49,8 +50,9 @@ export function stateGameBattleInit(definitions: Unit[], definitionsEnemy: Unit[
   createMasterPlan(world, -1, '#00ff00', definitionsEnemy);
 
   const HUD = new GameHUD(world);
-
   HUD.setNames('Player', 'Computer');
+
+  aa.setEnabled(true);
 
   return function GameBattleInitHandler(eventType: number) {
     renderGame(world, worldRender);
@@ -87,19 +89,15 @@ function stateGameBattle(world: GameWorld, worldRender: GameWorldRender, HUD: Ga
     }
 
     if (eventType === EVENT_BATTLE_FAST_FINISH) {
-      // Run simulation until completion without rendering
-      const UPDATE_STEP = 16; // 60fps equivalent step
-      let simulationTime = world.getTime();
-
-      while (simulationTime <= 60000) {
+      aa.setEnabled(false);
+      while (world.getTime() <= 60000) {
         // Max 60 seconds as per the original time limit
-        world.update(UPDATE_STEP);
-        simulationTime += UPDATE_STEP;
+        world.update(MIN_TICK);
 
         const balance = world.getBalance();
 
         // Check win conditions
-        if (balance === 0 || balance === 1 || simulationTime >= 60000) {
+        if (balance === 0 || balance === 1 || world.getTime() >= 60000) {
           // Render final state
           renderGame(world, worldRender);
           HUD.render(world);
