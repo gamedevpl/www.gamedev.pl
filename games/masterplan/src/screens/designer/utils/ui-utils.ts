@@ -30,26 +30,25 @@ export function calculatePanelPosition(
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
 
-  const scaleX = rect.width / canvas.width;
-  const scaleY = rect.height / canvas.height;
+  const scale = viewportWidth > viewportHeight ? rect.width / canvas.width : rect.height / canvas.height;
 
   // Calculate unit center position in screen coordinates
-  const unitCenterX = (unit.col + MAX_COL / 2 + unit.sizeCol / 2) * cellWidth * scaleX;
-  const unitCenterY = (unit.row + MAX_ROW / 2 + unit.sizeRow / 2) * cellHeight * scaleY;
+  const unitCenterX = (unit.col + MAX_COL / 2 + unit.sizeCol / 2) * cellWidth * scale;
+  const unitCenterY = (unit.row + MAX_ROW / 2 + unit.sizeRow / 2) * cellHeight * scale;
   const screenX = rect.left + unitCenterX;
   const screenY = rect.top + unitCenterY;
 
   // Determine if unit is on the left or right half of the screen
   const isUnitOnLeftHalf = screenX < viewportWidth / 2;
-  const isUnitOnAboveHalf = screenY < viewportHeight * 0.75;
+  const isUnitOnAboveHalf = screenY < viewportHeight / 2;
 
   // Calculate x position based on which half the unit is on
-  const x = isUnitOnLeftHalf
-    ? screenX + (unit.sizeCol / 2) * cellWidth * scaleX + MARGIN // Right side
-    : screenX - (unit.sizeCol / 2) * cellWidth * scaleX - panelDimensions.width - MARGIN; // Left side
+  const x = !isUnitOnLeftHalf
+    ? screenX + (unit.sizeCol / 2) * cellWidth * scale + MARGIN // Right side
+    : screenX - (unit.sizeCol / 2) * cellWidth * scale - panelDimensions.width - MARGIN; // Left side
 
   // Calculate y position at bottom with margin)
-  const y = isUnitOnAboveHalf
+  const y = !isUnitOnAboveHalf
     ? screenY + panelDimensions.height // Below
     : screenY - panelDimensions.height; // Above
 

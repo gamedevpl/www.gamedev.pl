@@ -116,8 +116,8 @@ export const InfoPanelContainer: React.FC<InfoPanelContainerProps> = ({ unit, on
       <PanelSection>
         <Label>Fomration:</Label>
         <Select value={unit.command} onChange={handleFormationChange}>
-          {getFormations(unit.sizeCol, unit.sizeRow).map((formation) => (
-            <option value={`${formation.sizeCol}x${formation.sizeRow}`}>
+          {getFormations(unit.sizeCol, unit.sizeRow).map((formation, idx) => (
+            <option key={idx} value={`${formation.sizeCol}x${formation.sizeRow}`}>
               {formation.sizeCol}x{formation.sizeRow}
             </option>
           ))}

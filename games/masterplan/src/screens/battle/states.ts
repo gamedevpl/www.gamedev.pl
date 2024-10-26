@@ -24,14 +24,14 @@ type StateHandler<T = unknown> = (eventType: number, eventObject: T) => StateHan
 /**
  * Event processing
  */
-let currentState: StateHandler;
+let currentState: StateHandler | undefined;
 
 export function initCurrentState() {
   currentState = stateInit() as StateHandler;
 }
 
 export function updateState(eventType: number, eventObject?: unknown) {
-  const nextState = currentState(eventType, eventObject);
+  const nextState = currentState?.(eventType, eventObject);
 
   if (!nextState) {
     return;
@@ -39,7 +39,7 @@ export function updateState(eventType: number, eventObject?: unknown) {
 
   if (nextState !== currentState) {
     if (DEBUG) {
-      console.log('Transition from ' + currentState.name + ' to ' + nextState.name);
+      console.log('Transition from ' + currentState?.name + ' to ' + nextState.name);
     }
 
     currentState = nextState;

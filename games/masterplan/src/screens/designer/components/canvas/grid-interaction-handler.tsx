@@ -125,7 +125,6 @@ export class GridInteractionHandler {
     event: React.TouchEvent<HTMLCanvasElement>,
     handler: (event: React.TouchEvent<HTMLCanvasElement>) => void,
   ): void {
-    event.preventDefault();
     handler(event);
   }
 

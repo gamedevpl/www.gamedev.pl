@@ -215,8 +215,8 @@ export const BattleStyles = createGlobalStyle`
 }
 
 canvas#layer-default {
-  max-width: 100vw;
-  max-height: 100vh;
+  max-width: 100%;
+  max-height: 100%;
   position: absolute;
   pointer-events: none;
   z-index: 1;

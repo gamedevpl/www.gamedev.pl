@@ -61,19 +61,6 @@ const OppositionOverlay = styled.div`
   justify-content: center;
   align-items: center;
   pointer-events: none;
-  animation: pulseRed 2s infinite;
-
-  @keyframes pulseRed {
-    0% {
-      background: rgba(255, 0, 0, 0.1);
-    }
-    50% {
-      background: rgba(255, 0, 0, 0.2);
-    }
-    100% {
-      background: rgba(255, 0, 0, 0.1);
-    }
-  }
 `;
 
 const OverlayText = styled.div`

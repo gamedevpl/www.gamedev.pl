@@ -134,16 +134,16 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 CanvasGrid.displayName = 'CanvasGrid';
 
 const CanvasContainer = styled.canvas`
-  position: absolute;
+  position: fixed;
   &[data-is-player-area='false'] {
     transform: translateX(-50%);
-    bottom: 0;
+    bottom: 50%;
   }
   &[data-is-player-area='true'] {
     transform: translateX(-50%);
-    top: 0;
+    top: 50%;
   }
   left: 50%;
-  max-width: 90vw;
-  max-height: 50vh;
+  max-width: 100%;
+  max-height: 50%;
 `;

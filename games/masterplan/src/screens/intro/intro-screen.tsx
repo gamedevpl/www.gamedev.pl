@@ -6,7 +6,7 @@ const IntroContainer = styled.div`
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  height: 100%;
   background-color: #242424;
   color: #ffffff;
   width: 100%;
