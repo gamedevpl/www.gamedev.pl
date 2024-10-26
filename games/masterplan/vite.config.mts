@@ -14,6 +14,7 @@ export default defineConfig({
     checker({ typescript: true }),
     genaicodeVite({
       imagen: 'vertex-ai',
+      disableInitialLint: true,
     }),
   ],
   publicDir: './src/public',

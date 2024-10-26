@@ -49,3 +49,15 @@ export function calculateSpreadScore(units: Unit[]): number {
 
   return avgDistance / maxDistance; // Normalized to [0, 1]
 }
+
+export function getFormations(sizeCol: number, sizeRow: number) {
+  const totalSize = sizeCol * sizeRow;
+  return [
+    { sizeCol: totalSize, sizeRow: 1 },
+    ...Array.from({ length: totalSize - 1 }, (_, i) => ({
+      sizeCol: i + 1,
+      sizeRow: Math.ceil(totalSize / (i + 1)),
+    })).filter((formation) => formation.sizeCol * formation.sizeRow <= totalSize),
+    { sizeCol: 1, sizeRow: totalSize },
+  ];
+}
