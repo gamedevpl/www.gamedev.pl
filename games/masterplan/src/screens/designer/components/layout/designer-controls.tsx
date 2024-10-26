@@ -15,8 +15,16 @@ export const DesignerControls: React.FC<DesignerControlsProps> = ({ onStartBattl
 
 const ControlsContainer = styled.div`
   position: absolute;
+
   top: 20px;
-  right: 20px;
+  @media (orientation: portrait) {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  @media (orientation: landscape) {
+    right: 20px;
+  }
+
   border-radius: 4px;
   display: flex;
   justify-content: center;
@@ -27,6 +35,9 @@ const ControlsContainer = styled.div`
 const StartBattleButton = styled.button`
   padding: 8px 16px;
   font-size: 14px;
+  @media (pointer: none), (pointer: coarse) {
+    font-size: 18px;
+  }
   background: rgba(0, 0, 0, 0.7);
   color: white;
   border: none;

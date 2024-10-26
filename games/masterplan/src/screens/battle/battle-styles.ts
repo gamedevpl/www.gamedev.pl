@@ -13,11 +13,18 @@ export const BattleStyles = createGlobalStyle`
 #hud-top-right {
   position: fixed;
   top: 20px;
-  right: 20px;
   display: flex;
-  align-items: flex-start;
   gap: 16px;
   pointer-events: all;
+
+  @media (orientation: landscape) {
+    right: 20px;
+    align-items: flex-start;
+  }
+  @media (orientation: portrait) {
+    justify-content: space-around;
+    width: 100%;
+  }
 }
 
 #battle-controls {
