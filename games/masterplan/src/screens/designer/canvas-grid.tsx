@@ -52,7 +52,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
     terrainData,
   }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animationFrameRef = useRef<number>();
     const [unitImages, setUnitImages] = useState<Record<string, HTMLImageElement>>({});
+    const [timestamp, setTimestamp] = useState<number>(0);
 
     useEffect(() => {
       const loadUnitImages = async () => {
@@ -68,6 +70,22 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
       };
 
       loadUnitImages();
+    }, []);
+
+    // Animation loop for the border animation
+    useEffect(() => {
+      const animate = (time: number) => {
+        setTimestamp(time);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
     }, []);
 
     const drawGrid = useCallback(
@@ -108,6 +126,36 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
       [width, height, cellWidth, cellHeight],
     );
 
+    const drawAnimatedBorder = useCallback(
+      (
+        ctx: CanvasRenderingContext2D,
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        timestamp: number,
+        selected: boolean,
+      ) => {
+        ctx.save();
+
+        // Set up the animated dotted line pattern
+        const dashLength = 5;
+        const dashGap = 3;
+        const dashOffset = (timestamp / 50) % (dashLength + dashGap);
+
+        ctx.strokeStyle = selected ? '#FFFFFF' : '#FFD700'; // Yellowish color
+        ctx.lineWidth = 2;
+        ctx.setLineDash([dashLength, dashGap]);
+        ctx.lineDashOffset = -dashOffset;
+
+        // Draw the animated border
+        ctx.strokeRect(x, y, width, height);
+
+        ctx.restore();
+      },
+      [],
+    );
+
     const drawUnits = useCallback(
       (ctx: CanvasRenderingContext2D) => {
         units.forEach((unit) => {
@@ -130,11 +178,9 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
             ctx.fillRect(x, y, unitWidth, unitHeight);
           }
 
-          // Draw border for selected unit (only in player area)
-          if (isPlayerArea && unit.id === selectedUnitId) {
-            ctx.strokeStyle = 'yellow';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, unitWidth, unitHeight);
+          // Draw animated border for player units
+          if (isPlayerArea) {
+            drawAnimatedBorder(ctx, x, y, unitWidth, unitHeight, timestamp, unit.id === selectedUnitId);
           }
 
           // Draw unit type text
@@ -145,7 +191,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
           ctx.fillText(unit.type, x + unitWidth / 2, y + unitHeight / 2);
         });
       },
-      [units, selectedUnitId, unitImages, cellWidth, cellHeight, isPlayerArea],
+      [units, selectedUnitId, unitImages, cellWidth, cellHeight, isPlayerArea, timestamp, drawAnimatedBorder],
     );
 
     useEffect(() => {
@@ -163,7 +209,19 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
 
       // Draw the units
       drawUnits(ctx);
-    }, [width, height, cellWidth, cellHeight, units, selectedUnitId, unitImages, drawGrid, drawUnits, terrainData]);
+    }, [
+      width,
+      height,
+      cellWidth,
+      cellHeight,
+      units,
+      selectedUnitId,
+      unitImages,
+      drawGrid,
+      drawUnits,
+      terrainData,
+      timestamp,
+    ]);
 
     const handleCanvasClick = useCallback(
       (event: React.MouseEvent<HTMLCanvasElement>) => {
