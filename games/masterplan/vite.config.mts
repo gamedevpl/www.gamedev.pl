@@ -9,6 +9,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
-  plugins: [react(), checker({ typescript: true }), genaicodeVite()],
+  plugins: [
+    react(),
+    checker({ typescript: true }),
+    genaicodeVite({
+      imagen: 'vertex-ai',
+    }),
+  ],
   publicDir: './src/public',
 });
