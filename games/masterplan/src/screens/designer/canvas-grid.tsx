@@ -94,6 +94,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = React.memo(
         cellWidth,
         cellHeight,
         isPlayerArea,
+        worldTime: Date.now(),
       });
 
       if (isPlayerArea) {

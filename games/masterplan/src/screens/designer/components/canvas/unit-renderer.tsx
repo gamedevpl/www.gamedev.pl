@@ -1,5 +1,6 @@
 import { Unit } from '../../designer-types';
 import { GridRenderer } from './grid-renderer';
+import { CommandPathRenderer } from './command-path-renderer';
 
 interface UnitRenderProps {
   units: Unit[];
@@ -7,18 +8,30 @@ interface UnitRenderProps {
   cellWidth: number;
   cellHeight: number;
   isPlayerArea: boolean;
+  worldTime: number; // Added worldTime for animation
 }
 
 export class UnitRenderer {
   static render(ctx: CanvasRenderingContext2D, props: UnitRenderProps): void {
-    const { units, unitImages, cellWidth, cellHeight, isPlayerArea } = props;
+    const { units, unitImages, cellWidth, cellHeight, isPlayerArea, worldTime } = props;
 
+    // First render command paths (they should appear behind the units)
+    CommandPathRenderer.render(ctx, {
+      units,
+      unitImages,
+      cellWidth,
+      cellHeight,
+      isPlayerArea,
+      worldTime,
+    });
+
+    // Then render the actual units on top
     units.forEach((unit) => {
       this.renderUnit(ctx, unit, unitImages, cellWidth, cellHeight, isPlayerArea);
     });
   }
 
-  private static renderUnit(
+  static renderUnit(
     ctx: CanvasRenderingContext2D,
     unit: Unit,
     unitImages: Record<string, HTMLImageElement>,
