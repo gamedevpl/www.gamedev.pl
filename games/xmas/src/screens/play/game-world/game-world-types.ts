@@ -1,0 +1,43 @@
+export type GameWorldState = {
+  time: number;
+  santas: Santa[];
+  gifts: Gift[];
+  chimneys: Chimney[];
+  fireballs: Fireball[];
+};
+
+export type Santa = {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  direction: 'left' | 'right';
+};
+
+export type Fireball = {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  angle: number;
+  state: 'charging' | 'flying' | 'exploding';
+};
+
+export type Gift = {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+};
+
+export type Chimney = {
+  id: string;
+  x: number;
+  y: number;
+};
