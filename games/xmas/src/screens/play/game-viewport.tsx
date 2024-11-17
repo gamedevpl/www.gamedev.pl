@@ -48,7 +48,7 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
       if (!gameStateRef.current) return;
 
       // Render the game
-      renderGame(gameStateRef.current, ctx);
+      renderGame(ctx, gameStateRef.current);
     }, [windowWidth, windowHeight]),
   );
 
