@@ -3,6 +3,7 @@ import { useRafLoop, useWindowSize } from 'react-use';
 import { renderGame } from './game-render/game-renderer';
 import { GameWorldState } from './game-world/game-world-types';
 import styled from 'styled-components';
+import { RenderState } from './game-render/render-state';
 
 const ViewportContainer = styled.div`
   width: 100vw;
@@ -23,7 +24,7 @@ const GameCanvas = styled.canvas`
 `;
 
 interface GameViewportProps {
-  gameStateRef: RefObject<GameWorldState>;
+  gameStateRef: RefObject<{ gameWorldState: GameWorldState; renderState: RenderState }>;
 }
 
 export function GameViewport({ gameStateRef }: GameViewportProps) {
@@ -48,7 +49,7 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
       if (!gameStateRef.current) return;
 
       // Render the game
-      renderGame(ctx, gameStateRef.current);
+      renderGame(ctx, gameStateRef.current.gameWorldState, gameStateRef.current.renderState);
     }, [windowWidth, windowHeight]),
   );
 

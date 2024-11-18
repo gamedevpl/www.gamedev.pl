@@ -1,7 +1,7 @@
 import { GameWorldState } from './game-world-types';
 
-export function updateGameWorld(world: GameWorldState): GameWorldState {
-  const newWorld = { ...world, time: Date.now() };
+export function updateGameWorld(world: GameWorldState, deltaTime: number): GameWorldState {
+  const newWorld = { ...world, time: world.time + deltaTime };
 
   return newWorld;
 }
