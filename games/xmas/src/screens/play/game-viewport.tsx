@@ -4,6 +4,8 @@ import { renderGame } from './game-render/game-renderer';
 import { GameWorldState } from './game-world/game-world-types';
 import styled from 'styled-components';
 import { RenderState } from './game-render/render-state';
+import { InputController } from './game-input/input-controller';
+import { GameController } from './game-controller';
 
 const ViewportContainer = styled.div`
   width: 100vw;
@@ -15,16 +17,21 @@ const ViewportContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
+  touch-action: none; /* Prevent default touch behaviors */
 `;
 
 const GameCanvas = styled.canvas`
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
 `;
 
 interface GameViewportProps {
-  gameStateRef: RefObject<{ gameWorldState: GameWorldState; renderState: RenderState }>;
+  gameStateRef: RefObject<{ 
+    gameWorldState: GameWorldState; 
+    renderState: RenderState;
+  }>;
 }
 
 export function GameViewport({ gameStateRef }: GameViewportProps) {
@@ -41,12 +48,10 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
       canvas.height = windowHeight;
 
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx || !gameStateRef.current) return;
 
       // Clear the canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (!gameStateRef.current) return;
 
       // Render the game
       renderGame(ctx, gameStateRef.current.gameWorldState, gameStateRef.current.renderState);
@@ -56,6 +61,8 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
   return (
     <ViewportContainer>
       <GameCanvas ref={canvasRef} />
+      <InputController canvasRef={canvasRef} />
+      <GameController gameStateRef={gameStateRef} />
     </ViewportContainer>
   );
 }

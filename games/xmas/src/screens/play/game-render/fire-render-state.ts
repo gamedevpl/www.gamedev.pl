@@ -20,6 +20,7 @@ export const VERTICAL_SPREAD_MULTIPLIER = 1.0;
 
 // Directional transfer probabilities
 export const HOT_CELL_SPREAD_PROBABILITY = 0.6; // Probability of hot cells spreading in any direction
+export const HOT_CELL_DOWNWARD_PROBABILITY = 0.5; // Probability of hot cells spreading downward
 export const COOL_CELL_HORIZONTAL_PROBABILITY = 0.3; // Probability of cool cells spreading horizontally
 
 // Represents a single cell in the fire grid
@@ -107,7 +108,7 @@ function calculateNeighborHeat(grid: FireCell[][], x: number, y: number): number
       shouldTransfer = Math.random() < HOT_CELL_SPREAD_PROBABILITY;
     } else {
       // Cool cells primarily spread upward, with low probability horizontally
-      if (dy === 1 || Math.random() < 0.5) {
+      if (dy === 1 || Math.random() < HOT_CELL_DOWNWARD_PROBABILITY) {
         // Always allow upward spread for cool cells
         shouldTransfer = true;
       } else if (dy === 0) {

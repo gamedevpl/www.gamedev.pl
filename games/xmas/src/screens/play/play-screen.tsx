@@ -5,47 +5,48 @@ import { useRafLoop } from 'react-use';
 import { updateGameWorld } from './game-world/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
 
-const INITIAL_STATE = {
-  gameWorldState: {
-    time: 0,
-    santas: [],
-    gifts: [],
-    chimneys: [],
-    fireballs: [
-      {
-        id: '1',
-        x: 300,
-        y: 300,
-        radius: 100,
-      },
-      {
-        id: '2',
-        x: 350,
-        y: 350,
-        radius: 100,
-      },
-      {
-        id: '2',
-        x: 300,
-        y: 150,
-        radius: 150,
-      },
-    ],
-  },
-  renderState: createRenderState(),
+const INITIAL_STATE: GameWorldState = {
+  time: 0,
+  santas: [],
+  gifts: [],
+  chimneys: [],
+  fireballs: [],
 };
 
+const UPDATE_STEP = 1000 / 60; // 60 FPS
+
+const MAX_DELTA_TIME = 1;
+
 export function PlayScreen() {
-  const gameStateRef = useRef<{ gameWorldState: GameWorldState; renderState: RenderState }>(INITIAL_STATE);
+  const gameStateRef = useRef<{
+    gameWorldState: GameWorldState;
+    renderState: RenderState;
+  }>({
+    gameWorldState: INITIAL_STATE,
+    renderState: createRenderState(),
+  });
 
   useRafLoop(() => {
-    const deltaTime = Date.now() - gameStateRef.current.gameWorldState.time;
-    gameStateRef.current.gameWorldState = updateGameWorld(gameStateRef.current.gameWorldState, deltaTime);
-    gameStateRef.current.renderState = updateRenderState(
-      gameStateRef.current.gameWorldState,
-      gameStateRef.current.renderState,
-      deltaTime,
-    );
+    let deltaTime = Date.now() - gameStateRef.current.gameWorldState.time;
+
+    if (deltaTime > MAX_DELTA_TIME) {
+      gameStateRef.current.gameWorldState.time = Date.now() - MAX_DELTA_TIME;
+      deltaTime = MAX_DELTA_TIME;
+    }
+
+    while (deltaTime >= 0) {
+      // Update game world
+      gameStateRef.current.gameWorldState = updateGameWorld(gameStateRef.current.gameWorldState, UPDATE_STEP);
+
+      // Update render state
+      gameStateRef.current.renderState = updateRenderState(
+        gameStateRef.current.gameWorldState,
+        gameStateRef.current.renderState,
+        UPDATE_STEP,
+      );
+
+      deltaTime -= UPDATE_STEP;
+    }
   });
 
   return <GameViewport gameStateRef={gameStateRef} />;

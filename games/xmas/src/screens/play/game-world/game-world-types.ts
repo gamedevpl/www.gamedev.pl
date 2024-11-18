@@ -21,6 +21,9 @@ export type Fireball = {
   x: number;
   y: number;
   radius: number;
+  createdAt: number; // timestamp when fireball was created
+  vx?: number; // optional horizontal velocity
+  vy?: number; // optional vertical velocity
 };
 
 export type Gift = {
@@ -37,3 +40,16 @@ export type Chimney = {
   x: number;
   y: number;
 };
+
+// Helper function to create a new fireball
+export function createFireball(x: number, y: number, radius: number): Fireball {
+  return {
+    id: `fireball_${Date.now()}_${Math.random()}`,
+    x,
+    y,
+    radius,
+    createdAt: Date.now(),
+    vx: 0,
+    vy: 0,
+  };
+}
