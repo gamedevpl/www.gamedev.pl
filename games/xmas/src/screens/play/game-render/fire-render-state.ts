@@ -65,7 +65,7 @@ function calculateFireballHeat(x: number, y: number, fireballs: GameWorldState['
     if (distance <= nucleusRadius) {
       // Inside nucleus - maximum temperature
       maxTemp = Math.max(maxTemp, MAX_TEMPERATURE);
-    } else if (distance < fireball.radius * 0.4) {
+    } else if (distance < fireball.radius * 0.5) {
       // Outside nucleus but inside fireball - linear falloff
       const normalizedDistance = (distance - nucleusRadius) / (fireball.radius - nucleusRadius);
       const temp = MAX_TEMPERATURE * (1 - normalizedDistance);

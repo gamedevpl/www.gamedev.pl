@@ -18,11 +18,11 @@ interface GameControllerProps {
  */
 export function GameController({ gameStateRef }: GameControllerProps) {
   // Handle fireball creation events
-  useCustomEvent<CreateFireballEvent>(GameEvents.CREATE_FIREBALL, ({ x, y, radius }) => {
+  useCustomEvent<CreateFireballEvent>(GameEvents.CREATE_FIREBALL, ({ id, x, y, radius }) => {
     if (!gameStateRef.current) return;
 
-    // Create actual fireball
-    addFireball(gameStateRef.current.gameWorldState, x, y, radius);
+    // Create actual fireball with the provided ID
+    addFireball(gameStateRef.current.gameWorldState, x, y, radius, id);
   });
 
   useCustomEvent<UpdateFireballEvent>(GameEvents.UPDATE_FIREBALL, ({ id, x, y, radius }) => {
