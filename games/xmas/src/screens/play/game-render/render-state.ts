@@ -17,11 +17,7 @@ export function createRenderState(): RenderState {
 /**
  * Update the render state based on the current game world state
  */
-export function updateRenderState(
-  world: GameWorldState,
-  state: RenderState,
-  deltaTime: number
-): RenderState {
+export function updateRenderState(world: GameWorldState, state: RenderState, deltaTime: number): RenderState {
   return {
     fire: updateFireRenderState(world, state.fire, deltaTime),
   };

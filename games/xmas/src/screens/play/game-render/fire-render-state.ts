@@ -1,36 +1,25 @@
 import { GameWorldState } from '../game-world/game-world-types';
-import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world/game-world-consts';
-
-// Cell size in pixels
-export const GRID_CELL_SIZE = 8;
-
-// Grid dimensions
-export const GRID_WIDTH = Math.ceil(GAME_WORLD_WIDTH / GRID_CELL_SIZE);
-export const GRID_HEIGHT = Math.ceil(GAME_WORLD_HEIGHT / GRID_CELL_SIZE);
-
-// Temperature thresholds and constants
-export const MAX_TEMPERATURE = 1;
-export const EXTINGUISH_THRESHOLD = 0.009;
-export const HOT_CELL_THRESHOLD = 0.6; // Above this temperature, cells behave as "hot"
-
-// Rate constants
-export const EXTINGUISH_RATE = 0.0001;
-export const BASE_SPREAD_RATE = 0.01;
-export const VERTICAL_SPREAD_MULTIPLIER = 1.0;
-
-// Directional transfer probabilities
-export const HOT_CELL_SPREAD_PROBABILITY = 0.6; // Probability of hot cells spreading in any direction
-export const HOT_CELL_DOWNWARD_PROBABILITY = 0.5; // Probability of hot cells spreading downward
-export const COOL_CELL_HORIZONTAL_PROBABILITY = 0.3; // Probability of cool cells spreading horizontally
-
-// Represents a single cell in the fire grid
-export type FireCell = {
-  temperature: number;
-};
+import { FireQuadTree } from './fire-render-quad-tree';
+import {
+  FireCell,
+  GRID_WIDTH,
+  GRID_HEIGHT,
+  GRID_CELL_SIZE,
+  MAX_TEMPERATURE,
+  HOT_CELL_THRESHOLD,
+  VERTICAL_SPREAD_MULTIPLIER,
+  HOT_CELL_SPREAD_PROBABILITY,
+  HOT_CELL_DOWNWARD_PROBABILITY,
+  COOL_CELL_HORIZONTAL_PROBABILITY,
+  EXTINGUISH_RATE,
+  BASE_SPREAD_RATE,
+  EXTINGUISH_THRESHOLD,
+} from './fire-render-types';
 
 // The complete fire render state
 export type FireRenderState = {
   grid: FireCell[][];
+  quadTree: FireQuadTree;
 };
 
 /**
@@ -45,7 +34,7 @@ export function createFireRenderState(): FireRenderState {
         .map(() => ({ temperature: 0 })),
     );
 
-  return { grid };
+  return { grid, quadTree: new FireQuadTree() };
 }
 
 /**
@@ -132,10 +121,20 @@ function calculateNeighborHeat(grid: FireCell[][], x: number, y: number): number
 /**
  * Precompute heat distribution from fireballs for the entire grid
  */
-function computeFireballHeatMap(fireballs: GameWorldState['fireballs'], grid: FireCell[][]) {
+function computeFireballHeatMap(
+  fireballs: GameWorldState['fireballs'],
+  grid: FireCell[][],
+  quadTree: FireQuadTree,
+): void {
+  if (fireballs.length === 0) {
+    // No fireballs, no heat
+    return;
+  }
+
   for (let y = 0; y < GRID_HEIGHT; y++) {
     for (let x = 0; x < GRID_WIDTH; x++) {
       grid[y][x].temperature = calculateFireballHeat(x, y, fireballs);
+      quadTree.update(x, y, grid[y][x].temperature);
     }
   }
 }
@@ -157,39 +156,49 @@ export function updateFireRenderState(
         .fill(null)
         .map(() => ({ temperature: 0 })),
     );
+  const newQuadTree = new FireQuadTree();
 
-  computeFireballHeatMap(world.fireballs, newGrid);
+  computeFireballHeatMap(world.fireballs, newGrid, newQuadTree);
 
   // Update each cell in the grid
-  for (let y = 0; y < GRID_HEIGHT; y++) {
-    for (let x = 0; x < GRID_WIDTH; x++) {
-      const currentTemp = state.grid[y][x].temperature + newGrid[y][x].temperature;
+  for (const [regionX, regionY, regionWidth, regionHeight] of state.quadTree.getHotRegions()) {
+    for (let y = regionY; y < regionHeight; y++) {
+      for (let x = regionX; x < regionWidth; x++) {
+        if (state.quadTree.isCold(x, y)) {
+          continue;
+        }
 
-      // Calculate new temperature from various sources
-      const neighborHeat = calculateNeighborHeat(state.grid, x, y);
+        const currentTemp = state.grid[y][x].temperature + newGrid[y][x].temperature;
 
-      // Temperature changes:
-      // 1. Natural decay over time
-      // 2. Heat from fireballs (immediate effect)
-      // 3. Heat spreading from neighbors with directional bias
-      let newTemp = currentTemp;
+        // Calculate new temperature from various sources
+        const neighborHeat = calculateNeighborHeat(state.grid, x, y);
 
-      // Apply decay
-      newTemp = Math.max(0, newTemp - EXTINGUISH_RATE * deltaTime);
+        // Temperature changes:
+        // 1. Natural decay over time
+        // 2. Heat from fireballs (immediate effect)
+        // 3. Heat spreading from neighbors with directional bias
+        let newTemp = currentTemp;
 
-      // Apply neighbor heat spreading
-      const spreadRate = BASE_SPREAD_RATE * (1 + (Math.random() * 0.2 - 0.1));
-      newTemp += (neighborHeat - newTemp) * spreadRate * deltaTime;
+        // Apply decay
+        newTemp = Math.max(0, newTemp - EXTINGUISH_RATE * deltaTime);
 
-      // Ensure temperature stays within bounds
-      newTemp = Math.min(MAX_TEMPERATURE, Math.max(0, newTemp));
+        // Apply neighbor heat spreading
+        const spreadRate = BASE_SPREAD_RATE * (1 + (Math.random() * 0.2 - 0.1));
+        newTemp += (neighborHeat - newTemp) * spreadRate * deltaTime;
 
-      // Only update if above extinction threshold
-      newGrid[y][x].temperature = newTemp > EXTINGUISH_THRESHOLD ? newTemp : 0;
+        // Ensure temperature stays within bounds
+        newTemp = Math.min(MAX_TEMPERATURE, Math.max(0, newTemp));
+
+        // Only update if above extinction threshold
+        newGrid[y][x].temperature = newTemp > EXTINGUISH_THRESHOLD ? newTemp : 0;
+
+        newQuadTree.update(x, y, newGrid[y][x].temperature);
+      }
     }
   }
 
   return {
     grid: newGrid,
+    quadTree: newQuadTree,
   };
 }

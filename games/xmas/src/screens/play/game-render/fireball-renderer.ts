@@ -1,5 +1,5 @@
 import { RenderState } from './render-state';
-import { GRID_CELL_SIZE, GRID_HEIGHT, GRID_WIDTH } from './fire-render-state';
+import { GRID_CELL_SIZE, GRID_HEIGHT, GRID_WIDTH } from './fire-render-types';
 
 /**
  * Render a single fire cell with temperature-based color
