@@ -66,6 +66,8 @@ export const InputController: React.FC<InputControllerProps> = ({ canvasRef }) =
             x,
             y,
             radius,
+            vx: 0,
+            vy: 0,
           });
 
           return {
@@ -73,18 +75,19 @@ export const InputController: React.FC<InputControllerProps> = ({ canvasRef }) =
             currentPosition: { x, y },
             currentFireballId: newFireballId,
           };
-        } else {
+        } else if (prev.currentPosition) {
           // Update existing fireball
           dispatchCustomEvent<UpdateFireballEvent>(GameEvents.UPDATE_FIREBALL, {
             id: prev.currentFireballId,
-            x,
-            y,
+            x: prev.currentPosition.x,
+            y: prev.currentPosition.y,
             radius,
+            vx: 0,
+            vy: 0,
           });
 
           return {
             ...prev,
-            currentPosition: { x, y },
           };
         }
       }
@@ -96,12 +99,55 @@ export const InputController: React.FC<InputControllerProps> = ({ canvasRef }) =
     });
   }, []);
 
-  const handleInteractionEnd = useCallback(() => {
-    setInputState({
-      isInteracting: false,
-      interactionStartTime: null,
-      currentPosition: null,
-      currentFireballId: null,
+  const handleInteractionEnd = useCallback((x: number, y: number) => {
+    setInputState((prev) => {
+      if (prev.currentFireballId && prev.currentPosition) {
+        const currentTime = Date.now();
+        const holdDuration = prev.interactionStartTime ? currentTime - prev.interactionStartTime : 0;
+
+        // Only process move if we're past the start delay
+        const growthDuration = holdDuration - FIREBALL_START_DELAY;
+        const radius = Math.min(
+          MAX_FIREBALL_RADIUS,
+          MIN_FIREBALL_RADIUS + (growthDuration / 1000) * FIREBALL_GROWTH_RATE,
+        );
+
+        // Constants for velocity calculation and smoothing
+        const VELOCITY_SMOOTHING = 0.5; // Lower values make velocity changes more smooth
+        const MIN_POSITION_DELTA = 10; // Minimum position change to calculate velocity
+
+        // Calculate position deltas
+        let dx = x - prev.currentPosition.x;
+        let dy = y - prev.currentPosition.y;
+
+        // Normalize
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        dx /= distance;
+        dy /= distance;
+
+        // Only update velocity if position change is significant
+        const shouldMove = Math.abs(distance) > MIN_POSITION_DELTA;
+        // Calculate new velocities with smoothing
+        const vx = shouldMove ? dx * VELOCITY_SMOOTHING : 0;
+        const vy = shouldMove ? dy * VELOCITY_SMOOTHING : 0;
+
+        // Update existing fireball
+        dispatchCustomEvent<UpdateFireballEvent>(GameEvents.UPDATE_FIREBALL, {
+          id: prev.currentFireballId,
+          x: prev.currentPosition.x,
+          y: prev.currentPosition.y,
+          radius,
+          vx,
+          vy,
+        });
+      }
+
+      return {
+        isInteracting: false,
+        interactionStartTime: null,
+        currentPosition: null,
+        currentFireballId: null,
+      };
     });
   }, []);
 
@@ -125,7 +171,7 @@ export const InputController: React.FC<InputControllerProps> = ({ canvasRef }) =
   const handleMouseUp = useCallback(
     (event: MouseEvent) => {
       event.preventDefault();
-      handleInteractionEnd();
+      handleInteractionEnd(event.clientX, event.clientY);
     },
     [handleInteractionEnd],
   );
@@ -152,7 +198,8 @@ export const InputController: React.FC<InputControllerProps> = ({ canvasRef }) =
   const handleTouchEnd = useCallback(
     (event: TouchEvent) => {
       event.preventDefault();
-      handleInteractionEnd();
+      const touch = event.touches[0];
+      handleInteractionEnd(touch.clientX, touch.clientY);
     },
     [handleInteractionEnd],
   );

@@ -18,17 +18,17 @@ interface GameControllerProps {
  */
 export function GameController({ gameStateRef }: GameControllerProps) {
   // Handle fireball creation events
-  useCustomEvent<CreateFireballEvent>(GameEvents.CREATE_FIREBALL, ({ id, x, y, radius }) => {
+  useCustomEvent<CreateFireballEvent>(GameEvents.CREATE_FIREBALL, ({ id, x, y, radius, vx, vy }) => {
     if (!gameStateRef.current) return;
 
     // Create actual fireball with the provided ID
-    addFireball(gameStateRef.current.gameWorldState, x, y, radius, id);
+    addFireball(gameStateRef.current.gameWorldState, id, x, y, radius, vx, vy);
   });
 
-  useCustomEvent<UpdateFireballEvent>(GameEvents.UPDATE_FIREBALL, ({ id, x, y, radius }) => {
+  useCustomEvent<UpdateFireballEvent>(GameEvents.UPDATE_FIREBALL, ({ id, x, y, radius, vx, vy }) => {
     if (!gameStateRef.current) return;
 
-    updateFireball(gameStateRef.current.gameWorldState, id, x, y, radius);
+    updateFireball(gameStateRef.current.gameWorldState, id, x, y, radius, vx, vy);
   });
 
   // Component doesn't render anything visible

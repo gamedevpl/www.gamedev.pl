@@ -8,6 +8,8 @@ export type CreateFireballEvent = {
   x: number;
   y: number;
   radius: number;
+  vx: number;
+  vy: number;
 };
 
 export type UpdateFireballEvent = {
@@ -15,4 +17,6 @@ export type UpdateFireballEvent = {
   x: number;
   y: number;
   radius: number;
+  vx: number;
+  vy: number;
 };
