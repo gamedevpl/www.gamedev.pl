@@ -51,6 +51,10 @@ export class FireQuadTree {
    * @param temperature New temperature value
    */
   update(x: number, y: number, temperature: number): void {
+    if (temperature === 0) {
+      return;
+    }
+
     // Update the temperature at the given point
     this.setTemperature(x, y, temperature);
 
