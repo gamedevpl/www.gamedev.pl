@@ -8,7 +8,9 @@ import { GRID_HEIGHT, GRID_WIDTH } from './fire-render-types';
  * - Minimizes allocations during reconstruction
  */
 export class FireQuadTree {
-  private temperatures: Float32Array;
+  private temperaturesInsert: Uint8Array;
+  private temperaturesRead: Uint8Array;
+
   private static readonly NEIGHBORHOOD = [
     [-1, -1],
     [0, -1],
@@ -21,9 +23,17 @@ export class FireQuadTree {
   ];
 
   constructor() {
-    // Use a single Float32Array for efficient temperature storage
     // Use 2 padding cells on each side for easier neighborhood checking
-    this.temperatures = new Float32Array((GRID_WIDTH + 2) * (GRID_HEIGHT + 2));
+    this.temperaturesInsert = new Uint8Array((GRID_WIDTH + 2) * (GRID_HEIGHT + 2));
+    this.temperaturesRead = new Uint8Array((GRID_WIDTH + 2) * (GRID_HEIGHT + 2));
+  }
+
+  swapBuffers(): void {
+    const temp = this.temperaturesInsert;
+    this.temperaturesInsert = this.temperaturesRead;
+    this.temperaturesRead = temp;
+
+    this.temperaturesInsert.fill(0);
   }
 
   /**
@@ -70,7 +80,7 @@ export class FireQuadTree {
    * @returns Temperature value at the point
    */
   private getTemperature(x: number, y: number): number {
-    return this.temperatures[this.getTemperatureIndex(x, y)];
+    return this.temperaturesRead[this.getTemperatureIndex(x, y)];
   }
 
   /**
@@ -81,11 +91,11 @@ export class FireQuadTree {
    */
   private setTemperature(x: number, y: number, temperature: number): void {
     const index = this.getTemperatureIndex(x, y);
-    if (this.temperatures[index] > 0) {
+    if (this.temperaturesInsert[index] > 0) {
       return;
     }
 
-    this.temperatures[index] = temperature;
+    this.temperaturesInsert[index] = temperature > 0 ? 1 : 0;
   }
 
   private getTemperatureIndex(x: number, y: number): number {

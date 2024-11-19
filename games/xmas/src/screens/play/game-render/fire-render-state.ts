@@ -156,9 +156,8 @@ export function updateFireRenderState(
         .fill(null)
         .map(() => ({ temperature: 0 })),
     );
-  const newQuadTree = new FireQuadTree();
 
-  computeFireballHeatMap(world.fireballs, newGrid, newQuadTree);
+  computeFireballHeatMap(world.fireballs, newGrid, state.quadTree);
 
   // Update each cell in the grid
   for (const [regionX, regionY, regionWidth, regionHeight] of state.quadTree.getHotRegions()) {
@@ -192,13 +191,15 @@ export function updateFireRenderState(
         // Only update if above extinction threshold
         newGrid[y][x].temperature = newTemp > EXTINGUISH_THRESHOLD ? newTemp : 0;
 
-        newQuadTree.update(x, y, newGrid[y][x].temperature);
+        state.quadTree.update(x, y, newGrid[y][x].temperature);
       }
     }
   }
 
+  state.quadTree.swapBuffers();
+
   return {
     grid: newGrid,
-    quadTree: newQuadTree,
+    quadTree: state.quadTree,
   };
 }
