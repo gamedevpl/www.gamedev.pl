@@ -8,9 +8,6 @@ export function renderFireballs(ctx: CanvasRenderingContext2D, render: RenderSta
   // Save the current context state
   ctx.save();
 
-  // Set composite operation for better blending
-  ctx.globalCompositeOperation = 'screen';
-
   // Render the fire grid using ImageData
   renderFireGrid(ctx, render.fire.grid);
 

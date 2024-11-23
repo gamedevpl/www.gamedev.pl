@@ -14,10 +14,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, _world: GameWorldState
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  renderFireballs(ctx, render);
-
-  // Render snow on top of fireballs for better visual effect
   renderSnow(ctx, render);
+
+  renderFireballs(ctx, render);
 
   // Restore initial context state
   ctx.restore();
