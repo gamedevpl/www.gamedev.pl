@@ -1,8 +1,10 @@
 import { GameWorldState } from '../game-world/game-world-types';
 import { FireRenderState, createFireRenderState, updateFireRenderState } from './fire-render-state';
+import { SnowRenderState, createSnowRenderState, updateSnowRenderState } from './snow-render-state';
 
 export type RenderState = {
   fire: FireRenderState;
+  snow: SnowRenderState;
 };
 
 /**
@@ -11,6 +13,7 @@ export type RenderState = {
 export function createRenderState(): RenderState {
   return {
     fire: createFireRenderState(),
+    snow: createSnowRenderState(),
   };
 }
 
@@ -20,5 +23,6 @@ export function createRenderState(): RenderState {
 export function updateRenderState(world: GameWorldState, state: RenderState, deltaTime: number): RenderState {
   return {
     fire: updateFireRenderState(world, state.fire, deltaTime),
+    snow: updateSnowRenderState(world, state.snow, deltaTime),
   };
 }
