@@ -28,8 +28,8 @@ const GameCanvas = styled.canvas`
 `;
 
 interface GameViewportProps {
-  gameStateRef: RefObject<{ 
-    gameWorldState: GameWorldState; 
+  gameStateRef: RefObject<{
+    gameWorldState: GameWorldState;
     renderState: RenderState;
   }>;
 }
@@ -61,7 +61,7 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
   return (
     <ViewportContainer>
       <GameCanvas ref={canvasRef} />
-      <InputController canvasRef={canvasRef} />
+      <InputController />
       <GameController gameStateRef={gameStateRef} />
     </ViewportContainer>
   );

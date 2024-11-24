@@ -1,4 +1,4 @@
-import { GameWorldState } from '../game-world/game-world-types';
+import { GameWorldState, FIREBALL_PHYSICS } from '../game-world/game-world-types';
 import { FireQuadTree } from './fire-render-quad-tree';
 import {
   FireCell,
@@ -66,6 +66,52 @@ function calculateFireballHeat(x: number, y: number, fireballs: GameWorldState['
 }
 
 /**
+ * Calculate the temperature at a specific grid position based on charging Santas
+ * Uses similar nucleus concept as fireballs but scales with charging duration
+ */
+function calculateSantaHeat(x: number, y: number, santas: GameWorldState['santas'], currentTime: number): number {
+  const worldX = x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
+  const worldY = y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
+
+  let maxTemp = 0;
+
+  for (const santa of santas) {
+    if (!santa.input.charging || !santa.input.chargeStartTime) continue;
+
+    const chargeDuration = currentTime - santa.input.chargeStartTime;
+    if (chargeDuration < FIREBALL_PHYSICS.MIN_CHARGE_TIME / 3) continue;
+
+    // Scale radius based on charge duration, capped at max charge time
+    const chargeProgress = Math.min(
+      (chargeDuration - FIREBALL_PHYSICS.MIN_CHARGE_TIME / 3) /
+        (FIREBALL_PHYSICS.MAX_CHARGE_TIME - FIREBALL_PHYSICS.MIN_CHARGE_TIME / 3),
+      1,
+    );
+
+    const radius =
+      FIREBALL_PHYSICS.MIN_RADIUS +
+      FIREBALL_PHYSICS.GROWTH_RATE * chargeProgress * (FIREBALL_PHYSICS.MAX_CHARGE_TIME / 1000);
+
+    const distance = Math.sqrt(Math.pow(worldX - santa.x, 2) + Math.pow(worldY - santa.y, 2));
+    const nucleusRadius = radius * 0.6;
+
+    if (distance <= nucleusRadius * 0.9) {
+      continue;
+    } else if (distance <= nucleusRadius) {
+      // Inside nucleus - temperature scales with charge progress
+      maxTemp = Math.max(maxTemp, MAX_TEMPERATURE * chargeProgress);
+    } else if (distance < radius * 0.5) {
+      // Outside nucleus but inside heat radius - linear falloff
+      const normalizedDistance = (distance - nucleusRadius) / (radius - nucleusRadius);
+      const temp = MAX_TEMPERATURE * chargeProgress * (1 - normalizedDistance);
+      maxTemp = Math.max(maxTemp, temp);
+    }
+  }
+
+  return maxTemp;
+}
+
+/**
  * Calculate heat transfer from neighboring cells with temperature-dependent behavior
  */
 function calculateNeighborHeat(grid: FireCell[][], x: number, y: number): number {
@@ -119,21 +165,25 @@ function calculateNeighborHeat(grid: FireCell[][], x: number, y: number): number
 }
 
 /**
- * Precompute heat distribution from fireballs for the entire grid
+ * Precompute heat distribution from fireballs and charging Santas for the entire grid
  */
-function computeFireballHeatMap(
-  fireballs: GameWorldState['fireballs'],
-  grid: FireCell[][],
-  quadTree: FireQuadTree,
-): void {
-  if (fireballs.length === 0) {
-    // No fireballs, no heat
+function computeHeatMap(world: GameWorldState, grid: FireCell[][], quadTree: FireQuadTree): void {
+  const hasHeatSources =
+    world.fireballs.length > 0 || world.santas.some((santa) => santa.input.charging && santa.input.chargeStartTime);
+
+  if (!hasHeatSources) {
+    // No heat sources, skip computation
     return;
   }
 
   for (let y = 0; y < GRID_HEIGHT; y++) {
     for (let x = 0; x < GRID_WIDTH; x++) {
-      grid[y][x].temperature = calculateFireballHeat(x, y, fireballs);
+      // Combine heat from both fireballs and charging Santas
+      const fireballTemp = calculateFireballHeat(x, y, world.fireballs);
+      const santaTemp = calculateSantaHeat(x, y, world.santas, world.time);
+
+      // Use maximum temperature from either source
+      grid[y][x].temperature = Math.max(fireballTemp, santaTemp);
       quadTree.update(x, y, grid[y][x].temperature);
     }
   }
@@ -157,7 +207,7 @@ export function updateFireRenderState(
         .map(() => ({ temperature: 0 })),
     );
 
-  computeFireballHeatMap(world.fireballs, newGrid, state.quadTree);
+  computeHeatMap(world, newGrid, state.quadTree);
 
   // Update each cell in the grid
   for (const [regionX, regionY, regionWidth, regionHeight] of state.quadTree.getHotRegions()) {
@@ -174,7 +224,7 @@ export function updateFireRenderState(
 
         // Temperature changes:
         // 1. Natural decay over time
-        // 2. Heat from fireballs (immediate effect)
+        // 2. Heat from fireballs and charging Santas (immediate effect)
         // 3. Heat spreading from neighbors with directional bias
         let newTemp = currentTemp;
 
