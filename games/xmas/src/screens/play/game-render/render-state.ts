@@ -9,24 +9,18 @@ export type RenderState = {
   landscape: LandscapeState;
 };
 
-/**
- * Create a new render state with initial values
- */
-export function createRenderState(): RenderState {
-  return {
-    fire: createFireRenderState(),
-    snow: createSnowRenderState(),
-    landscape: createLandscapeState(),
-  };
-}
+export const createRenderState = (): RenderState => ({
+  fire: createFireRenderState(),
+  snow: createSnowRenderState(),
+  landscape: createLandscapeState(),
+});
 
-/**
- * Update the render state based on the current game world state
- */
-export function updateRenderState(world: GameWorldState, state: RenderState, deltaTime: number): RenderState {
-  return {
-    fire: updateFireRenderState(world, state.fire, deltaTime),
-    snow: updateSnowRenderState(world, state.snow, deltaTime),
-    landscape: updateLandscapeState(world, state.landscape, deltaTime),
-  };
-}
+export const updateRenderState = (
+  world: GameWorldState, 
+  state: RenderState, 
+  deltaTime: number
+): RenderState => ({
+  fire: updateFireRenderState(world, state.fire, deltaTime),
+  snow: updateSnowRenderState(world, state.snow, deltaTime),
+  landscape: updateLandscapeState(world, state.landscape, deltaTime),
+});

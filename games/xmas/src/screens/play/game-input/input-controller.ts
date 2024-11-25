@@ -8,105 +8,69 @@ import {
   StopChargingEvent,
 } from './input-events';
 
-// Type helper for key checking
-type InputKeyType = (typeof INPUT_KEYS)[keyof typeof INPUT_KEYS][number];
-
-/**
- * Maps keyboard keys to input actions with proper type assertions
- */
 const INPUT_KEYS = {
-  LEFT: ['ArrowLeft', 'a', 'A'],
-  RIGHT: ['ArrowRight', 'd', 'D'],
-  UP: ['ArrowUp', 'w', 'W'],
-  DOWN: ['ArrowDown', 's', 'S'],
-  CHARGE: ['Space', ' '], // Space key for charging
-};
+  LEFT: new Set(['ArrowLeft', 'a', 'A']),
+  RIGHT: new Set(['ArrowRight', 'd', 'D']),
+  UP: new Set(['ArrowUp', 'w', 'W']),
+  DOWN: new Set(['ArrowDown', 's', 'S']),
+  CHARGE: new Set(['Space', ' ']),
+} as const;
 
-export type InputState = {
-  // Movement state
+type InputState = {
   moveInput: {
     left: boolean;
     right: boolean;
     up: boolean;
     down: boolean;
   };
-  // Charging state
   isCharging: boolean;
   chargeStartTime: number | null;
 };
 
-/**
- * Type guard to check if a key is a valid input key
- */
-function isValidInputKey(key: string): key is InputKeyType {
-  return (
-    INPUT_KEYS.LEFT.includes(key) ||
-    INPUT_KEYS.RIGHT.includes(key) ||
-    INPUT_KEYS.UP.includes(key) ||
-    INPUT_KEYS.DOWN.includes(key) ||
-    INPUT_KEYS.CHARGE.includes(key)
-  );
-}
+const initialInputState: InputState = {
+  moveInput: {
+    left: false,
+    right: false,
+    up: false,
+    down: false,
+  },
+  isCharging: false,
+  chargeStartTime: null,
+};
 
 export function InputController() {
-  const [inputState, setInputState] = useState<InputState>({
-    moveInput: {
-      left: false,
-      right: false,
-      up: false,
-      down: false,
-    },
-    isCharging: false,
-    chargeStartTime: null,
-  });
+  const [inputState, setInputState] = useState<InputState>(initialInputState);
 
-  // Dispatch movement event when input changes
   const dispatchMovement = useCallback((moveInput: InputState['moveInput']) => {
-    dispatchCustomEvent<MoveSantaEvent>(GameEvents.MOVE_SANTA, {
-      input: moveInput,
-    });
+    dispatchCustomEvent<MoveSantaEvent>(GameEvents.MOVE_SANTA, { input: moveInput });
 
-    // Update Santa direction based on horizontal movement
     if (moveInput.left && !moveInput.right) {
-      dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, {
-        direction: 'left',
-      });
+      dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, { direction: 'left' });
     } else if (moveInput.right && !moveInput.left) {
-      dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, {
-        direction: 'right',
-      });
+      dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, { direction: 'right' });
     }
   }, []);
 
-  // Handle keyboard input with type safety
   const handleKeyboardInput = useCallback(
     (event: KeyboardEvent, isKeyDown: boolean) => {
-      if (!isValidInputKey(event.key)) return;
-
-      // Handle charging input (Space key)
-      if (INPUT_KEYS.CHARGE.includes(event.key)) {
+      // Handle charging input
+      if (INPUT_KEYS.CHARGE.has(event.key)) {
         if (isKeyDown && !inputState.isCharging) {
-          // Start charging
           const timestamp = Date.now();
-          setInputState((prev) => ({
+          setInputState(prev => ({
             ...prev,
             isCharging: true,
             chargeStartTime: timestamp,
           }));
-          dispatchCustomEvent<StartChargingEvent>(GameEvents.START_CHARGING, {
-            timestamp,
-          });
+          dispatchCustomEvent<StartChargingEvent>(GameEvents.START_CHARGING, { timestamp });
         } else if (!isKeyDown && inputState.isCharging) {
-          // Stop charging
           const timestamp = Date.now();
-          setInputState((prev) => ({
+          setInputState(prev => ({
             ...prev,
             isCharging: false,
             chargeStartTime: null,
           }));
-          dispatchCustomEvent<StopChargingEvent>(GameEvents.STOP_CHARGING, {
-            timestamp,
-          });
+          dispatchCustomEvent<StopChargingEvent>(GameEvents.STOP_CHARGING, { timestamp });
         }
         return;
       }
@@ -115,36 +79,28 @@ export function InputController() {
       const newMoveInput = { ...inputState.moveInput };
       let inputChanged = false;
 
-      // Check each input direction with proper type assertions
-      if (INPUT_KEYS.LEFT.includes(event.key) && newMoveInput.left !== isKeyDown) {
-        newMoveInput.left = isKeyDown;
-        inputChanged = true;
-      }
-      if (INPUT_KEYS.RIGHT.includes(event.key) && newMoveInput.right !== isKeyDown) {
-        newMoveInput.right = isKeyDown;
-        inputChanged = true;
-      }
-      if (INPUT_KEYS.UP.includes(event.key) && newMoveInput.up !== isKeyDown) {
-        newMoveInput.up = isKeyDown;
-        inputChanged = true;
-      }
-      if (INPUT_KEYS.DOWN.includes(event.key) && newMoveInput.down !== isKeyDown) {
-        newMoveInput.down = isKeyDown;
-        inputChanged = true;
+      for (const [direction, keys] of Object.entries(INPUT_KEYS)) {
+        if (direction === 'CHARGE') continue;
+        if (keys.has(event.key)) {
+          const dir = direction.toLowerCase() as keyof typeof newMoveInput;
+          if (newMoveInput[dir] !== isKeyDown) {
+            newMoveInput[dir] = isKeyDown;
+            inputChanged = true;
+          }
+        }
       }
 
       if (inputChanged) {
-        setInputState((prev) => ({
+        setInputState(prev => ({
           ...prev,
           moveInput: newMoveInput,
         }));
         dispatchMovement(newMoveInput);
       }
     },
-    [inputState.moveInput, inputState.isCharging, inputState.chargeStartTime, dispatchMovement],
+    [inputState.moveInput, inputState.isCharging, dispatchMovement],
   );
 
-  // Keyboard event handlers
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => handleKeyboardInput(event, true);
     const handleKeyUp = (event: KeyboardEvent) => handleKeyboardInput(event, false);
@@ -158,6 +114,5 @@ export function InputController() {
     };
   }, [handleKeyboardInput]);
 
-  // Component doesn't render anything visible
   return null;
 }
