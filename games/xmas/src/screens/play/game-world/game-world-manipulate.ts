@@ -1,12 +1,7 @@
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
 import { Fireball, GameWorldState, Santa, SANTA_PHYSICS, FIREBALL_PHYSICS, SantaInputState } from './game-world-types';
 
-export function createSanta(
-  id: string,
-  x = GAME_WORLD_WIDTH / 2,
-  y = GAME_WORLD_HEIGHT / 2,
-  isPlayer = false,
-): Santa {
+export function createSanta(id: string, x = GAME_WORLD_WIDTH / 2, y = GAME_WORLD_HEIGHT / 2, isPlayer = false): Santa {
   return {
     id,
     x,
@@ -60,15 +55,42 @@ function calculateFireballProperties(chargeTime: number, availableEnergy: number
   return { radius, velocity, energyCost };
 }
 
-function createFireball(id: string, x: number, y: number, radius: number, velocity: number, angle: number): Fireball {
+function createFireball(
+  id: string,
+  x: number,
+  y: number,
+  radius: number,
+  velocity: number,
+  angle: number,
+  santa: Santa,
+): Fireball {
+  // Calculate base velocity components from angle and velocity
+  const baseVx = velocity * Math.cos(angle);
+  const baseVy = velocity * Math.sin(angle);
+
+  // Add santa's velocity components to create a combined velocity
+  const combinedVx = baseVx * 0.1 + santa.vx * 1.9;
+  const combinedVy = baseVy * 0.1 + santa.vy * 1.9;
+
+  // Calculate the combined velocity magnitude
+  const combinedVelocity = Math.sqrt(combinedVx * combinedVx + combinedVy * combinedVy);
+
+  // If the combined velocity exceeds the maximum allowed velocity, scale it down
+  const maxVelocity = velocity * 2; // Allow up to 100% increase from santa's momentum
+  const scale = combinedVelocity > maxVelocity ? maxVelocity / combinedVelocity : 1;
+
+  // Apply the scaling to get final velocity components
+  const finalVx = combinedVx * scale;
+  const finalVy = combinedVy * scale;
+
   return {
     id,
     x,
     y,
     radius,
     createdAt: Date.now(),
-    vx: velocity * Math.cos(angle),
-    vy: velocity * Math.sin(angle),
+    vx: finalVx,
+    vy: finalVy,
   };
 }
 
@@ -88,6 +110,7 @@ export function createFireballFromSanta(
     props.radius,
     props.velocity,
     santa.angle,
+    santa,
   );
 
   return { fireball, energyCost: props.energyCost };
@@ -101,6 +124,6 @@ export function addFireballFromSanta(world: GameWorldState, santa: Santa, charge
   santa.energy = Math.max(0, santa.energy - energyCost);
   santa.energyRegenPaused = true;
   world.fireballs.push(fireball);
-  
+
   return true;
 }
