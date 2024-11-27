@@ -33,7 +33,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (!gameStateRef.current) return;
     moveSanta(gameStateRef.current.gameWorldState.playerSanta, {
       charging: true,
-      chargeStartTime: event.timestamp
+      chargeStartTime: event.timestamp,
     });
   });
 
@@ -44,7 +44,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
 
     moveSanta(playerSanta, {
       charging: false,
-      chargeStartTime: null
+      chargeStartTime: null,
     });
 
     if (chargeStartTime !== null) {

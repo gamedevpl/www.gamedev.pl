@@ -1,3 +1,5 @@
+import { WaveState } from '../game-ai/ai-santa-types';
+
 export const enum SANTA_PHYSICS {
   MAX_VELOCITY = 1.0,
   MIN_VELOCITY = -1.0,
@@ -12,6 +14,12 @@ export const enum SANTA_PHYSICS {
   CHARGE_ENERGY_DRAIN_RATE = 0.02,
   MIN_HEIGHT = 100.1,
   MAX_HEIGHT = 900,
+  // Knockback physics constants
+  KNOCKBACK_BASE_FORCE = 0.5, // Base force multiplier for knockback
+  KNOCKBACK_SIZE_MULTIPLIER = 0.05, // How much fireball size affects knockback
+  KNOCKBACK_VELOCITY_MULTIPLIER = 1.5, // How much fireball velocity affects knockback
+  KNOCKBACK_RECOVERY_RATE = 0.001, // How quickly Santa recovers from knockback
+  MAX_KNOCKBACK_VELOCITY = 1.1, // Maximum velocity from knockback
 }
 
 export const enum FIREBALL_PHYSICS {
@@ -22,6 +30,11 @@ export const enum FIREBALL_PHYSICS {
   MAX_CHARGE_TIME = 5000,
   ENERGY_TO_SIZE_RATIO = 0.25,
   ENERGY_TO_VELOCITY_RATIO = 0.001,
+  // Collision physics constants
+  COLLISION_THRESHOLD = 0.51, // Multiplier for collision detection (radius sum * threshold)
+  MERGE_MOMENTUM_FACTOR = 0.8, // Conservation of momentum factor during merging
+  MERGE_SIZE_FACTOR = 1.0, // How volume is conserved during merging
+  MIN_COLLISION_VELOCITY = 0.1, // Minimum velocity difference for collision
 }
 
 export type SantaInputState = {
@@ -40,6 +53,7 @@ export type GameWorldState = {
   gifts: Gift[];
   chimneys: Chimney[];
   fireballs: Fireball[];
+  waveState: WaveState;
 };
 
 export type Santa = {
@@ -57,6 +71,10 @@ export type Santa = {
   energyRegenPaused: boolean;
   input: SantaInputState;
   isPlayer: boolean;
+  // New properties for knockback
+  knockbackVx?: number; // Additional velocity from knockback
+  knockbackVy?: number; // Additional velocity from knockback
+  lastKnockbackTime?: number; // Time of last knockback for recovery calculation
 };
 
 export type Fireball = {
@@ -67,6 +85,9 @@ export type Fireball = {
   createdAt: number;
   vx: number;
   vy: number;
+  // New properties for collision handling
+  mass?: number; // Mass of the fireball (proportional to volume)
+  mergeCount?: number; // Number of fireballs merged into this one
 };
 
 export type Gift = {

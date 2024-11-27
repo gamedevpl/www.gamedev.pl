@@ -6,6 +6,7 @@ import { updateGameWorld } from './game-world/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
 import { createSanta } from './game-world/game-world-manipulate';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-consts';
+import { initializeWaveState } from './game-ai/ai-santa-spawner';
 
 // Create initial Santa
 const PLAYER_SANTA = createSanta(
@@ -22,6 +23,7 @@ const INITIAL_STATE: GameWorldState = {
   gifts: [],
   chimneys: [],
   fireballs: [],
+  waveState: initializeWaveState(),
 };
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS

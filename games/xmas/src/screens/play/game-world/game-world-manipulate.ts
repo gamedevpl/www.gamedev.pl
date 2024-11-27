@@ -24,6 +24,9 @@ export function createSanta(id: string, x = GAME_WORLD_WIDTH / 2, y = GAME_WORLD
       chargeStartTime: null,
     },
     isPlayer,
+    knockbackVx: 0,
+    knockbackVy: 0,
+    lastKnockbackTime: 0,
   };
 }
 
@@ -39,6 +42,100 @@ export function setSantaDirection(santa: Santa, direction: 'left' | 'right'): vo
     santa.direction = direction;
     santa.angle = direction === 'left' ? Math.PI - santa.angle : -Math.PI - santa.angle;
   }
+}
+
+/**
+ * Calculate knockback force based on fireball properties
+ */
+function calculateKnockbackForce(fireball: Fireball): number {
+  const sizeForce = fireball.radius * SANTA_PHYSICS.KNOCKBACK_SIZE_MULTIPLIER;
+  const velocityForce =
+    Math.sqrt(fireball.vx * fireball.vx + fireball.vy * fireball.vy) * SANTA_PHYSICS.KNOCKBACK_VELOCITY_MULTIPLIER;
+  return SANTA_PHYSICS.KNOCKBACK_BASE_FORCE * (sizeForce + velocityForce);
+}
+
+/**
+ * Apply knockback to Santa's velocity
+ */
+function applyKnockback(santa: Santa, force: number, direction: { x: number; y: number }, currentTime: number): void {
+  // Normalize direction vector
+  const magnitude = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+  const normalizedDir = {
+    x: direction.x / magnitude,
+    y: direction.y / magnitude,
+  };
+
+  // Calculate knockback velocity components
+  const knockbackVx = normalizedDir.x * force;
+  const knockbackVy = normalizedDir.y * force;
+
+  // Add random variation for more dynamic feel
+  const randomFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
+
+  // Update Santa's knockback velocities
+  santa.knockbackVx = (santa.knockbackVx || 0) + knockbackVx * randomFactor;
+  santa.knockbackVy = (santa.knockbackVy || 0) + knockbackVy * randomFactor;
+
+  // Limit maximum knockback velocity
+  const currentKnockbackSpeed = Math.sqrt(
+    santa.knockbackVx * santa.knockbackVx + santa.knockbackVy * santa.knockbackVy,
+  );
+
+  if (currentKnockbackSpeed > SANTA_PHYSICS.MAX_KNOCKBACK_VELOCITY) {
+    const scale = SANTA_PHYSICS.MAX_KNOCKBACK_VELOCITY / currentKnockbackSpeed;
+    santa.knockbackVx *= scale;
+    santa.knockbackVy *= scale;
+  }
+
+  santa.lastKnockbackTime = currentTime;
+}
+
+/**
+ * Check if a fireball hits a Santa
+ */
+export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): boolean {
+  const dx = santa.x - fireball.x;
+  const dy = santa.y - fireball.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  return distance < fireball.radius; // 30 is approximate Santa radius
+}
+
+/**
+ * Handle collision between a fireball and Santa
+ */
+export function handleFireballSantaCollision(state: GameWorldState, fireball: Fireball, santa: Santa): void {
+  // Calculate knockback force
+  const force = calculateKnockbackForce(fireball);
+
+  // Calculate direction from fireball to Santa
+  const dx = santa.x - fireball.x;
+  const dy = santa.y - fireball.y;
+
+  // Apply knockback
+  applyKnockback(santa, force, { x: dx, y: dy }, state.time);
+
+  // Optional: Reduce Santa's energy
+  santa.energy = Math.max(0, santa.energy - force * 0.5);
+  santa.energyRegenPaused = true;
+}
+
+/**
+ * Update Santa's knockback state
+ */
+export function updateSantaKnockback(santa: Santa, currentTime: number): void {
+  if (!santa.knockbackVx && !santa.knockbackVy) return;
+
+  // Calculate recovery based on time since last knockback
+  const timeSinceKnockback = currentTime - (santa.lastKnockbackTime || 0);
+  const recoveryFactor = Math.min(1, timeSinceKnockback * SANTA_PHYSICS.KNOCKBACK_RECOVERY_RATE);
+
+  // Reduce knockback velocities
+  santa.knockbackVx = (santa.knockbackVx || 0) * (1 - recoveryFactor);
+  santa.knockbackVy = (santa.knockbackVy || 0) * (1 - recoveryFactor);
+
+  // Clear very small knockback values
+  if (Math.abs(santa.knockbackVx) < 0.01) santa.knockbackVx = 0;
+  if (Math.abs(santa.knockbackVy) < 0.01) santa.knockbackVy = 0;
 }
 
 // Calculate fireball properties based on charging time and available energy
@@ -91,7 +188,14 @@ function createFireball(
     createdAt: Date.now(),
     vx: finalVx,
     vy: finalVy,
+    mass: calculateFireballMass(radius),
+    mergeCount: 1,
   };
+}
+
+// Helper function for fireball mass calculation
+function calculateFireballMass(radius: number): number {
+  return (4 / 3) * Math.PI * Math.pow(radius, 3);
 }
 
 export function createFireballFromSanta(
