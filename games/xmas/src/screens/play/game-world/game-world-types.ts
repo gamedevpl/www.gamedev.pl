@@ -14,12 +14,6 @@ export const enum SANTA_PHYSICS {
   CHARGE_ENERGY_DRAIN_RATE = 0.02,
   MIN_HEIGHT = 100.1,
   MAX_HEIGHT = 900,
-  // Knockback physics constants
-  KNOCKBACK_BASE_FORCE = 0.5, // Base force multiplier for knockback
-  KNOCKBACK_SIZE_MULTIPLIER = 0.05, // How much fireball size affects knockback
-  KNOCKBACK_VELOCITY_MULTIPLIER = 1.5, // How much fireball velocity affects knockback
-  KNOCKBACK_RECOVERY_RATE = 0.001, // How quickly Santa recovers from knockback
-  MAX_KNOCKBACK_VELOCITY = 1.1, // Maximum velocity from knockback
 }
 
 export const enum FIREBALL_PHYSICS {
@@ -71,10 +65,6 @@ export type Santa = {
   energyRegenPaused: boolean;
   input: SantaInputState;
   isPlayer: boolean;
-  // New properties for knockback
-  knockbackVx?: number; // Additional velocity from knockback
-  knockbackVy?: number; // Additional velocity from knockback
-  lastKnockbackTime?: number; // Time of last knockback for recovery calculation
 };
 
 export type Fireball = {
