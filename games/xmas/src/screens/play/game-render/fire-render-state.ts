@@ -1,4 +1,4 @@
-import { GameWorldState, FIREBALL_PHYSICS } from '../game-world/game-world-types';
+import { GameWorldState, FIREBALL_PHYSICS, SANTA_PHYSICS } from '../game-world/game-world-types';
 import { FireQuadTree } from './fire-render-quad-tree';
 import {
   FireCell,
@@ -73,6 +73,35 @@ function calculateSantaHeat(x: number, y: number, santas: GameWorldState['santas
   const worldX = x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
   const worldY = y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2;
 
+  // Calculate movement-based trail heat first
+  let trailTemp = 0;
+  for (const santa of santas) {
+    const velocity = Math.sqrt(santa.vx * santa.vx + santa.vy * santa.vy);
+    const MIN_VELOCITY = 0.1;
+
+    if (velocity > MIN_VELOCITY) {
+      // Normalize velocity vector for direction
+      const dx = -santa.vx / velocity; // Negative to position trail behind movement
+      const dy = -santa.vy / velocity;
+
+      // Calculate trail parameters
+      const TRAIL_LENGTH = 40;
+      const TRAIL_WIDTH = 20;
+
+      // Check if the current cell is within the trail area
+      const trailX = worldX - santa.x;
+      const trailY = worldY - santa.y;
+      const projectedDist = trailX * dx + trailY * dy;
+      const perpDist = Math.abs(trailX * dy - trailY * dx);
+
+      if (projectedDist > 0 && projectedDist < TRAIL_LENGTH && perpDist < TRAIL_WIDTH) {
+        trailTemp = Math.max(
+          trailTemp,
+          (1 - projectedDist / TRAIL_LENGTH) * (velocity / SANTA_PHYSICS.MAX_VELOCITY) * 0.3,
+        );
+      }
+    }
+  }
   let maxTemp = 0;
 
   for (const santa of santas) {
@@ -107,7 +136,7 @@ function calculateSantaHeat(x: number, y: number, santas: GameWorldState['santas
       maxTemp = Math.max(maxTemp, temp);
     }
   }
-
+  return Math.max(maxTemp, trailTemp);
   return maxTemp;
 }
 
