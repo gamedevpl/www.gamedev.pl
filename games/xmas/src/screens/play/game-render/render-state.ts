@@ -1,7 +1,11 @@
 import { GameWorldState } from '../game-world/game-world-types';
 import { FireRenderState, createFireRenderState, updateFireRenderState } from './fire-render-state';
 import { SnowRenderState, createSnowRenderState, updateSnowRenderState } from './snow-render-state';
-import { LandscapeState, createLandscapeState, updateLandscapeState } from './landscape-render-state';
+import { 
+  LandscapeState, 
+  createLandscapeState, 
+  updateLandscapeState 
+} from './landscape/landscape-state';
 
 export type RenderState = {
   fire: FireRenderState;
