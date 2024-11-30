@@ -2,11 +2,11 @@
 export const STARS = {
   COUNT: 100, // Number of stars
   MIN_SIZE: 1, // Minimum star size in pixels
-  MAX_SIZE: 2, // Maximum star size in pixels
-  TWINKLE_SPEED: 0.0001, // How fast stars twinkle
+  MAX_SIZE: 5, // Maximum star size in pixels
+  TWINKLE_SPEED: 0.00001, // How fast stars twinkle
   COLOR: '#FFFFFF', // Star color
   MIN_BRIGHTNESS: 0.3, // Minimum star brightness
-  MAX_BRIGHTNESS: 1.0, // Maximum star brightness
+  MAX_BRIGHTNESS: 0.5, // Maximum star brightness
   SKY_HEIGHT_RATIO: 0.7, // Stars only in upper 70% of sky
 } as const;
 
