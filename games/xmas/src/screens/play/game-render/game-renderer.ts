@@ -1,30 +1,34 @@
 import { GameWorldState } from '../game-world/game-world-types';
-import { renderFireballs } from './fireball-renderer';
 import { RenderState } from './render-state';
-import { renderSnow } from './snow-renderer';
 import { renderLandscape } from './landscape/landscape-renderer';
-import { renderSantaWithEffects } from './santa-renderer';
+import { renderSnow } from './snow-renderer';
+import { renderSanta } from './santa-renderer';
+import { renderFireballs } from './fireball-renderer';
+import { renderSky } from './landscape/sky/sky-renderer';
 
-// Render layers in order: landscape -> snow -> game objects -> effects
-export function renderGame(ctx: CanvasRenderingContext2D, world: GameWorldState, render: RenderState): void {
+export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
+  const { viewport } = renderState;
+
+  // Save the current context state
   ctx.save();
 
-  // Clear canvas
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  // Render sky gradient (background)
+  renderSky(ctx, ctx.canvas.height);
 
-  // Background layer
-  renderLandscape(ctx, render.landscape);
-  renderSnow(ctx, render);
+  // Apply viewport translation
+  ctx.translate(viewport.x, viewport.y);
 
-  // Enable crisp pixel art rendering
-  ctx.imageSmoothingEnabled = false;
+  // Render all game elements with the applied translation
+  renderLandscape(ctx, renderState.landscape);
+  renderSnow(ctx, renderState);
 
-  // Game objects layer
-  world.santas.forEach((santa) => renderSantaWithEffects(ctx, santa, world.time));
+  // Render all santas
+  world.santas.forEach((santa) => {
+    renderSanta(ctx, santa, world.time);
+  });
 
-  // Effects layer
-  renderFireballs(ctx, render);
+  renderFireballs(ctx, renderState);
 
+  // Restore the context state
   ctx.restore();
-}
+};

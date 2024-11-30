@@ -1,4 +1,4 @@
-import { useRef, RefObject, useCallback } from 'react';
+import { useRef, RefObject, useEffect } from 'react';
 import { useRafLoop, useWindowSize } from 'react-use';
 import { renderGame } from './game-render/game-renderer';
 import { GameWorldState } from './game-world/game-world-types';
@@ -38,25 +38,28 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { width: windowWidth, height: windowHeight } = useWindowSize();
 
-  useRafLoop(
-    useCallback(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      // Set canvas dimensions to match window size
-      canvas.width = windowWidth;
-      canvas.height = windowHeight;
+    // Set canvas dimensions to match window size
+    canvas.width = windowWidth;
+    canvas.height = windowHeight;
+  }, [windowWidth, windowHeight]);
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx || !gameStateRef.current) return;
+  useRafLoop(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      // Clear the canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !gameStateRef.current) return;
 
-      // Render the game
-      renderGame(ctx, gameStateRef.current.gameWorldState, gameStateRef.current.renderState);
-    }, [windowWidth, windowHeight]),
-  );
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Render the game
+    renderGame(ctx, gameStateRef.current.gameWorldState, gameStateRef.current.renderState);
+  });
 
   return (
     <ViewportContainer>
