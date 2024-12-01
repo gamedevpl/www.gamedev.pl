@@ -3,6 +3,7 @@ import { createSanta } from '../game-world/game-world-manipulate';
 import { AI_CONFIG, AI_DIFFICULTY, AISanta, WaveState } from './ai-santa-types';
 import { initializeAIState } from './ai-santa-decision';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world/game-world-consts';
+import { devConfig } from '../dev/dev-config';
 
 /**
  * Calculate a safe spawn position for AI Santa
@@ -93,6 +94,12 @@ function spawnWaveSantas(gameState: GameWorldState, waveState: WaveState): void 
  * Main update function for AI Santa spawning system
  */
 export function updateAISpawner(gameState: GameWorldState, waveState: WaveState): void {
+  if (!devConfig.getConfig().enableAISantas) {
+    // Reset wave state when AI is disabled
+    waveState.currentWave = AI_DIFFICULTY.WAVE_1;
+    return;
+  }
+
   // Check if current wave is completed
   if (areAllSantasEliminated(gameState)) {
     if (waveState.nextSpawnTime === null) {

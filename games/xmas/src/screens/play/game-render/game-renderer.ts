@@ -6,6 +6,7 @@ import { renderSanta } from './santa-renderer';
 import { renderFireballs } from './fireball-renderer';
 import { renderSky } from './landscape/sky/sky-renderer';
 import { renderGifts } from './gift-renderer';
+import { devConfig } from '../dev/dev-config';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -19,19 +20,32 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   // Apply viewport translation
   ctx.translate(viewport.x, viewport.y);
 
-  // Render all game elements with the applied translation
-  renderLandscape(ctx, renderState.landscape, renderState.viewport);
-  renderSnow(ctx, renderState);
+  // Get current dev configuration
+  const config = devConfig.getConfig();
+
+  // Conditionally render landscape elements based on dev config
+  if (config.renderMountains || config.renderTrees || config.renderSnowGround) {
+    // Pass dev config to control individual landscape elements
+    renderLandscape(ctx, renderState.landscape, renderState.viewport);
+  }
+
+  // Conditionally render snow effects
+  if (config.renderSnow) {
+    renderSnow(ctx, renderState);
+  }
 
   // Render gifts before Santas for proper depth
   renderGifts(ctx, world.gifts, world.time);
 
-  // Render all santas
+  // Always render Santas as they're essential game elements
   world.santas.forEach((santa) => {
     renderSanta(ctx, santa, world.time);
   });
 
-  renderFireballs(ctx, renderState);
+  // Conditionally render fire effects
+  if (config.renderFire) {
+    renderFireballs(ctx, renderState);
+  }
 
   // Restore the context state
   ctx.restore();

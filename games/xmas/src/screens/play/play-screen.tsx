@@ -7,6 +7,7 @@ import { createRenderState, RenderState, updateRenderState } from './game-render
 import { createSanta } from './game-world/game-world-manipulate';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-consts';
 import { initializeWaveState } from './game-ai/ai-santa-spawner';
+import { DevConfigPanel } from './dev/dev-config-panel';
 
 // Game configuration
 const GAME_CONFIG = {
@@ -85,5 +86,10 @@ export function PlayScreen() {
     }
   });
 
-  return <GameViewport gameStateRef={gameStateRef} />;
+  return (
+    <>
+      <GameViewport gameStateRef={gameStateRef} />
+      <DevConfigPanel />
+    </>
+  );
 }

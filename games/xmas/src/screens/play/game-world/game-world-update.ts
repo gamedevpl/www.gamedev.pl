@@ -12,6 +12,7 @@ import {
 } from './game-world-manipulate';
 import { dropGift } from './game-world-gift-manipulate';
 import { updateGifts } from './game-world-update-gifts';
+import { devConfig } from '../dev/dev-config';
 
 /**
  * Check and handle collisions between fireballs and all Santas
@@ -34,21 +35,25 @@ function processFireballSantaCollisions(state: GameWorldState) {
     }
   });
 
-  // Check collisions with AI Santas
-  state.santas.forEach((santa) => {
-    fireballs.forEach((fireball) => {
-      if (checkFireballSantaCollision(fireball, santa)) {
-        handleFireballSantaCollision(state, fireball, santa);
-        // Drop gift if Santa was carrying one
-        if (santa.carriedGift) {
-          const gift = state.gifts.find((g) => g.id === santa.carriedGift);
-          if (gift) {
-            dropGift(state, santa.id);
+  // Check collisions with AI Santas only if AI is enabled
+  if (devConfig.getConfig().enableAISantas) {
+    state.santas.forEach((santa) => {
+      if (santa === state.playerSanta) return; // Skip player Santa
+      
+      fireballs.forEach((fireball) => {
+        if (checkFireballSantaCollision(fireball, santa)) {
+          handleFireballSantaCollision(state, fireball, santa);
+          // Drop gift if Santa was carrying one
+          if (santa.carriedGift) {
+            const gift = state.gifts.find((g) => g.id === santa.carriedGift);
+            if (gift) {
+              dropGift(state, santa.id);
+            }
           }
         }
-      }
+      });
     });
-  });
+  }
 }
 
 /**
@@ -100,26 +105,36 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   // Process fireball-Santa collisions
   processFireballSantaCollisions(state);
 
-  // Update AI-controlled Santas
-  state.santas.forEach((santa) => {
-    if ('ai' in santa) {
-      // Handle AI Santa updates including fireball creation
-      handleAISantaFireball(state, santa as AISanta);
-    }
+  // Get current dev configuration
+  const config = devConfig.getConfig();
 
-    // Update AI Santa physics
-    updateSantaPhysics(santa, deltaTime);
-    updateSantaEnergy(santa, deltaTime);
-    
-    // Check for automatic gift collection for AI Santas
-    tryCollectNearbyGifts(state, santa);
-  });
+  // Update AI-controlled Santas only if enabled
+  if (config.enableAISantas) {
+    state.santas.forEach((santa) => {
+      if (santa === state.playerSanta) return; // Skip player Santa
+      
+      if ('ai' in santa) {
+        // Handle AI Santa updates including fireball creation
+        handleAISantaFireball(state, santa as AISanta);
+      }
+
+      // Update AI Santa physics
+      updateSantaPhysics(santa, deltaTime);
+      updateSantaEnergy(santa, deltaTime);
+      
+      // Check for automatic gift collection for AI Santas
+      tryCollectNearbyGifts(state, santa);
+    });
+
+    // Update AI spawning system only if AI is enabled
+    updateAISpawner(state, state.waveState);
+  } else {
+    // If AI is disabled, ensure only player Santa remains
+    state.santas = state.santas.filter(santa => santa === state.playerSanta);
+  }
 
   // Update gifts system
   updateGifts(state);
-
-  // Update AI spawning system
-  updateAISpawner(state, state.waveState);
 
   return state;
 }
