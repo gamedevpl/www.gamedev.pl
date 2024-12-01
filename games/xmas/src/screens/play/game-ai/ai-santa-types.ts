@@ -14,8 +14,8 @@ export const enum AI_BEHAVIOR_STATE {
  */
 export const enum AI_DIFFICULTY {
   WAVE_1 = 1, // 1 Santa
-  WAVE_2 = 2, // 2 Santas
-  WAVE_3 = 3, // 3 Santas
+  // 2 Santas
+  // 3 Santas
   // Add more waves as needed
 }
 
@@ -47,7 +47,7 @@ export const AI_CONFIG = {
 /**
  * AI Santa state information
  */
-export type AISantaState = {
+type AISantaState = {
   behaviorState: AI_BEHAVIOR_STATE;
   lastDirectionChange: number;
   lastAttackTime: number;

@@ -130,7 +130,7 @@ function calculateFireballMass(radius: number): number {
   return (4 / 3) * Math.PI * Math.pow(radius, 3);
 }
 
-export function createFireballFromSanta(
+function createFireballFromSanta(
   santa: Santa,
   chargeTime: number,
 ): { fireball: Fireball; energyCost: number } | null {

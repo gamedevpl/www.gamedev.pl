@@ -5,13 +5,8 @@ export const enum SANTA_PHYSICS {
   MIN_VELOCITY = -1.0,
   ACCELERATION = 0.0005,
   DECELERATION = 0.002,
-  MAX_ROTATION_SPEED = 0.0021,
-  ROTATION_ACCELERATION = 0.0001,
-  ROTATION_DECELERATION = 0.00005,
   MAX_ENERGY = 100,
   ENERGY_REGENERATION = 0.01,
-  FIREBALL_ENERGY_COST = 10,
-  CHARGE_ENERGY_DRAIN_RATE = 0.02,
   MIN_HEIGHT = 10.1,
   MAX_HEIGHT = 990,
 }
@@ -37,7 +32,6 @@ export const enum GIFT_PHYSICS {
   GRAVITY = 0.0005, // Gravity acceleration for falling gifts
   MAX_FALL_VELOCITY = 5, // Maximum falling velocity
   COLLECTION_RADIUS = 50, // Distance at which Santa can collect a gift
-  DELIVERY_RADIUS = 50.1, // Distance at which a gift can be delivered to a chimney
   SPAWN_HEIGHT_MIN = 600, // Minimum height for gift spawning
   SPAWN_HEIGHT_MAX = 800, // Maximum height for gift spawning
   GROUND_LEVEL = 950, // Height of the ground level (GAME_WORLD_HEIGHT - 50)
@@ -47,7 +41,7 @@ export const enum GIFT_PHYSICS {
   THROW_COOLDOWN = 1000, // Cooldown time between throws
   THROW_ANGLE_MIN = -1.0471975512, // Minimum throw angle (relative to horizontal)
   THROW_ANGLE_MAX = 1.0471975512, // Maximum throw angle (relative to horizontal)
-  THROW_AIR_RESISTANCE = 0.0011, // Air resistance factor for thrown gifts
+  // Air resistance factor for thrown gifts
   THROW_ANGULAR_VELOCITY = 0.05, // Angular velocity when gift is thrown
   THROW_MOMENTUM_TRANSFER = 0.8, // How much of Santa's momentum transfers to thrown gift
 }
@@ -110,7 +104,7 @@ export type Fireball = {
   mergeCount?: number; // Number of fireballs merged into this one
 };
 
-export type GiftState = 'floating' | 'carried' | 'falling' | 'grounded';
+type GiftState = 'floating' | 'carried' | 'falling' | 'grounded';
 
 export type Gift = {
   id: string;
@@ -130,7 +124,7 @@ export type Gift = {
   angularVelocity?: number; // Rotation speed when thrown
 };
 
-export type Chimney = {
+type Chimney = {
   id: string;
   x: number;
   y: number;

@@ -8,7 +8,6 @@ export const SNOW_PARTICLE_MIN_LIFETIME = 1000; // Minimum particle lifetime in 
 export const SNOW_PARTICLE_MAX_LIFETIME = 15000; // Maximum particle lifetime in ms
 
 // Particle Size Configuration
-export const SNOW_PARTICLE_BASE_SIZE = 3; // Base size in pixels
 export const SNOW_PARTICLE_MIN_SIZE = 2; // Minimum size for distant particles
 export const SNOW_PARTICLE_MAX_SIZE = 6; // Maximum size for close particles
 

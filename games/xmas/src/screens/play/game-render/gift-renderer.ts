@@ -97,7 +97,7 @@ function drawGroundShadow(ctx: CanvasRenderingContext2D, x: number, y: number) {
 /**
  * Render a single gift
  */
-export function renderGift(ctx: CanvasRenderingContext2D, gift: Gift, time: number) {
+function renderGift(ctx: CanvasRenderingContext2D, gift: Gift, time: number) {
   ctx.save();
 
   switch (gift.state) {

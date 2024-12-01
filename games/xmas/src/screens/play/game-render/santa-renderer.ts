@@ -190,36 +190,3 @@ export function renderSanta(ctx: CanvasRenderingContext2D, santa: Santa, time: n
 
   ctx.restore();
 }
-
-/**
- * Render player indicator for player-controlled Santa
- */
-function renderPlayerIndicator(ctx: CanvasRenderingContext2D, santa: Santa): void {
-  if (!santa.isPlayer) return;
-
-  ctx.save();
-
-  // Draw indicator arrow above Santa
-  ctx.translate(santa.x, santa.y - SANTA_SIZE.HEIGHT);
-
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.lineTo(-5, -5);
-  ctx.lineTo(5, -5);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.restore();
-}
-
-/**
- * Main render function that handles both Santa and any indicators
- */
-export function renderSantaWithEffects(ctx: CanvasRenderingContext2D, santa: Santa, time: number): void {
-  // Render the main Santa and sledge
-  renderSanta(ctx, santa, time);
-
-  // Render player indicator if needed
-  renderPlayerIndicator(ctx, santa);
-}

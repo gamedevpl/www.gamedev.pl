@@ -104,18 +104,3 @@ export function updateAISpawner(gameState: GameWorldState, waveState: WaveState)
     }
   }
 }
-
-/**
- * Get current wave information
- */
-export function getWaveInfo(waveState: WaveState): {
-  wave: number;
-  santasRemaining: number;
-  nextSpawnTime: number | null;
-} {
-  return {
-    wave: waveState.currentWave,
-    santasRemaining: waveState.santasRemaining,
-    nextSpawnTime: waveState.nextSpawnTime,
-  };
-}

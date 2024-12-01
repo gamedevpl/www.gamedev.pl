@@ -1,5 +1,5 @@
 import { GAME_WORLD_WIDTH } from './game-world-consts';
-import { GameWorldState, Gift, GIFT_PHYSICS, Santa, GiftState, GIFT_SPAWN } from './game-world-types';
+import { GameWorldState, Gift, GIFT_PHYSICS, Santa, GIFT_SPAWN } from './game-world-types';
 
 /**
  * Try to collect any gifts that are within collection range of the Santa
@@ -24,7 +24,7 @@ export function tryCollectNearbyGifts(world: GameWorldState, santa: Santa): bool
 /**
  * Get the count of active gifts in the world
  */
-export function getActiveGiftCount(world: GameWorldState): number {
+function getActiveGiftCount(world: GameWorldState): number {
   return world.gifts.length;
 }
 
@@ -54,7 +54,7 @@ export function updateGiftSpawnTiming(world: GameWorldState): void {
 /**
  * Create a new gift at specified position
  */
-export function createGift(id: string, x: number, y: number): Gift {
+function createGift(id: string, x: number, y: number): Gift {
   return {
     id,
     x,
@@ -87,7 +87,7 @@ export function spawnGift(world: GameWorldState): void {
 /**
  * Check if a gift can be collected by Santa
  */
-export function canCollectGift(gift: Gift, santa: Santa): boolean {
+function canCollectGift(gift: Gift, santa: Santa): boolean {
   if (gift.state !== 'floating' && gift.state !== 'grounded' && gift.state !== 'falling') return false;
   if (santa.carriedGift) return false;
   if (gift.throwTime && Date.now() - gift.throwTime < GIFT_PHYSICS.THROW_COOLDOWN) return false;
@@ -102,7 +102,7 @@ export function canCollectGift(gift: Gift, santa: Santa): boolean {
 /**
  * Collect a gift
  */
-export function collectGift(world: GameWorldState, giftId: string, santaId: string): boolean {
+function collectGift(world: GameWorldState, giftId: string, santaId: string): boolean {
   const gift = world.gifts.find((g) => g.id === giftId);
   const santa = world.santas.find((s) => s.id === santaId);
 
@@ -112,43 +112,6 @@ export function collectGift(world: GameWorldState, giftId: string, santaId: stri
   gift.state = 'carried';
   gift.carriedBy = santa.id;
   santa.carriedGift = gift.id;
-
-  return true;
-}
-
-/**
- * Check if a gift can be delivered to a chimney
- */
-export function canDeliverGift(gift: Gift, x: number, y: number): boolean {
-  if (gift.state !== 'carried' && gift.state !== 'grounded') return false;
-
-  const dx = x - gift.x;
-  const dy = y - gift.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-
-  return distance <= GIFT_PHYSICS.DELIVERY_RADIUS;
-}
-
-/**
- * Deliver a gift to a chimney
- */
-export function deliverGift(world: GameWorldState, giftId: string, chimneyId: string): boolean {
-  const gift = world.gifts.find((g) => g.id === giftId);
-  const chimney = world.chimneys.find((c) => c.id === chimneyId);
-
-  if (!gift || !chimney) return false;
-  if (!canDeliverGift(gift, chimney.x, chimney.y)) return false;
-
-  // Find Santa carrying the gift
-  if (gift.carriedBy) {
-    const santa = world.santas.find((s) => s.id === gift.carriedBy);
-    if (santa) {
-      santa.carriedGift = undefined;
-    }
-  }
-
-  // Remove the delivered gift
-  world.gifts = world.gifts.filter((g) => g.id !== giftId);
 
   return true;
 }
@@ -173,82 +136,4 @@ export function dropGift(world: GameWorldState, santaId: string): boolean {
   gift.vy = santa.vy * 0.5;
 
   return true;
-}
-
-/**
- * Check if a Santa can throw a gift
- */
-export function canThrowGift(santa: Santa, gift: Gift): boolean {
-  if (!santa || !gift) return false;
-  if (gift.state !== 'carried') return false;
-  if (gift.carriedBy !== santa.id) return false;
-  if (santa.carriedGift !== gift.id) return false;
-
-  return true;
-}
-
-/**
- * Validate gift throw parameters
- */
-export function validateThrowParameters(velocity: number, angle: number): boolean {
-  if (velocity < GIFT_PHYSICS.MIN_THROW_VELOCITY || velocity > GIFT_PHYSICS.MAX_THROW_VELOCITY) return false;
-  if (angle < GIFT_PHYSICS.THROW_ANGLE_MIN || angle > GIFT_PHYSICS.THROW_ANGLE_MAX) return false;
-
-  return true;
-}
-
-/**
- * Calculate initial throw velocity components
- */
-export function calculateThrowVelocityComponents(
-  velocity: number,
-  angle: number,
-  santaVx: number,
-  santaVy: number,
-): { vx: number; vy: number } {
-  const baseVx = velocity * Math.cos(angle);
-  const baseVy = velocity * Math.sin(angle);
-
-  // Add Santa's momentum
-  const vx = baseVx + santaVx * GIFT_PHYSICS.THROW_MOMENTUM_TRANSFER;
-  const vy = baseVy + santaVy * GIFT_PHYSICS.THROW_MOMENTUM_TRANSFER;
-
-  return { vx, vy };
-}
-
-/**
- * Initialize gift for thrown state
- */
-export function initializeGiftThrow(gift: Gift, velocity: number, angle: number, vx: number, vy: number): void {
-  gift.state = 'falling';
-  gift.throwVelocity = velocity;
-  gift.throwAngle = angle;
-  gift.vx = vx;
-  gift.vy = vy;
-  gift.angularVelocity = GIFT_PHYSICS.THROW_ANGULAR_VELOCITY * (Math.random() > 0.5 ? 1 : -1);
-}
-
-/**
- * Clear gift-santa relationship
- */
-export function clearGiftSantaRelationship(gift: Gift, santa: Santa): void {
-  gift.carriedBy = undefined;
-  santa.carriedGift = undefined;
-}
-
-/**
- * Transition gift state
- */
-export function transitionGiftState(gift: Gift, newState: GiftState): void {
-  gift.state = newState;
-
-  // Reset specific properties based on new state
-  if (newState === 'grounded') {
-    gift.vx = 0;
-    gift.vy = 0;
-    gift.angularVelocity = 0;
-    gift.y = GIFT_PHYSICS.GROUND_LEVEL;
-  } else if (newState === 'falling') {
-    gift.angularVelocity = 0;
-  }
 }
