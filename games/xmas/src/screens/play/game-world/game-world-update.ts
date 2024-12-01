@@ -4,11 +4,14 @@ import { updateSantaCharging, updateSantaEnergy, updateSantaPhysics } from './ga
 import { makeAIDecision } from '../game-ai/ai-santa-decision';
 import { AISanta } from '../game-ai/ai-santa-types';
 import { updateAISpawner } from '../game-ai/ai-santa-spawner';
+import { shouldSpawnGift, spawnGift, updateGiftSpawnTiming, tryCollectNearbyGifts } from './game-world-gift-manipulate';
 import {
   checkFireballSantaCollision,
   handleFireballSantaCollision,
   addFireballFromSanta,
 } from './game-world-manipulate';
+import { dropGift } from './game-world-gift-manipulate';
+import { updateGifts } from './game-world-update-gifts';
 
 /**
  * Check and handle collisions between fireballs and all Santas
@@ -21,6 +24,13 @@ function processFireballSantaCollisions(state: GameWorldState) {
   fireballs.forEach((fireball) => {
     if (checkFireballSantaCollision(fireball, state.playerSanta)) {
       handleFireballSantaCollision(state, fireball, state.playerSanta);
+      // Drop gift if Santa was carrying one
+      if (state.playerSanta.carriedGift) {
+        const gift = state.gifts.find((g) => g.id === state.playerSanta.carriedGift);
+        if (gift) {
+          dropGift(state, state.playerSanta.id);
+        }
+      }
     }
   });
 
@@ -29,6 +39,13 @@ function processFireballSantaCollisions(state: GameWorldState) {
     fireballs.forEach((fireball) => {
       if (checkFireballSantaCollision(fireball, santa)) {
         handleFireballSantaCollision(state, fireball, santa);
+        // Drop gift if Santa was carrying one
+        if (santa.carriedGift) {
+          const gift = state.gifts.find((g) => g.id === santa.carriedGift);
+          if (gift) {
+            dropGift(state, santa.id);
+          }
+        }
       }
     });
   });
@@ -63,10 +80,19 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   // Update time
   state.time += deltaTime;
 
+  // Update gift spawning system
+  if (shouldSpawnGift(state)) {
+    spawnGift(state);
+  }
+  updateGiftSpawnTiming(state);
+
   // First update all physics and movement
   updateSantaPhysics(state.playerSanta, deltaTime);
   updateSantaCharging(state);
   updateSantaEnergy(state.playerSanta, deltaTime);
+
+  // Check for automatic gift collection for player Santa
+  tryCollectNearbyGifts(state, state.playerSanta);
 
   // Update fireballs and handle their collisions
   updateFireballs(state, deltaTime);
@@ -84,7 +110,13 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
     // Update AI Santa physics
     updateSantaPhysics(santa, deltaTime);
     updateSantaEnergy(santa, deltaTime);
+    
+    // Check for automatic gift collection for AI Santas
+    tryCollectNearbyGifts(state, santa);
   });
+
+  // Update gifts system
+  updateGifts(state);
 
   // Update AI spawning system
   updateAISpawner(state, state.waveState);

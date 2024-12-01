@@ -6,6 +6,8 @@ import {
   SetSantaDirectionEvent,
   StartChargingEvent,
   StopChargingEvent,
+  StartThrowingGiftEvent,
+  StopThrowingGiftEvent,
 } from './input-events';
 
 const INPUT_KEYS = {
@@ -24,6 +26,7 @@ type InputState = {
     down: boolean;
   };
   isCharging: boolean;
+  isThrowingGift: boolean;
   chargeStartTime: number | null;
 };
 
@@ -35,8 +38,12 @@ const initialInputState: InputState = {
     down: false,
   },
   isCharging: false,
+  isThrowingGift: false,
   chargeStartTime: null,
 };
+
+// External state to track if Santa is carrying a gift
+let isCarryingGift = false;
 
 export function InputController() {
   const [inputState, setInputState] = useState<InputState>(initialInputState);
@@ -51,26 +58,62 @@ export function InputController() {
     }
   }, []);
 
+  // Subscribe to santa state changes
+  useEffect(() => {
+    const handleSantaStateChange = (event: CustomEvent) => {
+      if (event.detail && 'hasGift' in event.detail) {
+        isCarryingGift = event.detail.hasGift;
+      }
+    };
+
+    window.addEventListener('santa:stateChange', handleSantaStateChange as EventListener);
+    return () => {
+      window.removeEventListener('santa:stateChange', handleSantaStateChange as EventListener);
+    };
+  }, []);
+
   const handleKeyboardInput = useCallback(
     (event: KeyboardEvent, isKeyDown: boolean) => {
-      // Handle charging input
+      // Handle charging/throwing input
       if (INPUT_KEYS.CHARGE.has(event.key)) {
-        if (isKeyDown && !inputState.isCharging) {
+        if (isKeyDown && !inputState.isCharging && !inputState.isThrowingGift) {
           const timestamp = Date.now();
-          setInputState(prev => ({
-            ...prev,
-            isCharging: true,
-            chargeStartTime: timestamp,
-          }));
-          dispatchCustomEvent<StartChargingEvent>(GameEvents.START_CHARGING, { timestamp });
-        } else if (!isKeyDown && inputState.isCharging) {
+          
+          // Determine whether to start charging fireball or throwing gift
+          if (isCarryingGift) {
+            setInputState(prev => ({
+              ...prev,
+              isThrowingGift: true,
+              chargeStartTime: timestamp,
+            }));
+            dispatchCustomEvent<StartThrowingGiftEvent>(GameEvents.START_THROWING_GIFT, { timestamp });
+          } else {
+            setInputState(prev => ({
+              ...prev,
+              isCharging: true,
+              chargeStartTime: timestamp,
+            }));
+            dispatchCustomEvent<StartChargingEvent>(GameEvents.START_CHARGING, { timestamp });
+          }
+        } else if (!isKeyDown) {
           const timestamp = Date.now();
-          setInputState(prev => ({
-            ...prev,
-            isCharging: false,
-            chargeStartTime: null,
-          }));
-          dispatchCustomEvent<StopChargingEvent>(GameEvents.STOP_CHARGING, { timestamp });
+          
+          // Handle release based on current state
+          if (inputState.isThrowingGift) {
+            setInputState(prev => ({
+              ...prev,
+              isThrowingGift: false,
+              chargeStartTime: null,
+            }));
+            dispatchCustomEvent<StopThrowingGiftEvent>(GameEvents.STOP_THROWING_GIFT, { timestamp });
+          } else if (inputState.isCharging) {
+            setInputState(prev => ({
+              ...prev,
+              isCharging: false,
+              chargeStartTime: null,
+            }));
+            dispatchCustomEvent<StopChargingEvent>(GameEvents.STOP_CHARGING, { timestamp });
+          }
         }
         return;
       }
@@ -98,7 +141,7 @@ export function InputController() {
         dispatchMovement(newMoveInput);
       }
     },
-    [inputState.moveInput, inputState.isCharging, dispatchMovement],
+    [inputState.moveInput, inputState.isCharging, inputState.isThrowingGift, dispatchMovement],
   );
 
   useEffect(() => {

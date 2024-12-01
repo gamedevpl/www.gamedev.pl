@@ -31,6 +31,33 @@ export const enum FIREBALL_PHYSICS {
   MIN_COLLISION_VELOCITY = 0.1, // Minimum velocity difference for collision
 }
 
+export const enum GIFT_PHYSICS {
+  FLOAT_AMPLITUDE = 0.2, // Amplitude of floating motion
+  FLOAT_FREQUENCY = 0.001, // Frequency of floating motion
+  GRAVITY = 0.0005, // Gravity acceleration for falling gifts
+  MAX_FALL_VELOCITY = 5, // Maximum falling velocity
+  COLLECTION_RADIUS = 50, // Distance at which Santa can collect a gift
+  DELIVERY_RADIUS = 50.1, // Distance at which a gift can be delivered to a chimney
+  SPAWN_HEIGHT_MIN = 600, // Minimum height for gift spawning
+  SPAWN_HEIGHT_MAX = 800, // Maximum height for gift spawning
+  GROUND_LEVEL = 950, // Height of the ground level (GAME_WORLD_HEIGHT - 50)
+  // Throw-related physics constants
+  MIN_THROW_VELOCITY = 0.21, // Minimum velocity when throwing a gift
+  MAX_THROW_VELOCITY = 5.1, // Maximum velocity when throwing a gift
+  THROW_COOLDOWN = 1000, // Cooldown time between throws
+  THROW_ANGLE_MIN = -1.0471975512, // Minimum throw angle (relative to horizontal)
+  THROW_ANGLE_MAX = 1.0471975512, // Maximum throw angle (relative to horizontal)
+  THROW_AIR_RESISTANCE = 0.0011, // Air resistance factor for thrown gifts
+  THROW_ANGULAR_VELOCITY = 0.05, // Angular velocity when gift is thrown
+  THROW_MOMENTUM_TRANSFER = 0.8, // How much of Santa's momentum transfers to thrown gift
+}
+
+export const enum GIFT_SPAWN {
+  MAX_CONCURRENT_GIFTS = 5, // Maximum number of gifts that can exist at once
+  MIN_SPAWN_INTERVAL = 5000, // Minimum time between gift spawns (5 seconds)
+  MAX_SPAWN_INTERVAL = 10000, // Maximum time between gift spawns (10 seconds)
+}
+
 export type SantaInputState = {
   left: boolean;
   right: boolean;
@@ -48,6 +75,8 @@ export type GameWorldState = {
   chimneys: Chimney[];
   fireballs: Fireball[];
   waveState: WaveState;
+  lastGiftSpawnTime: number; // Timestamp of the last gift spawn
+  nextGiftSpawnTime: number; // Timestamp when the next gift should spawn
 };
 
 export type Santa = {
@@ -65,6 +94,7 @@ export type Santa = {
   energyRegenPaused: boolean;
   input: SantaInputState;
   isPlayer: boolean;
+  carriedGift?: string; // ID of the gift being carried, if any
 };
 
 export type Fireball = {
@@ -80,6 +110,8 @@ export type Fireball = {
   mergeCount?: number; // Number of fireballs merged into this one
 };
 
+export type GiftState = 'floating' | 'carried' | 'falling' | 'grounded';
+
 export type Gift = {
   id: string;
   x: number;
@@ -87,6 +119,15 @@ export type Gift = {
   vx: number;
   vy: number;
   angle: number;
+  state: GiftState;
+  carriedBy?: string; // ID of the Santa carrying this gift
+  floatOffset?: number; // Random offset for floating animation
+  createdAt: number;
+  // Throw-related properties
+  throwTime?: number; // Time when gift was thrown
+  throwVelocity?: number; // Initial velocity when thrown
+  throwAngle?: number; // Initial angle when thrown
+  angularVelocity?: number; // Rotation speed when thrown
 };
 
 export type Chimney = {

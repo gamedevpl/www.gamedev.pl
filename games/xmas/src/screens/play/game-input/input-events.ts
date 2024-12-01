@@ -5,6 +5,10 @@ export enum GameEvents {
   START_CHARGING = 'game:start-charging',
   STOP_CHARGING = 'game:stop-charging',
 
+  // Gift throwing events
+  START_THROWING_GIFT = 'game:start-throwing-gift',
+  STOP_THROWING_GIFT = 'game:stop-throwing-gift',
+
   // Santa movement events
   MOVE_SANTA = 'game:move-santa',
   SET_SANTA_DIRECTION = 'game:set-santa-direction',
@@ -15,6 +19,14 @@ export type StartChargingEvent = {
 };
 
 export type StopChargingEvent = {
+  timestamp: number;
+};
+
+export type StartThrowingGiftEvent = {
+  timestamp: number;
+};
+
+export type StopThrowingGiftEvent = {
   timestamp: number;
 };
 
@@ -77,6 +89,18 @@ export function isStartChargingEvent(event: unknown): event is StartChargingEven
 }
 
 export function isStopChargingEvent(event: unknown): event is StopChargingEvent {
+  if (!isObject(event)) return false;
+
+  return hasProperty(event, 'timestamp') && typeof event.timestamp === 'number';
+}
+
+export function isStartThrowingGiftEvent(event: unknown): event is StartThrowingGiftEvent {
+  if (!isObject(event)) return false;
+
+  return hasProperty(event, 'timestamp') && typeof event.timestamp === 'number';
+}
+
+export function isStopThrowingGiftEvent(event: unknown): event is StopThrowingGiftEvent {
   if (!isObject(event)) return false;
 
   return hasProperty(event, 'timestamp') && typeof event.timestamp === 'number';

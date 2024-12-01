@@ -5,6 +5,7 @@ import { renderSnow } from './snow-renderer';
 import { renderSanta } from './santa-renderer';
 import { renderFireballs } from './fireball-renderer';
 import { renderSky } from './landscape/sky/sky-renderer';
+import { renderGifts } from './gift-renderer';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -21,6 +22,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   // Render all game elements with the applied translation
   renderLandscape(ctx, renderState.landscape, renderState.viewport);
   renderSnow(ctx, renderState);
+
+  // Render gifts before Santas for proper depth
+  renderGifts(ctx, world.gifts, world.time);
 
   // Render all santas
   world.santas.forEach((santa) => {
