@@ -19,7 +19,7 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   ctx.translate(viewport.x, viewport.y);
 
   // Render all game elements with the applied translation
-  renderLandscape(ctx, renderState.landscape);
+  renderLandscape(ctx, renderState.landscape, renderState.viewport);
   renderSnow(ctx, renderState);
 
   // Render all santas
