@@ -75,7 +75,7 @@ class DevConfigManager {
    * Get current configuration state
    */
   getConfig(): Readonly<DevConfig> {
-    return { ...this.config };
+    return this.config;
   }
 
   /**
