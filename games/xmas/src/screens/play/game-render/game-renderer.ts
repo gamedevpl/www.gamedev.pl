@@ -20,17 +20,14 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   // Apply viewport translation
   ctx.translate(viewport.x, viewport.y);
 
-  // Get current dev configuration
-  const config = devConfig.getConfig();
-
   // Conditionally render landscape elements based on dev config
-  if (config.renderMountains || config.renderTrees || config.renderSnowGround) {
+  if (devConfig.renderMountains || devConfig.renderTrees || devConfig.renderSnowGround) {
     // Pass dev config to control individual landscape elements
     renderLandscape(ctx, renderState.landscape, renderState.viewport);
   }
 
   // Conditionally render snow effects
-  if (config.renderSnow) {
+  if (devConfig.renderSnow) {
     renderSnow(ctx, renderState);
   }
 
@@ -43,7 +40,7 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   });
 
   // Conditionally render fire effects
-  if (config.renderFire) {
+  if (devConfig.renderFire) {
     renderFireballs(ctx, renderState);
   }
 

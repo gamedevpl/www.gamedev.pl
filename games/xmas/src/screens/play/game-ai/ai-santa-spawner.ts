@@ -94,7 +94,7 @@ function spawnWaveSantas(gameState: GameWorldState, waveState: WaveState): void 
  * Main update function for AI Santa spawning system
  */
 export function updateAISpawner(gameState: GameWorldState, waveState: WaveState): void {
-  if (!devConfig.getConfig().enableAISantas) {
+  if (!devConfig.enableAISantas) {
     // Reset wave state when AI is disabled
     waveState.currentWave = AI_DIFFICULTY.WAVE_1;
     return;

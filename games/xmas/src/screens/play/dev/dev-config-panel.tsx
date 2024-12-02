@@ -1,17 +1,35 @@
-import 'react';
+import { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { useDevConfig, useDevMode } from './dev-config';
+import { devConfig, DevConfig, setDevConfig, getDevMode } from './dev-config';
 
 export function DevConfigPanel() {
-  const isDevMode = useDevMode();
-  const [config, updateConfig] = useDevConfig();
+  // Local state to manage panel configuration
+  const [config, setConfig] = useState<DevConfig>(devConfig);
+  const [isDevMode, setIsDevMode] = useState(getDevMode);
 
+  // Sync local state with dev config on hash changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsDevMode(getDevMode());
+      setConfig(devConfig);
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Don't render panel if not in dev mode
   if (!isDevMode) {
     return null;
   }
 
-  const handleToggle = (key: keyof typeof config) => {
-    updateConfig({ [key]: !config[key] });
+  const handleToggle = (key: keyof DevConfig) => {
+    const newConfig = {
+      ...config,
+      [key]: !config[key],
+    };
+    setDevConfig(newConfig);
+    setConfig(newConfig);
   };
 
   return (

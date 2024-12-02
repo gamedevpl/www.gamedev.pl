@@ -7,8 +7,6 @@ import { ViewportState } from '../render-state';
 import { devConfig } from '../../dev/dev-config';
 
 export function renderLandscape(ctx: CanvasRenderingContext2D, state: LandscapeState, viewport: ViewportState): void {
-  const config = devConfig.getConfig();
-
   // Save the current context state
   ctx.save();
 
@@ -19,17 +17,17 @@ export function renderLandscape(ctx: CanvasRenderingContext2D, state: LandscapeS
   renderStars(ctx, state.stars.stars);
 
   // Render mountains (back to front)
-  if (config.renderMountains) {
+  if (devConfig.renderMountains) {
     renderMountains(ctx, state.mountains.mountains, viewport);
   }
 
   // Render snow ground (between mountains and trees)
-  if (config.renderSnowGround) {
+  if (devConfig.renderSnowGround) {
     renderSnowGrounds(ctx, state.snowGround.grounds, viewport);
   }
 
   // Render trees (back to front)
-  if (config.renderTrees) {
+  if (devConfig.renderTrees) {
     renderTrees(ctx, state.trees.trees, viewport);
   }
 

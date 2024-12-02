@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 /**
  * Interface defining the development configuration options
  */
@@ -28,126 +26,59 @@ const DEFAULT_CONFIG: DevConfig = {
 };
 
 /**
- * Custom event for config updates
+ * Serializes configuration object to URL hash string
  */
-const CONFIG_UPDATE_EVENT = 'devConfigUpdate';
-
-/**
- * Event interface for config updates
- */
-interface DevConfigUpdateEvent extends CustomEvent {
-  detail: Partial<DevConfig>;
+function serializeConfig(config: DevConfig): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(config)) {
+    params.set(key, String(value));
+  }
+  return `#dev?${params.toString()}`;
 }
 
 /**
- * Class managing the development configuration
+ * Deserializes configuration from URL hash string
  */
-class DevConfigManager {
-  private config: DevConfig;
-  private listeners: Set<(config: DevConfig) => void>;
+function deserializeConfig(hash: string): Partial<DevConfig> {
+  try {
+    const match = hash.match(/#dev\?(.*)/);
+    if (!match) return {};
 
-  constructor() {
-    this.config = { ...DEFAULT_CONFIG };
-    this.listeners = new Set();
-    this.initHashListener();
-  }
-
-  /**
-   * Initialize hash change listener for dev mode
-   */
-  private initHashListener() {
-    window.addEventListener('hashchange', this.checkDevMode.bind(this));
-    this.checkDevMode(); // Initial check
-  }
-
-  /**
-   * Check if dev mode is enabled via URL hash
-   */
-  private checkDevMode() {
-    const isDevMode = window.location.hash.includes('#dev');
-    if (!isDevMode) {
-      // Reset to default config when dev mode is disabled
-      this.updateConfig(DEFAULT_CONFIG);
-    }
-  }
-
-  /**
-   * Get current configuration state
-   */
-  getConfig(): Readonly<DevConfig> {
-    return this.config;
-  }
-
-  /**
-   * Update configuration
-   */
-  updateConfig(updates: Partial<DevConfig>) {
-    this.config = {
-      ...this.config,
-      ...updates,
-    };
-
-    // Notify all listeners
-    this.listeners.forEach((listener) => listener(this.getConfig()));
-
-    // Dispatch custom event
-    const event = new CustomEvent(CONFIG_UPDATE_EVENT, {
-      detail: updates,
-    }) as DevConfigUpdateEvent;
-    window.dispatchEvent(event);
-  }
-
-  /**
-   * Subscribe to configuration changes
-   */
-  subscribe(listener: (config: DevConfig) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  /**
-   * Check if dev mode is currently active
-   */
-  isDevMode(): boolean {
-    return window.location.hash.includes('#dev');
-  }
-}
-
-// Create singleton instance
-export const devConfig = new DevConfigManager();
-
-/**
- * React hook for accessing dev configuration
- */
-export function useDevConfig(): [DevConfig, (updates: Partial<DevConfig>) => void] {
-  const [config, setConfig] = useState<DevConfig>(devConfig.getConfig());
-
-  useEffect(() => {
-    // Subscribe to config updates
-    const unsubscribe = devConfig.subscribe((newConfig) => {
-      setConfig(newConfig);
+    const params = new URLSearchParams(match[1]);
+    const config: Partial<DevConfig> = {};
+    params.forEach((value, key) => {
+      if (key in DEFAULT_CONFIG) {
+        config[key as keyof DevConfig] = value === 'true';
+      }
     });
-
-    return unsubscribe;
-  }, []);
-
-  return [config, (updates) => devConfig.updateConfig(updates)];
+    return config;
+  } catch (e) {
+    console.warn('Failed to parse dev config from hash:', e);
+    return {};
+  }
 }
+
+export const setDevConfig = (config: Partial<DevConfig>) => {
+  Object.assign(devConfig, config);
+  const newHash = serializeConfig(devConfig);
+  if (window.location.hash !== newHash) {
+    window.history.replaceState(null, '', newHash);
+  }
+};
+
+export const getDevMode = () => window.location.hash.startsWith('#dev');
+
+export const setDevMode = (enabled: boolean) => {
+  if (enabled) {
+    window.location.hash = '#dev';
+  } else {
+    window.location.hash = '';
+  }
+};
 
 /**
- * React hook for checking dev mode status
+ * Export a singleton instance of the configuration manager
  */
-export function useDevMode(): boolean {
-  const [isDevMode, setIsDevMode] = useState(devConfig.isDevMode());
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setIsDevMode(devConfig.isDevMode());
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  return isDevMode;
-}
+export const devConfig: DevConfig = getDevMode()
+  ? { ...DEFAULT_CONFIG, ...deserializeConfig(window.location.hash) }
+  : { ...DEFAULT_CONFIG };
