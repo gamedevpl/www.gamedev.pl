@@ -6,6 +6,14 @@ import { renderSnowGrounds } from './snow-ground/snow-ground-renderer';
 import { ViewportState } from '../render-state';
 import { devConfig } from '../../dev/dev-config';
 
+/**
+ * Render the complete landscape with all its components
+ * Rendering order (back to front):
+ * 1. Stars (background)
+ * 2. Mountains (with parallax)
+ * 3. Snow Ground (simplified)
+ * 4. Trees (simplified)
+ */
 export function renderLandscape(ctx: CanvasRenderingContext2D, state: LandscapeState, viewport: ViewportState): void {
   // Save the current context state
   ctx.save();
@@ -16,19 +24,19 @@ export function renderLandscape(ctx: CanvasRenderingContext2D, state: LandscapeS
   // Render stars (background)
   renderStars(ctx, state.stars.stars);
 
-  // Render mountains (back to front)
+  // Render mountains (with parallax)
   if (devConfig.renderMountains) {
     renderMountains(ctx, state.mountains.mountains, viewport);
   }
 
-  // Render snow ground (between mountains and trees)
+  // Render snow ground (simplified, no parallax)
   if (devConfig.renderSnowGround) {
-    renderSnowGrounds(ctx, state.snowGround.grounds, viewport);
+    renderSnowGrounds(ctx, state.snowGround.grounds);
   }
 
-  // Render trees (back to front)
+  // Render trees (simplified, no parallax)
   if (devConfig.renderTrees) {
-    renderTrees(ctx, state.trees.trees, viewport);
+    renderTrees(ctx, state.trees.trees);
   }
 
   // Restore the context state
