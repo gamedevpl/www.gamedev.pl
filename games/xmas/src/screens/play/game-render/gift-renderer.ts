@@ -12,19 +12,18 @@ const GIFT_CONFIG = {
     glowColor: 'rgba(255, 255, 255, 0.3)',
     glowRadius: 40,
   },
-  grounded: {
-    shadowBlur: 15,
-    shadowColor: 'rgba(0, 0, 0, 0.3)',
-  },
 };
 
 /**
  * Draw a gift box shape
  */
-function drawGiftBox(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, angle: number) {
+function drawGiftBox(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, time: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(angle);
+  
+  // Add slight wobble to the gift
+  const wobble = Math.sin(time * 0.002) * 0.1;
+  ctx.rotate(wobble);
 
   // Draw shadow/depth effect
   ctx.fillStyle = GIFT_CONFIG.colors.shadow;
@@ -78,55 +77,14 @@ function drawFloatingEffect(ctx: CanvasRenderingContext2D, x: number, y: number,
 }
 
 /**
- * Draw ground shadow
- */
-function drawGroundShadow(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.save();
-
-  ctx.shadowBlur = GIFT_CONFIG.grounded.shadowBlur;
-  ctx.shadowColor = GIFT_CONFIG.grounded.shadowColor;
-
-  ctx.beginPath();
-  ctx.ellipse(x, y + 2, GIFT_CONFIG.size / 2, GIFT_CONFIG.size / 4, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-  ctx.fill();
-
-  ctx.restore();
-}
-
-/**
  * Render a single gift
  */
 function renderGift(ctx: CanvasRenderingContext2D, gift: Gift, time: number) {
-  ctx.save();
-
-  switch (gift.state) {
-    case 'floating':
-      // Draw floating effect
-      drawFloatingEffect(ctx, gift.x, gift.y, time);
-      // Draw the gift with slight wobble
-      drawGiftBox(ctx, gift.x, gift.y, GIFT_CONFIG.size, Math.sin(time * 0.002) * 0.1);
-      break;
-
-    case 'carried':
-      // Draw the gift with santa's angle
-      drawGiftBox(ctx, gift.x, gift.y, GIFT_CONFIG.size, gift.angle);
-      break;
-
-    case 'falling':
-      // Draw rotating gift
-      drawGiftBox(ctx, gift.x, gift.y, GIFT_CONFIG.size, gift.angle);
-      break;
-
-    case 'grounded':
-      // Draw shadow under the gift
-      drawGroundShadow(ctx, gift.x, gift.y);
-      // Draw the gift
-      drawGiftBox(ctx, gift.x, gift.y, GIFT_CONFIG.size, gift.angle);
-      break;
-  }
-
-  ctx.restore();
+  // Draw floating effect
+  drawFloatingEffect(ctx, gift.x, gift.y, time);
+  
+  // Draw the gift
+  drawGiftBox(ctx, gift.x, gift.y, GIFT_CONFIG.size, time);
 }
 
 /**

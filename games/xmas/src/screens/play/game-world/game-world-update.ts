@@ -10,7 +10,6 @@ import {
   handleFireballSantaCollision,
   addFireballFromSanta,
 } from './game-world-manipulate';
-import { dropGift } from './game-world-gift-manipulate';
 import { updateGifts } from './game-world-update-gifts';
 import { devConfig } from '../dev/dev-config';
 
@@ -25,13 +24,6 @@ function processFireballSantaCollisions(state: GameWorldState) {
   fireballs.forEach((fireball) => {
     if (checkFireballSantaCollision(fireball, state.playerSanta)) {
       handleFireballSantaCollision(state, fireball, state.playerSanta);
-      // Drop gift if Santa was carrying one
-      if (state.playerSanta.carriedGift) {
-        const gift = state.gifts.find((g) => g.id === state.playerSanta.carriedGift);
-        if (gift) {
-          dropGift(state, state.playerSanta.id);
-        }
-      }
     }
   });
 
@@ -43,13 +35,6 @@ function processFireballSantaCollisions(state: GameWorldState) {
       fireballs.forEach((fireball) => {
         if (checkFireballSantaCollision(fireball, santa)) {
           handleFireballSantaCollision(state, fireball, santa);
-          // Drop gift if Santa was carrying one
-          if (santa.carriedGift) {
-            const gift = state.gifts.find((g) => g.id === santa.carriedGift);
-            if (gift) {
-              dropGift(state, santa.id);
-            }
-          }
         }
       });
     });
