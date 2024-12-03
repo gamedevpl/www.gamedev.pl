@@ -8,6 +8,7 @@ export const STARS = {
   MIN_BRIGHTNESS: 0.3, // Minimum star brightness
   MAX_BRIGHTNESS: 0.5, // Maximum star brightness
   SKY_HEIGHT_RATIO: 0.7, // Stars only in upper 70% of sky
+  PARALLAX_FACTOR: 0.1, // Parallax factor for stars
 } as const;
 
 // Star type definition

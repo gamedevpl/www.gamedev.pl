@@ -1,9 +1,10 @@
+import { ViewportState } from '../../render-state';
 import { Star, STARS } from './star-types';
 
 /**
  * Render twinkling stars
  */
-export function renderStars(ctx: CanvasRenderingContext2D, stars: Star[]): void {
+export function renderStars(ctx: CanvasRenderingContext2D, stars: Star[], viewport: ViewportState): void {
   ctx.fillStyle = STARS.COLOR;
 
   for (const star of stars) {
@@ -13,8 +14,8 @@ export function renderStars(ctx: CanvasRenderingContext2D, stars: Star[]): void 
     ctx.globalAlpha = brightness;
 
     // Round positions to nearest pixel for crisp rendering
-    const x = Math.round(star.x);
-    const y = Math.round(star.y);
+    const x = Math.round(star.x) - viewport.x + STARS.PARALLAX_FACTOR * viewport.x;
+    const y = Math.round(star.y) - viewport.y + STARS.PARALLAX_FACTOR * viewport.y;
     const size = Math.round(star.size);
 
     // Set shadow properties to add glow effect, with blur increasing with star size

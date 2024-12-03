@@ -22,7 +22,7 @@ export function renderLandscape(ctx: CanvasRenderingContext2D, state: LandscapeS
   ctx.imageSmoothingEnabled = false;
 
   // Render stars (background)
-  renderStars(ctx, state.stars.stars);
+  renderStars(ctx, state.stars.stars, viewport);
 
   // Render mountains (with parallax)
   if (devConfig.renderMountains) {
