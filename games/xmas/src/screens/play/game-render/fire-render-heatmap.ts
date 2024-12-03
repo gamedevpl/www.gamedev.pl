@@ -1,22 +1,11 @@
 import { GameWorldState, FIREBALL_PHYSICS, SANTA_PHYSICS } from '../game-world/game-world-types';
 import { FireQuadTree } from './fire-render-quad-tree';
-import {
-  FireCell,
-  GRID_WIDTH,
-  GRID_HEIGHT,
-  GRID_CELL_SIZE,
-  MAX_TEMPERATURE,
-  HOT_CELL_THRESHOLD,
-  VERTICAL_SPREAD_MULTIPLIER,
-  HOT_CELL_SPREAD_PROBABILITY,
-  HOT_CELL_DOWNWARD_PROBABILITY,
-  COOL_CELL_HORIZONTAL_PROBABILITY,
-} from './fire-render-types';
+import { FireCell, GRID_WIDTH, GRID_HEIGHT, GRID_CELL_SIZE, MAX_TEMPERATURE } from './fire-render-types';
 
 /**
  * Calculate the temperature at a specific grid position based on nearby fireballs.
  * Implements nucleus concept where inner half of radius maintains max temperature.
- * 
+ *
  * @param worldX - X coordinate in world space
  * @param worldY - Y coordinate in world space
  * @param fireballs - Array of active fireballs
@@ -47,7 +36,7 @@ export function calculateFireballHeat(worldX: number, worldY: number, fireballs:
  * Calculate the temperature at a specific grid position based on charging Santas.
  * Uses similar nucleus concept as fireballs but scales with charging duration.
  * Also includes movement-based trail heat calculation.
- * 
+ *
  * @param worldX - X coordinate in world space
  * @param worldY - Y coordinate in world space
  * @param santas - Array of active Santas
@@ -129,68 +118,9 @@ export function calculateSantaHeat(
 }
 
 /**
- * Calculate heat transfer from neighboring cells with temperature-dependent behavior.
- * Implements directional heat transfer with different probabilities based on cell temperature.
- * 
- * @param grid - Current fire grid state
- * @param x - X coordinate in grid space
- * @param y - Y coordinate in grid space
- * @returns Calculated heat value from neighbors
- */
-export function calculateNeighborHeat(grid: FireCell[][], x: number, y: number): number {
-  let totalTemp = 0;
-  let totalWeight = 0;
-
-  const currentTemp = grid[y][x].temperature;
-  const isHotCell = currentTemp >= HOT_CELL_THRESHOLD;
-
-  // Define direction weights based on temperature
-  const directions = [
-    { dx: 0, dy: -1, weight: VERTICAL_SPREAD_MULTIPLIER }, // Up
-    { dx: -1, dy: 0, weight: 1 }, // Left
-    { dx: 1, dy: 0, weight: 1 }, // Right
-    { dx: 0, dy: 1, weight: 0.5 }, // Down
-  ];
-
-  for (const { dx, dy, weight } of directions) {
-    const nx = x + dx;
-    const ny = y + dy;
-
-    // Skip if outside grid bounds
-    if (nx < 0 || nx >= GRID_WIDTH || ny < 0 || ny >= GRID_HEIGHT) continue;
-
-    // Determine if we should transfer heat in this direction
-    let shouldTransfer = false;
-    if (isHotCell) {
-      // Hot cells have high probability of spreading in all directions
-      shouldTransfer = Math.random() < HOT_CELL_SPREAD_PROBABILITY;
-    } else {
-      // Cool cells primarily spread upward, with low probability horizontally
-      if (dy === 1 || Math.random() < HOT_CELL_DOWNWARD_PROBABILITY) {
-        // Always allow upward spread for cool cells
-        shouldTransfer = true;
-      } else if (dy === 0) {
-        // Horizontal spread with low probability for cool cells
-        shouldTransfer = Math.random() < COOL_CELL_HORIZONTAL_PROBABILITY;
-      }
-    }
-
-    if (shouldTransfer) {
-      const neighborTemp = grid[ny][nx].temperature;
-      if (neighborTemp > currentTemp) {
-        totalTemp += neighborTemp * weight;
-        totalWeight += weight;
-      }
-    }
-  }
-
-  return totalWeight > 0 ? totalTemp / totalWeight : 0;
-}
-
-/**
  * Precompute heat distribution from fireballs and charging Santas for the entire grid.
  * Optimizes computation by checking for heat sources first.
- * 
+ *
  * @param world - Current game world state
  * @param grid - Fire grid to update
  * @param quadTree - Quad tree for spatial optimization
