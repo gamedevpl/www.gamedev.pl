@@ -37,8 +37,9 @@ function createAISanta(gameState: GameWorldState): AISanta {
   const { x, y } = calculateSpawnPosition(gameState);
   const id = `ai_santa_${Date.now()}_${Math.random()}`;
 
-  // Create base Santa instance
+  // Create base Santa instance with dedMoroz theme
   const santa = createSanta(id, x, y, false) as AISanta;
+  santa.colorTheme = 'dedMoroz'; // Set the Ded Moroz theme for AI Santas
 
   // Initialize AI state
   initializeAIState(santa);

@@ -64,6 +64,9 @@ export type GameWorldState = {
   nextGiftSpawnTime: number; // Timestamp when the next gift should spawn
 };
 
+// Available color themes for Santas
+export type SantaColorTheme = 'classic' | 'dedMoroz';
+
 export type Santa = {
   id: string;
   x: number;
@@ -79,6 +82,7 @@ export type Santa = {
   energyRegenPaused: boolean;
   input: SantaInputState;
   isPlayer: boolean;
+  colorTheme?: SantaColorTheme; // Optional color theme property
 };
 
 export type Fireball = {

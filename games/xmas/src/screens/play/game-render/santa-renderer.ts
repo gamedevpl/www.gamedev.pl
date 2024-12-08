@@ -1,12 +1,20 @@
-import { Santa } from '../game-world/game-world-types';
+import { Santa, SantaColorTheme } from '../game-world/game-world-types';
 
-// Pixel art color palette
+// Pixel art color palettes
 const COLORS = {
-  SANTA: {
+  CLASSIC: {
     HAT: '#FF0000',
     FACE: '#FFE0BD',
     BEARD: '#FFFFFF',
     SUIT: '#FF0000',
+    BELT: '#4A4A4A',
+    BOOTS: '#4A4A4A',
+  },
+  DED_MOROZ: {
+    HAT: '#87CEEB', // Light blue for Ded Moroz
+    FACE: '#FFE0BD',
+    BEARD: '#FFFFFF',
+    SUIT: '#87CEEB', // Light blue for Ded Moroz
     BELT: '#4A4A4A',
     BOOTS: '#4A4A4A',
   },
@@ -28,6 +36,19 @@ const SLEDGE_SIZE = {
   WIDTH: 48,
   HEIGHT: 24,
 } as const;
+
+/**
+ * Get color palette based on Santa's theme
+ */
+function getColorPalette(colorTheme?: SantaColorTheme) {
+  switch (colorTheme) {
+    case 'dedMoroz':
+      return COLORS.DED_MOROZ;
+    case 'classic':
+    default:
+      return COLORS.CLASSIC;
+  }
+}
 
 /**
  * Draw a pixel-art circle
@@ -68,13 +89,19 @@ function drawPixelRect(
 /**
  * Render Santa's hat
  */
-function renderSantaHat(ctx: CanvasRenderingContext2D, x: number, y: number, direction: 'left' | 'right') {
+function renderSantaHat(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  direction: 'left' | 'right',
+  colorPalette: typeof COLORS.CLASSIC | typeof COLORS.DED_MOROZ,
+) {
   const hatWidth = 12;
   const hatHeight = 8;
   const pompomSize = 4;
 
   // Hat base
-  drawPixelRect(ctx, x, y, hatWidth, hatHeight, COLORS.SANTA.HAT);
+  drawPixelRect(ctx, x, y, hatWidth, hatHeight, colorPalette.HAT);
 
   // Pompom
   drawPixelCircle(
@@ -82,19 +109,25 @@ function renderSantaHat(ctx: CanvasRenderingContext2D, x: number, y: number, dir
     x + (direction === 'right' ? hatWidth - pompomSize / 2 : pompomSize / 2),
     y - pompomSize / 2,
     pompomSize / 2,
-    COLORS.SANTA.BEARD,
+    colorPalette.BEARD,
   );
 }
 
 /**
  * Render Santa's face
  */
-function renderSantaFace(ctx: CanvasRenderingContext2D, x: number, y: number, direction: 'left' | 'right') {
+function renderSantaFace(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  direction: 'left' | 'right',
+  colorPalette: typeof COLORS.CLASSIC | typeof COLORS.DED_MOROZ,
+) {
   // Face
-  drawPixelCircle(ctx, x + 8, y + 8, 8, COLORS.SANTA.FACE);
+  drawPixelCircle(ctx, x + 8, y + 8, 8, colorPalette.FACE);
 
   // Beard
-  drawPixelRect(ctx, x + 4, y + 8, 8, 8, COLORS.SANTA.BEARD);
+  drawPixelRect(ctx, x + 4, y + 8, 8, 8, colorPalette.BEARD);
 
   // Eyes
   const eyeX = x + (direction === 'right' ? 10 : 6);
@@ -104,16 +137,21 @@ function renderSantaFace(ctx: CanvasRenderingContext2D, x: number, y: number, di
 /**
  * Render Santa's body
  */
-function renderSantaBody(ctx: CanvasRenderingContext2D, x: number, y: number) {
+function renderSantaBody(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  colorPalette: typeof COLORS.CLASSIC | typeof COLORS.DED_MOROZ,
+) {
   // Suit
-  drawPixelRect(ctx, x + 4, y + 16, 16, 12, COLORS.SANTA.SUIT);
+  drawPixelRect(ctx, x + 4, y + 16, 16, 12, colorPalette.SUIT);
 
   // Belt
-  drawPixelRect(ctx, x + 4, y + 22, 16, 2, COLORS.SANTA.BELT);
+  drawPixelRect(ctx, x + 4, y + 22, 16, 2, colorPalette.BELT);
 
   // Boots
-  drawPixelRect(ctx, x + 4, y + 28, 6, 4, COLORS.SANTA.BOOTS);
-  drawPixelRect(ctx, x + 14, y + 28, 6, 4, COLORS.SANTA.BOOTS);
+  drawPixelRect(ctx, x + 4, y + 28, 6, 4, colorPalette.BOOTS);
+  drawPixelRect(ctx, x + 14, y + 28, 6, 4, colorPalette.BOOTS);
 }
 
 /**
@@ -166,6 +204,9 @@ function calculateAnimationOffset(santa: Santa, time: number): number {
 export function renderSanta(ctx: CanvasRenderingContext2D, santa: Santa, time: number): void {
   ctx.save();
 
+  // Get the appropriate color palette based on Santa's theme
+  const colorPalette = getColorPalette(santa.colorTheme);
+
   // Move to Santa's position
   ctx.translate(santa.x, santa.y);
 
@@ -184,9 +225,9 @@ export function renderSanta(ctx: CanvasRenderingContext2D, santa: Santa, time: n
   const santaX = -SANTA_SIZE.WIDTH / 2;
   const santaY = -SANTA_SIZE.HEIGHT / 2 + animOffset;
 
-  renderSantaBody(ctx, santaX, santaY);
-  renderSantaFace(ctx, santaX, santaY, santa.direction);
-  renderSantaHat(ctx, santaX + 4, santaY, santa.direction);
+  renderSantaBody(ctx, santaX, santaY, colorPalette);
+  renderSantaFace(ctx, santaX, santaY, santa.direction, colorPalette);
+  renderSantaHat(ctx, santaX + 4, santaY, santa.direction, colorPalette);
 
   ctx.restore();
 }
