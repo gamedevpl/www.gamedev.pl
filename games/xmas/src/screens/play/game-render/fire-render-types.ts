@@ -22,6 +22,12 @@ export const HOT_CELL_SPREAD_PROBABILITY = 0.6; // Probability of hot cells spre
 export const HOT_CELL_DOWNWARD_PROBABILITY = 0.5; // Probability of hot cells spreading downward
 export const COOL_CELL_HORIZONTAL_PROBABILITY = 0.3; // Probability of cool cells spreading horizontally
 
+// Santa energy heat spot constants
+export const SANTA_ENERGY_HEAT_SPOTS_MAX = 1; // Maximum number of heat spots per frame
+export const SANTA_ENERGY_HEAT_SPOT_PROBABILITY = 0.003; // Base probability of generating a heat spot
+export const SANTA_ENERGY_HEAT_SPOT_TEMPERATURE = 1; // Temperature of generated heat spots (0-1)
+export const SANTA_ENERGY_HEAT_SPOT_RANGE = 50; // Maximum range around santa in pixels
+
 // Represents a single cell in the fire grid
 export type FireCell = {
   temperature: number;

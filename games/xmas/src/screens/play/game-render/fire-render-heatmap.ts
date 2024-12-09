@@ -1,6 +1,16 @@
 import { GameWorldState, FIREBALL_PHYSICS, SANTA_PHYSICS } from '../game-world/game-world-types';
 import { FireQuadTree } from './fire-render-quad-tree';
-import { FireCell, GRID_WIDTH, GRID_HEIGHT, GRID_CELL_SIZE, MAX_TEMPERATURE } from './fire-render-types';
+import { 
+  FireCell, 
+  GRID_WIDTH, 
+  GRID_HEIGHT, 
+  GRID_CELL_SIZE, 
+  MAX_TEMPERATURE,
+  SANTA_ENERGY_HEAT_SPOTS_MAX,
+  SANTA_ENERGY_HEAT_SPOT_PROBABILITY,
+  SANTA_ENERGY_HEAT_SPOT_TEMPERATURE,
+  SANTA_ENERGY_HEAT_SPOT_RANGE
+} from './fire-render-types';
 
 /**
  * Calculate the temperature at a specific grid position based on nearby fireballs.
@@ -30,6 +40,37 @@ export function calculateFireballHeat(worldX: number, worldY: number, fireballs:
   }
 
   return maxTemp;
+}
+
+/**
+ * Generate a single heat spot based on santa's energy level
+ * @param santa - Santa object
+ * @param worldX - X coordinate in world space
+ * @param worldY - Y coordinate in world space
+ * @returns Temperature value for the heat spot
+ */
+function generateSantaEnergyHeatSpot(
+  santa: GameWorldState['santas'][0],
+  worldX: number,
+  worldY: number
+): number {
+  const distance = Math.sqrt(Math.pow(worldX - santa.x, 2) + Math.pow(worldY - santa.y, 2));
+  
+  // Check if the point is within range
+  if (distance > SANTA_ENERGY_HEAT_SPOT_RANGE) {
+    return 0;
+  }
+
+  // Scale probability with santa's energy
+  const energyRatio = santa.energy / SANTA_PHYSICS.MAX_ENERGY;
+  const probability = SANTA_ENERGY_HEAT_SPOT_PROBABILITY * energyRatio;
+
+  // Generate heat spot with scaled probability
+  if (Math.random() < probability) {
+    return SANTA_ENERGY_HEAT_SPOT_TEMPERATURE;
+  }
+
+  return 0;
 }
 
 /**
@@ -76,6 +117,13 @@ export function calculateSantaHeat(
           (1 - projectedDist / TRAIL_LENGTH) * (velocity / SANTA_PHYSICS.MAX_VELOCITY) * 0.3,
         );
       }
+    }
+
+    // Generate energy-based heat spots
+    const maxSpots = Math.floor(SANTA_ENERGY_HEAT_SPOTS_MAX * (santa.energy / SANTA_PHYSICS.MAX_ENERGY));
+    if (maxSpots > 0) {
+      const spotTemp = generateSantaEnergyHeatSpot(santa, worldX, worldY);
+      trailTemp = Math.max(trailTemp, spotTemp);
     }
   }
 
@@ -127,7 +175,9 @@ export function calculateSantaHeat(
  */
 export function computeHeatMap(world: GameWorldState, grid: FireCell[][], quadTree: FireQuadTree): void {
   const hasHeatSources =
-    world.fireballs.length > 0 || world.santas.some((santa) => santa.input.charging && santa.input.chargeStartTime);
+    world.fireballs.length > 0 || 
+    world.santas.some((santa) => santa.input.charging && santa.input.chargeStartTime) ||
+    world.santas.some((santa) => santa.energy > 0);
 
   if (!hasHeatSources) {
     // No heat sources, skip computation
