@@ -12,13 +12,14 @@ export const enum SANTA_PHYSICS {
 }
 
 export const enum FIREBALL_PHYSICS {
-  BASE_VELOCITY = 0.5,
+  BASE_VELOCITY = 1.0, // Increased from 0.5 to 1.0 for higher initial velocity
   MIN_RADIUS = 30,
   GROWTH_RATE = 30.1,
   MIN_CHARGE_TIME = 1000,
   MAX_CHARGE_TIME = 5000,
   ENERGY_TO_SIZE_RATIO = 0.25,
   ENERGY_TO_VELOCITY_RATIO = 0.001,
+  GROWTH_DURATION = 500, // 500ms (0.5 seconds) for growth duration
   // Collision physics constants
   COLLISION_THRESHOLD = 0.51, // Multiplier for collision detection (radius sum * threshold)
   MERGE_MOMENTUM_FACTOR = 0.8, // Conservation of momentum factor during merging
@@ -95,6 +96,8 @@ export type Fireball = {
   x: number;
   y: number;
   radius: number;
+  targetRadius: number; // The final radius the fireball will grow to
+  growthEndTime: number; // Timestamp when the fireball should reach full size
   createdAt: number;
   vx: number;
   vy: number;

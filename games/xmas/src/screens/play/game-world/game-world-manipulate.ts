@@ -57,7 +57,7 @@ export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): b
 function calculatePushbackForce(fireball: Fireball, distance: number): number {
   // Base force depends on fireball size
   const baseForce =
-    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE + fireball.radius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER;
+    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE + fireball.targetRadius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER;
 
   // Force decreases with distance (inverse relationship)
   const normalizedDistance = Math.max(0.1, distance / fireball.radius); // Prevent division by zero
@@ -124,7 +124,7 @@ export function handleFireballSantaCollision(fireball: Fireball, santa: Santa): 
   santa.vy = finalVelocity.vy;
 
   // Reduce Santa's energy based on fireball properties (existing mechanic)
-  const energyReduction = fireball.radius * 0.5;
+  const energyReduction = fireball.targetRadius * 0.5;
   santa.energy = Math.max(0, santa.energy - energyReduction);
   santa.energyRegenPaused = true;
 }
@@ -147,11 +147,13 @@ function createFireball(
   id: string,
   x: number,
   y: number,
-  radius: number,
+  targetRadius: number,
   velocity: number,
   angle: number,
   santa: Santa,
 ): Fireball {
+  const now = Date.now();
+
   // Calculate base velocity components from angle and velocity
   const baseVx = velocity * Math.cos(angle);
   const baseVy = velocity * Math.sin(angle);
@@ -175,11 +177,13 @@ function createFireball(
     id,
     x,
     y,
-    radius,
-    createdAt: Date.now(),
+    radius: 0, // Start with 0 radius
+    targetRadius, // Store the target radius
+    growthEndTime: now + FIREBALL_PHYSICS.GROWTH_DURATION, // Set when growth should end
+    createdAt: now,
     vx: finalVx,
     vy: finalVy,
-    mass: calculateFireballMass(radius),
+    mass: calculateFireballMass(targetRadius), // Calculate mass based on target radius
     mergeCount: 1,
   };
 }
@@ -199,7 +203,7 @@ function createFireballFromSanta(santa: Santa, chargeTime: number): { fireball: 
     `fireball_${Date.now()}`,
     santa.x,
     santa.y,
-    props.radius,
+    props.radius, // This becomes the target radius
     props.velocity,
     santa.angle,
     santa,
