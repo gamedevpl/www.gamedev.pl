@@ -25,7 +25,7 @@ function calculateFireballVolume(radius: number): number {
  * Calculate radius from volume
  */
 function calculateRadiusFromVolume(volume: number): number {
-  return Math.pow((3 * volume) / (4 * Math.PI), 1/3);
+  return Math.pow((3 * volume) / (4 * Math.PI), 1 / 3);
 }
 
 /**
@@ -51,7 +51,7 @@ function areFireballsColliding(f1: Fireball, f2: Fireball, currentTime: number):
   const dx = f2.x - f1.x;
   const dy = f2.y - f1.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  
+
   // Get current radii for both fireballs
   const radius1 = calculateCurrentRadius(f1, currentTime);
   const radius2 = calculateCurrentRadius(f2, currentTime);
@@ -73,7 +73,7 @@ function mergeFireballs(f1: Fireball, f2: Fireball, currentTime: number): Fireba
   const volume1 = calculateFireballVolume(calculateCurrentRadius(f1, currentTime));
   const volume2 = calculateFireballVolume(calculateCurrentRadius(f2, currentTime));
   const totalVolume = volume1 + volume2;
-  
+
   // Calculate new target radius from combined volume
   const newTargetRadius = calculateRadiusFromVolume(totalVolume * FIREBALL_PHYSICS.MERGE_SIZE_FACTOR);
 
@@ -97,14 +97,14 @@ function mergeFireballs(f1: Fireball, f2: Fireball, currentTime: number): Fireba
     id: `merged_${f1.id}_${f2.id}`,
     x: newX,
     y: newY,
-    radius: calculateCurrentRadius(f1, currentTime), // Start with current radius of larger fireball
+    radius: newTargetRadius,
     targetRadius: newTargetRadius,
-    growthEndTime: now + FIREBALL_PHYSICS.GROWTH_DURATION,
+    growthEndTime: now,
     vx: newVx,
     vy: newVy,
     createdAt: now,
     mass: totalMass,
-    mergeCount: (f1.mergeCount ?? 1) + (f2.mergeCount ?? 1)
+    mergeCount: (f1.mergeCount ?? 1) + (f2.mergeCount ?? 1),
   };
 }
 
@@ -117,7 +117,7 @@ function processFireballCollisions(fireballs: Fireball[], currentTime: number): 
 
   for (let i = 0; i < fireballs.length; i++) {
     const f1 = fireballs[i];
-    
+
     // Skip if this fireball was already processed
     if (processedFireballs.has(f1.id)) continue;
 
@@ -126,7 +126,7 @@ function processFireballCollisions(fireballs: Fireball[], currentTime: number): 
 
     for (let j = i + 1; j < fireballs.length; j++) {
       const f2 = fireballs[j];
-      
+
       // Skip if this fireball was already processed
       if (processedFireballs.has(f2.id)) continue;
 
