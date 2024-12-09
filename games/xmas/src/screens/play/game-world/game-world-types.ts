@@ -23,7 +23,7 @@ export const enum FIREBALL_PHYSICS {
   // Collision physics constants
   COLLISION_THRESHOLD = 0.51, // Multiplier for collision detection (radius sum * threshold)
   MERGE_MOMENTUM_FACTOR = 0.8, // Conservation of momentum factor during merging
-  MERGE_SIZE_FACTOR = 1.0, // How volume is conserved during merging
+  MERGE_SIZE_FACTOR = 1.011, // How volume is conserved during merging
   MIN_COLLISION_VELOCITY = 0.1, // Minimum velocity difference for collision
   // Pushback physics constants
   PUSHBACK_BASE_FORCE = 0.0512, // Base force applied when a fireball hits a Santa
