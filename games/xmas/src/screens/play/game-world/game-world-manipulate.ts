@@ -1,12 +1,5 @@
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
-import {
-  Fireball,
-  GameWorldState,
-  Santa,
-  SANTA_PHYSICS,
-  FIREBALL_PHYSICS,
-  SantaInputState,
-} from './game-world-types';
+import { Fireball, GameWorldState, Santa, SANTA_PHYSICS, FIREBALL_PHYSICS, SantaInputState } from './game-world-types';
 
 export function createSanta(id: string, x = GAME_WORLD_WIDTH / 2, y = GAME_WORLD_HEIGHT / 2, isPlayer = false): Santa {
   return {
@@ -59,10 +52,78 @@ export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): b
 }
 
 /**
+ * Calculate the pushback force based on distance from fireball center
+ */
+function calculatePushbackForce(fireball: Fireball, distance: number): number {
+  // Base force depends on fireball size
+  const baseForce =
+    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE + fireball.radius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER;
+
+  // Force decreases with distance (inverse relationship)
+  const normalizedDistance = Math.max(0.1, distance / fireball.radius); // Prevent division by zero
+  const distanceFactor = 1 / Math.pow(normalizedDistance, FIREBALL_PHYSICS.PUSHBACK_DISTANCE_FACTOR);
+
+  return baseForce * distanceFactor;
+}
+
+/**
+ * Calculate the pushback vector for collision
+ */
+function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx: number; vy: number } {
+  // Calculate vector from fireball center to santa
+  const dx = santa.x - fireball.x;
+  const dy = santa.y - fireball.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Normalize the vector
+  const nx = dx / distance;
+  const ny = dy / distance;
+
+  // Calculate force magnitude
+  const force = calculatePushbackForce(fireball, distance);
+
+  // Calculate velocity components
+  const vx = nx * force;
+  const vy = ny * force;
+
+  return { vx, vy };
+}
+
+/**
+ * Clamp velocity components to prevent extreme knockbacks
+ */
+function clampVelocity(vx: number, vy: number): { vx: number; vy: number } {
+  const speed = Math.sqrt(vx * vx + vy * vy);
+  if (speed > FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY) {
+    const scale = FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY / speed;
+    return {
+      vx: vx * scale,
+      vy: vy * scale,
+    };
+  }
+  return { vx, vy };
+}
+
+/**
  * Handle collision between a fireball and Santa
  */
-export function handleFireballSantaCollision(_state: GameWorldState, fireball: Fireball, santa: Santa): void {
-  // Reduce Santa's energy based on fireball properties
+export function handleFireballSantaCollision(fireball: Fireball, santa: Santa): void {
+  // Calculate pushback vector
+  const pushback = calculatePushbackVector(fireball, santa);
+
+  // Clamp velocity to prevent extreme knockbacks
+  const clampedVelocity = clampVelocity(pushback.vx, pushback.vy);
+
+  // Apply pushback velocity to Santa
+  santa.vx += clampedVelocity.vx;
+  santa.vy += clampedVelocity.vy;
+
+  // Clamp final velocity to prevent exceeding maximum allowed velocity
+  const finalVelocity = clampVelocity(santa.vx, santa.vy);
+  santa.vx = finalVelocity.vx;
+  santa.vy = finalVelocity.vy;
+
+  // Reduce Santa's energy based on fireball properties (existing mechanic)
   const energyReduction = fireball.radius * 0.5;
   santa.energy = Math.max(0, santa.energy - energyReduction);
   santa.energyRegenPaused = true;
@@ -128,10 +189,7 @@ function calculateFireballMass(radius: number): number {
   return (4 / 3) * Math.PI * Math.pow(radius, 3);
 }
 
-function createFireballFromSanta(
-  santa: Santa,
-  chargeTime: number,
-): { fireball: Fireball; energyCost: number } | null {
+function createFireballFromSanta(santa: Santa, chargeTime: number): { fireball: Fireball; energyCost: number } | null {
   if (chargeTime < FIREBALL_PHYSICS.MIN_CHARGE_TIME) {
     return null;
   }

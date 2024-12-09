@@ -24,17 +24,22 @@ export const enum FIREBALL_PHYSICS {
   MERGE_MOMENTUM_FACTOR = 0.8, // Conservation of momentum factor during merging
   MERGE_SIZE_FACTOR = 1.0, // How volume is conserved during merging
   MIN_COLLISION_VELOCITY = 0.1, // Minimum velocity difference for collision
+  // Pushback physics constants
+  PUSHBACK_BASE_FORCE = 0.0512, // Base force applied when a fireball hits a Santa
+  PUSHBACK_RADIUS_MULTIPLIER = 0.02, // How much the fireball's radius affects pushback force
+  PUSHBACK_DISTANCE_FACTOR = 1.012, // How distance from center affects force (higher = stronger distance falloff)
+  MAX_PUSHBACK_VELOCITY = 1.01, // Maximum velocity that can be applied from pushback
 }
 
 export const enum GIFT_CONSTANTS {
   // Gift collection
   COLLECTION_RADIUS = 50, // Distance at which Santa can collect a gift
   ENERGY_BOOST = 25, // Amount of energy gained from collecting a gift
-  
+
   // Gift floating animation
   FLOAT_AMPLITUDE = 0.2, // Amplitude of floating motion
   FLOAT_FREQUENCY = 0.001, // Frequency of floating motion
-  
+
   // Gift spawning
   SPAWN_HEIGHT_MIN = 600, // Minimum height for gift spawning
   SPAWN_HEIGHT_MAX = 800, // Maximum height for gift spawning

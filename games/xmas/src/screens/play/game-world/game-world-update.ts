@@ -23,7 +23,7 @@ function processFireballSantaCollisions(state: GameWorldState) {
   // Check collisions with player Santa
   fireballs.forEach((fireball) => {
     if (checkFireballSantaCollision(fireball, state.playerSanta)) {
-      handleFireballSantaCollision(state, fireball, state.playerSanta);
+      handleFireballSantaCollision(fireball, state.playerSanta);
     }
   });
 
@@ -34,7 +34,7 @@ function processFireballSantaCollisions(state: GameWorldState) {
 
       fireballs.forEach((fireball) => {
         if (checkFireballSantaCollision(fireball, santa)) {
-          handleFireballSantaCollision(state, fireball, santa);
+          handleFireballSantaCollision(fireball, santa);
         }
       });
     });
