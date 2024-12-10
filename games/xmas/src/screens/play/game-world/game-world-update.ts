@@ -5,13 +5,10 @@ import { makeAIDecision } from '../game-ai/ai-santa-decision';
 import { AISanta } from '../game-ai/ai-santa-types';
 import { updateAISpawner } from '../game-ai/ai-santa-spawner';
 import { shouldSpawnGift, spawnGift, updateGiftSpawnTiming, tryCollectNearbyGifts } from './game-world-gift-manipulate';
-import {
-  checkFireballSantaCollision,
-  handleFireballSantaCollision,
-  addFireballFromSanta,
-} from './game-world-manipulate';
+import { addFireballFromSanta } from './game-world-manipulate';
 import { updateGifts } from './game-world-update-gifts';
 import { devConfig } from '../dev/dev-config';
+import { checkFireballSantaCollision, handleFireballSantaCollision } from './game-world-collisions';
 
 /**
  * Check and handle collisions between fireballs and all Santas

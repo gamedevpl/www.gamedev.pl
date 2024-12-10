@@ -12,41 +12,59 @@ export const enum SANTA_PHYSICS {
 }
 
 export const enum FIREBALL_PHYSICS {
-  BASE_VELOCITY = 1.0, // Increased from 0.5 to 1.0 for higher initial velocity
+  BASE_VELOCITY = 1.0,
   MIN_RADIUS = 30,
   GROWTH_RATE = 30.1,
   MIN_CHARGE_TIME = 1000,
   MAX_CHARGE_TIME = 5000,
   ENERGY_TO_SIZE_RATIO = 0.25,
   ENERGY_TO_VELOCITY_RATIO = 0.001,
-  GROWTH_DURATION = 500, // 500ms (0.5 seconds) for growth duration
+  GROWTH_DURATION = 500,
+
+  // Collision detection constants
+  COLLISION_MARGIN = 0.9, // Margin for collision detection (0.9 means collision starts at 90% of visual radius)
+  COLLISION_GROWTH_THRESHOLD = 0.3, // Threshold for when growing fireballs start collision detection
+  COLLISION_VISUAL_SCALE = 0.95, // Scale factor for visual vs. collision radius (helps with visual consistency)
+
   // Collision physics constants
-  COLLISION_THRESHOLD = 0.51, // Multiplier for collision detection (radius sum * threshold)
-  MERGE_MOMENTUM_FACTOR = 0.8, // Conservation of momentum factor during merging
-  MERGE_SIZE_FACTOR = 1.011, // How volume is conserved during merging
-  MIN_COLLISION_VELOCITY = 0.1, // Minimum velocity difference for collision
-  // Pushback physics constants
-  PUSHBACK_BASE_FORCE = 0.0512, // Base force applied when a fireball hits a Santa
-  PUSHBACK_RADIUS_MULTIPLIER = 0.02, // How much the fireball's radius affects pushback force
-  PUSHBACK_DISTANCE_FACTOR = 1.012, // How distance from center affects force (higher = stronger distance falloff)
-  MAX_PUSHBACK_VELOCITY = 1.01, // Maximum velocity that can be applied from pushback
+  COLLISION_THRESHOLD = 0.951, // Adjusted from 0.51 for more accurate collisions
+  MERGE_MOMENTUM_FACTOR = 0.8,
+  MERGE_SIZE_FACTOR = 1.011,
+  MIN_COLLISION_VELOCITY = 0.1,
+
+  // Progressive collision sensitivity
+  COLLISION_SENSITIVITY_MIN = 0.85, // Minimum collision sensitivity (outer edge)
+  COLLISION_SENSITIVITY_MAX = 1.01, // Maximum collision sensitivity (center)
+  COLLISION_SENSITIVITY_CURVE = 2.0, // Power curve for sensitivity progression (higher = sharper transition)
+
+  // Pushback mechanics
+  PUSHBACK_BASE_FORCE = 0.005, // Reduced from 0.025 for gentler pushback
+  PUSHBACK_RADIUS_MULTIPLIER = 0.003, // Reduced from 0.015 for more balanced size impact
+  PUSHBACK_DISTANCE_FACTOR = 1.0111, // Reduced from 1.5 for smoother distance falloff
+  PUSHBACK_MIN_FORCE = 0.01, // Minimum force applied on collision
+  PUSHBACK_MAX_FORCE = 0.05, // Reduced from 0.5 for gentler maximum force
+  MAX_PUSHBACK_VELOCITY = 0.11, // Reduced from 0.81 for minimal knockback
+
+  // Momentum transfer
+  MOMENTUM_TRANSFER_RATE = 0.6, // How much of fireball's momentum transfers to Santa
+  VELOCITY_DAMPENING = 0.851, // Dampening factor for transferred velocity
 }
 
 export const enum GIFT_CONSTANTS {
   // Gift collection
-  COLLECTION_RADIUS = 50, // Distance at which Santa can collect a gift
-  ENERGY_BOOST = 25, // Amount of energy gained from collecting a gift
+  COLLECTION_RADIUS = 50,
+  ENERGY_BOOST = 25,
 
   // Gift floating animation
-  FLOAT_AMPLITUDE = 0.2, // Amplitude of floating motion
-  FLOAT_FREQUENCY = 0.001, // Frequency of floating motion
+  FLOAT_AMPLITUDE = 0.2,
+  FLOAT_FREQUENCY = 0.001,
 
   // Gift spawning
-  SPAWN_HEIGHT_MIN = 600, // Minimum height for gift spawning
-  SPAWN_HEIGHT_MAX = 800, // Maximum height for gift spawning
-  MAX_CONCURRENT_GIFTS = 5, // Maximum number of gifts that can exist at once
-  MIN_SPAWN_INTERVAL = 5000, // Minimum time between gift spawns (5 seconds)
-  MAX_SPAWN_INTERVAL = 10000, // Maximum time between gift spawns (10 seconds)
+  SPAWN_HEIGHT_MIN = 600,
+  SPAWN_HEIGHT_MAX = 800,
+  MAX_CONCURRENT_GIFTS = 5,
+  MIN_SPAWN_INTERVAL = 5000,
+  MAX_SPAWN_INTERVAL = 10000,
 }
 
 export type SantaInputState = {
@@ -66,11 +84,10 @@ export type GameWorldState = {
   chimneys: Chimney[];
   fireballs: Fireball[];
   waveState: WaveState;
-  lastGiftSpawnTime: number; // Timestamp of the last gift spawn
-  nextGiftSpawnTime: number; // Timestamp when the next gift should spawn
+  lastGiftSpawnTime: number;
+  nextGiftSpawnTime: number;
 };
 
-// Available color themes for Santas
 export type SantaColorTheme = 'classic' | 'dedMoroz';
 
 export type Santa = {
@@ -88,7 +105,7 @@ export type Santa = {
   energyRegenPaused: boolean;
   input: SantaInputState;
   isPlayer: boolean;
-  colorTheme?: SantaColorTheme; // Optional color theme property
+  colorTheme?: SantaColorTheme;
 };
 
 export type Fireball = {
@@ -96,21 +113,20 @@ export type Fireball = {
   x: number;
   y: number;
   radius: number;
-  targetRadius: number; // The final radius the fireball will grow to
-  growthEndTime: number; // Timestamp when the fireball should reach full size
+  targetRadius: number;
+  growthEndTime: number;
   createdAt: number;
   vx: number;
   vy: number;
-  // New properties for collision handling
-  mass?: number; // Mass of the fireball (proportional to volume)
-  mergeCount?: number; // Number of fireballs merged into this one
+  mass?: number;
+  mergeCount?: number;
 };
 
 export type Gift = {
   id: string;
   x: number;
   y: number;
-  floatOffset?: number; // Random offset for floating animation
+  floatOffset?: number;
   createdAt: number;
 };
 
