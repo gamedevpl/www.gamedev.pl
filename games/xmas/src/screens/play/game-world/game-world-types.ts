@@ -76,6 +76,13 @@ export type SantaInputState = {
   chargeStartTime: number | null;
 };
 
+export type GameOverStats = {
+  timeSurvived: number;
+  giftsCollected: number;
+  santasEliminated: number;
+  finalWave: number;
+};
+
 export type GameWorldState = {
   time: number;
   playerSanta: Santa;
@@ -86,6 +93,10 @@ export type GameWorldState = {
   waveState: WaveState;
   lastGiftSpawnTime: number;
   nextGiftSpawnTime: number;
+  gameOver: boolean;
+  gameOverStats?: GameOverStats;
+  giftsCollectedCount: number; // Track total gifts collected for stats
+  santasEliminatedCount: number; // Track total santas eliminated for stats
 };
 
 export type SantaColorTheme = 'classic' | 'dedMoroz';
@@ -106,6 +117,8 @@ export type Santa = {
   input: SantaInputState;
   isPlayer: boolean;
   colorTheme?: SantaColorTheme;
+  isEliminated: boolean;
+  eliminatedAt?: number;
 };
 
 export type Fireball = {

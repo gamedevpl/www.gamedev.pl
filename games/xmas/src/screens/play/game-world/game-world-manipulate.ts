@@ -25,6 +25,7 @@ export function createSanta(id: string, x = GAME_WORLD_WIDTH / 2, y = GAME_WORLD
       chargeStartTime: null,
     },
     isPlayer,
+    isEliminated: false,
   };
 }
 

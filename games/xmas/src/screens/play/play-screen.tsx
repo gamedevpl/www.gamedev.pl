@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { GameViewport } from './game-viewport';
 import { GameWorldState } from './game-world/game-world-types';
 import { useRafLoop } from 'react-use';
@@ -8,6 +8,7 @@ import { createSanta } from './game-world/game-world-manipulate';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-consts';
 import { initializeWaveState } from './game-ai/ai-santa-spawner';
 import { DevConfigPanel } from './dev/dev-config-panel';
+import { GameOverScreen } from './game-over-screen';
 
 // Game configuration
 const GAME_CONFIG = {
@@ -21,13 +22,15 @@ const GAME_CONFIG = {
   },
 };
 
-// Create initial Santa
-const PLAYER_SANTA = createSanta(
-  'player_santa',
-  GAME_WORLD_WIDTH / 2, // Start in horizontal center
-  GAME_WORLD_HEIGHT * 0.7, // Start at 70% of screen height
-  true, // Mark as player-controlled
-);
+// Function to create initial Santa
+function createInitialSanta() {
+  return createSanta(
+    'player_santa',
+    GAME_WORLD_WIDTH / 2, // Start in horizontal center
+    GAME_WORLD_HEIGHT * 0.7, // Start at 70% of screen height
+    true, // Mark as player-controlled
+  );
+}
 
 // Create initial chimneys
 const INITIAL_CHIMNEYS = Array.from({ length: GAME_CONFIG.chimneys.count }, (_, index) => ({
@@ -36,17 +39,25 @@ const INITIAL_CHIMNEYS = Array.from({ length: GAME_CONFIG.chimneys.count }, (_, 
   y: GAME_WORLD_HEIGHT * 0.2, // Position chimneys at 20% of screen height
 }));
 
-const INITIAL_STATE: GameWorldState = {
-  time: Date.now(),
-  playerSanta: PLAYER_SANTA,
-  santas: [PLAYER_SANTA], // Add player Santa to initial state
-  gifts: [], // Start with empty gifts array, they will be spawned by the update system
-  chimneys: INITIAL_CHIMNEYS,
-  fireballs: [],
-  waveState: initializeWaveState(),
-  lastGiftSpawnTime: Date.now(),
-  nextGiftSpawnTime: Date.now(),
-};
+// Function to create initial game state
+function createInitialState(): GameWorldState {
+  const playerSanta = createInitialSanta();
+  return {
+    time: Date.now(),
+    playerSanta,
+    santas: [playerSanta], // Add player Santa to initial state
+    gifts: [], // Start with empty gifts array, they will be spawned by the update system
+    chimneys: INITIAL_CHIMNEYS,
+    fireballs: [],
+    waveState: initializeWaveState(),
+    lastGiftSpawnTime: Date.now(),
+    nextGiftSpawnTime: Date.now(),
+    gameOver: false,
+    gameOverStats: undefined,
+    giftsCollectedCount: 0,
+    santasEliminatedCount: 0,
+  };
+}
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS
 const MAX_DELTA_TIME = 1000; // Maximum time step to prevent spiral of death
@@ -56,9 +67,21 @@ export function PlayScreen() {
     gameWorldState: GameWorldState;
     renderState: RenderState;
   }>({
-    gameWorldState: INITIAL_STATE,
+    gameWorldState: createInitialState(),
     renderState: createRenderState(),
   });
+
+  const [isGameOver, setIsGameOver] = useState(false);
+
+  // Function to handle game restart
+  const handleRestart = () => {
+    // Reset game state to initial state
+    gameStateRef.current = {
+      gameWorldState: createInitialState(),
+      renderState: createRenderState(),
+    };
+    setIsGameOver(false);
+  };
 
   useRafLoop(() => {
     let deltaTime = Date.now() - gameStateRef.current.gameWorldState.time;
@@ -84,12 +107,19 @@ export function PlayScreen() {
 
       deltaTime -= UPDATE_STEP;
     }
+
+    if (gameStateRef.current.gameWorldState.gameOver && !isGameOver) {
+      setIsGameOver(true);
+    }
   });
 
   return (
     <>
       <GameViewport gameStateRef={gameStateRef} />
       <DevConfigPanel />
+      {isGameOver && gameStateRef.current.gameWorldState.gameOverStats && (
+        <GameOverScreen stats={gameStateRef.current.gameWorldState.gameOverStats} onRestart={handleRestart} />
+      )}
     </>
   );
 }

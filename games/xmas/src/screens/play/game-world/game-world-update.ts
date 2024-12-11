@@ -1,4 +1,4 @@
-import { GameWorldState } from './game-world-types';
+import { GameOverStats, GameWorldState } from './game-world-types';
 import { updateFireballs } from './game-world-update-fireballs';
 import { updateSantaCharging, updateSantaEnergy, updateSantaPhysics } from './game-world-update-santas';
 import { makeAIDecision } from '../game-ai/ai-santa-decision';
@@ -11,6 +11,43 @@ import { devConfig } from '../dev/dev-config';
 import { checkFireballSantaCollision, handleFireballSantaCollision } from './game-world-collisions';
 
 /**
+ * Check if a Santa should be eliminated based on their energy
+ */
+function checkSantaElimination(state: GameWorldState, currentTime: number) {
+  state.santas.forEach(santa => {
+    // Check if Santa should be eliminated (energy is 0 and not already eliminated)
+    if (santa.energy <= 0 && !santa.isEliminated) {
+      santa.isEliminated = true;
+      santa.eliminatedAt = currentTime;
+
+      // Increment eliminated count for stats
+      state.santasEliminatedCount++;
+
+      // If player Santa is eliminated, trigger game over
+      if (santa === state.playerSanta && !state.gameOver) {
+        const gameOverStats: GameOverStats = {
+          timeSurvived: currentTime - state.time,
+          giftsCollected: state.giftsCollectedCount,
+          santasEliminated: state.santasEliminatedCount,
+          finalWave: state.waveState.currentWave,
+        };
+        state.gameOver = true;
+        state.gameOverStats = gameOverStats;
+      }
+    }
+  });
+}
+
+/**
+ * Remove eliminated AI Santas from the game world
+ */
+function removeEliminatedAISantas(state: GameWorldState) {
+  state.santas = state.santas.filter(santa => 
+    santa === state.playerSanta || !santa.isEliminated
+  );
+}
+
+/**
  * Check and handle collisions between fireballs and all Santas
  */
 function processFireballSantaCollisions(state: GameWorldState) {
@@ -19,7 +56,7 @@ function processFireballSantaCollisions(state: GameWorldState) {
 
   // Check collisions with player Santa
   fireballs.forEach((fireball) => {
-    if (checkFireballSantaCollision(fireball, state.playerSanta)) {
+    if (!state.playerSanta.isEliminated && checkFireballSantaCollision(fireball, state.playerSanta)) {
       handleFireballSantaCollision(fireball, state.playerSanta);
     }
   });
@@ -27,7 +64,7 @@ function processFireballSantaCollisions(state: GameWorldState) {
   // Check collisions with AI Santas only if AI is enabled
   if (devConfig.enableAISantas) {
     state.santas.forEach((santa) => {
-      if (santa === state.playerSanta) return; // Skip player Santa
+      if (santa === state.playerSanta || santa.isEliminated) return; // Skip player Santa and eliminated Santas
 
       fireballs.forEach((fireball) => {
         if (checkFireballSantaCollision(fireball, santa)) {
@@ -42,6 +79,9 @@ function processFireballSantaCollisions(state: GameWorldState) {
  * Handle AI Santa's fireball launching
  */
 function handleAISantaFireball(state: GameWorldState, aiSanta: AISanta) {
+  // Skip if Santa is eliminated
+  if (aiSanta.isEliminated) return;
+
   const wasCharging = aiSanta.input.charging;
   const previousChargeStartTime = aiSanta.input.chargeStartTime;
 
@@ -67,6 +107,11 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   // Update time
   state.time += deltaTime;
 
+  // Skip updates if game is over
+  if (state.gameOver) {
+    return state;
+  }
+
   // Update gift spawning system
   if (shouldSpawnGift(state)) {
     spawnGift(state);
@@ -74,12 +119,14 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   updateGiftSpawnTiming(state);
 
   // First update all physics and movement
-  updateSantaPhysics(state.playerSanta, deltaTime);
-  updateSantaCharging(state);
-  updateSantaEnergy(state.playerSanta, deltaTime);
+  if (!state.playerSanta.isEliminated) {
+    updateSantaPhysics(state.playerSanta, deltaTime);
+    updateSantaCharging(state);
+    updateSantaEnergy(state.playerSanta, deltaTime);
 
-  // Check for automatic gift collection for player Santa
-  tryCollectNearbyGifts(state, state.playerSanta);
+    // Check for automatic gift collection for player Santa
+    tryCollectNearbyGifts(state, state.playerSanta);
+  }
 
   // Update fireballs and handle their collisions
   updateFireballs(state, deltaTime);
@@ -87,10 +134,13 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   // Process fireball-Santa collisions
   processFireballSantaCollisions(state);
 
+  // Check for Santa eliminations
+  checkSantaElimination(state, state.time);
+
   // Update AI-controlled Santas only if enabled
   if (devConfig.enableAISantas) {
     state.santas.forEach((santa) => {
-      if (santa === state.playerSanta) return; // Skip player Santa
+      if (santa === state.playerSanta || santa.isEliminated) return; // Skip player Santa and eliminated Santas
 
       if ('ai' in santa) {
         // Handle AI Santa updates including fireball creation
@@ -107,6 +157,9 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
     // Update AI spawning system only if AI is enabled
     updateAISpawner(state, state.waveState);
+
+    // Remove eliminated AI Santas
+    removeEliminatedAISantas(state);
   } else {
     // If AI is disabled, ensure only player Santa remains
     state.santas = state.santas.filter((santa) => santa === state.playerSanta);
