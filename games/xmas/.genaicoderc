@@ -1,6 +1,6 @@
 {
   "rootDir": ".",
-  "lintCommand": "npm run lint",
+  "lintCommand": "npm run type-check && npm run lint",
   "ignorePaths": [
     "dist",
     "node_modules",
