@@ -40,7 +40,6 @@ const GameOverContainer = styled.div`
   justify-content: center;
   background: rgba(0, 0, 0, 0.8);
   color: white;
-  font-family: 'Arial', sans-serif;
   z-index: 1000;
 `;
 
