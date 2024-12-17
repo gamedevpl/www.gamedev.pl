@@ -133,7 +133,6 @@ export function PlayScreen() {
         ...gameState.waveState,
         status: WAVE_STATUS.PREPARING,
         startTime: gameState.time, // Use game world time instead of Date.now()
-        isBossWave: currentWave % 5 === 0,
         difficultyMultiplier: 1 + (currentWave - 1) * 0.1, // 10% increase per wave
       };
 

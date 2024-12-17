@@ -113,16 +113,14 @@ export const formatWaveNumber = (wave: number): string => {
 };
 
 export const formatEnemyCount = (count: number): string => {
-  return `Enemy Santas: ${count}`;
+  return `Opponents: ${count}`;
 };
 
 export const getWaveDescription = (waveNumber: number): string => {
   if (waveNumber === 1) {
-    return 'The invasion begins!';
-  } else if (waveNumber % 5 === 0) {
-    return 'Boss wave incoming!';
+    return 'Start!';
   } else {
-    return 'Prepare for battle!';
+    return 'Prepare!';
   }
 };
 
