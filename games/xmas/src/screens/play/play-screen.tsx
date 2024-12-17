@@ -76,17 +76,18 @@ const INITIAL_CHIMNEYS = Array.from({ length: GAME_CONFIG.chimneys.count }, (_, 
 
 // Function to create initial game state with enhanced wave state
 function createInitialState(): GameWorldState {
+  const initialTime = Date.now(); // Only get current time once
   const playerSanta = createInitialSanta();
   return {
-    time: Date.now(),
+    time: initialTime,
     playerSanta,
     santas: [playerSanta], // Add player Santa to initial state
     gifts: [], // Start with empty gifts array, they will be spawned by the update system
     chimneys: INITIAL_CHIMNEYS,
     fireballs: [],
     waveState: initializeWaveState(),
-    lastGiftSpawnTime: Date.now(),
-    nextGiftSpawnTime: Date.now(),
+    lastGiftSpawnTime: initialTime,
+    nextGiftSpawnTime: initialTime,
     gameOver: false,
     gameOverStats: undefined,
     giftsCollectedCount: 0,
@@ -131,7 +132,7 @@ export function PlayScreen() {
       gameState.waveState = {
         ...gameState.waveState,
         status: WAVE_STATUS.PREPARING,
-        startTime: Date.now(),
+        startTime: gameState.time, // Use game world time instead of Date.now()
         isBossWave: currentWave % 5 === 0,
         difficultyMultiplier: 1 + (currentWave - 1) * 0.1, // 10% increase per wave
       };
@@ -142,11 +143,12 @@ export function PlayScreen() {
   };
 
   useRafLoop(() => {
-    let deltaTime = Date.now() - gameStateRef.current.gameWorldState.time;
+    const currentTime = Date.now();
+    let deltaTime = currentTime - gameStateRef.current.gameWorldState.time;
 
     // Prevent large time steps that could cause physics issues
     if (deltaTime > MAX_DELTA_TIME) {
-      gameStateRef.current.gameWorldState.time = Date.now() - MAX_DELTA_TIME;
+      gameStateRef.current.gameWorldState.time = currentTime - MAX_DELTA_TIME;
       deltaTime = MAX_DELTA_TIME;
     }
 

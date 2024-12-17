@@ -6,9 +6,11 @@ export const enum SANTA_PHYSICS {
   ACCELERATION = 0.0005,
   DECELERATION = 0.002,
   MAX_ENERGY = 100,
+  NEGATIVE_ENERGY_LIMIT = -10, // Maximum allowed negative energy
   ENERGY_REGENERATION = 0.01,
   MIN_HEIGHT = 10.1,
   MAX_HEIGHT = 990,
+  FIREBALL_CONTACT_ENERGY_DRAIN_RATE = 0.05, // Energy drain per millisecond of fireball contact
 }
 
 export const enum FIREBALL_PHYSICS {
@@ -119,6 +121,7 @@ export type Santa = {
   colorTheme?: SantaColorTheme;
   isEliminated: boolean;
   eliminatedAt?: number;
+  fireballContactTime?: number; // Tracks the time of continuous fireball contact
 };
 
 export type Fireball = {

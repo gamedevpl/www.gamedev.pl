@@ -52,12 +52,12 @@ export function updateGiftSpawnTiming(world: GameWorldState): void {
 /**
  * Create a new gift at specified position
  */
-function createGift(id: string, x: number, y: number): Gift {
+function createGift(id: string, x: number, y: number, currentTime: number): Gift {
   return {
     id,
     x,
     y,
-    createdAt: Date.now(),
+    createdAt: currentTime,
   };
 }
 
@@ -75,7 +75,12 @@ export function spawnGift(world: GameWorldState): void {
     GIFT_CONSTANTS.SPAWN_HEIGHT_MIN + 
     Math.random() * (GIFT_CONSTANTS.SPAWN_HEIGHT_MAX - GIFT_CONSTANTS.SPAWN_HEIGHT_MIN);
 
-  const gift = createGift(`gift_${Date.now()}`, x, y);
+  const gift = createGift(
+    `gift_${world.time}_${Math.random().toString(36).substr(2, 9)}`,
+    x,
+    y,
+    world.time
+  );
   world.gifts.push(gift);
 }
 

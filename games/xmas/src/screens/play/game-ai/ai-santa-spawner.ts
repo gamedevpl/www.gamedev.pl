@@ -35,7 +35,7 @@ function calculateSpawnPosition(gameState: GameWorldState): { x: number; y: numb
  */
 function createAISanta(gameState: GameWorldState): AISanta {
   const { x, y } = calculateSpawnPosition(gameState);
-  const id = `ai_santa_${Date.now()}_${Math.random()}`;
+  const id = `ai_santa_${gameState.time}_${Math.random().toString(36).substr(2, 9)}`;
 
   // Create base Santa instance with dedMoroz theme
   const santa = createSanta(id, x, y, false) as AISanta;
@@ -74,10 +74,10 @@ function areAllSantasEliminated(gameState: GameWorldState): boolean {
 /**
  * Progress to the next wave
  */
-function progressToNextWave(waveState: WaveState): void {
+function progressToNextWave(waveState: WaveState, currentTime: number): void {
   waveState.currentWave++;
   waveState.santasRemaining = waveState.currentWave;
-  waveState.nextSpawnTime = Date.now() + 3000; // 3 second delay before next wave
+  waveState.nextSpawnTime = currentTime + 3000; // 3 second delay before next wave
 }
 
 /**
@@ -108,8 +108,8 @@ export function updateAISpawner(gameState: GameWorldState, waveState: WaveState)
   if (areAllSantasEliminated(gameState)) {
     if (waveState.nextSpawnTime === null) {
       // Progress to next wave
-      progressToNextWave(waveState);
-    } else if (Date.now() >= waveState.nextSpawnTime) {
+      progressToNextWave(waveState, gameState.time);
+    } else if (gameState.time >= waveState.nextSpawnTime) {
       // Spawn new wave of Santas
       spawnWaveSantas(gameState, waveState);
     }

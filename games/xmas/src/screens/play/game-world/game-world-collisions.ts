@@ -1,4 +1,4 @@
-import { Fireball, FIREBALL_PHYSICS, Santa } from './game-world-types';
+import { Fireball, FIREBALL_PHYSICS, Santa, SANTA_PHYSICS } from './game-world-types';
 
 /**
  * Calculate the effective collision radius of a fireball based on its growth state
@@ -70,16 +70,16 @@ export function calculatePushbackForce(fireball: Fireball, distance: number): nu
   const collisionRadius = calculateEffectiveCollisionRadius(fireball);
   const normalizedDistance = Math.max(0.1, distance / collisionRadius);
 
-  // Calculate base force with smoother falloff
+  // Increase base force since we removed instant elimination
   const baseForce =
-    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE + fireball.targetRadius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER;
+    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE * 2.5 + fireball.targetRadius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER * 1.5;
 
   // Use smoother distance falloff
   const distanceFactor = 1 / Math.pow(normalizedDistance, FIREBALL_PHYSICS.PUSHBACK_DISTANCE_FACTOR);
 
   // Calculate final force with clamping
   const force = baseForce * distanceFactor;
-  return Math.min(FIREBALL_PHYSICS.PUSHBACK_MAX_FORCE, Math.max(FIREBALL_PHYSICS.PUSHBACK_MIN_FORCE, force));
+  return Math.min(FIREBALL_PHYSICS.PUSHBACK_MAX_FORCE * 2, Math.max(FIREBALL_PHYSICS.PUSHBACK_MIN_FORCE, force));
 }
 
 /**
@@ -101,9 +101,9 @@ export function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx:
   const momentumVx = fireball.vx * FIREBALL_PHYSICS.MOMENTUM_TRANSFER_RATE;
   const momentumVy = fireball.vy * FIREBALL_PHYSICS.MOMENTUM_TRANSFER_RATE;
 
-  // Combine direct force and momentum transfer
-  const vx = (nx * force + momentumVx) * FIREBALL_PHYSICS.VELOCITY_DAMPENING;
-  const vy = (ny * force + momentumVy) * FIREBALL_PHYSICS.VELOCITY_DAMPENING;
+  // Combine direct force and momentum transfer with increased effect
+  const vx = (nx * force + momentumVx) * FIREBALL_PHYSICS.VELOCITY_DAMPENING * 1.5;
+  const vy = (ny * force + momentumVy) * FIREBALL_PHYSICS.VELOCITY_DAMPENING * 1.5;
 
   return { vx, vy };
 }
@@ -113,9 +113,9 @@ export function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx:
  */
 export function clampVelocity(vx: number, vy: number): { vx: number; vy: number } {
   const speed = Math.sqrt(vx * vx + vy * vy);
-  if (speed > FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY) {
+  if (speed > FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY * 2) { // Increased max velocity since we removed instant elimination
     // Apply smooth clamping
-    const scale = FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY / speed;
+    const scale = (FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY * 2) / speed;
     return {
       vx: vx * scale,
       vy: vy * scale,
@@ -125,30 +125,45 @@ export function clampVelocity(vx: number, vy: number): { vx: number; vy: number 
 }
 
 /**
- * Handle collision between a fireball and Santa with improved physics
+ * Handle collision between a fireball and Santa with continuous energy drain
  */
 export function handleFireballSantaCollision(fireball: Fireball, santa: Santa): void {
-  // Calculate pushback vector with momentum transfer
-  const pushback = calculatePushbackVector(fireball, santa);
+  const now = Date.now();
 
-  // Apply smooth velocity clamping
+  // Initialize or update fireball contact time
+  if (!santa.fireballContactTime) {
+    santa.fireballContactTime = now;
+  }
+
+  // Skip energy drain if santa is charging
+  if (!santa.input.charging) {
+    // Calculate time since last contact
+    const contactDuration = now - santa.fireballContactTime;
+    
+    // Calculate energy drain based on contact duration and fireball size
+    const sizeFactor = fireball.targetRadius / FIREBALL_PHYSICS.MIN_RADIUS;
+    const energyDrain = SANTA_PHYSICS.FIREBALL_CONTACT_ENERGY_DRAIN_RATE * contactDuration * sizeFactor;
+
+    // Apply energy drain, respecting the negative energy limit
+    santa.energy = Math.max(SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT, santa.energy - energyDrain);
+  }
+
+  // Update contact time for next frame
+  santa.fireballContactTime = now;
+
+  // Calculate and apply pushback
+  const pushback = calculatePushbackVector(fireball, santa);
   const clampedVelocity = clampVelocity(santa.vx + pushback.vx, santa.vy + pushback.vy);
 
   // Update Santa's velocity
   santa.vx = clampedVelocity.vx;
   santa.vy = clampedVelocity.vy;
 
-  // Calculate energy reduction based on collision impact
-  const impactSpeed = Math.sqrt(pushback.vx * pushback.vx + pushback.vy * pushback.vy);
-  const energyReduction = Math.min(
-    santa.energy,
-    fireball.targetRadius * 0.5 * (impactSpeed / FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY),
-  );
-
-  // Apply energy reduction
-  santa.energy = Math.max(0, santa.energy - energyReduction);
+  // Pause energy regeneration while in contact with fireball
   santa.energyRegenPaused = true;
 }
+
+// ... rest of the file remains unchanged ...
 
 /**
  * Calculate the current radius of a fireball based on its growth progress

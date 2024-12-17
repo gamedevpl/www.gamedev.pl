@@ -65,9 +65,8 @@ function createFireball(
   velocity: number,
   angle: number,
   santa: Santa,
+  currentTime: number, // Add currentTime parameter
 ): Fireball {
-  const now = Date.now();
-
   // Calculate base velocity components from angle and velocity
   const baseVx = velocity * Math.cos(angle);
   const baseVy = velocity * Math.sin(angle);
@@ -93,8 +92,8 @@ function createFireball(
     y,
     radius: 0,
     targetRadius,
-    growthEndTime: now + FIREBALL_PHYSICS.GROWTH_DURATION,
-    createdAt: now,
+    growthEndTime: currentTime + FIREBALL_PHYSICS.GROWTH_DURATION,
+    createdAt: currentTime,
     vx: finalVx,
     vy: finalVy,
     mass: calculateFireballMass(targetRadius),
@@ -102,27 +101,28 @@ function createFireball(
   };
 }
 
-function createFireballFromSanta(santa: Santa, chargeTime: number): { fireball: Fireball; energyCost: number } | null {
+function createFireballFromSanta(santa: Santa, chargeTime: number, world: GameWorldState): { fireball: Fireball; energyCost: number } | null {
   if (chargeTime < FIREBALL_PHYSICS.MIN_CHARGE_TIME) {
     return null;
   }
 
   const props = calculateFireballProperties(chargeTime, santa.energy);
   const fireball = createFireball(
-    `fireball_${Date.now()}`,
+    `fireball_${world.time}_${Math.random().toString(36).substr(2, 9)}`,
     santa.x,
     santa.y,
     props.radius,
     props.velocity,
     santa.angle,
     santa,
+    world.time,
   );
 
   return { fireball, energyCost: props.energyCost };
 }
 
 export function addFireballFromSanta(world: GameWorldState, santa: Santa, chargeTime: number): boolean {
-  const result = createFireballFromSanta(santa, chargeTime);
+  const result = createFireballFromSanta(santa, chargeTime, world);
   if (!result) return false;
 
   const { fireball, energyCost } = result;

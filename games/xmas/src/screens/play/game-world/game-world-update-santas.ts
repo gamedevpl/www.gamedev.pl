@@ -58,22 +58,39 @@ export function updateSantaPhysics(santa: Santa, deltaTime: number): boolean {
  * Updates Santa's energy level and handles regeneration
  * Returns false if energy update should be skipped (e.g., Santa is eliminated)
  */
-export function updateSantaEnergy(santa: Santa, deltaTime: number): boolean {
+export function updateSantaEnergy(santa: Santa, deltaTime: number, world: GameWorldState): boolean {
   // Skip energy update for eliminated Santas
   if (santa.isEliminated) {
     return false;
   }
 
-  // Check for elimination condition (energy <= 0)
-  if (santa.energy <= 0) {
-    santa.energy = 0;
+  // Check if santa is not in contact with fireball
+  if (santa.fireballContactTime && world.time - santa.fireballContactTime > 100) {
+    santa.fireballContactTime = undefined;
+    santa.energyRegenPaused = false;
+  }
+
+  // Check for elimination condition (energy <= NEGATIVE_ENERGY_LIMIT)
+  if (santa.energy <= SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT) {
+    santa.energy = SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT;
     santa.isEliminated = true;
-    santa.eliminatedAt = Date.now();
+    santa.eliminatedAt = world.time;
     return false;
   }
 
-  if (!santa.energyRegenPaused && santa.energy < SANTA_PHYSICS.MAX_ENERGY) {
-    santa.energy = Math.min(SANTA_PHYSICS.MAX_ENERGY, santa.energy + SANTA_PHYSICS.ENERGY_REGENERATION * deltaTime);
+  // Only regenerate energy when:
+  // 1. Regeneration is not paused
+  // 2. Not in contact with fireball
+  // 3. Energy is below max
+  // 4. Energy is above 0 (no regeneration in negative energy state)
+  if (!santa.energyRegenPaused && 
+      !santa.fireballContactTime && 
+      santa.energy < SANTA_PHYSICS.MAX_ENERGY &&
+      santa.energy > 0) {
+    santa.energy = Math.min(
+      SANTA_PHYSICS.MAX_ENERGY, 
+      santa.energy + SANTA_PHYSICS.ENERGY_REGENERATION * deltaTime
+    );
   }
 
   return true;
@@ -97,11 +114,17 @@ export function updateSantaCharging(state: GameWorldState): boolean {
 
   const { input } = playerSanta;
 
+  // Prevent charging if energy is below 0
+  if (playerSanta.energy <= 0 && input.charging) {
+    input.charging = false;
+    input.chargeStartTime = null;
+  }
+
   if (input.charging && input.chargeStartTime !== null) {
     // Pause energy regeneration while charging
     playerSanta.energyRegenPaused = true;
-  } else {
-    // Allow energy regeneration when not charging
+  } else if (!playerSanta.fireballContactTime) {
+    // Allow energy regeneration when not charging and not in contact with fireball
     playerSanta.energyRegenPaused = false;
   }
 

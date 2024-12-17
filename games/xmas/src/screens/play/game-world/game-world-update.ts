@@ -120,7 +120,7 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   if (!state.playerSanta.isEliminated) {
     updateSantaPhysics(state.playerSanta, deltaTime);
     updateSantaCharging(state);
-    updateSantaEnergy(state.playerSanta, deltaTime);
+    updateSantaEnergy(state.playerSanta, deltaTime, state);
 
     // Check for automatic gift collection for player Santa
     tryCollectNearbyGifts(state, state.playerSanta);
@@ -147,7 +147,7 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
       // Update AI Santa physics
       updateSantaPhysics(santa, deltaTime);
-      updateSantaEnergy(santa, deltaTime);
+      updateSantaEnergy(santa, deltaTime, state);
 
       // Check for automatic gift collection for AI Santas
       tryCollectNearbyGifts(state, santa);
