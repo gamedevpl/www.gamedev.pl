@@ -1,6 +1,6 @@
 import { GameWorldState } from '../game-world/game-world-types';
 import { createSanta } from '../game-world/game-world-manipulate';
-import { AI_CONFIG, AI_DIFFICULTY, AISanta, WaveState } from './ai-santa-types';
+import { AI_CONFIG, AI_DIFFICULTY, AISanta, WAVE_STATUS, WaveState } from './ai-santa-types';
 import { initializeAIState } from './ai-santa-decision';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world/game-world-consts';
 import { devConfig } from '../dev/dev-config';
@@ -55,9 +55,12 @@ function createAISanta(gameState: GameWorldState): AISanta {
  */
 export function initializeWaveState(): WaveState {
   return {
-    currentWave: AI_DIFFICULTY.WAVE_1,
-    santasRemaining: 1,
+    currentWave: AI_DIFFICULTY.WAVE_0,
+    santasRemaining: 0,
     nextSpawnTime: null,
+    status: WAVE_STATUS.PREPARING, // or appropriate default value
+    difficultyMultiplier: 1, // or appropriate default value
+    isBossWave: false, // or appropriate default value
   };
 }
 

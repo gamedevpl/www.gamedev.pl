@@ -10,14 +10,43 @@ export const enum AI_BEHAVIOR_STATE {
 }
 
 /**
+ * Wave status enumeration
+ */
+export const enum WAVE_STATUS {
+  PREPARING = 'PREPARING', // Wave is about to start
+  IN_PROGRESS = 'IN_PROGRESS', // Wave is currently active
+  COMPLETED = 'COMPLETED', // Wave has been completed
+}
+
+/**
  * AI difficulty levels configuration
  */
 export const enum AI_DIFFICULTY {
+  WAVE_0 = 0, // 0 Santa
   WAVE_1 = 1, // 1 Santa
-  // 2 Santas
-  // 3 Santas
+  WAVE_2 = 2, // 2 Santas
+  WAVE_3 = 3, // 3 Santas
+  WAVE_4 = 4, // 4 Santas
+  WAVE_5 = 5, // 5 Santas (Boss Wave)
   // Add more waves as needed
 }
+
+/**
+ * Wave progression constants
+ */
+export const WAVE_CONFIG = {
+  PREPARATION_TIME: 3000, // Time between waves (ms)
+  BOSS_WAVE_INTERVAL: 5, // Every X waves is a boss wave
+  DIFFICULTY_SCALING: {
+    ENERGY_REGEN_MULTIPLIER: 0.1, // Energy regeneration increase per wave
+    SPEED_MULTIPLIER: 0.05, // Speed increase per wave
+    ACCURACY_MULTIPLIER: 0.05, // Accuracy increase per wave
+  },
+  REWARDS: {
+    BASE_SCORE: 100, // Base score for completing a wave
+    BONUS_MULTIPLIER: 1.5, // Score multiplier for boss waves
+  },
+} as const;
 
 /**
  * AI Santa configuration constants
@@ -79,10 +108,32 @@ export type AIDecision = {
 };
 
 /**
- * Wave state tracking
+ * Wave state tracking with enhanced information
  */
 export type WaveState = {
   currentWave: AI_DIFFICULTY;
   santasRemaining: number;
   nextSpawnTime: number | null;
+  status: WAVE_STATUS;
+  startTime?: number; // When the current wave started
+  completionTime?: number; // When the current wave was completed
+  difficultyMultiplier: number; // Current difficulty scaling
+  isBossWave: boolean; // Whether this is a boss wave
 };
+
+/**
+ * Helper function to check if a wave is a boss wave
+ */
+export function isBossWave(waveNumber: number): boolean {
+  return waveNumber % WAVE_CONFIG.BOSS_WAVE_INTERVAL === 0;
+}
+
+/**
+ * Calculate difficulty multiplier based on wave number
+ */
+export function calculateDifficultyMultiplier(waveNumber: number): number {
+  const baseMultiplier = 1.0;
+  const waveScaling = (waveNumber - 1) * 0.1; // 10% increase per wave
+  const bossBonus = isBossWave(waveNumber) ? 0.5 : 0; // 50% bonus for boss waves
+  return baseMultiplier + waveScaling + bossBonus;
+}

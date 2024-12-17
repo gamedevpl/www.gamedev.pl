@@ -14,7 +14,7 @@ import { checkFireballSantaCollision, handleFireballSantaCollision } from './gam
  * Check if a Santa should be eliminated based on their energy
  */
 function checkSantaElimination(state: GameWorldState, currentTime: number) {
-  state.santas.forEach(santa => {
+  state.santas.forEach((santa) => {
     // Check if Santa should be eliminated (energy is 0 and not already eliminated)
     if (santa.energy <= 0 && !santa.isEliminated) {
       santa.isEliminated = true;
@@ -22,18 +22,6 @@ function checkSantaElimination(state: GameWorldState, currentTime: number) {
 
       // Increment eliminated count for stats
       state.santasEliminatedCount++;
-
-      // If player Santa is eliminated, trigger game over
-      if (santa === state.playerSanta && !state.gameOver) {
-        const gameOverStats: GameOverStats = {
-          timeSurvived: currentTime - state.time,
-          giftsCollected: state.giftsCollectedCount,
-          santasEliminated: state.santasEliminatedCount,
-          finalWave: state.waveState.currentWave,
-        };
-        state.gameOver = true;
-        state.gameOverStats = gameOverStats;
-      }
     }
   });
 }
@@ -42,9 +30,7 @@ function checkSantaElimination(state: GameWorldState, currentTime: number) {
  * Remove eliminated AI Santas from the game world
  */
 function removeEliminatedAISantas(state: GameWorldState) {
-  state.santas = state.santas.filter(santa => 
-    santa === state.playerSanta || !santa.isEliminated
-  );
+  state.santas = state.santas.filter((santa) => santa === state.playerSanta || !santa.isEliminated);
 }
 
 /**
@@ -110,6 +96,18 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   // Skip updates if game is over
   if (state.gameOver) {
     return state;
+  }
+
+  if (state.playerSanta.isEliminated && !state.gameOver) {
+    // If player Santa is eliminated, trigger game over
+    const gameOverStats: GameOverStats = {
+      timeSurvived: state.time - state.waveState.startTime!,
+      giftsCollected: state.giftsCollectedCount,
+      santasEliminated: state.santasEliminatedCount,
+      finalWave: state.waveState.currentWave,
+    };
+    state.gameOver = true;
+    state.gameOverStats = gameOverStats;
   }
 
   // Update gift spawning system

@@ -9,6 +9,21 @@ import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-con
 import { initializeWaveState } from './game-ai/ai-santa-spawner';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
+import { WAVE_STATUS } from './game-ai/ai-santa-types';
+import {
+  WaveInfoContainer,
+  WaveNumber,
+  EnemyCount,
+  WaveSplashContainer,
+  WaveSplashTitle,
+  WaveSplashSubtitle,
+  formatWaveNumber,
+  formatEnemyCount,
+  getWaveDescription,
+  useWaveSplash,
+  WaveInfoProps,
+  WaveSplashProps,
+} from './utils/wave-display';
 
 // Game configuration
 const GAME_CONFIG = {
@@ -20,6 +35,26 @@ const GAME_CONFIG = {
     count: 3, // Number of chimneys in the game
     spacing: GAME_WORLD_WIDTH / 4, // Minimum spacing between chimneys
   },
+};
+
+// Wave Info Component
+const WaveInfo = ({ waveState, enemyCount }: WaveInfoProps) => (
+  <WaveInfoContainer>
+    <WaveNumber>{formatWaveNumber(waveState.currentWave)}</WaveNumber>
+    <EnemyCount>{formatEnemyCount(enemyCount)}</EnemyCount>
+  </WaveInfoContainer>
+);
+
+// Wave Splash Component
+const WaveSplash = ({ waveNumber, isVisible }: WaveSplashProps) => {
+  if (!isVisible) return null;
+
+  return (
+    <WaveSplashContainer isVisible={isVisible}>
+      <WaveSplashTitle>{formatWaveNumber(waveNumber)}</WaveSplashTitle>
+      <WaveSplashSubtitle>{getWaveDescription(waveNumber)}</WaveSplashSubtitle>
+    </WaveSplashContainer>
+  );
 };
 
 // Function to create initial Santa
@@ -39,7 +74,7 @@ const INITIAL_CHIMNEYS = Array.from({ length: GAME_CONFIG.chimneys.count }, (_, 
   y: GAME_WORLD_HEIGHT * 0.2, // Position chimneys at 20% of screen height
 }));
 
-// Function to create initial game state
+// Function to create initial game state with enhanced wave state
 function createInitialState(): GameWorldState {
   const playerSanta = createInitialSanta();
   return {
@@ -70,8 +105,11 @@ export function PlayScreen() {
     gameWorldState: createInitialState(),
     renderState: createRenderState(),
   });
+  const [gameState, setGameState] = useState(() => ({ ...gameStateRef.current.gameWorldState }));
 
   const [isGameOver, setIsGameOver] = useState(false);
+  const prevWaveRef = useRef(0);
+  const { isVisible, showWaveSplash } = useWaveSplash(3000);
 
   // Function to handle game restart
   const handleRestart = () => {
@@ -81,6 +119,26 @@ export function PlayScreen() {
       renderState: createRenderState(),
     };
     setIsGameOver(false);
+    prevWaveRef.current = 0;
+  };
+
+  // Function to handle wave transitions
+  const handleWaveTransition = (currentWave: number) => {
+    if (currentWave !== prevWaveRef.current) {
+      const gameState = gameStateRef.current.gameWorldState;
+
+      // Update wave state with new wave information
+      gameState.waveState = {
+        ...gameState.waveState,
+        status: WAVE_STATUS.PREPARING,
+        startTime: Date.now(),
+        isBossWave: currentWave % 5 === 0,
+        difficultyMultiplier: 1 + (currentWave - 1) * 0.1, // 10% increase per wave
+      };
+
+      showWaveSplash();
+      prevWaveRef.current = currentWave;
+    }
   };
 
   useRafLoop(() => {
@@ -98,6 +156,10 @@ export function PlayScreen() {
       // Update game world
       gameStateRef.current.gameWorldState = updateGameWorld(gameStateRef.current.gameWorldState, stepTime);
 
+      // Check for wave transitions
+      const currentWave = gameStateRef.current.gameWorldState.waveState.currentWave;
+      handleWaveTransition(currentWave);
+
       // Update render state
       gameStateRef.current.renderState = updateRenderState(
         gameStateRef.current.gameWorldState,
@@ -111,11 +173,18 @@ export function PlayScreen() {
     if (gameStateRef.current.gameWorldState.gameOver && !isGameOver) {
       setIsGameOver(true);
     }
+
+    if (gameStateRef.current.gameWorldState.time - gameState.time >= 1000) {
+      setGameState({ ...gameStateRef.current.gameWorldState });
+    }
   });
 
   return (
     <>
-      <GameViewport gameStateRef={gameStateRef} />
+      <GameViewport gameStateRef={gameStateRef}>
+        <WaveInfo waveState={gameState.waveState} enemyCount={gameState.santas.length - 1} />
+        <WaveSplash waveNumber={gameState.waveState.currentWave} isVisible={isVisible} />
+      </GameViewport>
       <DevConfigPanel />
       {isGameOver && gameStateRef.current.gameWorldState.gameOverStats && (
         <GameOverScreen stats={gameStateRef.current.gameWorldState.gameOverStats} onRestart={handleRestart} />

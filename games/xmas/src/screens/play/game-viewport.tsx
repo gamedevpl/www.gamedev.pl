@@ -1,4 +1,4 @@
-import { useRef, RefObject, useEffect } from 'react';
+import { useRef, RefObject, useEffect, PropsWithChildren } from 'react';
 import { useRafLoop, useWindowSize } from 'react-use';
 import { renderGame } from './game-render/game-renderer';
 import { GameWorldState } from './game-world/game-world-types';
@@ -34,7 +34,7 @@ interface GameViewportProps {
   }>;
 }
 
-export function GameViewport({ gameStateRef }: GameViewportProps) {
+export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameViewportProps>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { width: windowWidth, height: windowHeight } = useWindowSize();
 
@@ -66,6 +66,7 @@ export function GameViewport({ gameStateRef }: GameViewportProps) {
       <GameCanvas ref={canvasRef} />
       <InputController />
       <GameController gameStateRef={gameStateRef} />
+      {children}
     </ViewportContainer>
   );
 }
