@@ -150,7 +150,6 @@ export function handleFireballSantaCollision(fireball: Fireball, santa: Santa, w
     // Calculate energy drain based on contact duration and fireball size
     const sizeFactor = fireball.radius / FIREBALL_PHYSICS.MIN_RADIUS;
     const energyDrain = SANTA_PHYSICS.FIREBALL_CONTACT_ENERGY_DRAIN_RATE * contactDuration * sizeFactor;
-    console.log(energyDrain);
 
     // Apply energy drain, respecting the negative energy limit
     santa.energy = Math.max(SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT, santa.energy - energyDrain);
