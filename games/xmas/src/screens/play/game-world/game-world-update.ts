@@ -1,6 +1,11 @@
 import { GameOverStats, GameWorldState, SANTA_PHYSICS } from './game-world-types';
 import { updateFireballs } from './game-world-update-fireballs';
-import { updateSantaCharging, updateSantaEnergy, updateSantaPhysics } from './game-world-update-santas';
+import {
+  updateSantaCharging,
+  updateSantaDialogues,
+  updateSantaEnergy,
+  updateSantaPhysics,
+} from './game-world-update-santas';
 import { makeAIDecision } from '../game-ai/ai-santa-decision';
 import { AISanta } from '../game-ai/ai-santa-types';
 import { updateAISpawner } from '../game-ai/ai-santa-spawner';
@@ -9,6 +14,7 @@ import { addFireballFromSanta } from './game-world-manipulate';
 import { updateGifts } from './game-world-update-gifts';
 import { devConfig } from '../dev/dev-config';
 import { checkFireballSantaCollision, handleFireballSantaCollision } from './game-world-collisions';
+import { triggerHitDialogue, triggerEliminationDialogue } from '../game-dialogues/santa-dialogues';
 
 /**
  * Check if a Santa should be eliminated based on their energy
@@ -19,6 +25,9 @@ function checkSantaElimination(state: GameWorldState, currentTime: number) {
     if (santa.energy <= SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT && !santa.isEliminated) {
       santa.isEliminated = true;
       santa.eliminatedAt = currentTime;
+
+      // Trigger elimination dialogue
+      triggerEliminationDialogue(santa, currentTime);
 
       // Increment eliminated count for stats
       state.santasEliminatedCount++;
@@ -44,6 +53,8 @@ function processFireballSantaCollisions(state: GameWorldState) {
   fireballs.forEach((fireball) => {
     if (!state.playerSanta.isEliminated && checkFireballSantaCollision(fireball, state.playerSanta, state)) {
       handleFireballSantaCollision(fireball, state.playerSanta, state);
+      // Trigger hit dialogue for player Santa
+      triggerHitDialogue(state.playerSanta, state.time);
     }
   });
 
@@ -55,6 +66,8 @@ function processFireballSantaCollisions(state: GameWorldState) {
       fireballs.forEach((fireball) => {
         if (checkFireballSantaCollision(fireball, santa, state)) {
           handleFireballSantaCollision(fireball, santa, state);
+          // Trigger hit dialogue for AI Santa
+          triggerHitDialogue(santa, state.time);
         }
       });
     });
@@ -124,6 +137,8 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
     // Check for automatic gift collection for player Santa
     tryCollectNearbyGifts(state, state.playerSanta);
+
+    updateSantaDialogues(state.playerSanta, state);
   }
 
   // Update fireballs and handle their collisions
@@ -148,6 +163,7 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
       // Update AI Santa physics
       updateSantaPhysics(santa, deltaTime);
       updateSantaEnergy(santa, deltaTime, state);
+      updateSantaDialogues(santa, state);
 
       // Check for automatic gift collection for AI Santas
       tryCollectNearbyGifts(state, santa);

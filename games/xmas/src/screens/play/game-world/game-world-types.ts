@@ -13,6 +13,16 @@ export const enum SANTA_PHYSICS {
   FIREBALL_CONTACT_ENERGY_DRAIN_RATE = 0.05, // Energy drain per millisecond of fireball contact
 }
 
+export const enum DIALOGUE_CONSTANTS {
+  FADE_IN_DURATION = 200,
+  FADE_OUT_DURATION = 300,
+  DISPLAY_DURATION = 2000,
+  VERTICAL_OFFSET = -50,
+  LOW_ENERGY_THRESHOLD = 25, // 25% of max energy
+  DIALOGUE_COOLDOWN = 1500, // Minimum time between dialogues
+  MAX_CONCURRENT_DIALOGUES = 2,
+}
+
 export const enum FIREBALL_PHYSICS {
   BASE_VELOCITY = 1.0,
   MIN_RADIUS = 30,
@@ -24,35 +34,35 @@ export const enum FIREBALL_PHYSICS {
   GROWTH_DURATION = 500,
 
   // Collision detection constants
-  COLLISION_MARGIN = 0.9, // Margin for collision detection (0.9 means collision starts at 90% of visual radius)
-  COLLISION_GROWTH_THRESHOLD = 0.3, // Threshold for when growing fireballs start collision detection
-  COLLISION_VISUAL_SCALE = 0.95, // Scale factor for visual vs. collision radius (helps with visual consistency)
+  COLLISION_MARGIN = 0.9,
+  COLLISION_GROWTH_THRESHOLD = 0.3,
+  COLLISION_VISUAL_SCALE = 0.95,
 
   // Collision physics constants
-  COLLISION_THRESHOLD = 0.951, // Adjusted from 0.51 for more accurate collisions
+  COLLISION_THRESHOLD = 0.951,
   MERGE_MOMENTUM_FACTOR = 0.8,
   MERGE_SIZE_FACTOR = 1.011,
   MIN_COLLISION_VELOCITY = 0.1,
 
   // Progressive collision sensitivity
-  COLLISION_SENSITIVITY_MIN = 0.85, // Minimum collision sensitivity (outer edge)
-  COLLISION_SENSITIVITY_MAX = 1.01, // Maximum collision sensitivity (center)
-  COLLISION_SENSITIVITY_CURVE = 2.0, // Power curve for sensitivity progression (higher = sharper transition)
+  COLLISION_SENSITIVITY_MIN = 0.85,
+  COLLISION_SENSITIVITY_MAX = 1.01,
+  COLLISION_SENSITIVITY_CURVE = 2.0,
 
   // Pushback mechanics
-  PUSHBACK_BASE_FORCE = 0.005, // Reduced from 0.025 for gentler pushback
-  PUSHBACK_RADIUS_MULTIPLIER = 0.003, // Reduced from 0.015 for more balanced size impact
-  PUSHBACK_DISTANCE_FACTOR = 1.0111, // Reduced from 1.5 for smoother distance falloff
-  PUSHBACK_MIN_FORCE = 0.01, // Minimum force applied on collision
-  PUSHBACK_MAX_FORCE = 0.05, // Reduced from 0.5 for gentler maximum force
-  MAX_PUSHBACK_VELOCITY = 0.11, // Reduced from 0.81 for minimal knockback
+  PUSHBACK_BASE_FORCE = 0.005,
+  PUSHBACK_RADIUS_MULTIPLIER = 0.003,
+  PUSHBACK_DISTANCE_FACTOR = 1.0111,
+  PUSHBACK_MIN_FORCE = 0.01,
+  PUSHBACK_MAX_FORCE = 0.05,
+  MAX_PUSHBACK_VELOCITY = 0.11,
 
   // Momentum transfer
-  MOMENTUM_TRANSFER_RATE = 0.6, // How much of fireball's momentum transfers to Santa
-  VELOCITY_DAMPENING = 0.851, // Dampening factor for transferred velocity
+  MOMENTUM_TRANSFER_RATE = 0.6,
+  VELOCITY_DAMPENING = 0.851,
 
   // Launcher immunity
-  LAUNCHER_IMMUNITY_DURATION = 1000.01, // Duration in milliseconds during which a Santa is immune to their own fireball
+  LAUNCHER_IMMUNITY_DURATION = 1000.01,
 }
 
 export const enum GIFT_CONSTANTS {
@@ -71,6 +81,16 @@ export const enum GIFT_CONSTANTS {
   MIN_SPAWN_INTERVAL = 5000,
   MAX_SPAWN_INTERVAL = 10000,
 }
+
+export type DialogueText = {
+  id: string;
+  text: string;
+  createdAt: number;
+  duration: number;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+  opacity: number;
+};
 
 export type SantaInputState = {
   left: boolean;
@@ -100,8 +120,8 @@ export type GameWorldState = {
   nextGiftSpawnTime: number;
   gameOver: boolean;
   gameOverStats?: GameOverStats;
-  giftsCollectedCount: number; // Track total gifts collected for stats
-  santasEliminatedCount: number; // Track total santas eliminated for stats
+  giftsCollectedCount: number;
+  santasEliminatedCount: number;
 };
 
 export type SantaColorTheme = 'classic' | 'dedMoroz';
@@ -124,7 +144,10 @@ export type Santa = {
   colorTheme?: SantaColorTheme;
   isEliminated: boolean;
   eliminatedAt?: number;
-  fireballContactTime?: number; // Tracks the time of continuous fireball contact
+  fireballContactTime?: number;
+  // Dialogue-related properties
+  dialogues: DialogueText[];
+  lastDialogueTime?: number;
 };
 
 export type Fireball = {
@@ -139,7 +162,7 @@ export type Fireball = {
   vy: number;
   mass?: number;
   mergeCount?: number;
-  launcherId: string; // ID of the Santa who launched this fireball
+  launcherId: string;
 };
 
 export type Gift = {

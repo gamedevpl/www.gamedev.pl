@@ -26,6 +26,17 @@ export function createSanta(id: string, x = GAME_WORLD_WIDTH / 2, y = GAME_WORLD
     },
     isPlayer,
     isEliminated: false,
+    dialogues: [
+      {
+        id: 'dialogue_1',
+        text: 'Ho ho ho!',
+        duration: 2,
+        createdAt: 0,
+        fadeInDuration: 0.5,
+        fadeOutDuration: 0.5,
+        opacity: 1,
+      },
+    ],
   };
 }
 
@@ -102,7 +113,11 @@ function createFireball(
   };
 }
 
-function createFireballFromSanta(santa: Santa, chargeTime: number, world: GameWorldState): { fireball: Fireball; energyCost: number } | null {
+function createFireballFromSanta(
+  santa: Santa,
+  chargeTime: number,
+  world: GameWorldState,
+): { fireball: Fireball; energyCost: number } | null {
   if (chargeTime < FIREBALL_PHYSICS.MIN_CHARGE_TIME) {
     return null;
   }

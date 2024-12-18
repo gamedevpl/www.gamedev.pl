@@ -1,4 +1,4 @@
-import { Santa, SantaColorTheme } from '../game-world/game-world-types';
+import { DialogueText, DIALOGUE_CONSTANTS, Santa, SantaColorTheme } from '../game-world/game-world-types';
 
 // Pixel art color palettes
 const COLORS = {
@@ -11,10 +11,10 @@ const COLORS = {
     BOOTS: '#4A4A4A',
   },
   DED_MOROZ: {
-    HAT: '#87CEEB', // Light blue for Ded Moroz
+    HAT: '#87CEEB',
     FACE: '#FFE0BD',
     BEARD: '#FFFFFF',
-    SUIT: '#87CEEB', // Light blue for Ded Moroz
+    SUIT: '#87CEEB',
     BELT: '#4A4A4A',
     BOOTS: '#4A4A4A',
   },
@@ -22,6 +22,10 @@ const COLORS = {
     BODY: '#8B4513',
     RAILS: '#A0522D',
     METAL: '#C0C0C0',
+  },
+  DIALOGUE: {
+    TEXT: '#000000',
+    SHADOW: '#FFFFFF',
   },
 } as const;
 
@@ -35,6 +39,15 @@ const SANTA_SIZE = {
 const SLEDGE_SIZE = {
   WIDTH: 48,
   HEIGHT: 24,
+} as const;
+
+// Dialogue rendering constants
+const DIALOGUE_STYLE = {
+  FONT_SIZE: 12,
+  FONT_FAMILY: '"Press Start 2P", monospace',
+  SHADOW_OFFSET: 1,
+  LINE_HEIGHT: 15,
+  MAX_WIDTH: 150,
 } as const;
 
 /**
@@ -199,6 +212,39 @@ function calculateAnimationOffset(santa: Santa, time: number): number {
 }
 
 /**
+ * Render dialogue text with pixel-perfect positioning and style
+ */
+function renderDialogue(ctx: CanvasRenderingContext2D, dialogue: DialogueText, x: number, y: number, index: number) {
+  ctx.save();
+
+  // Set text style
+  ctx.font = `${DIALOGUE_STYLE.FONT_SIZE}px ${DIALOGUE_STYLE.FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  // Calculate vertical position with offset for multiple dialogues
+  const verticalOffset = y + DIALOGUE_CONSTANTS.VERTICAL_OFFSET - index * DIALOGUE_STYLE.LINE_HEIGHT;
+
+  // Apply dialogue opacity
+  ctx.globalAlpha = dialogue.opacity;
+
+  // Draw text shadow
+  ctx.fillStyle = COLORS.DIALOGUE.SHADOW;
+  ctx.fillText(
+    dialogue.text,
+    x + DIALOGUE_STYLE.SHADOW_OFFSET,
+    verticalOffset + DIALOGUE_STYLE.SHADOW_OFFSET,
+    DIALOGUE_STYLE.MAX_WIDTH,
+  );
+
+  // Draw main text
+  ctx.fillStyle = COLORS.DIALOGUE.TEXT;
+  ctx.fillText(dialogue.text, x, verticalOffset, DIALOGUE_STYLE.MAX_WIDTH);
+
+  ctx.restore();
+}
+
+/**
  * Main render function for Santa and sledge
  */
 export function renderSanta(ctx: CanvasRenderingContext2D, santa: Santa, time: number): void {
@@ -209,6 +255,11 @@ export function renderSanta(ctx: CanvasRenderingContext2D, santa: Santa, time: n
 
   // Move to Santa's position
   ctx.translate(santa.x, santa.y);
+
+  // Render dialogues before any other transformations
+  santa.dialogues.forEach((dialogue, index) => {
+    renderDialogue(ctx, dialogue, 0, 0, index);
+  });
 
   ctx.scale(-1, santa.direction === 'right' ? 1 : -1);
 

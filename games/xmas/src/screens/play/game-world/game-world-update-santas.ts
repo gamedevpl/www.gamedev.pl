@@ -1,5 +1,30 @@
 import { GAME_WORLD_WIDTH } from './game-world-consts';
-import { GameWorldState, Santa, SANTA_PHYSICS } from './game-world-types';
+import { GameWorldState, Santa, SANTA_PHYSICS, DIALOGUE_CONSTANTS } from './game-world-types';
+import {
+  updateDialogues,
+  triggerLowEnergyDialogue,
+  triggerMaxEnergyDialogue,
+  triggerEliminationDialogue,
+} from '../game-dialogues/santa-dialogues';
+
+// Track previous energy states to detect transitions
+const santaEnergyStates = new Map<string, {
+  wasLowEnergy: boolean;
+  wasMaxEnergy: boolean;
+}>();
+
+/**
+ * Initialize or get santa energy state
+ */
+function getSantaEnergyState(santa: Santa) {
+  if (!santaEnergyStates.has(santa.id)) {
+    santaEnergyStates.set(santa.id, {
+      wasLowEnergy: false,
+      wasMaxEnergy: false,
+    });
+  }
+  return santaEnergyStates.get(santa.id)!;
+}
 
 /**
  * Updates Santa's physics state based on current input and constraints
@@ -55,6 +80,29 @@ export function updateSantaPhysics(santa: Santa, deltaTime: number): boolean {
 }
 
 /**
+ * Check and trigger energy-related dialogues
+ */
+function checkEnergyDialogues(santa: Santa, world: GameWorldState) {
+  const energyState = getSantaEnergyState(santa);
+  const isLowEnergy = santa.energy <= SANTA_PHYSICS.MAX_ENERGY * (DIALOGUE_CONSTANTS.LOW_ENERGY_THRESHOLD / 100);
+  const isMaxEnergy = santa.energy >= SANTA_PHYSICS.MAX_ENERGY;
+
+  // Trigger low energy dialogue when transitioning to low energy state
+  if (isLowEnergy && !energyState.wasLowEnergy) {
+    triggerLowEnergyDialogue(santa, world.time);
+  }
+
+  // Trigger max energy dialogue when reaching max energy
+  if (isMaxEnergy && !energyState.wasMaxEnergy) {
+    triggerMaxEnergyDialogue(santa, world.time);
+  }
+
+  // Update states
+  energyState.wasLowEnergy = isLowEnergy;
+  energyState.wasMaxEnergy = isMaxEnergy;
+}
+
+/**
  * Updates Santa's energy level and handles regeneration
  * Returns false if energy update should be skipped (e.g., Santa is eliminated)
  */
@@ -75,6 +123,8 @@ export function updateSantaEnergy(santa: Santa, deltaTime: number, world: GameWo
     santa.energy = SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT;
     santa.isEliminated = true;
     santa.eliminatedAt = world.time;
+    // Trigger elimination dialogue
+    triggerEliminationDialogue(santa, world.time);
     return false;
   }
 
@@ -92,6 +142,9 @@ export function updateSantaEnergy(santa: Santa, deltaTime: number, world: GameWo
       santa.energy + SANTA_PHYSICS.ENERGY_REGENERATION * deltaTime
     );
   }
+
+  // Check and trigger energy-related dialogues
+  checkEnergyDialogues(santa, world);
 
   return true;
 }
@@ -129,4 +182,26 @@ export function updateSantaCharging(state: GameWorldState): boolean {
   }
 
   return true;
+}
+
+/**
+ * Update dialogues for a Santa
+ */
+export function updateSantaDialogues(santa: Santa, world: GameWorldState): void {
+  // Initialize dialogues array if it doesn't exist
+  if (!santa.dialogues) {
+    santa.dialogues = [];
+  }
+
+  // Update existing dialogues (fade effects, removal)
+  updateDialogues(santa, world.time);
+}
+
+/**
+ * Cleanup eliminated Santa's state
+ */
+export function cleanupEliminatedSanta(santa: Santa): void {
+  if (santa.isEliminated) {
+    santaEnergyStates.delete(santa.id);
+  }
 }
