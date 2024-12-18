@@ -65,7 +65,7 @@ function createFireball(
   velocity: number,
   angle: number,
   santa: Santa,
-  currentTime: number, // Add currentTime parameter
+  currentTime: number,
 ): Fireball {
   // Calculate base velocity components from angle and velocity
   const baseVx = velocity * Math.cos(angle);
@@ -98,6 +98,7 @@ function createFireball(
     vy: finalVy,
     mass: calculateFireballMass(targetRadius),
     mergeCount: 1,
+    launcherId: santa.id, // Add the santa's ID as the launcherId
   };
 }
 

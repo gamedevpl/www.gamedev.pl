@@ -1,10 +1,10 @@
-import { Fireball, FIREBALL_PHYSICS, Santa, SANTA_PHYSICS } from './game-world-types';
+import { Fireball, FIREBALL_PHYSICS, GameWorldState, Santa, SANTA_PHYSICS } from './game-world-types';
 
 /**
  * Calculate the effective collision radius of a fireball based on its growth state
  */
-export function calculateEffectiveCollisionRadius(fireball: Fireball): number {
-  const growthProgress = Math.min(1, (Date.now() - fireball.createdAt) / FIREBALL_PHYSICS.GROWTH_DURATION);
+export function calculateEffectiveCollisionRadius(fireball: Fireball, world: GameWorldState): number {
+  const growthProgress = Math.min(1, (world.time - fireball.createdAt) / FIREBALL_PHYSICS.GROWTH_DURATION);
 
   // Only start collision detection after growth threshold
   if (growthProgress < FIREBALL_PHYSICS.COLLISION_GROWTH_THRESHOLD) {
@@ -34,9 +34,9 @@ export function calculateCollisionSensitivity(normalizedDistance: number): numbe
 /**
  * Check if a fireball hits a Santa with progressive collision sensitivity
  */
-export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): boolean {
+export function checkFireballSantaCollision(fireball: Fireball, santa: Santa, world: GameWorldState): boolean {
   // Early exit if fireball is too new (still growing)
-  const growthProgress = (Date.now() - fireball.createdAt) / FIREBALL_PHYSICS.GROWTH_DURATION;
+  const growthProgress = (world.time - fireball.createdAt) / FIREBALL_PHYSICS.GROWTH_DURATION;
   if (growthProgress < FIREBALL_PHYSICS.COLLISION_GROWTH_THRESHOLD) {
     return false;
   }
@@ -46,7 +46,7 @@ export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): b
   const distanceSquared = dx * dx + dy * dy;
 
   // Early exit for obvious non-collisions using squared distance
-  const collisionRadius = calculateEffectiveCollisionRadius(fireball);
+  const collisionRadius = calculateEffectiveCollisionRadius(fireball, world);
   const maxCollisionDistanceSquared = collisionRadius * collisionRadius;
 
   if (distanceSquared > maxCollisionDistanceSquared) {
@@ -66,13 +66,14 @@ export function checkFireballSantaCollision(fireball: Fireball, santa: Santa): b
 /**
  * Calculate the pushback force with improved distance-based scaling
  */
-export function calculatePushbackForce(fireball: Fireball, distance: number): number {
-  const collisionRadius = calculateEffectiveCollisionRadius(fireball);
+export function calculatePushbackForce(fireball: Fireball, distance: number, world: GameWorldState): number {
+  const collisionRadius = calculateEffectiveCollisionRadius(fireball, world);
   const normalizedDistance = Math.max(0.1, distance / collisionRadius);
 
   // Increase base force since we removed instant elimination
   const baseForce =
-    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE * 2.5 + fireball.targetRadius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER * 1.5;
+    FIREBALL_PHYSICS.PUSHBACK_BASE_FORCE * 2.5 +
+    fireball.targetRadius * FIREBALL_PHYSICS.PUSHBACK_RADIUS_MULTIPLIER * 1.5;
 
   // Use smoother distance falloff
   const distanceFactor = 1 / Math.pow(normalizedDistance, FIREBALL_PHYSICS.PUSHBACK_DISTANCE_FACTOR);
@@ -85,7 +86,11 @@ export function calculatePushbackForce(fireball: Fireball, distance: number): nu
 /**
  * Calculate the pushback vector with momentum transfer
  */
-export function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx: number; vy: number } {
+export function calculatePushbackVector(
+  fireball: Fireball,
+  santa: Santa,
+  world: GameWorldState,
+): { vx: number; vy: number } {
   const dx = santa.x - fireball.x;
   const dy = santa.y - fireball.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
@@ -95,7 +100,7 @@ export function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx:
   const ny = dy / distance;
 
   // Calculate force and basic pushback
-  const force = calculatePushbackForce(fireball, distance);
+  const force = calculatePushbackForce(fireball, distance, world);
 
   // Calculate momentum transfer
   const momentumVx = fireball.vx * FIREBALL_PHYSICS.MOMENTUM_TRANSFER_RATE;
@@ -113,7 +118,8 @@ export function calculatePushbackVector(fireball: Fireball, santa: Santa): { vx:
  */
 export function clampVelocity(vx: number, vy: number): { vx: number; vy: number } {
   const speed = Math.sqrt(vx * vx + vy * vy);
-  if (speed > FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY * 2) { // Increased max velocity since we removed instant elimination
+  if (speed > FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY * 2) {
+    // Increased max velocity since we removed instant elimination
     // Apply smooth clamping
     const scale = (FIREBALL_PHYSICS.MAX_PUSHBACK_VELOCITY * 2) / speed;
     return {
@@ -127,32 +133,34 @@ export function clampVelocity(vx: number, vy: number): { vx: number; vy: number 
 /**
  * Handle collision between a fireball and Santa with continuous energy drain
  */
-export function handleFireballSantaCollision(fireball: Fireball, santa: Santa): void {
-  const now = Date.now();
-
+export function handleFireballSantaCollision(fireball: Fireball, santa: Santa, world: GameWorldState): void {
   // Initialize or update fireball contact time
   if (!santa.fireballContactTime) {
-    santa.fireballContactTime = now;
+    santa.fireballContactTime = world.time;
   }
 
-  // Skip energy drain if santa is charging
-  if (!santa.input.charging) {
+  // Skip energy drain if santa is charging or santa is immune
+  if (
+    !santa.input.charging &&
+    !(fireball.launcherId === santa.id && world.time - fireball.createdAt < FIREBALL_PHYSICS.LAUNCHER_IMMUNITY_DURATION)
+  ) {
     // Calculate time since last contact
-    const contactDuration = now - santa.fireballContactTime;
-    
+    const contactDuration = world.time - santa.fireballContactTime;
+
     // Calculate energy drain based on contact duration and fireball size
-    const sizeFactor = fireball.targetRadius / FIREBALL_PHYSICS.MIN_RADIUS;
+    const sizeFactor = fireball.radius / FIREBALL_PHYSICS.MIN_RADIUS;
     const energyDrain = SANTA_PHYSICS.FIREBALL_CONTACT_ENERGY_DRAIN_RATE * contactDuration * sizeFactor;
+    console.log(energyDrain);
 
     // Apply energy drain, respecting the negative energy limit
     santa.energy = Math.max(SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT, santa.energy - energyDrain);
   }
 
   // Update contact time for next frame
-  santa.fireballContactTime = now;
+  santa.fireballContactTime = world.time;
 
   // Calculate and apply pushback
-  const pushback = calculatePushbackVector(fireball, santa);
+  const pushback = calculatePushbackVector(fireball, santa, world);
   const clampedVelocity = clampVelocity(santa.vx + pushback.vx, santa.vy + pushback.vy);
 
   // Update Santa's velocity
@@ -300,6 +308,7 @@ export function mergeFireballs(f1: Fireball, f2: Fireball, currentTime: number):
     createdAt: currentTime,
     mass: totalMass,
     mergeCount: (f1.mergeCount ?? 1) + (f2.mergeCount ?? 1),
+    launcherId: f1.launcherId, // Keep the original launcher ID from the first fireball
   };
 }
 

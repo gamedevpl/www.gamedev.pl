@@ -50,6 +50,9 @@ export const enum FIREBALL_PHYSICS {
   // Momentum transfer
   MOMENTUM_TRANSFER_RATE = 0.6, // How much of fireball's momentum transfers to Santa
   VELOCITY_DAMPENING = 0.851, // Dampening factor for transferred velocity
+
+  // Launcher immunity
+  LAUNCHER_IMMUNITY_DURATION = 1000.01, // Duration in milliseconds during which a Santa is immune to their own fireball
 }
 
 export const enum GIFT_CONSTANTS {
@@ -136,6 +139,7 @@ export type Fireball = {
   vy: number;
   mass?: number;
   mergeCount?: number;
+  launcherId: string; // ID of the Santa who launched this fireball
 };
 
 export type Gift = {

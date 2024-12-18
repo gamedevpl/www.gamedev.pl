@@ -1,4 +1,4 @@
-import { GameOverStats, GameWorldState } from './game-world-types';
+import { GameOverStats, GameWorldState, SANTA_PHYSICS } from './game-world-types';
 import { updateFireballs } from './game-world-update-fireballs';
 import { updateSantaCharging, updateSantaEnergy, updateSantaPhysics } from './game-world-update-santas';
 import { makeAIDecision } from '../game-ai/ai-santa-decision';
@@ -16,7 +16,7 @@ import { checkFireballSantaCollision, handleFireballSantaCollision } from './gam
 function checkSantaElimination(state: GameWorldState, currentTime: number) {
   state.santas.forEach((santa) => {
     // Check if Santa should be eliminated (energy is 0 and not already eliminated)
-    if (santa.energy <= 0 && !santa.isEliminated) {
+    if (santa.energy <= SANTA_PHYSICS.NEGATIVE_ENERGY_LIMIT && !santa.isEliminated) {
       santa.isEliminated = true;
       santa.eliminatedAt = currentTime;
 
@@ -42,8 +42,8 @@ function processFireballSantaCollisions(state: GameWorldState) {
 
   // Check collisions with player Santa
   fireballs.forEach((fireball) => {
-    if (!state.playerSanta.isEliminated && checkFireballSantaCollision(fireball, state.playerSanta)) {
-      handleFireballSantaCollision(fireball, state.playerSanta);
+    if (!state.playerSanta.isEliminated && checkFireballSantaCollision(fireball, state.playerSanta, state)) {
+      handleFireballSantaCollision(fireball, state.playerSanta, state);
     }
   });
 
@@ -53,8 +53,8 @@ function processFireballSantaCollisions(state: GameWorldState) {
       if (santa === state.playerSanta || santa.isEliminated) return; // Skip player Santa and eliminated Santas
 
       fireballs.forEach((fireball) => {
-        if (checkFireballSantaCollision(fireball, santa)) {
-          handleFireballSantaCollision(fireball, santa);
+        if (checkFireballSantaCollision(fireball, santa, state)) {
+          handleFireballSantaCollision(fireball, santa, state);
         }
       });
     });
