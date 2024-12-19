@@ -7,6 +7,11 @@ export class ArcadeAudio {
     this.sounds = {};
     if (isBrowser) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Create master gain node and connect it to destination
+      this.masterGainNode = this.audioContext.createGain();
+      this.masterGainNode.connect(this.audioContext.destination);
+      // Set initial volume to 1 (100%)
+      this.masterGainNode.gain.value = 1;
     }
   }
 
@@ -45,9 +50,11 @@ export class ArcadeAudio {
     const source = this.audioContext.createBufferSource();
     source.buffer = soundData.buffers[soundData.tick];
 
+    // Create individual gain node for this sound
     const gainNode = this.audioContext.createGain();
     source.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
+    // Connect to master gain instead of destination
+    gainNode.connect(this.masterGainNode);
 
     source.start(0);
 
@@ -71,6 +78,26 @@ export class ArcadeAudio {
 
   setEnabled(enabled) {
     this.enabled = enabled;
+  }
+
+  // Set master volume (0 to 1)
+  setMasterVolume(volume) {
+    if (!isBrowser) {
+      return;
+    }
+    // Clamp volume between 0 and 1
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+    if (this.masterGainNode) {
+      this.masterGainNode.gain.value = clampedVolume;
+    }
+  }
+
+  // Get current master volume
+  getMasterVolume() {
+    if (!isBrowser || !this.masterGainNode) {
+      return 0;
+    }
+    return this.masterGainNode.gain.value;
   }
 }
 

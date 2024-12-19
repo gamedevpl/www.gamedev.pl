@@ -1,5 +1,7 @@
 import { ArcadeAudio } from './arcade-audio';
 
+const DEFAULT_VOLUME = 0.15; // Default volume level (15%)
+
 class SoundArcadeEngine {
   private audio: ArcadeAudio;
   private windInterval?: NodeJS.Timeout;
@@ -9,6 +11,8 @@ class SoundArcadeEngine {
   constructor() {
     this.audio = new ArcadeAudio();
     this.initializeSounds();
+    // Set initial volume
+    this.setMasterVolume(DEFAULT_VOLUME);
   }
 
   private async initializeSounds() {
@@ -58,6 +62,22 @@ class SoundArcadeEngine {
       // eslint-disable-next-line no-sparse-arrays
       [1, , 0.15, 0.0, 0.12, 0.25, , 0.25, 0.03, 0.3, 0.6, , , , , , 0.15, -0.15, 0.7, , , , , 0.45],
     ]);
+  }
+
+  /**
+   * Set the master volume for all sounds
+   * @param volume Volume level between 0 (muted) and 1 (full volume)
+   */
+  setMasterVolume(volume: number): void {
+    this.audio.setMasterVolume(volume);
+  }
+
+  /**
+   * Get the current master volume
+   * @returns Current volume level between 0 and 1
+   */
+  getMasterVolume(): number {
+    return this.audio.getMasterVolume();
   }
 
   fireballLaunchSound(energy: number = 1) {
