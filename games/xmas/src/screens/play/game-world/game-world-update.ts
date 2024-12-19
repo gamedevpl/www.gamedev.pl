@@ -15,6 +15,7 @@ import { updateGifts } from './game-world-update-gifts';
 import { devConfig } from '../dev/dev-config';
 import { checkFireballSantaCollision, handleFireballSantaCollision } from './game-world-collisions';
 import { triggerHitDialogue, triggerEliminationDialogue } from '../game-dialogues/santa-dialogues';
+import { gameSoundController } from '../sound/game-sound-controller';
 
 /**
  * Check if a Santa should be eliminated based on their energy
@@ -108,6 +109,8 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
   // Skip updates if game is over
   if (state.gameOver) {
+    // Clean up sounds when game is over
+    gameSoundController.cleanup();
     return state;
   }
 
@@ -181,6 +184,9 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
   // Update gifts system
   updateGifts(state);
+
+  // Update sound controller with current game state
+  gameSoundController.update(state);
 
   return state;
 }
