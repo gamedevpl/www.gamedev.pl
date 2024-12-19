@@ -25,9 +25,16 @@ jobs:
       - uses: actions/setup-node@v2-beta
         with:
           node-version: '18'
-      - run: npm install --prefix=../games/monster-steps && npm install --prefix=../games/nukes && npm install --prefix=../games/masterplan && npm install
-      - run: npm run build --prefix=../games/monster-steps && npm run build --prefix=../games/nukes && npm run build --prefix=../games/masterplan && npm run build
-
+      - run: npm install --prefix=../games/monster-steps
+      - run: npm install --prefix=../games/nukes
+      - run: npm install --prefix=../games/masterplan
+      - run: npm install --prefix=../games/xmas
+      - run: npm install
+      - run: npm run build --prefix=../games/monster-steps
+      - run: npm run build --prefix=../games/nukes
+      - run: npm run build --prefix=../games/masterplan
+      - run: npm run build --prefix=../games/xmas
+      - run: npm run build
       - name: Deploy website
         uses: JamesIves/github-pages-deploy-action@releases/v3
         with:

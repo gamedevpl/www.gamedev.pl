@@ -31,6 +31,11 @@ export default defineConfig({
           dest: 'games/',
           rename: 'masterplan',
         },
+        {
+          src: '../games/xmas/dist',
+          dest: 'games/',
+          rename: 'xmas',
+        },
       ],
     }),
   ],
