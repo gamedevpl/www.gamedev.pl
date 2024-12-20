@@ -64,7 +64,7 @@ export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameV
   return (
     <ViewportContainer>
       <GameCanvas ref={canvasRef} />
-      <InputController />
+      <InputController gameStateRef={gameStateRef} />
       <GameController gameStateRef={gameStateRef} />
       {children}
     </ViewportContainer>
