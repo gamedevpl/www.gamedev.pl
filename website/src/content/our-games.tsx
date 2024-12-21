@@ -5,12 +5,20 @@ import styled from 'styled-components';
 import nukesHighlight from '../assets/nukes-highlight.png';
 import monsterStepsHighlight from '../assets/monster-steps-highlight.png';
 import masterplanHighlight from '../assets/masterplan-highlight.png';
+import xmasHighlight from '../assets/xmas-highlight.png';
 
 export default function OurGames() {
   const { t } = useTranslation();
 
   return (
     <Section>
+      <GameBox
+        title={t('XMAS')}
+        description={t('Świąteczna platformówka')}
+        highlight={xmasHighlight}
+        href={'/games/xmas/'}
+        inProgress={false}
+      />
       <GameBox
         title={t('Nukes')}
         description={t('Symulacja wojny nuklearnej')}
