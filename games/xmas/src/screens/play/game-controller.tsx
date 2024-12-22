@@ -11,7 +11,12 @@ import {
   StopChargingEvent,
   MouseMoveEvent,
   MouseButtonEvent,
+  TouchStartEvent,
+  TouchMoveEvent,
+  TouchEndEvent,
+  InputPosition,
   MousePosition,
+  TouchRole,
 } from './game-input/input-events';
 
 type GameControllerProps = {
@@ -27,16 +32,30 @@ type MouseState = {
   rightButton: boolean;
 };
 
-// Configuration for mouse movement in world coordinates
-const MOUSE_CONFIG = {
+type TouchState = {
+  isActive: boolean;
+  position: InputPosition | null;
+  isCharging: boolean;
+  chargeStartTime: number | null;
+};
+
+// Configuration for input movement in world coordinates
+const INPUT_CONFIG = {
   // Minimum distance in world units to trigger movement
-  MOVEMENT_DEADZONE: 10,
+  MOVEMENT_DEADZONE: 8,
   // Maximum movement speed
   MAX_SPEED: 1.0,
-  // How quickly movement responds to mouse position
+  // How quickly movement responds to input position
   MOVEMENT_SMOOTHING: 0.8,
   // Maximum distance to consider for movement calculation
   MAX_DISTANCE: 200,
+  // Touch-specific adjustments
+  TOUCH: {
+    // Slightly larger deadzone for touch to prevent accidental movements
+    MOVEMENT_DEADZONE: 12,
+    // Adjusted smoothing for touch input
+    MOVEMENT_SMOOTHING: 0.7,
+  },
 };
 
 function calculateVectorToTarget(
@@ -67,6 +86,13 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     rightButton: false,
   });
 
+  const touchStateRef = useRef<TouchState>({
+    isActive: false,
+    position: null,
+    isCharging: false,
+    chargeStartTime: null,
+  });
+
   // Handle keyboard movement events
   useCustomEvent<MoveSantaEvent>(GameEvents.MOVE_SANTA, (event) => {
     if (!gameStateRef.current) return;
@@ -79,61 +105,151 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   });
 
   // Calculate movement based on world coordinates
-  const calculateMouseMovement = useCallback((position: MousePosition, playerSanta: GameWorldState['playerSanta']) => {
-    const { worldX, worldY } = position;
-    const { x: playerX, y: playerY } = playerSanta;
+  const calculateMovement = useCallback(
+    (position: InputPosition, playerSanta: GameWorldState['playerSanta'], isTouch: boolean = false) => {
+      const { worldX, worldY } = position;
+      const { x: playerX, y: playerY } = playerSanta;
 
-    // Calculate vector to target
-    const { dx, dy, distance } = calculateVectorToTarget(playerX, playerY, worldX, worldY);
+      // Calculate vector to target
+      const { dx, dy, distance } = calculateVectorToTarget(playerX, playerY, worldX, worldY);
 
-    // If within deadzone, no movement
-    if (distance < MOUSE_CONFIG.MOVEMENT_DEADZONE) {
-      return {
+      // Use touch-specific or default deadzone
+      const deadzone = isTouch ? INPUT_CONFIG.TOUCH.MOVEMENT_DEADZONE : INPUT_CONFIG.MOVEMENT_DEADZONE;
+
+      // If within deadzone, no movement
+      if (distance < deadzone) {
+        return {
+          left: false,
+          right: false,
+          up: false,
+          down: false,
+        };
+      }
+
+      // Calculate normalized direction vector
+      const normalizedDistance = Math.min(distance, INPUT_CONFIG.MAX_DISTANCE) / INPUT_CONFIG.MAX_DISTANCE;
+      const { nx, ny } = normalizeVector(dx, dy, normalizedDistance * INPUT_CONFIG.MAX_SPEED);
+
+      // Set movement direction based on normalized vector
+      const movement = {
+        left: nx < -0.1,
+        right: nx > 0.1,
+        up: ny < -0.1,
+        down: ny > 0.1,
+      };
+
+      // Set Santa's facing direction based on horizontal movement
+      if (Math.abs(nx) > 0.1) {
+        dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, {
+          direction: nx < 0 ? 'left' : 'right',
+        });
+      }
+
+      return movement;
+    },
+    [],
+  );
+
+  // Handle touch events with multi-touch support
+  useCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, (event) => {
+    if (!gameStateRef.current) return;
+
+    // Handle movement touch (primary)
+    if (event.primaryTouch.role === TouchRole.MOVEMENT) {
+      touchStateRef.current.isActive = true;
+      touchStateRef.current.position = event.primaryTouch.position;
+
+      const moveInput = calculateMovement(
+        event.primaryTouch.position,
+        gameStateRef.current.gameWorldState.playerSanta,
+        true,
+      );
+      moveSanta(gameStateRef.current.gameWorldState.playerSanta, moveInput);
+    }
+
+    // Handle charging touch
+    if (event.chargingTouch && event.chargingTouch.role === TouchRole.CHARGING) {
+      touchStateRef.current.isCharging = true;
+      touchStateRef.current.chargeStartTime = event.timestamp;
+      
+      moveSanta(gameStateRef.current.gameWorldState.playerSanta, {
+        charging: true,
+        chargeStartTime: event.timestamp,
+      });
+    }
+  });
+
+  useCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, (event) => {
+    if (!gameStateRef.current || !touchStateRef.current.isActive) return;
+
+    // Update movement if primary touch moved
+    if (event.primaryTouch.role === TouchRole.MOVEMENT) {
+      touchStateRef.current.position = event.primaryTouch.position;
+
+      const moveInput = calculateMovement(
+        event.primaryTouch.position,
+        gameStateRef.current.gameWorldState.playerSanta,
+        true,
+      );
+      moveSanta(gameStateRef.current.gameWorldState.playerSanta, moveInput);
+    }
+  });
+
+  useCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, (event) => {
+    if (!gameStateRef.current) return;
+
+    // Handle charging touch release
+    if (event.wasCharging && touchStateRef.current.isCharging) {
+      const chargeStartTime = touchStateRef.current.chargeStartTime;
+      if (chargeStartTime !== null) {
+        const chargeDuration = event.timestamp - chargeStartTime;
+        addFireballFromSanta(gameStateRef.current.gameWorldState, gameStateRef.current.gameWorldState.playerSanta, chargeDuration);
+      }
+
+      touchStateRef.current.isCharging = false;
+      touchStateRef.current.chargeStartTime = null;
+
+      moveSanta(gameStateRef.current.gameWorldState.playerSanta, {
+        charging: false,
+        chargeStartTime: null,
+      });
+    }
+
+    // Reset movement when all touches are gone
+    if (event.touches.length === 0) {
+      touchStateRef.current = {
+        isActive: false,
+        position: null,
+        isCharging: false,
+        chargeStartTime: null,
+      };
+
+      // Reset movement when touch ends
+      moveSanta(gameStateRef.current.gameWorldState.playerSanta, {
         left: false,
         right: false,
         up: false,
         down: false,
-      };
-    }
-
-    // Calculate normalized direction vector
-    const normalizedDistance = Math.min(distance, MOUSE_CONFIG.MAX_DISTANCE) / MOUSE_CONFIG.MAX_DISTANCE;
-    const { nx, ny } = normalizeVector(dx, dy, normalizedDistance * MOUSE_CONFIG.MAX_SPEED);
-
-    // Set movement direction based on normalized vector
-    const movement = {
-      left: nx < -0.1,
-      right: nx > 0.1,
-      up: ny < -0.1,
-      down: ny > 0.1,
-    };
-
-    // Set Santa's facing direction based on horizontal movement
-    if (Math.abs(nx) > 0.1) {
-      dispatchCustomEvent<SetSantaDirectionEvent>(GameEvents.SET_SANTA_DIRECTION, {
-        direction: nx < 0 ? 'left' : 'right',
       });
     }
-
-    return movement;
-  }, []);
+  });
 
   // Handle mouse movement
   useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
-    if (!gameStateRef.current) return;
+    if (!gameStateRef.current || touchStateRef.current.isActive) return;
 
     mouseStateRef.current.position = event.position;
 
     // Only calculate movement if any mouse button is pressed
     if (mouseStateRef.current.leftButton || mouseStateRef.current.rightButton) {
-      const moveInput = calculateMouseMovement(event.position, gameStateRef.current.gameWorldState.playerSanta);
+      const moveInput = calculateMovement(event.position, gameStateRef.current.gameWorldState.playerSanta);
       moveSanta(gameStateRef.current.gameWorldState.playerSanta, moveInput);
     }
   });
 
   // Handle mouse buttons
   useCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, (event) => {
-    if (!gameStateRef.current) return;
+    if (!gameStateRef.current || touchStateRef.current.isActive) return;
 
     const prevState = mouseStateRef.current;
     const newState = {
@@ -143,7 +259,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     };
     mouseStateRef.current = newState;
 
-    // Handle charging (both buttons pressed)
+    // Handle charging (right button)
     const wasCharging = prevState.rightButton;
     const isCharging = newState.rightButton;
 
@@ -161,7 +277,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
 
     // Handle movement
     if (newState.position && (newState.leftButton || newState.rightButton)) {
-      const moveInput = calculateMouseMovement(newState.position, gameStateRef.current.gameWorldState.playerSanta);
+      const moveInput = calculateMovement(newState.position, gameStateRef.current.gameWorldState.playerSanta);
       moveSanta(gameStateRef.current.gameWorldState.playerSanta, moveInput);
     } else if (!newState.leftButton && !newState.rightButton) {
       // Reset movement when no buttons are pressed

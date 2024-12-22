@@ -17,14 +17,40 @@ const ViewportContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  touch-action: none; /* Prevent default touch behaviors */
+  
+  /* Prevent default touch behaviors */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  
+  /* Prevent text selection during touch/drag */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  
+  /* Ensure proper touch handling on iOS */
+  -webkit-tap-highlight-color: transparent;
+  
+  /* Ensure the viewport takes full priority for touch events */
+  z-index: 1;
 `;
 
 const GameCanvas = styled.canvas`
   width: 100%;
   height: 100%;
   display: block;
+  
+  /* Prevent any default touch behaviors on the canvas */
   touch-action: none;
+  -webkit-touch-callout: none;
+  
+  /* Prevent dragging on the canvas */
+  -webkit-user-drag: none;
+  user-drag: none;
+  
+  /* Ensure proper rendering on high-DPI displays */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 `;
 
 interface GameViewportProps {
@@ -45,6 +71,23 @@ export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameV
     // Set canvas dimensions to match window size
     canvas.width = windowWidth;
     canvas.height = windowHeight;
+
+    // Prevent default touch behaviors on the canvas
+    const preventDefaultTouch = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    // Add touch event listeners with passive: false to ensure preventDefault works
+    canvas.addEventListener('touchstart', preventDefaultTouch, { passive: false });
+    canvas.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+    canvas.addEventListener('touchend', preventDefaultTouch, { passive: false });
+
+    // Cleanup event listeners
+    return () => {
+      canvas.removeEventListener('touchstart', preventDefaultTouch);
+      canvas.removeEventListener('touchmove', preventDefaultTouch);
+      canvas.removeEventListener('touchend', preventDefaultTouch);
+    };
   }, [windowWidth, windowHeight]);
 
   useRafLoop(() => {

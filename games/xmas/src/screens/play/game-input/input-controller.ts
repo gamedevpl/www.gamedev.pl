@@ -8,7 +8,12 @@ import {
   StopChargingEvent,
   MouseMoveEvent,
   MouseButtonEvent,
-  MousePosition,
+  TouchStartEvent,
+  TouchMoveEvent,
+  TouchEndEvent,
+  TouchPoint,
+  InputPosition,
+  TouchRole,
 } from './input-events';
 import { RenderState, ViewportState } from '../game-render/render-state';
 import { GameWorldState } from '../game-world/game-world-types';
@@ -30,6 +35,7 @@ type InputState = {
   };
   isCharging: boolean;
   chargeStartTime: number | null;
+  activeTouches: Map<number, TouchPoint>;
 };
 
 const initialInputState: InputState = {
@@ -41,6 +47,7 @@ const initialInputState: InputState = {
   },
   isCharging: false,
   chargeStartTime: null,
+  activeTouches: new Map(),
 };
 
 function calculateWorldCoordinates(
@@ -48,14 +55,12 @@ function calculateWorldCoordinates(
   screenY: number,
   viewport: ViewportState,
 ): { worldX: number; worldY: number } {
-  // Convert screen coordinates to world coordinates by reversing viewport translation
   const worldX = screenX - viewport.x;
   const worldY = screenY - viewport.y;
-
   return { worldX, worldY };
 }
 
-function calculateMousePosition(clientX: number, clientY: number, viewport: ViewportState): MousePosition {
+function calculateInputPosition(clientX: number, clientY: number, viewport: ViewportState): InputPosition {
   const { innerWidth, innerHeight } = window;
   const centerX = innerWidth / 2;
   const centerY = innerHeight / 2;
@@ -77,6 +82,26 @@ function calculateMousePosition(clientX: number, clientY: number, viewport: View
     viewportWidth: innerWidth,
     viewportHeight: innerHeight,
   };
+}
+
+function convertTouchToPoint(
+  touch: Touch,
+  viewport: ViewportState,
+  role: TouchRole = TouchRole.UNASSIGNED,
+): TouchPoint {
+  return {
+    identifier: touch.identifier,
+    position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
+    role,
+    startTime: Date.now(),
+  };
+}
+
+function assignTouchRoles(touches: TouchPoint[]): TouchPoint[] {
+  return touches.map((touch, index) => ({
+    ...touch,
+    role: index === 0 ? TouchRole.MOVEMENT : index === 1 ? TouchRole.CHARGING : TouchRole.UNASSIGNED,
+  }));
 }
 
 type InputControllerProps = {
@@ -157,7 +182,7 @@ export function InputController({ gameStateRef }: InputControllerProps) {
     (event: MouseEvent) => {
       if (!gameStateRef.current) return;
 
-      const position = calculateMousePosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
+      const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
       dispatchCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, {
         position,
         timestamp: Date.now(),
@@ -173,7 +198,7 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : null;
       if (button === null || !gameStateRef.current) return;
 
-      const position = calculateMousePosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
+      const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
       dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
         button,
         isPressed: isDown,
@@ -184,6 +209,178 @@ export function InputController({ gameStateRef }: InputControllerProps) {
     [gameStateRef],
   );
 
+  // Touch event handlers
+  const handleTouchStart = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+      if (!gameStateRef.current) return;
+
+      const viewport = gameStateRef.current.renderState.viewport;
+
+      // Assign roles to all active touches
+      const allTouches = Array.from(event.touches).map((touch) => {
+        const existingTouch = Array.from(inputState.activeTouches.values()).find(
+          (t) => t.identifier === touch.identifier,
+        );
+        return existingTouch || convertTouchToPoint(touch, viewport);
+      });
+      const touchesWithRoles = assignTouchRoles(allTouches);
+
+      // Find primary and charging touches
+      const primaryTouch = touchesWithRoles.find((t) => t.role === TouchRole.MOVEMENT);
+      const chargingTouch = touchesWithRoles.find((t) => t.role === TouchRole.CHARGING);
+
+      // Update active touches
+      setInputState((prev) => {
+        const updatedTouches = new Map(prev.activeTouches);
+        touchesWithRoles.forEach((touch) => updatedTouches.set(touch.identifier, touch));
+        return {
+          ...prev,
+          activeTouches: updatedTouches,
+          isCharging: !!chargingTouch,
+          chargeStartTime: chargingTouch ? Date.now() : prev.chargeStartTime,
+        };
+      });
+
+      if (primaryTouch) {
+        dispatchCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, {
+          touches: touchesWithRoles,
+          primaryTouch,
+          chargingTouch,
+          timestamp: Date.now(),
+        });
+      }
+
+      // Start charging if this is a second touch
+      if (chargingTouch) {
+        dispatchCustomEvent<StartChargingEvent>(GameEvents.START_CHARGING, {
+          timestamp: Date.now(),
+        });
+      }
+    },
+    [gameStateRef, inputState.activeTouches],
+  );
+
+  const handleTouchMove = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+      if (!gameStateRef.current) return;
+
+      const viewport = gameStateRef.current.renderState.viewport;
+      const allTouches = Array.from(event.touches).map((touch) => {
+        const existingTouch = Array.from(inputState.activeTouches.values()).find(
+          (t) => t.identifier === touch.identifier,
+        );
+        if (existingTouch) {
+          return {
+            ...existingTouch,
+            position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
+          };
+        }
+        return convertTouchToPoint(touch, viewport);
+      });
+
+      const touchesWithRoles = assignTouchRoles(allTouches);
+      const primaryTouch = touchesWithRoles.find((t) => t.role === TouchRole.MOVEMENT);
+      const chargingTouch = touchesWithRoles.find((t) => t.role === TouchRole.CHARGING);
+
+      // Update active touches
+      setInputState((prev) => {
+        const updatedTouches = new Map(prev.activeTouches);
+        touchesWithRoles.forEach((touch) => updatedTouches.set(touch.identifier, touch));
+        return { ...prev, activeTouches: updatedTouches };
+      });
+
+      if (primaryTouch) {
+        dispatchCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, {
+          touches: touchesWithRoles,
+          primaryTouch,
+          chargingTouch,
+          timestamp: Date.now(),
+        });
+      }
+    },
+    [gameStateRef, inputState.activeTouches],
+  );
+
+  const handleTouchEnd = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+      if (!gameStateRef.current) return;
+
+      const viewport = gameStateRef.current.renderState.viewport;
+      const endedTouches = Array.from(event.changedTouches).map((touch) => {
+        const existingTouch = Array.from(inputState.activeTouches.values()).find(
+          (t) => t.identifier === touch.identifier,
+        );
+        return {
+          ...(existingTouch || convertTouchToPoint(touch, viewport)),
+          position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
+        };
+      });
+
+      const remainingTouches = Array.from(event.touches).map((touch) => {
+        const existingTouch = Array.from(inputState.activeTouches.values()).find(
+          (t) => t.identifier === touch.identifier,
+        );
+        return {
+          ...(existingTouch || convertTouchToPoint(touch, viewport)),
+          position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
+        };
+      });
+
+      // Check if a charging touch was released
+      const wasChargingTouch = endedTouches.some(
+        (touch) => inputState.activeTouches.get(touch.identifier)?.role === TouchRole.CHARGING,
+      );
+
+      // Update active touches and charging state
+      setInputState((prev) => {
+        const updatedTouches = new Map(prev.activeTouches);
+        endedTouches.forEach((touch) => updatedTouches.delete(touch.identifier));
+
+        // Reset charging if charging touch was released
+        const newState = {
+          ...prev,
+          activeTouches: updatedTouches,
+        };
+
+        if (wasChargingTouch) {
+          newState.isCharging = false;
+          newState.chargeStartTime = null;
+        }
+
+        return newState;
+      });
+
+      // Dispatch touch end event
+      dispatchCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, {
+        touches: remainingTouches,
+        changedTouches: endedTouches,
+        wasCharging: wasChargingTouch,
+        timestamp: Date.now(),
+      });
+
+      // If charging touch was released, dispatch stop charging event
+      if (wasChargingTouch) {
+        dispatchCustomEvent<StopChargingEvent>(GameEvents.STOP_CHARGING, {
+          timestamp: Date.now(),
+        });
+      }
+
+      // Reset movement if no touches remain
+      if (remainingTouches.length === 0) {
+        dispatchMovement({
+          left: false,
+          right: false,
+          up: false,
+          down: false,
+        });
+      }
+    },
+    [gameStateRef, inputState.activeTouches, dispatchMovement],
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => handleKeyboardInput(event, true);
     const handleKeyUp = (event: KeyboardEvent) => handleKeyboardInput(event, false);
@@ -191,6 +388,7 @@ export function InputController({ gameStateRef }: InputControllerProps) {
     const handleMouseUp = (event: MouseEvent) => handleMouseButtons(event, false);
     const handleContextMenu = (event: Event) => event.preventDefault();
 
+    // Mouse event listeners
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousedown', handleMouseDown);
@@ -198,15 +396,28 @@ export function InputController({ gameStateRef }: InputControllerProps) {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('contextmenu', handleContextMenu);
 
+    // Touch event listeners
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: false });
+    window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
     return () => {
+      // Remove mouse event listeners
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('contextmenu', handleContextMenu);
+
+      // Remove touch event listeners
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [handleKeyboardInput, handleMouseButtons, handleMouseMove]);
+  }, [handleKeyboardInput, handleMouseButtons, handleMouseMove, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   return null;
 }
