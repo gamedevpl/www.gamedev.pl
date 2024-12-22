@@ -1,0 +1,9 @@
+{
+  "rootDir": ".",
+  "lintCommand": "npm run type-check && npm run lint",
+  "ignorePaths": [
+    "dist",
+    "node_modules",
+    "package-lock.json"
+  ]
+}

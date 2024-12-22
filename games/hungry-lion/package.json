@@ -1,0 +1,31 @@
+{
+  "name": "hungry-lion",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Hungry Lion game",
+  "devDependencies": {
+    "@fontsource/press-start-2p": "^5.1.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^8.54.0",
+    "genaicode": "file:../../../codegen/genaicode-0.8.3.tgz",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-use": "^17.5.1",
+    "styled-components": "^6.1.13",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.6",
+    "vite-plugin-checker": "^0.8.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite",
+    "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
+    "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --allow-directory-create --imagen=dall-e --vision"
+  },
+  "author": "gtanczyk",
+  "license": "ISC"
+}
