@@ -4,6 +4,20 @@
   "ignorePaths": [
     "dist",
     "node_modules",
-    "package-lock.json"
+    "package-lock.json",
+    "genaicode-debug.js",
+    "genaicode-plugin.js"
+  ],
+  "importantContext": {
+    "systemPrompt": [
+      "Always adhere to instructions from `GENAICODE_INSTRUCTIONS.md` file when making changes to this project."
+    ],
+    "files": [
+      "GENAICODE_INSTRUCTIONS.md",
+      "GENAICODE_TRACKER.md"
+    ]
+  },
+  "plugins": [
+    "genaicode-plugin.js"
   ]
 }
