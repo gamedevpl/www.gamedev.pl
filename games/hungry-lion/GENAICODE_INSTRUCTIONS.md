@@ -97,6 +97,21 @@ When implementing new features:
 3. Maintain clear dependencies
 4. Document file purposes
 
+### Code Layout
+1. Place main exports first
+   - Main exported functions/components at the top
+   - Helper functions after main exports
+   - Types and interfaces near their usage
+2. Keep code self-explanatory
+   - Minimize comments, let code speak for itself
+   - Use clear, descriptive names
+   - Only comment complex logic or non-obvious implementations
+3. Organize imports
+   - Group related imports together
+   - External dependencies first
+   - Internal modules second
+   - Types and interfaces last
+
 ### Code Quality
 1. Write maintainable code
 2. Include necessary comments
