@@ -7,6 +7,7 @@ import { createRenderState, RenderState, updateRenderState } from './game-render
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-consts';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
+import { InputController } from './game-input/input-controller';
 
 // Function to create initial game state
 function createInitialState(): GameWorldState {
@@ -15,10 +16,18 @@ function createInitialState(): GameWorldState {
   return {
     time: initialTime,
     gameOver: false,
-    player: {
-      x: GAME_WORLD_WIDTH / 2,
-      y: GAME_WORLD_HEIGHT / 2,
-    },
+    lion: {
+      position: {
+        x: GAME_WORLD_WIDTH / 2,
+        y: GAME_WORLD_HEIGHT / 2,
+      },
+      targetPosition: null,
+      movement: {
+        isMoving: false,
+        speed: 0,
+        direction: { x: 0, y: 0 }
+      }
+    }
   };
 }
 
@@ -34,7 +43,6 @@ export function PlayScreen() {
     renderState: createRenderState(),
   });
   const [gameState, setGameState] = useState(() => ({ ...gameStateRef.current.gameWorldState }));
-
   const [isGameOver, setIsGameOver] = useState(false);
 
   // Function to handle game restart
@@ -85,7 +93,8 @@ export function PlayScreen() {
 
   return (
     <>
-      <GameViewport gameStateRef={gameStateRef}></GameViewport>
+      <GameViewport gameStateRef={gameStateRef} />
+      <InputController gameStateRef={gameStateRef} />
       <DevConfigPanel />
       {isGameOver && gameStateRef.current.gameWorldState.gameOverStats && (
         <GameOverScreen stats={gameStateRef.current.gameWorldState.gameOverStats} onRestart={handleRestart} />

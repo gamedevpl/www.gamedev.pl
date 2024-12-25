@@ -2,44 +2,22 @@ import { useCallback, useEffect, useState, RefObject } from 'react';
 import { dispatchCustomEvent } from '../../../utils/custom-events';
 import {
   GameEvents,
-  MovePlayerEvent,
-  SetPlayerDirectionEvent,
   MouseMoveEvent,
   MouseButtonEvent,
-  TouchStartEvent,
-  TouchMoveEvent,
-  TouchEndEvent,
   TouchPoint,
   InputPosition,
-  TouchRole,
+  LionTargetEvent,
 } from './input-events';
 import { RenderState, ViewportState } from '../game-render/render-state';
 import { GameWorldState } from '../game-world/game-world-types';
 
-const INPUT_KEYS = {
-  LEFT: new Set(['ArrowLeft', 'a', 'A']),
-  RIGHT: new Set(['ArrowRight', 'd', 'D']),
-  UP: new Set(['ArrowUp', 'w', 'W']),
-  DOWN: new Set(['ArrowDown', 's', 'S']),
-} as const;
-
 type InputState = {
-  moveInput: {
-    left: boolean;
-    right: boolean;
-    up: boolean;
-    down: boolean;
-  };
+  isPressed: boolean;
   activeTouches: Map<number, TouchPoint>;
 };
 
 const initialInputState: InputState = {
-  moveInput: {
-    left: false,
-    right: false,
-    up: false,
-    down: false,
-  },
+  isPressed: false,
   activeTouches: new Map(),
 };
 
@@ -77,24 +55,16 @@ function calculateInputPosition(clientX: number, clientY: number, viewport: View
   };
 }
 
-function convertTouchToPoint(
-  touch: Touch,
-  viewport: ViewportState,
-  role: TouchRole = TouchRole.UNASSIGNED,
-): TouchPoint {
-  return {
-    identifier: touch.identifier,
-    position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
-    role,
-    startTime: Date.now(),
-  };
-}
-
-function assignTouchRoles(touches: TouchPoint[]): TouchPoint[] {
-  return touches.map((touch, index) => ({
-    ...touch,
-    role: index === 0 ? TouchRole.MOVEMENT : index === 1 ? TouchRole.ACTION : TouchRole.UNASSIGNED,
-  }));
+function dispatchLionTarget(position: InputPosition | null, isPressed: boolean) {
+  dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
+    position: position
+      ? {
+          x: position.worldX,
+          y: position.worldY,
+        }
+      : null,
+    isPressed,
+  });
 }
 
 type InputControllerProps = {
@@ -107,43 +77,6 @@ type InputControllerProps = {
 export function InputController({ gameStateRef }: InputControllerProps) {
   const [inputState, setInputState] = useState<InputState>(initialInputState);
 
-  const dispatchMovement = useCallback((moveInput: InputState['moveInput']) => {
-    dispatchCustomEvent<MovePlayerEvent>(GameEvents.MOVE_PLAYER, { input: moveInput });
-
-    if (moveInput.left && !moveInput.right) {
-      dispatchCustomEvent<SetPlayerDirectionEvent>(GameEvents.SET_PLAYER_DIRECTION, { direction: 'left' });
-    } else if (moveInput.right && !moveInput.left) {
-      dispatchCustomEvent<SetPlayerDirectionEvent>(GameEvents.SET_PLAYER_DIRECTION, { direction: 'right' });
-    }
-  }, []);
-
-  const handleKeyboardInput = useCallback(
-    (event: KeyboardEvent, isKeyDown: boolean) => {
-      // Handle movement input
-      const newMoveInput = { ...inputState.moveInput };
-      let inputChanged = false;
-
-      for (const [direction, keys] of Object.entries(INPUT_KEYS)) {
-        if (keys.has(event.key)) {
-          const dir = direction.toLowerCase() as keyof typeof newMoveInput;
-          if (newMoveInput[dir] !== isKeyDown) {
-            newMoveInput[dir] = isKeyDown;
-            inputChanged = true;
-          }
-        }
-      }
-
-      if (inputChanged) {
-        setInputState((prev) => ({
-          ...prev,
-          moveInput: newMoveInput,
-        }));
-        dispatchMovement(newMoveInput);
-      }
-    },
-    [inputState.moveInput, dispatchMovement],
-  );
-
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
       if (!gameStateRef.current) return;
@@ -153,24 +86,38 @@ export function InputController({ gameStateRef }: InputControllerProps) {
         position,
         timestamp: Date.now(),
       });
+
+      // Update lion target if mouse is pressed - continuous movement
+      if (inputState.isPressed) {
+        dispatchLionTarget(position, true);
+      }
     },
-    [gameStateRef],
+    [gameStateRef, inputState.isPressed],
   );
 
   const handleMouseButtons = useCallback(
     (event: MouseEvent, isDown: boolean) => {
       event.preventDefault();
 
-      const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : null;
-      if (button === null || !gameStateRef.current) return;
+      if (event.button !== 0 || !gameStateRef.current) return; // Only handle left mouse button
 
       const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
+
+      setInputState((prev) => ({ ...prev, isPressed: isDown }));
+
       dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
-        button,
+        button: 'left',
         isPressed: isDown,
         position,
         timestamp: Date.now(),
       });
+
+      // For mouse down, it's a single step if it's the initial press
+      if (isDown) {
+        dispatchLionTarget(position, true);
+      } else {
+        dispatchLionTarget(null, false);
+      }
     },
     [gameStateRef],
   );
@@ -182,82 +129,32 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       if (!gameStateRef.current) return;
 
       const viewport = gameStateRef.current.renderState.viewport;
+      const touch = event.touches[0]; // Use first touch
+      if (!touch) return;
 
-      // Assign roles to all active touches
-      const allTouches = Array.from(event.touches).map((touch) => {
-        const existingTouch = Array.from(inputState.activeTouches.values()).find(
-          (t) => t.identifier === touch.identifier,
-        );
-        return existingTouch || convertTouchToPoint(touch, viewport);
-      });
-      const touchesWithRoles = assignTouchRoles(allTouches);
+      const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
 
-      // Find primary and action touches
-      const primaryTouch = touchesWithRoles.find((t) => t.role === TouchRole.MOVEMENT);
-      const actionTouch = touchesWithRoles.find((t) => t.role === TouchRole.ACTION);
-
-      // Update active touches
-      setInputState((prev) => {
-        const updatedTouches = new Map(prev.activeTouches);
-        touchesWithRoles.forEach((touch) => updatedTouches.set(touch.identifier, touch));
-        return {
-          ...prev,
-          activeTouches: updatedTouches,
-        };
-      });
-
-      if (primaryTouch) {
-        dispatchCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, {
-          touches: touchesWithRoles,
-          primaryTouch,
-          actionTouch,
-          timestamp: Date.now(),
-        });
-      }
+      setInputState((prev) => ({ ...prev, isPressed: true }));
+      // Initial touch is always a single step
+      dispatchLionTarget(position, true);
     },
-    [gameStateRef, inputState.activeTouches],
+    [gameStateRef],
   );
 
   const handleTouchMove = useCallback(
     (event: TouchEvent) => {
       event.preventDefault();
-      if (!gameStateRef.current) return;
+      if (!gameStateRef.current || !inputState.isPressed) return;
 
       const viewport = gameStateRef.current.renderState.viewport;
-      const allTouches = Array.from(event.touches).map((touch) => {
-        const existingTouch = Array.from(inputState.activeTouches.values()).find(
-          (t) => t.identifier === touch.identifier,
-        );
-        if (existingTouch) {
-          return {
-            ...existingTouch,
-            position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
-          };
-        }
-        return convertTouchToPoint(touch, viewport);
-      });
+      const touch = event.touches[0]; // Use first touch
+      if (!touch) return;
 
-      const touchesWithRoles = assignTouchRoles(allTouches);
-      const primaryTouch = touchesWithRoles.find((t) => t.role === TouchRole.MOVEMENT);
-      const actionTouch = touchesWithRoles.find((t) => t.role === TouchRole.ACTION);
-
-      // Update active touches
-      setInputState((prev) => {
-        const updatedTouches = new Map(prev.activeTouches);
-        touchesWithRoles.forEach((touch) => updatedTouches.set(touch.identifier, touch));
-        return { ...prev, activeTouches: updatedTouches };
-      });
-
-      if (primaryTouch) {
-        dispatchCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, {
-          touches: touchesWithRoles,
-          primaryTouch,
-          actionTouch,
-          timestamp: Date.now(),
-        });
-      }
+      const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
+      // Touch move is continuous movement
+      dispatchLionTarget(position, true);
     },
-    [gameStateRef, inputState.activeTouches],
+    [gameStateRef, inputState.isPressed],
   );
 
   const handleTouchEnd = useCallback(
@@ -265,67 +162,19 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       event.preventDefault();
       if (!gameStateRef.current) return;
 
-      const viewport = gameStateRef.current.renderState.viewport;
-      const endedTouches = Array.from(event.changedTouches).map((touch) => {
-        const existingTouch = Array.from(inputState.activeTouches.values()).find(
-          (t) => t.identifier === touch.identifier,
-        );
-        return {
-          ...(existingTouch || convertTouchToPoint(touch, viewport)),
-          position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
-        };
-      });
+      setInputState((prev) => ({ ...prev, isPressed: false }));
 
-      const remainingTouches = Array.from(event.touches).map((touch) => {
-        const existingTouch = Array.from(inputState.activeTouches.values()).find(
-          (t) => t.identifier === touch.identifier,
-        );
-        return {
-          ...(existingTouch || convertTouchToPoint(touch, viewport)),
-          position: calculateInputPosition(touch.clientX, touch.clientY, viewport),
-        };
-      });
-
-      // Update active touches
-      setInputState((prev) => {
-        const updatedTouches = new Map(prev.activeTouches);
-        endedTouches.forEach((touch) => updatedTouches.delete(touch.identifier));
-        return {
-          ...prev,
-          activeTouches: updatedTouches,
-        };
-      });
-
-      // Dispatch touch end event
-      dispatchCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, {
-        touches: remainingTouches,
-        changedTouches: endedTouches,
-        timestamp: Date.now(),
-      });
-
-      // Reset movement if no touches remain
-      if (remainingTouches.length === 0) {
-        dispatchMovement({
-          left: false,
-          right: false,
-          up: false,
-          down: false,
-        });
-      }
+      dispatchLionTarget(null, false);
     },
-    [gameStateRef, inputState.activeTouches, dispatchMovement],
+    [gameStateRef],
   );
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => handleKeyboardInput(event, true);
-    const handleKeyUp = (event: KeyboardEvent) => handleKeyboardInput(event, false);
     const handleMouseDown = (event: MouseEvent) => handleMouseButtons(event, true);
     const handleMouseUp = (event: MouseEvent) => handleMouseButtons(event, false);
     const handleContextMenu = (event: Event) => event.preventDefault();
 
     // Mouse event listeners
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('mousemove', handleMouseMove);
@@ -339,8 +188,6 @@ export function InputController({ gameStateRef }: InputControllerProps) {
 
     return () => {
       // Remove mouse event listeners
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
@@ -352,7 +199,7 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       window.removeEventListener('touchend', handleTouchEnd);
       window.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [handleKeyboardInput, handleMouseButtons, handleMouseMove, handleTouchStart, handleTouchMove, handleTouchEnd]);
+  }, [handleMouseButtons, handleMouseMove, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   return null;
 }

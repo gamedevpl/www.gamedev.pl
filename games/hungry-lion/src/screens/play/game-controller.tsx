@@ -10,6 +10,7 @@ import {
   TouchMoveEvent,
   TouchEndEvent,
   InputPosition,
+  LionTargetEvent,
 } from './game-input/input-events';
 
 type GameControllerProps = {
@@ -28,6 +29,20 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   const touchStateRef = useRef<TouchState>({
     isActive: false,
     position: null,
+  });
+
+  // Handle SET_LION_TARGET event
+  useCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, (event) => {
+    if (!gameStateRef.current) return;
+
+    // Update lion's target position in game state, including the singleStep flag
+    gameStateRef.current.gameWorldState.lion.targetPosition =
+      event.isPressed && event.position
+        ? {
+            x: event.position.x,
+            y: event.position.y,
+          }
+        : null;
   });
 
   // Handle touch events with multi-touch support

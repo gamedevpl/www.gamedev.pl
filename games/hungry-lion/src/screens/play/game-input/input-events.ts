@@ -8,23 +8,17 @@ export enum GameEvents {
   TOUCH_MOVE = 'game:touch-move',
   TOUCH_END = 'game:touch-end',
 
-  // Player movement events
-  MOVE_PLAYER = 'game:move-player',
-  SET_PLAYER_DIRECTION = 'game:set-player-direction'
+  // Lion movement events
+  SET_LION_TARGET = 'game:set-lion-target',
 }
 
-// Player Movement Events
-export type MovePlayerEvent = {
-  input: {
-    left: boolean;
-    right: boolean;
-    up: boolean;
-    down: boolean;
-  };
-};
-
-export type SetPlayerDirectionEvent = {
-  direction: 'left' | 'right';
+// Lion Movement Events
+export type LionTargetEvent = {
+  position: {
+    x: number;
+    y: number;
+  } | null;
+  isPressed: boolean; // true when mouse/touch is held down
 };
 
 // Common position type for both mouse and touch events

@@ -20,8 +20,8 @@ const calculateViewportTranslation = (
   const targetY = canvasHeight / 2;
 
   // Calculate the translation needed to center the player
-  let translateX = targetX - worldState.player.x;
-  let translateY = targetY - worldState.player.y;
+  let translateX = targetX - worldState.lion.position.x;
+  let translateY = targetY - worldState.lion.position.y;
 
   // Constrain translation to prevent showing beyond world boundaries
   // Left boundary
