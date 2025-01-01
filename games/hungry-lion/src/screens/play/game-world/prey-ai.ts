@@ -1,4 +1,11 @@
-import { PREY_SPEED, PREY_VISION_ANGLE, PREY_VISION_RANGE, FLEE_DURATION, FLEE_DISTANCE, PreyState } from './prey-types';
+import {
+  PREY_SPEED,
+  PREY_VISION_ANGLE,
+  PREY_VISION_RANGE,
+  FLEE_DURATION,
+  FLEE_DISTANCE,
+  PreyState,
+} from './prey-types';
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from './game-world-consts';
 import { LionState, Vector2D } from './game-world-types';
 import { devConfig } from '../dev/dev-config';
@@ -48,10 +55,13 @@ export function updatePrey(prey: PreyState, deltaTime: number, lion: LionState):
       prey.movement.speed = PREY_SPEED * 1.5;
     }
 
-    prey.state = 'fleeing';
-    prey.fleeingUntil = currentTime + FLEE_DURATION;
+    if (prey.state !== 'fleeing') {
+      // Start fleeing
+      prey.state = 'fleeing';
+      prey.fleeingUntil = currentTime + FLEE_DURATION;
+    }
     prey.visionDirection = { ...prey.movement.direction };
-    
+
     // Update position with fleeing movement
     updatePosition(prey, secondsDelta);
   }
@@ -71,14 +81,14 @@ function checkShouldStartFleeing(prey: PreyState, lion: LionState, distance: num
   if (lion.movement.isMoving) {
     const lionDirection = normalizeVector({
       x: lion.position.x - prey.position.x,
-      y: lion.position.y - prey.position.y
+      y: lion.position.y - prey.position.y,
     });
 
     // Calculate angle between prey's vision direction and lion's position
     const angle = Math.acos(
       (prey.visionDirection.x * lionDirection.x + prey.visionDirection.y * lionDirection.y) /
-      (Math.sqrt(prey.visionDirection.x * prey.visionDirection.x + prey.visionDirection.y * prey.visionDirection.y) *
-        Math.sqrt(lionDirection.x * lionDirection.x + lionDirection.y * lionDirection.y))
+        (Math.sqrt(prey.visionDirection.x * prey.visionDirection.x + prey.visionDirection.y * prey.visionDirection.y) *
+          Math.sqrt(lionDirection.x * lionDirection.x + lionDirection.y * lionDirection.y)),
     );
 
     // Prey sees the lion if it's within vision angle or very close
@@ -106,7 +116,7 @@ function updatePosition(prey: PreyState, secondsDelta: number) {
 function getFleeingDirection(prey: PreyState, lion: LionState): Vector2D {
   return normalizeVector({
     x: prey.position.x - lion.position.x,
-    y: prey.position.y - lion.position.y
+    y: prey.position.y - lion.position.y,
   });
 }
 
@@ -116,7 +126,7 @@ function addRandomness(direction: Vector2D, amount: number): Vector2D {
   const sin = Math.sin(randomAngle);
   return normalizeVector({
     x: direction.x * cos - direction.y * sin,
-    y: direction.x * sin + direction.y * cos
+    y: direction.x * sin + direction.y * cos,
   });
 }
 
@@ -124,7 +134,7 @@ function getRandomDirection(): Vector2D {
   const angle = Math.random() * Math.PI * 2;
   return {
     x: Math.cos(angle),
-    y: Math.sin(angle)
+    y: Math.sin(angle),
   };
 }
 
