@@ -10,7 +10,8 @@
   ],
   "importantContext": {
     "systemPrompt": [
-      "Always adhere to instructions from `GENAICODE_INSTRUCTIONS.md` file when making changes to this project."
+      "MANDATORY: Always adhere to instructions from `GENAICODE_INSTRUCTIONS.md` file when making changes to this project.",
+      "Whenever you are reasoning about code changes, always incorporate relevant information from `GENAICODE_INSTRUCTIONS.md` file."
     ],
     "files": [
       "GENAICODE_INSTRUCTIONS.md",
@@ -19,5 +20,11 @@
   },
   "plugins": [
     "genaicode-plugin.js"
-  ]
+  ],
+  "modelOverrides": {
+    "aiStudio": {
+      "default": "gemini-exp-1206",
+      "cheap": "gemini-2.0-flash-exp"
+    }
+  }
 }
