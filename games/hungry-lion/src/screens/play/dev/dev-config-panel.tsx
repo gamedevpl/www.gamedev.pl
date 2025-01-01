@@ -42,7 +42,6 @@ export function DevConfigPanel() {
           <ToggleInput type="checkbox" checked={config.renderGrass} onChange={() => handleToggle('renderGrass')} />
           Render grass
         </ToggleContainer>
-        {/* debugFleeingState */}
         <ToggleContainer>
           <ToggleInput
             type="checkbox"
@@ -50,6 +49,14 @@ export function DevConfigPanel() {
             onChange={() => handleToggle('debugFleeingState')}
           />
           Debug fleeing state
+        </ToggleContainer>
+        <ToggleContainer>
+          <ToggleInput
+            type="checkbox"
+            checked={config.debugCatchingMechanics}
+            onChange={() => handleToggle('debugCatchingMechanics')}
+          />
+          Debug catching mechanics
         </ToggleContainer>
       </Section>
     </Panel>

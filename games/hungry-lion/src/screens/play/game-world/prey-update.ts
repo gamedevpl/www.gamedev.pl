@@ -7,10 +7,31 @@ import {
   PreyState,
 } from './prey-types';
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from './game-world-consts';
-import { LionState, Vector2D } from './game-world-types';
+import { LionState, Vector2D, GameWorldState } from './game-world-types';
 import { devConfig } from '../dev/dev-config';
+import { normalizeVector, getDistance } from './coordinate-utils';
+import { spawnPrey } from './prey-spawner';
+import { DEFAULT_PREY_SPAWN_CONFIG } from './prey-init';
 
-export function updatePrey(prey: PreyState, deltaTime: number, lion: LionState): PreyState {
+/**
+ * Updates all prey in the game world
+ */
+export function updateAllPrey(state: GameWorldState, deltaTime: number): PreyState[] {
+  // Update all prey entities with lion's state
+  let updatedPrey = state.prey.map((p) => updatePrey(p, deltaTime, state.lion));
+
+  // Spawn new prey entities if needed
+  if (state.time % DEFAULT_PREY_SPAWN_CONFIG.spawnInterval < deltaTime) {
+    updatedPrey = spawnPrey(DEFAULT_PREY_SPAWN_CONFIG, updatedPrey);
+  }
+
+  return updatedPrey;
+}
+
+/**
+ * Updates a single prey's state
+ */
+function updatePrey(prey: PreyState, deltaTime: number, lion: LionState): PreyState {
   const secondsDelta = deltaTime / 1000;
   const currentTime = Date.now();
 
@@ -36,23 +57,17 @@ export function updatePrey(prey: PreyState, deltaTime: number, lion: LionState):
     }
   }
 
-  if (prey.state === 'idle') {
-    // Randomly decide to start moving
-    if (Math.random() < 0.01) {
-      prey.state = 'moving';
-      prey.movement.direction = getRandomDirection();
-      prey.movement.speed = PREY_SPEED * 0.5;
-      prey.visionDirection = { ...prey.movement.direction };
-    }
-  } else if (prey.state === 'moving') {
-    // Update position based on movement
-    updatePosition(prey, secondsDelta);
-
-    // Randomly decide to stop moving
-    if (Math.random() < 0.01) {
-      prey.state = 'idle';
-      prey.movement.speed = 0;
-    }
+  // Update prey based on its current state
+  switch (prey.state) {
+    case 'idle':
+      handleIdleState(prey);
+      break;
+    case 'moving':
+      handleMovingState(prey, secondsDelta);
+      break;
+    case 'fleeing':
+      handleFleeingState(prey, secondsDelta);
+      break;
   }
 
   // Check if the prey should start or continue fleeing
@@ -60,21 +75,9 @@ export function updatePrey(prey: PreyState, deltaTime: number, lion: LionState):
   const shouldStartFleeing = checkShouldStartFleeing(prey, lion, distanceToLion);
 
   if (shouldStartFleeing || prey.state === 'fleeing') {
-    if (shouldStartFleeing) {
-      // Update fleeing direction with some randomness
-      const fleeDirection = getFleeingDirection(prey, lion);
-      prey.movement.direction = addRandomness(fleeDirection, 0.3);
-      prey.movement.speed = PREY_SPEED * 1.5;
-    }
-
     if (prey.state !== 'fleeing') {
-      // Start fleeing
-      prey.state = 'fleeing';
-      prey.fleeingUntil = currentTime + FLEE_DURATION;
+      startFleeing(prey, lion, currentTime);
     }
-    prey.visionDirection = { ...prey.movement.direction };
-
-    // Update position with fleeing movement
     updatePosition(prey, secondsDelta);
   }
 
@@ -86,6 +89,54 @@ export function updatePrey(prey: PreyState, deltaTime: number, lion: LionState):
   return prey;
 }
 
+/**
+ * Handles prey behavior in idle state
+ */
+function handleIdleState(prey: PreyState): void {
+  // Randomly decide to start moving
+  if (Math.random() < 0.01) {
+    prey.state = 'moving';
+    prey.movement.direction = getRandomDirection();
+    prey.movement.speed = PREY_SPEED * 0.5;
+    prey.visionDirection = { ...prey.movement.direction };
+  }
+}
+
+/**
+ * Handles prey behavior in moving state
+ */
+function handleMovingState(prey: PreyState, secondsDelta: number): void {
+  updatePosition(prey, secondsDelta);
+
+  // Randomly decide to stop moving
+  if (Math.random() < 0.01) {
+    prey.state = 'idle';
+    prey.movement.speed = 0;
+  }
+}
+
+/**
+ * Handles prey behavior in fleeing state
+ */
+function handleFleeingState(prey: PreyState, secondsDelta: number): void {
+  prey.visionDirection = { ...prey.movement.direction };
+  updatePosition(prey, secondsDelta);
+}
+
+/**
+ * Initiates fleeing behavior for prey
+ */
+function startFleeing(prey: PreyState, lion: LionState, currentTime: number): void {
+  const fleeDirection = getFleeingDirection(prey, lion);
+  prey.movement.direction = addRandomness(fleeDirection, 0.3);
+  prey.movement.speed = PREY_SPEED;
+  prey.state = 'fleeing';
+  prey.fleeingUntil = currentTime + FLEE_DURATION;
+}
+
+/**
+ * Checks if prey should start fleeing from the lion
+ */
 function checkShouldStartFleeing(prey: PreyState, lion: LionState, distance: number): boolean {
   if (distance > PREY_VISION_RANGE) return false;
 
@@ -110,7 +161,10 @@ function checkShouldStartFleeing(prey: PreyState, lion: LionState, distance: num
   return false;
 }
 
-function updatePosition(prey: PreyState, secondsDelta: number) {
+/**
+ * Updates prey position and handles world boundaries
+ */
+function updatePosition(prey: PreyState, secondsDelta: number): void {
   prey.position.x += prey.movement.direction.x * prey.movement.speed * secondsDelta;
   prey.position.y += prey.movement.direction.y * prey.movement.speed * secondsDelta;
 
@@ -125,6 +179,9 @@ function updatePosition(prey: PreyState, secondsDelta: number) {
   }
 }
 
+/**
+ * Calculates fleeing direction away from lion
+ */
 function getFleeingDirection(prey: PreyState, lion: LionState): Vector2D {
   return normalizeVector({
     x: prey.position.x - lion.position.x,
@@ -132,6 +189,9 @@ function getFleeingDirection(prey: PreyState, lion: LionState): Vector2D {
   });
 }
 
+/**
+ * Adds random variation to a direction vector
+ */
 function addRandomness(direction: Vector2D, amount: number): Vector2D {
   const randomAngle = (Math.random() - 0.5) * amount * Math.PI;
   const cos = Math.cos(randomAngle);
@@ -142,25 +202,13 @@ function addRandomness(direction: Vector2D, amount: number): Vector2D {
   });
 }
 
+/**
+ * Generates a random direction vector
+ */
 function getRandomDirection(): Vector2D {
   const angle = Math.random() * Math.PI * 2;
   return {
     x: Math.cos(angle),
     y: Math.sin(angle),
-  };
-}
-
-function getDistance(pos1: Vector2D, pos2: Vector2D): number {
-  const dx = pos2.x - pos1.x;
-  const dy = pos2.y - pos1.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function normalizeVector(vector: Vector2D): Vector2D {
-  const length = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-  if (length === 0) return { x: 0, y: 0 };
-  return {
-    x: vector.x / length,
-    y: vector.y / length,
   };
 }

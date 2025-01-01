@@ -16,10 +16,20 @@ export type MovementState = {
   direction: Vector2D;
 };
 
+export type HungerState = {
+  level: number; // 0 (starving) to 100 (gluttonous)
+  isStarving: boolean;
+  isFull: boolean;
+  isGluttonous: boolean;
+  lastEatenTime: number; // timestamp of last eaten prey
+};
+
 export type LionState = {
   position: Vector2D;
   targetPosition: Vector2D | null;
+  chaseTarget: string | null; // ID of the prey being chased, null if not chasing
   movement: MovementState;
+  hunger: HungerState;
 };
 
 export type GameWorldState = {

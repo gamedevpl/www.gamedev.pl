@@ -4,9 +4,12 @@ import {
   GameEvents,
   MouseMoveEvent,
   MouseButtonEvent,
-  TouchPoint,
+  TouchStartEvent,
+  TouchMoveEvent,
+  TouchEndEvent,
   InputPosition,
-  LionTargetEvent,
+  TouchPoint,
+  TouchRole,
 } from './input-events';
 import { RenderState, ViewportState } from '../game-render/render-state';
 import { GameWorldState } from '../game-world/game-world-types';
@@ -41,8 +44,14 @@ export function InputController({ gameStateRef }: InputControllerProps) {
         timestamp: Date.now(),
       });
 
+      // Continuously update target position while mouse is held down
       if (inputState.isPressed) {
-        dispatchLionTarget(position, true);
+        dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
+          button: 'left',
+          isPressed: true,
+          position,
+          timestamp: Date.now(),
+        });
       }
     },
     [gameStateRef, inputState.isPressed],
@@ -64,12 +73,6 @@ export function InputController({ gameStateRef }: InputControllerProps) {
         position,
         timestamp: Date.now(),
       });
-
-      if (isDown) {
-        dispatchLionTarget(position, true);
-      } else {
-        dispatchLionTarget(null, false);
-      }
     },
     [gameStateRef],
   );
@@ -86,7 +89,16 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
 
       setInputState((prev) => ({ ...prev, isPressed: true }));
-      dispatchLionTarget(position, true);
+      dispatchCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, {
+        touches: [],
+        primaryTouch: {
+          identifier: touch.identifier,
+          position,
+          role: TouchRole.MOVEMENT,
+          startTime: Date.now(),
+        },
+        timestamp: Date.now(),
+      });
     },
     [gameStateRef],
   );
@@ -101,7 +113,16 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       if (!touch) return;
 
       const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
-      dispatchLionTarget(position, true);
+      dispatchCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, {
+        touches: [],
+        primaryTouch: {
+          identifier: touch.identifier,
+          position,
+          role: TouchRole.MOVEMENT,
+          startTime: Date.now(),
+        },
+        timestamp: Date.now(),
+      });
     },
     [gameStateRef, inputState.isPressed],
   );
@@ -112,7 +133,11 @@ export function InputController({ gameStateRef }: InputControllerProps) {
       if (!gameStateRef.current) return;
 
       setInputState((prev) => ({ ...prev, isPressed: false }));
-      dispatchLionTarget(null, false);
+      dispatchCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, {
+        touches: [],
+        changedTouches: [],
+        timestamp: Date.now(),
+      });
     },
     [gameStateRef],
   );
@@ -148,24 +173,16 @@ export function InputController({ gameStateRef }: InputControllerProps) {
   return null;
 }
 
-function calculateWorldCoordinates(
-  screenX: number,
-  screenY: number,
-  viewport: ViewportState,
-): { worldX: number; worldY: number } {
-  const worldX = screenX - viewport.x;
-  const worldY = screenY - viewport.y;
-  return { worldX, worldY };
-}
-
 function calculateInputPosition(clientX: number, clientY: number, viewport: ViewportState): InputPosition {
   const { innerWidth, innerHeight } = window;
   const centerX = innerWidth / 2;
   const centerY = innerHeight / 2;
 
+  // Calculate normalized coordinates (-1 to 1)
   const normalizedX = (clientX - centerX) / centerX;
   const normalizedY = (clientY - centerY) / centerY;
 
+  // Calculate world coordinates
   const { worldX, worldY } = calculateWorldCoordinates(clientX, clientY, viewport);
 
   return {
@@ -180,14 +197,12 @@ function calculateInputPosition(clientX: number, clientY: number, viewport: View
   };
 }
 
-function dispatchLionTarget(position: InputPosition | null, isPressed: boolean) {
-  dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
-    position: position
-      ? {
-          x: position.worldX,
-          y: position.worldY,
-        }
-      : null,
-    isPressed,
-  });
+function calculateWorldCoordinates(
+  screenX: number,
+  screenY: number,
+  viewport: ViewportState,
+): { worldX: number; worldY: number } {
+  const worldX = screenX - viewport.x;
+  const worldY = screenY - viewport.y;
+  return { worldX, worldY };
 }

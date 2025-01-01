@@ -6,6 +6,8 @@ export interface DevConfig {
   renderGrass: boolean;
   // Setting to enable debug rendering of fleeing state information
   debugFleeingState: boolean;
+  // Setting to enable debug rendering of catching mechanics
+  debugCatchingMechanics: boolean;
 }
 
 /**
@@ -14,6 +16,7 @@ export interface DevConfig {
 const DEFAULT_CONFIG: DevConfig = {
   renderGrass: true,
   debugFleeingState: false,
+  debugCatchingMechanics: false,
 };
 
 /**

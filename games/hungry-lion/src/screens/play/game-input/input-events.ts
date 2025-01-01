@@ -10,6 +10,7 @@ export enum GameEvents {
 
   // Lion movement events
   SET_LION_TARGET = 'game:set-lion-target',
+  CANCEL_CHASE = 'game:cancel-chase',
 }
 
 // Lion Movement Events
@@ -18,7 +19,14 @@ export type LionTargetEvent = {
     x: number;
     y: number;
   } | null;
-  isPressed: boolean; // true when mouse/touch is held down
+  preyId?: string | null; // Optional prey ID for chase targeting
+};
+
+export type CancelChaseEvent = {
+  position: {
+    x: number;
+    y: number;
+  } | null;
 };
 
 // Common position type for both mouse and touch events

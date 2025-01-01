@@ -2,6 +2,7 @@ import { GameWorldState, LION_WIDTH, Vector2D } from '../game-world/game-world-t
 import { RenderState } from './render-state';
 import { drawGround } from './ground-renderer';
 import { renderPrey } from './prey-renderer';
+import { renderDebugInfo } from './debug-renderer';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -21,6 +22,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Render all prey entities
   prey.forEach((p) => renderPrey(ctx, p));
+
+  // Render debug information
+  renderDebugInfo(ctx, world);
 
   ctx.restore();
 };

@@ -1,6 +1,6 @@
 export const PREY_WIDTH = 30;
 export const PREY_HEIGHT = 30;
-export const PREY_SPEED = 100; // units per second
+export const PREY_SPEED = 80; // units per second
 export const PREY_VISION_RANGE = 200; // units
 export const PREY_VISION_ANGLE = Math.PI / 3; // 60 degrees
 
@@ -24,7 +24,7 @@ export type PreyState = {
     };
     speed: number;
   };
-  state: 'idle' | 'moving' | 'fleeing';
+  state: 'idle' | 'moving' | 'fleeing' | 'carrion';
   visionDirection: {
     x: number;
     y: number;
@@ -32,6 +32,22 @@ export type PreyState = {
   // Timestamp until which the prey should maintain fleeing state
   // undefined means not fleeing
   fleeingUntil?: number;
+  // Properties for being caught and eaten
+  isBeingCaught?: boolean;
+  isCaught?: boolean;
+  isCarrion?: boolean;
+  carrionTime?: number; // Timestamp when prey became carrion
+  // Properties for lock-on state
+  isLockedOn?: boolean;
+  lockOnTime?: number; // Timestamp when prey was locked on
+  // New properties for continuous chasing
+  isBeingChased?: boolean;
+  chaseStartTime?: number; // Timestamp when chase started
+  lastKnownPosition?: {
+    x: number;
+    y: number;
+  }; // Last known position when being chased
+  movementPattern?: 'random' | 'evasive' | 'direct'; // Movement pattern when fleeing
 };
 
 export type PreySpawnConfig = {

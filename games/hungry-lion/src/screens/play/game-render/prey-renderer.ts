@@ -43,6 +43,12 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyState) {
     color = `rgba(255, 0, 0, ${pulseIntensity})`;
   } else if (prey.state === 'moving') {
     color = 'rgba(255, 200, 0, 0.8)'; // Yellow for moving
+  } else if (prey.isBeingCaught) {
+    color = 'rgba(255, 100, 0, 0.8)'; // Orange for being caught
+  } else if (prey.isCaught) {
+    color = 'rgba(150, 75, 0, 0.8)'; // Brown for caught
+  } else if (prey.isCarrion) {
+    color = 'rgba(100, 50, 0, 0.8)'; // Dark brown for carrion
   } else {
     color = 'rgba(0, 200, 0, 0.8)'; // Green for idle
   }
