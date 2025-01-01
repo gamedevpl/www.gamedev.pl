@@ -4,6 +4,8 @@
 export interface DevConfig {
   // Setting to render grass effect
   renderGrass: boolean;
+  // Setting to enable debug rendering of fleeing state information
+  debugFleeingState: boolean;
 }
 
 /**
@@ -11,6 +13,7 @@ export interface DevConfig {
  */
 const DEFAULT_CONFIG: DevConfig = {
   renderGrass: true,
+  debugFleeingState: false,
 };
 
 /**

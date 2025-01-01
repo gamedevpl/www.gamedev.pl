@@ -15,6 +15,10 @@ export function spawnPrey(config: PreySpawnConfig, existingPrey: PreyState[]): P
       speed: 0,
     },
     state: 'idle',
+    visionDirection: {
+      x: 0,
+      y: 0,
+    },
   };
 
   return [...existingPrey, newPrey];

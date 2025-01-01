@@ -38,6 +38,23 @@ This is a list of tasks that were done or are planned for the project.
   - Implemented basic AI for prey movement
   - Added spawning mechanic for prey
   - Integrated prey rendering into the game
+- [x] Enhanced Prey Behavior
+  - Prey now flee when they see the lion moving towards them
+  - Prey can see the lion if they are looking towards it, it is within a certain distance, and it is actually moving
+- [x] Improved Prey Rendering
+  - Prey are now rendered as rotated rectangles
+  - Better visual feedback for different states (idle, moving, fleeing)
+- [x] Enhanced Prey Fleeing Behavior
+  - Implemented sustained fleeing state with duration tracking
+  - Added safe distance requirement for returning to idle
+  - Improved lion detection with better vision cone mechanics
+  - Added random variations to fleeing direction
+  - Enhanced visual feedback with dynamic colors and animations
+  - Improved prey movement patterns during fleeing
+  - Added pulsing effect and visual indicators for fleeing state
+- [x] Debug Rendering for Fleeing State
+  - Added debug rendering to visualize remaining fleeing time and safe distance condition
+  - Enabled debug rendering only in dev mode
 
 ## Planned Tasks
 

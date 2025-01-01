@@ -15,8 +15,8 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   updateLionMovement(state, deltaTime);
   gameSoundController.update();
 
-  // Update all prey entities
-  state.prey = state.prey.map((p) => updatePrey(p, deltaTime));
+  // Update all prey entities with lion's state
+  state.prey = state.prey.map((p) => updatePrey(p, deltaTime, state.lion));
 
   // Spawn new prey entities if needed
   if (state.time % DEFAULT_PREY_SPAWN_CONFIG.spawnInterval < deltaTime) {

@@ -21,6 +21,10 @@ export function createInitialPrey(): PreyState[] {
         speed: 0,
       },
       state: 'idle',
+      visionDirection: {
+        x: 0,
+        y: 0,
+      },
     });
   }
   return preyEntities;
