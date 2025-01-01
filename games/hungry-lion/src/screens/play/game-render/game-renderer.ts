@@ -1,5 +1,6 @@
 import { GameWorldState, LION_WIDTH, Vector2D } from '../game-world/game-world-types';
 import { RenderState } from './render-state';
+import { drawGround } from './ground-renderer';
 
 export const renderGame = (
   ctx: CanvasRenderingContext2D,
@@ -11,6 +12,9 @@ export const renderGame = (
 
   ctx.save();
   ctx.translate(viewport.x, viewport.y);
+
+  // Draw the ground
+  drawGround(ctx, world, renderState);
 
   if (lion.targetPosition) {
     drawTarget(ctx, lion.targetPosition);
