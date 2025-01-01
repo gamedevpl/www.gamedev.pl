@@ -4,32 +4,10 @@ import { GameWorldState } from './game-world/game-world-types';
 import { useRafLoop } from 'react-use';
 import { updateGameWorld } from './game-world/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
-import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world/game-world-consts';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
 import { InputController } from './game-input/input-controller';
-
-// Function to create initial game state
-function createInitialState(): GameWorldState {
-  const initialTime = Date.now();
-
-  return {
-    time: initialTime,
-    gameOver: false,
-    lion: {
-      position: {
-        x: GAME_WORLD_WIDTH / 2,
-        y: GAME_WORLD_HEIGHT / 2,
-      },
-      targetPosition: null,
-      movement: {
-        isMoving: false,
-        speed: 0,
-        direction: { x: 0, y: 0 }
-      }
-    }
-  };
-}
+import { createInitialState } from './game-world/game-world-init';
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS
 const MAX_DELTA_TIME = 1000; // Maximum time step to prevent spiral of death
