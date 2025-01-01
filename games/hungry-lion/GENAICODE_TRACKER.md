@@ -122,6 +122,11 @@ This is a list of tasks that were done or are planned for the project.
   - Simplified main game world update logic
   - Preserved all existing functionality
   - Enhanced code organization and modularity
+- [x] Hunger Bar and Starvation Warnings
+  - Added hunger bar at the top of the screen
+  - Implemented visual and text warnings for impending starvation
+  - Updated RenderState to manage hunger bar and warning states
+  - Modified updateLion function to handle hunger bar and warning states
 
 ## Planned Tasks
 

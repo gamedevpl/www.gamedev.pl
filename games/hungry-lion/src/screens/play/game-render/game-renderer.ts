@@ -26,6 +26,18 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   // Render debug information
   renderDebugInfo(ctx, world);
 
+  // Reset the translation
+  ctx.restore();
+  ctx.save();
+
+  // Render hunger bar
+  renderHungerBar(ctx, world);
+
+  // Render starvation warning if needed
+  if (lion.hunger.isStarving) {
+    renderStarvationWarning(ctx);
+  }
+
   ctx.restore();
 };
 
@@ -76,4 +88,51 @@ function drawTarget(ctx: CanvasRenderingContext2D, position: Vector2D) {
   ctx.stroke();
 
   ctx.restore();
+}
+
+function renderHungerBar(ctx: CanvasRenderingContext2D, world: GameWorldState) {
+  const { lion } = world;
+  const barWidth = 300;
+  const barHeight = 20;
+  const barX = (ctx.canvas.width - barWidth) / 2;
+  const barY = 20;
+
+  // Draw background bar
+  ctx.fillStyle = '#444';
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+
+  // Draw hunger level
+  const hungerWidth = (lion.hunger.level / 100) * barWidth;
+  ctx.fillStyle = lion.hunger.isStarving ? '#ff4444' : '#44ff44';
+  ctx.fillRect(barX, barY, hungerWidth, barHeight);
+
+  // Draw border
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+  // Draw labels
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Starving', barX - 40, barY + barHeight / 2 + 5);
+  ctx.fillText('Gluttonous', barX + barWidth + 50, barY + barHeight / 2 + 5);
+  ctx.fillText('Full', barX + barWidth / 2, barY + barHeight / 2 + 5);
+}
+
+function renderStarvationWarning(ctx: CanvasRenderingContext2D) {
+  const warningText = 'WARNING: Starvation Imminent!';
+  const textX = ctx.canvas.width / 2;
+  const textY = 60;
+
+  // Draw flashing background
+  const flashIntensity = Math.sin(Date.now() / 200) * 127 + 128;
+  ctx.fillStyle = `rgba(255, 0, 0, ${flashIntensity / 255})`;
+  ctx.fillRect(0, 50, ctx.canvas.width, 30);
+
+  // Draw warning text
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(warningText, textX, textY);
 }

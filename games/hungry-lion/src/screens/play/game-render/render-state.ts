@@ -6,8 +6,14 @@ export type ViewportState = {
   y: number;
 };
 
+export type HungerBarState = {
+  isVisible: boolean;
+  isWarningActive: boolean;
+};
+
 export type RenderState = {
   viewport: ViewportState;
+  hungerBar: HungerBarState;
 };
 
 const calculateViewportTranslation = (
@@ -42,6 +48,10 @@ const calculateViewportTranslation = (
 
 export const createRenderState = (): RenderState => ({
   viewport: { x: 0, y: 0 },
+  hungerBar: {
+    isVisible: true,
+    isWarningActive: false,
+  },
 });
 
 export const updateRenderState = (
@@ -52,4 +62,8 @@ export const updateRenderState = (
   canvasHeight: number = window.innerHeight,
 ): RenderState => ({
   viewport: calculateViewportTranslation(world, canvasWidth, canvasHeight),
+  hungerBar: {
+    isVisible: true,
+    isWarningActive: world.lion.hunger.isStarving,
+  },
 });

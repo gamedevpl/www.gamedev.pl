@@ -89,7 +89,7 @@ function updateLionMovement(state: GameWorldState, deltaTime: number) {
  */
 function updateLionHunger(state: GameWorldState, deltaTime: number) {
   const { lion } = state;
-  const hungerDecayRate = 0.1; // Hunger decreases by 0.1 per second
+  const hungerDecayRate = 1; // Hunger decreases by 0.1 per second
   lion.hunger.level = Math.max(0, lion.hunger.level - hungerDecayRate * (deltaTime / 1000));
 
   // Update hunger state flags
