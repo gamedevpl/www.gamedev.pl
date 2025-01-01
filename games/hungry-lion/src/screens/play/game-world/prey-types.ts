@@ -4,11 +4,21 @@ export const PREY_SPEED = 80; // units per second
 export const PREY_VISION_RANGE = 200; // units
 export const PREY_VISION_ANGLE = Math.PI / 3; // 60 degrees
 
-// Duration for which prey stays in fleeing state after losing sight of lion
+// Duration for which prey stays in fleeing state after losing sight of threat
 export const FLEE_DURATION = 3000; // milliseconds
 
-// Distance prey needs to maintain from lion to feel safe and return to idle
+// Distance prey needs to maintain from threat to feel safe and return to idle
 export const FLEE_DISTANCE = PREY_VISION_RANGE * 1.5; // units
+
+// Type to identify the source of fleeing behavior
+export type FleeingSource = {
+  type: 'lion' | 'prey';
+  id: string;
+  position: {
+    x: number;
+    y: number;
+  };
+};
 
 export type PreyState = {
   safeDistanceReached?: boolean;
@@ -32,6 +42,8 @@ export type PreyState = {
   // Timestamp until which the prey should maintain fleeing state
   // undefined means not fleeing
   fleeingUntil?: number;
+  // Source that triggered the fleeing behavior (lion or other prey)
+  fleeingSource?: FleeingSource;
   // Properties for being caught and eaten
   isBeingCaught?: boolean;
   isCaught?: boolean;
@@ -40,7 +52,7 @@ export type PreyState = {
   // Properties for lock-on state
   isLockedOn?: boolean;
   lockOnTime?: number; // Timestamp when prey was locked on
-  // New properties for continuous chasing
+  // Properties for continuous chasing
   isBeingChased?: boolean;
   chaseStartTime?: number; // Timestamp when chase started
   lastKnownPosition?: {

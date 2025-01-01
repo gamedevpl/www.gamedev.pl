@@ -61,3 +61,94 @@ export function getDistance(pos1: Vector2D, pos2: Vector2D): number {
   const dy = pos2.y - pos1.y;
   return Math.sqrt(dx * dx + dy * dy);
 }
+
+/**
+ * Checks if a target position is within a specified range from a source position
+ */
+export function isInRange(source: Vector2D, target: Vector2D, range: number): boolean {
+  return getDistance(source, target) <= range;
+}
+
+/**
+ * Calculates the angle between two vectors in radians
+ */
+export function calculateAngleBetweenVectors(v1: Vector2D, v2: Vector2D): number {
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const v1Length = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+  const v2Length = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+  
+  if (v1Length === 0 || v2Length === 0) return 0;
+  
+  const cosAngle = dot / (v1Length * v2Length);
+  // Clamp the value to prevent floating point errors
+  return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+}
+
+/**
+ * Checks if a target is within a vision cone defined by source position,
+ * vision direction, and vision angle
+ */
+export function isInVisionCone(
+  source: Vector2D,
+  target: Vector2D,
+  visionDirection: Vector2D,
+  visionAngle: number
+): boolean {
+  const toTarget = normalizeVector({
+    x: target.x - source.x,
+    y: target.y - source.y,
+  });
+
+  const angle = calculateAngleBetweenVectors(visionDirection, toTarget);
+  return angle <= visionAngle / 2;
+}
+
+/**
+ * Gets the direction vector from source to target
+ */
+export function getDirectionToTarget(source: Vector2D, target: Vector2D): Vector2D {
+  return normalizeVector({
+    x: target.x - source.x,
+    y: target.y - source.y,
+  });
+}
+
+/**
+ * Adds random variation to a direction vector
+ */
+export function addRandomness(direction: Vector2D, amount: number): Vector2D {
+  const randomAngle = (Math.random() - 0.5) * amount * Math.PI;
+  const cos = Math.cos(randomAngle);
+  const sin = Math.sin(randomAngle);
+  return normalizeVector({
+    x: direction.x * cos - direction.y * sin,
+    y: direction.x * sin + direction.y * cos,
+  });
+}
+
+/**
+ * Generates a random direction vector
+ */
+export function getRandomDirection(): Vector2D {
+  const angle = Math.random() * Math.PI * 2;
+  return {
+    x: Math.cos(angle),
+    y: Math.sin(angle),
+  };
+}
+
+/**
+ * Handles boundary checks and bouncing for entities
+ */
+export function handleBoundaryBounce(position: Vector2D, direction: Vector2D, worldWidth: number, worldHeight: number): Vector2D {
+  let newDirection = { ...direction };
+  if (position.x < 0 || position.x > worldWidth) {
+    newDirection.x *= -1;
+    newDirection = addRandomness(newDirection, 0.2);
+  }
+  if (position.y < 0 || position.y > worldHeight) {
+    newDirection.y *= -1;
+    newDirection = addRandomness(newDirection, 0.2);
+  }
+  return newDirection;
+}

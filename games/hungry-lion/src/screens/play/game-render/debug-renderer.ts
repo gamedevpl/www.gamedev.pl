@@ -18,6 +18,11 @@ export function renderDebugInfo(ctx: CanvasRenderingContext2D, world: GameWorldS
       ctx.fillText(`Distance: ${distance.toFixed(2)}`, 10, -10);
       ctx.fillText(`Catching: ${isCatchingEffective ? 'Effective' : 'Not Effective'}`, 10, 10);
       ctx.fillText('Speed: ' + p.movement.speed.toFixed(2), 10, 30);
+      ctx.fillText(
+        'State: ' + [p.isBeingCaught && 'BeingCaught', p.isCarrion && 'Carrion', p.isCaught && 'Caught'].join(','),
+        10,
+        50,
+      );
       ctx.restore();
     });
   }

@@ -25,6 +25,8 @@ export function createInitialPrey(): PreyState[] {
         x: 0,
         y: 0,
       },
+      // fleeingSource and fleeingUntil are undefined by default
+      // they will be set when the prey starts fleeing
     });
   }
   return preyEntities;

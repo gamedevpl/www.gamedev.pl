@@ -59,7 +59,7 @@ function updateLionMovement(state: GameWorldState, deltaTime: number) {
     lion.movement.direction = normalizeVector({ x: dx, y: dy });
 
     // If close to target and not chasing, stop moving
-    if (distanceToTarget < 3) {
+    if (distanceToTarget < 1) {
       lion.targetPosition = null;
       lion.movement.isMoving = false;
       lion.movement.speed = 0;
@@ -124,6 +124,11 @@ function handlePreyCatching(state: GameWorldState, deltaTime: number) {
       // Reduce prey speed when being caught
       p.movement.speed = Math.max(0, p.movement.speed - catchSpeedReduction * (deltaTime / 1000));
       p.isBeingCaught = true;
+
+      if (p.movement.speed === 0) {
+        p.isCaught = true;
+        p.isCarrion = true; // Set isCarrion to true when prey speed reaches zero
+      }
 
       if (p.movement.speed === 0 && distance < eatDistance && p.isCarrion) {
         // Prey is caught and can be eaten
