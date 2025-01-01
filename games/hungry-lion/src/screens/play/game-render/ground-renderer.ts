@@ -1,7 +1,6 @@
-import { GameWorldState } from '../game-world/game-world-types';
 import { RenderState } from './render-state';
 
-export function drawGround(ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) {
+export function drawGround(ctx: CanvasRenderingContext2D, renderState: RenderState) {
   const { viewport } = renderState;
 
   // Create a simple canvas pattern for the ground

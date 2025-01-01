@@ -2,11 +2,7 @@ import { GameWorldState, LION_WIDTH, Vector2D } from '../game-world/game-world-t
 import { RenderState } from './render-state';
 import { drawGround } from './ground-renderer';
 
-export const renderGame = (
-  ctx: CanvasRenderingContext2D,
-  world: GameWorldState,
-  renderState: RenderState
-) => {
+export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
   const { lion } = world;
 
@@ -14,28 +10,18 @@ export const renderGame = (
   ctx.translate(viewport.x, viewport.y);
 
   // Draw the ground
-  drawGround(ctx, world, renderState);
+  drawGround(ctx, renderState);
 
   if (lion.targetPosition) {
     drawTarget(ctx, lion.targetPosition);
   }
 
-  drawLion(
-    ctx,
-    lion.position,
-    lion.movement.direction,
-    lion.movement.isMoving
-  );
+  drawLion(ctx, lion.position, lion.movement.direction, lion.movement.isMoving);
 
   ctx.restore();
 };
 
-function drawLion(
-  ctx: CanvasRenderingContext2D,
-  position: Vector2D,
-  direction: Vector2D,
-  isMoving: boolean
-) {
+function drawLion(ctx: CanvasRenderingContext2D, position: Vector2D, direction: Vector2D, isMoving: boolean) {
   const width = LION_WIDTH;
   const height = LION_WIDTH;
 
@@ -66,7 +52,7 @@ function drawLion(
 
 function drawTarget(ctx: CanvasRenderingContext2D, position: Vector2D) {
   ctx.save();
-  
+
   ctx.beginPath();
   ctx.arc(position.x, position.y, 5, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
