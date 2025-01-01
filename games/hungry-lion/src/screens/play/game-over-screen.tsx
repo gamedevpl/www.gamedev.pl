@@ -11,7 +11,9 @@ export function GameOverScreen({ stats, onRestart }: GameOverScreenProps) {
           <span>{formatTime(stats.timeSurvived)}</span>
         </StatRow>
       </StatsContainer>
-      <RestartButton onClick={onRestart}>Play Again</RestartButton>
+      <RestartButton className="play-again-button" onClick={onRestart} onTouchStart={onRestart}>
+        Play Again
+      </RestartButton>
     </GameOverContainer>
   );
 }

@@ -44,7 +44,6 @@ export function InputController({ gameStateRef }: InputControllerProps) {
         timestamp: Date.now(),
       });
 
-      // Continuously update target position while mouse is held down
       if (inputState.isPressed) {
         dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
           button: 'left',
@@ -178,11 +177,9 @@ function calculateInputPosition(clientX: number, clientY: number, viewport: View
   const centerX = innerWidth / 2;
   const centerY = innerHeight / 2;
 
-  // Calculate normalized coordinates (-1 to 1)
   const normalizedX = (clientX - centerX) / centerX;
   const normalizedY = (clientY - centerY) / centerY;
 
-  // Calculate world coordinates
   const { worldX, worldY } = calculateWorldCoordinates(clientX, clientY, viewport);
 
   return {

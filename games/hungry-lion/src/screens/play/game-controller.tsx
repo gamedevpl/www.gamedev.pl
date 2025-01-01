@@ -74,20 +74,28 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (!gameStateRef.current) return;
     if (event.primaryTouch) {
       handleTargeting(event.primaryTouch.position);
+      touchStateRef.current.isActive = true;
+      touchStateRef.current.position = event.primaryTouch.position;
     }
   });
 
-  useCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, () => {
+  useCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, (event) => {
     if (!gameStateRef.current || !touchStateRef.current.isActive) return;
+    if (event.primaryTouch) {
+      handleTargeting(event.primaryTouch.position);
+      touchStateRef.current.position = event.primaryTouch.position;
+    }
   });
 
   useCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, () => {
     if (!gameStateRef.current) return;
-    handleCancelChase();
   });
 
-  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, () => {
+  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
     if (!gameStateRef.current || touchStateRef.current.isActive) return;
+    if (event.position) {
+      handleTargeting(event.position);
+    }
   });
 
   useCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, (event) => {
