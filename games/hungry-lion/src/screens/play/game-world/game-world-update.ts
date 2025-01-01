@@ -1,5 +1,8 @@
 import { GameWorldState, LION_MAX_SPEED, Vector2D } from './game-world-types';
 import { gameSoundController } from '../sound/game-sound-controller';
+import { updatePrey } from './prey-ai';
+import { spawnPrey } from './prey-spawner';
+import { DEFAULT_PREY_SPAWN_CONFIG } from './prey-init';
 
 export function updateGameWorld(state: GameWorldState, deltaTime: number) {
   state.time += deltaTime;
@@ -11,6 +14,14 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number) {
 
   updateLionMovement(state, deltaTime);
   gameSoundController.update();
+
+  // Update all prey entities
+  state.prey = state.prey.map((p) => updatePrey(p, deltaTime));
+
+  // Spawn new prey entities if needed
+  if (state.time % DEFAULT_PREY_SPAWN_CONFIG.spawnInterval < deltaTime) {
+    state.prey = spawnPrey(DEFAULT_PREY_SPAWN_CONFIG, state.prey);
+  }
 
   return state;
 }

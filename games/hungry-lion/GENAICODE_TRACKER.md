@@ -32,6 +32,12 @@ This is a list of tasks that were done or are planned for the project.
   - Low performance impact
   - Modular ground rendering system
   - Fixed viewport translation issue
+- [x] Prey Entities Implementation
+  - Defined prey type and properties
+  - Initialized prey entities in the game world
+  - Implemented basic AI for prey movement
+  - Added spawning mechanic for prey
+  - Integrated prey rendering into the game
 
 ## Planned Tasks
 
@@ -52,9 +58,8 @@ This is a list of tasks that were done or are planned for the project.
 
 ### Gameplay Enhancements
 
-- [ ] Add prey entities
-- [ ] Implement hunting mechanics
-- [ ] Add stamina system
+- [ ] Add hunting mechanics
+- [ ] Implement stamina system
 - [ ] Create environmental obstacles
 
 ### Technical Improvements

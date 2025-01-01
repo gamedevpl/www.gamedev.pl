@@ -1,10 +1,11 @@
 import { GameWorldState, LION_WIDTH, Vector2D } from '../game-world/game-world-types';
 import { RenderState } from './render-state';
 import { drawGround } from './ground-renderer';
+import { renderPrey } from './prey-renderer';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
-  const { lion } = world;
+  const { lion, prey } = world;
 
   ctx.save();
   ctx.translate(viewport.x, viewport.y);
@@ -17,6 +18,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   }
 
   drawLion(ctx, lion.position, lion.movement.direction, lion.movement.isMoving);
+
+  // Render all prey entities
+  prey.forEach((p) => renderPrey(ctx, p));
 
   ctx.restore();
 };

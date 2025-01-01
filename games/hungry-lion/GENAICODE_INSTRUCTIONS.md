@@ -13,6 +13,9 @@ Large and long files are not desired, they make life of programmer harder. LLMs 
 ### Demand well defined tasks
 Feel free to ask questions, and expect better defined tasks.
 
+### Create new modules for specific functionalities
+When adding new features or functionalities, create new modules specifically for them. This helps maintain modularity, clarity, and makes the codebase easier to manage and extend.
+
 ## Documentation Requirements
 
 ### Documentation Updates with Code Changes

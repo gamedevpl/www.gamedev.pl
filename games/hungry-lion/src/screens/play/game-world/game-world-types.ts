@@ -1,3 +1,5 @@
+import { PreyState } from './prey-types';
+
 // Lion properties
 export const LION_WIDTH = 50;
 export const LION_STEP_SIZE = LION_WIDTH / 3;
@@ -25,6 +27,7 @@ export type GameWorldState = {
   gameOver: boolean;
   gameOverStats?: GameOverStats;
   lion: LionState;
+  prey: PreyState[];
 };
 
 export type GameOverStats = {

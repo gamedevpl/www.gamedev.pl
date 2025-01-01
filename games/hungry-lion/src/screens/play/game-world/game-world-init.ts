@@ -1,5 +1,6 @@
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from './game-world-consts';
 import { GameWorldState } from './game-world-types';
+import { createInitialPrey } from './prey-init';
 
 // Function to create initial game state
 export function createInitialState(): GameWorldState {
@@ -20,5 +21,6 @@ export function createInitialState(): GameWorldState {
         direction: { x: 0, y: 0 },
       },
     },
+    prey: createInitialPrey(),
   };
 }
