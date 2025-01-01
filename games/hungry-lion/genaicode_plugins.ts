@@ -101,11 +101,11 @@ export const genaicodeTracker: Plugin = {
         return undefined;
       }
 
-      // Example: Add additional analysis to the problem analysis
+      // Ensure the tracker is updated with the new changes and used as the primary source of truth
       const trackerUpdate = result.args!.affectedFiles.find((file) => file.filePath.endsWith('GENAICODE_TRACKER.md'));
       if (!trackerUpdate) {
         result.args!.affectedFiles.push({
-          reason: 'Needs to be updated with the new changes',
+          reason: 'Needs to be updated with the new changes and used as the primary source of truth for game design and development plans',
           filePath: (await getRcConfig()).rootDir + '/GENAICODE_TRACKER.md',
           dependencies: [],
         });
