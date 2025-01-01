@@ -105,8 +105,22 @@ export const genaicodeTracker: Plugin = {
       const trackerUpdate = result.args!.affectedFiles.find((file) => file.filePath.endsWith('GENAICODE_TRACKER.md'));
       if (!trackerUpdate) {
         result.args!.affectedFiles.push({
-          reason: 'Needs to be updated with the new changes and used as the primary source of truth for game design and development plans',
+          reason: `Needs to be updated with the new changes and used as the primary source of truth for game design and development plans.
+GENAICODE_TRACKER.md is a markdown file which is a tree of features that were developed or are in development.
+It is fine to not update this file if the changes are not related to the game world or are minor.`,
           filePath: (await getRcConfig()).rootDir + '/GENAICODE_TRACKER.md',
+          dependencies: [],
+        });
+      }
+
+      // Ensure GENAICODE_INSTRUCTIONS.md is updated with the new changes
+      const instructionsUpdate = result.args!.affectedFiles.find((file) =>
+        file.filePath.endsWith('GENAICODE_INSTRUCTIONS.md'),
+      );
+      if (!instructionsUpdate) {
+        result.args!.affectedFiles.push({
+          reason: `Did we learn something new? Did we change our process? Did we find a better way to do something? Does anything need to be updated in the instructions?`,
+          filePath: (await getRcConfig()).rootDir + '/GENAICODE_INSTRUCTIONS.md',
           dependencies: [],
         });
       }
