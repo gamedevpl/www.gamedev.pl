@@ -29,11 +29,13 @@ jobs:
       - run: npm install --prefix=../games/nukes
       - run: npm install --prefix=../games/masterplan
       - run: npm install --prefix=../games/xmas
+      - run: npm install --prefix=../games/hungry-lion
       - run: npm install
       - run: npm run build --prefix=../games/monster-steps
       - run: npm run build --prefix=../games/nukes
       - run: npm run build --prefix=../games/masterplan
       - run: npm run build --prefix=../games/xmas
+      - run: npm run build --prefix=../games/hungry-lion
       - run: npm run build
       - name: Deploy website
         uses: JamesIves/github-pages-deploy-action@releases/v3
