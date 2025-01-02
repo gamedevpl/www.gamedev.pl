@@ -8,6 +8,10 @@ export interface DevConfig {
   debugFleeingState: boolean;
   // Setting to enable debug rendering of catching mechanics
   debugCatchingMechanics: boolean;
+  // Setting to enable debug rendering of prey states (catching, eating)
+  debugPreyStates: boolean;
+  // Setting to enable debug rendering of timing constants
+  debugTimingConstants: boolean;
 }
 
 /**
@@ -17,6 +21,8 @@ const DEFAULT_CONFIG: DevConfig = {
   renderGrass: true,
   debugFleeingState: false,
   debugCatchingMechanics: false,
+  debugPreyStates: false,
+  debugTimingConstants: false,
 };
 
 /**
@@ -35,7 +41,7 @@ function serializeConfig(config: DevConfig): string {
  */
 function deserializeConfig(hash: string): Partial<DevConfig> {
   try {
-    const match = hash.match(/#dev\?(.*)/);
+    const match = hash.match(/#dev\\?(.*)/);
     if (!match) return {};
 
     const params = new URLSearchParams(match[1]);

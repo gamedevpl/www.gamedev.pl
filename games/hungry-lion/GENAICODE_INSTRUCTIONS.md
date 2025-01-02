@@ -138,4 +138,19 @@ When implementing new features:
 - Keep documentation updated
 - Follow established patterns
 
+## New Development Patterns
+
+### Timing Mechanics
+When implementing timing mechanics (e.g., prey-to-carrion conversion, eating process):
+1. Define timing constants in a central location (e.g., `prey-types.ts`)
+2. Use timestamps to track the start of processes
+3. Update state transitions based on elapsed time
+4. Ensure consistent timing across different game states
+
+### Prey Behavior and Rendering
+When implementing prey behavior and rendering:
+1. Ensure that prey which became carrion and is being eaten does not move
+2. Provide distinct visual representation for carrion
+3. Maintain consistency between behavior and rendering logic
+
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.

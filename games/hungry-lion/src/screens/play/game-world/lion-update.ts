@@ -1,6 +1,6 @@
 import { GameWorldState, LION_MAX_SPEED } from './game-world-types';
 import { normalizeVector } from './coordinate-utils';
-import { PREY_SPEED } from './prey-types';
+import { PREY_SPEED, CONVERSION_TIME, EATING_TIME } from './prey-types';
 import { gameSoundController } from '../sound/game-sound-controller';
 
 const ACCELERATION = LION_MAX_SPEED;
@@ -125,18 +125,30 @@ function handlePreyCatching(state: GameWorldState, deltaTime: number) {
       p.movement.speed = Math.max(0, p.movement.speed - catchSpeedReduction * (deltaTime / 1000));
       p.isBeingCaught = true;
 
-      if (p.movement.speed === 0) {
-        p.isCaught = true;
-        p.isCarrion = true; // Set isCarrion to true when prey speed reaches zero
+      if (p.movement.speed === 0 && !p.isCarrion && !p.carrionTime) {
+        // Start conversion to carrion
+        p.carrionTime = Date.now();
       }
 
-      if (p.movement.speed === 0 && distance < eatDistance && p.isCarrion) {
-        // Prey is caught and can be eaten
-        lion.hunger.level = Math.min(100, lion.hunger.level + 10); // Increase hunger level
-        lion.hunger.lastEatenTime = Date.now();
-        state.prey = state.prey.filter((prey) => prey.id !== p.id); // Remove eaten prey
-        lion.targetPosition = null; // Stop chasing after catching prey
-        lion.chaseTarget = null; // Clear chase target after catching prey
+      if (p.isCarrion && p.carrionTime && Date.now() - p.carrionTime >= CONVERSION_TIME) {
+        // Prey is fully converted to carrion
+        p.isCaught = true;
+      }
+
+      if (p.isCaught && distance < eatDistance) {
+        // Start eating carrion
+        if (!p.eatingStartTime) {
+          p.eatingStartTime = Date.now();
+        }
+
+        if (Date.now() - p.eatingStartTime >= EATING_TIME) {
+          // Prey is fully eaten
+          lion.hunger.level = Math.min(100, lion.hunger.level + 10); // Increase hunger level
+          lion.hunger.lastEatenTime = Date.now();
+          state.prey = state.prey.filter((prey) => prey.id !== p.id); // Remove eaten prey
+          lion.targetPosition = null; // Stop chasing after catching prey
+          lion.chaseTarget = null; // Clear chase target after catching prey
+        }
       }
     } else if (p.isBeingCaught) {
       // Reset catching state if prey is no longer within catching distance

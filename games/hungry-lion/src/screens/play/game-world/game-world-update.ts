@@ -14,6 +14,9 @@ export function updateGameWorld(state: GameWorldState, deltaTime: number): GameW
     
     // Update all prey entities
     state.prey = updateAllPrey(state, deltaTime);
+
+    // Remove fully eaten prey from the game world
+    state.prey = state.prey.filter(prey => !prey.isEaten);
   }
 
   return state;

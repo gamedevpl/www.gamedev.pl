@@ -54,6 +54,18 @@
             *   ✅ Centralized threat detection in `threat-detection.ts`
             *   ✅ Enhanced coordinate utilities in `coordinate-utils.ts`
             *   ✅ Removed code duplication between `prey-update.ts` and `prey-ai.ts`
+        *   ✅ Prey-to-Carrion Conversion and Eating Process
+            *   ✅ Added 2-second conversion time from prey to carrion
+            *   ✅ Added 10-second eating time for carrion
+            *   ✅ Updated state transitions in `prey-behavior.ts`
+            *   ✅ Modified `lion-update.ts` to handle new timing
+            *   ✅ Ensured carrion does not move and is rendered distinctly
+        *   ✅ Enhanced Debugging Capabilities
+            *   ✅ Added dev configuration for prey states
+            *   ✅ Added configurable timing constants
+            *   ✅ Implemented detailed state visualization
+            *   ✅ Added conversion and eating progress indicators
+            *   ✅ Enhanced debug panel with timing controls
         *   ☐ Advanced Group Dynamics
             *   ☐ Implement leader-follower behavior
             *   ☐ Add group cohesion mechanics
@@ -80,6 +92,11 @@
     *   ✅ Prey Catching and Eating Mechanics
     *   ✅ Debug Catching Mechanics
     *   ✅ Enhanced Catching Mechanics
+    *   ✅ Debug Visualization System
+        *   ✅ Added prey state debugging
+        *   ✅ Added timing constant controls
+        *   ✅ Implemented progress indicators
+        *   ✅ Enhanced visual feedback
 
 ## Branch: Visual Improvements
     *   ☐ Replace simple triangle with proper lion sprite
@@ -91,16 +108,12 @@
         *   ☐ Implement visual stress levels
         *   ☐ Add group fleeing visualization
 
-## Branch: Gameplay Enhancements
-    *   ☐ Add hunting mechanics
-    *   ☐ Implement stamina system
-    *   ☐ Create environmental obstacles
-    *   ☐ Enhanced Group Mechanics
-        *   ☐ Add group formations
-        *   ☐ Implement safe zones
-        *   ☐ Add group leadership roles
-
 ## Branch: Technical Improvements
+    *   ✅ Enhanced Debug System
+        *   ✅ Implemented configurable timing constants
+        *   ✅ Added detailed state visualization
+        *   ✅ Created progress indicators for state transitions
+        *   ✅ Added dev panel controls for debugging features
     *   ☐ Optimize movement calculations
     *   ☐ Add movement prediction
     *   ☐ Implement collision detection
@@ -129,3 +142,10 @@
         *   Add behavior caching for group decisions
         *   Optimize fleeing propagation algorithms
         *   Add level of detail system for distant entities
+    *   Debug System Enhancement
+        *   Add state transition history visualization
+        *   Implement timeline view for state changes
+        *   Add ability to pause and step through state changes
+        *   Create detailed metrics for prey behavior analysis
+        *   Add export/import of debug configurations
+        *   Implement debug data logging and analysis tools

@@ -10,6 +10,12 @@ export const FLEE_DURATION = 3000; // milliseconds
 // Distance prey needs to maintain from threat to feel safe and return to idle
 export const FLEE_DISTANCE = PREY_VISION_RANGE * 1.5; // units
 
+// Time taken to convert prey into carrion
+export const CONVERSION_TIME = 2000; // milliseconds
+
+// Time taken to eat carrion
+export const EATING_TIME = 10000; // milliseconds
+
 // Type to identify the source of fleeing behavior
 export type FleeingSource = {
   type: 'lion' | 'prey';
@@ -49,6 +55,8 @@ export type PreyState = {
   isCaught?: boolean;
   isCarrion?: boolean;
   carrionTime?: number; // Timestamp when prey became carrion
+  eatingStartTime?: number; // Timestamp when eating started
+  isEaten?: boolean;
   // Properties for lock-on state
   isLockedOn?: boolean;
   lockOnTime?: number; // Timestamp when prey was locked on

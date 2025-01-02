@@ -1,4 +1,12 @@
-import { PreyState, FleeingSource, FLEE_DISTANCE, PREY_SPEED, FLEE_DURATION } from './prey-types';
+import {
+  PreyState,
+  FleeingSource,
+  FLEE_DISTANCE,
+  PREY_SPEED,
+  FLEE_DURATION,
+  CONVERSION_TIME,
+  EATING_TIME,
+} from './prey-types';
 import { Vector2D } from './game-world-types';
 import {
   normalizeVector,
@@ -19,11 +27,27 @@ export function updatePreyState(prey: PreyState, deltaTime: number): PreyState {
   // Handle being caught
   if (prey.isBeingCaught) {
     prey.movement.speed = Math.max(0, prey.movement.speed - 10 * secondsDelta);
-    if (prey.movement.speed === 0) {
+    if (prey.movement.speed === 0 && !prey.isCarrion && !prey.carrionTime) {
+      // Start conversion to carrion
+      prey.carrionTime = currentTime;
+    }
+
+    if (!prey.isCarrion && prey.carrionTime && currentTime - prey.carrionTime >= CONVERSION_TIME) {
+      // Prey is fully converted to carrion
       prey.isCaught = true;
       prey.isBeingCaught = false;
       prey.isCarrion = true;
-      prey.carrionTime = currentTime;
+      prey.movement.speed = 0; // Stop movement when prey becomes carrion
+    }
+
+    if (prey.isCaught && !prey.eatingStartTime) {
+      // Start eating carrion
+      prey.eatingStartTime = currentTime;
+    }
+
+    if (prey.eatingStartTime && currentTime - prey.eatingStartTime >= EATING_TIME) {
+      // Prey is fully eaten
+      prey.isEaten = true;
     }
     return prey;
   }
@@ -39,6 +63,10 @@ export function updatePreyState(prey: PreyState, deltaTime: number): PreyState {
         prey.movement.speed = 0;
       }
     }
+  }
+
+  if (prey.isCarrion) {
+    return prey;
   }
 
   // Handle state transitions
@@ -73,7 +101,9 @@ function handleIdleState(prey: PreyState): void {
  * Handles prey behavior in moving state
  */
 function handleMovingState(prey: PreyState, secondsDelta: number): void {
-  updatePosition(prey, secondsDelta);
+  if (!prey.isCarrion) {
+    updatePosition(prey, secondsDelta);
+  }
 
   if (Math.random() < 0.01) {
     prey.state = 'idle';
@@ -85,7 +115,7 @@ function handleMovingState(prey: PreyState, secondsDelta: number): void {
  * Handles prey behavior in fleeing state
  */
 function handleFleeingState(prey: PreyState): void {
-  if (prey.fleeingSource) {
+  if (prey.fleeingSource && !prey.isCarrion) {
     const fleeDirection = getFleeingDirection(prey.position, prey.fleeingSource.position);
     prey.movement.direction = addRandomness(fleeDirection, 0.2);
   }
