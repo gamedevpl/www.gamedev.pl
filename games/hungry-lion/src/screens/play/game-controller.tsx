@@ -91,11 +91,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (!gameStateRef.current) return;
   });
 
-  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
+  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, () => {
     if (!gameStateRef.current || touchStateRef.current.isActive) return;
-    if (event.position) {
-      handleTargeting(event.position);
-    }
   });
 
   useCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, (event) => {
