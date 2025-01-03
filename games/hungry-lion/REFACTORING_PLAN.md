@@ -1,184 +1,126 @@
 # Game World Refactoring Plan
 
 ## Overview
-This document outlines the comprehensive plan for refactoring the game world implementation to improve code organization, maintainability, and extensibility.
+This document outlines the plan for refactoring the game world implementation using functional programming principles to improve code organization, maintainability, and extensibility.
 
 ## Goals
-- ⚡ Improve code organization and maintainability
-- 🔄 Implement clear state management
-- 🎯 Decouple game logic
-- 📈 Enhance performance
-- 🧪 Improve testability
-- 🔌 Make the system more extensible
+- ⚡ Improve code organization through functional composition
+- 🔄 Implement pure function-based state management
+- 🎯 Decouple game logic using function composition
+- 📈 Enhance performance through immutable state updates
+- 🔌 Make the system more extensible using functional patterns
 
-## Phase 1: Core Architecture Setup ⚙️
-- [ ] Create core directory structure
-- [ ] Implement base interfaces and classes
-  - [ ] Entity interface and base implementation
-  - [ ] Component base class
-  - [ ] StateMachine interface
-  - [ ] Event system
-- [ ] Set up unit testing framework
-- [ ] Document core architecture
+## Phase 1: Core Functional Architecture Setup ⚙️
 
-### Core Components Details
+### State Management
 ```typescript
-// Key interfaces to implement
-interface Entity {
-  id: string;
-  components: Map<string, Component>;
-}
+type GameState = Readonly<{
+  time: number;
+  entities: ReadonlyArray<Entity>;
+  events: ReadonlyArray<GameEvent>;
+}>;
 
-interface Component {
-  type: string;
-  entity: Entity;
-}
-
-interface StateMachine<T> {
-  currentState: State<T>;
-  transition(newState: State<T>): void;
-}
-
-interface EventSystem {
-  dispatch(event: GameEvent): void;
-  subscribe(eventType: string, handler: EventHandler): void;
-}
+type StateUpdate = (state: GameState) => GameState;
 ```
 
-## Phase 2: Entity Refactoring 🎮
+### Pure Functions for Core Game Logic
+```typescript
+// Example of pure function signatures
+type UpdateEntity = (entity: Entity, state: GameState) => Entity;
+type HandleEvent = (event: GameEvent, state: GameState) => GameState;
+type ApplyBehavior = (entity: Entity, behavior: Behavior) => Entity;
+```
 
-### Lion Entity
-- [ ] Create Lion-specific components
-  - [ ] Movement component
-  - [ ] Hunger component
-  - [ ] Chase component
-- [ ] Implement Lion states
-  - [ ] Idle state
-  - [ ] Hunting state
-  - [ ] Eating state
-- [ ] Update Lion behavior system
+## Phase 2: Entity Management 🎮
 
-### Prey Entity
-- [ ] Create Prey-specific components
-  - [ ] Movement component
-  - [ ] Fleeing component
-  - [ ] Health component
-- [ ] Implement Prey states
-  - [ ] Idle state
-  - [ ] Moving state
-  - [ ] Fleeing state
-  - [ ] Carrion state
-- [ ] Update Prey behavior system
+### Lion State Management
+- Pure functions for movement updates
+- Immutable state transitions for hunger system
+- Functional approach to chase mechanics
+```typescript
+type UpdateLion = (lion: LionState, gameState: GameState) => LionState;
+type UpdateHunger = (hunger: HungerState, deltaTime: number) => HungerState;
+type UpdateChase = (lion: LionState, prey: PreyState) => LionState;
+```
+
+### Prey State Management
+- Pure functions for movement patterns
+- Functional implementation of fleeing behavior
+- Immutable state updates for health system
+```typescript
+type UpdatePrey = (prey: PreyState, gameState: GameState) => PreyState;
+type UpdateFleeing = (prey: PreyState, threats: ReadonlyArray<Threat>) => PreyState;
+type UpdateHealth = (health: HealthState, damage: number) => HealthState;
+```
 
 ## Phase 3: Systems Implementation 🔧
-- [ ] Create systems directory structure
-- [ ] Implement core systems
-  - [ ] Movement system
-  - [ ] Collision system
-  - [ ] AI system
-  - [ ] Hunger system
-- [ ] Update game loop
-- [ ] Implement system manager
 
-### Systems Details
+### Pure Function Systems
 ```typescript
-// Example system interface
-interface System {
-  update(entities: Entity[], deltaTime: number): void;
-}
+// Core system functions
+type MovementSystem = (state: GameState) => GameState;
+type CollisionSystem = (state: GameState) => GameState;
+type BehaviorSystem = (state: GameState) => GameState;
+
+// Composition of systems
+const updateGameState = compose(
+  movementSystem,
+  collisionSystem,
+  behaviorSystem
+);
 ```
 
 ## Phase 4: Event System Implementation 📢
-- [ ] Define core game events
-  - [ ] Entity collision events
-  - [ ] State change events
-  - [ ] Game state events
-- [ ] Implement event dispatcher
-- [ ] Create event handlers
-- [ ] Update entities to use events
 
-### Event Types
+### Functional Event Handling
 ```typescript
-type GameEvent = {
-  type: string;
-  payload: any;
-}
+type EventHandler = (state: GameState, event: GameEvent) => GameState;
+type EventDispatcher = (handlers: ReadonlyArray<EventHandler>) => (state: GameState) => GameState;
 
 // Example events
-type CollisionEvent = {
+type CollisionEvent = Readonly<{
   type: 'collision';
-  payload: {
-    entity1: Entity;
-    entity2: Entity;
-  };
-}
+  entities: [Entity, Entity];
+}>;
 ```
 
-## Phase 5: Testing and Optimization 🚀
-- [ ] Write unit tests
-  - [ ] Core components
-  - [ ] Entity behavior
-  - [ ] Systems
-  - [ ] Event handling
-- [ ] Performance testing
-  - [ ] Measure baseline performance
-  - [ ] Identify bottlenecks
-  - [ ] Optimize critical paths
-- [ ] Integration testing
-- [ ] Documentation updates
+## Phase 5: Game Loop Optimization 🚀
 
-## Phase 6: Migration and Cleanup 🧹
-- [ ] Migrate existing game logic
-- [ ] Remove deprecated code
-- [ ] Update documentation
-- [ ] Final testing and validation
+### Pure Update Functions
+```typescript
+// Main game loop as composition of pure functions
+const gameLoop = compose(
+  handleEvents,
+  updateEntities,
+  applyPhysics,
+  cleanupState
+);
+```
 
-## Progress Tracking
+## Implementation Guidelines
 
-### Status Legend
-- ✅ Complete
-- 🔄 In Progress
-- ⏳ Pending
-- ❌ Blocked
+### Functional Programming Principles
+- Use pure functions for all game logic
+- Maintain immutable state throughout the system
+- Compose functions for complex behavior
+- Avoid side effects in core game logic
+- Use readonly types for state management
 
-### Current Status
-- Phase 1: 🔄 In Progress
-- Phase 2: ⏳ Pending
-- Phase 3: ⏳ Pending
-- Phase 4: ⏳ Pending
-- Phase 5: ⏳ Pending
-- Phase 6: ⏳ Pending
+### Code Organization
+- Group related functions by domain
+- Keep functions small and focused
+- Use function composition for complex operations
+- Maintain clear data flow between functions
 
-## Dependencies
-- Entity system must be completed before entity refactoring
-- Basic event system needed for state machine implementation
-- Systems implementation requires completed entity refactoring
-- Testing framework needed before implementation phases
-
-## Risk Management
-- 🔍 Maintain game functionality during refactoring
-- 🔄 Regular testing to catch issues early
-- 📦 Incremental changes to minimize disruption
-- 📝 Keep documentation updated with changes
-
-## Timeline
-1. Phase 1: Core Architecture (1-2 days)
-2. Phase 2: Entity Refactoring (2-3 days)
-3. Phase 3: Systems Implementation (2-3 days)
-4. Phase 4: Event System (1-2 days)
-5. Phase 5: Testing and Optimization (2-3 days)
-6. Phase 6: Migration and Cleanup (1-2 days)
-
-## Review Points
-- Code review after each phase
-- Performance testing at key points
-- Documentation review
-- Final system architecture review
+### State Management
+- Use immutable state updates
+- Implement pure state transition functions
+- Compose state updates for complex changes
+- Keep state transformations predictable
 
 ## Success Criteria
-- ✅ All tests passing
-- ✅ No regression in game functionality
-- ✅ Improved code organization
-- ✅ Better maintainability
-- ✅ Enhanced performance
-- ✅ Complete documentation
+- ✅ Pure function implementation
+- ✅ Immutable state management
+- ✅ Functional composition
+- ✅ Clear data flow
+- ✅ Predictable state updates
