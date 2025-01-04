@@ -1,6 +1,6 @@
 import { RefObject, useRef } from 'react';
 import { dispatchCustomEvent, useCustomEvent } from '../../utils/custom-events';
-import { GameWorldState } from './game-world/game-world-types';
+import { GameWorldState } from './game-world-v2/game-world-types';
 import { RenderState } from './game-render/render-state';
 import {
   GameEvents,
@@ -13,7 +13,9 @@ import {
   LionTargetEvent,
   CancelChaseEvent,
 } from './game-input/input-events';
-import { PreyState } from './game-world/prey-types';
+import { Entity } from './game-world-v2/entities-types';
+import { getPlayerLion, getPrey } from './game-world-v2/game-world-query';
+// import { getLions } from './game-world-v2/game-world-query';
 
 export function GameController({ gameStateRef }: GameControllerProps) {
   const touchStateRef = useRef<TouchState>({
@@ -21,10 +23,11 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     position: null,
   });
 
-  const findPreyAtPosition = (position: InputPosition): PreyState | null => {
+  const findPreyAtPosition = (position: InputPosition): Entity | null => {
     if (!gameStateRef.current) return null;
     const catchDistance = 80;
-    for (const prey of gameStateRef.current.gameWorldState.prey) {
+
+    for (const prey of getPrey(gameStateRef.current.gameWorldState)) {
       const distance = Math.sqrt(
         Math.pow(prey.position.x - position.worldX, 2) + Math.pow(prey.position.y - position.worldY, 2),
       );
@@ -44,7 +47,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
         x: position.worldX,
         y: position.worldY,
       },
-      preyId: prey?.id || null,
+      preyId: prey?.id,
     });
   };
 
@@ -58,16 +61,20 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   useCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, (event) => {
     if (!gameStateRef.current) return;
 
-    const { lion } = gameStateRef.current.gameWorldState;
-    lion.targetPosition = event.position;
-    lion.chaseTarget = event.preyId || null;
+    const lion = getPlayerLion(gameStateRef.current.gameWorldState);
+    if (lion) {
+      lion.target.position = event.position;
+      lion.target.entityId = event.preyId;
+    }
   });
 
   useCustomEvent<CancelChaseEvent>(GameEvents.CANCEL_CHASE, () => {
     if (!gameStateRef.current) return;
-    const { lion } = gameStateRef.current.gameWorldState;
-    lion.targetPosition = null;
-    lion.chaseTarget = null;
+    const lion = getPlayerLion(gameStateRef.current.gameWorldState);
+    if (lion) {
+      lion.target.position = undefined;
+      lion.target.entityId = undefined;
+    }
   });
 
   useCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, (event) => {

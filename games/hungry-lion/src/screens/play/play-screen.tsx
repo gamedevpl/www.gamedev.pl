@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react';
 import { GameViewport } from './game-viewport';
-import { GameWorldState } from './game-world/game-world-types';
+import { GameWorldState } from './game-world-v2/game-world-types';
 import { useRafLoop } from 'react-use';
-import { updateGameWorld } from './game-world/game-world-update';
+import { gameWorldUpdate } from './game-world-v2/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
 import { InputController } from './game-input/input-controller';
-import { createInitialState } from './game-world/game-world-init';
+// import { createInitialState } from './game-world/game-world-init';
+import { gameWorldInit } from './game-world-v2/game-world-update';
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS
 const MAX_DELTA_TIME = 1000; // Maximum time step to prevent spiral of death
@@ -17,7 +18,7 @@ export function PlayScreen() {
     gameWorldState: GameWorldState;
     renderState: RenderState;
   }>({
-    gameWorldState: createInitialState(),
+    gameWorldState: gameWorldInit(),
     renderState: createRenderState(),
   });
   const [gameState, setGameState] = useState(() => ({ ...gameStateRef.current.gameWorldState }));
@@ -27,7 +28,7 @@ export function PlayScreen() {
   const handleRestart = () => {
     // Reset game state to initial state
     gameStateRef.current = {
-      gameWorldState: createInitialState(),
+      gameWorldState: gameWorldInit(),
       renderState: createRenderState(),
     };
     setIsGameOver(false);
@@ -47,7 +48,9 @@ export function PlayScreen() {
       const stepTime = Math.min(deltaTime, UPDATE_STEP);
 
       // Update game world
-      gameStateRef.current.gameWorldState = updateGameWorld(gameStateRef.current.gameWorldState, stepTime);
+      gameStateRef.current.gameWorldState = gameWorldUpdate(gameStateRef.current.gameWorldState, {
+        deltaTime: stepTime,
+      });
 
       // Update render state
       gameStateRef.current.renderState = updateRenderState(

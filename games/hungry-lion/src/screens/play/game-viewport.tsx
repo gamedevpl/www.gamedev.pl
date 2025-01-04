@@ -1,7 +1,7 @@
 import { useRef, RefObject, useEffect, PropsWithChildren } from 'react';
 import { useRafLoop, useWindowSize } from 'react-use';
 import { renderGame } from './game-render/game-renderer';
-import { GameWorldState } from './game-world/game-world-types';
+import { GameWorldState } from './game-world-v2/game-world-types';
 import styled from 'styled-components';
 import { RenderState } from './game-render/render-state';
 import { InputController } from './game-input/input-controller';
@@ -17,20 +17,20 @@ const ViewportContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  
+
   /* Prevent default touch behaviors */
   touch-action: none;
   -webkit-touch-callout: none;
-  
+
   /* Prevent text selection during touch/drag */
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  
+
   /* Ensure proper touch handling on iOS */
   -webkit-tap-highlight-color: transparent;
-  
+
   /* Ensure the viewport takes full priority for touch events */
   z-index: 1;
 `;
@@ -39,15 +39,15 @@ const GameCanvas = styled.canvas`
   width: 100%;
   height: 100%;
   display: block;
-  
+
   /* Prevent any default touch behaviors on the canvas */
   touch-action: none;
   -webkit-touch-callout: none;
-  
+
   /* Prevent dragging on the canvas */
   -webkit-user-drag: none;
   user-drag: none;
-  
+
   /* Ensure proper rendering on high-DPI displays */
   image-rendering: pixelated;
   image-rendering: crisp-edges;

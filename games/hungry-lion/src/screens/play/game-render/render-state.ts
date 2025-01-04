@@ -1,5 +1,6 @@
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-consts';
-import { GameWorldState } from '../game-world/game-world-types';
+import { GameWorldState } from '../game-world-v2/game-world-types';
+import { getLions } from '../game-world-v2/game-world-query';
 
 export type ViewportState = {
   x: number;
@@ -25,9 +26,11 @@ const calculateViewportTranslation = (
   const targetX = canvasWidth / 2;
   const targetY = canvasHeight / 2;
 
+  const [lion] = getLions(worldState);
+
   // Calculate the translation needed to center the player
-  let translateX = targetX - worldState.lion.position.x;
-  let translateY = targetY - worldState.lion.position.y;
+  let translateX = targetX - lion.position.x;
+  let translateY = targetY - lion.position.y;
 
   // Constrain translation to prevent showing beyond world boundaries
   // Left boundary
@@ -64,6 +67,6 @@ export const updateRenderState = (
   viewport: calculateViewportTranslation(world, canvasWidth, canvasHeight),
   hungerBar: {
     isVisible: true,
-    isWarningActive: world.lion.hunger.isStarving,
+    isWarningActive: false, //world.lion.hunger.isStarving,
   },
 });

@@ -1,7 +1,7 @@
-import { GameState, UpdateContext } from './game-world-types';
-import { interactionsDefinitions } from './interactions-definitions';
+import { GameWorldState, UpdateContext } from '../game-world-types';
+import { interactionsDefinitions } from '.';
 
-export function interactionsUpdate(gameState: GameState, updateContext: UpdateContext): void {
+export function interactionsUpdate(gameState: GameWorldState, updateContext: UpdateContext): void {
   gameState.entities.entities.forEach((source) => {
     gameState.entities.entities.forEach((target) => {
       if (source === target) {

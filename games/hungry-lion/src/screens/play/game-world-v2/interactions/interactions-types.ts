@@ -1,5 +1,5 @@
-import { Entity, EntityType } from './entities-types';
-import { UpdateContext } from './game-world-types';
+import { Entity, EntityType } from '../entities-types';
+import { UpdateContext } from '../game-world-types';
 
 export type InteractionDefinition = {
   sourceType?: EntityType;

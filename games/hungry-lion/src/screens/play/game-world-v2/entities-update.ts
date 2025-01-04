@@ -1,25 +1,51 @@
-import { Entities, Entity, EntityId, EntityType } from './entities-types';
-import { Vector2D } from './math-types';
+import { Entities, Entity, EntityId, EntityType, LionEntity } from './entities-types';
+import { UpdateContext } from './game-world-types';
+import { vectorAdd, vectorLength, vectorScale } from './math-utils';
 
-export function createEntities(): Entities {
-  return {
-    entities: new Map(),
-    nextEntityId: 1,
-  };
+export function updateEntities(state: Entities, updateContext: UpdateContext): void {
+  state.entities.forEach((entity) => {
+    // traction force
+    entity.forces.push(vectorScale(entity.velocity, -0.1));
+
+    entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
+
+    // zero velocity if it's too small
+    if (vectorLength(entity.velocity) < 0.001) {
+      entity.velocity = { x: 0, y: 0 };
+    } else {
+      entity.direction = Math.atan2(entity.velocity.y, entity.velocity.x);
+    }
+
+    entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
+
+    entity.forces = [];
+  });
 }
 
-export function createEntity(
+export function createEntities(): Entities {
+  const state = {
+    entities: new Map<EntityId, Entity>(),
+    nextEntityId: 1,
+  };
+
+  createEntity<LionEntity>(state, 'lion', { position: { x: 100, y: 100 }, isPlayer: true, target: {} });
+
+  return state;
+}
+
+export function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
-  position: Vector2D,
-  initialState?: Partial<Entity>,
-): Entity {
-  const entity: Entity = {
-    id: state.nextEntityId,
+  initialState: Partial<Entity> & Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction'>,
+): T {
+  const entity: T = {
+    id: state.nextEntityId++,
     type,
-    position,
+    velocity: { x: 0, y: 0 },
+    direction: 0,
+    forces: [],
     ...initialState,
-  };
+  } as unknown as T;
   state.entities.set(entity.id, entity);
   return entity;
 }

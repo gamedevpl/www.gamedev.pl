@@ -28,6 +28,15 @@ It works more or less, it has proper functional style.
 - helpers like math
 - agentic ai behavior
 
+## Missing Features
+
+The following features from game-world v1 are not yet implemented in game-world v2:
+
+- **Lion Hunger State**: The hunger mechanics including hunger level, starvation, and visual feedback.
+- **Prey Carrion Conversion**: The process of converting prey to carrion and the subsequent eating process.
+- **Threat Detection**: The logic for detecting threats and initiating fleeing behavior.
+- **Boundary Bouncing Logic**: The handling of entity movement at world boundaries.
+
 # Implementation plan
 
 1. Implement the new system entirely, ensure feature parity

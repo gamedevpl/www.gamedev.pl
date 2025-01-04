@@ -1,3 +1,6 @@
+import { EntityId } from '../game-world-v2/entities-types';
+import { Vector2D } from '../game-world-v2/math-types';
+
 export enum GameEvents {
   // Mouse input events
   MOUSE_MOVE = 'game:mouse-move',
@@ -15,11 +18,8 @@ export enum GameEvents {
 
 // Lion Movement Events
 export type LionTargetEvent = {
-  position: {
-    x: number;
-    y: number;
-  } | null;
-  preyId?: string | null; // Optional prey ID for chase targeting
+  position: Vector2D | undefined;
+  preyId?: EntityId | undefined;
 };
 
 export type CancelChaseEvent = {
