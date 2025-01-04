@@ -200,9 +200,8 @@ Responsibilities:
 
 ### Phase 1: Foundation
 
-1. Set up new directory structure
-2. Create base entity system
-3. Implement core utilities
+1. Create new entity system
+2. Implement core utilities
 
 ### Phase 2: Systems Migration
 
