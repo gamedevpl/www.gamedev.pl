@@ -153,4 +153,11 @@ When implementing prey behavior and rendering:
 2. Provide distinct visual representation for carrion
 3. Maintain consistency between behavior and rendering logic
 
+### Angle-Based Behavior Logic
+When implementing behavior logic that considers angles (e.g., prey fleeing behavior):
+1. Define angle thresholds as constants for clarity and maintainability
+2. Use vector math utilities to calculate angles between entities
+3. Adjust behavior parameters (e.g., detection distance) based on calculated angles
+4. Ensure smooth transitions between different behavior states based on angle thresholds
+
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.

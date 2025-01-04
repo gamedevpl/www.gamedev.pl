@@ -40,6 +40,11 @@
         *   ✅ Enhanced Prey Behavior
         *   ✅ Improved Prey Rendering
         *   ✅ Enhanced Prey Fleeing Behavior
+            *   ✅ Implemented fleeing behavior
+            *   ✅ Added lion proximity detection
+            *   ✅ Calculated fleeing direction
+            *   ✅ Set higher acceleration during fleeing
+            *   ✅ Integrated with existing entity update system
         *   ✅ Debug Rendering for Fleeing State
         *   ✅ Fixed Prey Fleeing Immediately on Click
         *   ✅ Panic and Group Behavior
@@ -66,6 +71,10 @@
             *   ✅ Implemented detailed state visualization
             *   ✅ Added conversion and eating progress indicators
             *   ✅ Enhanced debug panel with timing controls
+        *   ✅ Enhanced Fleeing Behavior
+            *   ✅ Added angle-based detection logic
+            *   ✅ Reduced detection distance when lion is behind prey
+            *   ✅ Updated fleeing state transitions
         *   ☐ Advanced Group Dynamics
             *   ☐ Implement leader-follower behavior
             *   ☐ Add group cohesion mechanics

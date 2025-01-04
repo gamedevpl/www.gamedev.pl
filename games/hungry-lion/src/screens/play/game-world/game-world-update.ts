@@ -5,7 +5,7 @@ import { interactionsUpdate } from './interactions/interactions-update';
 import { PreySpawnConfig, spawnPrey } from './prey-spawner';
 
 const DEFAULT_SPAWN_CONFIG: PreySpawnConfig = {
-  maxCount: 10,
+  maxCount: 20,
   minSpawnDistance: 100,
 };
 
