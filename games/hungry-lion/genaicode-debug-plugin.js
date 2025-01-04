@@ -1,6 +1,6 @@
 import fs from 'fs';
-const currentPromptPlugin = {
-  name: 'current-prompt-plugin',
+const genaicodeDebugPlugin = {
+  name: 'genaicode-debug-plugin',
   // Example implementation of generateContent hooks
   generateContentHook: async ([prompt]) => {
     fs.writeFileSync(
@@ -9,4 +9,4 @@ const currentPromptPlugin = {
     );
   },
 };
-export default currentPromptPlugin;
+export default genaicodeDebugPlugin;
