@@ -1,3 +1,4 @@
+import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
 import { Vector2D } from './math-types';
 
 export function vectorAdd(v1: Vector2D, v2: Vector2D): Vector2D {
@@ -54,4 +55,23 @@ export function vectorRotate(v: Vector2D, angle: number): Vector2D {
     x: v.x * cos - v.y * sin,
     y: v.x * sin + v.y * cos,
   };
+}
+
+export function calculateBoundaryForce(position: Vector2D, boundaryRange: number, boundaryStrength: number): Vector2D {
+  const force = { x: 0, y: 0 };
+
+  if (position.x < boundaryRange) {
+    force.x += boundaryStrength * (boundaryRange - position.x);
+  }
+  if (position.x > GAME_WORLD_WIDTH - boundaryRange) {
+    force.x -= boundaryStrength * (position.x - (GAME_WORLD_WIDTH - boundaryRange));
+  }
+  if (position.y < boundaryRange) {
+    force.y += boundaryStrength * (boundaryRange - position.y);
+  }
+  if (position.y > GAME_WORLD_HEIGHT - boundaryRange) {
+    force.y -= boundaryStrength * (position.y - (GAME_WORLD_HEIGHT - boundaryRange));
+  }
+
+  return force;
 }

@@ -1,11 +1,16 @@
 import { Entities, Entity, EntityId, EntityType, LionEntity } from './entities-types';
 import { UpdateContext } from './game-world-types';
-import { vectorAdd, vectorLength, vectorScale } from './math-utils';
+import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from './math-utils';
+import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from './game-world-consts';
 
 export function updateEntities(state: Entities, updateContext: UpdateContext): void {
   state.entities.forEach((entity) => {
     // traction force
     entity.forces.push(vectorScale(entity.velocity, -0.1));
+
+    // boundary forces
+    const boundaryForce = calculateBoundaryForce(entity.position, BOUNDARY_FORCE_RANGE, BOUNDARY_FORCE_STRENGTH);
+    entity.forces.push(boundaryForce);
 
     entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
 
