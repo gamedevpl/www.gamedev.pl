@@ -1,12 +1,12 @@
-import { GameWorldState } from '../game-world-v2/game-world-types';
+import { GameWorldState } from '../game-world/game-world-types';
 import { RenderState } from './render-state';
 import { drawGround } from './ground-renderer';
 import { renderPrey } from './prey-renderer';
 import { renderDebugInfo } from './debug-renderer';
-import { LION_WIDTH } from '../game-world/game-world-types';
-import { getLions, getPrey } from '../game-world-v2/game-world-query';
-import { LionEntity } from '../game-world-v2/entities-types';
-import { vectorLength } from '../game-world-v2/math-utils';
+import { getLions, getPrey } from '../game-world/game-world-query';
+import { LionEntity } from '../game-world/entities-types';
+import { vectorLength } from '../game-world/math-utils';
+import { LION_WIDTH } from '../game-world/game-world-consts';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;

@@ -1,7 +1,7 @@
-import { GameWorldState } from '../game-world-v2/game-world-types';
+import { GameWorldState } from '../game-world/game-world-types';
 import { devConfig } from '../dev/dev-config';
-import { getLions, getPrey } from '../game-world-v2/game-world-query';
-import { vectorLength } from '../game-world-v2/math-utils';
+import { getLions, getPrey } from '../game-world/game-world-query';
+import { vectorLength } from '../game-world/math-utils';
 
 export function renderDebugInfo(ctx: CanvasRenderingContext2D, world: GameWorldState) {
   const prey = getPrey(world);

@@ -1,6 +1,6 @@
 import { RefObject, useRef } from 'react';
 import { dispatchCustomEvent, useCustomEvent } from '../../utils/custom-events';
-import { GameWorldState } from './game-world-v2/game-world-types';
+import { GameWorldState } from './game-world/game-world-types';
 import { RenderState } from './game-render/render-state';
 import {
   GameEvents,
@@ -13,8 +13,8 @@ import {
   LionTargetEvent,
   CancelChaseEvent,
 } from './game-input/input-events';
-import { Entity } from './game-world-v2/entities-types';
-import { getPlayerLion, getPrey } from './game-world-v2/game-world-query';
+import { Entity } from './game-world/entities-types';
+import { getPlayerLion, getPrey } from './game-world/game-world-query';
 // import { getLions } from './game-world-v2/game-world-query';
 
 export function GameController({ gameStateRef }: GameControllerProps) {

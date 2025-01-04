@@ -1,4 +1,4 @@
-import { GameOverStats } from './game-world-v2/game-world-types';
+import { GameOverStats } from './game-world/game-world-types';
 import styled from 'styled-components';
 
 export function GameOverScreen({ stats, onRestart }: GameOverScreenProps) {

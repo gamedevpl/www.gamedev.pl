@@ -1,7 +1,7 @@
 import { useRef, RefObject, useEffect, PropsWithChildren } from 'react';
 import { useRafLoop, useWindowSize } from 'react-use';
 import { renderGame } from './game-render/game-renderer';
-import { GameWorldState } from './game-world-v2/game-world-types';
+import { GameWorldState } from './game-world/game-world-types';
 import styled from 'styled-components';
 import { RenderState } from './game-render/render-state';
 import { InputController } from './game-input/input-controller';

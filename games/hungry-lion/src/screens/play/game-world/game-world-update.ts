@@ -1,26 +1,37 @@
-import { GameWorldState } from './game-world-types';
-import { updateLion } from './lion-update';
-import { updateAllPrey } from './prey-update';
+import { agenticUpdate } from './agentic/agentic-update';
+import { createEntities, updateEntities } from './entities-update';
+import { GameWorldState, UpdateContext } from './game-world-types';
+import { interactionsUpdate } from './interactions/interactions-update';
+import { PreySpawnConfig, spawnPrey } from './prey-spawner';
 
-/**
- * Updates the entire game world state for one frame
- */
-export function updateGameWorld(state: GameWorldState, deltaTime: number): GameWorldState {
-  state.time += deltaTime;
+const DEFAULT_SPAWN_CONFIG: PreySpawnConfig = {
+  maxCount: 10,
+  minSpawnDistance: 100,
+};
 
-  if (!state.gameOver) {
-    // Update lion state including movement, hunger and prey catching
-    updateLion(state, deltaTime);
-    
-    // Update all prey entities
-    state.prey = updateAllPrey(state, deltaTime);
-
-    // Remove fully eaten prey from the game world
-    state.prey = state.prey.filter(prey => !prey.isEaten);
+export function gameWorldUpdate(gameState: GameWorldState, updateContext: UpdateContext): GameWorldState {
+  if (gameState.gameOver) {
+    return gameState;
   }
 
-  return state;
+  interactionsUpdate(gameState, updateContext);
+
+  agenticUpdate(gameState, updateContext);
+
+  updateEntities(gameState.entities, updateContext);
+
+  // Spawn new prey if needed
+  gameState.entities = spawnPrey(gameState.entities, gameState.spawnConfig);
+
+  gameState.time += updateContext.deltaTime;
+  return gameState;
 }
 
-// Re-export coordinate utilities for backward compatibility
-export { calculateWorldCoordinates, calculateInputPosition } from './coordinate-utils';
+export function gameWorldInit(): GameWorldState {
+  return {
+    entities: createEntities(),
+    time: 0,
+    gameOver: false,
+    spawnConfig: DEFAULT_SPAWN_CONFIG,
+  };
+}

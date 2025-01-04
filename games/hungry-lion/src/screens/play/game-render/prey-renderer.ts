@@ -1,5 +1,5 @@
 // import { devConfig } from '../dev/dev-config';
-import { PreyEntity } from '../game-world-v2/entities-types';
+import { PreyEntity } from '../game-world/entities-types';
 
 export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.save();

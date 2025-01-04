@@ -12,7 +12,7 @@ import {
   TouchRole,
 } from './input-events';
 import { RenderState, ViewportState } from '../game-render/render-state';
-import { GameWorldState } from '../game-world-v2/game-world-types';
+import { GameWorldState } from '../game-world/game-world-types';
 
 type InputControllerProps = {
   gameStateRef: RefObject<{

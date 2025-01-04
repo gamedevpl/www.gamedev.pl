@@ -1,14 +1,13 @@
 import { useRef, useState } from 'react';
 import { GameViewport } from './game-viewport';
-import { GameWorldState } from './game-world-v2/game-world-types';
+import { GameWorldState } from './game-world/game-world-types';
 import { useRafLoop } from 'react-use';
-import { gameWorldUpdate } from './game-world-v2/game-world-update';
+import { gameWorldUpdate } from './game-world/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
 import { InputController } from './game-input/input-controller';
-// import { createInitialState } from './game-world/game-world-init';
-import { gameWorldInit } from './game-world-v2/game-world-update';
+import { gameWorldInit } from './game-world/game-world-update';
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS
 const MAX_DELTA_TIME = 1000; // Maximum time step to prevent spiral of death

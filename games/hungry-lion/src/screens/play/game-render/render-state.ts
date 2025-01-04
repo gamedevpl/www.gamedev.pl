@@ -1,6 +1,6 @@
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-consts';
-import { GameWorldState } from '../game-world-v2/game-world-types';
-import { getLions } from '../game-world-v2/game-world-query';
+import { GameWorldState } from '../game-world/game-world-types';
+import { getLions } from '../game-world/game-world-query';
 
 export type ViewportState = {
   x: number;
