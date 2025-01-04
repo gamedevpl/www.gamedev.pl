@@ -12,13 +12,19 @@ export function updateEntities(state: Entities, updateContext: UpdateContext): v
     const boundaryForce = calculateBoundaryForce(entity.position, BOUNDARY_FORCE_RANGE, BOUNDARY_FORCE_STRENGTH);
     entity.forces.push(boundaryForce);
 
+    const accelerationForce = vectorScale(
+      { x: Math.cos(entity.direction), y: Math.sin(entity.direction) },
+      entity.acceleration,
+    );
+    entity.forces.push(accelerationForce);
+
     entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
+    // TODO: Introduce angular velocity
+    entity.direction = entity.targetDirection;
 
     // zero velocity if it's too small
     if (vectorLength(entity.velocity) < 0.001) {
       entity.velocity = { x: 0, y: 0 };
-    } else {
-      entity.direction = Math.atan2(entity.velocity.y, entity.velocity.x);
     }
 
     entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
@@ -41,13 +47,16 @@ export function createEntities(): Entities {
 export function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
-  initialState: Partial<Entity> & Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction'>,
+  initialState: Partial<Entity> &
+    Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'targetDirection' | 'acceleration'>,
 ): T {
   const entity: T = {
     id: state.nextEntityId++,
     type,
     velocity: { x: 0, y: 0 },
     direction: 0,
+    targetDirection: 0,
+    acceleration: 0,
     forces: [],
     ...initialState,
   } as unknown as T;

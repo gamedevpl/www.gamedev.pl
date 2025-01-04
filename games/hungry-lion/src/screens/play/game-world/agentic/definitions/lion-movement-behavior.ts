@@ -7,6 +7,8 @@ export const LION_MOVE_TO_TARGET: AgenticBehavior<LionEntity> = {
   perform: (_gameState, entity) => {
     if (!isLion(entity) || (!entity.target.position && !entity.target.entityId)) return;
 
+    entity.acceleration = 0;
+
     let targetPosition = entity.target.position;
 
     if (entity.target.entityId) {
@@ -26,9 +28,7 @@ export const LION_MOVE_TO_TARGET: AgenticBehavior<LionEntity> = {
       return;
     }
 
-    entity.forces.push({
-      x: (dx / distance) * 0.01,
-      y: (dy / distance) * 0.01,
-    });
+    entity.targetDirection = Math.atan2(dy, dx);
+    entity.acceleration = 0.01;
   },
 };

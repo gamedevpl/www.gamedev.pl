@@ -10,6 +10,8 @@ export interface Entity {
   type: EntityType;
   position: Vector2D;
   direction: number;
+  targetDirection: number;
+  acceleration: number;
   forces: Vector2D[];
   velocity: Vector2D;
 }
