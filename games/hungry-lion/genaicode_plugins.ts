@@ -92,43 +92,24 @@ async function generateContent(
 export const genaicodeTracker: Plugin = {
   name: 'genaicode-tracker',
 
-  // Planning post-hook: Modify the planning result
-  planningPostHook: async ({ result }) => {
+  // Planning pre-hook: Inject documentation review prompt
+  planningPreHook: async ({ prompt }) => {
     try {
-      const { getRcConfig } = await import('genaicode');
-
-      if (!result) {
-        return undefined;
-      }
-
-      // Ensure the tracker is updated with the new changes and used as the primary source of truth
-      const trackerUpdate = result.args!.affectedFiles.find((file) => file.filePath.endsWith('GENAICODE_TRACKER.md'));
-      if (!trackerUpdate) {
-        result.args!.affectedFiles.push({
-          reason: `Needs to be updated with the new changes and used as the primary source of truth for game design and development plans.
-GENAICODE_TRACKER.md is a markdown file which is a tree of features that were developed or are in development.`,
-          filePath: (await getRcConfig()).rootDir + '/GENAICODE_TRACKER.md',
-          dependencies: [],
-        });
-      }
-
-      // Ensure GENAICODE_INSTRUCTIONS.md is updated with the new changes
-      const instructionsUpdate = result.args!.affectedFiles.find((file) =>
-        file.filePath.endsWith('GENAICODE_INSTRUCTIONS.md'),
+      // Add documentation review prompt
+      return (
+        prompt +
+        '\n\n' +
+        '**DOCUMENTATION REVIEW:**\n' +
+        'Before finalizing the plan, ALWAYS review if updates are needed in:\n\n' +
+        '*   `GENAICODE_TRACKER.md`: to reflect task progress, new tasks, or changes to existing tasks.\n' +
+        '*   `GENAICODE_INSTRUCTIONS.md`: to capture new development patterns, process improvements, or best practices.\n\n' +
+        'Include these updates in the plan if relevant. This ensures our documentation stays current and useful.\n' +
+        'When including updates to the codegen plan, be verbose on the changes you want to make to the files.\n'
       );
-      if (!instructionsUpdate) {
-        result.args!.affectedFiles.push({
-          reason: `Needs to be updated in case if during the conversation we learn something new, changed our process, found a better way to do something, or there is other reason to update something in the instructions.`,
-          filePath: (await getRcConfig()).rootDir + '/GENAICODE_INSTRUCTIONS.md',
-          dependencies: [],
-        });
-      }
-
-      return result;
     } catch (error) {
-      console.error('Error in planning post-hook:', error);
-      // Return undefined to use original result in case of error
-      return undefined;
+      console.error('Error in planning pre-hook:', error);
+      // Return original prompt in case of error
+      return prompt;
     }
   },
 };
