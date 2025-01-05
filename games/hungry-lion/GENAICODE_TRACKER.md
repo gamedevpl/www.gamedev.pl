@@ -83,6 +83,11 @@
             *   ✅ Implemented health reduction when touched by lion
             *   ✅ Added force application towards lion
             *   ✅ Implemented conversion to carrion when health reaches 0
+        *   ✅ Natural Prey Movement Behavior
+            *   ✅ Added idle states where prey sometimes stand still
+            *   ✅ Implemented social behaviors where prey sometimes follow others
+            *   ✅ Added varied movement patterns with different speeds and directions
+            *   ✅ Integrated new behaviors with existing collision detection and boundary handling
         *   ☐ Advanced Group Dynamics
             *   ☐ Implement leader-follower behavior
             *   ☐ Add group cohesion mechanics

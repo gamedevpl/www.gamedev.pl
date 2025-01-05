@@ -40,11 +40,11 @@ export const PREY_FLEEING: AgenticBehavior<PreyEntity> = {
         entity.targetDirection = Math.atan2(normalizedDirection.y, normalizedDirection.x);
         entity.acceleration = FLEE_ACCELERATION;
         entity.state = 'fleeing';
-      } else {
-        entity.state = 'moving';
+      } else if (entity.state === 'fleeing') {
+        entity.state = 'idle';
       }
-    } else {
-      entity.state = 'moving';
+    } else if (entity.state === 'fleeing') {
+      entity.state = 'idle';
     }
   },
 };

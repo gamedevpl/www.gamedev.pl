@@ -168,4 +168,12 @@ When implementing carrion rendering:
 4. Ensure carrion rendering is consistent with game's visual style
 5. Keep rendering logic separate from behavior logic
 
+### Natural Prey Movement Patterns
+When implementing natural prey movement:
+1. Implement idle states with configurable probabilities
+2. Add social behaviors with configurable following probabilities
+3. Use varied movement patterns with different speeds and directions
+4. Ensure smooth integration with existing collision detection and boundary handling
+5. Maintain clear state transitions between different behaviors
+
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.

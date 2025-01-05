@@ -48,6 +48,8 @@ export function spawnPrey(entities: Entities, config: PreySpawnConfig): Entities
     position,
     state: 'idle',
     health: 100,
+    currentBehavior: 'idle',
+    lastBehaviorUpdate: 0,
   });
 
   return entities;

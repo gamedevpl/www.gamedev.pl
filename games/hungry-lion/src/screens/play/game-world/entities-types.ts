@@ -28,6 +28,8 @@ export interface PreyEntity extends Entity {
   type: 'prey';
   state: 'idle' | 'moving' | 'fleeing';
   health: number;
+  currentBehavior: 'idle' | 'moving';
+  lastBehaviorUpdate: number;
 }
 
 export interface CarrionEntity extends Entity {
