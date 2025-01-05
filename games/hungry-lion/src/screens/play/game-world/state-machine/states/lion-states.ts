@@ -11,11 +11,7 @@ const MOVE_ACCELERATION = 0.01;
 export type LionStateType = 'LION_IDLE' | 'LION_MOVING_TO_TARGET' | 'LION_CHASING';
 
 // Lion state data interface
-interface LionStateData extends BaseStateData {
-  targetPosition?: { x: number; y: number } | null;
-  targetEntityId?: number | null;
-  lastTargetUpdate?: number;
-}
+type LionStateData = BaseStateData;
 
 // State Definitions
 export const LION_IDLE_STATE: State<LionEntity, LionStateData> = {
@@ -31,7 +27,6 @@ export const LION_IDLE_STATE: State<LionEntity, LionStateData> = {
         nextState,
         data: {
           ...data,
-          lastTargetUpdate: context.updateContext.gameState.time,
         },
       };
     }
@@ -79,7 +74,6 @@ export const LION_MOVING_TO_TARGET_STATE: State<LionEntity, LionStateData> = {
       nextState: 'LION_MOVING_TO_TARGET',
       data: {
         ...data,
-        lastTargetUpdate: context.updateContext.gameState.time,
       },
     };
   },
@@ -111,8 +105,6 @@ export const LION_CHASING_STATE: State<LionEntity, LionStateData> = {
       nextState: 'LION_CHASING',
       data: {
         ...data,
-        targetEntityId: entity.target.entityId,
-        lastTargetUpdate: context.updateContext.gameState.time,
       },
     };
   },
