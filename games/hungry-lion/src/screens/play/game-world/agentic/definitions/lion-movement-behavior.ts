@@ -4,7 +4,7 @@ import { LionEntity } from '../../entities-types';
 
 export const LION_MOVE_TO_TARGET: AgenticBehavior<LionEntity> = {
   entityType: 'lion',
-  perform: (_gameState, entity) => {
+  perform: (entity, { gameState }) => {
     if (!isLion(entity) || (!entity.target.position && !entity.target.entityId)) return;
 
     entity.acceleration = 0;
@@ -12,7 +12,7 @@ export const LION_MOVE_TO_TARGET: AgenticBehavior<LionEntity> = {
     let targetPosition = entity.target.position;
 
     if (entity.target.entityId) {
-      const target = _gameState.entities.entities.get(entity.target.entityId);
+      const target = gameState.entities.entities.get(entity.target.entityId);
       if (!target) return;
 
       targetPosition = target.position;

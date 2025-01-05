@@ -2,8 +2,10 @@ import { Entities, Entity, EntityId, EntityType, LionEntity, PreyEntity, Carrion
 import { UpdateContext } from './game-world-types';
 import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from './math-utils';
 import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from './game-world-consts';
+import { spawnPrey } from './prey-spawner';
 
-export function updateEntities(state: Entities, updateContext: UpdateContext): void {
+export function updateEntities(updateContext: UpdateContext): void {
+  const state = updateContext.gameState.entities;
   // First handle prey-to-carrion conversion
   state.entities.forEach((entity) => {
     if (entity.type === 'prey') {
@@ -52,6 +54,9 @@ export function updateEntities(state: Entities, updateContext: UpdateContext): v
 
     entity.forces = [];
   });
+
+  // Spawn new prey if needed
+  spawnPrey(state);
 }
 
 export function createEntities(): Entities {

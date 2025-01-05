@@ -47,7 +47,8 @@ export function PlayScreen() {
       const stepTime = Math.min(deltaTime, UPDATE_STEP);
 
       // Update game world
-      gameStateRef.current.gameWorldState = gameWorldUpdate(gameStateRef.current.gameWorldState, {
+      gameStateRef.current.gameWorldState = gameWorldUpdate({
+        gameState: gameStateRef.current.gameWorldState,
         deltaTime: stepTime,
       });
 

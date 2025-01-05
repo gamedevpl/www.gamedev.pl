@@ -6,6 +6,7 @@ import { renderDebugInfo } from './debug-renderer';
 import { getLions, getPrey, getCarrion } from '../game-world/game-world-query';
 import { drawLion } from './entity-renderers/lion-renderer';
 import { drawCarrion } from './entity-renderers/carrion-renderer';
+import { renderEnvironment } from './environment-renderer';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -15,6 +16,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Draw the ground
   drawGround(ctx, renderState);
+
+  // Render environment
+  renderEnvironment(ctx, world.environment);
 
   // Render all carrion entities
   getCarrion(world).forEach((c) => drawCarrion(ctx, c));

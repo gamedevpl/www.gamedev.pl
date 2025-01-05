@@ -1,11 +1,16 @@
 import { Entities } from './entities-types';
-import { PreySpawnConfig } from './prey-spawner';
+import { Environment } from './environment-types';
 
 export type GameWorldState = {
   /**
    * The entities in the game.
    */
   entities: Entities;
+
+  /**
+   * Environment state.
+   */
+  environment: Environment;
 
   /**
    * Time since the game started in milliseconds.
@@ -21,14 +26,14 @@ export type GameWorldState = {
    * Stats for the game over screen.
    */
   gameOverStats?: GameOverStats;
-
-  /**
-   * Configuration for prey spawning mechanics
-   */
-  spawnConfig: PreySpawnConfig;
 };
 
 export type UpdateContext = {
+  /**
+   * Game world state.
+   */
+  gameState: GameWorldState;
+
   /**
    * Time since the last update in milliseconds.
    */

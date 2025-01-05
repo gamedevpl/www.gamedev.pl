@@ -1,37 +1,31 @@
 import { agenticUpdate } from './agentic/agentic-update';
 import { createEntities, updateEntities } from './entities-update';
+import { environmentInit, environmentUpdate } from './environment-update';
 import { GameWorldState, UpdateContext } from './game-world-types';
 import { interactionsUpdate } from './interactions/interactions-update';
-import { PreySpawnConfig, spawnPrey } from './prey-spawner';
 
-const DEFAULT_SPAWN_CONFIG: PreySpawnConfig = {
-  maxCount: 20,
-  minSpawnDistance: 100,
-};
-
-export function gameWorldUpdate(gameState: GameWorldState, updateContext: UpdateContext): GameWorldState {
-  if (gameState.gameOver) {
-    return gameState;
+export function gameWorldUpdate(updateContext: UpdateContext): GameWorldState {
+  if (updateContext.gameState.gameOver) {
+    return updateContext.gameState;
   }
 
-  interactionsUpdate(gameState, updateContext);
+  interactionsUpdate(updateContext);
 
-  agenticUpdate(gameState, updateContext);
+  agenticUpdate(updateContext);
 
-  updateEntities(gameState.entities, updateContext);
+  updateEntities(updateContext);
 
-  // Spawn new prey if needed
-  gameState.entities = spawnPrey(gameState.entities, gameState.spawnConfig);
+  environmentUpdate(updateContext);
 
-  gameState.time += updateContext.deltaTime;
-  return gameState;
+  updateContext.gameState.time += updateContext.deltaTime;
+  return updateContext.gameState;
 }
 
 export function gameWorldInit(): GameWorldState {
   return {
     entities: createEntities(),
+    environment: environmentInit(),
     time: 0,
     gameOver: false,
-    spawnConfig: DEFAULT_SPAWN_CONFIG,
   };
 }

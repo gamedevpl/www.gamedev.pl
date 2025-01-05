@@ -9,7 +9,7 @@ const FLEE_ANGLE_THRESHOLD = Math.PI / 3; // 60 degrees
 
 export const PREY_FLEEING: AgenticBehavior<PreyEntity> = {
   entityType: 'prey',
-  perform: (gameState, entity) => {
+  perform: (entity, { gameState }) => {
     const lions = getLions(gameState);
     let nearestLion = null;
     let minDistance = Infinity;

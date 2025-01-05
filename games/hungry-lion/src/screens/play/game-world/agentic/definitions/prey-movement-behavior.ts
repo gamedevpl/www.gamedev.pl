@@ -10,7 +10,7 @@ const MAX_SPEED_VARIATION = 0.005; // Maximum speed variation from base speed
 // Basic prey movement with natural behaviors
 export const PREY_MOVEMENT: AgenticBehavior<PreyEntity> = {
   entityType: 'prey',
-  perform: (gameState, entity) => {
+  perform: (entity, { gameState }) => {
     if (entity.state === 'fleeing') {
       return;
     }

@@ -3,17 +3,10 @@ import { createEntity } from './entities-update';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
 import { Vector2D } from './math-types';
 
-export interface PreySpawnConfig {
-  /**
-   * Maximum number of prey entities allowed in the game world
-   */
-  maxCount: number;
-
-  /**
-   * Minimum distance from other entities for spawning new prey
-   */
-  minSpawnDistance?: number;
-}
+const DEFAULT_SPAWN_CONFIG = {
+  maxCount: 20,
+  minSpawnDistance: 100,
+};
 
 /**
  * Generates a random position within game world bounds
@@ -31,7 +24,7 @@ function generateRandomPosition(): Vector2D {
  * @param config Spawn configuration
  * @returns Updated entities state
  */
-export function spawnPrey(entities: Entities, config: PreySpawnConfig): Entities {
+export function spawnPrey(entities: Entities, config = DEFAULT_SPAWN_CONFIG): Entities {
   // Count existing prey
   const preyCount = Array.from(entities.entities.values()).filter((entity) => entity.type === 'prey').length;
 
@@ -41,6 +34,7 @@ export function spawnPrey(entities: Entities, config: PreySpawnConfig): Entities
   }
 
   // Generate random position
+  // TODO: Make sure prey is not spawned on water or other entities
   const position = generateRandomPosition();
 
   // Create new prey entity
