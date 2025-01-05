@@ -17,7 +17,7 @@ export function preyUpdate(entity: Entity, updateContext: UpdateContext, state: 
   }
 
   // if state eating, and on grass sector, consume grass, increase health
-  if (prey.state === 'eating' && prey.hungerLevel < 100) {
+  if (prey.acceleration === 0 && prey.hungerLevel < 100) {
     const grassSector = getSectorAtEntity<GrassSector>(updateContext.gameState.environment, prey, 'grass');
     if (grassSector && grassSector.density > 0) {
       prey.hungerLevel += 0.15 * updateContext.deltaTime;
@@ -27,7 +27,7 @@ export function preyUpdate(entity: Entity, updateContext: UpdateContext, state: 
   }
 
   // if state drinking, and on water sector, drink water, increase health
-  if (prey.state === 'drinking' && prey.thirstLevel < 100) {
+  if (prey.acceleration === 0 && prey.thirstLevel < 100) {
     const waterSector = getSectorAtEntity(updateContext.gameState.environment, prey, 'water');
     if (waterSector) {
       prey.thirstLevel += 0.15 * updateContext.deltaTime;
@@ -35,10 +35,10 @@ export function preyUpdate(entity: Entity, updateContext: UpdateContext, state: 
     }
   }
 
-  if (prey.state === 'fleeing') {
-    prey.staminaLevel = Math.max(prey.staminaLevel - 0.01 * updateContext.deltaTime, 0);
+  if (prey.acceleration > 0) {
+    prey.staminaLevel = Math.max(prey.staminaLevel - 0.001 * updateContext.deltaTime, 0);
   } else {
-    prey.staminaLevel = Math.min(prey.staminaLevel + 0.01 * updateContext.deltaTime, 100);
+    prey.staminaLevel = Math.min(prey.staminaLevel + 0.1 * updateContext.deltaTime, 100);
   }
 
   if (prey.health <= 0) {

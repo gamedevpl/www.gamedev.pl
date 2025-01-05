@@ -31,6 +31,6 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces = [];
 
   if (entity.stateMachine) {
-    entity.stateMachine = stateUpdate(...entity.stateMachine);
+    entity.stateMachine = stateUpdate(...entity.stateMachine, { entity, updateContext });
   }
 }

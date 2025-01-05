@@ -43,6 +43,14 @@ export function DevConfigPanel() {
           Debug vitals
         </ToggleContainer>
       </Section>
+      <ToggleContainer>
+        <ToggleInput
+          type="checkbox"
+          checked={config.debugStateMachine}
+          onChange={() => handleToggle('debugStateMachine')}
+        />
+        Debug state
+      </ToggleContainer>
     </Panel>
   );
 }

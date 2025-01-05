@@ -12,7 +12,7 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.rotate(prey.direction);
 
   // Add slight wobble effect for fleeing state
-  if (prey.state === 'fleeing') {
+  if (prey.stateMachine[0] === 'PREY_FLEEING') {
     const wobble = Math.sin(Date.now() / 100) * 0.1;
     ctx.rotate(wobble);
   }
@@ -35,22 +35,22 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   const healthPercentage = prey.health / 100;
   let color: string;
 
-  if (prey.state === 'fleeing') {
+  if (prey.stateMachine[0] === 'PREY_FLEEING') {
     // Pulsing red effect for fleeing
     const pulseIntensity = Math.sin(Date.now() / 100) * 0.3 + 0.7;
     color = `rgba(255, 0, 0, ${pulseIntensity * healthPercentage})`;
-  } else if (prey.state === 'eating') {
+  } else if (prey.stateMachine[0] === 'PREY_EATING') {
     // Green pulsing effect while eating
     const eatPulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
     color = `rgba(0, 255, 0, ${eatPulse * healthPercentage})`;
-  } else if (prey.state === 'drinking') {
+  } else if (prey.stateMachine[0] === 'PREY_DRINKING') {
     // Blue pulsing effect while drinking
     const drinkPulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
     color = `rgba(0, 191, 255, ${drinkPulse * healthPercentage})`;
   } else if (prey.hungerLevel <= CRITICAL_HUNGER || prey.thirstLevel <= CRITICAL_THIRST) {
     // Yellowish color for critical needs
     color = `rgba(255, 191, 0, ${healthPercentage})`;
-  } else if (prey.state === 'moving') {
+  } else if (prey.stateMachine[0] === 'PREY_MOVING') {
     color = `rgba(255, 200, 0, ${0.8 * healthPercentage})`;
   } else {
     color = `rgba(0, 200, 0, ${healthPercentage})`;
@@ -60,8 +60,8 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.fill();
 
   // Add border with state-dependent style
-  ctx.strokeStyle = prey.state === 'fleeing' ? 'darkred' : 'black';
-  ctx.lineWidth = prey.state === 'fleeing' ? 3 : 2;
+  ctx.strokeStyle = prey.stateMachine[0] === 'PREY_FLEEING' ? 'darkred' : 'black';
+  ctx.lineWidth = prey.stateMachine[0] === 'PREY_FLEEING' ? 3 : 2;
   ctx.stroke();
 
   // Draw eyes to indicate direction
@@ -86,7 +86,7 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.fill();
 
   // Add eating/drinking animation effects
-  if (prey.state === 'eating') {
+  if (prey.stateMachine[0] === 'PREY_EATING') {
     // Draw munching animation
     const munchPhase = Math.sin(Date.now() / 100);
     ctx.beginPath();
@@ -94,7 +94,7 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
     ctx.strokeStyle = 'green';
     ctx.lineWidth = 2;
     ctx.stroke();
-  } else if (prey.state === 'drinking') {
+  } else if (prey.stateMachine[0] === 'PREY_DRINKING') {
     // Draw drinking ripples
     const ripplePhase = Date.now() / 200;
     for (let i = 0; i < 3; i++) {

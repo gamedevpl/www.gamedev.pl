@@ -4,6 +4,9 @@
 export interface DevConfig {
   // Setting to enable debug rendering of vital information
   debugVitals: boolean;
+
+  // Setin to enable state machine debugging
+  debugStateMachine: boolean;
 }
 
 /**
@@ -11,6 +14,7 @@ export interface DevConfig {
  */
 const DEFAULT_CONFIG: DevConfig = {
   debugVitals: false,
+  debugStateMachine: false,
 };
 
 /**

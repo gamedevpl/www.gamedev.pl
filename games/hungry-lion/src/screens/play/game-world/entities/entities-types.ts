@@ -29,8 +29,6 @@ export interface LionEntity extends Entity {
 
 export interface PreyEntity extends Entity {
   type: 'prey';
-  /** Current behavioral state of the prey */
-  state: 'idle' | 'moving' | 'fleeing' | 'eating' | 'drinking';
   /** Health level (0-100). At 0, prey becomes carrion */
   health: number;
   /** Hunger level (0-100). At 0, health starts decreasing */

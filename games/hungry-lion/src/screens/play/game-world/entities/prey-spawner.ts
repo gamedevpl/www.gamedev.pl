@@ -48,7 +48,6 @@ export function preySpawn(entities: Entities, config = DEFAULT_SPAWN_CONFIG): En
   // Create new prey entity with initialized hunger and thirst
   createEntity<PreyEntity>(entities, 'prey', {
     position,
-    state: 'idle',
     stateMachine: createPreyStateMachine(),
     health: 100,
     // Initialize hunger and thirst levels randomly within configured ranges

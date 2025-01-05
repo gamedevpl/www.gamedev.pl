@@ -1,4 +1,3 @@
-import { agenticUpdate } from './agentic/agentic-update';
 import { createEntities, entitiesUpdate } from './entities/entities-update';
 import { environmentInit, environmentUpdate } from './environment/environment-update';
 import { GameWorldState, UpdateContext } from './game-world-types';
@@ -10,8 +9,6 @@ export function gameWorldUpdate(updateContext: UpdateContext): GameWorldState {
   }
 
   interactionsUpdate(updateContext);
-
-  agenticUpdate(updateContext);
 
   entitiesUpdate(updateContext);
 
