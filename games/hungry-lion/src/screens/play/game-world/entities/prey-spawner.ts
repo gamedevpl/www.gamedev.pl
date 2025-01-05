@@ -2,7 +2,7 @@ import { Entities, PreyEntity } from './entities-types';
 import { createEntity } from './entities-update';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world-consts';
 import { Vector2D } from '../utils/math-types';
-import { createPreyStateMachine } from '../state-machine/states/prey-states';
+import { createPreyStateMachine } from '../state-machine/states/prey';
 
 const DEFAULT_SPAWN_CONFIG = {
   maxCount: 20,

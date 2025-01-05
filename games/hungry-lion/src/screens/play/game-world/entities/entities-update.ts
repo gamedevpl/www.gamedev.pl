@@ -4,7 +4,7 @@ import { preySpawn } from './prey-spawner';
 import { entityUpdate } from './entity-update';
 import { carrionUpdate } from './carrion-update';
 import { preyUpdate } from './prey-update';
-import { createLionStateMachine } from '../state-machine/states/lion-states';
+import { createLionStateMachine } from '../state-machine/states/lion';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
