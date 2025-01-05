@@ -50,9 +50,9 @@ export function spawnPrey(entities: Entities, config = DEFAULT_SPAWN_CONFIG): En
     state: 'idle',
     health: 100,
     // Initialize hunger and thirst levels randomly within configured ranges
-    hungerLevel: randomInRange(50, 100),
-    thirstLevel: randomInRange(50, 100),
-    staminaLevel: 100,
+    hungerLevel: randomInRange(25, 100),
+    thirstLevel: randomInRange(25, 100),
+    staminaLevel: randomInRange(25, 75),
   });
 
   return entities;

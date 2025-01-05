@@ -41,6 +41,12 @@ export function updateEntities(updateContext: UpdateContext): void {
         }
       }
 
+      if (prey.state === 'fleeing') {
+        prey.staminaLevel = Math.max(prey.staminaLevel - 0.01 * updateContext.deltaTime, 0);
+      } else {
+        prey.staminaLevel = Math.min(prey.staminaLevel + 0.01 * updateContext.deltaTime, 100);
+      }
+
       if (prey.health <= 0) {
         state.entities.delete(prey.id);
         createEntity<CarrionEntity>(state, 'carrion', {

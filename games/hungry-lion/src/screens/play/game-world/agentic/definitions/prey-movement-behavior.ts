@@ -2,7 +2,7 @@ import { AgenticBehavior } from '../agentic-types';
 import { PreyEntity } from '../../entities-types';
 
 // Constants for behavior parameters
-const IDLE_CHANCE = 0.1; // 10% chance to be idle
+const IDLE_CHANCE = 0.5; // 50% chance to be idle
 const MAX_SPEED_VARIATION = 0.005; // Maximum speed variation from base speed
 
 // Basic prey movement with natural behaviors
@@ -14,7 +14,7 @@ export const PREY_MOVEMENT: AgenticBehavior<PreyEntity> = {
       entity.state === 'eating' ||
       entity.state === 'drinking' ||
       entity.thirstLevel < 30 ||
-      entity.hungerLevel > 30
+      entity.hungerLevel < 30
     ) {
       return;
     }

@@ -38,7 +38,7 @@ export const PREY_FLEEING: AgenticBehavior<PreyEntity> = {
       // If a lion is within adjusted flee distance, flee from it
       if (minDistance < adjustedFleeDistance) {
         entity.targetDirection = Math.atan2(normalizedDirection.y, normalizedDirection.x);
-        entity.acceleration = FLEE_ACCELERATION;
+        entity.acceleration = (FLEE_ACCELERATION * entity.staminaLevel) / 100;
         entity.state = 'fleeing';
       } else if (entity.state === 'fleeing') {
         entity.state = 'idle';
