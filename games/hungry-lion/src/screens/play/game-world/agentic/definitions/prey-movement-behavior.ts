@@ -2,35 +2,28 @@ import { AgenticBehavior } from '../agentic-types';
 import { PreyEntity } from '../../entities-types';
 
 // Constants for behavior parameters
-const IDLE_CHANCE = 0.4; // 40% chance to be idle
-const MIN_MOVE_DURATION = 1000; // Minimum move duration in ms
-const MAX_MOVE_DURATION = 5000; // Maximum move duration in ms
+const IDLE_CHANCE = 0.1; // 10% chance to be idle
 const MAX_SPEED_VARIATION = 0.005; // Maximum speed variation from base speed
 
 // Basic prey movement with natural behaviors
 export const PREY_MOVEMENT: AgenticBehavior<PreyEntity> = {
   entityType: 'prey',
-  perform: (entity, { gameState }) => {
-    if (entity.state === 'fleeing') {
+  perform: (entity) => {
+    if (
+      entity.state === 'fleeing' ||
+      entity.state === 'eating' ||
+      entity.state === 'drinking' ||
+      entity.thirstLevel < 30 ||
+      entity.hungerLevel > 30
+    ) {
       return;
     }
-    // Only apply movement if not fleeing
-    // Handle idle state
-    if (!entity.lastBehaviorUpdate) {
-      entity.lastBehaviorUpdate = gameState.time;
-    }
 
-    // Check if it's time to change behavior
-    const now = gameState.time;
-    if (now - entity.lastBehaviorUpdate > (entity.currentBehavior === 'idle' ? MIN_MOVE_DURATION : MAX_MOVE_DURATION)) {
-      entity.lastBehaviorUpdate = now;
-      entity.currentBehavior = Math.random() < IDLE_CHANCE ? 'idle' : 'moving';
-    }
+    entity.state = Math.random() < IDLE_CHANCE ? 'idle' : 'moving';
 
-    if (entity.currentBehavior === 'idle') {
+    if (entity.state === 'idle') {
       // Idle state - no movement
       entity.acceleration = 0;
-      entity.state = 'idle';
     } else {
       // Moving state
       entity.state = 'moving';

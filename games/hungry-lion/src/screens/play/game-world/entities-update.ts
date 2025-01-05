@@ -3,6 +3,8 @@ import { UpdateContext } from './game-world-types';
 import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from './math-utils';
 import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from './game-world-consts';
 import { spawnPrey } from './prey-spawner';
+import { getSectorAtEntity } from './environment-query';
+import { GrassSector } from './environment-types';
 
 export function updateEntities(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -10,19 +12,51 @@ export function updateEntities(updateContext: UpdateContext): void {
   state.entities.forEach((entity) => {
     if (entity.type === 'prey') {
       const prey = entity as PreyEntity;
+
+      // update hunger and thirst levels
+      prey.hungerLevel = Math.max(prey.hungerLevel - 0.001 * updateContext.deltaTime, 0);
+      prey.thirstLevel = Math.max(prey.thirstLevel - 0.001 * updateContext.deltaTime, 0);
+
+      // hungry or thirsty reduces health
+      if (prey.hungerLevel <= 0 || prey.thirstLevel <= 0) {
+        prey.health -= 0.001 * updateContext.deltaTime;
+      }
+
+      // if state eating, and on grass sector, consume grass, increase health
+      if (prey.state === 'eating' && prey.hungerLevel < 100) {
+        const grassSector = getSectorAtEntity<GrassSector>(updateContext.gameState.environment, prey, 'grass');
+        if (grassSector && grassSector.density > 0) {
+          prey.hungerLevel += 0.15 * updateContext.deltaTime;
+          prey.health += 0.01 * updateContext.deltaTime;
+          grassSector.density -= 0.001 * updateContext.deltaTime;
+        }
+      }
+
+      // if state drinking, and on water sector, drink water, increase health
+      if (prey.state === 'drinking' && prey.thirstLevel < 100) {
+        const waterSector = getSectorAtEntity(updateContext.gameState.environment, prey, 'water');
+        if (waterSector) {
+          prey.thirstLevel += 0.15 * updateContext.deltaTime;
+          prey.health += 0.01 * updateContext.deltaTime;
+        }
+      }
+
       if (prey.health <= 0) {
         state.entities.delete(prey.id);
         createEntity<CarrionEntity>(state, 'carrion', {
           position: prey.position,
           direction: prey.direction,
           food: 100,
+          decay: 100,
         });
       }
     }
 
     if (entity.type === 'carrion') {
       const carrion = entity as CarrionEntity;
-      if (carrion.food <= 0) {
+      // decay
+      carrion.decay -= 0.01 * updateContext.deltaTime;
+      if (carrion.food <= 0 || carrion.decay <= 0) {
         state.entities.delete(carrion.id);
         return;
       }

@@ -6,7 +6,7 @@ export type Environment = {
 
 export type SectorType = 'water' | 'grass';
 
-interface BaseSector {
+export interface BaseSector {
   rect: Rect2D;
   type: SectorType;
 }

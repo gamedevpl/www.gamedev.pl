@@ -1,5 +1,8 @@
-// import { devConfig } from '../dev/dev-config';
 import { PreyEntity } from '../../game-world/entities-types';
+
+// Constants for rendering
+const CRITICAL_HUNGER = 20;
+const CRITICAL_THIRST = 15;
 
 export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.save();
@@ -28,15 +31,29 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.beginPath();
   ctx.rect(-15, -15, 30, 30);
 
-  // Dynamic color based on state and health
+  // Dynamic color based on state, health, and survival needs
   const healthPercentage = prey.health / 100;
-  let color = `rgba(0, 200, 0, ${healthPercentage})`;
+  let color: string;
+
   if (prey.state === 'fleeing') {
     // Pulsing red effect for fleeing
     const pulseIntensity = Math.sin(Date.now() / 100) * 0.3 + 0.7;
     color = `rgba(255, 0, 0, ${pulseIntensity * healthPercentage})`;
+  } else if (prey.state === 'eating') {
+    // Green pulsing effect while eating
+    const eatPulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+    color = `rgba(0, 255, 0, ${eatPulse * healthPercentage})`;
+  } else if (prey.state === 'drinking') {
+    // Blue pulsing effect while drinking
+    const drinkPulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+    color = `rgba(0, 191, 255, ${drinkPulse * healthPercentage})`;
+  } else if (prey.hungerLevel <= CRITICAL_HUNGER || prey.thirstLevel <= CRITICAL_THIRST) {
+    // Yellowish color for critical needs
+    color = `rgba(255, 191, 0, ${healthPercentage})`;
   } else if (prey.state === 'moving') {
     color = `rgba(255, 200, 0, ${0.8 * healthPercentage})`;
+  } else {
+    color = `rgba(0, 200, 0, ${healthPercentage})`;
   }
 
   ctx.fillStyle = color;
@@ -68,8 +85,27 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
   ctx.fillStyle = 'black';
   ctx.fill();
 
-  // Reset rotation for debug text
-  ctx.rotate(-prey.direction);
+  // Add eating/drinking animation effects
+  if (prey.state === 'eating') {
+    // Draw munching animation
+    const munchPhase = Math.sin(Date.now() / 100);
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * munchPhase);
+    ctx.strokeStyle = 'green';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (prey.state === 'drinking') {
+    // Draw drinking ripples
+    const ripplePhase = Date.now() / 200;
+    for (let i = 0; i < 3; i++) {
+      const radius = ((ripplePhase + i * 2) % 6) + 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0, 191, 255, ${0.5 - radius / 12})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
 
   ctx.restore();
 }

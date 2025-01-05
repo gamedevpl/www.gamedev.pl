@@ -26,15 +26,22 @@ export interface LionEntity extends Entity {
 
 export interface PreyEntity extends Entity {
   type: 'prey';
-  state: 'idle' | 'moving' | 'fleeing';
+  /** Current behavioral state of the prey */
+  state: 'idle' | 'moving' | 'fleeing' | 'eating' | 'drinking';
+  /** Health level (0-100). At 0, prey becomes carrion */
   health: number;
-  currentBehavior: 'idle' | 'moving';
-  lastBehaviorUpdate: number;
+  /** Hunger level (0-100). At 0, health starts decreasing */
+  hungerLevel: number;
+  /** Thirst level (0-100). At 0, health starts decreasing */
+  thirstLevel: number;
+  /** Stamina level (0-100). At 0, prey can't move */
+  staminaLevel: number;
 }
 
 export interface CarrionEntity extends Entity {
   type: 'carrion';
   food: number;
+  decay: number;
 }
 
 export type Entities = {

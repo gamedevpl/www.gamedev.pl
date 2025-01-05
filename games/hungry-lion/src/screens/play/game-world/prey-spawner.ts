@@ -9,6 +9,13 @@ const DEFAULT_SPAWN_CONFIG = {
 };
 
 /**
+ * Generates a random value within a range
+ */
+function randomInRange(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+/**
  * Generates a random position within game world bounds
  */
 function generateRandomPosition(): Vector2D {
@@ -37,13 +44,15 @@ export function spawnPrey(entities: Entities, config = DEFAULT_SPAWN_CONFIG): En
   // TODO: Make sure prey is not spawned on water or other entities
   const position = generateRandomPosition();
 
-  // Create new prey entity
+  // Create new prey entity with initialized hunger and thirst
   createEntity<PreyEntity>(entities, 'prey', {
     position,
     state: 'idle',
     health: 100,
-    currentBehavior: 'idle',
-    lastBehaviorUpdate: 0,
+    // Initialize hunger and thirst levels randomly within configured ranges
+    hungerLevel: randomInRange(50, 100),
+    thirstLevel: randomInRange(50, 100),
+    staminaLevel: 100,
   });
 
   return entities;
