@@ -1,5 +1,5 @@
 import { AgenticBehavior } from '../agentic-types';
-import { PreyEntity } from '../../entities-types';
+import { PreyEntity } from '../../entities/entities-types';
 
 // Constants for behavior parameters
 const IDLE_CHANCE = 0.5; // 50% chance to be idle

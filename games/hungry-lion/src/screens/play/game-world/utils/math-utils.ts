@@ -1,4 +1,4 @@
-import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
+import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world-consts';
 import { Vector2D } from './math-types';
 
 export function vectorAdd(v1: Vector2D, v2: Vector2D): Vector2D {

@@ -1,6 +1,6 @@
 import { agenticUpdate } from './agentic/agentic-update';
-import { createEntities, updateEntities } from './entities-update';
-import { environmentInit, environmentUpdate } from './environment-update';
+import { createEntities, updateEntities } from './entities/entities-update';
+import { environmentInit, environmentUpdate } from './environment/environment-update';
 import { GameWorldState, UpdateContext } from './game-world-types';
 import { interactionsUpdate } from './interactions/interactions-update';
 

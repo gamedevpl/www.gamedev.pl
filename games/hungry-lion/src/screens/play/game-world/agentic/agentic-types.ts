@@ -1,4 +1,4 @@
-import { Entity, EntityType } from '../entities-types';
+import { Entity, EntityType } from '../entities/entities-types';
 import { UpdateContext } from '../game-world-types';
 
 export interface AgenticBehavior<T extends Entity> {

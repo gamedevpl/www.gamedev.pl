@@ -1,7 +1,7 @@
-import { Entity } from './entities-types';
+import { Entity } from '../entities/entities-types';
 import { Environment, Sector, SectorType } from './environment-types';
-import { Rect2D } from './math-types';
-import { vectorDistance } from './math-utils';
+import { Rect2D } from '../utils/math-types';
+import { vectorDistance } from '../utils/math-utils';
 
 export function getOverlappingSectors(environment: Environment, rect: Rect2D): Sector[] {
   return environment.sectors.filter((sector) => {

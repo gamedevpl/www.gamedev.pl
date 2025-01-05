@@ -1,6 +1,6 @@
-import { LionEntity } from '../../game-world/entities-types';
+import { LionEntity } from '../../game-world/entities/entities-types';
 import { LION_WIDTH } from '../../game-world/game-world-consts';
-import { vectorLength } from '../../game-world/math-utils';
+import { vectorLength } from '../../game-world/utils/math-utils';
 
 export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
   const width = LION_WIDTH;

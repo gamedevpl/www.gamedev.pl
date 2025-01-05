@@ -1,6 +1,6 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../math-utils';
-import { PreyEntity } from '../../entities-types';
+import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
+import { PreyEntity } from '../../entities/entities-types';
 
 const HEALTH_DECREMENT = 1;
 const FORCE_STRENGTH = 0.005;

@@ -1,4 +1,4 @@
-import { CarrionEntity } from '../../game-world/entities-types';
+import { CarrionEntity } from '../../game-world/entities/entities-types';
 
 export function drawCarrion(ctx: CanvasRenderingContext2D, carrion: CarrionEntity) {
   const width = 30,

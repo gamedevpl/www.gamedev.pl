@@ -1,10 +1,10 @@
 import { Entities, Entity, EntityId, EntityType, LionEntity, PreyEntity, CarrionEntity } from './entities-types';
-import { UpdateContext } from './game-world-types';
-import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from './math-utils';
-import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from './game-world-consts';
-import { spawnPrey } from './prey-spawner';
-import { getSectorAtEntity } from './environment-query';
-import { GrassSector } from './environment-types';
+import { UpdateContext } from '../game-world-types';
+import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from '../utils/math-utils';
+import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from '../game-world-consts';
+import { spawnPrey } from '../prey-spawner';
+import { getSectorAtEntity } from '../environment/environment-query';
+import { GrassSector } from '../environment/environment-types';
 
 export function updateEntities(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;

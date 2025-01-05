@@ -1,6 +1,6 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance } from '../../math-utils';
-import { CarrionEntity } from '../../entities-types';
+import { vectorDistance } from '../../utils/math-utils';
+import { CarrionEntity } from '../../entities/entities-types';
 
 const FOOD_CONSUMPTION_RATE = 0.25;
 

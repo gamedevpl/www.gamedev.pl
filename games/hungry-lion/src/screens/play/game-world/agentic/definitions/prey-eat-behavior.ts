@@ -1,6 +1,6 @@
-import { PreyEntity } from '../../entities-types';
+import { PreyEntity } from '../../entities/entities-types';
 import { AgenticBehavior } from '../agentic-types';
-import { findClosestSector, getSectorAtEntity } from '../../environment-query';
+import { findClosestSector, getSectorAtEntity } from '../../environment/environment-query';
 
 const MAX_SPEED_VARIATION = 0.005; // Maximum speed variation from base speed
 

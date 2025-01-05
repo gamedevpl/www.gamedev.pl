@@ -1,5 +1,5 @@
-import { EntityId } from '../game-world/entities-types';
-import { Vector2D } from '../game-world/math-types';
+import { EntityId } from '../game-world/entities/entities-types';
+import { Vector2D } from '../game-world/utils/math-types';
 
 export enum GameEvents {
   // Mouse input events

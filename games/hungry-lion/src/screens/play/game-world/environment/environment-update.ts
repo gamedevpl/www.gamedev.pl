@@ -1,5 +1,5 @@
 import { Environment, isGrassSector } from './environment-types';
-import { UpdateContext } from './game-world-types';
+import { UpdateContext } from '../game-world-types';
 
 // Constants for environment mechanics
 const GRASS_REGENERATION_RATE = 0.1; // How much grass grows per second

@@ -1,4 +1,4 @@
-import { PreyEntity } from '../../game-world/entities-types';
+import { PreyEntity } from '../../game-world/entities/entities-types';
 
 // Constants for rendering
 const CRITICAL_HUNGER = 20;

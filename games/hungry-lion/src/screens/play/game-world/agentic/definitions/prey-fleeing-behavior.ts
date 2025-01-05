@@ -1,7 +1,7 @@
 import { AgenticBehavior } from '../agentic-types';
-import { PreyEntity } from '../../entities-types';
+import { PreyEntity } from '../../entities/entities-types';
 import { getLions } from '../../game-world-query';
-import { vectorSubtract, vectorNormalize, vectorDistance, vectorAngleBetween } from '../../math-utils';
+import { vectorSubtract, vectorNormalize, vectorDistance, vectorAngleBetween } from '../../utils/math-utils';
 
 const FLEE_ACCELERATION = 0.011;
 const FLEE_DISTANCE = 200;

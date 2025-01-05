@@ -1,7 +1,7 @@
-import { Entities, PreyEntity } from './entities-types';
-import { createEntity } from './entities-update';
+import { Entities, PreyEntity } from './entities/entities-types';
+import { createEntity } from './entities/entities-update';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
-import { Vector2D } from './math-types';
+import { Vector2D } from './utils/math-types';
 
 const DEFAULT_SPAWN_CONFIG = {
   maxCount: 20,

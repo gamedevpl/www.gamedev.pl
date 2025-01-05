@@ -1,5 +1,5 @@
 import { agenticDefinitions } from '.';
-import { LionEntity, PreyEntity } from '../entities-types';
+import { LionEntity, PreyEntity } from '../entities/entities-types';
 import { UpdateContext } from '../game-world-types';
 import { AgenticBehavior } from './agentic-types';
 

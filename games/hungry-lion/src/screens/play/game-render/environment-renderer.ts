@@ -1,4 +1,10 @@
-import { Environment, GrassSector, isGrassSector, isWaterSector, WaterSector } from '../game-world/environment-types';
+import {
+  Environment,
+  GrassSector,
+  isGrassSector,
+  isWaterSector,
+  WaterSector,
+} from '../game-world/environment/environment-types';
 
 export function renderEnvironment(ctx: CanvasRenderingContext2D, environment: Environment): void {
   environment.sectors.forEach((sector) => {

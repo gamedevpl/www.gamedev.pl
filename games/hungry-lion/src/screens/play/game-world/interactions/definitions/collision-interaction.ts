@@ -1,5 +1,5 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../math-utils';
+import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
 
 // Basic collision detection and response between any entities
 export const COLLISIONS: InteractionDefinition = {

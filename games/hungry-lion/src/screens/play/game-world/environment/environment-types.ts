@@ -1,4 +1,4 @@
-import { Rect2D } from './math-types';
+import { Rect2D } from '../utils/math-types';
 
 export type Environment = {
   sectors: Sector[];

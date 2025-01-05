@@ -1,5 +1,5 @@
-import { Entities } from './entities-types';
-import { Environment } from './environment-types';
+import { Entities } from './entities/entities-types';
+import { Environment } from './environment/environment-types';
 
 export type GameWorldState = {
   /**

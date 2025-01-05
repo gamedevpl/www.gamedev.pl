@@ -1,4 +1,4 @@
-import { Vector2D } from './math-types';
+import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
 

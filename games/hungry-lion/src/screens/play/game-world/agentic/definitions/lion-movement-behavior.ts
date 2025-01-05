@@ -1,6 +1,6 @@
 import { AgenticBehavior } from '../agentic-types';
 import { isLion } from '../../game-world-query';
-import { LionEntity } from '../../entities-types';
+import { LionEntity } from '../../entities/entities-types';
 
 export const LION_MOVE_TO_TARGET: AgenticBehavior<LionEntity> = {
   entityType: 'lion',

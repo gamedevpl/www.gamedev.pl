@@ -1,4 +1,4 @@
-import { CarrionEntity, Entity, LionEntity, PreyEntity } from './entities-types';
+import { CarrionEntity, Entity, LionEntity, PreyEntity } from './entities/entities-types';
 import { GameWorldState } from './game-world-types';
 
 export function isLion(entity: Entity): entity is LionEntity {
