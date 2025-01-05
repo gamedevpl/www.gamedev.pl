@@ -1,7 +1,7 @@
-import { Entities, PreyEntity } from './entities/entities-types';
-import { createEntity } from './entities/entities-update';
-import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from './game-world-consts';
-import { Vector2D } from './utils/math-types';
+import { Entities, PreyEntity } from './entities-types';
+import { createEntity } from './entities-update';
+import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world-consts';
+import { Vector2D } from '../utils/math-types';
 
 const DEFAULT_SPAWN_CONFIG = {
   maxCount: 20,
@@ -31,7 +31,7 @@ function generateRandomPosition(): Vector2D {
  * @param config Spawn configuration
  * @returns Updated entities state
  */
-export function spawnPrey(entities: Entities, config = DEFAULT_SPAWN_CONFIG): Entities {
+export function preySpawn(entities: Entities, config = DEFAULT_SPAWN_CONFIG): Entities {
   // Count existing prey
   const preyCount = Array.from(entities.entities.values()).filter((entity) => entity.type === 'prey').length;
 
