@@ -1,10 +1,29 @@
-import { Entities, Entity, EntityId, EntityType, LionEntity } from './entities-types';
+import { Entities, Entity, EntityId, EntityType, LionEntity, PreyEntity, CarrionEntity } from './entities-types';
 import { UpdateContext } from './game-world-types';
 import { vectorAdd, vectorLength, vectorScale, calculateBoundaryForce } from './math-utils';
 import { BOUNDARY_FORCE_STRENGTH, BOUNDARY_FORCE_RANGE } from './game-world-consts';
 
 export function updateEntities(state: Entities, updateContext: UpdateContext): void {
+  // First handle prey-to-carrion conversion
   state.entities.forEach((entity) => {
+    if (entity.type === 'prey') {
+      const prey = entity as PreyEntity;
+      if (prey.health <= 0) {
+        state.entities.delete(prey.id);
+        createEntity<CarrionEntity>(state, 'carrion', {
+          position: prey.position,
+          direction: prey.direction,
+        });
+      }
+    }
+  });
+
+  // Then update remaining entities
+  state.entities.forEach((entity) => {
+    if (entity.type === 'carrion') {
+      return;
+    }
+
     // traction force
     entity.forces.push(vectorScale(entity.velocity, -0.1));
 

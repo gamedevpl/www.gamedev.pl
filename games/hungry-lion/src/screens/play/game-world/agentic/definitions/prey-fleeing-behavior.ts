@@ -30,7 +30,10 @@ export const PREY_FLEEING: AgenticBehavior<PreyEntity> = {
       const angle = vectorAngleBetween(preyDirectionVector, normalizedDirection);
 
       // Adjust flee distance based on angle
-      const adjustedFleeDistance = angle < FLEE_ANGLE_THRESHOLD ? FLEE_DISTANCE * 0.5 : FLEE_DISTANCE;
+      let adjustedFleeDistance = angle < FLEE_ANGLE_THRESHOLD ? FLEE_DISTANCE * 0.5 : FLEE_DISTANCE;
+      if (entity.state === 'fleeing') {
+        adjustedFleeDistance = FLEE_DISTANCE * 2;
+      }
 
       // If a lion is within adjusted flee distance, flee from it
       if (minDistance < adjustedFleeDistance) {

@@ -9,7 +9,11 @@ export function interactionsUpdate(gameState: GameWorldState, updateContext: Upd
       }
 
       interactionsDefinitions.forEach((interaction) => {
-        if (interaction.checker(source, target, updateContext)) {
+        if (
+          (!interaction.sourceType || source.type === interaction.sourceType) &&
+          (!interaction.targetType || target.type === interaction.targetType) &&
+          interaction.checker(source, target, updateContext)
+        ) {
           interaction.perform(source, target, updateContext);
         }
       });

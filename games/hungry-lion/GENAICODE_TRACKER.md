@@ -65,6 +65,9 @@
             *   ✅ Updated state transitions in `prey-behavior.ts`
             *   ✅ Modified `lion-update.ts` to handle new timing
             *   ✅ Ensured carrion does not move and is rendered distinctly
+            *   ✅ Implemented carrion entity type
+            *   ✅ Added carrion rendering with gray color and crosses
+            *   ✅ Excluded carrion from collision detection
         *   ✅ Enhanced Debugging Capabilities
             *   ✅ Added dev configuration for prey states
             *   ✅ Added configurable timing constants
@@ -75,6 +78,11 @@
             *   ✅ Added angle-based detection logic
             *   ✅ Reduced detection distance when lion is behind prey
             *   ✅ Updated fleeing state transitions
+        *   ✅ Lion-Prey Interaction Implementation
+            *   ✅ Added health property to PreyEntity
+            *   ✅ Implemented health reduction when touched by lion
+            *   ✅ Added force application towards lion
+            *   ✅ Implemented conversion to carrion when health reaches 0
         *   ☐ Advanced Group Dynamics
             *   ☐ Implement leader-follower behavior
             *   ☐ Add group cohesion mechanics

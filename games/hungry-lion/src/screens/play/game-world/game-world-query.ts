@@ -1,4 +1,4 @@
-import { Entity, LionEntity, PreyEntity } from './entities-types';
+import { CarrionEntity, Entity, LionEntity, PreyEntity } from './entities-types';
 import { GameWorldState } from './game-world-types';
 
 export function isLion(entity: Entity): entity is LionEntity {
@@ -23,4 +23,8 @@ export function getLions(gameState: GameWorldState): LionEntity[] {
 
 export function getPrey(gameState: GameWorldState): PreyEntity[] {
   return filteredEntities(gameState, (entity) => entity.type === 'prey') as PreyEntity[];
+}
+
+export function getCarrion(gameState: GameWorldState): CarrionEntity[] {
+  return filteredEntities(gameState, (entity) => entity.type === 'carrion') as CarrionEntity[];
 }

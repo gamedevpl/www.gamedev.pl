@@ -160,4 +160,12 @@ When implementing behavior logic that considers angles (e.g., prey fleeing behav
 3. Adjust behavior parameters (e.g., detection distance) based on calculated angles
 4. Ensure smooth transitions between different behavior states based on angle thresholds
 
+### Carrion Rendering Patterns
+When implementing carrion rendering:
+1. Use a distinct gray color (#808080) for carrion entities
+2. Render simple line crosses on carrion entities
+3. Maintain the same body shape as prey but with different visual indicators
+4. Ensure carrion rendering is consistent with game's visual style
+5. Keep rendering logic separate from behavior logic
+
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.

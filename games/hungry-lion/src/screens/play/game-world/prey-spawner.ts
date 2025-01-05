@@ -47,6 +47,7 @@ export function spawnPrey(entities: Entities, config: PreySpawnConfig): Entities
   createEntity<PreyEntity>(entities, 'prey', {
     position,
     state: 'idle',
+    health: 100,
   });
 
   return entities;

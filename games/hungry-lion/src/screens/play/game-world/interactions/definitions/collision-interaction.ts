@@ -8,6 +8,10 @@ export const COLLISIONS: InteractionDefinition = {
   maxDistance: 30, // Units of distance for collision detection
 
   checker: (source, target) => {
+    // Exclude carrion entities from collisions
+    if (source.type === 'carrion' || target.type === 'carrion') {
+      return false;
+    }
     const distance = vectorDistance(source.position, target.position);
     return distance < 30; // Same as maxDistance for consistency
   },

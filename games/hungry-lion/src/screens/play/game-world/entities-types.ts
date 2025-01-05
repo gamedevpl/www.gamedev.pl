@@ -2,7 +2,7 @@ import { Vector2D } from './math-types';
 
 export type EntityId = number;
 
-export type EntityType = 'lion' | 'prey';
+export type EntityType = 'lion' | 'prey' | 'carrion';
 
 export interface Entity {
   id: EntityId;
@@ -26,7 +26,12 @@ export interface LionEntity extends Entity {
 
 export interface PreyEntity extends Entity {
   type: 'prey';
-  state: 'idle' | 'moving' | 'fleeing' | 'caught' | 'carrion';
+  state: 'idle' | 'moving' | 'fleeing';
+  health: number;
+}
+
+export interface CarrionEntity extends Entity {
+  type: 'carrion';
 }
 
 export type Entities = {
