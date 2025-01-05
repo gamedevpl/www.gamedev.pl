@@ -1,3 +1,4 @@
+import { StateData, StateType } from '../state-machine/state-machine-types';
 import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
@@ -14,6 +15,7 @@ export interface Entity {
   acceleration: number;
   forces: Vector2D[];
   velocity: Vector2D;
+  stateMachine?: [StateType, StateData];
 }
 
 export interface LionEntity extends Entity {
@@ -22,6 +24,7 @@ export interface LionEntity extends Entity {
     entityId?: EntityId;
     position?: Vector2D;
   };
+  stateMachine: [StateType, StateData];
 }
 
 export interface PreyEntity extends Entity {
@@ -36,6 +39,7 @@ export interface PreyEntity extends Entity {
   thirstLevel: number;
   /** Stamina level (0-100). At 0, prey can't move */
   staminaLevel: number;
+  stateMachine: [StateType, StateData];
 }
 
 export interface CarrionEntity extends Entity {

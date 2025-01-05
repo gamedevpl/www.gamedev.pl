@@ -2,6 +2,7 @@ import { Entities, PreyEntity } from './entities-types';
 import { createEntity } from './entities-update';
 import { GAME_WORLD_HEIGHT, GAME_WORLD_WIDTH } from '../game-world-consts';
 import { Vector2D } from '../utils/math-types';
+import { createPreyStateMachine } from '../state-machine/states/prey-states';
 
 const DEFAULT_SPAWN_CONFIG = {
   maxCount: 20,
@@ -48,6 +49,7 @@ export function preySpawn(entities: Entities, config = DEFAULT_SPAWN_CONFIG): En
   createEntity<PreyEntity>(entities, 'prey', {
     position,
     state: 'idle',
+    stateMachine: createPreyStateMachine(),
     health: 100,
     // Initialize hunger and thirst levels randomly within configured ranges
     hungerLevel: randomInRange(25, 100),

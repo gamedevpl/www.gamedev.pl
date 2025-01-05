@@ -4,6 +4,7 @@ import { preySpawn } from './prey-spawner';
 import { entityUpdate } from './entity-update';
 import { carrionUpdate } from './carrion-update';
 import { preyUpdate } from './prey-update';
+import { createLionStateMachine } from '../state-machine/states/lion-states';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -32,7 +33,12 @@ export function createEntities(): Entities {
     nextEntityId: 1,
   };
 
-  createEntity<LionEntity>(state, 'lion', { position: { x: 100, y: 100 }, isPlayer: true, target: {} });
+  createEntity<LionEntity>(state, 'lion', {
+    position: { x: 100, y: 100 },
+    isPlayer: true,
+    target: {},
+    stateMachine: createLionStateMachine(),
+  });
 
   return state;
 }

@@ -1,5 +1,6 @@
 import { BOUNDARY_FORCE_RANGE, BOUNDARY_FORCE_STRENGTH } from '../game-world-consts';
 import { UpdateContext } from '../game-world-types';
+import { stateUpdate } from '../state-machine/state-machine-update';
 import { vectorScale, calculateBoundaryForce, vectorAdd, vectorLength } from '../utils/math-utils';
 import { Entity } from './entities-types';
 
@@ -28,4 +29,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
 
   entity.forces = [];
+
+  if (entity.stateMachine) {
+    entity.stateMachine = stateUpdate(...entity.stateMachine);
+  }
 }
