@@ -23,6 +23,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite",
+    "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
     "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --allow-directory-create --imagen=dall-e --vision"
   },
