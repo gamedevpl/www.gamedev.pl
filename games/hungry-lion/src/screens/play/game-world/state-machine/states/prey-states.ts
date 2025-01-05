@@ -40,7 +40,8 @@ export const PREY_IDLE_STATE: State<PreyEntity, PreyStateData> = {
     }
 
     // Randomly transition to moving state
-    if (Math.random() > IDLE_CHANCE) {
+    if (Math.random() > IDLE_CHANCE && context.updateContext.gameState.time - data.enteredAt > 5000) {
+      entity.targetDirection = Math.random() * Math.PI * 2;
       return { nextState: 'PREY_MOVING', data: { enteredAt: context.updateContext.gameState.time } };
     }
 
@@ -68,9 +69,14 @@ export const PREY_MOVING_STATE: State<PreyEntity, PreyStateData> = {
       return { nextState: 'PREY_EATING', data: { enteredAt: context.updateContext.gameState.time } };
     }
 
-    // Update movement
     const now = context.updateContext.gameState.time;
-    if (!data.lastDirectionChange || now - data.lastDirectionChange > 1000) {
+
+    if (now - data.enteredAt > 5000) {
+      return { nextState: 'PREY_IDLE', data: { enteredAt: context.updateContext.gameState.time } };
+    }
+
+    // Update movement
+    if (!data.lastDirectionChange || now - data.lastDirectionChange > 100) {
       const angleChange = ((Math.random() - 0.5) * Math.PI) / 2;
       entity.targetDirection += angleChange / 10;
       data.lastDirectionChange = now;
