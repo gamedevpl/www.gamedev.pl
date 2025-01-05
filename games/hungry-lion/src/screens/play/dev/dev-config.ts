@@ -2,27 +2,15 @@
  * Interface defining the development configuration options
  */
 export interface DevConfig {
-  // Setting to render grass effect
-  renderGrass: boolean;
-  // Setting to enable debug rendering of fleeing state information
-  debugFleeingState: boolean;
-  // Setting to enable debug rendering of catching mechanics
-  debugCatchingMechanics: boolean;
-  // Setting to enable debug rendering of prey states (catching, eating)
-  debugPreyStates: boolean;
-  // Setting to enable debug rendering of timing constants
-  debugTimingConstants: boolean;
+  // Setting to enable debug rendering of vital information
+  debugVitals: boolean;
 }
 
 /**
  * Default configuration values
  */
 const DEFAULT_CONFIG: DevConfig = {
-  renderGrass: true,
-  debugFleeingState: false,
-  debugCatchingMechanics: false,
-  debugPreyStates: false,
-  debugTimingConstants: false,
+  debugVitals: false,
 };
 
 /**

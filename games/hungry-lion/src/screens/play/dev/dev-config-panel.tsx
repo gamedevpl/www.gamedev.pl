@@ -37,46 +37,10 @@ export function DevConfigPanel() {
       <Title>Dev Configuration</Title>
 
       <Section>
-        <SectionTitle>Game Features</SectionTitle>
-        <ToggleContainer>
-          <ToggleInput type="checkbox" checked={config.renderGrass} onChange={() => handleToggle('renderGrass')} />
-          Render grass
-        </ToggleContainer>
-      </Section>
-
-      <Section>
         <SectionTitle>Debug Options</SectionTitle>
         <ToggleContainer>
-          <ToggleInput
-            type="checkbox"
-            checked={config.debugFleeingState}
-            onChange={() => handleToggle('debugFleeingState')}
-          />
-          Debug fleeing state
-        </ToggleContainer>
-        <ToggleContainer>
-          <ToggleInput
-            type="checkbox"
-            checked={config.debugCatchingMechanics}
-            onChange={() => handleToggle('debugCatchingMechanics')}
-          />
-          Debug catching mechanics
-        </ToggleContainer>
-        <ToggleContainer>
-          <ToggleInput
-            type="checkbox"
-            checked={config.debugPreyStates}
-            onChange={() => handleToggle('debugPreyStates')}
-          />
-          Debug prey states
-        </ToggleContainer>
-        <ToggleContainer>
-          <ToggleInput
-            type="checkbox"
-            checked={config.debugTimingConstants}
-            onChange={() => handleToggle('debugTimingConstants')}
-          />
-          Debug timing constants
+          <ToggleInput type="checkbox" checked={config.debugVitals} onChange={() => handleToggle('debugVitals')} />
+          Debug vitals
         </ToggleContainer>
       </Section>
     </Panel>
