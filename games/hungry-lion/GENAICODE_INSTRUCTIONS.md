@@ -168,6 +168,20 @@ When implementing carrion rendering:
 4. Ensure carrion rendering is consistent with game's visual style
 5. Keep rendering logic separate from behavior logic
 
+### Health-Based Rendering Patterns
+When implementing health-based rendering:
+1. Use linear interpolation between colors based on health percentage
+2. Start visual changes below 50% health
+3. Maintain consistent visual feedback for health changes
+4. Ensure rendering updates are performance efficient
+
+### Interaction Mechanics
+When implementing interaction mechanics:
+1. Define clear interaction ranges and parameters
+2. Use state-based interaction handling
+3. Implement visual feedback for interactions
+4. Ensure smooth state transitions during interactions
+
 ### Natural Prey Movement Patterns
 When implementing natural prey movement:
 1. Implement idle states with configurable probabilities

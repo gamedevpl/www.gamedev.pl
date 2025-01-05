@@ -88,6 +88,15 @@
             *   ✅ Implemented social behaviors where prey sometimes follow others
             *   ✅ Added varied movement patterns with different speeds and directions
             *   ✅ Integrated new behaviors with existing collision detection and boundary handling
+        *   ✅ Health-Based Prey Rendering
+            *   ✅ Implemented linear color interpolation between green (healthy) and gray (low health)
+            *   ✅ Added health percentage tracking
+            *   ✅ Added visual feedback for health changes below 50%
+        *   ✅ Carrion Eating Mechanics
+            *   ✅ Added food value property to CarrionEntity
+            *   ✅ Implemented 10 food consumption per interaction
+            *   ✅ Added transparency-based rendering for carrion
+            *   ✅ Implemented carrion removal when food reaches 0
         *   ☐ Advanced Group Dynamics
             *   ☐ Implement leader-follower behavior
             *   ☐ Add group cohesion mechanics

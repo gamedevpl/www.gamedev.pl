@@ -34,6 +34,7 @@ export interface PreyEntity extends Entity {
 
 export interface CarrionEntity extends Entity {
   type: 'carrion';
+  food: number;
 }
 
 export type Entities = {

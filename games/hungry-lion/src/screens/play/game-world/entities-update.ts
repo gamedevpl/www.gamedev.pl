@@ -13,15 +13,17 @@ export function updateEntities(state: Entities, updateContext: UpdateContext): v
         createEntity<CarrionEntity>(state, 'carrion', {
           position: prey.position,
           direction: prey.direction,
+          food: 100,
         });
       }
     }
-  });
 
-  // Then update remaining entities
-  state.entities.forEach((entity) => {
     if (entity.type === 'carrion') {
-      return;
+      const carrion = entity as CarrionEntity;
+      if (carrion.food <= 0) {
+        state.entities.delete(carrion.id);
+        return;
+      }
     }
 
     // traction force
