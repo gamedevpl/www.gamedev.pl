@@ -1,10 +1,18 @@
 {
-  "rootDir": "website",
+  "rootDir": ".",
   "lintCommand": "npm run type-check && npm run lint",
-  "ignorePatterns": [
+  "ignorePaths": [
+    "design",
+    "games",
     "dist",
     "build",
     "node_modules",
     "package-lock.json"
-  ]
+  ],
+  "modelOverrides": {
+    "aiStudio": {
+      "default": "gemini-exp-1206",
+      "cheap": "gemini-2.0-flash-exp"
+    }
+  }
 }
