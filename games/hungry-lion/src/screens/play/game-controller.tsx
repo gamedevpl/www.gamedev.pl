@@ -15,7 +15,6 @@ import {
 } from './game-input/input-events';
 import { Entity } from './game-world/entities/entities-types';
 import { getPlayerLion, getPrey } from './game-world/game-world-query';
-// import { getLions } from './game-world-v2/game-world-query';
 
 export function GameController({ gameStateRef }: GameControllerProps) {
   const touchStateRef = useRef<TouchState>({
