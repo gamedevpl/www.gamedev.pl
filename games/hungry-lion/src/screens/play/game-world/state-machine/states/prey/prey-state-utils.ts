@@ -9,6 +9,7 @@ export const MAX_SPEED_VARIATION = 0.005;
 export const FLEE_ACCELERATION = 0.011;
 export const FLEE_DISTANCE = 300;
 export const FLEE_ANGLE_THRESHOLD = Math.PI / 3;
+export const AMBUSH_DISTANCE_MODIFIER = 5;
 
 // Helper function to check if prey needs to flee
 export function shouldFlee(entity: PreyEntity, context: StateContext<PreyEntity>): boolean {
@@ -17,7 +18,10 @@ export function shouldFlee(entity: PreyEntity, context: StateContext<PreyEntity>
   let minDistance = Infinity;
 
   for (const lion of lions) {
-    const distance = vectorDistance(entity.position, lion.position);
+    let distance = vectorDistance(entity.position, lion.position);
+    if (lion.stateMachine[0] === 'LION_AMBUSH') {
+      distance *= AMBUSH_DISTANCE_MODIFIER;
+    }
     if (distance < minDistance) {
       minDistance = distance;
       nearestLion = lion;

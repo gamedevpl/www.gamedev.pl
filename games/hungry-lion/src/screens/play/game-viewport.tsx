@@ -117,6 +117,7 @@ export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameV
             getPlayerLion(gameStateRef.current.gameWorldState)?.actions || {
               walk: { enabled: false },
               attack: { enabled: false },
+              ambush: { enabled: false },
             }
           }
         />

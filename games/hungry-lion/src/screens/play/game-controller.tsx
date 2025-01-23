@@ -82,6 +82,10 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (lion) {
       lion.actions[event.action].enabled = event.enabled;
+      // When enabling ambush, disable other actions
+      if (event.action === 'ambush' && event.enabled) {
+        lion.actions.walk.enabled = lion.actions.attack.enabled = false;
+      }
       if (!event.enabled) {
         handleCancelChase();
       }

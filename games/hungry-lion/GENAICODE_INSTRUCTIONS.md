@@ -205,4 +205,36 @@ When implementing natural prey movement:
 4. Ensure smooth integration with existing collision detection and boundary handling
 5. Maintain clear state transitions between different behaviors
 
+### Ambush State Mechanics
+When implementing ambush state and mechanics:
+1. State Implementation:
+   - Create dedicated state file for ambush mechanics
+   - Implement no movement logic during ambush
+   - Handle proper state transitions
+   - Include speed boost flag in state data
+
+2. Speed Boost Implementation:
+   - Define separate constants for normal and boosted speeds
+   - Implement boost duration with proper timing
+   - Handle boost expiration gracefully
+   - Ensure smooth acceleration transitions
+
+3. Action Management:
+   - Make ambush action mutually exclusive with others
+   - Clear other actions when enabling ambush
+   - Handle proper state cleanup on action toggle
+   - Maintain clear action state transitions
+
+4. State Transitions:
+   - Handle transitions between all relevant states
+   - Implement proper boost timing on state change
+   - Clear boost effects when appropriate
+   - Maintain state consistency during transitions
+
+5. Game Balance:
+   - Configure appropriate boost values
+   - Set reasonable boost duration
+   - Balance risk/reward of ambush state
+   - Consider prey behavior modifications
+
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.

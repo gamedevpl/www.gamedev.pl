@@ -44,12 +44,15 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
       entity.targetDirection = Math.atan2(dy, dx);
     }
 
-    // Stay idle
     entity.acceleration = 0;
+
+    if (entity.actions.ambush.enabled) {
+      return {
+        nextState: 'LION_AMBUSH',
+        data: { enteredAt: context.updateContext.gameState.time },
+      };
+    }
+
     return { nextState: 'LION_IDLE', data };
   },
-
-  onEnter: (context) => ({
-    enteredAt: context.updateContext.gameState.time,
-  }),
 };

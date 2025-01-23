@@ -63,8 +63,4 @@ export const PREY_IDLE_STATE: State<PreyEntity, PreyIdleStateData> = {
     entity.acceleration = 0;
     return { nextState: 'PREY_IDLE', data };
   },
-
-  onEnter: (context) => ({
-    enteredAt: context.updateContext.gameState.time,
-  }),
 };

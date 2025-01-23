@@ -50,7 +50,7 @@ export interface State<T extends Entity = Entity, D extends BaseStateData = Base
   /** Function to update the state */
   update: StateUpdate<T, D>;
   /** Optional function called when entering the state */
-  onEnter?: (context: StateContext<T>) => D;
+  onEnter?: (context: StateContext<T>, nextData: D) => D;
   /** Optional function called when leaving the state */
   onExit?: (context: StateContext<T>, nextState: StateType) => void;
 }

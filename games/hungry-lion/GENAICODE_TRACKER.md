@@ -25,6 +25,16 @@
             *   ✅ Added visual feedback for hunger levels
             *   ✅ Fixed Initial Hunger Mechanics
             *   ✅ Hunger Bar and Starvation Warnings
+        *   ✅ Ambush Mechanics
+            *   ✅ Added 'ambush' action button to action bar
+            *   ✅ Implemented LION_AMBUSH state with no movement
+            *   ✅ Added speed boost when transitioning from ambush to chase
+            *   ✅ Made ambush action mutually exclusive with walk/attack
+            *   ✅ Implemented state transitions and boost duration
+            *   ✅ Added proper type definitions and documentation
+            *   ☐ Add visual feedback for ambush state
+            *   ☐ Implement reduced visibility effect on prey behavior
+            *   ☐ Add particle effects for speed boost
         *   ☐ Stealth movement mechanics
         *   ✅ Action Bar Implementation
             *   ✅ Basic action bar UI

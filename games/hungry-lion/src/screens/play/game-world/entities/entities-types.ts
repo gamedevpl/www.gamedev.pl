@@ -27,6 +27,7 @@ export interface LionEntity extends Entity {
   actions: {
     walk: { enabled: boolean };
     attack: { enabled: boolean };
+    ambush: { enabled: boolean };
   };
   stateMachine: [StateType, StateData];
 }

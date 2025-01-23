@@ -6,11 +6,12 @@ interface ActionBarProps {
   actions: {
     walk: { enabled: boolean };
     attack: { enabled: boolean };
+    ambush: { enabled: boolean };
   };
 }
 
 export function ActionBar({ actions }: ActionBarProps) {
-  const toggleAction = (action: 'walk' | 'attack') => {
+  const toggleAction = (action: 'walk' | 'attack' | 'ambush') => {
     dispatchCustomEvent<ToggleActionEvent>(GameEvents.TOGGLE_ACTION, {
       action,
       enabled: !actions[action].enabled,
@@ -24,6 +25,9 @@ export function ActionBar({ actions }: ActionBarProps) {
       </ActionButton>
       <ActionButton active={actions.attack.enabled} onClick={() => toggleAction('attack')}>
         Attack
+      </ActionButton>
+      <ActionButton active={actions.ambush.enabled} onClick={() => toggleAction('ambush')}>
+        Ambush
       </ActionButton>
     </ActionBarContainer>
   );

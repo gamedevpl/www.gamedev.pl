@@ -40,6 +40,7 @@ export function createEntities(): Entities {
     actions: {
       walk: { enabled: false },
       attack: { enabled: false },
+      ambush: { enabled: false },
     },
     stateMachine: createLionStateMachine(),
   });

@@ -31,7 +31,7 @@ export type CancelChaseEvent = {
 };
 
 export type ToggleActionEvent = {
-  action: 'walk' | 'attack';
+  action: 'walk' | 'attack' | 'ambush';
   enabled: boolean;
 };
 

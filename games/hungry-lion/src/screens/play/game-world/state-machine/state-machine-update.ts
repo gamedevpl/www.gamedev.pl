@@ -32,7 +32,7 @@ export function stateUpdate(type: StateType, data: StateData, context: StateCont
 
   // If state is changing, handle the transition
   if (isStateTransitionNeeded(type, nextState)) {
-    return [nextState, handleStateTransition(currentState, nextState, context, STATES)];
+    return [nextState, handleStateTransition(currentState, nextState, nextData, context, STATES)];
   }
 
   return [nextState, nextData];

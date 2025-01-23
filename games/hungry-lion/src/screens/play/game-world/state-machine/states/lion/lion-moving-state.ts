@@ -65,8 +65,4 @@ export const LION_MOVING_TO_TARGET_STATE: State<LionEntity, LionMovingStateData>
       },
     };
   },
-
-  onEnter: (context) => ({
-    enteredAt: context.updateContext.gameState.time,
-  }),
 };

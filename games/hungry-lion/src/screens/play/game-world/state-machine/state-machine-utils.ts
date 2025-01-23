@@ -12,6 +12,7 @@ import { State, StateContext, StateData, StateType } from './state-machine-types
 export function handleStateTransition<T extends Entity>(
   currentState: State<T, StateData>,
   nextStateType: StateType,
+  nextData: StateData,
   context: StateContext<T>,
   states: State<T, StateData>[],
 ): StateData {
@@ -22,11 +23,11 @@ export function handleStateTransition<T extends Entity>(
   const nextStateHandler = states.find(({ id }) => id === nextStateType) as State<T, StateData>;
   if (nextStateHandler?.onEnter) {
     // Call enter handler and use its data
-    return nextStateHandler.onEnter(context);
+    return nextStateHandler.onEnter(context, nextData);
   }
 
   // Return default state data if no enter handler
-  return { enteredAt: context.updateContext.gameState.time };
+  return { ...nextData, enteredAt: context.updateContext.gameState.time };
 }
 
 /**
