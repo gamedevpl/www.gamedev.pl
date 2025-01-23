@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { FunctionCall, FunctionDef, PromptItem, Plugin } from 'genaicode';
+import { FunctionCall, FunctionDef, PromptItem, Plugin, ModelType } from 'genaicode';
 
 export const deepseekAiService: Plugin = {
   name: 'deepseek-ai-service',
@@ -12,6 +12,7 @@ export const deepseekAiService: Plugin = {
         modelOverrides: {
           default: 'deepseek-chat',
           cheap: 'deepseek-chat',
+          reasoning: 'deepseek-reasoner',
         },
       },
     },
@@ -23,7 +24,7 @@ async function generateContent(
   functionDefs: FunctionDef[],
   requiredFunctionName: string | null,
   temperature: number,
-  cheap = false,
+  modelType = ModelType.DEFAULT,
 ): Promise<FunctionCall[]> {
   const { getServiceConfig } = await import('genaicode/ai-service/service-configurations.js');
   const serviceConfig = getServiceConfig('plugin:deepseek-ai-service');
@@ -52,9 +53,11 @@ async function generateContent(
       functionDefs,
       requiredFunctionName,
       temperature,
-      cheap,
-      cheap
+      modelType,
+      modelType === ModelType.CHEAP
         ? serviceConfig.modelOverrides?.cheap ?? 'deepseek-chat'
+        : modelType === ModelType.REASONING
+        ? 'deepseek-reasoner'
         : serviceConfig.modelOverrides?.default ?? 'deepseek-chat',
       openai,
     );
