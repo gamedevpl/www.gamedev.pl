@@ -6,7 +6,6 @@ import { gameWorldUpdate } from './game-world/game-world-update';
 import { createRenderState, RenderState, updateRenderState } from './game-render/render-state';
 import { DevConfigPanel } from './dev/dev-config-panel';
 import { GameOverScreen } from './game-over-screen';
-import { InputController } from './game-input/input-controller';
 import { gameWorldInit } from './game-world/game-world-update';
 
 const UPDATE_STEP = 1000 / 60; // 60 FPS
@@ -75,7 +74,6 @@ export function PlayScreen() {
   return (
     <>
       <GameViewport gameStateRef={gameStateRef} />
-      <InputController gameStateRef={gameStateRef} />
       <DevConfigPanel />
       {isGameOver && gameStateRef.current.gameWorldState.gameOverStats && (
         <GameOverScreen stats={gameStateRef.current.gameWorldState.gameOverStats} onRestart={handleRestart} />

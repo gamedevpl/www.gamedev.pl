@@ -14,6 +14,7 @@ export enum GameEvents {
   // Lion movement events
   SET_LION_TARGET = 'game:set-lion-target',
   CANCEL_CHASE = 'game:cancel-chase',
+  TOGGLE_ACTION = 'game:toggle-action',
 }
 
 // Lion Movement Events
@@ -27,6 +28,11 @@ export type CancelChaseEvent = {
     x: number;
     y: number;
   } | null;
+};
+
+export type ToggleActionEvent = {
+  action: 'walk' | 'attack';
+  enabled: boolean;
 };
 
 // Common position type for both mouse and touch events

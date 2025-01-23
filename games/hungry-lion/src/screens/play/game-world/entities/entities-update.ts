@@ -37,6 +37,10 @@ export function createEntities(): Entities {
     position: { x: 100, y: 100 },
     isPlayer: true,
     target: {},
+    actions: {
+      walk: { enabled: false },
+      attack: { enabled: false },
+    },
     stateMachine: createLionStateMachine(),
   });
 

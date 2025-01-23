@@ -8,6 +8,7 @@ import {
   MouseButtonEvent,
   TouchStartEvent,
   TouchMoveEvent,
+  ToggleActionEvent,
   TouchEndEvent,
   InputPosition,
   LionTargetEvent,
@@ -73,6 +74,17 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (lion) {
       lion.target.position = undefined;
       lion.target.entityId = undefined;
+    }
+  });
+
+  useCustomEvent<ToggleActionEvent>(GameEvents.TOGGLE_ACTION, (event) => {
+    if (!gameStateRef.current) return;
+    const lion = getPlayerLion(gameStateRef.current.gameWorldState);
+    if (lion) {
+      lion.actions[event.action].enabled = event.enabled;
+      if (!event.enabled) {
+        handleCancelChase();
+      }
     }
   });
 

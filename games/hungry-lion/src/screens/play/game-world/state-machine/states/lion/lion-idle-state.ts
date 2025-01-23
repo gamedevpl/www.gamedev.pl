@@ -16,7 +16,10 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
     const { entity } = context;
 
     // Check if we have a target
-    if (entity.target.entityId || entity.target.position) {
+    if (
+      (entity.target.entityId && entity.actions.attack.enabled) ||
+      (entity.target.position && entity.actions.walk.enabled)
+    ) {
       // Determine if target is an entity (chasing) or position (moving to target)
       const nextState = entity.target.entityId ? 'LION_CHASING' : 'LION_MOVING_TO_TARGET';
       return {
@@ -25,6 +28,20 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
           ...data,
         },
       };
+    } else if (entity.target.entityId && !entity.actions.attack.enabled) {
+      const targetEntity = context.updateContext.gameState.entities.entities.get(entity.target.entityId!);
+
+      if (targetEntity) {
+        const dx = targetEntity.position.x - entity.position.x;
+        const dy = targetEntity.position.y - entity.position.y;
+
+        entity.targetDirection = Math.atan2(dy, dx);
+      }
+    } else if (entity.target.position && !entity.actions.walk.enabled) {
+      const dx = entity.target.position.x - entity.position.x;
+      const dy = entity.target.position.y - entity.position.y;
+
+      entity.targetDirection = Math.atan2(dy, dx);
     }
 
     // Stay idle

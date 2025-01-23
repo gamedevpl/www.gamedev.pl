@@ -182,6 +182,21 @@ When implementing interaction mechanics:
 3. Implement visual feedback for interactions
 4. Ensure smooth state transitions during interactions
 
+### Action Bar Mechanics
+When implementing action bar mechanics:
+1. Maintain clear state management:
+   - Track enabled/disabled state for each action
+   - Update visual feedback based on state
+   - Handle state transitions appropriately
+2. Implement proper event handling:
+   - Toggle actions through dedicated events
+   - Update game state based on action states
+   - Clear targets when actions are disabled
+3. Ensure proper state machine integration:
+   - Check action states before state transitions
+   - Return to idle state when actions are disabled
+   - Maintain consistency between UI and game state
+
 ### Natural Prey Movement Patterns
 When implementing natural prey movement:
 1. Implement idle states with configurable probabilities

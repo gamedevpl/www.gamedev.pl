@@ -19,6 +19,7 @@ type InputControllerProps = {
     gameWorldState: GameWorldState;
     renderState: RenderState;
   }>;
+  canvasRef: RefObject<HTMLCanvasElement>;
 };
 
 type InputState = {
@@ -31,7 +32,7 @@ const initialInputState: InputState = {
   activeTouches: new Map(),
 };
 
-export function InputController({ gameStateRef }: InputControllerProps) {
+export function InputController({ gameStateRef, canvasRef }: InputControllerProps) {
   const [inputState, setInputState] = useState<InputState>(initialInputState);
 
   const handleMouseMove = useCallback(
@@ -142,30 +143,36 @@ export function InputController({ gameStateRef }: InputControllerProps) {
   );
 
   useEffect(() => {
+    if (!canvasRef.current) {
+      return;
+    }
+
     const handleMouseDown = (event: MouseEvent) => handleMouseButtons(event, true);
     const handleMouseUp = (event: MouseEvent) => handleMouseButtons(event, false);
     const handleContextMenu = (event: Event) => event.preventDefault();
 
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('contextmenu', handleContextMenu);
+    const canvas = canvasRef.current;
 
-    window.addEventListener('touchstart', handleTouchStart, { passive: false });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd, { passive: false });
-    window.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('contextmenu', handleContextMenu);
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
     return () => {
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
 
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchEnd);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [handleMouseButtons, handleMouseMove, handleTouchStart, handleTouchMove, handleTouchEnd]);
 

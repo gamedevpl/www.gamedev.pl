@@ -19,6 +19,15 @@ export const LION_CHASING_STATE: State<LionEntity, LionChasingStateData> = {
   update: (data, context) => {
     const { entity } = context;
 
+    // Return to idle if attack action is disabled
+    if (!entity.actions.attack.enabled) {
+      entity.target = {}; // Clear target
+      return {
+        nextState: 'LION_IDLE',
+        data: { enteredAt: context.updateContext.gameState.time },
+      };
+    }
+
     // Get current target position
     const targetEntity = context.updateContext.gameState.entities.entities.get(entity.target.entityId!);
 

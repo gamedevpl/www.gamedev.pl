@@ -24,6 +24,10 @@ export interface LionEntity extends Entity {
     entityId?: EntityId;
     position?: Vector2D;
   };
+  actions: {
+    walk: { enabled: boolean };
+    attack: { enabled: boolean };
+  };
   stateMachine: [StateType, StateData];
 }
 

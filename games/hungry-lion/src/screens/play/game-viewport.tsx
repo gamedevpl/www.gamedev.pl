@@ -6,6 +6,8 @@ import styled from 'styled-components';
 import { RenderState } from './game-render/render-state';
 import { InputController } from './game-input/input-controller';
 import { GameController } from './game-controller';
+import { ActionBar } from './components/action-bar';
+import { getPlayerLion } from './game-world/game-world-query';
 
 const ViewportContainer = styled.div`
   width: 100vw;
@@ -107,8 +109,18 @@ export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameV
   return (
     <ViewportContainer>
       <GameCanvas ref={canvasRef} />
-      <InputController gameStateRef={gameStateRef} />
+      <InputController gameStateRef={gameStateRef} canvasRef={canvasRef} />
       <GameController gameStateRef={gameStateRef} />
+      {gameStateRef.current && (
+        <ActionBar
+          actions={
+            getPlayerLion(gameStateRef.current.gameWorldState)?.actions || {
+              walk: { enabled: false },
+              attack: { enabled: false },
+            }
+          }
+        />
+      )}
       {children}
     </ViewportContainer>
   );

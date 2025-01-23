@@ -23,6 +23,15 @@ export const LION_MOVING_TO_TARGET_STATE: State<LionEntity, LionMovingStateData>
   update: (data, context) => {
     const { entity } = context;
 
+    // Return to idle if walk action is disabled
+    if (!entity.actions.walk.enabled) {
+      entity.target = {}; // Clear target
+      return {
+        nextState: 'LION_IDLE',
+        data: { enteredAt: context.updateContext.gameState.time },
+      };
+    }
+
     // Get current target position
     const targetPosition = entity.target.position;
 
