@@ -42,4 +42,5 @@ export type UpdateContext = {
 
 export type GameOverStats = {
   timeSurvived: number;
+  deathCause: 'starvation';
 };

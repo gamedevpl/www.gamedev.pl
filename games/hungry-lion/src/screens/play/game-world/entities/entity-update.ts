@@ -3,6 +3,7 @@ import { UpdateContext } from '../game-world-types';
 import { stateUpdate } from '../state-machine/state-machine-update';
 import { vectorScale, calculateBoundaryForce, vectorAdd, vectorLength } from '../utils/math-utils';
 import { Entity } from './entities-types';
+import { lionUpdate } from './lion-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces.push(vectorScale(entity.velocity, -0.1));
@@ -49,5 +50,9 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
 
   if (entity.stateMachine) {
     entity.stateMachine = stateUpdate(...entity.stateMachine, { entity, updateContext });
+  }
+
+  if (entity.type === 'lion') {
+    lionUpdate(entity, updateContext);
   }
 }

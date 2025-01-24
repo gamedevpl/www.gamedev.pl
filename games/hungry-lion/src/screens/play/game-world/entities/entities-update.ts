@@ -42,6 +42,7 @@ export function createEntities(): Entities {
       attack: { enabled: false },
       ambush: { enabled: false },
     },
+    hungerLevel: 100, // Initialize hunger level for lions
     stateMachine: createLionStateMachine(),
   });
 

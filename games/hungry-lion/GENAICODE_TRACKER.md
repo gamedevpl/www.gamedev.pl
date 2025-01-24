@@ -25,6 +25,8 @@
             *   ✅ Added visual feedback for hunger levels
             *   ✅ Fixed Initial Hunger Mechanics
             *   ✅ Hunger Bar and Starvation Warnings
+            *   ✅ Updated hunger visualization with color interpolation
+            *   ✅ Implemented starvation game over mechanic
         *   ✅ Ambush Mechanics
             *   ✅ Added 'ambush' action button to action bar
             *   ✅ Implemented LION_AMBUSH state with no movement
@@ -117,6 +119,13 @@
             *   ✅ Implemented linear color interpolation between green (healthy) and gray (low health)
             *   ✅ Added health percentage tracking
             *   ✅ Added visual feedback for health changes below 50%
+        *   ✅ Lion Hunger Mechanics
+            *   ✅ Added hungerLevel property to LionEntity
+            *   ✅ Implemented hunger decay over time
+            *   ✅ Added visual feedback for hunger levels
+            *   ☐ Add hunger warning effects
+            *   ☐ Implement starvation damage
+            *   ☐ Add food consumption mechanics
         *   ✅ Carrion Eating Mechanics
             *   ✅ Added food value property to CarrionEntity
             *   ✅ Implemented 10 food consumption per interaction

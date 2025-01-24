@@ -1,7 +1,7 @@
 import { Entity, EntityType } from '../entities/entities-types';
 import { UpdateContext } from '../game-world-types';
 
-export type InteractionDefinition = {
+export interface InteractionDefinition<S extends Entity = Entity, T extends Entity = Entity> {
   sourceType?: EntityType;
   targetType?: EntityType;
 
@@ -11,10 +11,10 @@ export type InteractionDefinition = {
   /**
    * Check if the interaction is happening.
    */
-  checker: (source: Entity, target: Entity, updateContext: UpdateContext) => boolean;
+  checker: (source: S, target: T, updateContext: UpdateContext) => boolean;
 
   /**
    * Perform the interaction.
    */
-  perform: (source: Entity, target: Entity, updateContext: UpdateContext) => void;
-};
+  perform: (source: S, target: T, updateContext: UpdateContext) => void;
+}

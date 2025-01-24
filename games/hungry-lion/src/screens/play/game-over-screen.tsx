@@ -10,6 +10,12 @@ export function GameOverScreen({ stats, onRestart }: GameOverScreenProps) {
           <span>Time Survived:</span>
           <span>{formatTime(stats.timeSurvived)}</span>
         </StatRow>
+        {stats.deathCause && (
+          <StatRow>
+            <span>Cause of Death:</span>
+            <span>{formatDeathCause(stats.deathCause)}</span>
+          </StatRow>
+        )}
       </StatsContainer>
       <RestartButton className="play-again-button" onClick={onRestart} onTouchStart={onRestart}>
         Play Again
@@ -84,4 +90,12 @@ function formatTime(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function formatDeathCause(cause: string): string {
+  // Capitalize first letter and format cause
+  return cause
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }

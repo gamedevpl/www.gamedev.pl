@@ -43,6 +43,8 @@ export interface LionEntity extends Entity {
     ambush: { enabled: boolean };
   };
   stateMachine: [StateType, StateData];
+  /** Hunger level (0-100). At 0, lion starts starving */
+  hungerLevel: number;
 }
 
 export interface PreyEntity extends Entity {
