@@ -52,7 +52,7 @@ export function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
   initialState: Partial<Entity> &
-    Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'targetDirection' | 'acceleration'>,
+    Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'targetDirection' | 'acceleration' | 'debuffs'>,
 ): T {
   const entity: T = {
     id: state.nextEntityId++,
@@ -62,6 +62,7 @@ export function createEntity<T extends Entity>(
     targetDirection: 0,
     acceleration: 0,
     forces: [],
+    debuffs: [],
     ...initialState,
   } as unknown as T;
   state.entities.set(entity.id, entity);

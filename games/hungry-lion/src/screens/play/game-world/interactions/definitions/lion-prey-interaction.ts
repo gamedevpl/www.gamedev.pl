@@ -25,10 +25,11 @@ export const LION_PREY_INTERACTION: InteractionDefinition = {
     prey.health = Math.max(prey.health - HEALTH_DECREMENT, 0);
 
     // Apply slow debuff
-    prey.debuff = {
+    prey.debuffs.push({
+      type: 'slow',
       startTime: updateContext.gameState.time,
-      duration: 500, // 500ms slow duration
-    };
+      duration: 500,
+    });
 
     // Apply force towards lion
     const direction = vectorNormalize(vectorSubtract(source.position, prey.position));

@@ -16,11 +16,18 @@ export interface Entity {
   forces: Vector2D[];
   velocity: Vector2D;
   stateMachine?: [StateType, StateData];
-  debuff?: DebuffEffect;
+  debuffs: ActiveDebuff[];
 }
 
-export interface DebuffEffect {
+/**
+ * Represents an active debuff effect on an entity
+ */
+export interface ActiveDebuff {
+  /** Debuff type */
+  type: 'slow';
+  /** Time when the debuff was applied */
   startTime: number;
+  /** Duration of the debuff in milliseconds */
   duration: number;
 }
 

@@ -17,15 +17,22 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   );
   entity.forces.push(accelerationForce);
 
-  // Handle debuff effect
-  if (entity.debuff) {
-    const debuffElapsed = updateContext.gameState.time - entity.debuff.startTime;
-    if (debuffElapsed < entity.debuff.duration) {
-      entity.velocity = vectorScale(entity.velocity, 0.5); // Reduce velocity by 50% while debuffed
-    } else {
-      entity.debuff = undefined; // Clear expired debuff
+  // Process each active debuff
+  entity.debuffs.forEach((debuff) => {
+    const debuffElapsed = updateContext.gameState.time - debuff.startTime;
+
+    if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
+      // Apply debuff effect - currently all debuffs reduce velocity by 50%
+      // Multiple debuffs stack multiplicatively
+      entity.velocity = vectorScale(entity.velocity, 0.5);
     }
-  }
+  });
+
+  // Clean up expired debuffs in a separate pass to avoid modifying the map during iteration
+  entity.debuffs = entity.debuffs.filter((debuff) => {
+    const debuffElapsed = updateContext.gameState.time - debuff.startTime;
+    return debuffElapsed < debuff.duration;
+  });
 
   entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
   // TODO: Introduce angular velocity
