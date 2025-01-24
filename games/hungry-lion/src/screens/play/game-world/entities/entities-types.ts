@@ -16,6 +16,12 @@ export interface Entity {
   forces: Vector2D[];
   velocity: Vector2D;
   stateMachine?: [StateType, StateData];
+  debuff?: DebuffEffect;
+}
+
+export interface DebuffEffect {
+  startTime: number;
+  duration: number;
 }
 
 export interface LionEntity extends Entity {

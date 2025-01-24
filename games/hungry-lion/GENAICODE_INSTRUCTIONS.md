@@ -238,3 +238,21 @@ When implementing ambush state and mechanics:
    - Consider prey behavior modifications
 
 Remember: Documentation is as important as code. Every code change should be reflected in the project's documentation to maintain clarity and facilitate future development.
+### Debuff Mechanics Pattern
+When implementing temporary effects on entities (debuffs):
+
+1. Debuff Definition:
+   - Use the `DebuffEffect` interface to define temporary effects
+   - Include start time and duration properties
+   - Consider the effect type and strength
+
+2. Application Guidelines:
+   - Apply debuffs through interaction definitions
+   - Set appropriate duration based on game balance
+   - Consider frame-rate independence for timing
+
+3. Processing and Cleanup:
+   - Check and process debuffs in entity update
+   - Apply effects consistently across all entity types
+   - Automatically clear expired debuffs
+   - Reset affected properties when debuff expires

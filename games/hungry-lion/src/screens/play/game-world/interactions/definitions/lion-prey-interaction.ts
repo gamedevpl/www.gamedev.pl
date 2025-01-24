@@ -18,11 +18,17 @@ export const LION_PREY_INTERACTION: InteractionDefinition = {
     return distance < 30; // Same as maxDistance for consistency
   },
 
-  perform: (source, target) => {
+  perform: (source, target, updateContext) => {
     const prey = target as PreyEntity;
 
     // Reduce prey health
     prey.health = Math.max(prey.health - HEALTH_DECREMENT, 0);
+
+    // Apply slow debuff
+    prey.debuff = {
+      startTime: updateContext.gameState.time,
+      duration: 500, // 500ms slow duration
+    };
 
     // Apply force towards lion
     const direction = vectorNormalize(vectorSubtract(source.position, prey.position));

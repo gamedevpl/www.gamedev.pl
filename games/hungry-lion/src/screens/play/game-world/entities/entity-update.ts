@@ -17,6 +17,16 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   );
   entity.forces.push(accelerationForce);
 
+  // Handle debuff effect
+  if (entity.debuff) {
+    const debuffElapsed = updateContext.gameState.time - entity.debuff.startTime;
+    if (debuffElapsed < entity.debuff.duration) {
+      entity.velocity = vectorScale(entity.velocity, 0.5); // Reduce velocity by 50% while debuffed
+    } else {
+      entity.debuff = undefined; // Clear expired debuff
+    }
+  }
+
   entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
   // TODO: Introduce angular velocity
   entity.direction = entity.targetDirection;

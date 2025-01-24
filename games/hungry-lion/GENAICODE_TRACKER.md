@@ -103,6 +103,11 @@
             *   ✅ Implemented health reduction when touched by lion
             *   ✅ Added force application towards lion
             *   ✅ Implemented conversion to carrion when health reaches 0
+            *   ✅ Implemented Debuff System
+                *   ✅ Added generic DebuffEffect interface
+                *   ✅ Implemented velocity reduction during debuff
+                *   ✅ Added debuff application in lion-prey interaction
+                *   ✅ Added automatic debuff cleanup
         *   ✅ Natural Prey Movement Behavior
             *   ✅ Added idle states where prey sometimes stand still
             *   ✅ Implemented social behaviors where prey sometimes follow others
