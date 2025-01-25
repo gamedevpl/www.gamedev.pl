@@ -51,6 +51,21 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     });
   };
 
+  const handleFollowCursor = (position: InputPosition) => {
+    if (!gameStateRef.current) return;
+
+    const lion = getPlayerLion(gameStateRef.current.gameWorldState);
+
+    if (lion?.actions.walk.enabled && !lion.target.entityId) {
+      dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
+        position: {
+          x: position.worldX,
+          y: position.worldY,
+        },
+      });
+    }
+  };
+
   const handleCancelChase = () => {
     if (!gameStateRef.current) return;
     dispatchCustomEvent<CancelChaseEvent>(GameEvents.CANCEL_CHASE, {
@@ -116,8 +131,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   useCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, (event) => {
     if (!gameStateRef.current || !touchStateRef.current.isActive) return;
     if (event.primaryTouch) {
-      handleTargeting(event.primaryTouch.position);
       touchStateRef.current.position = event.primaryTouch.position;
+      handleFollowCursor(event.primaryTouch.position);
     }
   });
 
@@ -125,8 +140,10 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (!gameStateRef.current) return;
   });
 
-  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, () => {
+  useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
     if (!gameStateRef.current || touchStateRef.current.isActive) return;
+    touchStateRef.current.position = event.position;
+    handleFollowCursor(event.position);
   });
 
   useCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, (event) => {
