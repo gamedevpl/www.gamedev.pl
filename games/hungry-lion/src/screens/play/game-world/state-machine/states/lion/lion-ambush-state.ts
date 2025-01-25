@@ -22,14 +22,6 @@ export const LION_AMBUSH_STATE: State<LionEntity, LionAmbushStateData> = {
   update: (data, context) => {
     const { entity } = context;
 
-    // Return to idle if ambush action is disabled
-    if (!entity.actions.ambush.enabled) {
-      return {
-        nextState: 'LION_IDLE',
-        data: { enteredAt: context.updateContext.gameState.time },
-      };
-    }
-
     // If we have a target and attack is enabled, transition to chasing with speed boost
     if (entity.target.entityId && entity.actions.attack.enabled) {
       entity.actions.ambush.enabled = false;
@@ -40,6 +32,14 @@ export const LION_AMBUSH_STATE: State<LionEntity, LionAmbushStateData> = {
           applySpeedBoost: true, // Set flag for speed boost
           boostAppliedAt: context.updateContext.gameState.time, // Set timestamp for speed boost
         },
+      };
+    }
+
+    // Return to idle if ambush action is disabled
+    if (!entity.actions.ambush.enabled) {
+      return {
+        nextState: 'LION_IDLE',
+        data: { enteredAt: context.updateContext.gameState.time },
       };
     }
 

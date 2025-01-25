@@ -63,6 +63,18 @@ export function GameController({ gameStateRef }: GameControllerProps) {
 
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (lion) {
+      if (event.preyId && !lion.actions.ambush.enabled) {
+        lion.actions.ambush.enabled = true;
+        lion.actions.attack.enabled = false;
+        lion.actions.attack.enabled = false;
+      } else if (event.preyId && lion.actions.ambush.enabled) {
+        lion.actions.ambush.enabled = false;
+        lion.actions.attack.enabled = true;
+      } else if (!event.preyId && event.position) {
+        lion.actions.walk.enabled = true;
+        lion.actions.attack.enabled = false;
+      }
+
       lion.target.position = event.position;
       lion.target.entityId = event.preyId;
     }

@@ -55,4 +55,15 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
 
     return { nextState: 'LION_IDLE', data };
   },
+
+  onEnter: (context, nextData) => {
+    const { entity } = context;
+
+    // Reset target
+    entity.actions.attack.enabled = false;
+    entity.actions.walk.enabled = false;
+    entity.actions.ambush.enabled = false;
+
+    return nextData;
+  },
 };

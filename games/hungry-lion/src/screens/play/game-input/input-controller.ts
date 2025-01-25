@@ -40,21 +40,13 @@ export function InputController({ gameStateRef, canvasRef }: InputControllerProp
       if (!gameStateRef.current) return;
 
       const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
+      
       dispatchCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, {
         position,
         timestamp: Date.now(),
       });
-
-      if (inputState.isPressed) {
-        dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
-          button: 'left',
-          isPressed: true,
-          position,
-          timestamp: Date.now(),
-        });
-      }
     },
-    [gameStateRef, inputState.isPressed],
+    [gameStateRef],
   );
 
   const handleMouseButtons = useCallback(
