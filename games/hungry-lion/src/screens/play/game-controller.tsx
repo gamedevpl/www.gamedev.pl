@@ -141,13 +141,14 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   });
 
   useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
-    if (!gameStateRef.current || touchStateRef.current.isActive) return;
+    if (!gameStateRef.current || !touchStateRef.current.isActive) return;
     touchStateRef.current.position = event.position;
     handleFollowCursor(event.position);
   });
 
   useCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, (event) => {
-    if (!gameStateRef.current || touchStateRef.current.isActive) return;
+    if (!gameStateRef.current) return;
+    touchStateRef.current.isActive = event.isPressed;
     if (event.position && event.isPressed) {
       handleTargeting(event.position);
     } else if (!event.position) {
