@@ -22,6 +22,9 @@
   "plugins": [
     "genaicode-debug-plugin.js"
   ],
+  "featuresEnabled": {
+    "appContext": true
+  },
   "modelOverrides": {
     "aiStudio": {
       "default": "gemini-exp-1206",
