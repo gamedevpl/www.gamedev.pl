@@ -5,8 +5,13 @@ export interface DevConfig {
   // Setting to enable debug rendering of vital information
   debugVitals: boolean;
 
-  // Setin to enable state machine debugging
+  // Setting to enable state machine debugging
   debugStateMachine: boolean;
+
+  // Metrics collection settings
+  metricsEnabled: boolean;
+  metricsTimeWindow: number;
+  metricsMaxPayloadSize: number;
 }
 
 /**
@@ -15,6 +20,10 @@ export interface DevConfig {
 const DEFAULT_CONFIG: DevConfig = {
   debugVitals: false,
   debugStateMachine: false,
+  // Default metrics settings
+  metricsEnabled: false,
+  metricsTimeWindow: 10000, // 10 seconds
+  metricsMaxPayloadSize: 2048, // characters
 };
 
 /**
@@ -38,9 +47,15 @@ function deserializeConfig(hash: string): Partial<DevConfig> {
 
     const params = new URLSearchParams(match[1]);
     const config: Partial<DevConfig> = {};
+
     params.forEach((value, key) => {
       if (key in DEFAULT_CONFIG) {
-        config[key as keyof DevConfig] = value === 'true';
+        if (key === 'metricsTimeWindow' || key === 'metricsMaxPayloadSize') {
+          config[key] = Number(value);
+        } else {
+          const boolKey = key as keyof Omit<DevConfig, 'metricsTimeWindow' | 'metricsMaxPayloadSize'>;
+          config[boolKey] = value === 'true';
+        }
       }
     });
     return config;

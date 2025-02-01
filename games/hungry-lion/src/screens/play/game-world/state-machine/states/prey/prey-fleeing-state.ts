@@ -1,4 +1,5 @@
 import { PreyEntity } from '../../../entities/entities-types';
+import { metricsAggregator } from '../../../../../../utils/metrics/metrics-aggregator';
 import { BaseStateData, State } from '../../state-machine-types';
 import { shouldFlee, updateFleeing } from './prey-state-utils';
 
@@ -18,6 +19,9 @@ export const PREY_FLEEING_STATE: State<PreyEntity, PreyFleeingStateData> = {
   update: (data, context) => {
     const { entity } = context;
     const currentTime = context.updateContext.gameState.time;
+    if (data.enteredAt === currentTime) {
+      metricsAggregator.recordFleeEvent();
+    }
     const timeInState = currentTime - data.enteredAt;
 
     // Only consider stopping fleeing after minimum flee time

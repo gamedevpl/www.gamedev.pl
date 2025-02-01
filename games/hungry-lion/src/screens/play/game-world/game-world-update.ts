@@ -1,4 +1,5 @@
 import { createEntities, entitiesUpdate } from './entities/entities-update';
+import { metricsAggregator } from '../../../utils/metrics/metrics-aggregator';
 import { environmentInit, environmentUpdate } from './environment/environment-update';
 import { GameWorldState, UpdateContext } from './game-world-types';
 import { interactionsUpdate } from './interactions/interactions-update';
@@ -15,6 +16,8 @@ export function gameWorldUpdate(updateContext: UpdateContext): GameWorldState {
   environmentUpdate(updateContext);
 
   updateContext.gameState.time += updateContext.deltaTime;
+  
+  metricsAggregator.aggregateAndSend();
   return updateContext.gameState;
 }
 

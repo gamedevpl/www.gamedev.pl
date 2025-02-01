@@ -32,6 +32,18 @@ export function DevConfigPanel() {
     setConfig(newConfig);
   };
 
+  const handleNumberChange = (key: keyof DevConfig, value: string) => {
+    const numValue = parseInt(value, 10);
+    if (!isNaN(numValue)) {
+      const newConfig = {
+        ...config,
+        [key]: numValue,
+      };
+      setDevConfig(newConfig);
+      setConfig(newConfig);
+    }
+  };
+
   return (
     <Panel>
       <Title>Dev Configuration</Title>
@@ -39,18 +51,58 @@ export function DevConfigPanel() {
       <Section>
         <SectionTitle>Debug Options</SectionTitle>
         <ToggleContainer>
-          <ToggleInput type="checkbox" checked={config.debugVitals} onChange={() => handleToggle('debugVitals')} />
+          <ToggleInput 
+            type="checkbox" 
+            checked={config.debugVitals} 
+            onChange={() => handleToggle('debugVitals')} 
+          />
           Debug vitals
         </ToggleContainer>
+        <ToggleContainer>
+          <ToggleInput
+            type="checkbox"
+            checked={config.debugStateMachine}
+            onChange={() => handleToggle('debugStateMachine')}
+          />
+          Debug state
+        </ToggleContainer>
       </Section>
-      <ToggleContainer>
-        <ToggleInput
-          type="checkbox"
-          checked={config.debugStateMachine}
-          onChange={() => handleToggle('debugStateMachine')}
-        />
-        Debug state
-      </ToggleContainer>
+
+      <Section>
+        <SectionTitle>Metrics Collection</SectionTitle>
+        <ToggleContainer>
+          <ToggleInput
+            type="checkbox"
+            checked={config.metricsEnabled}
+            onChange={() => handleToggle('metricsEnabled')}
+          />
+          Enable metrics collection
+        </ToggleContainer>
+        <InputContainer>
+          <InputLabel>Time window (ms):</InputLabel>
+          <NumberInput
+            type="number"
+            value={config.metricsTimeWindow}
+            onChange={(e) => handleNumberChange('metricsTimeWindow', e.target.value)}
+            min="1000"
+            max="60000"
+            step="1000"
+            disabled={!config.metricsEnabled}
+          />
+        </InputContainer>
+        <InputContainer>
+          <InputLabel>Max payload size:</InputLabel>
+          <NumberInput
+            type="number"
+            value={config.metricsMaxPayloadSize}
+            onChange={(e) => handleNumberChange('metricsMaxPayloadSize', e.target.value)}
+            min="512"
+            max="8192"
+            step="512"
+            disabled={!config.metricsEnabled}
+          />
+        </InputContainer>
+      </Section>
     </Panel>
   );
 }
@@ -112,6 +164,47 @@ const ToggleContainer = styled.label`
   }
 `;
 
+const InputContainer = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const InputLabel = styled.label`
+  flex: 1;
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.9);
+`;
+
+const NumberInput = styled.input`
+  width: 80px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  background: transparent;
+  color: white;
+  font-size: 12px;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #4a9eff;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: #4a9eff;
+  }
+`;
+
 const ToggleInput = styled.input`
   margin-right: 8px;
   cursor: pointer;
@@ -142,5 +235,10 @@ const ToggleInput = styled.input`
 
   &:hover {
     border-color: #4a9eff;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;

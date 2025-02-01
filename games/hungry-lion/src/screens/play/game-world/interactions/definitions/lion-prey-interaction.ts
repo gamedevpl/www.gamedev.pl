@@ -1,6 +1,7 @@
 import { InteractionDefinition } from '../interactions-types';
 import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
-import { PreyEntity } from '../../entities/entities-types';
+import { metricsAggregator } from '../../../../../utils/metrics/metrics-aggregator';
+import { LionEntity, PreyEntity } from '../../entities/entities-types';
 
 const HEALTH_DECREMENT = 1;
 const FORCE_STRENGTH = 0.005;
@@ -19,8 +20,10 @@ export const LION_PREY_INTERACTION: InteractionDefinition = {
   },
 
   perform: (source, target, updateContext) => {
+    const lion = source as LionEntity;
     const prey = target as PreyEntity;
 
+    metricsAggregator.recordCatchEvent(lion.hungerLevel);
     // Reduce prey health
     prey.health = Math.max(prey.health - HEALTH_DECREMENT, 0);
 
