@@ -1,6 +1,7 @@
 import { FunctionDef, ModelType } from 'genaicode';
 import { Asset } from '../assets/assets-types.js';
 import { generateContent } from './genaicode-executor.js';
+import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
 
 /**
  * Assess an asset by analyzing its rendering result
@@ -36,6 +37,7 @@ The assessment should be clear, concise, and constructive. It should not exceed 
 
   const assessment = await generateContent(
     [
+      ASSET_ASSESSOR_PROMPT,
       {
         type: 'user',
         text: prompt,

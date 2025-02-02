@@ -1,5 +1,6 @@
 import { FunctionDef, ModelType } from 'genaicode';
 import { generateCode } from './genaicode-executor.js';
+import { ASSET_GENERATOR_PROMPT } from './prompts.js';
 
 /**
  * Generate an improved implementation of an asset
@@ -42,6 +43,7 @@ export async function generateImprovedAsset(
 
   const improvedImplementation = await generateCode(
     [
+      ASSET_GENERATOR_PROMPT,
       {
         type: 'user',
         text: prompt,
