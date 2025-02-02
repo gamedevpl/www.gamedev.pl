@@ -16,3 +16,9 @@ Asset is a code that is responsible for rendering the asset.
 5. Generator analyses the asset rendering outcome
 6. Go back to point 3 (or stop iteration)
 7. Asset code is created
+
+# Architecture
+
+Assets generator tool is implemented as a genaicode plugin, it introduces some additional actions to genaicode:
+
+-

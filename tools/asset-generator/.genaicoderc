@@ -1,5 +1,11 @@
 {
   "rootDir": ".",
+  "importantContext": {
+    "files": [
+      "README.md",
+      "tsconfig.json"
+    ]
+  },
   "ignorePaths": [
     "dist",
     "build",
@@ -8,7 +14,7 @@
   ],
   "modelOverrides": {
     "aiStudio": {
-      "default": "gemini-exp-1206",
+      "default": "gemini-2.0-flash-exp",
       "cheap": "gemini-2.0-flash-exp"
     }
   }

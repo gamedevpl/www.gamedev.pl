@@ -1,6 +1,18 @@
 {
   "name": "asset-generator",
+  "type": "module",
+  "bin": {
+    "asset-generator": "./dist/runner.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "execute": "node ./bin/asset-gen.cjs"
+  },
   "dependencies": {
+    "canvas": "^3.1.0",
     "genaicode": "^0.9.2"
   }
 }
