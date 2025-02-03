@@ -4,7 +4,69 @@ import { generateContent } from './genaicode-executor.js';
 import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { getAssetFilePath } from './asset-loader.js';
+
+interface AssessmentContext {
+  referenceImageDescription?: string;
+  renderedAssetDescription?: string;
+  implementationDescription?: string;
+}
+
+interface StepResult<T> {
+  result: T;
+  promptItems: PromptItem[];
+}
+
+/**
+ * Execute a single step in the Chain of Thought process
+ */
+async function executeStep<T>(
+  promptItems: PromptItem[],
+  requiredFunctionName: string,
+  stepName: string,
+): Promise<StepResult<T>> {
+  try {
+    console.log(`Executing ${stepName}...`);
+    const [result] = await generateContent(
+      promptItems,
+      [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
+      requiredFunctionName,
+      0.7,
+      ModelType.CHEAP,
+    );
+
+    // Add assistant's response as a prompt item
+    const assistantPromptItem: PromptItem = {
+      type: 'assistant',
+      text: `${stepName} Result:`,
+      functionCalls: [
+        {
+          name: requiredFunctionName,
+          args: result.args,
+        },
+      ],
+    };
+
+    return {
+      result: result.args as T,
+      promptItems: [
+        ...promptItems,
+        assistantPromptItem,
+        {
+          type: 'user',
+          functionResponses: [
+            {
+              name: requiredFunctionName,
+              content: '',
+            },
+          ],
+        },
+      ],
+    };
+  } catch (error) {
+    console.error(`Error in ${stepName}:`, error);
+    throw new Error(`Failed to execute ${stepName}: ${(error as Error).message}`);
+  }
+}
 
 /**
  * Assess an asset by analyzing its rendering result
@@ -20,74 +82,205 @@ export async function assessAsset(
   currentImplementation: string | null,
   dataUrl: string,
 ): Promise<string> {
-  // Handle reference image if specified
-  let referenceImageData: string | undefined;
-  if (asset.referenceImage) {
-    try {
-      // Get the reference image path
-      const imagePath = path.join(path.dirname(assetPath), asset.referenceImage);
-
-      // Read and convert to base64
-      const imageBuffer = await fs.readFile(imagePath);
-      referenceImageData = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    } catch (error) {
-      console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
-    }
-  }
-
-  const promptMessage = `Analyze this asset rendering:
+  try {
+    // Initialize assessment context and base prompt items
+    const context: AssessmentContext = {};
+    let promptItems: PromptItem[] = [
+      ASSET_ASSESSOR_PROMPT,
+      {
+        type: 'user',
+        text: `Analyze this asset using Chain of Thought (CoT) process:
 Asset Name: ${asset.name}
-Asset Description: ${asset.description}
-    ${
-      currentImplementation
-        ? 'Current implementation:\\n```typescript\\n' + currentImplementation + '\\n```'
-        : 'No current implementation exists.'
+Asset Description: ${asset.description}`,
+      },
+    ];
+
+    // Add implementation if available
+    if (currentImplementation) {
+      promptItems.push(
+        {
+          type: 'user',
+          text: 'Current implementation:',
+        },
+        {
+          type: 'user',
+          text: `\`\`\`typescript\n${currentImplementation}\n\`\`\``,
+        },
+      );
+    } else {
+      promptItems.push({
+        type: 'user',
+        text: 'No current implementation exists.',
+      });
     }
 
-${
-  referenceImageData
-    ? 'Compare this rendering with the provided reference image, considering:\n' +
-      '1. How well the asset matches the reference image style and proportions\n' +
-      '2. What elements from the reference are well-implemented\n' +
-      '3. What elements from the reference could be improved\n' +
-      '4. Any elements that are missing'
-    : 'No reference image provided for comparison.'
-}
+    // Handle reference image if specified
+    let referenceImageData: string | undefined;
+    if (asset.referenceImage) {
+      try {
+        const imagePath = path.join(path.dirname(assetPath), asset.referenceImage);
+        const imageBuffer = await fs.readFile(imagePath);
+        referenceImageData = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
-Please assess:
-1. Visual quality and appearance
-2. How well the asset meets its intended purpose
-3. What improvements could be made to make it meet its purpose better
+        // Step 1: Describe reference image
+        const refImageStep = await executeStep<{ description: string }>(
+          [
+            ...promptItems,
+            {
+              type: 'user',
+              text: 'Reference image for analysis:',
+              images: [
+                {
+                  mediaType: 'image/png',
+                  base64url: referenceImageData.split('data:image/png;base64,')[1],
+                },
+              ],
+            },
+            {
+              type: 'user',
+              text: 'Please analyze the reference image in detail (200 words max):',
+            },
+          ],
+          describeReferenceImageDef.name,
+          'Reference Image Analysis',
+        );
 
-Respond using the \`assessAsset\` function with the assessment text as the argument.
-The assessment should be clear, concise, and constructive. It should not exceed 1000 words.
-  `;
+        context.referenceImageDescription = refImageStep.result.description;
+        promptItems = refImageStep.promptItems;
+      } catch (error) {
+        console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
+      }
+    }
 
-  const prompt: PromptItem[] = [
-    ASSET_ASSESSOR_PROMPT,
-    {
+    // Step 2: Describe rendered asset
+    const renderStep = await executeStep<{ description: string }>(
+      [
+        ...promptItems,
+        {
+          type: 'user',
+          text: 'Rendered asset for analysis:',
+          images: [
+            {
+              mediaType: 'image/png',
+              base64url: dataUrl.split('data:image/png;base64,')[1],
+            },
+          ],
+        },
+        {
+          type: 'user',
+          text: 'Please analyze the rendered asset in detail (200 words max):',
+        },
+      ],
+      describeAssetRenderingDef.name,
+      'Rendered Asset Analysis',
+    );
+
+    context.renderedAssetDescription = renderStep.result.description;
+    promptItems = renderStep.promptItems;
+
+    // Step 3: Describe implementation (if available)
+    if (currentImplementation) {
+      const implStep = await executeStep<{ description: string }>(
+        [
+          ...promptItems,
+          {
+            type: 'user',
+            text: 'Please analyze the implementation in detail (200 words max):',
+          },
+        ],
+        describeCurrentImplementationDef.name,
+        'Implementation Analysis',
+      );
+
+      context.implementationDescription = implStep.result.description;
+      promptItems = implStep.promptItems;
+    }
+
+    // Step 4: Final assessment
+    promptItems.push({
       type: 'user',
-      text: promptMessage,
-    },
-  ];
-  if (referenceImageData) {
-    prompt.push({
-      type: 'user',
-      text: 'This is the reference image:',
-      images: [{ mediaType: 'image/png', base64url: referenceImageData.split('data:image/png;base64,')[1] } as const],
+      text: 'Please provide the final assessment based on all previous analyses (max 200 words):',
     });
+
+    const assessStep = await executeStep<{ assessment: string }>(promptItems, assessAssetDef.name, 'Final Assessment');
+
+    return `## Reference Image Analysis
+${context.referenceImageDescription || 'No reference image provided.'}
+
+## Rendered Asset Analysis
+${context.renderedAssetDescription}
+
+## Implementation Analysis
+${context.implementationDescription || 'No current implementation available.'}
+
+## Final Assessment
+${assessStep.result.assessment}`;
+  } catch (error) {
+    console.error('Error during asset assessment:', error);
+    throw new Error(`Failed to assess asset: ${(error as Error).message}`);
   }
-  prompt.push({
-    type: 'user',
-    text: 'This is the rendering of the current implementation of the asset:',
-    images: [{ mediaType: 'image/png', base64url: dataUrl.split('data:image/png;base64,')[1] }],
-  });
-
-  const assessment = await generateContent(prompt, [assessAssetDef], 'assessAsset', 0.7, ModelType.CHEAP);
-
-  return assessment[0].args.assessment as string;
 }
 
+/**
+ * Function definition for describing a reference image
+ */
+const describeReferenceImageDef: FunctionDef = {
+  name: 'describeReferenceImage',
+  description: 'Describe the reference image for an asset',
+  parameters: {
+    type: 'object',
+    properties: {
+      description: {
+        type: 'string',
+        description: 'Detailed description of the reference image, max 200 words',
+        maxLength: 1000,
+      },
+    },
+    required: ['description'],
+  },
+};
+
+/**
+ * Function definition for describing an asset rendering
+ */
+const describeAssetRenderingDef: FunctionDef = {
+  name: 'describeAssetRendering',
+  description: 'Describe the rendered asset',
+  parameters: {
+    type: 'object',
+    properties: {
+      description: {
+        type: 'string',
+        description: 'Detailed description of the rendered asset, max 200 words',
+        maxLength: 1000,
+      },
+    },
+    required: ['description'],
+  },
+};
+
+/**
+ * Function definition for describing current implementation
+ */
+const describeCurrentImplementationDef: FunctionDef = {
+  name: 'describeCurrentImplementation',
+  description: 'Describe the current implementation of the asset',
+  parameters: {
+    type: 'object',
+    properties: {
+      description: {
+        type: 'string',
+        description: 'Detailed description of the current implementation, max 200 words',
+        maxLength: 1000,
+      },
+    },
+    required: ['description'],
+  },
+};
+
+/**
+ * Function definition for the final assessment
+ */
 const assessAssetDef: FunctionDef = {
   name: 'assessAsset',
   description: 'Assess an asset by analyzing its rendering result',
@@ -96,7 +289,8 @@ const assessAssetDef: FunctionDef = {
     properties: {
       assessment: {
         type: 'string',
-        description: 'The outcome of the assessment',
+        description: 'The outcome of the assessment, max 200 words',
+        maxLength: 1000,
       },
     },
     required: ['assessment'],
