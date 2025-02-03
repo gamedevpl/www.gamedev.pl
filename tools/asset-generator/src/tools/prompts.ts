@@ -3,6 +3,8 @@
  * These prompts guide the AI in assessing and generating game assets.
  */
 
+import { PromptItem } from 'genaicode';
+
 /**
  * System prompt for the asset assessor.
  * This prompt guides the AI in evaluating assets based on specific criteria:
@@ -11,10 +13,11 @@
  * 3. Areas for improvement
  * 4. Technical implementation
  */
-export const ASSET_ASSESSOR_PROMPT = {
+export const ASSET_ASSESSOR_PROMPT: PromptItem = {
   type: 'systemPrompt',
-  content: `You are an expert game asset assessor. Your role is to evaluate game assets based on their visual quality, functionality, and implementation. Follow these guidelines:
+  systemPrompt: `You are an expert game asset assessor. Your role is to evaluate game assets based on their visual quality, functionality, and implementation. Follow these guidelines:
 
+/**
 1. Visual Quality Assessment:
    - Evaluate the overall visual appearance
    - Check for consistency in style and proportions
@@ -26,14 +29,21 @@ export const ASSET_ASSESSOR_PROMPT = {
    - Verify that all required elements are present
    - Check if the asset meets specified dimensions and constraints
    - Evaluate how well it serves its intended purpose
+   
+3. Reference Image Analysis (when provided):
+   - Compare the asset with its reference image
+   - Evaluate style consistency with the reference
+   - Assess proportion accuracy and scaling
+   - Identify elements that match well
+   - Note areas that deviate from the reference
 
-3. Technical Implementation:
+4. Technical Implementation:
    - Review the code quality and organization
    - Assess rendering performance and efficiency
    - Check for proper use of Canvas API
    - Look for potential technical issues
 
-4. Improvement Areas:
+5. Improvement Areas:
    - Identify specific areas that need enhancement
    - Suggest concrete, actionable improvements
    - Prioritize suggestions by impact
@@ -52,15 +62,16 @@ Your assessment should be thorough but concise, highlighting the most important 
  * 3. Performance considerations
  * 4. Maintainability requirements
  */
-export const ASSET_GENERATOR_PROMPT = {
+export const ASSET_GENERATOR_PROMPT: PromptItem = {
   type: 'systemPrompt',
-  content: `You are an expert game asset generator. Your role is to generate high-quality, performant, and maintainable asset implementations. Follow these guidelines:
+  systemPrompt: `You are an expert game asset generator. Your role is to generate high-quality, performant, and maintainable asset implementations. Follow these guidelines:
 
 1. Code Quality:
    - Write clean, readable, and well-organized code
    - Follow TypeScript best practices and idioms
    - Use meaningful variable and function names
-   - Add appropriate comments for complex logic
+   - Keep the code concise and focused
+   - Code must be compact yet understandable
 
 2. Implementation Focus:
    - Address all improvement points from the assessment
@@ -79,6 +90,9 @@ export const ASSET_GENERATOR_PROMPT = {
    - Make the implementation flexible for future changes
    - Use constants for configurable values
    - Implement proper error handling
+
+5. Reference Image Consideration:
+   - Adhere to the observations from the reference image (when provided)
 
 5. Canvas API Usage:
    - Use appropriate Canvas API methods

@@ -1,4 +1,4 @@
-import { FunctionDef, ModelType } from 'genaicode';
+import { FunctionDef, ModelType, PromptItem } from 'genaicode';
 import { generateCode } from './genaicode-executor.js';
 import { ASSET_GENERATOR_PROMPT } from './prompts.js';
 
@@ -14,7 +14,7 @@ export async function generateImprovedAsset(
   currentImplementation: string | null,
   assessment: string,
 ): Promise<string> {
-  const prompt = `
+  const promptMessage = `
     Generate an improved implementation of the ${assetName} asset.
     ${
       currentImplementation
@@ -41,19 +41,15 @@ export async function generateImprovedAsset(
     Generate the complete TypeScript file content for the improved asset.
   `;
 
-  const improvedImplementation = await generateCode(
-    [
-      ASSET_GENERATOR_PROMPT,
-      {
-        type: 'user',
-        text: prompt,
-      },
-    ],
-    [saveAssetDef],
-    'saveAsset',
-    0.7,
-    ModelType.DEFAULT,
-  );
+  const prompt: PromptItem[] = [
+    ASSET_GENERATOR_PROMPT,
+    {
+      type: 'user',
+      text: promptMessage,
+    },
+  ];
+
+  const improvedImplementation = await generateCode(prompt, [saveAssetDef], 'saveAsset', 0.7, ModelType.DEFAULT);
 
   return improvedImplementation[0].args.content as string;
 }

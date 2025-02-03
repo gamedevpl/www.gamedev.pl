@@ -38,7 +38,7 @@ export async function assetGenRunner() {
 
     // Run inference for assessment
     const assessment = currentAsset
-      ? await assessAsset(currentAsset, currentContent, renderingResult)
+      ? await assessAsset(assetPath, currentAsset, currentContent, renderingResult)
       : 'No existing asset to assess';
     console.log('\nAsset Assessment:');
     console.log(assessment);
