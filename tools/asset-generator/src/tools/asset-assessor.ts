@@ -150,6 +150,11 @@ Asset Description: ${asset.description}`,
       } catch (error) {
         console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
       }
+    } else {
+      promptItems.push({
+        type: 'user',
+        text: 'No reference image was provided.',
+      });
     }
 
     // Step 2: Describe rendered asset

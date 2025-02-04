@@ -3,106 +3,122 @@ import { Asset } from '../assets-types';
 
 export const SimpleCharacter: Asset = {
   name: 'simple-character',
-  description: `Simple character should have following parts:
-- Head (circle)
-    - No hair
-    - Eyes
-    - Eyebrows
-    - Mouth
-- Body (a rectangle)
-- Arms (2 lines)
-- Hands (2 small circles)
-- Legs (2 lines)
-- Feet (2 small circles)
+  description: `A cartoon-style character with an angry expression and bold, minimalist design.
 
-Characteristics:
-- character must have angry face expression
+Visual Style:
+- Bold, clean lines with clear silhouette
+- Vibrant color palette: yellow for head, light blue for body, black for details
+- Exaggerated proportions for emotional impact
+- Minimalist yet expressive features
+- Strong contrast between main shapes and details
 
-Desired dimensions:
-- fit within 300x300 square
+Character Mood:
+- Conveys anger through exaggerated eyebrows and downturned mouth
+- Dynamic pose suggesting tension and energy
 
-Rendering requirements:
-- can be rendered in a rotation over Y axis (3d rotation)
-
-Visual style:
-- cartoon style
+Technical Requirements:
+- Dimensions: 300x300 pixels
+- Support walk animation via 'animationProgress' parameter
+- Efficient use of basic geometric shapes
+- Must be implemented using only 10 rectangles.
+- Must not use any other shapes or paths
+- Implementation must be contained entirely within the 'render' function.
 `,
-  render(ctx: CanvasRenderingContext2D): void {
-    const centerX = 150;
-    const centerY = 150;
-    const headRadius = 40;
-    const bodyWidth = 60;
-    const bodyHeight = 80;
-    const armLength = 50;
-    const legLength = 60;
-    const handRadius = 10; // Increased hand radius
-    const footRadius = 10; // Increased foot radius
-
-    // Head
-    ctx.beginPath();
-    ctx.arc(centerX, centerY - bodyHeight / 2 - headRadius, headRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = 'yellow';
-    ctx.fill();
-    ctx.stroke();
-
-    // Eyes
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
-    ctx.arc(centerX - 15, centerY - bodyHeight / 2 - headRadius + 10, 4, 0, 2 * Math.PI); // Smaller eyes
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(centerX + 15, centerY - bodyHeight / 2 - headRadius + 10, 4, 0, 2 * Math.PI); // Smaller eyes
-    ctx.fill();
-
-    // Eyebrows
-    ctx.beginPath();
-    ctx.moveTo(centerX - 20, centerY - bodyHeight / 2 - headRadius - 10);
-    ctx.lineTo(centerX - 10, centerY - bodyHeight / 2 - headRadius - 25); // More angled eyebrows
-    ctx.moveTo(centerX + 20, centerY - bodyHeight / 2 - headRadius - 10);
-    ctx.lineTo(centerX + 10, centerY - bodyHeight / 2 - headRadius - 25); // More angled eyebrows
-    ctx.stroke();
-
-    // Mouth
-    ctx.beginPath();
-    ctx.moveTo(centerX - 15, centerY - bodyHeight / 2 - headRadius + 30);
-    ctx.quadraticCurveTo(centerX, centerY - bodyHeight / 2 - headRadius + 40, centerX + 15, centerY - bodyHeight / 2 - headRadius + 30); // Downward curved mouth
-    ctx.stroke();
-
-    // Body
-    ctx.fillStyle = 'lightblue';
-    ctx.fillRect(centerX - bodyWidth / 2, centerY - bodyHeight / 2, bodyWidth, bodyHeight);
-    ctx.strokeRect(centerX - bodyWidth / 2, centerY - bodyHeight / 2, bodyWidth, bodyHeight);
-
-    // Arms
-    ctx.beginPath();
-    ctx.moveTo(centerX - bodyWidth / 2, centerY - bodyHeight / 2 + 20);
-    ctx.lineTo(centerX - bodyWidth / 2 - armLength, centerY - bodyHeight / 2 + 30); // Slightly angled arms
-    ctx.moveTo(centerX + bodyWidth / 2, centerY - bodyHeight / 2 + 20);
-    ctx.lineTo(centerX + bodyWidth / 2 + armLength, centerY - bodyHeight / 2 + 30); // Slightly angled arms
-    ctx.stroke();
-
-    // Hands
-    ctx.beginPath();
-    ctx.arc(centerX - bodyWidth / 2 - armLength, centerY - bodyHeight / 2 + 30, handRadius, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(centerX + bodyWidth / 2 + armLength, centerY - bodyHeight / 2 + 30, handRadius, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Legs
-    ctx.beginPath();
-    ctx.moveTo(centerX - bodyWidth / 4, centerY + bodyHeight / 2);
-    ctx.lineTo(centerX - bodyWidth / 4 - 10, centerY + bodyHeight / 2 + legLength); // Slightly angled legs
-    ctx.moveTo(centerX + bodyWidth / 4, centerY + bodyHeight / 2);
-    ctx.lineTo(centerX + bodyWidth / 4 + 10, centerY + bodyHeight / 2 + legLength); // Slightly angled legs
-    ctx.stroke();
-
-    // Feet
-    ctx.beginPath();
-    ctx.arc(centerX - bodyWidth / 4 - 10, centerY + bodyHeight / 2 + legLength, footRadius, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(centerX + bodyWidth / 4 + 10, centerY + bodyHeight / 2 + legLength, footRadius, 0, 2 * Math.PI);
-    ctx.fill();
+  render(ctx: CanvasRenderingContext2D, animationProgress: number = 0): void {
+    // Constants for character dimensions and positioning
+    const CHARACTER_WIDTH = 100;
+    const CHARACTER_HEIGHT = 200;
+    const CENTER_X = 150;
+    const CENTER_Y = 150;
+    
+    // Animation calculations
+    const walkOffset = Math.sin(animationProgress * Math.PI * 2) * 10;
+    const bodyTilt = Math.sin(animationProgress * Math.PI * 2) * 0.1;
+    
+    // Save the current context state
+    ctx.save();
+    
+    // Move to character center and apply animation tilt
+    ctx.translate(CENTER_X, CENTER_Y);
+    ctx.rotate(bodyTilt);
+    
+    // Draw body (Rectangle 1)
+    ctx.fillStyle = '#87CEEB'; // Light blue
+    ctx.fillRect(
+      -CHARACTER_WIDTH / 2,
+      -CHARACTER_HEIGHT / 2,
+      CHARACTER_WIDTH,
+      CHARACTER_HEIGHT * 0.6
+    );
+    
+    // Draw legs with walk animation
+    // Left leg (Rectangle 2)
+    ctx.fillRect(
+      -CHARACTER_WIDTH / 3,
+      CHARACTER_HEIGHT * 0.1 + walkOffset,
+      CHARACTER_WIDTH / 4,
+      CHARACTER_HEIGHT * 0.4
+    );
+    
+    // Right leg (Rectangle 3)
+    ctx.fillRect(
+      CHARACTER_WIDTH / 12,
+      CHARACTER_HEIGHT * 0.1 - walkOffset,
+      CHARACTER_WIDTH / 4,
+      CHARACTER_HEIGHT * 0.4
+    );
+    
+    // Draw head (Rectangle 4)
+    ctx.fillStyle = '#FFD700'; // Yellow
+    const headSize = CHARACTER_WIDTH * 0.8;
+    ctx.fillRect(
+      -headSize / 2,
+      -CHARACTER_HEIGHT / 2 - headSize * 0.8,
+      headSize,
+      headSize
+    );
+    
+    // Draw angry eyebrows (Rectangles 5 and 6)
+    ctx.fillStyle = '#000000';
+    const eyebrowWidth = headSize * 0.4;
+    const eyebrowHeight = headSize * 0.1;
+    
+    // Left eyebrow
+    ctx.save();
+    ctx.translate(-headSize / 4, -CHARACTER_HEIGHT / 2 - headSize * 0.5);
+    ctx.rotate(-Math.PI / 6);
+    ctx.fillRect(-eyebrowWidth / 2, -eyebrowHeight / 2, eyebrowWidth, eyebrowHeight);
+    ctx.restore();
+    
+    // Right eyebrow
+    ctx.save();
+    ctx.translate(headSize / 4, -CHARACTER_HEIGHT / 2 - headSize * 0.5);
+    ctx.rotate(Math.PI / 6);
+    ctx.fillRect(-eyebrowWidth / 2, -eyebrowHeight / 2, eyebrowWidth, eyebrowHeight);
+    ctx.restore();
+    
+    // Draw eyes (Rectangles 7 and 8)
+    const eyeSize = headSize * 0.15;
+    ctx.fillRect(-headSize / 4 - eyeSize / 2, -CHARACTER_HEIGHT / 2 - headSize * 0.4, eyeSize, eyeSize);
+    ctx.fillRect(headSize / 4 - eyeSize / 2, -CHARACTER_HEIGHT / 2 - headSize * 0.4, eyeSize, eyeSize);
+    
+    // Draw angry mouth (Rectangles 9 and 10)
+    const mouthWidth = headSize * 0.3;
+    const mouthHeight = headSize * 0.1;
+    
+    ctx.save();
+    ctx.translate(-mouthWidth / 2, -CHARACTER_HEIGHT / 2 - headSize * 0.2);
+    ctx.rotate(-Math.PI / 12);
+    ctx.fillRect(0, 0, mouthWidth, mouthHeight);
+    ctx.restore();
+    
+    ctx.save();
+    ctx.translate(mouthWidth / 2, -CHARACTER_HEIGHT / 2 - headSize * 0.2);
+    ctx.rotate(Math.PI / 12);
+    ctx.fillRect(-mouthWidth, 0, mouthWidth, mouthHeight);
+    ctx.restore();
+    
+    // Restore the original context state
+    ctx.restore();
   },
 };
