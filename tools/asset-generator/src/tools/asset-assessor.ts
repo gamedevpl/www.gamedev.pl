@@ -49,7 +49,6 @@ async function executeStep<T>(
     return {
       result: result.args as T,
       promptItems: [
-        ...promptItems,
         assistantPromptItem,
         {
           type: 'user',
@@ -85,34 +84,6 @@ export async function assessAsset(
   try {
     // Initialize assessment context and base prompt items
     const context: AssessmentContext = {};
-    let promptItems: PromptItem[] = [
-      ASSET_ASSESSOR_PROMPT,
-      {
-        type: 'user',
-        text: `Analyze this asset using Chain of Thought (CoT) process:
-Asset Name: ${asset.name}
-Asset Description: ${asset.description}`,
-      },
-    ];
-
-    // Add implementation if available
-    if (currentImplementation) {
-      promptItems.push(
-        {
-          type: 'user',
-          text: 'Current implementation:',
-        },
-        {
-          type: 'user',
-          text: `\`\`\`typescript\n${currentImplementation}\n\`\`\``,
-        },
-      );
-    } else {
-      promptItems.push({
-        type: 'user',
-        text: 'No current implementation exists.',
-      });
-    }
 
     // Handle reference image if specified
     let referenceImageData: string | undefined;
@@ -125,7 +96,7 @@ Asset Description: ${asset.description}`,
         // Step 1: Describe reference image
         const refImageStep = await executeStep<{ description: string }>(
           [
-            ...promptItems,
+            ASSET_ASSESSOR_PROMPT,
             {
               type: 'user',
               text: 'Reference image for analysis:',
@@ -146,21 +117,15 @@ Asset Description: ${asset.description}`,
         );
 
         context.referenceImageDescription = refImageStep.result.description;
-        promptItems = refImageStep.promptItems;
       } catch (error) {
         console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
       }
-    } else {
-      promptItems.push({
-        type: 'user',
-        text: 'No reference image was provided.',
-      });
     }
 
     // Step 2: Describe rendered asset
     const renderStep = await executeStep<{ description: string }>(
       [
-        ...promptItems,
+        ASSET_ASSESSOR_PROMPT,
         {
           type: 'user',
           text: 'Rendered asset for analysis:',
@@ -181,13 +146,16 @@ Asset Description: ${asset.description}`,
     );
 
     context.renderedAssetDescription = renderStep.result.description;
-    promptItems = renderStep.promptItems;
 
     // Step 3: Describe implementation (if available)
     if (currentImplementation) {
       const implStep = await executeStep<{ description: string }>(
         [
-          ...promptItems,
+          ASSET_ASSESSOR_PROMPT,
+          {
+            type: 'user',
+            text: 'Current implementation:\n\n' + `\`\`\`typescript\n${currentImplementation}\n\`\`\``,
+          },
           {
             type: 'user',
             text: 'Please analyze the implementation in detail (200 words max):',
@@ -198,28 +166,36 @@ Asset Description: ${asset.description}`,
       );
 
       context.implementationDescription = implStep.result.description;
-      promptItems = implStep.promptItems;
     }
 
-    // Step 4: Final assessment
-    promptItems.push({
-      type: 'user',
-      text: 'Please provide the final assessment based on all previous analyses (max 200 words):',
-    });
+    const assessStep = await executeStep<{ assessment: string }>(
+      [
+        ASSET_ASSESSOR_PROMPT,
+        {
+          type: 'user',
+          text: `Please provide the final assessment based on all previous analyses (max 200 words).
 
-    const assessStep = await executeStep<{ assessment: string }>(promptItems, assessAssetDef.name, 'Final Assessment');
+## Asset Name:
+${asset.name}
 
-    return `## Reference Image Analysis
+## Asset Description: 
+${asset.description}
+
+## Reference Image Analysis
 ${context.referenceImageDescription || 'No reference image provided.'}
 
 ## Rendered Asset Analysis
 ${context.renderedAssetDescription}
 
 ## Implementation Analysis
-${context.implementationDescription || 'No current implementation available.'}
+${context.implementationDescription || 'No current implementation available.'}`,
+        },
+      ],
+      assessAssetDef.name,
+      'Final Assessment',
+    );
 
-## Final Assessment
-${assessStep.result.assessment}`;
+    return assessStep.result.assessment;
   } catch (error) {
     console.error('Error during asset assessment:', error);
     throw new Error(`Failed to assess asset: ${(error as Error).message}`);

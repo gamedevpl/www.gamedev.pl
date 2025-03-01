@@ -13,6 +13,9 @@ export async function assetGenRunner() {
       throw new Error('Asset name is required. Usage: asset-generator <asset-name>');
     }
 
+    const args = process.argv.slice(3);
+    const renderOnly = args.includes('--render-only');
+
     // Get asset file path
     const assetPath = await getAssetFilePath(assetName);
     console.log(`Processing asset: ${assetName}`);
@@ -34,6 +37,11 @@ export async function assetGenRunner() {
     if (currentAsset) {
       renderingResult = await renderAsset(currentAsset, assetPath);
       console.log('Asset rendered successfully');
+    }
+
+    if (renderOnly) {
+      console.log('Rendering only, exiting...');
+      return;
     }
 
     // Run inference for assessment

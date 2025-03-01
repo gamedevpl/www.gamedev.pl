@@ -5,14 +5,23 @@
     "asset-generator": "./dist/runner.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc",
-    "execute": "node ./bin/asset-gen.cjs"
+    "execute": "node ./bin/asset-gen.cjs",
+    "preview": "vite",
+    "build:preview": "vite build",
+    "serve:preview": "vite preview",
+    "start": "vite"
   },
   "dependencies": {
     "canvas": "^3.1.0",
     "genaicode": "^0.9.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "typescript": "^5.3.3",
+    "vite": "^6.2.0"
   }
 }

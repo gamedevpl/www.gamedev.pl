@@ -32,7 +32,6 @@ export async function generateImprovedAsset(
     4. Include proper type annotations
     5. Follow best practices for code organization
     6. IMPORTANT: Adhere to suggested improvements from the assessment
-    7. Do not modify the asset name or description
     8. Make sure the code is valid and error-free
     9. Find balance between code readability and verbosity
     10. Modify the existing code as needed, retain parts that are already good
@@ -51,6 +50,8 @@ export async function generateImprovedAsset(
 
   const improvedImplementation = await generateCode(prompt, [saveAssetDef], 'saveAsset', 0.7, ModelType.DEFAULT);
 
+  console.log('Improved implementation:', improvedImplementation[0].args.summaryOfChanges);
+
   return improvedImplementation[0].args.content as string;
 }
 
@@ -60,8 +61,9 @@ const saveAssetDef: FunctionDef = {
   parameters: {
     type: 'object',
     properties: {
+      summaryOfChanges: { type: 'string', description: 'Summary of changes made in the asset, max 100 words.' },
       content: { type: 'string' },
     },
-    required: ['content'],
+    required: ['summaryOfChanges', 'content'],
   },
 };
