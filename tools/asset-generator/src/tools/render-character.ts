@@ -16,7 +16,7 @@ export async function renderAsset(asset: Asset, assetPath: string): Promise<stri
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
-  asset.render(ctx);
+  asset.render(ctx as unknown as CanvasRenderingContext2D, undefined);
   const dataUrl = canvas.toDataURL();
 
   try {

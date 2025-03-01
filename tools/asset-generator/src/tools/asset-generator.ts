@@ -50,9 +50,9 @@ export async function generateImprovedAsset(
 
   const improvedImplementation = await generateCode(prompt, [saveAssetDef], 'saveAsset', 0.7, ModelType.DEFAULT);
 
-  console.log('Improved implementation:', improvedImplementation[0].args.summaryOfChanges);
+  console.log('Improved implementation:', improvedImplementation[0]!.args!.summaryOfChanges);
 
-  return improvedImplementation[0].args.content as string;
+  return improvedImplementation[0]!.args!.content as string;
 }
 
 const saveAssetDef: FunctionDef = {
