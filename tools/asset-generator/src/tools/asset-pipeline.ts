@@ -1,8 +1,8 @@
-import { getAssetFilePath, loadAsset } from './asset-loader';
-import { renderAsset } from './render-character';
-import { assessAsset } from './asset-assessor';
-import { generateImprovedAsset } from './asset-generator';
-import { saveAsset } from './asset-saver';
+import { getAssetFilePath, loadAsset } from './asset-loader.js';
+import { renderAsset } from './render-character.js';
+import { assessAsset } from './asset-assessor.js';
+import { generateImprovedAsset } from './asset-generator.js';
+import { saveAsset } from './asset-saver.js';
 import * as fs from 'fs/promises';
 
 /**

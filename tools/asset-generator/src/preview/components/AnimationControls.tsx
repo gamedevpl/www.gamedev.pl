@@ -127,7 +127,7 @@ const Label = styled.label`
 `;
 
 const Slider = styled.input`
-  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 6px;
   border-radius: 3px;
@@ -135,7 +135,7 @@ const Slider = styled.input`
   outline: none;
 
   &::-webkit-slider-thumb {
-    -webkit-appearance: none;
+    appearance: none;
     appearance: none;
     width: 16px;
     height: 16px;

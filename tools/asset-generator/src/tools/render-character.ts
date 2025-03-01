@@ -3,6 +3,8 @@ import { Asset } from '../assets/assets-types.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+/// <reference lib="dom" />
+
 /**
  * Renders an asset to canvas and saves it as PNG file in the asset directory
  * @param asset The asset to render
@@ -16,7 +18,7 @@ export async function renderAsset(asset: Asset, assetPath: string): Promise<stri
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
-  asset.render(ctx as unknown as CanvasRenderingContext2D, undefined);
+  asset.render(ctx as any, undefined);
   const dataUrl = canvas.toDataURL();
 
   try {

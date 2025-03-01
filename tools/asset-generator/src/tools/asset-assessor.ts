@@ -1,9 +1,9 @@
+import * as path from 'path';
+import * as fs from 'fs/promises';
 import { FunctionDef, ModelType, PromptItem } from 'genaicode';
 import { Asset } from '../assets/assets-types.js';
 import { generateContent } from './genaicode-executor.js';
 import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
-import * as path from 'path';
-import * as fs from 'fs/promises';
 
 interface AssessmentContext {
   referenceImageDescription?: string;
