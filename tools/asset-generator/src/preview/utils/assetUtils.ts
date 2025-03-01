@@ -51,8 +51,44 @@ export interface RegenerateAssetOptions {
  * @param assetName Name of the asset to regenerate
  * @param options Regeneration options
  */
-export async function regenerateAsset(_assetName: string, _options: RegenerateAssetOptions = {}): Promise<void> {
-  // TODO: call rest endpoint
+export async function regenerateAsset(assetName: string, options: RegenerateAssetOptions = {}): Promise<void> {
+  try {
+    // Call onStart callback if provided
+    if (options.onStart) {
+      options.onStart();
+    }
+
+    // Make POST request to the regenerate-asset endpoint
+    const response = await fetch('/api/regenerate-asset', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ assetName }),
+    });
+
+    // Parse the response
+    const result = await response.json();
+
+    // Check if the request was successful
+    if (!response.ok) {
+      throw new Error(result.message || 'Failed to regenerate asset');
+    }
+
+    // Call onSuccess callback if provided
+    if (options.onSuccess) {
+      options.onSuccess(result);
+    }
+
+    console.log('Asset regenerated successfully:', result);
+  } catch (error) {
+    console.error('Error regenerating asset:', error);
+
+    // Call onError callback if provided
+    if (options.onError) {
+      options.onError(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
 }
 
 /**

@@ -10,7 +10,7 @@ import * as fs from 'fs/promises';
 export function getAssetFilePath(assetName: string): string {
   const assetsDir = path.join(process.cwd(), 'src', 'assets');
   const assetDir = path.join(assetsDir, assetName.toLowerCase());
-  return path.join(assetDir, `${assetName.toLowerCase()}.ts`);
+  return path.join(assetDir, `${assetName.toLowerCase()}.js`);
 }
 
 /**
