@@ -81,9 +81,39 @@ const ANIMATION_LOOKUP = {
   },
 };
 
-export const Lion2d: Asset<LionAnimationState> = {
+export const Lion2d: Asset<LionAnimationState, {}> = {
   name: 'lion-2d',
   stances: ['standing', 'walking', 'running', 'idle', 'sleeping'],
+  defaultState: INITIAL_LION_STATE,
+  getPropertyControls: () => ({
+    stance: {
+      type: 'enum',
+      options: [
+        { value: 'standing', label: 'Standing' },
+        { value: 'walking', label: 'Walking' },
+        { value: 'running', label: 'Running' },
+        { value: 'idle', label: 'Idle' },
+        { value: 'sleeping', label: 'Sleeping' },
+      ],
+    },
+    direction: {
+      type: 'enum',
+      options: [
+        { value: 'right', label: 'Right' },
+        { value: 'left', label: 'Left' },
+      ],
+    },
+    scale: { type: 'number', min: 0.5, max: 2, step: 0.1 },
+    colorVariant: {
+      type: 'enum',
+      options: [
+        { value: 'default', label: 'Default' },
+        { value: 'golden', label: 'Golden' },
+        { value: 'white', label: 'White' },
+      ],
+    },
+  }),
+
   description: `# Two dimensional representation of a lion game asset
 
 # Projecting a lion in a 2D space
@@ -108,8 +138,8 @@ Limited color palette and bold outlines.
 - scale: Adjust the overall size of the lion
 - colorVariant: Choose from default, golden, or white color schemes
 `,
-  render: (ctx: CanvasRenderingContext2D, animationState: LionAnimationState = INITIAL_LION_STATE): void => {
-    let { progress, stance, direction, scale = 1, colorVariant = 'default' } = animationState;
+  render: (ctx: CanvasRenderingContext2D, animationState?: LionAnimationState): void => {
+    let { progress, stance, direction, scale = 1, colorVariant = 'default' } = animationState ?? INITIAL_LION_STATE;
     stance = stance || 'standing';
     direction = direction || 'right';
 

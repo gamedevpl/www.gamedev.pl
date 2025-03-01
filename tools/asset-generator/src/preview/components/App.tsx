@@ -9,7 +9,15 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import AssetSelector from './AssetSelector';
 import AnimationControls from './AnimationControls';
-import { AssetInfo, getAvailableAssets, renderAssetToCanvas, regenerateAsset } from '../utils/assetUtils';
+import StanceSelector from './StanceSelector';
+import AssetPropertyControls from './AssetPropertyControls';
+import { 
+  AssetInfo, 
+  getAvailableAssets, 
+  renderAssetToCanvas, 
+  regenerateAsset,
+  getDefaultProperties
+} from '../utils/assetUtils';
 import { Asset } from '../../assets/assets-types';
 
 /**
@@ -29,6 +37,12 @@ export const App: React.FC = () => {
   const [selectedAssetName, setSelectedAssetName] = useState<string>('');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
+  // State for selected stance
+  const [selectedStance, setSelectedStance] = useState<string>('');
+
+  // State for custom asset properties
+  const [customProperties, setCustomProperties] = useState<Record<string, any>>({});
+
   // State for loading/regenerating indicators
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
@@ -47,8 +61,13 @@ export const App: React.FC = () => {
 
       // Select the first asset by default
       if (assets.length > 0) {
+        const firstAsset = assets[0].asset;
         setSelectedAssetName(assets[0].name);
-        setSelectedAsset(assets[0].asset);
+        setSelectedAsset(firstAsset);
+        
+        // Set default stance and properties
+        setSelectedStance(firstAsset.stances[0] || '');
+        setCustomProperties(getDefaultProperties(firstAsset));
       }
 
       setIsLoading(false);
@@ -67,12 +86,18 @@ export const App: React.FC = () => {
     if (!ctx) return;
 
     // Initial render
-    renderAssetToCanvas(selectedAsset, ctx, 0);
-  }, [selectedAsset]);
+    renderAssetToCanvas(
+      selectedAsset,
+      ctx,
+      0,
+      selectedStance,
+      customProperties
+    );
+  }, [selectedAsset, selectedStance, customProperties]);
 
   // Animation loop
   useEffect(() => {
-    if (!selectedAsset || !canvasRef.current) return;
+    if (!selectedAsset || !canvasRef.current || !isAnimationPlaying) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -91,7 +116,13 @@ export const App: React.FC = () => {
       });
 
       // Render with current progress
-      renderAssetToCanvas(selectedAsset, ctx, animationProgress);
+      renderAssetToCanvas(
+        selectedAsset,
+        ctx,
+        animationProgress,
+        selectedStance,
+        customProperties
+      );
 
       // Continue animation loop
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -107,22 +138,42 @@ export const App: React.FC = () => {
         animationFrameRef.current = null;
       }
     };
-  }, [selectedAsset, selectedAssetName, isAnimationPlaying, animationSpeed, availableAssets, animationProgress]);
+  }, [selectedAsset, selectedAssetName, isAnimationPlaying, animationSpeed, availableAssets, animationProgress, selectedStance, customProperties]);
 
   // Handle asset selection
   const handleAssetSelect = useCallback(
     (assetName: string) => {
       const assetInfo = availableAssets.find((info) => info.name === assetName);
       if (assetInfo) {
+        const asset = assetInfo.asset;
         setSelectedAssetName(assetName);
-        setSelectedAsset(assetInfo.asset);
+        setSelectedAsset(asset);
 
         // Reset animation progress when changing assets
         setAnimationProgress(0);
+        
+        // Reset stance to first available stance
+        setSelectedStance(asset.stances[0] || '');
+        
+        // Reset custom properties to asset defaults
+        setCustomProperties(getDefaultProperties(asset));
       }
     },
     [availableAssets],
   );
+
+  // Handle stance selection
+  const handleStanceSelect = useCallback((stance: string) => {
+    setSelectedStance(stance);
+  }, []);
+
+  // Handle property change
+  const handlePropertyChange = useCallback((propertyName: string, value: any) => {
+    setCustomProperties((prev) => ({
+      ...prev,
+      [propertyName]: value,
+    }));
+  }, []);
 
   // Toggle animation playback
   const handleTogglePlay = useCallback(() => {
@@ -184,6 +235,22 @@ export const App: React.FC = () => {
             availableAssets={availableAssets}
             selectedAssetName={selectedAssetName}
             onSelectAsset={handleAssetSelect}
+            disabled={isLoading || isRegenerating}
+          />
+
+          {selectedAsset && (
+            <StanceSelector
+              availableStances={selectedAsset.stances}
+              selectedStance={selectedStance}
+              onSelectStance={handleStanceSelect}
+              disabled={isLoading || isRegenerating}
+            />
+          )}
+
+          <AssetPropertyControls
+            asset={selectedAsset}
+            propertyValues={customProperties}
+            onPropertyChange={handlePropertyChange}
             disabled={isLoading || isRegenerating}
           />
 
