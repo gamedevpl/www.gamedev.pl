@@ -9,6 +9,7 @@ import { Asset, AssetAnimationState } from '../../assets/assets-types';
 
 // Import all assets
 import { Lion2d } from '../../assets/lion-2d/lion-2d';
+import { Prey2d } from '../../assets/prey-2d/prey-2d';
 
 /**
  * Interface for asset metadata
@@ -24,7 +25,7 @@ export interface AssetInfo {
  */
 export function getAvailableAssets(): AssetInfo[] {
   // List of all available assets
-  const assets: Asset[] = [Lion2d];
+  const assets: Asset[] = [Lion2d, Prey2d];
 
   // Map assets to asset info objects
   return assets.map((asset) => ({
@@ -76,7 +77,7 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
   ctx: CanvasRenderingContext2D,
   animationProgress?: number,
   stance?: string,
-  customProperties?: Partial<P>
+  customProperties?: Partial<P>,
 ): void {
   // Clear the canvas
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -87,7 +88,7 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
   try {
     // Get the default state from the asset
     const defaultState = { ...asset.defaultState };
-    
+
     // Create the state object by merging defaults with provided values
     const state = {
       ...defaultState,
@@ -132,7 +133,7 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
  * @returns Default properties for the asset
  */
 export function getDefaultProperties<T extends AssetAnimationState, P extends Record<string, any>>(
-  asset: Asset<T, P>
+  asset: Asset<T, P>,
 ): P {
   // Extract custom properties from defaultState (excluding standard animation state properties)
   const { progress, stance, ...customProperties } = asset.defaultState;
