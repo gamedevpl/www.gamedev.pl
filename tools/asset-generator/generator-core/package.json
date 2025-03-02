@@ -1,0 +1,40 @@
+{
+  "name": "@gamedev/generator-core",
+  "version": "1.0.0",
+  "description": "Core tools for generating game assets",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "asset-generator": "./bin/asset-gen.cjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node ./bin/asset-gen-dev.js",
+    "start": "node ./bin/asset-gen.cjs"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "genaicode": "^0.9.6",
+    "please-upgrade-node": "^3.2.0",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "ts-node": "^10.9.2"
+  }
+}

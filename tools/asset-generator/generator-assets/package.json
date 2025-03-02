@@ -1,0 +1,26 @@
+{
+  "name": "@gamedev/generator-assets",
+  "version": "1.0.0",
+  "description": "Generated assets for games",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./lion-2d": "./src/lion-2d/lion-2d.ts",
+    "./prey-2d": "./src/prey-2d/prey-2d.ts"
+  },
+  "files": [
+    "src/**/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8"
+  }
+}

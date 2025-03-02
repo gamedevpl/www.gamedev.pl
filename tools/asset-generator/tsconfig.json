@@ -1,48 +1,25 @@
 {
-  "ts-node": {
-    "esm": true,
-    "experimentalSpecifierResolution": "node",
-    "compilerOptions": {
-      "skipLibCheck": true,
-      "module": "ESNext",
-      "moduleResolution": "bundler",
-      "esModuleInterop": true,
-      "allowSyntheticDefaultImports": true,
-      "lib": ["ESNext", "DOM"],
-      "types": ["dom", "node"]
-    },
-    "include": ["./src/**/*.ts"]
-  },
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "allowSyntheticDefaultImports": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "jsx": "react-jsx",
-    "allowJs": true,
-
-    /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": false,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": false,
-    "emitDeclarationOnly": false,
-    "composite": true,
-    "declaration": true,
-
-    /* Linting */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@gamedev/generator-assets/*": ["generator-assets/src/*"],
+      "@gamedev/generator-core/*": ["generator-core/src/*"],
+      "@gamedev/generator-frontend/*": ["generator-frontend/src/*"]
+    }
   },
-  "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.tsx", "index.html"],
-  "exclude": ["vite.config.ts", "src/plugins/vite-plugin-asset-generator.ts", "node_modules"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["**/node_modules", "**/dist"]
 }

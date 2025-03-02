@@ -1,34 +1,30 @@
 {
-  "name": "asset-generator",
+  "name": "asset-generator-workspace",
+  "version": "1.0.0",
+  "description": "Workspace for asset generator tools",
+  "private": true,
   "type": "module",
-  "bin": {
-    "asset-generator": "./dist/runner.js"
+  "workspaces": [
+    "generator-assets",
+    "generator-core",
+    "generator-frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspace=@gamedev/generator-frontend",
+    "start": "npm run start --workspace=@gamedev/generator-frontend",
+    "build:assets": "npm run build --workspace=@gamedev/generator-assets",
+    "build:core": "npm run build --workspace=@gamedev/generator-core",
+    "build:frontend": "npm run build --workspace=@gamedev/generator-frontend"
   },
   "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "build": "tsc",
-    "execute": "node ./bin/asset-gen.cjs",
-    "start": "vite"
-  },
-  "dependencies": {
-    "@types/react": "^18.3.10",
-    "@types/react-dom": "^18.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.6.0",
-    "@vitejs/plugin-react": "^4.3.2",
-    "canvas": "^3.1.0",
-    "eslint": "^8.54.0",
-    "genaicode": "^0.9.6",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-use": "^17.5.1",
-    "typescript": "^5.3.3",
-    "vite": "^6.2.0"
+    "node": ">=20",
+    "npm": ">=10"
   },
   "devDependencies": {
-    "@types/node": "^22.13.8",
-    "styled-components": "^6.1.15",
-    "vite-plugin-checker": "^0.9.0"
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@typescript-eslint/parser": "^8.6.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.3"
   }
 }

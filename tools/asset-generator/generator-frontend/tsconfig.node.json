@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2024",
+    "paths": {
+      "@gamedev/generator-core/*": ["../generator-core/src/*"],
+      "@gamedev/generator-assets/*": ["../generator-assets/src/*"]
+    }
+  },
+  "include": ["vite.config.mts", "./vite-plugin-asset-generator.ts", "../generator-core/src/**/*.ts"],
+  "references": [{ "path": "../generator-core/tsconfig.json" }]
+}
