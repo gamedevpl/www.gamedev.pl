@@ -1,5 +1,14 @@
 import type { Plugin } from 'vite';
 import { runAssetGenerationPipeline } from '../tools/asset-pipeline';
+import url from 'node:url';
+import { register } from 'node:module';
+import path from 'path';
+
+const __filename = url.fileURLToPath(import.meta.url);
+register('ts-node/esm', url.pathToFileURL(__filename));
+
+const project = path.resolve('./tsconfig.json');
+(await import('ts-node')).register({ project });
 
 /**
  * Vite plugin that exposes an HTTP endpoint to trigger asset regeneration
@@ -34,19 +43,23 @@ export function assetGeneratorPlugin(): Plugin {
 
           // Return success response
           res.statusCode = 200;
-          res.end(JSON.stringify({ 
-            success: true, 
-            message: 'Asset regenerated successfully',
-            assetPath: result.assetPath,
-            assessment: result.assessment
-          }));
+          res.end(
+            JSON.stringify({
+              success: true,
+              message: 'Asset regenerated successfully',
+              assetPath: result.assetPath,
+              assessment: result.assessment,
+            }),
+          );
         } catch (error) {
           console.error('Error regenerating asset:', error);
           res.statusCode = 500;
-          res.end(JSON.stringify({ 
-            error: 'Failed to regenerate asset', 
-            message: (error as Error).message 
-          }));
+          res.end(
+            JSON.stringify({
+              error: 'Failed to regenerate asset',
+              message: (error as Error).message,
+            }),
+          );
         }
       });
     },

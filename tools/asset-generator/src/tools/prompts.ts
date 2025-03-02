@@ -2,7 +2,8 @@
  * This file contains system prompts used by the asset generator tool.
  * These prompts guide the AI in assessing and generating game assets.
  */
-
+import fs from 'fs';
+import path from 'path';
 import { PromptItem } from 'genaicode';
 
 /**
@@ -130,13 +131,26 @@ export const ASSET_GENERATOR_PROMPT: PromptItem = {
 5. Reference Image Consideration:
    - Adhere to the observations from the reference image (when provided)
 
-5. Canvas API Usage:
+6. Canvas API Usage:
    - Use appropriate Canvas API methods
    - Implement efficient drawing patterns
    - Consider the rendering context state
    - Handle transformations properly
 
+7. TypeScript Interface Adherence:
+   - IMPORTANT: All assets MUST implement the Asset interface from /src/assets/assets-types.ts
+   - Read the Asset interface definition and related types in that file before generating code
+   - Ensure proper typing for all properties and methods
+   - Follow the type definitions exactly as specified
+   - Include all required properties and methods:
+   - Implement proper generic type parameters when needed
+   - See asset types for more details:
+     \`\`\`
+${fs.readFileSync(path.join(import.meta.dirname, '../assets/assets-types.ts'), 'utf-8')}
+     \`\`\`
+
 Generate code that is not only functional but also maintainable and efficient.
 Focus on implementing improvements while maintaining existing working features.
-Ensure the generated code follows the project's coding style and standards.`,
+Ensure the generated code follows the project's coding style and standards.
+MOST IMPORTANTLY: Make sure the code implements the Asset interface correctly with all required properties and methods.`,
 } as const;

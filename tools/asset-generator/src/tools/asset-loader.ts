@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Asset } from '../assets/assets-types.js';
+import { Asset } from '../assets/assets-types';
 import * as fs from 'fs/promises';
 
 /**
@@ -10,7 +10,7 @@ import * as fs from 'fs/promises';
 export function getAssetFilePath(assetName: string): string {
   const assetsDir = path.join(process.cwd(), 'src', 'assets');
   const assetDir = path.join(assetsDir, assetName.toLowerCase());
-  return path.join(assetDir, `${assetName.toLowerCase()}.js`);
+  return path.join(assetDir, `${assetName.toLowerCase()}.ts`);
 }
 
 /**
@@ -58,6 +58,7 @@ export async function loadAsset(assetPath: string): Promise<Asset | null> {
     return asset;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
+      console.error(error);
       return null;
     }
     throw error;

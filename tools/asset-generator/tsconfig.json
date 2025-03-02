@@ -3,7 +3,6 @@
     "esm": true,
     "experimentalSpecifierResolution": "node",
     "compilerOptions": {
-      "composite": true,
       "skipLibCheck": true,
       "module": "ESNext",
       "moduleResolution": "bundler",
@@ -15,7 +14,8 @@
     "include": ["./src/**/*.ts"]
   },
   "compilerOptions": {
-    "composite": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
     "target": "ES2020",
     "useDefineForClassFields": true,
     "allowSyntheticDefaultImports": true,
@@ -28,10 +28,13 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "composite": true,
+    "declaration": true,
 
     /* Linting */
     "strict": true,
@@ -39,5 +42,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.tsx", "index.html"]
+  "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.tsx", "index.html"],
+  "exclude": ["vite.config.ts", "src/plugins/vite-plugin-asset-generator.ts", "node_modules"],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }
