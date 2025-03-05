@@ -137,6 +137,8 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
     const canvasWidth = ctx.canvas.width;
     const canvasHeight = ctx.canvas.height;
 
+    ctx.save();
+
     // Move to the center of the canvas
     ctx.translate(canvasWidth / 2, canvasHeight / 2);
 
@@ -161,6 +163,12 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
 
   // Restore context state
   ctx.restore();
+
+  // Draw progress text
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = 'black';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Progress: ${animationProgress}`, 0, 16);
 }
 
 /**

@@ -31,7 +31,9 @@
     "canvas": "^3.1.0",
     "genaicode": "^0.9.6",
     "please-upgrade-node": "^3.2.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "videoshow": "^0.1.12",
+    "tmp-promise": "^3.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.13.8",

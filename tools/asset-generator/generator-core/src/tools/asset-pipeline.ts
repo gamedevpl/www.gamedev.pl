@@ -1,5 +1,5 @@
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
-import { renderAsset } from './render-character.js';
+import { renderAsset, renderAssetVideos, VideoRenderResult } from './render-character.js';
 import { assessAsset } from './asset-assessor.js';
 import { generateImprovedAsset } from './asset-generator.js';
 import { saveAsset } from './asset-saver.js';
@@ -11,6 +11,15 @@ import * as fs from 'fs/promises';
 export interface AssetGenerationOptions {
   /** Whether to only render the asset without assessment and improvement */
   renderOnly?: boolean;
+  /** Whether to skip video generation */
+  skipVideos?: boolean;
+  /** Video rendering options */
+  videoOptions?: {
+    /** Frames per second for the video (default: 30) */
+    fps?: number;
+    /** Duration of the video in seconds (default: 2) */
+    duration?: number;
+  };
 }
 
 /**
@@ -23,6 +32,8 @@ export interface AssetGenerationResult {
   assessment?: string;
   /** Whether asset was regenerated or just rendered */
   regenerated: boolean;
+  /** Results of video generation for each stance */
+  videos?: VideoRenderResult[];
 }
 
 /**
@@ -57,13 +68,43 @@ export async function runAssetGenerationPipeline(
   if (currentAsset) {
     renderingResult = await renderAsset(currentAsset, assetPath);
     console.log('Asset rendered successfully');
+    
+    // Generate videos for each stance if not skipped
+    let videoResults: VideoRenderResult[] = [];
+    if (!options.skipVideos) {
+      try {
+        console.log('\nGenerating videos for each stance...');
+        videoResults = await renderAssetVideos(currentAsset, assetPath, {
+          fps: options.videoOptions?.fps,
+          duration: options.videoOptions?.duration,
+          logProgress: true,
+        });
+        console.log('Video generation completed successfully');
+      } catch (error) {
+        console.error('Error generating videos:', error);
+      }
+    }
   }
 
   if (options.renderOnly) {
     console.log('Rendering only, exiting...');
+    
+    // If we have videos, include them in the result
+    const videos = !options.skipVideos && currentAsset 
+      ? await renderAssetVideos(currentAsset, assetPath, {
+          fps: options.videoOptions?.fps,
+          duration: options.videoOptions?.duration,
+          logProgress: true,
+        }).catch(error => {
+          console.error('Error generating videos in render-only mode:', error);
+          return [];
+        })
+      : undefined;
+    
     return {
       assetPath,
       regenerated: false,
+      videos,
     };
   }
 
@@ -91,10 +132,27 @@ export async function runAssetGenerationPipeline(
   }
 
   await renderAsset(currentAsset, assetPath);
+  
+  // Generate videos for the improved asset if not skipped
+  let videos: VideoRenderResult[] | undefined;
+  if (!options.skipVideos) {
+    try {
+      console.log('\nGenerating videos for improved asset...');
+      videos = await renderAssetVideos(currentAsset, assetPath, {
+        fps: options.videoOptions?.fps,
+        duration: options.videoOptions?.duration,
+        logProgress: true,
+      });
+      console.log('Video generation for improved asset completed successfully');
+    } catch (error) {
+      console.error('Error generating videos for improved asset:', error);
+    }
+  }
 
   return {
     assetPath,
     assessment,
     regenerated: true,
+    videos,
   };
 }
