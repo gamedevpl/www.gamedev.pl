@@ -10,14 +10,7 @@ import styled from 'styled-components';
 import AssetSelector from './AssetSelector';
 import AnimationControls from './AnimationControls';
 import StanceSelector from './StanceSelector';
-import AssetPropertyControls from './AssetPropertyControls';
-import {
-  AssetInfo,
-  getAvailableAssets,
-  renderAssetToCanvas,
-  regenerateAsset,
-  getDefaultProperties,
-} from '../utils/assetUtils';
+import { AssetInfo, getAvailableAssets, renderAssetToCanvas, regenerateAsset } from '../utils/assetUtils';
 import { Asset } from '../../../generator-core/src/assets-types';
 
 /**
@@ -37,11 +30,10 @@ export const App: React.FC = () => {
   const [selectedAssetName, setSelectedAssetName] = useState<string>('');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
-  // State for selected stance
+  // State for animation properties
   const [selectedStance, setSelectedStance] = useState<string>('');
-
-  // State for custom asset properties
-  const [customProperties, setCustomProperties] = useState<Record<string, any>>({});
+  const [selectedDirection, setSelectedDirection] = useState<'left' | 'right'>('right');
+  const [animationProgress, setAnimationProgress] = useState<number>(0);
 
   // State for loading/regenerating indicators
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -51,7 +43,6 @@ export const App: React.FC = () => {
   // State for animation
   const [isAnimationPlaying, setIsAnimationPlaying] = useState<boolean>(true);
   const [animationSpeed, setAnimationSpeed] = useState<number>(1.0);
-  const [animationProgress, setAnimationProgress] = useState<number>(0);
 
   // Load available assets on component mount
   useEffect(() => {
@@ -65,9 +56,9 @@ export const App: React.FC = () => {
         setSelectedAssetName(assets[0].name);
         setSelectedAsset(firstAsset);
 
-        // Set default stance and properties
+        // Set default stance and direction
         setSelectedStance(firstAsset.stances[0] || '');
-        setCustomProperties(getDefaultProperties(firstAsset));
+        setSelectedDirection('right');
       }
 
       setIsLoading(false);
@@ -86,8 +77,8 @@ export const App: React.FC = () => {
     if (!ctx) return;
 
     // Initial render
-    renderAssetToCanvas(selectedAsset, ctx, 0, selectedStance, customProperties);
-  }, [selectedAsset, selectedStance, customProperties]);
+    renderAssetToCanvas(selectedAsset, ctx, animationProgress, selectedStance, selectedDirection);
+  }, [selectedAsset, selectedStance, selectedDirection, animationProgress]);
 
   // Animation loop
   useEffect(() => {
@@ -110,7 +101,7 @@ export const App: React.FC = () => {
       });
 
       // Render with current progress
-      renderAssetToCanvas(selectedAsset, ctx, animationProgress, selectedStance, customProperties);
+      renderAssetToCanvas(selectedAsset, ctx, animationProgress, selectedStance, selectedDirection);
 
       // Continue animation loop
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -134,7 +125,7 @@ export const App: React.FC = () => {
     availableAssets,
     animationProgress,
     selectedStance,
-    customProperties,
+    selectedDirection,
   ]);
 
   // Handle asset selection
@@ -152,8 +143,8 @@ export const App: React.FC = () => {
         // Reset stance to first available stance
         setSelectedStance(asset.stances[0] || '');
 
-        // Reset custom properties to asset defaults
-        setCustomProperties(getDefaultProperties(asset));
+        // Set direction from default state
+        setSelectedDirection('right');
       }
     },
     [availableAssets],
@@ -164,12 +155,9 @@ export const App: React.FC = () => {
     setSelectedStance(stance);
   }, []);
 
-  // Handle property change
-  const handlePropertyChange = useCallback((propertyName: string, value: any) => {
-    setCustomProperties((prev) => ({
-      ...prev,
-      [propertyName]: value,
-    }));
+  // Handle direction selection
+  const handleDirectionSelect = useCallback((direction: 'left' | 'right') => {
+    setSelectedDirection(direction);
   }, []);
 
   // Toggle animation playback
@@ -244,12 +232,27 @@ export const App: React.FC = () => {
             />
           )}
 
-          <AssetPropertyControls
-            asset={selectedAsset}
-            propertyValues={customProperties}
-            onPropertyChange={handlePropertyChange}
-            disabled={isLoading || isRegenerating}
-          />
+          {selectedAsset && (
+            <DirectionSelector>
+              <SectionTitle>Direction</SectionTitle>
+              <DirectionButtons>
+                <DirectionButton
+                  selected={selectedDirection === 'left'}
+                  onClick={() => handleDirectionSelect('left')}
+                  disabled={isLoading || isRegenerating}
+                >
+                  Left
+                </DirectionButton>
+                <DirectionButton
+                  selected={selectedDirection === 'right'}
+                  onClick={() => handleDirectionSelect('right')}
+                  disabled={isLoading || isRegenerating}
+                >
+                  Right
+                </DirectionButton>
+              </DirectionButtons>
+            </DirectionSelector>
+          )}
 
           <AnimationControls
             isPlaying={isAnimationPlaying}
@@ -422,4 +425,40 @@ const RegenerationMessage = styled.div`
   border-radius: var(--border-radius);
   background-color: var(--background-color);
   border: 1px solid var(--border-color);
+`;
+
+// New Direction Selector Components
+const DirectionSelector = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+  background-color: var(--background-color);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+`;
+
+const DirectionButtons = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const DirectionButton = styled.button<{ selected: boolean }>`
+  flex: 1;
+  padding: 0.5rem;
+  background-color: ${(props) => (props.selected ? 'var(--primary-color)' : 'var(--input-bg-color)')};
+  color: ${(props) => (props.selected ? 'white' : 'var(--text-color)')};
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  &:hover:not(:disabled) {
+    background-color: ${(props) => (props.selected ? 'var(--primary-hover-color, #0056b3)' : 'var(--border-color)')};
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;

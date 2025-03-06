@@ -1,55 +1,18 @@
-import { Asset, AssetAnimationState } from '../../../generator-core/src/assets-types';
-
-export interface PreyAnimationState extends AssetAnimationState {
-  stance: 'standing' | 'walking' | 'running' | 'grazing' | 'alert';
-  direction?: 'left' | 'right';
-  // Customization options
-  scale?: number;
-  colorVariant?: 'default' | 'brown' | 'spotted';
-}
-
-const INITIAL_PREY_STATE: PreyAnimationState = {
-  progress: 0,
-  stance: 'standing',
-  direction: 'right',
-  scale: 1,
-  colorVariant: 'default',
-};
+import { Asset } from '../../../generator-core/src/assets-types';
 
 // Color palettes for different variants
-const COLOR_PALETTES = {
-  default: {
-    body: '#d2b48c',
-    legs: '#a89070',
-    outline: '#3a2e1d',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    ear: '#c2a47c',
-    tail: '#c2a47c',
-  },
-  brown: {
-    body: '#8b4513',
-    legs: '#654321',
-    outline: '#3a2e1d',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    ear: '#7b3503',
-    tail: '#7b3503',
-  },
-  spotted: {
-    body: '#f5deb3',
-    legs: '#d2b48c',
-    outline: '#3a2e1d',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    ear: '#e5ce93',
-    tail: '#e5ce93',
-    spots: '#8b4513',
-  },
+const colors: Record<string, string> = {
+  body: '#d2b48c',
+  legs: '#a89070',
+  outline: '#3a2e1d',
+  eye: '#2c2c2c',
+  nose: '#2c2c2c',
+  ear: '#c2a47c',
+  tail: '#c2a47c',
 };
 
 // Pre-calculated animation values for performance
-const ANIMATION_LOOKUP = {
+const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
   legOffset: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 1),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 3),
@@ -87,38 +50,9 @@ const ANIMATION_LOOKUP = {
   },
 };
 
-export const Prey2d: Asset<PreyAnimationState, {}> = {
+export const Prey2d: Asset = {
   name: 'prey-2d',
   stances: ['standing', 'walking', 'running', 'grazing', 'alert'],
-  defaultState: INITIAL_PREY_STATE,
-  getPropertyControls: () => ({
-    stance: {
-      type: 'enum',
-      options: [
-        { value: 'standing', label: 'Standing' },
-        { value: 'walking', label: 'Walking' },
-        { value: 'running', label: 'Running' },
-        { value: 'grazing', label: 'Grazing' },
-        { value: 'alert', label: 'Alert' },
-      ],
-    },
-    direction: {
-      type: 'enum',
-      options: [
-        { value: 'right', label: 'Right' },
-        { value: 'left', label: 'Left' },
-      ],
-    },
-    scale: { type: 'number', min: 0.5, max: 2, step: 0.1 },
-    colorVariant: {
-      type: 'enum',
-      options: [
-        { value: 'default', label: 'Default' },
-        { value: 'brown', label: 'Brown' },
-        { value: 'spotted', label: 'Spotted' },
-      ],
-    },
-  }),
 
   description: `# Two dimensional representation of a prey animal game asset
 
@@ -144,13 +78,9 @@ Limited color palette and bold outlines.
 - scale: Adjust the overall size of the prey
 - colorVariant: Choose from default, brown, or spotted color schemes
 `,
-  render: (ctx: CanvasRenderingContext2D, animationState?: PreyAnimationState): void => {
-    let { progress, stance, direction, scale = 1, colorVariant = 'default' } = animationState ?? INITIAL_PREY_STATE;
+  render: (ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: string): void => {
     stance = stance || 'standing';
     direction = direction || 'right';
-
-    // Get appropriate color palette
-    const colors = COLOR_PALETTES[colorVariant];
 
     // Convert progress to index for lookup tables (0-99)
     const lookupIndex = Math.floor((progress % 1) * 100);
@@ -165,9 +95,6 @@ Limited color palette and bold outlines.
     // Save the current context state
     ctx.save();
 
-    // Apply scaling
-    ctx.scale(scale, scale);
-
     // Handle direction (flip if facing left)
     if (direction === 'left') {
       ctx.scale(-1, 1);
@@ -175,11 +102,11 @@ Limited color palette and bold outlines.
     }
 
     // Draw the prey animal
-    drawTail(ctx, tailAngle, colors);
-    drawHindLegs(ctx, legOffset, colors);
-    drawBody(ctx, bodyOffset, colors, colorVariant === 'spotted');
-    drawHead(ctx, headOffset, earAngle, stance, colors);
-    drawFrontLegs(ctx, legOffset, colors);
+    drawTail(ctx, tailAngle);
+    drawHindLegs(ctx, legOffset);
+    drawBody(ctx, bodyOffset, false);
+    drawHead(ctx, headOffset, earAngle, stance);
+    drawFrontLegs(ctx, legOffset);
 
     // Restore the context state
     ctx.restore();
@@ -189,7 +116,7 @@ Limited color palette and bold outlines.
 function drawBody(
   ctx: CanvasRenderingContext2D,
   offset: number,
-  colors: typeof COLOR_PALETTES.default,
+
   spotted: boolean,
 ): void {
   ctx.fillStyle = colors.body;
@@ -204,7 +131,7 @@ function drawBody(
 
   // Add spots if spotted variant
   if (spotted && 'spots' in colors) {
-    ctx.fillStyle = (colors as typeof COLOR_PALETTES.spotted).spots;
+    ctx.fillStyle = colors.spots;
 
     // Draw a pattern of spots
     const spotPositions = [
@@ -224,13 +151,7 @@ function drawBody(
   }
 }
 
-function drawHead(
-  ctx: CanvasRenderingContext2D,
-  offset: number,
-  earAngle: number,
-  stance: string,
-  colors: typeof COLOR_PALETTES.default,
-): void {
+function drawHead(ctx: CanvasRenderingContext2D, offset: number, earAngle: number, stance: string): void {
   // Head - smaller and more pointed than the lion's
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
@@ -248,7 +169,7 @@ function drawHead(
   ctx.stroke();
 
   // Ears
-  drawEars(ctx, 70, 40 + offset, earAngle, colors);
+  drawEars(ctx, 70, 40 + offset, earAngle);
 
   // Eye - blink occasionally for standing stance
   ctx.fillStyle = colors.eye;
@@ -273,13 +194,7 @@ function drawHead(
   ctx.fill();
 }
 
-function drawEars(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  earAngle: number,
-  colors: typeof COLOR_PALETTES.default,
-): void {
+function drawEars(ctx: CanvasRenderingContext2D, x: number, y: number, earAngle: number): void {
   ctx.fillStyle = colors.ear;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;
@@ -300,7 +215,7 @@ function drawEars(
   }
 }
 
-function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, colors: typeof COLOR_PALETTES.default): void {
+function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.legs;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;
@@ -323,7 +238,7 @@ function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, colors: ty
   drawHoof(ctx, 72, 78 - offset);
 }
 
-function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, colors: typeof COLOR_PALETTES.default): void {
+function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.legs;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;
@@ -354,7 +269,7 @@ function drawHoof(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.stroke();
 }
 
-function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number, colors: typeof COLOR_PALETTES.default): void {
+function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.fillStyle = colors.tail;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;

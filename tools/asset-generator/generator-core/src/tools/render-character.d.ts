@@ -6,3 +6,31 @@ import { Asset } from '../assets-types.js';
  * @returns Data URL of the rendered asset
  */
 export declare function renderAsset(asset: Asset, assetPath: string): Promise<string>;
+/**
+ * Configuration options for video rendering
+ */
+export interface VideoRenderOptions {
+    /** Frames per second for the video (default: 30) */
+    fps?: number;
+    /** Duration of the video in seconds (default: 2) */
+    duration?: number;
+    /** Whether to log progress (default: true) */
+    logProgress?: boolean;
+}
+/**
+ * Result of video rendering process
+ */
+export interface VideoRenderResult {
+    /** The stance that was rendered */
+    stance: string;
+    /** Path to the output video file */
+    videoPath: string;
+}
+/**
+ * Renders videos for each stance of an asset
+ * @param asset The asset to render
+ * @param assetPath Path to the asset's source file
+ * @param options Video rendering options
+ * @returns Array of video render results
+ */
+export declare function renderAssetVideos(asset: Asset, assetPath: string, options?: VideoRenderOptions): Promise<VideoRenderResult[]>;

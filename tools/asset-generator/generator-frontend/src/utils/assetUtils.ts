@@ -5,7 +5,7 @@
  * It provides functionality for loading assets, checking animation support, and regeneration.
  */
 
-import { Asset, AssetAnimationState } from '../../../generator-core/src/assets-types';
+import { Asset } from '../../../generator-core/src/assets-types';
 
 // Import all assets
 import { Lion2d } from '../../../generator-assets/src/lion-2d/lion-2d';
@@ -100,20 +100,12 @@ export function getAssetByName(assetName: string): Asset | undefined {
   return getAvailableAssets().find((info) => info.name === assetName)?.asset;
 }
 
-/**
- * Render an asset to a canvas
- * @param asset The asset to render
- * @param ctx The canvas rendering context
- * @param animationProgress Optional animation progress (0-1)
- * @param stance Optional stance name (defaults to first stance)
- * @param customProperties Optional custom properties specific to the asset
- */
-export function renderAssetToCanvas<T extends AssetAnimationState, P extends Record<string, any>>(
-  asset: Asset<T, P>,
+export function renderAssetToCanvas(
+  asset: Asset,
   ctx: CanvasRenderingContext2D,
   animationProgress?: number,
   stance?: string,
-  customProperties?: Partial<P>,
+  direction?: 'left' | 'right',
 ): void {
   // Clear the canvas
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -122,17 +114,6 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
   ctx.save();
 
   try {
-    // Get the default state from the asset
-    const defaultState = { ...asset.defaultState };
-
-    // Create the state object by merging defaults with provided values
-    const state = {
-      ...defaultState,
-      progress: animationProgress !== undefined ? animationProgress : defaultState.progress,
-      stance: stance || defaultState.stance,
-      ...(customProperties || {}),
-    } as T & P;
-
     // Center the asset on the canvas
     const canvasWidth = ctx.canvas.width;
     const canvasHeight = ctx.canvas.height;
@@ -148,7 +129,7 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
     ctx.scale(scale, scale);
 
     // Render the asset with the combined state
-    asset.render(ctx, state);
+    asset.render(ctx, animationProgress || 0, stance || asset.stances[0], direction || 'right');
   } catch (error) {
     console.error('Error rendering asset:', error);
 
@@ -169,17 +150,4 @@ export function renderAssetToCanvas<T extends AssetAnimationState, P extends Rec
   ctx.fillStyle = 'black';
   ctx.textAlign = 'left';
   ctx.fillText(`Progress: ${animationProgress}`, 0, 16);
-}
-
-/**
- * Get default properties for an asset
- * @param asset The asset to get default properties for
- * @returns Default properties for the asset
- */
-export function getDefaultProperties<T extends AssetAnimationState, P extends Record<string, any>>(
-  asset: Asset<T, P>,
-): P {
-  // Extract custom properties from defaultState (excluding standard animation state properties)
-  const { progress, stance, ...customProperties } = asset.defaultState;
-  return customProperties as P;
 }

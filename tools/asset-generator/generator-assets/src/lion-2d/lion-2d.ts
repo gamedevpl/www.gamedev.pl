@@ -1,68 +1,23 @@
-import { Asset, AssetAnimationState } from '../../../generator-core/src/assets-types';
+import { Asset } from '../../../generator-core/src/assets-types';
 
-export interface LionAnimationState extends AssetAnimationState {
-  stance: 'standing' | 'walking' | 'running' | 'sleeping' | 'idle';
-  direction?: 'left' | 'right';
-  scale?: number;
-  colorVariant?: 'default' | 'golden' | 'white';
-}
-
-const INITIAL_LION_STATE: LionAnimationState = {
-  progress: 0,
-  stance: 'standing',
-  direction: 'right',
-  scale: 1,
-  colorVariant: 'default',
-};
-
-// Color palettes for different variants
-const COLOR_PALETTES = {
-  default: {
-    body: '#e8b06d',
-    mane: '#a56d27',
-    darkMane: '#7a4e1d',
-    outline: '#3a2e1d',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    mouth: '#7a4e1d',
-    paw: '#c99c5e',
-    tail: '#c99c5e',
-    tailTip: '#7a4e1d',
-    shadow: 'rgba(58, 46, 29, 0.3)',
-    highlight: '#f9d9a8',
-  },
-  golden: {
-    body: '#ffd700',
-    mane: '#ff8c00',
-    darkMane: '#cd6600',
-    outline: '#3a2e1d',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    mouth: '#8b4513',
-    paw: '#ffc125',
-    tail: '#ffc125',
-    tailTip: '#cd6600',
-    shadow: 'rgba(58, 46, 29, 0.3)',
-    highlight: '#fffacd',
-  },
-  white: {
-    body: '#f8f8ff',
-    mane: '#e6e6fa',
-    darkMane: '#d8bfd8',
-    outline: '#696969',
-    eye: '#2c2c2c',
-    nose: '#2c2c2c',
-    mouth: '#a9a9a9',
-    paw: '#f0f0f0',
-    tail: '#f0f0f0',
-    tailTip: '#d8bfd8',
-    shadow: 'rgba(105, 105, 105, 0.3)',
-    highlight: '#ffffff',
-  },
+// Get appropriate color palette
+const colors: Record<string, string> = {
+  body: '#e8b06d',
+  mane: '#a56d27',
+  darkMane: '#7a4e1d',
+  outline: '#3a2e1d',
+  eye: '#2c2c2c',
+  nose: '#2c2c2c',
+  mouth: '#7a4e1d',
+  paw: '#c99c5e',
+  tail: '#c99c5e',
+  tailTip: '#7a4e1d',
+  shadow: 'rgba(58, 46, 29, 0.3)',
+  highlight: '#f9d9a8',
 };
 
 // Pre-calculated animation values for performance
-const ANIMATION_LOOKUP = {
+const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
   legOffset: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 1),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 3),
@@ -85,11 +40,11 @@ const ANIMATION_LOOKUP = {
     sleeping: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.05),
   },
   blinkRate: {
-    standing: 0.02,
-    walking: 0.01,
-    running: 0.005,
-    idle: 0.1,
-    sleeping: 1,
+    standing: [0.02],
+    walking: [0.01],
+    running: [0.005],
+    idle: [0.1],
+    sleeping: [1],
   },
   breathingRate: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.5),
@@ -100,10 +55,9 @@ const ANIMATION_LOOKUP = {
   },
 };
 
-export const Lion2d: Asset<LionAnimationState, {}> = {
+export const Lion2d: Asset = {
   name: 'lion-2d',
   stances: ['standing', 'walking', 'running', 'idle', 'sleeping'],
-  defaultState: INITIAL_LION_STATE,
   description: `# Two dimensional representation of a lion game asset
 
 # Projecting a lion in a 2D space
@@ -129,57 +83,9 @@ Limited color palette and bold outlines.
 - colorVariant: Choose from default, golden, or white color schemes
 `,
 
-  getPropertyControls() {
-    return {
-      stance: {
-        type: 'enum',
-        label: 'Stance',
-        options: [
-          { value: 'standing', label: 'Standing' },
-          { value: 'walking', label: 'Walking' },
-          { value: 'running', label: 'Running' },
-          { value: 'idle', label: 'Idle' },
-          { value: 'sleeping', label: 'Sleeping' },
-        ],
-      },
-      direction: {
-        type: 'enum',
-        label: 'Direction',
-        options: [
-          { value: 'right', label: 'Right' },
-          { value: 'left', label: 'Left' },
-        ],
-      },
-      scale: {
-        type: 'number',
-        label: 'Scale',
-        min: 0.5,
-        max: 2,
-        step: 0.1,
-      },
-      colorVariant: {
-        type: 'enum',
-        label: 'Color Variant',
-        options: [
-          { value: 'default', label: 'Default' },
-          { value: 'golden', label: 'Golden' },
-          { value: 'white', label: 'White' },
-        ],
-      },
-    };
-  },
-
-  render(ctx: CanvasRenderingContext2D, animationState?: LionAnimationState): void {
-    const {
-      progress = 0,
-      stance = 'standing',
-      direction = 'right',
-      scale = 1,
-      colorVariant = 'default',
-    } = animationState ?? INITIAL_LION_STATE;
-
-    // Get appropriate color palette
-    const colors = COLOR_PALETTES[colorVariant];
+  render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: string): void {
+    stance = stance || 'standing';
+    direction = direction || 'right';
 
     // Convert progress to index for lookup tables (0-99)
     const lookupIndex = Math.floor((progress % 1) * 100);
@@ -189,14 +95,11 @@ Limited color palette and bold outlines.
     const bodyOffset = ANIMATION_LOOKUP.bodyOffset[stance][lookupIndex];
     const tailAngle = ANIMATION_LOOKUP.tailAngle[stance][lookupIndex];
     const breathingOffset = ANIMATION_LOOKUP.breathingRate[stance][lookupIndex];
-    const blinkRate = ANIMATION_LOOKUP.blinkRate[stance];
+    const blinkRate = ANIMATION_LOOKUP.blinkRate[stance][0];
     const isBlinking = Math.random() < blinkRate;
 
     // Save the current context state
     ctx.save();
-
-    // Apply scaling
-    ctx.scale(scale, scale);
 
     // Handle direction (flip if facing left)
     if (direction === 'left') {
@@ -205,19 +108,19 @@ Limited color palette and bold outlines.
     }
 
     // Draw shadow first (under everything)
-    drawShadow(ctx, stance, bodyOffset, colors);
+    drawShadow(ctx, stance, bodyOffset);
 
     // Handle sleeping stance separately
     if (stance === 'sleeping') {
-      drawSleepingLion(ctx, colors, breathingOffset, isBlinking);
+      drawSleepingLion(ctx, breathingOffset, isBlinking);
     } else {
       // Draw the lion in layers from back to front
-      drawTail(ctx, tailAngle, colors);
-      drawHindLeg(ctx, legOffset, colors);
-      drawBody(ctx, bodyOffset, breathingOffset, colors);
-      drawMane(ctx, bodyOffset, colors);
-      drawHead(ctx, bodyOffset, stance, isBlinking, colors);
-      drawFrontLeg(ctx, legOffset, colors);
+      drawTail(ctx, tailAngle);
+      drawHindLeg(ctx, legOffset);
+      drawBody(ctx, bodyOffset, breathingOffset);
+      drawMane(ctx, bodyOffset);
+      drawHead(ctx, bodyOffset, stance, isBlinking);
+      drawFrontLeg(ctx, legOffset);
     }
 
     // Restore the context state
@@ -225,12 +128,7 @@ Limited color palette and bold outlines.
   },
 };
 
-function drawShadow(
-  ctx: CanvasRenderingContext2D,
-  stance: string,
-  bodyOffset: number,
-  colors: typeof COLOR_PALETTES.default,
-): void {
+function drawShadow(ctx: CanvasRenderingContext2D, stance: string, bodyOffset: number): void {
   ctx.fillStyle = colors.shadow;
 
   if (stance === 'sleeping') {
@@ -246,12 +144,7 @@ function drawShadow(
   }
 }
 
-function drawSleepingLion(
-  ctx: CanvasRenderingContext2D,
-  colors: typeof COLOR_PALETTES.default,
-  breathingOffset: number,
-  isBlinking: boolean,
-): void {
+function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number, isBlinking: boolean): void {
   // Body (lying down) with breathing animation
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
@@ -370,12 +263,7 @@ function drawSleepingLion(
   ctx.stroke();
 }
 
-function drawBody(
-  ctx: CanvasRenderingContext2D,
-  offset: number,
-  breathingOffset: number,
-  colors: typeof COLOR_PALETTES.default,
-): void {
+function drawBody(ctx: CanvasRenderingContext2D, offset: number, breathingOffset: number): void {
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -395,7 +283,7 @@ function drawBody(
   ctx.globalAlpha = 1;
 }
 
-function drawMane(ctx: CanvasRenderingContext2D, offset: number, colors: typeof COLOR_PALETTES.default): void {
+function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.mane;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -437,13 +325,7 @@ function drawMane(ctx: CanvasRenderingContext2D, offset: number, colors: typeof 
   ctx.stroke();
 }
 
-function drawHead(
-  ctx: CanvasRenderingContext2D,
-  offset: number,
-  stance: string,
-  isBlinking: boolean,
-  colors: typeof COLOR_PALETTES.default,
-): void {
+function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string, isBlinking: boolean): void {
   // Head
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
@@ -537,7 +419,7 @@ function drawHead(
   ctx.stroke();
 }
 
-function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number, colors: typeof COLOR_PALETTES.default): void {
+function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.paw;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -566,7 +448,7 @@ function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number, colors: typ
   ctx.stroke();
 }
 
-function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number, colors: typeof COLOR_PALETTES.default): void {
+function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.paw;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -595,7 +477,7 @@ function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number, colors: type
   ctx.stroke();
 }
 
-function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number, colors: typeof COLOR_PALETTES.default): void {
+function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.save();
   ctx.translate(25, 45);
   ctx.rotate(tailAngle);
