@@ -11,6 +11,11 @@
       "@gamedev/generator-assets/*": ["../generator-assets/src/*"]
     }
   },
-  "include": ["vite.config.mts", "./vite-plugin-asset-generator.ts", "../generator-core/src/**/*.ts"],
-  "references": [{ "path": "../generator-core/tsconfig.json" }]
+  "include": [
+    "vite.config.mts",
+    "./vite-plugin-asset-generator.ts",
+    "../generator-core/src/**/*.ts",
+    "../generator-assets/src/**/*.ts"
+  ],
+  "references": [{ "path": "../generator-core/tsconfig.json" }, { "path": "../generator-assets/tsconfig.json" }]
 }
