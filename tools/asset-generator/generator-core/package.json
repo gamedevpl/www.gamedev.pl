@@ -25,10 +25,12 @@
   "scripts": {
     "build": "tsc",
     "dev": "node ./bin/asset-gen-dev.js",
-    "start": "node ./bin/asset-gen.cjs"
+    "start": "node ./bin/asset-gen.cjs",
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "canvas": "^3.1.0",
+    "eslint": "^8.54.0",
     "genaicode": "^0.9.6",
     "please-upgrade-node": "^3.2.0",
     "typescript": "^5.3.3",
@@ -37,6 +39,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.8",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@typescript-eslint/parser": "^8.6.0",
     "ts-node": "^10.9.2"
   }
 }

@@ -7,6 +7,8 @@ export interface AssetGenerationOptions {
     renderOnly?: boolean;
     /** Whether to skip video generation */
     skipVideos?: boolean;
+    /** Whether to skip linting */
+    skipLinting?: boolean;
     /** Video rendering options */
     videoOptions?: {
         /** Frames per second for the video (default: 30) */
@@ -14,6 +16,21 @@ export interface AssetGenerationOptions {
         /** Duration of the video in seconds (default: 2) */
         duration?: number;
     };
+}
+/**
+ * Interface for linting results in the asset generation process
+ */
+export interface AssetLintingResult {
+    /** Whether linting was performed */
+    lintingPerformed: boolean;
+    /** Whether any linting errors were found */
+    hasLintingErrors: boolean;
+    /** Whether any linting warnings were found */
+    hasLintingWarnings: boolean;
+    /** Whether linting errors were fixed */
+    errorsFixed: boolean;
+    /** Summary of linting fixes if applied */
+    fixSummary?: string;
 }
 /**
  * Result of asset generation process
@@ -27,6 +44,8 @@ export interface AssetGenerationResult {
     regenerated: boolean;
     /** Results of video generation for each stance */
     videos?: VideoRenderResult[];
+    /** Results of linting process */
+    linting?: AssetLintingResult;
 }
 /**
  * Main function to run the asset generation pipeline

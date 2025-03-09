@@ -3,6 +3,8 @@ import { renderAsset, renderAssetVideos, VideoRenderResult } from './render-char
 import { assessAsset } from './asset-assessor.js';
 import { generateImprovedAsset } from './asset-generator.js';
 import { saveAsset } from './asset-saver.js';
+import { lintAssetFile, LintResult, formatLintErrors } from './asset-linter.js';
+import { fixLintErrors, LintFixResult } from './asset-linter-fixer.js';
 import * as fs from 'fs/promises';
 
 /**
@@ -13,6 +15,8 @@ export interface AssetGenerationOptions {
   renderOnly?: boolean;
   /** Whether to skip video generation */
   skipVideos?: boolean;
+  /** Whether to skip linting */
+  skipLinting?: boolean;
   /** Video rendering options */
   videoOptions?: {
     /** Frames per second for the video (default: 30) */
@@ -20,6 +24,22 @@ export interface AssetGenerationOptions {
     /** Duration of the video in seconds (default: 2) */
     duration?: number;
   };
+}
+
+/**
+ * Interface for linting results in the asset generation process
+ */
+export interface AssetLintingResult {
+  /** Whether linting was performed */
+  lintingPerformed: boolean;
+  /** Whether any linting errors were found */
+  hasLintingErrors: boolean;
+  /** Whether any linting warnings were found */
+  hasLintingWarnings: boolean;
+  /** Whether linting errors were fixed */
+  errorsFixed: boolean;
+  /** Summary of linting fixes if applied */
+  fixSummary?: string;
 }
 
 /**
@@ -34,6 +54,8 @@ export interface AssetGenerationResult {
   regenerated: boolean;
   /** Results of video generation for each stance */
   videos?: VideoRenderResult[];
+  /** Results of linting process */
+  linting?: AssetLintingResult;
 }
 
 /**
@@ -105,6 +127,12 @@ export async function runAssetGenerationPipeline(
       assetPath,
       regenerated: false,
       videos,
+      linting: {
+        lintingPerformed: false,
+        hasLintingErrors: false,
+        hasLintingWarnings: false,
+        errorsFixed: false
+      }
     };
   }
 
@@ -123,6 +151,55 @@ export async function runAssetGenerationPipeline(
   console.log('\nSaving improved asset...');
   await saveAsset(assetPath, improvedImplementation);
   console.log('Asset saved successfully');
+
+  // Linting step
+  let lintingResult: AssetLintingResult = {
+    lintingPerformed: false,
+    hasLintingErrors: false,
+    hasLintingWarnings: false,
+    errorsFixed: false
+  };
+
+  if (!options.skipLinting) {
+    try {
+      console.log('\nLinting asset code...');
+      const lintResults: LintResult = await lintAssetFile(assetPath);
+      
+      lintingResult.lintingPerformed = true;
+      lintingResult.hasLintingErrors = lintResults.hasErrors;
+      lintingResult.hasLintingWarnings = lintResults.hasWarnings;
+      
+      if (lintResults.hasErrors || lintResults.hasWarnings) {
+        console.log('\nLinting issues found:');
+        console.log(formatLintErrors(lintResults));
+        
+        console.log('\nAttempting to fix linting issues...');
+        const fixResult: LintFixResult = await fixLintErrors(lintResults);
+        
+        if (fixResult.success) {
+          console.log('\nLinting issues fixed successfully:');
+          console.log(fixResult.summary);
+          
+          // Save the fixed code
+          await saveAsset(assetPath, fixResult.code);
+          console.log('Fixed asset code saved successfully');
+          
+          lintingResult.errorsFixed = true;
+          lintingResult.fixSummary = fixResult.summary;
+        } else {
+          console.error('\nFailed to fix linting issues:', fixResult.error);
+          lintingResult.errorsFixed = false;
+        }
+      } else {
+        console.log('No linting issues found');
+      }
+    } catch (error) {
+      console.error('Error during linting process:', error);
+      // Continue with the pipeline even if linting fails
+    }
+  } else {
+    console.log('\nSkipping linting (disabled in options)');
+  }
 
   // Render improved asset
   console.log('\nRendering improved asset...');
@@ -154,5 +231,6 @@ export async function runAssetGenerationPipeline(
     assessment,
     regenerated: true,
     videos,
+    linting: lintingResult
   };
 }

@@ -1,7 +1,7 @@
 import { Asset } from '../../../generator-core/src/assets-types';
 
-// Get appropriate color palette
-const colors: Record<string, string> = {
+// Color palette with semantic naming
+const colors = {
   body: '#e8b06d',
   mane: '#a56d27',
   darkMane: '#7a4e1d',
@@ -14,46 +14,89 @@ const colors: Record<string, string> = {
   tailTip: '#7a4e1d',
   shadow: 'rgba(58, 46, 29, 0.3)',
   highlight: '#f9d9a8',
+  tongue: '#ff9999',
 };
 
-// Pre-calculated animation values for performance
-const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
-  legOffset: {
-    standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 1),
-    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 3),
-    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 5),
-    idle: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.5),
-    sleeping: Array.from({ length: 100 }, () => 0),
+// Animation configuration by stance
+type AnimationConfig = {
+  legAmplitude: number;
+  legFrequency: number;
+  bodyAmplitude: number;
+  bodyFrequency: number;
+  tailAmplitude: number;
+  tailFrequency: number;
+  blinkRate: number;
+  breathingAmplitude: number;
+  breathingFrequency: number;
+};
+
+const ANIMATION_CONFIG: Record<string, AnimationConfig> = {
+  standing: {
+    legAmplitude: 1,
+    legFrequency: 0.2,
+    bodyAmplitude: 0.5,
+    bodyFrequency: 0.5,
+    tailAmplitude: 0.2,
+    tailFrequency: 0.5,
+    blinkRate: 0.02,
+    breathingAmplitude: 0.5,
+    breathingFrequency: 0.3,
   },
-  bodyOffset: {
-    standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.5),
-    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 1),
-    running: Array.from({ length: 100 }, (_, i) => Math.abs(Math.sin((i / 100) * 4 * Math.PI * 2)) * 2),
-    idle: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.3),
-    sleeping: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.05 * Math.PI * 2) * 0.2),
+  walking: {
+    legAmplitude: 3,
+    legFrequency: 2,
+    bodyAmplitude: 1,
+    bodyFrequency: 2,
+    tailAmplitude: 0.5,
+    tailFrequency: 2,
+    blinkRate: 0.01,
+    breathingAmplitude: 0.3,
+    breathingFrequency: 0.5,
   },
-  tailAngle: {
-    standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.2),
-    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 0.5),
-    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 3 * Math.PI * 2) * 0.8),
-    idle: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.15),
-    sleeping: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.05),
+  running: {
+    legAmplitude: 5,
+    legFrequency: 4,
+    bodyAmplitude: 2,
+    bodyFrequency: 4,
+    tailAmplitude: 0.8,
+    tailFrequency: 3,
+    blinkRate: 0.005,
+    breathingAmplitude: 0.8,
+    breathingFrequency: 1,
   },
-  blinkRate: {
-    standing: [0.02],
-    walking: [0.01],
-    running: [0.005],
-    idle: [0.1],
-    sleeping: [1],
+  idle: {
+    legAmplitude: 0.5,
+    legFrequency: 0.1,
+    bodyAmplitude: 0.3,
+    bodyFrequency: 0.3,
+    tailAmplitude: 0.15,
+    tailFrequency: 0.2,
+    blinkRate: 0.1,
+    breathingAmplitude: 0.4,
+    breathingFrequency: 0.2,
   },
-  breathingRate: {
-    standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.5),
-    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.3),
-    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 1 * Math.PI * 2) * 0.8),
-    idle: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.4),
-    sleeping: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 1),
+  sleeping: {
+    legAmplitude: 0,
+    legFrequency: 0,
+    bodyAmplitude: 0.2,
+    bodyFrequency: 0.05,
+    tailAmplitude: 0.05,
+    tailFrequency: 0.1,
+    blinkRate: 1,
+    breathingAmplitude: 1,
+    breathingFrequency: 0.1,
   },
 };
+
+// Helper for calculating animation values on demand
+function calculateAnimationValue(
+  progress: number,
+  amplitude: number,
+  frequency: number,
+  phaseShift = 0
+): number {
+  return Math.sin((progress * Math.PI * 2 * frequency) + phaseShift) * amplitude;
+}
 
 export const Lion2d: Asset = {
   name: 'lion-2d',
@@ -83,43 +126,43 @@ Limited color palette and bold outlines.
 - colorVariant: Choose from default, golden, or white color schemes
 `,
 
-  render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: string): void {
-    stance = stance || 'standing';
-    direction = direction || 'right';
+  render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: 'left' | 'right'): void {
+    // Ensure we have valid stance and direction
+    const validStance = this.stances.includes(stance) ? stance : 'standing';
+    const validDirection = direction || 'right';
 
-    // Convert progress to index for lookup tables (0-99)
-    const lookupIndex = Math.floor((progress % 1) * 100);
+    // Get animation config for current stance
+    const config = ANIMATION_CONFIG[validStance];
 
-    // Get animation values from lookup tables
-    const legOffset = ANIMATION_LOOKUP.legOffset[stance][lookupIndex];
-    const bodyOffset = ANIMATION_LOOKUP.bodyOffset[stance][lookupIndex];
-    const tailAngle = ANIMATION_LOOKUP.tailAngle[stance][lookupIndex];
-    const breathingOffset = ANIMATION_LOOKUP.breathingRate[stance][lookupIndex];
-    const blinkRate = ANIMATION_LOOKUP.blinkRate[stance][0];
-    const isBlinking = Math.random() < blinkRate;
+    // Calculate animation values
+    const legOffset = calculateAnimationValue(progress, config.legAmplitude, config.legFrequency);
+    const bodyOffset = calculateAnimationValue(progress, config.bodyAmplitude, config.bodyFrequency);
+    const tailAngle = calculateAnimationValue(progress, config.tailAmplitude, config.tailFrequency);
+    const breathingOffset = calculateAnimationValue(progress, config.breathingAmplitude, config.breathingFrequency);
+    const isBlinking = Math.random() < config.blinkRate;
 
     // Save the current context state
     ctx.save();
 
     // Handle direction (flip if facing left)
-    if (direction === 'left') {
+    if (validDirection === 'left') {
       ctx.scale(-1, 1);
       ctx.translate(-100, 0);
     }
 
     // Draw shadow first (under everything)
-    drawShadow(ctx, stance, bodyOffset);
+    drawShadow(ctx, validStance, bodyOffset);
 
     // Handle sleeping stance separately
-    if (stance === 'sleeping') {
-      drawSleepingLion(ctx, breathingOffset, isBlinking);
+    if (validStance === 'sleeping') {
+      drawSleepingLion(ctx, breathingOffset, isBlinking, progress);
     } else {
       // Draw the lion in layers from back to front
       drawTail(ctx, tailAngle);
       drawHindLeg(ctx, legOffset);
       drawBody(ctx, bodyOffset, breathingOffset);
       drawMane(ctx, bodyOffset);
-      drawHead(ctx, bodyOffset, stance, isBlinking);
+      drawHead(ctx, bodyOffset, validStance, isBlinking);
       drawFrontLeg(ctx, legOffset);
     }
 
@@ -128,68 +171,101 @@ Limited color palette and bold outlines.
   },
 };
 
-function drawShadow(ctx: CanvasRenderingContext2D, stance: string, bodyOffset: number): void {
-  ctx.fillStyle = colors.shadow;
+// Drawing helper functions
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  shape: 'ellipse' | 'roundRect',
+  params: number[],
+  fillStyle?: string,
+  strokeStyle?: string,
+  lineWidth = 2
+): void {
+  if (fillStyle) ctx.fillStyle = fillStyle;
+  if (strokeStyle) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+  }
 
+  ctx.beginPath();
+  
+  if (shape === 'ellipse') {
+    // params: [x, y, radiusX, radiusY, rotation, startAngle, endAngle]
+    ctx.ellipse(
+      params[0], params[1], 
+      params[2], params[3], 
+      params[4] || 0, 
+      params[5] || 0, 
+      params[6] || Math.PI * 2
+    );
+  } else if (shape === 'roundRect') {
+    // params: [x, y, width, height, radius]
+    ctx.roundRect(params[0], params[1], params[2], params[3], params[4] || 0);
+  }
+
+  if (fillStyle) ctx.fill();
+  if (strokeStyle) ctx.stroke();
+}
+
+function drawShadow(ctx: CanvasRenderingContext2D, stance: string, bodyOffset: number): void {
   if (stance === 'sleeping') {
     // Oval shadow beneath sleeping lion
-    ctx.beginPath();
-    ctx.ellipse(50, 82, 35, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawShape(ctx, 'ellipse', [50, 82, 35, 5], colors.shadow);
   } else {
     // Dynamic shadow that moves with the lion
-    ctx.beginPath();
-    ctx.ellipse(50, 82, 25 + Math.abs(bodyOffset), 4, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawShape(ctx, 'ellipse', [50, 82, 25 + Math.abs(bodyOffset), 4], colors.shadow);
   }
 }
 
-function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number, isBlinking: boolean): void {
+function drawSleepingLion(
+  ctx: CanvasRenderingContext2D, 
+  breathingOffset: number, 
+  isBlinking: boolean,
+  progress: number
+): void {
   // Body (lying down) with breathing animation
-  ctx.fillStyle = colors.body;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
-  ctx.beginPath();
-  ctx.ellipse(50, 70, 30, 12 + breathingOffset, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [50, 70, 30, 12 + breathingOffset], 
+    colors.body, 
+    colors.outline
+  );
 
   // Highlight on body
-  ctx.fillStyle = colors.highlight;
   ctx.globalAlpha = 0.3;
-  ctx.beginPath();
-  ctx.ellipse(45, 65, 20, 6, Math.PI * 0.1, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [45, 65, 20, 6, Math.PI * 0.1], colors.highlight);
   ctx.globalAlpha = 1;
 
   // Head (resting)
-  ctx.fillStyle = colors.body;
-  ctx.beginPath();
-  ctx.ellipse(75, 65, 10, 8, Math.PI * 0.1, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [75, 65, 10, 8, Math.PI * 0.1], 
+    colors.body, 
+    colors.outline
+  );
 
   // Mane
-  ctx.fillStyle = colors.mane;
-  ctx.beginPath();
-  ctx.ellipse(70, 63, 12, 10, Math.PI * 0.1, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [70, 63, 12, 10, Math.PI * 0.1], 
+    colors.mane, 
+    colors.outline
+  );
 
   // Darker inner mane
-  ctx.fillStyle = colors.darkMane;
-  ctx.beginPath();
-  ctx.ellipse(72, 63, 8, 7, Math.PI * 0.1, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [72, 63, 8, 7, Math.PI * 0.1], 
+    colors.darkMane
+  );
 
   // Eye (closed or slightly open)
   if (isBlinking) {
     // Slightly open eye
-    ctx.fillStyle = colors.eye;
-    ctx.beginPath();
-    ctx.ellipse(80, 60.5, 1.5, 0.5, Math.PI * 0.1, 0, Math.PI * 2);
-    ctx.fill();
+    drawShape(ctx, 'ellipse', [80, 60.5, 1.5, 0.5, Math.PI * 0.1], colors.eye);
   } else {
     // Closed eye (as a line)
     ctx.strokeStyle = colors.eye;
@@ -201,10 +277,7 @@ function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number
   }
 
   // Nose
-  ctx.fillStyle = colors.nose;
-  ctx.beginPath();
-  ctx.ellipse(84, 64, 2, 1.5, Math.PI * 0.1, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [84, 64, 2, 1.5, Math.PI * 0.1], colors.nose);
 
   // Mouth (subtle curved line)
   ctx.strokeStyle = colors.mouth;
@@ -215,19 +288,10 @@ function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number
   ctx.stroke();
 
   // Front leg (tucked)
-  ctx.fillStyle = colors.paw;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(65, 78, 8, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(ctx, 'ellipse', [65, 78, 8, 4], colors.paw, colors.outline);
 
   // Hind leg (tucked)
-  ctx.beginPath();
-  ctx.ellipse(35, 78, 8, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(ctx, 'ellipse', [35, 78, 8, 4], colors.paw, colors.outline);
 
   // Tail (curled)
   ctx.strokeStyle = colors.outline;
@@ -238,19 +302,14 @@ function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number
   ctx.stroke();
 
   // Tail tip
-  ctx.fillStyle = colors.tailTip;
-  ctx.beginPath();
-  ctx.ellipse(15, 70, 4, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawShape(ctx, 'ellipse', [15, 70, 4, 3], colors.tailTip, colors.outline, 2);
 
   // Z's for sleeping (animated slightly)
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1;
   ctx.beginPath();
 
-  const zOffset = Math.sin(Date.now() / 1000) * 2;
+  const zOffset = Math.sin(progress * Math.PI * 2) * 2;
 
   ctx.moveTo(88, 50 + zOffset);
   ctx.lineTo(93, 48 + zOffset);
@@ -263,49 +322,42 @@ function drawSleepingLion(ctx: CanvasRenderingContext2D, breathingOffset: number
   ctx.stroke();
 }
 
-function drawBody(ctx: CanvasRenderingContext2D, offset: number, breathingOffset: number): void {
-  ctx.fillStyle = colors.body;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
+function drawBody(
+  ctx: CanvasRenderingContext2D, 
+  offset: number, 
+  breathingOffset: number
+): void {
   // Main body with breathing animation
-  ctx.beginPath();
-  ctx.ellipse(50, 50 + offset, 25, 15 + breathingOffset, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [50, 50 + offset, 25, 15 + breathingOffset], 
+    colors.body, 
+    colors.outline
+  );
 
   // Add highlight for depth
-  ctx.fillStyle = colors.highlight;
   ctx.globalAlpha = 0.3;
-  ctx.beginPath();
-  ctx.ellipse(45, 45 + offset, 15, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [45, 45 + offset, 15, 8], colors.highlight);
   ctx.globalAlpha = 1;
 }
 
 function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
-  ctx.fillStyle = colors.mane;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
   // Main mane
-  ctx.beginPath();
-  ctx.ellipse(70, 45 + offset, 18, 20, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [70, 45 + offset, 18, 20], 
+    colors.mane, 
+    colors.outline
+  );
 
   // Darker inner mane details
-  ctx.fillStyle = colors.darkMane;
-  ctx.beginPath();
-  ctx.ellipse(72, 45 + offset, 12, 15, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [72, 45 + offset, 12, 15], colors.darkMane);
 
   // Add highlight to mane for depth
-  ctx.fillStyle = colors.highlight;
   ctx.globalAlpha = 0.2;
-  ctx.beginPath();
-  ctx.ellipse(65, 40 + offset, 10, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [65, 40 + offset, 10, 12], colors.highlight);
   ctx.globalAlpha = 1;
 
   // Add some mane detail with curved lines
@@ -325,29 +377,51 @@ function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.stroke();
 }
 
-function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string, isBlinking: boolean): void {
+function drawHead(
+  ctx: CanvasRenderingContext2D, 
+  offset: number, 
+  stance: string, 
+  isBlinking: boolean
+): void {
   // Head
-  ctx.fillStyle = colors.body;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
-  ctx.beginPath();
-  ctx.ellipse(80, 40 + offset, 10, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [80, 40 + offset, 10, 10], 
+    colors.body, 
+    colors.outline
+  );
 
   // Head highlight
-  ctx.fillStyle = colors.highlight;
   ctx.globalAlpha = 0.3;
-  ctx.beginPath();
-  ctx.ellipse(78, 37 + offset, 6, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [78, 37 + offset, 6, 5], colors.highlight);
   ctx.globalAlpha = 1;
 
+  // Enhanced facial expressions based on stance
+  if (stance === 'running') {
+    // Alert, excited expression
+    drawRunningFacialExpression(ctx, offset);
+  } else if (stance === 'idle') {
+    // Relaxed, content expression
+    drawIdleFacialExpression(ctx, offset, isBlinking);
+  } else {
+    // Default expression
+    drawDefaultFacialExpression(ctx, offset, isBlinking);
+  }
+
+  // Whiskers
+  drawWhiskers(ctx, offset);
+}
+
+function drawDefaultFacialExpression(
+  ctx: CanvasRenderingContext2D, 
+  offset: number, 
+  isBlinking: boolean
+): void {
   // Eye - with blinking
-  ctx.fillStyle = colors.eye;
   if (isBlinking) {
     // Blinking
+    ctx.strokeStyle = colors.eye;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(83, 37 + offset);
@@ -355,51 +429,85 @@ function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string,
     ctx.stroke();
   } else {
     // Normal eye
-    ctx.beginPath();
-    ctx.ellipse(85, 37 + offset, 2, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawShape(ctx, 'ellipse', [85, 37 + offset, 2, 2], colors.eye);
 
+    // Add eye highlight
+    drawShape(ctx, 'ellipse', [84, 36 + offset, 0.8, 0.8], '#ffffff');
+  }
+
+  // Nose
+  drawShape(ctx, 'ellipse', [88, 42 + offset, 2, 1.5], colors.nose);
+
+  // Normal mouth
+  ctx.strokeStyle = colors.mouth;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(88, 43 + offset);
+  ctx.lineTo(85, 45 + offset);
+  ctx.stroke();
+}
+
+function drawRunningFacialExpression(ctx: CanvasRenderingContext2D, offset: number): void {
+  // Alert eyes
+  drawShape(ctx, 'ellipse', [85, 37 + offset, 2.5, 2.5], colors.eye);
+  drawShape(ctx, 'ellipse', [84, 36 + offset, 0.8, 0.8], '#ffffff');
+
+  // Nose
+  drawShape(ctx, 'ellipse', [88, 42 + offset, 2, 1.5], colors.nose);
+
+  // Open mouth for running
+  ctx.strokeStyle = colors.mouth;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(88, 43 + offset);
+  ctx.lineTo(85, 46 + offset);
+  ctx.lineTo(88, 46 + offset);
+  ctx.stroke();
+
+  // Tongue for running
+  drawShape(ctx, 'ellipse', [86.5, 46 + offset, 1.5, 1], colors.tongue);
+}
+
+function drawIdleFacialExpression(
+  ctx: CanvasRenderingContext2D, 
+  offset: number, 
+  isBlinking: boolean
+): void {
+  // Relaxed eyes, slightly squinted
+  if (isBlinking) {
+    ctx.strokeStyle = colors.eye;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(83, 37 + offset);
+    ctx.lineTo(87, 37 + offset);
+    ctx.stroke();
+  } else {
+    // Slightly squinted eyes
+    ctx.fillStyle = colors.eye;
+    ctx.beginPath();
+    ctx.ellipse(85, 37 + offset, 2, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
     // Add eye highlight
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.ellipse(84, 36 + offset, 0.8, 0.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(84, 36.5 + offset, 0.8, 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Nose
-  ctx.fillStyle = colors.nose;
-  ctx.beginPath();
-  ctx.ellipse(88, 42 + offset, 2, 1.5, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawShape(ctx, 'ellipse', [88, 42 + offset, 2, 1.5], colors.nose);
 
-  // Mouth - different expressions for different stances
+  // Slightly curved mouth for idle - content expression
   ctx.strokeStyle = colors.mouth;
   ctx.lineWidth = 1;
   ctx.beginPath();
-
-  if (stance === 'running') {
-    // Open mouth for running
-    ctx.moveTo(88, 43 + offset);
-    ctx.lineTo(85, 46 + offset);
-    ctx.lineTo(88, 46 + offset);
-
-    // Tongue for running
-    ctx.fillStyle = '#ff9999';
-    ctx.beginPath();
-    ctx.ellipse(86.5, 46 + offset, 1.5, 1, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (stance === 'idle') {
-    // Slightly curved mouth for idle
-    ctx.moveTo(88, 43 + offset);
-    ctx.quadraticCurveTo(86, 46 + offset, 84, 45 + offset);
-  } else {
-    // Normal mouth
-    ctx.moveTo(88, 43 + offset);
-    ctx.lineTo(85, 45 + offset);
-  }
+  ctx.moveTo(88, 43 + offset);
+  ctx.quadraticCurveTo(86, 46 + offset, 84, 45 + offset);
   ctx.stroke();
+}
 
-  // Whiskers
+function drawWhiskers(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 0.5;
 
@@ -420,60 +528,66 @@ function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string,
 }
 
 function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
-  ctx.fillStyle = colors.paw;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
   // Front leg
-  ctx.beginPath();
-  ctx.roundRect(65, 60 + offset, 6, 20, 3);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'roundRect', 
+    [65, 60 + offset, 6, 20, 3], 
+    colors.paw, 
+    colors.outline
+  );
 
   // Paw
-  ctx.beginPath();
-  ctx.ellipse(68, 80 + offset, 5, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [68, 80 + offset, 5, 3], 
+    colors.paw, 
+    colors.outline
+  );
 
   // Paw details (toes)
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(65, 80 + offset);
-  ctx.lineTo(65, 82 + offset);
-  ctx.moveTo(68, 81 + offset);
-  ctx.lineTo(68, 83 + offset);
-  ctx.moveTo(71, 80 + offset);
-  ctx.lineTo(71, 82 + offset);
-  ctx.stroke();
+  drawPawDetails(ctx, 65, 68, 71, 80 + offset);
 }
 
 function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number): void {
-  ctx.fillStyle = colors.paw;
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-
   // Hind leg
-  ctx.beginPath();
-  ctx.roundRect(30, 60 - offset, 7, 20, 3);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'roundRect', 
+    [30, 60 - offset, 7, 20, 3], 
+    colors.paw, 
+    colors.outline
+  );
 
   // Paw
-  ctx.beginPath();
-  ctx.ellipse(33.5, 80 - offset, 5, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [33.5, 80 - offset, 5, 3], 
+    colors.paw, 
+    colors.outline
+  );
 
   // Paw details (toes)
+  drawPawDetails(ctx, 30.5, 33.5, 36.5, 80 - offset);
+}
+
+function drawPawDetails(
+  ctx: CanvasRenderingContext2D, 
+  x1: number, 
+  x2: number, 
+  x3: number, 
+  y: number
+): void {
   ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.moveTo(30.5, 80 - offset);
-  ctx.lineTo(30.5, 82 - offset);
-  ctx.moveTo(33.5, 81 - offset);
-  ctx.lineTo(33.5, 83 - offset);
-  ctx.moveTo(36.5, 80 - offset);
-  ctx.lineTo(36.5, 82 - offset);
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x1, y + 2);
+  ctx.moveTo(x2, y + 1);
+  ctx.lineTo(x2, y + 3);
+  ctx.moveTo(x3, y);
+  ctx.lineTo(x3, y + 2);
   ctx.stroke();
 }
 
@@ -493,12 +607,14 @@ function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.stroke();
 
   // Tail tip
-  ctx.fillStyle = colors.tailTip;
-  ctx.beginPath();
-  ctx.ellipse(-30, -15, 5, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawShape(
+    ctx, 
+    'ellipse', 
+    [-30, -15, 5, 4], 
+    colors.tailTip, 
+    colors.outline, 
+    2
+  );
 
   // Tail details/fur
   ctx.strokeStyle = colors.outline;

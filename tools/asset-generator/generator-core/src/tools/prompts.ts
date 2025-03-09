@@ -108,46 +108,78 @@ export const ASSET_GENERATOR_PROMPT: PromptItem = {
    - Keep the code concise and focused
    - Code must be compact yet understandable
    - Code must be valid and error-free
-   - Code must adhere to functional programming principless
+   - Code must adhere to functional programming principles
+   - Avoid any syntax errors or type mismatches
+   - Use proper TypeScript constructs (interfaces, types, etc.)
+   - Ensure all variables are properly declared with appropriate types
 
-2. Implementation Focus:
+2. TypeScript Error Prevention:
+   - Always check parameter types against the Asset interface
+   - Verify function return types match their declarations
+   - Ensure proper type narrowing when using union types
+   - Use type guards where appropriate
+   - Avoid using 'any' type unless absolutely necessary
+   - Properly handle optional properties with null checks
+   - Ensure all required properties are implemented
+   - Check for common TypeScript errors:
+     - Incorrect property access
+     - Missing properties in object literals
+     - Type mismatches in function parameters
+     - Undefined or null reference errors
+   - Test your mental model of the code by walking through execution
+
+3. Implementation Focus:
    - Address all improvement points from the assessment
    - Maintain or enhance existing good qualities
    - Ensure the implementation matches the asset description
    - Consider edge cases and potential issues
+   - Validate all inputs before using them
 
-3. Performance Optimization:
+4. Performance Optimization:
    - Write efficient rendering code
    - Minimize unnecessary calculations
    - Use appropriate data structures
    - Consider memory usage
+   - Avoid redundant operations in render loops
 
-4. Maintainability:
+5. Maintainability:
    - Structure code for easy understanding
    - Make the implementation flexible for future changes
    - Use constants for configurable values
    - Implement proper error handling
+   - Add comments for complex logic
 
-5. Reference Image Consideration:
+6. Reference Image Consideration:
    - Adhere to the observations from the reference image (when provided)
 
-6. Canvas API Usage:
+7. Canvas API Usage:
    - Use appropriate Canvas API methods
    - Implement efficient drawing patterns
    - Consider the rendering context state
    - Handle transformations properly
+   - Restore context state after modifications
 
-7. TypeScript Interface Adherence:
+8. TypeScript Interface Adherence:
    - IMPORTANT: All assets MUST implement the Asset interface from /src/assets/assets-types.ts
    - Read the Asset interface definition and related types in that file before generating code
    - Ensure proper typing for all properties and methods
    - Follow the type definitions exactly as specified
-   - Include all required properties and methods:
+   - Include all required properties and methods
    - Implement proper generic type parameters when needed
+   - Verify the render method signature matches exactly:
+     render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: 'left' | 'right'): void
+   - Double-check that 'stances' is properly defined as string[]
    - See asset types for more details:
      \`\`\`
 ${fs.readFileSync(path.join(import.meta.dirname, '../assets-types.ts'), 'utf-8')}
      \`\`\`
+
+9. Final Code Verification:
+   - Review the generated code for any TypeScript errors
+   - Verify all interface requirements are met
+   - Check for logical errors or edge cases
+   - Ensure the code will compile without errors
+   - Confirm all required properties and methods are properly implemented
 
 Generate code that is not only functional but also maintainable and efficient.
 Focus on implementing improvements while maintaining existing working features.

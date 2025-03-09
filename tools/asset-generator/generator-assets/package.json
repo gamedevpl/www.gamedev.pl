@@ -15,12 +15,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
     "typescript": "^5.3.3"
   },
   "devDependencies": {
-    "@types/node": "^22.13.8"
+    "@types/node": "^22.13.8",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@typescript-eslint/parser": "^8.6.0",
+    "eslint": "^8.54.0"
   }
 }

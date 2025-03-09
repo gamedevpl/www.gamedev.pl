@@ -39,7 +39,9 @@ export function assetGeneratorPlugin(): Plugin {
           console.log(`Regenerating asset: ${assetName}`);
 
           // Run the asset generation pipeline
-          const result = await runAssetGenerationPipeline(assetName);
+          const result = await runAssetGenerationPipeline(assetName, {
+            skipVideos: true,
+          });
 
           // Return success response
           res.statusCode = 200;
