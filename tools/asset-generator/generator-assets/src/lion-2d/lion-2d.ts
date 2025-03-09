@@ -89,13 +89,8 @@ const ANIMATION_CONFIG: Record<string, AnimationConfig> = {
 };
 
 // Helper for calculating animation values on demand
-function calculateAnimationValue(
-  progress: number,
-  amplitude: number,
-  frequency: number,
-  phaseShift = 0
-): number {
-  return Math.sin((progress * Math.PI * 2 * frequency) + phaseShift) * amplitude;
+function calculateAnimationValue(progress: number, amplitude: number, frequency: number, phaseShift = 0): number {
+  return Math.sin(progress * Math.PI * 2 * frequency + phaseShift) * amplitude;
 }
 
 export const Lion2d: Asset = {
@@ -178,7 +173,7 @@ function drawShape(
   params: number[],
   fillStyle?: string,
   strokeStyle?: string,
-  lineWidth = 2
+  lineWidth = 2,
 ): void {
   if (fillStyle) ctx.fillStyle = fillStyle;
   if (strokeStyle) {
@@ -187,16 +182,10 @@ function drawShape(
   }
 
   ctx.beginPath();
-  
+
   if (shape === 'ellipse') {
     // params: [x, y, radiusX, radiusY, rotation, startAngle, endAngle]
-    ctx.ellipse(
-      params[0], params[1], 
-      params[2], params[3], 
-      params[4] || 0, 
-      params[5] || 0, 
-      params[6] || Math.PI * 2
-    );
+    ctx.ellipse(params[0], params[1], params[2], params[3], params[4] || 0, params[5] || 0, params[6] || Math.PI * 2);
   } else if (shape === 'roundRect') {
     // params: [x, y, width, height, radius]
     ctx.roundRect(params[0], params[1], params[2], params[3], params[4] || 0);
@@ -217,19 +206,13 @@ function drawShadow(ctx: CanvasRenderingContext2D, stance: string, bodyOffset: n
 }
 
 function drawSleepingLion(
-  ctx: CanvasRenderingContext2D, 
-  breathingOffset: number, 
+  ctx: CanvasRenderingContext2D,
+  breathingOffset: number,
   isBlinking: boolean,
-  progress: number
+  progress: number,
 ): void {
   // Body (lying down) with breathing animation
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [50, 70, 30, 12 + breathingOffset], 
-    colors.body, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [50, 70, 30, 12 + breathingOffset], colors.body, colors.outline);
 
   // Highlight on body
   ctx.globalAlpha = 0.3;
@@ -237,30 +220,13 @@ function drawSleepingLion(
   ctx.globalAlpha = 1;
 
   // Head (resting)
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [75, 65, 10, 8, Math.PI * 0.1], 
-    colors.body, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [75, 65, 10, 8, Math.PI * 0.1], colors.body, colors.outline);
 
   // Mane
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [70, 63, 12, 10, Math.PI * 0.1], 
-    colors.mane, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [70, 63, 12, 10, Math.PI * 0.1], colors.mane, colors.outline);
 
   // Darker inner mane
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [72, 63, 8, 7, Math.PI * 0.1], 
-    colors.darkMane
-  );
+  drawShape(ctx, 'ellipse', [72, 63, 8, 7, Math.PI * 0.1], colors.darkMane);
 
   // Eye (closed or slightly open)
   if (isBlinking) {
@@ -322,19 +288,9 @@ function drawSleepingLion(
   ctx.stroke();
 }
 
-function drawBody(
-  ctx: CanvasRenderingContext2D, 
-  offset: number, 
-  breathingOffset: number
-): void {
+function drawBody(ctx: CanvasRenderingContext2D, offset: number, breathingOffset: number): void {
   // Main body with breathing animation
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [50, 50 + offset, 25, 15 + breathingOffset], 
-    colors.body, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [50, 50 + offset, 25, 15 + breathingOffset], colors.body, colors.outline);
 
   // Add highlight for depth
   ctx.globalAlpha = 0.3;
@@ -344,13 +300,7 @@ function drawBody(
 
 function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
   // Main mane
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [70, 45 + offset, 18, 20], 
-    colors.mane, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [70, 45 + offset, 18, 20], colors.mane, colors.outline);
 
   // Darker inner mane details
   drawShape(ctx, 'ellipse', [72, 45 + offset, 12, 15], colors.darkMane);
@@ -377,20 +327,9 @@ function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.stroke();
 }
 
-function drawHead(
-  ctx: CanvasRenderingContext2D, 
-  offset: number, 
-  stance: string, 
-  isBlinking: boolean
-): void {
+function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string, isBlinking: boolean): void {
   // Head
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [80, 40 + offset, 10, 10], 
-    colors.body, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [80, 40 + offset, 10, 10], colors.body, colors.outline);
 
   // Head highlight
   ctx.globalAlpha = 0.3;
@@ -413,11 +352,7 @@ function drawHead(
   drawWhiskers(ctx, offset);
 }
 
-function drawDefaultFacialExpression(
-  ctx: CanvasRenderingContext2D, 
-  offset: number, 
-  isBlinking: boolean
-): void {
+function drawDefaultFacialExpression(ctx: CanvasRenderingContext2D, offset: number, isBlinking: boolean): void {
   // Eye - with blinking
   if (isBlinking) {
     // Blinking
@@ -468,11 +403,7 @@ function drawRunningFacialExpression(ctx: CanvasRenderingContext2D, offset: numb
   drawShape(ctx, 'ellipse', [86.5, 46 + offset, 1.5, 1], colors.tongue);
 }
 
-function drawIdleFacialExpression(
-  ctx: CanvasRenderingContext2D, 
-  offset: number, 
-  isBlinking: boolean
-): void {
+function drawIdleFacialExpression(ctx: CanvasRenderingContext2D, offset: number, isBlinking: boolean): void {
   // Relaxed eyes, slightly squinted
   if (isBlinking) {
     ctx.strokeStyle = colors.eye;
@@ -487,7 +418,7 @@ function drawIdleFacialExpression(
     ctx.beginPath();
     ctx.ellipse(85, 37 + offset, 2, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    
+
     // Add eye highlight
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
@@ -529,22 +460,10 @@ function drawWhiskers(ctx: CanvasRenderingContext2D, offset: number): void {
 
 function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
   // Front leg
-  drawShape(
-    ctx, 
-    'roundRect', 
-    [65, 60 + offset, 6, 20, 3], 
-    colors.paw, 
-    colors.outline
-  );
+  drawShape(ctx, 'roundRect', [65, 60 + offset, 6, 20, 3], colors.paw, colors.outline);
 
   // Paw
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [68, 80 + offset, 5, 3], 
-    colors.paw, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [68, 80 + offset, 5, 3], colors.paw, colors.outline);
 
   // Paw details (toes)
   drawPawDetails(ctx, 65, 68, 71, 80 + offset);
@@ -552,34 +471,16 @@ function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
 
 function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number): void {
   // Hind leg
-  drawShape(
-    ctx, 
-    'roundRect', 
-    [30, 60 - offset, 7, 20, 3], 
-    colors.paw, 
-    colors.outline
-  );
+  drawShape(ctx, 'roundRect', [30, 60 - offset, 7, 20, 3], colors.paw, colors.outline);
 
   // Paw
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [33.5, 80 - offset, 5, 3], 
-    colors.paw, 
-    colors.outline
-  );
+  drawShape(ctx, 'ellipse', [33.5, 80 - offset, 5, 3], colors.paw, colors.outline);
 
   // Paw details (toes)
   drawPawDetails(ctx, 30.5, 33.5, 36.5, 80 - offset);
 }
 
-function drawPawDetails(
-  ctx: CanvasRenderingContext2D, 
-  x1: number, 
-  x2: number, 
-  x3: number, 
-  y: number
-): void {
+function drawPawDetails(ctx: CanvasRenderingContext2D, x1: number, x2: number, x3: number, y: number): void {
   ctx.lineWidth = 0.5;
   ctx.beginPath();
   ctx.moveTo(x1, y);
@@ -607,14 +508,7 @@ function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.stroke();
 
   // Tail tip
-  drawShape(
-    ctx, 
-    'ellipse', 
-    [-30, -15, 5, 4], 
-    colors.tailTip, 
-    colors.outline, 
-    2
-  );
+  drawShape(ctx, 'ellipse', [-30, -15, 5, 4], colors.tailTip, colors.outline, 2);
 
   // Tail details/fur
   ctx.strokeStyle = colors.outline;
