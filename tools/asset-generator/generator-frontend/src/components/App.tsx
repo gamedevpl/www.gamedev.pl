@@ -39,6 +39,7 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
   const [regenerationMessage, setRegenerationMessage] = useState<string>('');
+  const [regenerationPrompt, setRegenerationPrompt] = useState<string>('');
 
   // State for animation
   const [isAnimationPlaying, setIsAnimationPlaying] = useState<boolean>(true);
@@ -170,11 +171,17 @@ export const App: React.FC = () => {
     setAnimationSpeed(speed);
   }, []);
 
+  // Handle regeneration prompt change
+  const handlePromptChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setRegenerationPrompt(event.target.value);
+  }, []);
+
   // Regenerate selected asset
   const handleRegenerateAsset = useCallback(() => {
     if (!selectedAssetName || isRegenerating) return;
 
     regenerateAsset(selectedAssetName, {
+      additionalPrompt: regenerationPrompt,
       onStart: () => {
         setIsRegenerating(true);
         setRegenerationMessage('Regenerating asset...');
@@ -198,7 +205,7 @@ export const App: React.FC = () => {
         }, 5000);
       },
     });
-  }, [selectedAssetName, isRegenerating]);
+  }, [selectedAssetName, isRegenerating, regenerationPrompt]);
 
   return (
     <AppContainer>
@@ -264,6 +271,16 @@ export const App: React.FC = () => {
 
           <RegenerateSection>
             <SectionTitle>Asset Generation</SectionTitle>
+            
+            <PromptLabel htmlFor="regeneration-prompt">Special Requirements:</PromptLabel>
+            <PromptTextArea 
+              id="regeneration-prompt"
+              value={regenerationPrompt}
+              onChange={handlePromptChange}
+              placeholder="Enter any special requirements for regeneration..."
+              disabled={isLoading || isRegenerating}
+            />
+            
             <RegenerateButton
               onClick={handleRegenerateAsset}
               disabled={isLoading || isRegenerating || !selectedAssetName}
@@ -396,6 +413,37 @@ const SectionTitle = styled.h3`
   font-size: 1rem;
   margin: 0;
   color: var(--text-color);
+`;
+
+const PromptLabel = styled.label`
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-top: 0.5rem;
+`;
+
+const PromptTextArea = styled.textarea`
+  width: 100%;
+  min-height: 80px;
+  padding: 0.6rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  resize: vertical;
+  font-family: inherit;
+  margin-bottom: 0.5rem;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const RegenerateButton = styled.button`

@@ -38,6 +38,8 @@ export function getAvailableAssets(): AssetInfo[] {
  * Interface for asset regeneration options
  */
 export interface RegenerateAssetOptions {
+  /** Additional prompt with special requirements for asset generation */
+  additionalPrompt?: string;
   /** Called when regeneration starts */
   onStart?: () => void;
   /** Called when regeneration completes successfully */
@@ -58,13 +60,19 @@ export async function regenerateAsset(assetName: string, options: RegenerateAsse
       options.onStart();
     }
 
+    // Prepare request payload
+    const payload = {
+      assetName,
+      additionalPrompt: options.additionalPrompt || undefined
+    };
+
     // Make POST request to the regenerate-asset endpoint
     const response = await fetch('/api/regenerate-asset', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ assetName }),
+      body: JSON.stringify(payload),
     });
 
     // Parse the response

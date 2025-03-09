@@ -15,6 +15,8 @@ export interface AssetGenerationOptions {
   renderOnly?: boolean;
   /** Whether to skip video generation */
   skipVideos?: boolean;
+  /** Additional prompt with special requirements for asset generation */
+  additionalPrompt?: string;
   /** Whether to skip linting */
   skipLinting?: boolean;
   /** Video rendering options */
@@ -145,7 +147,7 @@ export async function runAssetGenerationPipeline(
 
   // Generate improved asset
   console.log('\nGenerating improved asset...');
-  const improvedImplementation = await generateImprovedAsset(assetName, currentContent, assessment);
+  const improvedImplementation = await generateImprovedAsset(assetName, currentContent, assessment, options.additionalPrompt);
 
   // Save new asset
   console.log('\nSaving improved asset...');

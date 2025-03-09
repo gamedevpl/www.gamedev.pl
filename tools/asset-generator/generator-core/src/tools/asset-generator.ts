@@ -7,12 +7,14 @@ import { ASSET_GENERATOR_PROMPT } from './prompts.js';
  * @param assetName Name of the asset
  * @param currentImplementation Current implementation of the asset (if exists)
  * @param assessment Assessment of the current implementation
+ * @param additionalPrompt Additional user-provided prompt with special requirements
  * @returns Promise resolving to the improved implementation code
  */
 export async function generateImprovedAsset(
   assetName: string,
   currentImplementation: string | null,
   assessment: string,
+  additionalPrompt?: string,
 ): Promise<string> {
   const promptMessage = `
     Generate an improved implementation of the ${assetName} asset.
@@ -24,6 +26,8 @@ export async function generateImprovedAsset(
     
     Assessment of current version:
     ${assessment}
+
+    ${additionalPrompt ? `Special Requirements from User:\n    ${additionalPrompt}\n` : ''}
 
     Requirements:
     1. Implement the Asset interface with name and render method
