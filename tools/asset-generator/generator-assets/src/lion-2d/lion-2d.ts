@@ -114,11 +114,6 @@ Limited color palette and bold outlines.
 - running: Exaggerated leg movement and pronounced bounce
 - idle: Very subtle movements showing the lion at rest
 - sleeping: Lion in a sleeping pose
-
-# Customization
-
-- scale: Adjust the overall size of the lion
-- colorVariant: Choose from default, golden, or white color schemes
 `,
 
   render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: 'left' | 'right'): void {

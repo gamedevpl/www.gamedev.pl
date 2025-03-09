@@ -36,12 +36,16 @@ export async function generateImprovedAsset(
     4. Include proper type annotations
     5. Follow best practices for code organization
     6. IMPORTANT: Adhere to suggested improvements from the assessment
-    8. Make sure the code is valid and error-free
-    9. Find balance between code readability and verbosity
-    10. Modify the existing code as needed, retain parts that are already good
+    7. Make sure the code is valid and error-free
+    8. Find balance between code readability and verbosity
+    9. IMPORTANT: Make only the minimal necessary changes to address the issues highlighted in the assessment
+    10. Preserve all parts of the code that are already working well
     11. In the render method, do not clean the canvas, assume it is already cleared and ready for rendering
+    12. Your modifications should directly correspond to the issues identified in the assessment
+    13. DO NOT refactor or rewrite the entire codebase unless the assessment explicitly requires it
+    14. Focus on incremental, targeted improvements rather than complete overhauls
 
-    Generate the complete TypeScript file content for the improved asset.
+    Provide only the necessary changes to address the issues in the assessment while maintaining the overall structure and approach of the existing code. If the current implementation is good in some areas, keep those parts unchanged.
   `;
 
   const prompt: PromptItem[] = [

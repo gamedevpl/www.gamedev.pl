@@ -72,11 +72,6 @@ Limited color palette and bold outlines.
 - running: Exaggerated leg movement and pronounced bounce
 - grazing: Head lowered, gentle movements showing the animal eating
 - alert: Head raised, ears perked up, showing awareness of danger
-
-# Customization
-
-- scale: Adjust the overall size of the prey
-- colorVariant: Choose from default, brown, or spotted color schemes
 `,
   render: (ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: string): void => {
     stance = stance || 'standing';
