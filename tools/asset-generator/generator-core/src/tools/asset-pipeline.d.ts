@@ -1,4 +1,3 @@
-import { VideoRenderResult } from './render-character.js';
 /**
  * Interface for asset generation options
  */
@@ -7,6 +6,8 @@ export interface AssetGenerationOptions {
     renderOnly?: boolean;
     /** Whether to skip video generation */
     skipVideos?: boolean;
+    /** Additional prompt with special requirements for asset generation */
+    additionalPrompt?: string;
     /** Whether to skip linting */
     skipLinting?: boolean;
     /** Video rendering options */
@@ -42,8 +43,12 @@ export interface AssetGenerationResult {
     assessment?: string;
     /** Whether asset was regenerated or just rendered */
     regenerated: boolean;
-    /** Results of video generation for each stance */
-    videos?: VideoRenderResult[];
+    /** Results of asset rendering */
+    renderingResult?: {
+        stance: string;
+        mediaType: string;
+        dataUrl: string;
+    }[];
     /** Results of linting process */
     linting?: AssetLintingResult;
 }

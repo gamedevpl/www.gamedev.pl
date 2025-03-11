@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { FunctionDef, ModelType, PromptItem } from 'genaicode';
+import { FunctionDef, ModelType, PromptImageMediaType, PromptItem } from 'genaicode';
 import { Asset } from '../assets-types.js';
 import { generateContent } from './genaicode-executor.js';
 import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
@@ -69,17 +69,16 @@ async function executeStep<T>(
 
 /**
  * Assess an asset by analyzing its rendering result
- * @param assetPath Path to the asset file
- * @param asset The asset to assess
- * @param currentImplementation Current implementation of the asset (if exists)
- * @param dataUrl The data URL of the rendered asset
- * @returns Promise resolving to the assessment text
  */
 export async function assessAsset(
   assetPath: string,
   asset: Asset,
   currentImplementation: string | null,
-  dataUrl: string,
+  stanceMedia: {
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+  }[],
 ): Promise<string> {
   try {
     // Initialize assessment context and base prompt items
@@ -126,19 +125,19 @@ export async function assessAsset(
     const renderStep = await executeStep<{ description: string }>(
       [
         ASSET_ASSESSOR_PROMPT,
-        {
+        ...stanceMedia.map<PromptItem>(({ stance, mediaType, dataUrl }) => ({
           type: 'user',
-          text: 'Rendered asset for analysis:',
+          text: `Rendered asset for stance "${stance}":`,
           images: [
             {
-              mediaType: 'image/png',
-              base64url: dataUrl.split('data:image/png;base64,')[1],
+              mediaType: mediaType as PromptImageMediaType,
+              base64url: dataUrl.split(`data:${mediaType};base64,`)[1],
             },
           ],
-        },
+        })),
         {
           type: 'user',
-          text: 'Please analyze the rendered asset in detail (200 words max):',
+          text: 'Please analyze the rendered asset in detail (200 words max).',
         },
       ],
       describeAssetRenderingDef.name,

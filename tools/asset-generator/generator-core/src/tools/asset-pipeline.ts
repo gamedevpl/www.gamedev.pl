@@ -1,5 +1,5 @@
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
-import { renderAsset, renderAssetVideos, VideoRenderResult } from './render-character.js';
+import { renderAsset, renderAssetVideos } from './render-character.js';
 import { assessAsset } from './asset-assessor.js';
 import { generateImprovedAsset } from './asset-generator.js';
 import { saveAsset } from './asset-saver.js';
@@ -54,8 +54,8 @@ export interface AssetGenerationResult {
   assessment?: string;
   /** Whether asset was regenerated or just rendered */
   regenerated: boolean;
-  /** Results of video generation for each stance */
-  videos?: VideoRenderResult[];
+  /** Results of asset rendering */
+  renderingResult?: { stance: string; mediaType: string; dataUrl: string }[];
   /** Results of linting process */
   linting?: AssetLintingResult;
 }
@@ -88,21 +88,22 @@ export async function runAssetGenerationPipeline(
   }
 
   // Render current asset if exists
-  let renderingResult = '';
+  let renderingResult: { stance: string; mediaType: string; dataUrl: string }[] = [];
   if (currentAsset) {
     renderingResult = await renderAsset(currentAsset, assetPath);
     console.log('Asset rendered successfully');
-    
+
     // Generate videos for each stance if not skipped
-    let videoResults: VideoRenderResult[] = [];
     if (!options.skipVideos) {
       try {
         console.log('\nGenerating videos for each stance...');
-        videoResults = await renderAssetVideos(currentAsset, assetPath, {
-          fps: options.videoOptions?.fps,
-          duration: options.videoOptions?.duration,
-          logProgress: true,
-        });
+        renderingResult.push(
+          ...(await renderAssetVideos(currentAsset, assetPath, {
+            fps: options.videoOptions?.fps,
+            duration: options.videoOptions?.duration,
+            logProgress: true,
+          })),
+        );
         console.log('Video generation completed successfully');
       } catch (error) {
         console.error('Error generating videos:', error);
@@ -112,29 +113,17 @@ export async function runAssetGenerationPipeline(
 
   if (options.renderOnly) {
     console.log('Rendering only, exiting...');
-    
-    // If we have videos, include them in the result
-    const videos = !options.skipVideos && currentAsset 
-      ? await renderAssetVideos(currentAsset, assetPath, {
-          fps: options.videoOptions?.fps,
-          duration: options.videoOptions?.duration,
-          logProgress: true,
-        }).catch(error => {
-          console.error('Error generating videos in render-only mode:', error);
-          return [];
-        })
-      : undefined;
-    
+
     return {
       assetPath,
       regenerated: false,
-      videos,
+      renderingResult,
       linting: {
         lintingPerformed: false,
         hasLintingErrors: false,
         hasLintingWarnings: false,
-        errorsFixed: false
-      }
+        errorsFixed: false,
+      },
     };
   }
 
@@ -147,7 +136,12 @@ export async function runAssetGenerationPipeline(
 
   // Generate improved asset
   console.log('\nGenerating improved asset...');
-  const improvedImplementation = await generateImprovedAsset(assetName, currentContent, assessment, options.additionalPrompt);
+  const improvedImplementation = await generateImprovedAsset(
+    assetName,
+    currentContent,
+    assessment,
+    options.additionalPrompt,
+  );
 
   // Save new asset
   console.log('\nSaving improved asset...');
@@ -159,33 +153,33 @@ export async function runAssetGenerationPipeline(
     lintingPerformed: false,
     hasLintingErrors: false,
     hasLintingWarnings: false,
-    errorsFixed: false
+    errorsFixed: false,
   };
 
   if (!options.skipLinting) {
     try {
       console.log('\nLinting asset code...');
       const lintResults: LintResult = await lintAssetFile(assetPath);
-      
+
       lintingResult.lintingPerformed = true;
       lintingResult.hasLintingErrors = lintResults.hasErrors;
       lintingResult.hasLintingWarnings = lintResults.hasWarnings;
-      
+
       if (lintResults.hasErrors || lintResults.hasWarnings) {
         console.log('\nLinting issues found:');
         console.log(formatLintErrors(lintResults));
-        
+
         console.log('\nAttempting to fix linting issues...');
         const fixResult: LintFixResult = await fixLintErrors(lintResults);
-        
+
         if (fixResult.success) {
           console.log('\nLinting issues fixed successfully:');
           console.log(fixResult.summary);
-          
+
           // Save the fixed code
           await saveAsset(assetPath, fixResult.code);
           console.log('Fixed asset code saved successfully');
-          
+
           lintingResult.errorsFixed = true;
           lintingResult.fixSummary = fixResult.summary;
         } else {
@@ -211,13 +205,12 @@ export async function runAssetGenerationPipeline(
   }
 
   await renderAsset(currentAsset, assetPath);
-  
+
   // Generate videos for the improved asset if not skipped
-  let videos: VideoRenderResult[] | undefined;
   if (!options.skipVideos) {
     try {
       console.log('\nGenerating videos for improved asset...');
-      videos = await renderAssetVideos(currentAsset, assetPath, {
+      await renderAssetVideos(currentAsset, assetPath, {
         fps: options.videoOptions?.fps,
         duration: options.videoOptions?.duration,
         logProgress: true,
@@ -232,7 +225,7 @@ export async function runAssetGenerationPipeline(
     assetPath,
     assessment,
     regenerated: true,
-    videos,
-    linting: lintingResult
+    renderingResult,
+    linting: lintingResult,
   };
 }

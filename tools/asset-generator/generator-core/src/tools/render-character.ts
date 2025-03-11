@@ -10,37 +10,52 @@ import * as os from 'os';
 
 /**
  * Renders an asset to canvas and saves it as PNG file in the asset directory
- * @param asset The asset to render
- * @param assetPath Path to the asset's source file
- * @returns Data URL of the rendered asset
  */
-export async function renderAsset(asset: Asset, assetPath: string): Promise<string> {
+export async function renderAsset(
+  asset: Asset,
+  assetPath: string,
+): Promise<
+  {
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+  }[]
+> {
   const canvas = createCanvas(1024, 1024);
   const ctx = canvas.getContext('2d');
-  ctx.save();
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
-  asset.render(ctx as any, 0, asset.stances[0], 'right');
-  const dataUrl = canvas.toDataURL();
+  const result = [];
+  for (const stance of asset.stances) {
+    ctx.save();
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    asset.render(ctx as any, 0, asset.stances[0], 'right');
+    const dataUrl = canvas.toDataURL();
 
-  try {
-    // Convert data URL to buffer
-    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    try {
+      // Convert data URL to buffer
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
 
-    // Create output file path
-    const assetDir = path.dirname(assetPath);
-    const outputPath = path.join(assetDir, `${asset.name.toLowerCase()}.png`);
+      // Create output file path
+      const assetDir = path.dirname(assetPath);
+      const outputPath = path.join(assetDir, `${asset.name.toLowerCase()}-${stance}.png`);
 
-    // Save the buffer as PNG file
-    await fs.writeFile(outputPath, buffer);
-    console.log(`Rendered asset saved to: ${outputPath}`);
-  } catch (error) {
-    console.error('Failed to save rendered asset:', error);
+      // Save the buffer as PNG file
+      await fs.writeFile(outputPath, buffer);
+      console.log(`Rendered asset saved to: ${outputPath}`);
+    } catch (error) {
+      console.error('Failed to save rendered asset:', error);
+    }
+
+    result.push({
+      stance,
+      mediaType: 'image/png',
+      dataUrl,
+    });
   }
 
-  return dataUrl;
+  return result;
 }
 
 /**
@@ -56,16 +71,6 @@ export interface VideoRenderOptions {
 }
 
 /**
- * Result of video rendering process
- */
-export interface VideoRenderResult {
-  /** The stance that was rendered */
-  stance: string;
-  /** Path to the output video file */
-  videoPath: string;
-}
-
-/**
  * Renders videos for each stance of an asset
  * @param asset The asset to render
  * @param assetPath Path to the asset's source file
@@ -76,8 +81,18 @@ export async function renderAssetVideos(
   asset: Asset,
   assetPath: string,
   options: VideoRenderOptions = {},
-): Promise<VideoRenderResult[]> {
-  const results: VideoRenderResult[] = [];
+): Promise<
+  {
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+  }[]
+> {
+  const results: {
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+  }[] = [];
   const { fps = 30, duration = 2, logProgress = true } = options;
 
   // Create temporary directory for frames
@@ -127,7 +142,11 @@ async function renderStanceVideo(
   stance: string,
   tempDir: string,
   options: VideoRenderOptions,
-): Promise<VideoRenderResult> {
+): Promise<{
+  stance: string;
+  mediaType: string;
+  dataUrl: string;
+}> {
   const { fps = 30, duration = 2, logProgress = true } = options;
   const totalFrames = fps * duration;
   const frameDir = path.join(tempDir, stance);
@@ -150,9 +169,12 @@ async function renderStanceVideo(
     console.log(`Video for stance "${stance}" saved to: ${videoPath}`);
   }
 
+  const dataUrl = `data:video/mp4;base64,${(await fs.readFile(videoPath)).toString('base64')}`;
+
   return {
     stance,
-    videoPath,
+    mediaType: 'video/mp4',
+    dataUrl,
   };
 }
 

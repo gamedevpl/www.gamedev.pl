@@ -5,7 +5,6 @@ import { PromptItem } from 'genaicode';
  * 1. Visual quality and appearance
  * 2. Adherence to asset description and requirements
  * 3. Areas for improvement
- * 4. Technical implementation
  */
 export declare const ASSET_ASSESSOR_PROMPT: PromptItem;
 /**

@@ -1,11 +1,12 @@
 import { Asset } from '../assets-types.js';
 /**
  * Renders an asset to canvas and saves it as PNG file in the asset directory
- * @param asset The asset to render
- * @param assetPath Path to the asset's source file
- * @returns Data URL of the rendered asset
  */
-export declare function renderAsset(asset: Asset, assetPath: string): Promise<string>;
+export declare function renderAsset(asset: Asset, assetPath: string): Promise<{
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+}[]>;
 /**
  * Configuration options for video rendering
  */
@@ -18,19 +19,14 @@ export interface VideoRenderOptions {
     logProgress?: boolean;
 }
 /**
- * Result of video rendering process
- */
-export interface VideoRenderResult {
-    /** The stance that was rendered */
-    stance: string;
-    /** Path to the output video file */
-    videoPath: string;
-}
-/**
  * Renders videos for each stance of an asset
  * @param asset The asset to render
  * @param assetPath Path to the asset's source file
  * @param options Video rendering options
  * @returns Array of video render results
  */
-export declare function renderAssetVideos(asset: Asset, assetPath: string, options?: VideoRenderOptions): Promise<VideoRenderResult[]>;
+export declare function renderAssetVideos(asset: Asset, assetPath: string, options?: VideoRenderOptions): Promise<{
+    stance: string;
+    mediaType: string;
+    dataUrl: string;
+}[]>;
