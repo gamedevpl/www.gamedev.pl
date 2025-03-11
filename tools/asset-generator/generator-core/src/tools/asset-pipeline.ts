@@ -143,7 +143,7 @@ export async function runAssetGenerationPipeline(
     console.log('Files in asset directory:', files);
     // add to rendering result
     for (const file of files) {
-      if (file.endsWith('.mp4') || file.endsWith('.png')) {
+      if (file.endsWith('.mp4') /* || file.endsWith('.png')*/) {
         const mediaType = file.endsWith('mp4') ? 'video/mp4' : 'image/png';
         renderingResult.push({
           stance: file.replace(`${assetName.toLowerCase()}-`, '').replace('.mp4', '').replace('.png', ''),

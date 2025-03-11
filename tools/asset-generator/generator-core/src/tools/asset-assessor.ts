@@ -118,6 +118,8 @@ export async function assessAsset(
         );
 
         context.referenceImageDescription = refImageStep.result.description;
+
+        console.log('Reference image analysis completed:', refImageStep.result.description);
       } catch (error) {
         console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
       }
@@ -143,7 +145,7 @@ export async function assessAsset(
             ASSET_ASSESSOR_PROMPT,
             ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
               type: 'user',
-              text: `Rendered asset for stance "${stance}":`,
+              text: `Rendered asset:`,
               images: [
                 {
                   mediaType: mediaType as PromptImageMediaType,
@@ -153,14 +155,16 @@ export async function assessAsset(
             })),
             {
               type: 'user',
-              text: `Please analyze the rendering of the asset for stance "${stance}" in detail.`,
+              text: `Please analyze the rendering of the asset in detail. (max 1000 words)`,
             },
           ],
           describeAssetRenderingDef.name,
-          `Rendered Asset Analysis for stance "${stance}"`,
+          `Rendered Asset Analysis`,
         );
 
         context.stanceDescriptions[stance] = renderStep.result.description;
+
+        console.log(`Analysis for stance "${stance}" completed:`, renderStep.result.description);
       }),
     );
 
@@ -183,6 +187,8 @@ export async function assessAsset(
       );
 
       context.implementationDescription = implStep.result.description;
+
+      console.log('Implementation analysis completed:', implStep.result.description);
     }
 
     // Prepare stance descriptions for the final assessment
@@ -259,7 +265,8 @@ const describeAssetRenderingDef: FunctionDef = {
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed analysis of the rendered asset',
+        description: 'Detailed analysis of the rendered asset (max 1000 words)',
+        maxLength: 5000,
       },
     },
     required: ['description'],
