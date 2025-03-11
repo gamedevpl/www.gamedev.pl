@@ -10,6 +10,7 @@ import { Asset } from '../../../generator-core/src/assets-types';
 // Import all assets
 import { Lion2d } from '../../../generator-assets/src/lion-2d/lion-2d';
 import { Prey2d } from '../../../generator-assets/src/prey-2d/prey-2d';
+import { Hunter2d } from '../../../generator-assets/src/hunter-2d/hunter-2d';
 
 /**
  * Interface for asset metadata
@@ -25,7 +26,7 @@ export interface AssetInfo {
  */
 export function getAvailableAssets(): AssetInfo[] {
   // List of all available assets
-  const assets: Asset[] = [Lion2d, Prey2d];
+  const assets: Asset[] = [Lion2d, Prey2d, Hunter2d];
 
   // Map assets to asset info objects
   return assets.map((asset) => ({
@@ -63,7 +64,7 @@ export async function regenerateAsset(assetName: string, options: RegenerateAsse
     // Prepare request payload
     const payload = {
       assetName,
-      additionalPrompt: options.additionalPrompt || undefined
+      additionalPrompt: options.additionalPrompt || undefined,
     };
 
     // Make POST request to the regenerate-asset endpoint
