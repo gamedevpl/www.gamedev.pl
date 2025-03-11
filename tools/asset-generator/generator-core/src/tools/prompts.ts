@@ -26,6 +26,7 @@ Follow this Chain of Thought (CoT) assessment process:
    - Identify important details and characteristics
    - Document color schemes and artistic choices
    - Describe proportions and scale relationships
+   - For character assets: analyze silhouette clarity and character identity
 
 2. Asset Rendering Analysis:
    Next, call \`describeAssetRendering\` to analyze the rendered asset:
@@ -34,6 +35,14 @@ Follow this Chain of Thought (CoT) assessment process:
    - Note the use of colors, shapes, and proportions
    - Identify any visual artifacts or issues
    - Compare with reference image if available
+   - For character assets:
+     - Assess silhouette readability and distinctiveness
+     - Evaluate proportional harmony and anatomical consistency
+     - Analyze character expressiveness and visual identity
+     - Examine stance clarity and pose readability
+     - Evaluate animation fluidity and coherence across frames
+     - Check for proper application of animation principles (timing, anticipation, follow-through)
+     - Assess transition quality between different animation states
 
 3. Functionality & Gameplay Integration Analysis:
    Then, call \`describeCurrentImplementation\` to analyze how the asset functions:
@@ -42,6 +51,13 @@ Follow this Chain of Thought (CoT) assessment process:
    - Evaluate how the asset's design integrates with game aesthetics
    - Note any functional limitations or opportunities
    - Consider how well it serves its intended purpose
+   - For character assets:
+     - Analyze gameplay visibility in different contexts
+     - Evaluate character distinction within the game's visual hierarchy
+     - Consider genre-specific requirements (platformer, RPG, etc.)
+     - Assess technical implementation efficiency and optimization
+     - Evaluate scaling behavior across different resolutions
+     - Check for appropriate use of memory and performance considerations
 
 4. Final Assessment:
    Finally, ALWAYS call \`assessAsset\` with a comprehensive evaluation:
@@ -50,6 +66,11 @@ Follow this Chain of Thought (CoT) assessment process:
    - Assess visual quality and artistic coherence
    - Provide specific, actionable improvements focused on design and functionality
    - Consider player experience and gameplay integration
+   - For character assets:
+     - Provide stance-specific feedback on poses, proportions, and expressiveness
+     - Suggest concrete animation improvements with reference to animation principles
+     - Recommend specific visual hierarchy enhancements for gameplay visibility
+     - Offer technical optimization suggestions if relevant
 
 Guidelines for assessment:
 
@@ -58,24 +79,28 @@ Guidelines for assessment:
    - Check consistency in style and proportions
    - Assess use of colors, shapes, and details
    - Consider readability and clarity for players
+   - For character assets: evaluate silhouette strength, character recognition, and visual appeal
 
 2. Description Adherence:
    - Compare against provided description
    - Verify all required visual elements
    - Check visual dimensions and constraints
    - Evaluate purpose fulfillment
+   - For character assets: verify character personality traits are visually expressed
 
 3. Gameplay Integration:
    - Assess how well the asset serves its gameplay function
    - Consider player recognition and understanding
    - Evaluate visual feedback and responsiveness
    - Identify potential player experience issues
+   - For character assets: assess visibility against potential backgrounds and game environments
 
 4. Improvement Areas:
    - Identify visual enhancement needs
    - Suggest concrete artistic improvements
    - Prioritize by impact on player experience
    - Focus on visual and functional aspects
+   - For character assets: provide specific animation, silhouette, and stance improvement suggestions
 
 IMPORTANT:
 - Always follow the CoT process in order
@@ -83,6 +108,7 @@ IMPORTANT:
 - Provide clear, specific observations about visual and functional aspects
 - End with assessAsset function call
 - Focus on actionable feedback related to design and gameplay
+- For character assets: address each stance/animation state individually
 - Avoid detailed commentary on code structure or implementation details
 - Stay within limit of 200 words per description/assessment
 `,
@@ -139,38 +165,73 @@ export const ASSET_GENERATOR_PROMPT: PromptItem = {
    - Prioritize addressing the assessment feedback over implementing your own ideas for improvement
    - Retain variable names, function signatures, and code organization when not directly related to issues
 
-4. Implementation Focus:
+4. Code Reuse and Efficiency Within Assets:
+   - Identify and implement reusable functions within the asset itself
+   - Create helper functions for repeated operations (e.g., drawing shapes, calculating animations)
+   - Use consistent parameter patterns for similar operations
+   - Implement utility functions that can handle variations of similar tasks
+   - Group related functionality into logical helper functions
+   - Ensure helper functions are flexible enough to handle different parameters
+   - Use parameter defaulting for common use cases
+   - Balance granularity - neither too many tiny functions nor monolithic blocks
+   - Consider performance implications when designing reusable functions
+   - Document reusable functions with clear JSDoc comments explaining purpose and parameters
+
+5. Compact Code Structure:
+   - Organize code to minimize redundancy without sacrificing readability
+   - Use object literals and arrays to group related data
+   - Leverage TypeScript features like destructuring, spread operators, and template literals
+   - Use concise arrow functions for simple operations
+   - Apply functional programming techniques where appropriate (map, filter, reduce)
+   - Choose appropriate data structures to minimize code complexity
+   - Consolidate similar logic with parameterized functions
+   - Use loops and conditional expressions efficiently
+   - Employ the DRY (Don't Repeat Yourself) principle within the asset
+   - Structure code to make future modifications straightforward
+   - Maintain a balance between conciseness and clarity
+
+6. Implementation Focus:
    - Address all improvement points from the assessment
    - Maintain or enhance existing good qualities
    - Ensure the implementation matches the asset description
    - Consider edge cases and potential issues
    - Validate all inputs before using them
 
-5. Performance Optimization:
+7. Performance Optimization:
    - Write efficient rendering code
    - Minimize unnecessary calculations
    - Use appropriate data structures
    - Consider memory usage
    - Avoid redundant operations in render loops
+   - Pre-calculate values where beneficial for performance
+   - Consider using lookup tables for frequently accessed values
+   - Optimize animation calculations
+   - Minimize state changes in rendering context
+   - Batch similar drawing operations when possible
 
-6. Maintainability:
+8. Maintainability:
    - Structure code for easy understanding
    - Make the implementation flexible for future changes
    - Use constants for configurable values
    - Implement proper error handling
    - Add comments for complex logic
+   - Organize related functionality into cohesive groups
+   - Design for extensibility without overengineering
+   - Balance flexibility and simplicity
+   - Consider how new stances or variations might be added later
+   - Provide clear boundaries between different components
 
-7. Reference Image Consideration:
+9. Reference Image Consideration:
    - Adhere to the observations from the reference image (when provided)
 
-8. Canvas API Usage:
+10. Canvas API Usage:
    - Use appropriate Canvas API methods
    - Implement efficient drawing patterns
    - Consider the rendering context state
    - Handle transformations properly
    - Restore context state after modifications
 
-9. TypeScript Interface Adherence:
+11. TypeScript Interface Adherence:
    - IMPORTANT: All assets MUST implement the Asset interface from /src/assets/assets-types.ts
    - Read the Asset interface definition and related types in that file before generating code
    - Ensure proper typing for all properties and methods
@@ -185,7 +246,7 @@ export const ASSET_GENERATOR_PROMPT: PromptItem = {
 ${fs.readFileSync(path.join(import.meta.dirname, '../assets-types.ts'), 'utf-8')}
      \`\`\`
 
-10. Final Code Verification:
+12. Final Code Verification:
    - Review the generated code for any TypeScript errors
    - Verify all interface requirements are met
    - Check for logical errors or edge cases
@@ -193,7 +254,7 @@ ${fs.readFileSync(path.join(import.meta.dirname, '../assets-types.ts'), 'utf-8')
    - Confirm all required properties and methods are properly implemented
    - Verify that your changes are minimal and focused on the assessment feedback
 
-11. Change Minimization Guidelines:
+13. Change Minimization Guidelines:
    - Before making any change, ask yourself: "Is this change necessary to address the assessment?"
    - If the answer is no, do not make the change
    - For each modification, be able to point to a specific issue mentioned in the assessment

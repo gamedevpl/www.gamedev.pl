@@ -6,6 +6,8 @@ export interface AssetGenerationOptions {
     renderOnly?: boolean;
     /** Whether to skip video generation */
     skipVideos?: boolean;
+    /** Whether to skip rendering and use existing renderings for assessment */
+    skipRender?: boolean;
     /** Additional prompt with special requirements for asset generation */
     additionalPrompt?: string;
     /** Whether to skip linting */

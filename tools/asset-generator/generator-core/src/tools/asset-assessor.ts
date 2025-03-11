@@ -7,7 +7,7 @@ import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
 
 interface AssessmentContext {
   referenceImageDescription?: string;
-  renderedAssetDescription?: string;
+  stanceDescriptions: Record<string, string>;
   implementationDescription?: string;
 }
 
@@ -82,7 +82,9 @@ export async function assessAsset(
 ): Promise<string> {
   try {
     // Initialize assessment context and base prompt items
-    const context: AssessmentContext = {};
+    const context: AssessmentContext = {
+      stanceDescriptions: {},
+    };
 
     // Handle reference image if specified
     let referenceImageData: string | undefined;
@@ -108,7 +110,7 @@ export async function assessAsset(
             },
             {
               type: 'user',
-              text: 'Please analyze the reference image in detail (200 words max):',
+              text: 'Please analyze the reference image in detail',
             },
           ],
           describeReferenceImageDef.name,
@@ -121,30 +123,46 @@ export async function assessAsset(
       }
     }
 
-    // Step 2: Describe rendered asset
-    const renderStep = await executeStep<{ description: string }>(
-      [
-        ASSET_ASSESSOR_PROMPT,
-        ...stanceMedia.map<PromptItem>(({ stance, mediaType, dataUrl }) => ({
-          type: 'user',
-          text: `Rendered asset for stance "${stance}":`,
-          images: [
+    // Step 2: Describe rendered asset for each stance separately
+    // Group stanceMedia by stance
+    const stanceGroups: Record<string, typeof stanceMedia> = {};
+    stanceMedia.forEach((media) => {
+      if (!stanceGroups[media.stance]) {
+        stanceGroups[media.stance] = [];
+      }
+      stanceGroups[media.stance]!.push(media);
+    });
+
+    // Process each stance individually
+    await Promise.all(
+      Object.entries(stanceGroups).map(async ([stance, mediaItems]) => {
+        console.log(`Analyzing stance: ${stance}`);
+
+        const renderStep = await executeStep<{ description: string }>(
+          [
+            ASSET_ASSESSOR_PROMPT,
+            ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
+              type: 'user',
+              text: `Rendered asset for stance "${stance}":`,
+              images: [
+                {
+                  mediaType: mediaType as PromptImageMediaType,
+                  base64url: dataUrl.split(`data:${mediaType};base64,`)[1],
+                },
+              ],
+            })),
             {
-              mediaType: mediaType as PromptImageMediaType,
-              base64url: dataUrl.split(`data:${mediaType};base64,`)[1],
+              type: 'user',
+              text: `Please analyze the rendering of the asset for stance "${stance}" in detail.`,
             },
           ],
-        })),
-        {
-          type: 'user',
-          text: 'Please analyze the rendered asset in detail (200 words max).',
-        },
-      ],
-      describeAssetRenderingDef.name,
-      'Rendered Asset Analysis',
-    );
+          describeAssetRenderingDef.name,
+          `Rendered Asset Analysis for stance "${stance}"`,
+        );
 
-    context.renderedAssetDescription = renderStep.result.description;
+        context.stanceDescriptions[stance] = renderStep.result.description;
+      }),
+    );
 
     // Step 3: Describe implementation (if available)
     if (currentImplementation) {
@@ -157,7 +175,7 @@ export async function assessAsset(
           },
           {
             type: 'user',
-            text: 'Please analyze the implementation in detail (200 words max):',
+            text: 'Please analyze the implementation in detail',
           },
         ],
         describeCurrentImplementationDef.name,
@@ -167,26 +185,37 @@ export async function assessAsset(
       context.implementationDescription = implStep.result.description;
     }
 
+    // Prepare stance descriptions for the final assessment
+    let stanceDescriptionsText = '';
+    for (const [stance, description] of Object.entries(context.stanceDescriptions)) {
+      stanceDescriptionsText += `### Stance: ${stance}\n\n${description}\n\n`;
+    }
+
     const assessStep = await executeStep<{ assessment: string }>(
       [
         ASSET_ASSESSOR_PROMPT,
         {
           type: 'user',
-          text: `Please provide the final assessment based on all previous analyses (max 200 words).
+          text: `Please provide the final assessment based on all previous analyses.
 
-## Asset Name:
+## Asset Name
+
 ${asset.name}
 
-## Asset Description: 
+## Asset Description
+
 ${asset.description}
 
 ## Reference Image Analysis
+
 ${context.referenceImageDescription || 'No reference image provided.'}
 
-## Rendered Asset Analysis
-${context.renderedAssetDescription}
+## Rendered Asset Analysis by Stance
+
+${stanceDescriptionsText}
 
 ## Implementation Analysis
+
 ${context.implementationDescription || 'No current implementation available.'}`,
         },
       ],
@@ -212,8 +241,7 @@ const describeReferenceImageDef: FunctionDef = {
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed description of the reference image, max 200 words',
-        maxLength: 1000,
+        description: 'Detailed description of the reference image',
       },
     },
     required: ['description'],
@@ -231,8 +259,7 @@ const describeAssetRenderingDef: FunctionDef = {
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed description of the rendered asset, max 200 words',
-        maxLength: 1000,
+        description: 'Detailed analysis of the rendered asset',
       },
     },
     required: ['description'],
@@ -250,8 +277,7 @@ const describeCurrentImplementationDef: FunctionDef = {
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed description of the current implementation, max 200 words',
-        maxLength: 1000,
+        description: 'Detailed description of the current implementation',
       },
     },
     required: ['description'],
@@ -269,8 +295,7 @@ const assessAssetDef: FunctionDef = {
     properties: {
       assessment: {
         type: 'string',
-        description: 'The outcome of the assessment, max 200 words',
-        maxLength: 1000,
+        description: 'The outcome of the assessment',
       },
     },
     required: ['assessment'],

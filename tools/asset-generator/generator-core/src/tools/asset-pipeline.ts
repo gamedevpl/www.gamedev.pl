@@ -1,3 +1,4 @@
+import * as fs from 'fs/promises';
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
 import { renderAsset, renderAssetVideos } from './render-character.js';
 import { assessAsset } from './asset-assessor.js';
@@ -5,7 +6,6 @@ import { generateImprovedAsset } from './asset-generator.js';
 import { saveAsset } from './asset-saver.js';
 import { lintAssetFile, LintResult, formatLintErrors } from './asset-linter.js';
 import { fixLintErrors, LintFixResult } from './asset-linter-fixer.js';
-import * as fs from 'fs/promises';
 
 /**
  * Interface for asset generation options
@@ -87,7 +87,7 @@ export async function runAssetGenerationPipeline(
     currentContent = await fs.readFile(assetPath, 'utf-8');
   } else {
     console.log('No existing asset found, will create new one');
-    
+
     // Cannot skip rendering if no asset exists
     if (options.skipRender && !options.renderOnly) {
       throw new Error('Cannot skip rendering when no existing asset is found. Remove the --skip-render flag.');
@@ -97,18 +97,18 @@ export async function runAssetGenerationPipeline(
   // Check for existing rendered files if skip-render is enabled
   if (options.skipRender && !options.renderOnly && currentAsset) {
     console.log('Skipping rendering, using existing renderings for assessment...');
-    
+
     // Attempt to find existing rendered files (we don't actually load them here,
     // but we'll check if at least one stance file exists)
     const assetDir = path.dirname(assetPath);
     const stanceFile = path.join(assetDir, `${assetName.toLowerCase()}-${currentAsset.stances[0]}.png`);
-    
+
     try {
       await fs.access(stanceFile);
       console.log('Found existing rendered files to use for assessment');
     } catch (error) {
       throw new Error(
-        'No existing rendered files found. Cannot use --skip-render. Run without this flag first to generate renderings.'
+        'No existing rendered files found. Cannot use --skip-render. Run without this flag first to generate renderings.',
       );
     }
   }
@@ -133,6 +133,23 @@ export async function runAssetGenerationPipeline(
         console.log('Video generation completed successfully');
       } catch (error) {
         console.error('Error generating videos:', error);
+      }
+    }
+  } else if (currentAsset && options.skipRender) {
+    console.log('Skipping rendering of existing asset (--skip-render flag is enabled), using existing renderings');
+    // list files in the directory
+    const assetDir = path.dirname(assetPath);
+    const files = await fs.readdir(assetDir);
+    console.log('Files in asset directory:', files);
+    // add to rendering result
+    for (const file of files) {
+      if (file.endsWith('.mp4') || file.endsWith('.png')) {
+        const mediaType = file.endsWith('mp4') ? 'video/mp4' : 'image/png';
+        renderingResult.push({
+          stance: file.replace(`${assetName.toLowerCase()}-`, '').replace('.mp4', '').replace('.png', ''),
+          mediaType: mediaType,
+          dataUrl: `data:${mediaType};base64,${(await fs.readFile(path.join(assetDir, file))).toString('base64')}`,
+        });
       }
     }
   }
