@@ -13,6 +13,7 @@ export async function assetGenRunner() {
 
     const args = process.argv.slice(3);
     const renderOnly = args.includes('--render-only');
+    const skipRender = args.includes('--skip-render');
     
     // Parse prompt option
     let additionalPrompt: string | undefined;
@@ -29,6 +30,7 @@ export async function assetGenRunner() {
     // Run the asset generation pipeline
     await runAssetGenerationPipeline(assetName, { 
       renderOnly,
+      skipRender,
       additionalPrompt
     });
   } catch (error) {

@@ -15,6 +15,8 @@ export interface AssetGenerationOptions {
   renderOnly?: boolean;
   /** Whether to skip video generation */
   skipVideos?: boolean;
+  /** Whether to skip rendering and use existing renderings for assessment */
+  skipRender?: boolean;
   /** Additional prompt with special requirements for asset generation */
   additionalPrompt?: string;
   /** Whether to skip linting */
@@ -85,11 +87,35 @@ export async function runAssetGenerationPipeline(
     currentContent = await fs.readFile(assetPath, 'utf-8');
   } else {
     console.log('No existing asset found, will create new one');
+    
+    // Cannot skip rendering if no asset exists
+    if (options.skipRender && !options.renderOnly) {
+      throw new Error('Cannot skip rendering when no existing asset is found. Remove the --skip-render flag.');
+    }
   }
 
-  // Render current asset if exists
+  // Check for existing rendered files if skip-render is enabled
+  if (options.skipRender && !options.renderOnly && currentAsset) {
+    console.log('Skipping rendering, using existing renderings for assessment...');
+    
+    // Attempt to find existing rendered files (we don't actually load them here,
+    // but we'll check if at least one stance file exists)
+    const assetDir = path.dirname(assetPath);
+    const stanceFile = path.join(assetDir, `${assetName.toLowerCase()}-${currentAsset.stances[0]}.png`);
+    
+    try {
+      await fs.access(stanceFile);
+      console.log('Found existing rendered files to use for assessment');
+    } catch (error) {
+      throw new Error(
+        'No existing rendered files found. Cannot use --skip-render. Run without this flag first to generate renderings.'
+      );
+    }
+  }
+
+  // Render current asset if exists and not skipping render
   let renderingResult: { stance: string; mediaType: string; dataUrl: string }[] = [];
-  if (currentAsset) {
+  if (currentAsset && (!options.skipRender || options.renderOnly)) {
     renderingResult = await renderAsset(currentAsset, assetPath);
     console.log('Asset rendered successfully');
 
@@ -197,28 +223,32 @@ export async function runAssetGenerationPipeline(
     console.log('\nSkipping linting (disabled in options)');
   }
 
-  // Render improved asset
-  console.log('\nRendering improved asset...');
+  // Render improved asset if not skipping render
   currentAsset = await loadAsset(assetPath);
   if (!currentAsset) {
     throw new Error('Failed to load current asset after saving');
   }
 
-  await renderAsset(currentAsset, assetPath);
+  if (!options.skipRender) {
+    console.log('\nRendering improved asset...');
+    await renderAsset(currentAsset, assetPath);
 
-  // Generate videos for the improved asset if not skipped
-  if (!options.skipVideos) {
-    try {
-      console.log('\nGenerating videos for improved asset...');
-      await renderAssetVideos(currentAsset, assetPath, {
-        fps: options.videoOptions?.fps,
-        duration: options.videoOptions?.duration,
-        logProgress: true,
-      });
-      console.log('Video generation for improved asset completed successfully');
-    } catch (error) {
-      console.error('Error generating videos for improved asset:', error);
+    // Generate videos for the improved asset if not skipped
+    if (!options.skipVideos) {
+      try {
+        console.log('\nGenerating videos for improved asset...');
+        await renderAssetVideos(currentAsset, assetPath, {
+          fps: options.videoOptions?.fps,
+          duration: options.videoOptions?.duration,
+          logProgress: true,
+        });
+        console.log('Video generation for improved asset completed successfully');
+      } catch (error) {
+        console.error('Error generating videos for improved asset:', error);
+      }
     }
+  } else {
+    console.log('\nSkipping rendering of improved asset (--skip-render flag is enabled)');
   }
 
   return {
@@ -229,3 +259,6 @@ export async function runAssetGenerationPipeline(
     linting: lintingResult,
   };
 }
+
+// Import path module for file path operations
+import * as path from 'path';
