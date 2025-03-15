@@ -30,9 +30,13 @@ Limited color palette and bold outlines.
 - throwing: Hunter throwing a weapon
 `,
 
-  render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: 'left' | 'right'): void {
+  render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: 'left' | 'right'): void {
     // Save the current context state
     ctx.save();
+
+    // Apply transformations for positioning and scaling
+    ctx.translate(x, y);
+    ctx.scale(width / 100, height / 100);
 
     // Apply horizontal flip if facing left
     if (direction === 'left') {

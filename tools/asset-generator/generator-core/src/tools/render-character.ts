@@ -29,7 +29,7 @@ export async function renderAsset(
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    asset.render(ctx as any, 0, asset.stances[0], 'right');
+    asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, 0, stance, 'right');
     const dataUrl = canvas.toDataURL();
 
     try {
@@ -213,7 +213,7 @@ async function generateFrames(
     ctx.restore();
     // Create state with the current stance and progress
     // Render the asset with the current state
-    asset.render(ctx as any, progress, stance, 'right');
+    asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, progress, stance, 'right');
 
     // Save frame
     const frameNumber = i.toString().padStart(5, '0');

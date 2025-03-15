@@ -73,7 +73,7 @@ Limited color palette and bold outlines.
 - grazing: Head lowered, gentle movements showing the animal eating
 - alert: Head raised, ears perked up, showing awareness of danger
 `,
-  render: (ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: string): void => {
+  render: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: string): void => {
     stance = stance || 'standing';
     direction = direction || 'right';
 
@@ -89,6 +89,10 @@ Limited color palette and bold outlines.
 
     // Save the current context state
     ctx.save();
+
+    // Apply transformations for positioning and scaling
+    ctx.translate(x, y);
+    ctx.scale(width / 100, height / 100);
 
     // Handle direction (flip if facing left)
     if (direction === 'left') {

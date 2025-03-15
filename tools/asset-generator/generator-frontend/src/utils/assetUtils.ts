@@ -137,8 +137,28 @@ export function renderAssetToCanvas(
     const scale = Math.min(canvasWidth / 200, canvasHeight / 200) * 0.8; // 80% of the max possible size
     ctx.scale(scale, scale);
 
-    // Render the asset with the combined state
-    asset.render(ctx, animationProgress || 0, stance || asset.stances[0], direction || 'right');
+    // Calculate the dimensions for the asset
+    // Since we've translated to the center and scaled, we need to adjust the x,y coordinates
+    // to position the asset correctly within the scaled coordinate system
+    const assetWidth = 100; // Standard width in the asset's coordinate system
+    const assetHeight = 100; // Standard height in the asset's coordinate system
+    
+    // Calculate x,y to center the asset in the scaled coordinate system
+    // Since we've already translated to the center, x,y should be negative half of the dimensions
+    const x = -assetWidth / 2;
+    const y = -assetHeight / 2;
+    
+    // Render the asset with the combined state and all required parameters
+    asset.render(
+      ctx, 
+      x, 
+      y, 
+      assetWidth, 
+      assetHeight, 
+      animationProgress || 0, 
+      stance || asset.stances[0], 
+      direction || 'right'
+    );
   } catch (error) {
     console.error('Error rendering asset:', error);
 

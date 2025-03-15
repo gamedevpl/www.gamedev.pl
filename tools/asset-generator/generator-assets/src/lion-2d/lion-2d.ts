@@ -116,7 +116,7 @@ Limited color palette and bold outlines.
 - sleeping: Lion in a sleeping pose
 `,
 
-  render(ctx: CanvasRenderingContext2D, progress: number, stance: string, direction: 'left' | 'right'): void {
+  render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: 'left' | 'right'): void {
     // Ensure we have valid stance and direction
     const validStance = this.stances.includes(stance) ? stance : 'standing';
     const validDirection = direction || 'right';
@@ -133,6 +133,10 @@ Limited color palette and bold outlines.
 
     // Save the current context state
     ctx.save();
+
+    // Apply transformations for positioning and scaling
+    ctx.translate(x, y);
+    ctx.scale(width / 100, height / 100);
 
     // Handle direction (flip if facing left)
     if (validDirection === 'left') {
