@@ -77,6 +77,8 @@ Limited color palette and bold outlines.
     let isDefending = false;
     let headTilt = 0;
     let facingAngle = 0;
+    let torsoTwist = 0; // Added for secondary motion in torso
+    let shoulderOffset = 0; // Added for secondary motion in shoulders
 
     switch (stance) {
       case 'walking':
@@ -84,6 +86,8 @@ Limited color palette and bold outlines.
         armAngle = armSwing;
         bodyOffsetY = bounceHeight / 2;
         headTilt = Math.sin(progress * Math.PI * 2) * 3;
+        torsoTwist = Math.sin(progress * Math.PI * 2) * 2; // Subtle torso twist while walking
+        shoulderOffset = Math.sin(progress * Math.PI * 2) * 1.5; // Shoulder movement
         break;
       case 'running':
         legAngle = legSwing * 1.8;
@@ -91,11 +95,16 @@ Limited color palette and bold outlines.
         bodyOffsetY = bounceHeight * 1.5;
         headTilt = Math.sin(progress * Math.PI * 2) * 5;
         facingAngle = 5; // Lean forward while running
+        torsoTwist = Math.sin(progress * Math.PI * 2) * 4; // More pronounced torso twist while running
+        shoulderOffset = Math.sin(progress * Math.PI * 2) * 3; // More pronounced shoulder movement
         break;
       case 'idle':
         bodyOffsetY = breathe / 2;
         headTilt = Math.sin(progress * Math.PI) * 2;
         armAngle = Math.sin(progress * Math.PI) * 3;
+        // Added subtle shifts for idle
+        torsoTwist = Math.sin(progress * Math.PI * 0.5) * 1;
+        shoulderOffset = Math.sin(progress * Math.PI * 0.5) * 0.8;
         break;
       case 'attacking':
         armAngle = -45 + Math.sin(progress * Math.PI) * 40;
@@ -103,6 +112,9 @@ Limited color palette and bold outlines.
         isAttacking = true;
         facingAngle = 10; // Lean forward when attacking
         headTilt = 5;
+        // Added anticipation and follow-through for attacking
+        torsoTwist = 5 + Math.sin(progress * Math.PI * 2) * 3;
+        shoulderOffset = Math.sin(progress * Math.PI) * 4;
         break;
       case 'defending':
         armAngle = 30;
@@ -110,18 +122,27 @@ Limited color palette and bold outlines.
         isDefending = true;
         facingAngle = -10; // Lean backward when defending
         headTilt = -5;
+        // Added defensive posture adjustment
+        torsoTwist = -3;
+        shoulderOffset = -2;
         break;
       case 'throwing':
         armAngle = -90 + Math.sin(progress * Math.PI * 2) * 70;
         isThrowing = true;
         facingAngle = 15; // Lean forward when throwing
         headTilt = 10;
+        // Added anticipation and follow-through for throwing
+        torsoTwist = 8 * Math.sin(progress * Math.PI);
+        shoulderOffset = 5 * Math.sin(progress * Math.PI * 1.5);
         break;
       case 'standing':
       default:
         bodyOffsetY = breathe;
         armAngle = Math.sin(progress * Math.PI * 2) * 2;
         headTilt = Math.sin(progress * Math.PI * 2) * 2;
+        // Added subtle movement for standing
+        torsoTwist = Math.sin(progress * Math.PI) * 0.8;
+        shoulderOffset = Math.sin(progress * Math.PI * 0.7) * 0.5;
         break;
     }
 
@@ -201,6 +222,8 @@ Limited color palette and bold outlines.
     ctx.save();
     ctx.translate(50, 50 + bodyOffsetY);
     ctx.rotate((facingAngle * Math.PI) / 180);
+    // Apply torso twist for more natural movement
+    ctx.rotate((torsoTwist * Math.PI) / 180);
     ctx.translate(-50, -(50 + bodyOffsetY));
 
     // Draw legs with improved proportions
@@ -295,15 +318,16 @@ Limited color palette and bold outlines.
     ctx.fill();
     ctx.stroke();
 
-    // Draw head with tilt
+    // Draw head with tilt - Connected to body instead of detached
     ctx.save();
-    ctx.translate(50, 30 + bodyOffsetY);
+    // Adjusted head position to connect with the body
+    ctx.translate(50, 35 + bodyOffsetY);
     ctx.rotate((headTilt * Math.PI) / 180);
 
-    // Neck
+    // Neck - Adjusted for better connection to body
     ctx.fillStyle = skinColor;
     ctx.beginPath();
-    ctx.rect(-3, -2, 6, 6);
+    ctx.rect(-3, -2, 6, 5);
     ctx.fill();
     ctx.stroke();
 
@@ -375,9 +399,10 @@ Limited color palette and bold outlines.
 
     ctx.restore();
 
-    // Draw arms with improved proportions
+    // Draw arms with improved proportions and secondary motion
     ctx.save();
-    ctx.translate(50, 45 + bodyOffsetY);
+    // Apply shoulder offset for more natural movement
+    ctx.translate(50 + shoulderOffset * 0.5, 45 + bodyOffsetY);
 
     // Left arm
     ctx.save();
@@ -446,8 +471,8 @@ Limited color palette and bold outlines.
       ctx.fill();
       ctx.stroke();
 
-      // Draw impact effect when attacking
-      if (progress > 0.7 && progress < 0.9) {
+      // Draw impact effect when attacking with anticipation and follow-through
+      if ((progress > 0.6 && progress < 0.8) || (progress > 0.9 && progress < 1.0)) {
         drawEffect('impact', 40, 0, 15);
       }
 
@@ -456,8 +481,9 @@ Limited color palette and bold outlines.
 
     ctx.restore();
 
-    // Right arm
+    // Right arm with shoulder offset for secondary motion
     ctx.save();
+    ctx.translate(shoulderOffset * -0.5, 0); // Apply offset to right shoulder
     ctx.rotate((-armAngle * Math.PI) / 180);
 
     // Upper arm
@@ -526,25 +552,55 @@ Limited color palette and bold outlines.
       ctx.restore();
     }
 
-    // Draw throwing object with improved details
+    // Draw throwing object with improved details and animation
     if (isThrowing) {
       ctx.save();
       ctx.translate(0, 18);
 
-      // Calculate throw position with improved arc
-      const throwProgress = Math.max(0, Math.sin(progress * Math.PI));
-      const throwX = throwProgress * 40;
-      const throwY = throwProgress * -20 + throwProgress * throwProgress * 40;
+      // Improved throw animation with better anticipation and follow-through
+      const throwPhase = progress % 1;
+      let throwProgress = 0;
+      let throwX = 0;
+      let throwY = 0;
+      
+      // Improved throwing animation with anticipation
+      if (throwPhase < 0.3) {
+        // Anticipation phase - draw back
+        throwProgress = throwPhase / 0.3;
+        throwX = -10 * throwProgress;
+        throwY = -5 * throwProgress;
+      } else if (throwPhase < 0.7) {
+        // Throw phase
+        throwProgress = (throwPhase - 0.3) / 0.4;
+        throwX = -10 + throwProgress * 50;
+        throwY = -5 + throwProgress * -15 + throwProgress * throwProgress * 40;
+      } else {
+        // Follow-through phase
+        throwProgress = (throwPhase - 0.7) / 0.3;
+        throwX = 40 + throwProgress * 10;
+        throwY = 20 + throwProgress * 10;
+      }
 
       // Draw motion trail for the spear
-      if (throwProgress > 0.2) {
+      if (throwPhase > 0.3 && throwPhase < 0.7) {
         drawEffect('trail', throwX, throwY, 20);
       }
 
       // Throw object (spear) with improved details
       ctx.save();
       ctx.translate(throwX, throwY);
-      ctx.rotate((45 * Math.PI) / 180);
+      
+      // Adjust rotation based on throw phase for more natural movement
+      let spearRotation = 45;
+      if (throwPhase < 0.3) {
+        spearRotation = 30 - throwPhase * 60; // Rotate back during anticipation
+      } else if (throwPhase < 0.7) {
+        spearRotation = -30 + (throwPhase - 0.3) * 200; // Rotate forward during throw
+      } else {
+        spearRotation = 50 + (throwPhase - 0.7) * 30; // Slight adjustment in follow-through
+      }
+      
+      ctx.rotate((spearRotation * Math.PI) / 180);
 
       // Spear shaft with gradient
       const spearGradient = ctx.createLinearGradient(-2, -15, 2, 15);
