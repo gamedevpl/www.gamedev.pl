@@ -29,7 +29,11 @@ export async function renderAsset(
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, 0, stance, 'right');
+    try {
+      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, 0, stance, 'right');
+    } catch (error) {
+      console.error('Failed to render asset:', error);
+    }
     const dataUrl = canvas.toDataURL();
 
     try {
@@ -236,7 +240,11 @@ async function generateFrames(
     ctx.restore();
     // Create state with the current stance and progress
     // Render the asset with the current state
-    asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, progress, stance, 'right');
+    try {
+      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, progress, stance, 'right');
+    } catch {
+      // ignore errors, to not spam the console
+    }
 
     // Save frame
     const frameNumber = i.toString().padStart(5, '0');
