@@ -28,7 +28,6 @@
   "modelOverrides": {
     "aiStudio": {
       "default": "gemini-exp-1206",
-      "cheap": "gemini-2.0-flash-exp"
     }
   }
 }
