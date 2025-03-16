@@ -7,8 +7,6 @@ export interface LintFixResult {
     success: boolean;
     /** Fixed code if successful, original code if not */
     code: string;
-    /** Summary of changes made */
-    summary: string;
     /** Error message if fixing failed */
     error?: string;
 }

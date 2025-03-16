@@ -28,6 +28,8 @@ export interface LintError {
  * Interface for linting results
  */
 export interface LintResult {
+  /** Asset name */
+  assetName: string;
   /** Path to the file that was linted */
   filePath: string;
   /** Whether any errors were found */
@@ -42,18 +44,19 @@ export interface LintResult {
 
 /**
  * Lint an asset file using ESLint
+ * @param assetName
  * @param filePath Path to the asset file to lint
  * @returns Promise resolving to the linting results
  * @throws Error if linting fails
  */
-export async function lintAssetFile(filePath: string): Promise<LintResult> {
+export async function lintAssetFile(assetName: string, filePath: string): Promise<LintResult> {
   try {
     // Read the file content
     const source = await fs.readFile(filePath, 'utf-8');
-    
+
     // Determine the config file location (use the one in generator-assets)
     const eslintConfigPath = path.resolve(process.cwd(), '..', 'generator-assets', '.eslintrc.cjs');
-    
+
     // Initialize ESLint with the config
     const eslint = new ESLint({
       overrideConfigFile: eslintConfigPath,
@@ -61,13 +64,14 @@ export async function lintAssetFile(filePath: string): Promise<LintResult> {
       extensions: ['.ts'],
       fix: false,
     });
-    
+
     // Run ESLint on the file
     const results = await eslint.lintText(source, { filePath });
-    
+
     if (results.length === 0) {
       // No results means no errors
       return {
+        assetName,
         filePath,
         hasErrors: false,
         hasWarnings: false,
@@ -75,9 +79,9 @@ export async function lintAssetFile(filePath: string): Promise<LintResult> {
         source,
       };
     }
-    
+
     // Convert ESLint results to our LintError format
-    const errors: LintError[] = results[0].messages.map(message => ({
+    const errors: LintError[] = results[0].messages.map((message) => ({
       ruleId: message.ruleId,
       severity: message.severity,
       fixable: message.fix !== undefined,
@@ -87,12 +91,13 @@ export async function lintAssetFile(filePath: string): Promise<LintResult> {
       endLine: message.endLine,
       endColumn: message.endColumn,
     }));
-    
+
     // Check if there are any errors or warnings
-    const hasErrors = errors.some(error => error.severity === 2);
-    const hasWarnings = errors.some(error => error.severity === 1);
-    
+    const hasErrors = errors.some((error) => error.severity === 2);
+    const hasWarnings = errors.some((error) => error.severity === 1);
+
     return {
+      assetName,
       filePath,
       hasErrors,
       hasWarnings,
@@ -114,15 +119,15 @@ export function formatLintErrors(lintResult: LintResult): string {
   if (!lintResult.hasErrors && !lintResult.hasWarnings) {
     return 'No linting issues found.';
   }
-  
+
   const formatted = [`Linting issues in ${path.basename(lintResult.filePath)}:`];
-  
-  lintResult.errors.forEach(error => {
+
+  lintResult.errors.forEach((error) => {
     const severity = error.severity === 2 ? 'Error' : 'Warning';
     const ruleId = error.ruleId ? `(${error.ruleId})` : '';
     formatted.push(`  ${severity} ${ruleId}: ${error.message} at line ${error.line}, column ${error.column}`);
   });
-  
+
   return formatted.join('\n');
 }
 
@@ -132,5 +137,5 @@ export function formatLintErrors(lintResult: LintResult): string {
  * @returns True if there are fixable errors, false otherwise
  */
 export function hasFixableErrors(lintResult: LintResult): boolean {
-  return lintResult.errors.some(error => error.fixable);
+  return lintResult.errors.some((error) => error.fixable);
 }

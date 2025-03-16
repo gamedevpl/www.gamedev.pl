@@ -1,3 +1,4 @@
+import { VerbosityLevel } from './render-character.js';
 /**
  * Interface for asset generation options
  */
@@ -12,12 +13,16 @@ export interface AssetGenerationOptions {
     additionalPrompt?: string;
     /** Whether to skip linting */
     skipLinting?: boolean;
+    /** Whether to only perform linting without rendering or generation */
+    lintOnly?: boolean;
     /** Video rendering options */
     videoOptions?: {
         /** Frames per second for the video (default: 30) */
         fps?: number;
         /** Duration of the video in seconds (default: 2) */
         duration?: number;
+        /** Verbosity level for logging (default: 'minimal') */
+        verbosity?: VerbosityLevel;
     };
 }
 /**

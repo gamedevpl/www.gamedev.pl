@@ -1,6 +1,6 @@
 import { LintResult, formatLintErrors } from './asset-linter.js';
-import { FunctionDef, ModelType, PromptItem } from 'genaicode';
-import { generateCode } from './genaicode-executor.js';
+import { FunctionDef } from 'genaicode';
+import { generateImprovedAsset } from './asset-generator.js';
 
 /**
  * Interface for the result of fixing linting errors
@@ -10,8 +10,6 @@ export interface LintFixResult {
   success: boolean;
   /** Fixed code if successful, original code if not */
   code: string;
-  /** Summary of changes made */
-  summary: string;
   /** Error message if fixing failed */
   error?: string;
 }
@@ -28,88 +26,82 @@ export async function fixLintErrors(lintResult: LintResult): Promise<LintFixResu
       return {
         success: true,
         code: lintResult.source,
-        summary: 'No linting issues to fix.',
       };
     }
 
+    let currentCode = lintResult.source;
+
     // Format the linting errors for the prompt
     const formattedErrors = formatLintErrors(lintResult);
+    console.log(`Found ${lintResult.errors.length} linting issues.`);
 
-    // Create the prompt for GenAIcode
-    const promptMessage = `
-You are a TypeScript expert tasked with fixing ESLint errors in a game asset file.
+    // Generate a patch to fix the linting errors
+    const fixedContent = await generateFixedContent(lintResult.assetName, currentCode, formattedErrors);
 
-Here is the original code with linting issues:
-
-\`\`\`typescript
-${lintResult.source}
-\`\`\`
-
-Here are the linting errors that need to be fixed:
-
-${formattedErrors}
-
-Please fix all linting issues while preserving the functionality and structure of the code.
-Focus only on fixing the linting errors, don't make unrelated changes or improvements.
-Return the complete fixed code that addresses all the linting issues.
-
-Your response should include a brief summary of the changes you made to fix the issues.
-`;
-
-    const prompt: PromptItem[] = [
-      {
-        type: 'systemPrompt',
-        text: 'You are a TypeScript expert that fixes linting errors in code while preserving functionality.',
-      },
-      {
-        type: 'user',
-        text: promptMessage,
-      },
-    ];
-
-    // Generate fixed code using GenAIcode
-    const fixResults = await generateCode(prompt, [fixLintErrorsDef], 'fixLintErrors', 0.7, ModelType.DEFAULT);
-
-    if (!fixResults || fixResults.length === 0 || !fixResults[0]?.args) {
-      throw new Error('Failed to generate fixed code');
+    if (!fixedContent.success || !fixedContent.newContent) {
+      return {
+        success: false,
+        code: currentCode,
+        error: 'Failed to generate a valid patch',
+      };
     }
 
-    const result = fixResults[0].args as { fixedCode: string; summary: string };
+    currentCode = fixedContent.newContent;
 
     return {
       success: true,
-      code: result.fixedCode,
-      summary: result.summary,
+      code: currentCode,
     };
   } catch (error) {
     console.error('Error fixing linting errors:', error);
     return {
       success: false,
       code: lintResult.source, // Return original code on error
-      summary: 'Failed to fix linting errors.',
       error: (error as Error).message,
     };
   }
 }
 
+async function generateFixedContent(assetName: string, sourceCode: string, formattedErrors: string) {
+  // Create the prompt for GenAIcode
+  const promptMessage = `
+Here are the linting errors that need to be fixed:
+
+${formattedErrors}
+`;
+
+  try {
+    const newContent = await generateImprovedAsset(assetName, sourceCode, promptMessage);
+    return {
+      newContent,
+      success: true,
+    };
+  } catch (error) {
+    return {
+      newContent: null,
+      success: false,
+    };
+  }
+}
+
 /**
- * Function definition for fixing lint errors
+ * Function definition for generating a lint patch
  */
-const fixLintErrorsDef: FunctionDef = {
-  name: 'fixLintErrors',
-  description: 'Fix ESLint errors in TypeScript code',
+const generateLintPatchDef: FunctionDef = {
+  name: 'generateLintPatch',
+  description: 'Generate a patch to fix ESLint errors in TypeScript code',
   parameters: {
     type: 'object',
     properties: {
-      fixedCode: {
+      patch: {
         type: 'string',
-        description: 'The fixed code with linting errors resolved',
+        description: 'The patch in unified diff format to fix linting errors',
       },
       summary: {
         type: 'string',
-        description: 'Summary of changes made to fix the linting errors',
+        description: 'Summary of changes made in the patch',
       },
     },
-    required: ['fixedCode', 'summary'],
+    required: ['patch', 'summary'],
   },
 };

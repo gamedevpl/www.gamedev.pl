@@ -21,6 +21,8 @@ export interface AssetGenerationOptions {
   additionalPrompt?: string;
   /** Whether to skip linting */
   skipLinting?: boolean;
+  /** Whether to only perform linting without rendering or generation */
+  lintOnly?: boolean;
   /** Video rendering options */
   videoOptions?: {
     /** Frames per second for the video (default: 30) */
@@ -80,6 +82,27 @@ export async function runAssetGenerationPipeline(
   console.log(`Processing asset: ${assetName}`);
   console.log(`Asset path: ${assetPath}`);
 
+  // Handle conflicting options
+  if (options.lintOnly && options.renderOnly) {
+    console.log('Both lintOnly and renderOnly options are set. lintOnly will take precedence.');
+    options.renderOnly = false;
+  }
+
+  if (options.lintOnly && options.skipLinting) {
+    console.warn('Warning: Both lintOnly and skipLinting options are set. This is contradictory.');
+    console.warn('No action will be performed. Please choose one option.');
+    return {
+      assetPath,
+      regenerated: false,
+      linting: {
+        lintingPerformed: false,
+        hasLintingErrors: false,
+        hasLintingWarnings: false,
+        errorsFixed: false,
+      },
+    };
+  }
+
   // Load current asset if exists
   let currentAsset = await loadAsset(assetPath);
   let currentContent: string | null = null;
@@ -89,6 +112,11 @@ export async function runAssetGenerationPipeline(
     currentContent = await fs.readFile(assetPath, 'utf-8');
   } else {
     console.log('No existing asset found, will create new one');
+
+    // Cannot process if asset doesn't exist and lintOnly is set
+    if (options.lintOnly) {
+      throw new Error('Cannot perform lint-only operation when no existing asset is found.');
+    }
 
     // Cannot skip rendering if no asset exists
     if (options.skipRender && !options.renderOnly) {
@@ -156,42 +184,31 @@ export async function runAssetGenerationPipeline(
     }
   }
 
-  if (options.renderOnly) {
-    console.log('Rendering only, exiting...');
+  let assessment;
+  if (!(options.renderOnly || options.lintOnly)) {
+    // Run inference for assessment
+    assessment = currentAsset
+      ? await assessAsset(assetPath, currentAsset, currentContent, renderingResult)
+      : 'No existing asset to assess';
+    console.log('\nAsset Assessment:');
+    console.log(assessment);
 
-    return {
-      assetPath,
-      regenerated: false,
-      renderingResult,
-      linting: {
-        lintingPerformed: false,
-        hasLintingErrors: false,
-        hasLintingWarnings: false,
-        errorsFixed: false,
-      },
-    };
+    // Generate improved asset
+    console.log('\nGenerating improved asset...');
+    const improvedImplementation = await generateImprovedAsset(
+      assetName,
+      currentContent,
+      assessment,
+      options.additionalPrompt,
+    );
+
+    // Save new asset
+    console.log('\nSaving improved asset...');
+    await saveAsset(assetPath, improvedImplementation);
+    console.log('Asset saved successfully');
+  } else {
+    console.log('Skipping asset improvement (--render-only or --lint-only flag is enabled)');
   }
-
-  // Run inference for assessment
-  const assessment = currentAsset
-    ? await assessAsset(assetPath, currentAsset, currentContent, renderingResult)
-    : 'No existing asset to assess';
-  console.log('\nAsset Assessment:');
-  console.log(assessment);
-
-  // Generate improved asset
-  console.log('\nGenerating improved asset...');
-  const improvedImplementation = await generateImprovedAsset(
-    assetName,
-    currentContent,
-    assessment,
-    options.additionalPrompt,
-  );
-
-  // Save new asset
-  console.log('\nSaving improved asset...');
-  await saveAsset(assetPath, improvedImplementation);
-  console.log('Asset saved successfully');
 
   // Linting step
   let lintingResult: AssetLintingResult = {
@@ -202,9 +219,9 @@ export async function runAssetGenerationPipeline(
   };
 
   if (!options.skipLinting) {
-    try {
+    for (let tryCount = 0; tryCount < 3; tryCount++) {
       console.log('\nLinting asset code...');
-      const lintResults: LintResult = await lintAssetFile(assetPath);
+      const lintResults: LintResult = await lintAssetFile(assetName, assetPath);
 
       lintingResult.lintingPerformed = true;
       lintingResult.hasLintingErrors = lintResults.hasErrors;
@@ -215,28 +232,24 @@ export async function runAssetGenerationPipeline(
         console.log(formatLintErrors(lintResults));
 
         console.log('\nAttempting to fix linting issues...');
-        const fixResult: LintFixResult = await fixLintErrors(lintResults);
+        const fixResult: LintFixResult = await fixLintErrors(lintResults); // Allow up to 3 iterations
 
         if (fixResult.success) {
-          console.log('\nLinting issues fixed successfully:');
-          console.log(fixResult.summary);
+          console.log('\nLinting issues fixed successfully');
 
           // Save the fixed code
           await saveAsset(assetPath, fixResult.code);
           console.log('Fixed asset code saved successfully');
 
           lintingResult.errorsFixed = true;
-          lintingResult.fixSummary = fixResult.summary;
         } else {
           console.error('\nFailed to fix linting issues:', fixResult.error);
           lintingResult.errorsFixed = false;
         }
       } else {
         console.log('No linting issues found');
+        break;
       }
-    } catch (error) {
-      console.error('Error during linting process:', error);
-      // Continue with the pipeline even if linting fails
     }
   } else {
     console.log('\nSkipping linting (disabled in options)');
