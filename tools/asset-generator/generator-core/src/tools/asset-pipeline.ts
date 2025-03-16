@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
-import { renderAsset, renderAssetVideos } from './render-character.js';
+import { renderAsset, renderAssetVideos, VerbosityLevel } from './render-character.js';
 import { assessAsset } from './asset-assessor.js';
 import { generateImprovedAsset } from './asset-generator.js';
 import { saveAsset } from './asset-saver.js';
@@ -27,6 +27,8 @@ export interface AssetGenerationOptions {
     fps?: number;
     /** Duration of the video in seconds (default: 2) */
     duration?: number;
+    /** Verbosity level for logging (default: 'minimal') */
+    verbosity?: VerbosityLevel;
   };
 }
 
@@ -122,15 +124,15 @@ export async function runAssetGenerationPipeline(
     // Generate videos for each stance if not skipped
     if (!options.skipVideos) {
       try {
-        console.log('\nGenerating videos for each stance...');
+        console.log('Generating videos for each stance...');
         renderingResult.push(
           ...(await renderAssetVideos(currentAsset, assetPath, {
             fps: options.videoOptions?.fps,
             duration: options.videoOptions?.duration,
-            logProgress: true,
+            verbosity: options.videoOptions?.verbosity || 'minimal',
+            logProgress: options.videoOptions?.verbosity !== 'none',
           })),
         );
-        console.log('Video generation completed successfully');
       } catch (error) {
         console.error('Error generating videos:', error);
       }
@@ -253,13 +255,13 @@ export async function runAssetGenerationPipeline(
     // Generate videos for the improved asset if not skipped
     if (!options.skipVideos) {
       try {
-        console.log('\nGenerating videos for improved asset...');
+        console.log('Generating videos for improved asset...');
         await renderAssetVideos(currentAsset, assetPath, {
           fps: options.videoOptions?.fps,
           duration: options.videoOptions?.duration,
-          logProgress: true,
+          verbosity: options.videoOptions?.verbosity || 'minimal',
+          logProgress: options.videoOptions?.verbosity !== 'none',
         });
-        console.log('Video generation for improved asset completed successfully');
       } catch (error) {
         console.error('Error generating videos for improved asset:', error);
       }

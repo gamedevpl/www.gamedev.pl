@@ -59,19 +59,49 @@ export async function renderAsset(
 }
 
 /**
+ * Verbosity levels for logging
+ */
+export type VerbosityLevel = 'none' | 'minimal' | 'normal' | 'verbose';
+
+/**
  * Configuration options for video rendering
  */
 export interface VideoRenderOptions {
-  /** Frames per second for the video (default: 30) */
+  /** Frames per second for the video (default: 60) */
   fps?: number;
   /** Duration of the video in seconds (default: 2) */
   duration?: number;
   /** Whether to log progress (default: true) */
   logProgress?: boolean;
+  /** Verbosity level for logging (default: 'minimal') */
+  verbosity?: VerbosityLevel;
 }
 
 /**
- * Renders videos for each stance of an asset
+ * Determines if a message should be logged based on the current verbosity level
+ */
+function shouldLog(currentLevel: VerbosityLevel, requiredLevel: VerbosityLevel): boolean {
+  const levels: Record<VerbosityLevel, number> = {
+    'none': 0,
+    'minimal': 1,
+    'normal': 2,
+    'verbose': 3
+  };
+  
+  return levels[currentLevel] >= levels[requiredLevel];
+}
+
+/**
+ * Logs a message if the verbosity level allows it
+ */
+function log(message: string, verbosity: VerbosityLevel, requiredLevel: VerbosityLevel): void {
+  if (shouldLog(verbosity, requiredLevel)) {
+    console.log(message);
+  }
+}
+
+/**
+ * Renders videos for each stance of an asset in parallel
  * @param asset The asset to render
  * @param assetPath Path to the asset's source file
  * @param options Video rendering options
@@ -88,39 +118,34 @@ export async function renderAssetVideos(
     dataUrl: string;
   }[]
 > {
-  const results: {
-    stance: string;
-    mediaType: string;
-    dataUrl: string;
-  }[] = [];
-  const { fps = 30, duration = 2, logProgress = true } = options;
-
+  const { fps = 60, duration = 2, logProgress = true, verbosity = 'minimal' } = options;
+  
   // Create temporary directory for frames
   const { path: tempDir, cleanup } = await tmpDir({ unsafeCleanup: true });
 
   try {
-    if (logProgress) {
-      console.log(`Rendering videos for asset: ${asset.name}`);
-    }
+    log(`Rendering videos for asset: ${asset.name}`, verbosity, 'minimal');
 
-    // Render video for each stance
-    for (const stance of asset.stances) {
-      if (logProgress) {
-        console.log(`\nRendering video for stance: ${stance}`);
-      }
-
-      const result = await renderStanceVideo(asset, assetPath, stance, tempDir, { fps, duration, logProgress });
-      results.push(result);
-    }
-
+    // Process all stances in parallel
+    const renderPromises = asset.stances.map(stance => 
+      renderStanceVideo(asset, assetPath, stance, tempDir, { 
+        fps, 
+        duration, 
+        logProgress, 
+        verbosity 
+      })
+    );
+    
+    // Wait for all videos to render
+    const results = await Promise.all(renderPromises);
+    
+    log(`Completed rendering all videos for asset: ${asset.name}`, verbosity, 'minimal');
     return results;
   } finally {
     // Clean up temporary directory
     try {
       await cleanup();
-      if (logProgress) {
-        console.log('\nTemporary files cleaned up');
-      }
+      log('Temporary files cleaned up', verbosity, 'normal');
     } catch (error) {
       console.error('Error cleaning up temporary files:', error);
     }
@@ -147,15 +172,17 @@ async function renderStanceVideo(
   mediaType: string;
   dataUrl: string;
 }> {
-  const { fps = 30, duration = 2, logProgress = true } = options;
+  const { fps = 60, duration = 2, verbosity = 'minimal' } = options;
   const totalFrames = fps * duration;
   const frameDir = path.join(tempDir, stance);
 
   // Create directory for frames
   await fs.mkdir(frameDir, { recursive: true });
 
+  log(`Rendering video for stance: ${stance}`, verbosity, 'normal');
+
   // Generate frames
-  const framePaths = await generateFrames(asset, frameDir, stance, totalFrames, logProgress);
+  const framePaths = await generateFrames(asset, frameDir, stance, totalFrames, verbosity);
 
   // Create output path for video
   const assetDir = path.dirname(assetPath);
@@ -163,11 +190,9 @@ async function renderStanceVideo(
   const videoPath = path.join(assetDir, videoFileName);
 
   // Create video from frames
-  await createVideoFromFrames(framePaths, videoPath, fps, logProgress);
+  await createVideoFromFrames(framePaths, videoPath, fps, verbosity);
 
-  if (logProgress) {
-    console.log(`Video for stance "${stance}" saved to: ${videoPath}`);
-  }
+  log(`Video for stance "${stance}" saved to: ${videoPath}`, verbosity, 'minimal');
 
   const dataUrl = `data:video/mp4;base64,${(await fs.readFile(videoPath)).toString('base64')}`;
 
@@ -184,7 +209,7 @@ async function renderStanceVideo(
  * @param frameDir Directory to save frames
  * @param stance The stance to render
  * @param totalFrames Total number of frames to generate
- * @param logProgress Whether to log progress
+ * @param verbosity Verbosity level for logging
  * @returns Array of frame file paths
  */
 async function generateFrames(
@@ -192,15 +217,13 @@ async function generateFrames(
   frameDir: string,
   stance: string,
   totalFrames: number,
-  logProgress: boolean,
+  verbosity: VerbosityLevel,
 ): Promise<string[]> {
   const framePaths: string[] = [];
   const canvas = createCanvas(1024, 1024);
   const ctx = canvas.getContext('2d');
 
-  if (logProgress) {
-    console.log(`Generating ${totalFrames} frames for stance: ${stance}`);
-  }
+  log(`Generating ${totalFrames} frames for stance: ${stance}`, verbosity, 'normal');
 
   for (let i = 0; i < totalFrames; i++) {
     // Calculate progress (0 to 1)
@@ -225,9 +248,10 @@ async function generateFrames(
 
     framePaths.push(framePath);
 
-    // Log progress periodically
-    if (logProgress && (i === 0 || i === totalFrames - 1 || i % Math.ceil(totalFrames / 10) === 0)) {
-      console.log(`  Generated frame ${i + 1}/${totalFrames} (${Math.round(progress * 100)}%)`);
+    // Log progress only at specific intervals and only if verbosity is sufficient
+    if ((i === 0 || i === totalFrames - 1 || i % Math.ceil(totalFrames / 5) === 0) && 
+        shouldLog(verbosity, 'normal')) {
+      log(`  Generated frame ${i + 1}/${totalFrames} (${Math.round(progress * 100)}%)`, verbosity, 'normal');
     }
   }
 
@@ -239,17 +263,15 @@ async function generateFrames(
  * @param framePaths Array of frame file paths
  * @param outputPath Path to save the output video
  * @param fps Frames per second
- * @param logProgress Whether to log progress
+ * @param verbosity Verbosity level for logging
  */
 async function createVideoFromFrames(
   framePaths: string[],
   outputPath: string,
   fps: number,
-  logProgress: boolean,
+  verbosity: VerbosityLevel,
 ): Promise<void> {
-  if (logProgress) {
-    console.log(`Creating video from ${framePaths.length} frames at ${fps} FPS`);
-  }
+  log(`Creating video from ${framePaths.length} frames at ${fps} FPS`, verbosity, 'normal');
 
   return new Promise((resolve, reject) => {
     videoshow(framePaths, {
@@ -264,9 +286,7 @@ async function createVideoFromFrames(
     })
       .save(outputPath)
       .on('start', (command: string) => {
-        if (logProgress) {
-          console.log('  FFmpeg process started:', command);
-        }
+        log('FFmpeg process started', verbosity, 'verbose');
       })
       .on(
         'progress',
@@ -277,9 +297,7 @@ async function createVideoFromFrames(
           targetSize: number;
           timemark: string;
         }) => {
-          if (logProgress) {
-            console.log(`  Processing: ${progress.frames} frames at ${progress.currentFps} FPS`);
-          }
+          log(`Processing: ${progress.frames} frames at ${progress.currentFps} FPS`, verbosity, 'verbose');
         },
       )
       .on('error', (err: Error) => {
@@ -287,9 +305,7 @@ async function createVideoFromFrames(
         reject(err);
       })
       .on('end', () => {
-        if (logProgress) {
-          console.log('  Video creation completed');
-        }
+        log('Video creation completed', verbosity, 'normal');
         resolve();
       });
   });

@@ -28,6 +28,8 @@ type AnimationConfig = {
   blinkRate: number;
   breathingAmplitude: number;
   breathingFrequency: number;
+  headBobAmplitude?: number;
+  headBobFrequency?: number;
 };
 
 const ANIMATION_CONFIG: Record<string, AnimationConfig> = {
@@ -52,6 +54,8 @@ const ANIMATION_CONFIG: Record<string, AnimationConfig> = {
     blinkRate: 0.01,
     breathingAmplitude: 0.3,
     breathingFrequency: 0.5,
+    headBobAmplitude: 1.5,
+    headBobFrequency: 2,
   },
   running: {
     legAmplitude: 5,
@@ -63,6 +67,8 @@ const ANIMATION_CONFIG: Record<string, AnimationConfig> = {
     blinkRate: 0.005,
     breathingAmplitude: 0.8,
     breathingFrequency: 1,
+    headBobAmplitude: 2.5,
+    headBobFrequency: 4,
   },
   idle: {
     legAmplitude: 0.5,
@@ -130,6 +136,11 @@ Limited color palette and bold outlines.
     const tailAngle = calculateAnimationValue(progress, config.tailAmplitude, config.tailFrequency);
     const breathingOffset = calculateAnimationValue(progress, config.breathingAmplitude, config.breathingFrequency);
     const isBlinking = Math.random() < config.blinkRate;
+    
+    // Calculate head bob for walking and running
+    const headBobOffset = config.headBobAmplitude && config.headBobFrequency
+      ? calculateAnimationValue(progress, config.headBobAmplitude, config.headBobFrequency, Math.PI / 2) // Phase shift for natural movement
+      : 0;
 
     // Save the current context state
     ctx.save();
@@ -153,11 +164,17 @@ Limited color palette and bold outlines.
     } else {
       // Draw the lion in layers from back to front
       drawTail(ctx, tailAngle);
-      drawHindLeg(ctx, legOffset);
+      
+      // Fix for running animation - ensure legs are properly attached to the body
+      const adjustedLegOffset = validStance === 'running' 
+        ? Math.min(Math.max(legOffset, -4), 4) // Clamp leg offset for running to prevent detachment
+        : legOffset;
+      
+      drawHindLeg(ctx, adjustedLegOffset);
       drawBody(ctx, bodyOffset, breathingOffset);
-      drawMane(ctx, bodyOffset);
-      drawHead(ctx, bodyOffset, validStance, isBlinking);
-      drawFrontLeg(ctx, legOffset);
+      drawMane(ctx, bodyOffset, validStance);
+      drawHead(ctx, bodyOffset + headBobOffset, validStance, isBlinking);
+      drawFrontLeg(ctx, adjustedLegOffset);
     }
 
     // Restore the context state
@@ -210,19 +227,33 @@ function drawSleepingLion(
   isBlinking: boolean,
   progress: number,
 ): void {
-  // Body (lying down) with breathing animation
-  drawShape(ctx, 'ellipse', [50, 70, 30, 12 + breathingOffset], colors.body, colors.outline);
+  // Body (lying down) with enhanced breathing animation
+  const breathingScale = 0.5 + 0.5 * Math.sin(progress * Math.PI * 2 * 0.1); // Smooth breathing cycle
+  drawShape(ctx, 'ellipse', [50, 70, 30, 12 + breathingOffset * breathingScale], colors.body, colors.outline);
 
   // Highlight on body
   ctx.globalAlpha = 0.3;
-  drawShape(ctx, 'ellipse', [45, 65, 20, 6, Math.PI * 0.1], colors.highlight);
+  drawShape(ctx, 'ellipse', [45, 65, 20, 6], colors.highlight);
   ctx.globalAlpha = 1;
 
   // Head (resting)
   drawShape(ctx, 'ellipse', [75, 65, 10, 8, Math.PI * 0.1], colors.body, colors.outline);
 
-  // Mane
+  // Mane with more detail
   drawShape(ctx, 'ellipse', [70, 63, 12, 10, Math.PI * 0.1], colors.mane, colors.outline);
+  
+  // Add mane texture details
+  ctx.strokeStyle = colors.darkMane;
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI * 0.1 + i * Math.PI / 3;
+    const x = 70 + 10 * Math.cos(angle);
+    const y = 63 + 8 * Math.sin(angle);
+    ctx.beginPath();
+    ctx.moveTo(70, 63);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
 
   // Darker inner mane
   drawShape(ctx, 'ellipse', [72, 63, 8, 7, Math.PI * 0.1], colors.darkMane);
@@ -266,8 +297,19 @@ function drawSleepingLion(
   ctx.bezierCurveTo(15, 60, 10, 60, 15, 70);
   ctx.stroke();
 
-  // Tail tip
+  // Tail tip with more detail
   drawShape(ctx, 'ellipse', [15, 70, 4, 3], colors.tailTip, colors.outline, 2);
+  
+  // Add fur texture to tail tip
+  ctx.strokeStyle = colors.darkMane;
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    const angle = Math.PI / 2 + i * Math.PI / 4;
+    ctx.beginPath();
+    ctx.moveTo(15, 70);
+    ctx.lineTo(15 + 3 * Math.cos(angle), 70 + 2 * Math.sin(angle));
+    ctx.stroke();
+  }
 
   // Z's for sleeping (animated slightly)
   ctx.strokeStyle = colors.outline;
@@ -297,9 +339,30 @@ function drawBody(ctx: CanvasRenderingContext2D, offset: number, breathingOffset
   ctx.globalAlpha = 1;
 }
 
-function drawMane(ctx: CanvasRenderingContext2D, offset: number): void {
+function drawMane(ctx: CanvasRenderingContext2D, offset: number, stance: string): void {
   // Main mane
   drawShape(ctx, 'ellipse', [70, 45 + offset, 18, 20], colors.mane, colors.outline);
+
+  // Enhanced mane details - add more texture and volume
+  const maneDetails = stance === 'running' ? 12 : 8; // More detail when running
+  
+  // Add fur-like strokes around the mane
+  ctx.strokeStyle = colors.darkMane;
+  ctx.lineWidth = 0.8;
+  
+  for (let i = 0; i < maneDetails; i++) {
+    const angle = (i * Math.PI * 2) / maneDetails;
+    const length = 3 + Math.random() * 3; // Varied length for natural look
+    const x1 = 70 + 18 * Math.cos(angle);
+    const y1 = 45 + offset + 20 * Math.sin(angle);
+    const x2 = x1 + length * Math.cos(angle);
+    const y2 = y1 + length * Math.sin(angle);
+    
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
 
   // Darker inner mane details
   drawShape(ctx, 'ellipse', [72, 45 + offset, 12, 15], colors.darkMane);
@@ -340,7 +403,7 @@ function drawHead(ctx: CanvasRenderingContext2D, offset: number, stance: string,
     // Alert, excited expression
     drawRunningFacialExpression(ctx, offset);
   } else if (stance === 'idle') {
-    // Relaxed, content expression
+    // More animated idle expression - subtle movements
     drawIdleFacialExpression(ctx, offset, isBlinking);
   } else {
     // Default expression
@@ -428,12 +491,16 @@ function drawIdleFacialExpression(ctx: CanvasRenderingContext2D, offset: number,
   // Nose
   drawShape(ctx, 'ellipse', [88, 42 + offset, 2, 1.5], colors.nose);
 
-  // Slightly curved mouth for idle - content expression
+  // More animated mouth for idle - occasional small movements
   ctx.strokeStyle = colors.mouth;
   ctx.lineWidth = 1;
   ctx.beginPath();
+  
+  // Small random variation to make idle more lively
+  const mouthCurve = Math.sin(Date.now() / 2000) * 0.5;
+  
   ctx.moveTo(88, 43 + offset);
-  ctx.quadraticCurveTo(86, 46 + offset, 84, 45 + offset);
+  ctx.quadraticCurveTo(86, 46 + offset + mouthCurve, 84, 45 + offset);
   ctx.stroke();
 }
 
@@ -458,7 +525,7 @@ function drawWhiskers(ctx: CanvasRenderingContext2D, offset: number): void {
 }
 
 function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
-  // Front leg
+  // Front leg with improved connection to body
   drawShape(ctx, 'roundRect', [65, 60 + offset, 6, 20, 3], colors.paw, colors.outline);
 
   // Paw
@@ -469,7 +536,7 @@ function drawFrontLeg(ctx: CanvasRenderingContext2D, offset: number): void {
 }
 
 function drawHindLeg(ctx: CanvasRenderingContext2D, offset: number): void {
-  // Hind leg
+  // Hind leg with improved connection to body
   drawShape(ctx, 'roundRect', [30, 60 - offset, 7, 20, 3], colors.paw, colors.outline);
 
   // Paw
@@ -506,12 +573,19 @@ function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.bezierCurveTo(-15, 5, -25, -5, -30, -15);
   ctx.stroke();
 
-  // Tail tip
+  // Tail tip with enhanced detail
   drawShape(ctx, 'ellipse', [-30, -15, 5, 4], colors.tailTip, colors.outline, 2);
-
-  // Tail details/fur
-  ctx.strokeStyle = colors.outline;
+  
+  // Add fur texture to tail tip
+  ctx.strokeStyle = colors.darkMane;
   ctx.lineWidth = 0.5;
+  for (let i = 0; i < 6; i++) {
+    const angle = -Math.PI/4 + i * Math.PI/6;
+    ctx.beginPath();
+    ctx.moveTo(-30, -15);
+    ctx.lineTo(-30 + 5 * Math.cos(angle), -15 + 4 * Math.sin(angle));
+    ctx.stroke();
+  }
 
   // Small fur details on tail
   ctx.beginPath();
