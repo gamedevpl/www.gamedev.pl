@@ -40,25 +40,20 @@ export function assetGeneratorPlugin(): Plugin {
 
           // Execute the asset-gen command with the asset name and --json flags asynchronously
           const command = 'npm';
-          const args = ['exec', '--workspace=@gamedev/generator-core', '--', 'asset-gen', `${assetName}`, '--json'];
+          const args = ['exec', '--workspace=@gamedev/generator-core', '--', 'asset-gen', `${assetName}`];
           
           const process = spawn(command, args);
-          
-          let stdoutData = '';
-          let stderrData = '';
           
           // Collect stdout data
           process.stdout.on('data', (data) => {
             const chunk = data.toString('utf-8');
-            console.log(`stdout: ${chunk}`);
-            stdoutData += chunk;
+            console.log('[Generator]', chunk);
           });
           
           // Collect stderr data
           process.stderr.on('data', (data) => {
             const chunk = data.toString('utf-8');
-            console.error(`stderr: ${chunk}`);
-            stderrData += chunk;
+            console.log('[Generator]', chunk);
           });
           
           // Handle process completion
@@ -66,60 +61,19 @@ export function assetGeneratorPlugin(): Plugin {
             console.log(`Asset generation process exited with code ${code}`);
             
             if (code === 0) {
-              try {
-                // Parse the JSON output from stdout
-                const result = JSON.parse(stdoutData);
-                
                 // Return success response
                 res.statusCode = 200;
                 res.end(
                   JSON.stringify({
                     success: true,
                     message: 'Asset regenerated successfully',
-                    assetPath: result.assetPath,
-                    assessment: result.assessment,
                   }),
                 );
-              } catch (parseError) {
-                console.error('Error parsing JSON output:', parseError);
-                res.statusCode = 500;
-                res.end(
-                  JSON.stringify({
-                    error: 'Failed to parse asset generation output',
-                    message: (parseError as Error).message,
-                    stdout: stdoutData,
-                    stderr: stderrData,
-                  }),
-                );
-              }
             } else {
-              // Process failed
-              console.error(`Asset generation failed with code ${code}`);
-              
-              // Try to parse any JSON output that might have been produced before the error
-              let parsedError = null;
-              
-              try {
-                // Check if there's JSON in the stdout or stderr output
-                const stdoutMatch = stdoutData.match(/\{.*\}/s);
-                const stderrMatch = stderrData.match(/\{.*\}/s);
-                
-                if (stdoutMatch) {
-                  parsedError = JSON.parse(stdoutMatch[0]);
-                } else if (stderrMatch) {
-                  parsedError = JSON.parse(stderrMatch[0]);
-                }
-              } catch (parseError) {
-                // If we can't parse JSON from the output, just use the original error
-              }
-              
               res.statusCode = 500;
               res.end(
                 JSON.stringify({
                   error: 'Failed to regenerate asset',
-                  message: parsedError?.message || `Process exited with code ${code}`,
-                  stdout: stdoutData,
-                  stderr: stderrData,
                 }),
               );
             }

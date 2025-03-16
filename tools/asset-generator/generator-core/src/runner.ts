@@ -14,7 +14,6 @@ export async function assetGenRunner() {
     const args = process.argv.slice(3);
     const renderOnly = args.includes('--render-only');
     const skipRender = args.includes('--skip-render');
-    const jsonOutput = args.includes('--json');
     const skipVideos = args.includes('--skip-videos');
     
     // Parse prompt option
@@ -37,32 +36,24 @@ export async function assetGenRunner() {
       additionalPrompt
     });
 
-    // Output as JSON if the --json flag is provided
-    if (jsonOutput) {
-      // Output the result as JSON
-      console.log(JSON.stringify(result));
-    } else {
-      // If not outputting as JSON, the logs from runAssetGenerationPipeline will be shown
-      // This is just a final success message
-      console.log(`\nAsset generation completed successfully for: ${assetName}`);
-      
-      if (result.assessment) {
-        console.log('\nFinal Assessment:');
-        console.log(result.assessment);
-      }
-      
-      if (result.linting && result.linting.lintingPerformed) {
-        console.log('\nLinting Summary:');
-        console.log(`Linting errors: ${result.linting.hasLintingErrors ? 'Yes' : 'No'}`);
-        console.log(`Linting warnings: ${result.linting.hasLintingWarnings ? 'Yes' : 'No'}`);
-        console.log(`Errors fixed: ${result.linting.errorsFixed ? 'Yes' : 'No'}`);
-        
-        if (result.linting.fixSummary) {
-          console.log('\nFix Summary:');
-          console.log(result.linting.fixSummary);
-        }
-      }
+    console.log(`\nAsset generation completed successfully for: ${assetName}`);
+    
+    if (result.assessment) {
+      console.log('\nFinal Assessment:');
+      console.log(result.assessment);
     }
+    
+    if (result.linting && result.linting.lintingPerformed) {
+      console.log('\nLinting Summary:');
+      console.log(`Linting errors: ${result.linting.hasLintingErrors ? 'Yes' : 'No'}`);
+      console.log(`Linting warnings: ${result.linting.hasLintingWarnings ? 'Yes' : 'No'}`);
+      console.log(`Errors fixed: ${result.linting.errorsFixed ? 'Yes' : 'No'}`);
+      
+      if (result.linting.fixSummary) {
+        console.log('\nFix Summary:');
+        console.log(result.linting.fixSummary);
+      }
+    } 
   } catch (error) {
     const errorMessage = (error as Error).message;
     
