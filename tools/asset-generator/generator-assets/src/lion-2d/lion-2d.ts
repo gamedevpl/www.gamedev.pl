@@ -101,7 +101,7 @@ function calculateAnimationValue(progress: number, amplitude: number, frequency:
 
 export const Lion2d: Asset = {
   name: 'lion-2d',
-  stances: ['standing', 'walking', 'running', 'idle', 'sleeping'],
+  stances: ['standing', 'walking', 'running', 'idle', 'sleeping', 'ambushing', 'roaring', 'eating'],
   description: `# Two dimensional representation of a lion game asset
 
 # Projecting a lion in a 2D space
@@ -120,6 +120,9 @@ Limited color palette and bold outlines.
 - running: Exaggerated leg movement and pronounced bounce
 - idle: Very subtle movements showing the lion at rest
 - sleeping: Lion in a sleeping pose
+- ambushing: Lion in a crouching pose ready to pounce
+- roaring: Lion in a roaring pose with mouth open
+- eating: Lion in a eating pose, chewing on something
 `,
 
   render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: 'left' | 'right'): void {
