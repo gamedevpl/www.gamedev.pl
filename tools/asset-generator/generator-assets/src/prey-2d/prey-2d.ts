@@ -17,11 +17,11 @@ const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 1),
     walking: Array.from({ length: 100 }, (_, i) => {
       // Asymmetric leg movement for more natural gait
-      return i < 50 ? Math.sin((i / 100) * 2 * Math.PI * 2) * 3 : Math.sin(((i / 100) * 2 * Math.PI * 2) + Math.PI) * 3;
+      return i < 50 ? Math.sin((i / 100) * 2 * Math.PI * 2) * 3 : Math.sin((i / 100) * 2 * Math.PI * 2 + Math.PI) * 3;
     }),
     running: Array.from({ length: 100 }, (_, i) => {
       // Asymmetric leg movement for more natural gait
-      return i < 50 ? Math.sin((i / 100) * 4 * Math.PI * 2) * 5 : Math.sin(((i / 100) * 4 * Math.PI * 2) + Math.PI) * 5;
+      return i < 50 ? Math.sin((i / 100) * 4 * Math.PI * 2) * 5 : Math.sin((i / 100) * 4 * Math.PI * 2 + Math.PI) * 5;
     }),
     grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.5),
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.8),
@@ -67,12 +67,12 @@ const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
     grazing: Array.from({ length: 100 }, () => 0.05), // Slight bend when grazing
     alert: Array.from({ length: 100 }, () => 0),
     carrion: Array.from({ length: 100 }, () => 0), // No bend for carrion
-  }
+  },
 };
 
 export const Prey2d: Asset = {
   name: 'prey-2d',
-  stances: ['standing', 'walking', 'running', 'grazing', 'alert', 'carrion'],
+  stances: ['standing', 'walking', 'running', 'grazing', 'alert', 'carrion', 'drinking', 'eating'],
 
   description: `# Two dimensional representation of a prey animal game asset
 
@@ -93,8 +93,19 @@ Limited color palette and bold outlines.
 - grazing: Head lowered, gentle movements showing the animal eating
 - alert: Head raised, ears perked up, showing awareness of danger
 - carrion: Lying down, not moving, representing a dead animal
+- drinking: Head lowered, drinking water
+- eating: Head lowered, eating food
 `,
-  render: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: string): void => {
+  render: (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    progress: number,
+    stance: string,
+    direction: string,
+  ): void => {
     stance = stance || 'standing';
     direction = direction || 'right';
 
@@ -139,11 +150,7 @@ Limited color palette and bold outlines.
   },
 };
 
-function drawBody(
-  ctx: CanvasRenderingContext2D,
-  offset: number,
-  spotted: boolean,
-): void {
+function drawBody(ctx: CanvasRenderingContext2D, offset: number, spotted: boolean): void {
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -247,12 +254,12 @@ function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, bend: numb
 
   const legLength = 18;
   const legWidth = 4;
-  
+
   // Base positions for leg attachment to body
   const leftLegX = 62;
   const rightLegX = 70;
   const legY = 60;
-  
+
   // Apply different offsets to each leg for more natural movement
   const leftOffset = offset;
   const rightOffset = stance === 'walking' || stance === 'running' ? -offset : offset;
@@ -269,12 +276,12 @@ function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, bend: numbe
 
   const legLength = 18;
   const legWidth = 4;
-  
+
   // Base positions for leg attachment to body
   const leftLegX = 32;
   const rightLegX = 40;
   const legY = 60;
-  
+
   // Apply different offsets to each leg for more natural movement
   const leftOffset = stance === 'walking' || stance === 'running' ? -offset : offset;
   const rightOffset = offset;
@@ -285,37 +292,37 @@ function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, bend: numbe
 }
 
 function drawArticulatedLeg(
-  ctx: CanvasRenderingContext2D, 
-  x: number, 
-  y: number, 
-  width: number, 
-  length: number, 
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  length: number,
   bend: number,
-  isForward: boolean
+  isForward: boolean,
 ): void {
   // Upper part of leg
   const upperLength = length * 0.5;
   const lowerLength = length * 0.5;
-  
+
   // Calculate joint position with bend
-  const jointX = x + (isForward ? width/2 * bend : -width/2 * bend);
+  const jointX = x + (isForward ? (width / 2) * bend : (-width / 2) * bend);
   const jointY = y + upperLength;
-  
+
   // Draw upper leg segment
   ctx.beginPath();
   ctx.roundRect(x, y, width, upperLength, 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Draw lower leg segment with bend
   ctx.save();
   ctx.translate(jointX, jointY);
   ctx.rotate(isForward ? bend * 0.2 : -bend * 0.2);
   ctx.beginPath();
-  ctx.roundRect(-width/2, 0, width, lowerLength, 2);
+  ctx.roundRect(-width / 2, 0, width, lowerLength, 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Draw hoof at the end of lower leg
   drawHoof(ctx, 0, lowerLength);
   ctx.restore();
@@ -360,36 +367,36 @@ function drawCarrion(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
-  
+
   // Rotated body
   ctx.save();
   ctx.translate(50, 65);
   ctx.rotate(Math.PI * 0.5); // Rotate 90 degrees to lie on side
-  
+
   // Main body
   ctx.beginPath();
   ctx.ellipse(0, 0, 12, 22, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
-  
+
   // Head - lying to the side
   ctx.save();
   ctx.translate(70, 70);
   ctx.rotate(Math.PI * 0.3); // Head tilted
-  
+
   // Head shape
   ctx.beginPath();
   ctx.ellipse(0, 0, 7, 8, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Snout
   ctx.beginPath();
   ctx.ellipse(8, 1, 3, 5, Math.PI * 0.1, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Closed eye - X shape
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -398,41 +405,41 @@ function drawCarrion(ctx: CanvasRenderingContext2D): void {
   ctx.moveTo(2, -2);
   ctx.lineTo(-2, 2);
   ctx.stroke();
-  
+
   ctx.restore();
-  
+
   // Legs sprawled out
   ctx.fillStyle = colors.legs;
-  
+
   // Front legs
   ctx.beginPath();
   ctx.roundRect(60, 70, 18, 4, 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Hind legs
   ctx.beginPath();
   ctx.roundRect(35, 70, 18, 4, 2);
   ctx.fill();
   ctx.stroke();
-  
+
   // Tail
   ctx.save();
   ctx.translate(28, 65);
   ctx.rotate(Math.PI * 0.7); // Tail lying limp
-  
+
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.bezierCurveTo(-5, 5, -8, 0, -10, -5);
   ctx.lineWidth = 3;
   ctx.stroke();
-  
+
   // Tail tip
   ctx.beginPath();
   ctx.ellipse(-10, -5, 2, 3, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  
+
   ctx.restore();
 }
