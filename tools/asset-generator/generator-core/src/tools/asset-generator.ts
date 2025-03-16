@@ -53,6 +53,8 @@ export async function generateImprovedAsset(
     3. Last chunk: declaration of the Asset class and render method, and export
 
     Do not generate more than 400 lines of code per chunk. If the implementation would exceed this limit, split it into multiple chunks.
+    Split chunk only at logical points, such as after a function declaration or at the end of a block.
+    Do not split chunks in a middle of a function or a block or a line.
 
     Now please start from generating the first chunk of the improved implementation.
   `;
@@ -81,7 +83,7 @@ export async function generateImprovedAsset(
     isComplete = result.isComplete;
 
     // Accumulate the implementation
-    accumulatedImplementation += currentChunk;
+    accumulatedImplementation = (accumulatedImplementation ? accumulatedImplementation + '\n' : '') + currentChunk;
     chunkIndex++;
 
     console.log(`Generated chunk ${chunkIndex}, isComplete: ${isComplete}`);
