@@ -16,7 +16,7 @@ export async function generateImprovedAsset(
   assessment: string,
   additionalPrompt?: string,
 ): Promise<string> {
-  const promptMessage = `
+  const basePromptMessage = `
     Generate an improved implementation of the ${assetName} asset.
     ${
       currentImplementation
@@ -46,32 +46,128 @@ export async function generateImprovedAsset(
     14. Focus on incremental, targeted improvements rather than complete overhauls
 
     Provide only the necessary changes to address the issues in the assessment while maintaining the overall structure and approach of the existing code. If the current implementation is good in some areas, keep those parts unchanged.
+
+    Recommended strategy for chunk generation:
+    1. First chunk: the file header
+    2. Subsequent chunks: top level declarations, helper functions, types, consts etc.
+    3. Last chunk: declaration of the Asset class and render method, and export
+
+    Do not generate more than 400 lines of code per chunk. If the implementation would exceed this limit, split it into multiple chunks.
+
+    Now please start from generating the first chunk of the improved implementation.
   `;
 
   const prompt: PromptItem[] = [
     ASSET_GENERATOR_PROMPT,
     {
       type: 'user',
-      text: promptMessage,
+      text: basePromptMessage,
+      cache: true,
     },
   ];
 
-  const improvedImplementation = await generateCode(prompt, [saveAssetDef], 'saveAsset', 0.7, ModelType.DEFAULT);
+  // Initialize variables for chunk generation
+  let accumulatedImplementation = '';
+  let currentChunk = '';
+  let isComplete = false;
+  let chunkIndex = 0;
 
-  console.log('Improved implementation:', improvedImplementation[0]!.args!.summaryOfChanges);
+  // DO...UNTIL loop to generate chunks until complete
+  do {
+    // Generate the next chunk
+    const result = await generateAssetChunk(prompt, chunkIndex);
 
-  return improvedImplementation[0]!.args!.content as string;
+    currentChunk = result.content;
+    isComplete = result.isComplete;
+
+    // Accumulate the implementation
+    accumulatedImplementation += currentChunk;
+    chunkIndex++;
+
+    console.log(`Generated chunk ${chunkIndex}, isComplete: ${isComplete}`);
+
+    prompt.push(
+      {
+        type: 'assistant',
+        text: `Saving chunk ${chunkIndex} of the asset implementation.`,
+        functionCalls: [
+          {
+            name: 'saveAssetChunk',
+            args: {
+              content: currentChunk,
+              isComplete,
+            },
+          },
+        ],
+      },
+      {
+        type: 'user',
+        text: `Chunk ${chunkIndex} saved successfully. Please generate the next chunk.`,
+        cache: true,
+        functionResponses: [
+          {
+            name: 'saveAssetChunk',
+            content: '',
+          },
+        ],
+      },
+    );
+  } while (!isComplete);
+
+  console.log('Improved implementation complete after', chunkIndex, 'chunks');
+
+  return accumulatedImplementation;
 }
 
-const saveAssetDef: FunctionDef = {
-  name: 'saveAsset',
-  description: 'Generate an improved implementation of an asset',
+async function generateAssetChunk(
+  prompt: PromptItem[],
+  chunkIndex: number,
+): Promise<{ content: string; isComplete: boolean }> {
+  const chunkResult = await generateCode(prompt, [saveAssetChunkDef], 'saveAssetChunk', 0.7, ModelType.DEFAULT);
+
+  if (!chunkResult || chunkResult.length === 0 || !chunkResult[0]?.args) {
+    throw new Error('Failed to generate asset chunk');
+  }
+
+  const result = chunkResult[0].args as { content: string; isComplete: boolean; summaryOfChanges?: string };
+
+  if (result.summaryOfChanges) {
+    console.log(`Chunk ${chunkIndex} summary:`, result.summaryOfChanges);
+  }
+
+  return {
+    content: result.content,
+    isComplete: result.isComplete,
+  };
+}
+
+/**
+ * Function definition for saving a chunk of an asset implementation
+ */
+const saveAssetChunkDef: FunctionDef = {
+  name: 'saveAssetChunk',
+  description: 'Save a chunk of an asset implementation',
   parameters: {
     type: 'object',
     properties: {
-      summaryOfChanges: { type: 'string', description: 'Summary of changes made in the asset, max 100 words.' },
-      content: { type: 'string' },
+      previousChunkAnalysis: {
+        type: 'string',
+        description: 'Analysis of the previous chunk of the asset implementation. Max 100 words.',
+      },
+      summaryOfChanges: {
+        type: 'string',
+        description: 'Summary of changes made in this chunk, max 100 words.',
+      },
+      content: {
+        type: 'string',
+        description: 'The content of this chunk of the asset implementation. Maximum of 4000 characters.',
+        maxLength: 4000,
+      },
+      isComplete: {
+        type: 'boolean',
+        description: 'Whether this is the final chunk of the implementation',
+      },
     },
-    required: ['summaryOfChanges', 'content'],
+    required: ['previousChunkAnalysis', 'summaryOfChanges', 'content', 'isComplete'],
   },
 };
