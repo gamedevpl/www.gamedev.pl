@@ -15,61 +15,77 @@ const colors: Record<string, string> = {
 const ANIMATION_LOOKUP: Record<string, Record<string, number[]>> = {
   legOffset: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 1),
-    walking: Array.from({ length: 100 }, (_, i) => {
-      // Asymmetric leg movement for more natural gait
-      return i < 50 ? Math.sin((i / 100) * 2 * Math.PI * 2) * 3 : Math.sin((i / 100) * 2 * Math.PI * 2 + Math.PI) * 3;
-    }),
-    running: Array.from({ length: 100 }, (_, i) => {
-      // Asymmetric leg movement for more natural gait
-      return i < 50 ? Math.sin((i / 100) * 4 * Math.PI * 2) * 5 : Math.sin((i / 100) * 4 * Math.PI * 2 + Math.PI) * 5;
-    }),
-    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.5),
+    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 3),
+    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 5),
+    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 1.5),
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.8),
     carrion: Array.from({ length: 100 }, () => 0), // No movement for carrion
+    drinking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.5),
+    eating: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 1),
   },
   bodyOffset: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.5),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 1),
-    running: Array.from({ length: 100 }, (_, i) => Math.abs(Math.sin((i / 100) * 4 * Math.PI * 2)) * 2),
-    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.3),
+    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 2),
+    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.8),
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.6 * Math.PI * 2) * 0.7),
     carrion: Array.from({ length: 100 }, () => 0), // No movement for carrion
+    drinking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.5),
+    eating: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.7),
   },
   headOffset: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.5),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 0.8),
     running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 1.2),
-    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.3 - 3), // Lower head for grazing
+    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 1 - 3), // Lower head for grazing
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.5 - 2), // Raised head for alert
     carrion: Array.from({ length: 100 }, () => 0), // No movement for carrion
+    drinking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.5 - 4), // Lower head for drinking
+    eating: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.4 * Math.PI * 2) * 1 - 3), // Lower head for eating
   },
   tailAngle: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.2),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 0.5),
     running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 0.8),
-    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.15),
+    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.3),
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 3 * Math.PI * 2) * 0.9), // More tail movement when alert
     carrion: Array.from({ length: 100 }, () => 0.5), // Fixed position for carrion
+    drinking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.2),
+    eating: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.4 * Math.PI * 2) * 0.3),
   },
   earAngle: {
     standing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.1),
     walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.5 * Math.PI * 2) * 0.2),
     running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 1 * Math.PI * 2) * 0.3),
-    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.1 * Math.PI * 2) * 0.1),
+    grazing: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.2),
     alert: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.8 * Math.PI * 2) * 0.4 + 0.3), // Ears more upright and active when alert
     carrion: Array.from({ length: 100 }, () => 0), // Fixed position for carrion
+    drinking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.2 * Math.PI * 2) * 0.1),
+    eating: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 0.3 * Math.PI * 2) * 0.2),
   },
   // Add leg bend for more realistic movement
   legBend: {
     standing: Array.from({ length: 100 }, () => 0),
-    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 0.1),
-    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 0.2),
+    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2) * 0.15),
+    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2) * 0.3),
     grazing: Array.from({ length: 100 }, () => 0.05), // Slight bend when grazing
     alert: Array.from({ length: 100 }, () => 0),
     carrion: Array.from({ length: 100 }, () => 0), // No bend for carrion
+    drinking: Array.from({ length: 100 }, () => 0.1), // Slight bend when drinking
+    eating: Array.from({ length: 100 }, () => 0.1), // Slight bend when eating
+  },
+  // Add front and hind leg phase difference for more natural walking/running
+  legPhase: {
+    standing: Array.from({ length: 100 }, () => 0),
+    walking: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 2 * Math.PI * 2 + Math.PI) * 3),
+    running: Array.from({ length: 100 }, (_, i) => Math.sin((i / 100) * 4 * Math.PI * 2 + Math.PI) * 5),
+    grazing: Array.from({ length: 100 }, () => 0),
+    alert: Array.from({ length: 100 }, () => 0),
+    carrion: Array.from({ length: 100 }, () => 0),
+    drinking: Array.from({ length: 100 }, () => 0),
+    eating: Array.from({ length: 100 }, () => 0),
   },
 };
-
 export const Prey2d: Asset = {
   name: 'prey-2d',
   stances: ['standing', 'walking', 'running', 'grazing', 'alert', 'carrion', 'drinking', 'eating'],
@@ -104,9 +120,9 @@ Limited color palette and bold outlines.
     height: number,
     progress: number,
     stance: string,
-    direction: string,
+    direction: 'left' | 'right',
   ): void => {
-    stance = stance || 'standing';
+    stance = stance in ANIMATION_LOOKUP.legOffset ? stance : 'standing';
     direction = direction || 'right';
 
     // Convert progress to index for lookup tables (0-99)
@@ -114,13 +130,12 @@ Limited color palette and bold outlines.
 
     // Get animation values from lookup tables
     const legOffset = ANIMATION_LOOKUP.legOffset[stance][lookupIndex];
+    const legPhase = ANIMATION_LOOKUP.legPhase[stance][lookupIndex]; // Use phase difference for legs
     const bodyOffset = ANIMATION_LOOKUP.bodyOffset[stance][lookupIndex];
     const headOffset = ANIMATION_LOOKUP.headOffset[stance][lookupIndex];
     const tailAngle = ANIMATION_LOOKUP.tailAngle[stance][lookupIndex];
     const earAngle = ANIMATION_LOOKUP.earAngle[stance][lookupIndex];
-    const legBend = ANIMATION_LOOKUP.legBend[stance][lookupIndex];
-
-    // Save the current context state
+    const legBend = ANIMATION_LOOKUP.legBend[stance][lookupIndex]; // Save the current context state
     ctx.save();
 
     // Apply transformations for positioning and scaling
@@ -136,13 +151,17 @@ Limited color palette and bold outlines.
     // Special case for carrion stance
     if (stance === 'carrion') {
       drawCarrion(ctx);
+    } else if (stance === 'drinking') {
+      drawDrinking(ctx, headOffset, legOffset, legPhase, bodyOffset, tailAngle, earAngle, legBend);
+    } else if (stance === 'eating') {
+      drawEating(ctx, headOffset, legOffset, legPhase, bodyOffset, tailAngle, earAngle, legBend);
     } else {
       // Draw the prey animal in other stances
       drawTail(ctx, tailAngle);
-      drawHindLegs(ctx, legOffset, legBend, stance);
-      drawBody(ctx, bodyOffset, false);
+      drawHindLegs(ctx, legOffset, legPhase, legBend);
+      drawBody(ctx, bodyOffset);
       drawHead(ctx, headOffset, earAngle, stance);
-      drawFrontLegs(ctx, legOffset, legBend, stance);
+      drawFrontLegs(ctx, legOffset, legPhase, legBend);
     }
 
     // Restore the context state
@@ -150,7 +169,7 @@ Limited color palette and bold outlines.
   },
 };
 
-function drawBody(ctx: CanvasRenderingContext2D, offset: number, spotted: boolean): void {
+function drawBody(ctx: CanvasRenderingContext2D, offset: number): void {
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
@@ -160,29 +179,7 @@ function drawBody(ctx: CanvasRenderingContext2D, offset: number, spotted: boolea
   ctx.ellipse(50, 50 + offset, 22, 12, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
-  // Add spots if spotted variant
-  if (spotted && 'spots' in colors) {
-    ctx.fillStyle = colors.spots;
-
-    // Draw a pattern of spots
-    const spotPositions = [
-      [40, 45 + offset, 3],
-      [55, 48 + offset, 2.5],
-      [65, 45 + offset, 2],
-      [45, 55 + offset, 2.5],
-      [60, 55 + offset, 3],
-      [50, 50 + offset, 2],
-    ];
-
-    for (const [x, y, r] of spotPositions) {
-      ctx.beginPath();
-      ctx.ellipse(x, y, r, r, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
 }
-
 function drawHead(ctx: CanvasRenderingContext2D, offset: number, earAngle: number, stance: string): void {
   // Head - smaller and more pointed than the lion's
   ctx.fillStyle = colors.body;
@@ -246,8 +243,7 @@ function drawEars(ctx: CanvasRenderingContext2D, x: number, y: number, earAngle:
     ctx.restore();
   }
 }
-
-function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, bend: number, stance: string): void {
+function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, phaseOffset: number, bend: number): void {
   ctx.fillStyle = colors.legs;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;
@@ -262,14 +258,12 @@ function drawFrontLegs(ctx: CanvasRenderingContext2D, offset: number, bend: numb
 
   // Apply different offsets to each leg for more natural movement
   const leftOffset = offset;
-  const rightOffset = stance === 'walking' || stance === 'running' ? -offset : offset;
-
-  // Draw front legs with articulation
+  const rightOffset = phaseOffset; // Use phase offset for right leg  // Draw front legs with articulation
   drawArticulatedLeg(ctx, leftLegX, legY + leftOffset, legWidth, legLength, bend, true);
   drawArticulatedLeg(ctx, rightLegX, legY + rightOffset, legWidth, legLength, bend, false);
 }
 
-function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, bend: number, stance: string): void {
+function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, phaseOffset: number, bend: number): void {
   ctx.fillStyle = colors.legs;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 1.5;
@@ -283,7 +277,7 @@ function drawHindLegs(ctx: CanvasRenderingContext2D, offset: number, bend: numbe
   const legY = 60;
 
   // Apply different offsets to each leg for more natural movement
-  const leftOffset = stance === 'walking' || stance === 'running' ? -offset : offset;
+  const leftOffset = phaseOffset; // Use phase offset for left leg
   const rightOffset = offset;
 
   // Draw hind legs with articulation
@@ -310,14 +304,14 @@ function drawArticulatedLeg(
 
   // Draw upper leg segment
   ctx.beginPath();
-  ctx.roundRect(x, y, width, upperLength, 2);
+  ctx.roundRect(x - width / 2, y, width, upperLength, 2);
   ctx.fill();
   ctx.stroke();
 
   // Draw lower leg segment with bend
   ctx.save();
   ctx.translate(jointX, jointY);
-  ctx.rotate(isForward ? bend * 0.2 : -bend * 0.2);
+  ctx.rotate(isForward ? bend * 0.3 : -bend * 0.3);
   ctx.beginPath();
   ctx.roundRect(-width / 2, 0, width, lowerLength, 2);
   ctx.fill();
@@ -327,7 +321,6 @@ function drawArticulatedLeg(
   drawHoof(ctx, 0, lowerLength);
   ctx.restore();
 }
-
 function drawHoof(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.fillStyle = '#333';
   ctx.beginPath();
@@ -362,13 +355,134 @@ function drawTail(ctx: CanvasRenderingContext2D, tailAngle: number): void {
   ctx.restore();
 }
 
+function drawDrinking(
+  ctx: CanvasRenderingContext2D,
+  headOffset: number,
+  legOffset: number,
+  legPhase: number,
+  bodyOffset: number,
+  tailAngle: number,
+  earAngle: number,
+  legBend: number,
+): void {
+  // Draw the prey animal in drinking position
+  drawTail(ctx, tailAngle);
+  drawHindLegs(ctx, legOffset, legPhase, legBend);
+  drawBody(ctx, bodyOffset);
+
+  // Draw head in drinking position (lowered to water)
+  ctx.fillStyle = colors.body;
+  ctx.strokeStyle = colors.outline;
+  ctx.lineWidth = 2;
+
+  // Head lowered
+  ctx.beginPath();
+  ctx.ellipse(75, 55 + headOffset, 8, 7, Math.PI * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Snout touching water
+  ctx.beginPath();
+  ctx.ellipse(83, 62 + headOffset, 5, 3, Math.PI * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Ears
+  drawEars(ctx, 70, 50 + headOffset, earAngle);
+
+  // Eye
+  ctx.fillStyle = colors.eye;
+  ctx.beginPath();
+  ctx.ellipse(76, 53 + headOffset, 1.5, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nose
+  ctx.fillStyle = colors.nose;
+  ctx.beginPath();
+  ctx.ellipse(86, 63 + headOffset, 1.5, 1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw ripples in water
+  ctx.strokeStyle = '#6ab7ff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(86, 65 + headOffset, 3, 1, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(86, 65 + headOffset, 6, 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  drawFrontLegs(ctx, legOffset, legPhase, legBend);
+}
+function drawEating(
+  ctx: CanvasRenderingContext2D,
+  headOffset: number,
+  legOffset: number,
+  legPhase: number,
+  bodyOffset: number,
+  tailAngle: number,
+  earAngle: number,
+  legBend: number,
+): void {
+  // Draw the prey animal in eating position
+  drawTail(ctx, tailAngle);
+  drawHindLegs(ctx, legOffset, legPhase, legBend);
+  drawBody(ctx, bodyOffset);
+
+  // Draw head in eating position (lowered to ground)
+  ctx.fillStyle = colors.body;
+  ctx.strokeStyle = colors.outline;
+  ctx.lineWidth = 2;
+
+  // Head lowered
+  ctx.beginPath();
+  ctx.ellipse(75, 52 + headOffset, 8, 7, Math.PI * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Snout touching ground
+  ctx.beginPath();
+  ctx.ellipse(83, 58 + headOffset, 5, 3, Math.PI * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Ears
+  drawEars(ctx, 70, 47 + headOffset, earAngle);
+
+  // Eye
+  ctx.fillStyle = colors.eye;
+  ctx.beginPath();
+  ctx.ellipse(76, 50 + headOffset, 1.5, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nose
+  ctx.fillStyle = colors.nose;
+  ctx.beginPath();
+  ctx.ellipse(86, 59 + headOffset, 1.5, 1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw grass being eaten
+  ctx.strokeStyle = '#4a8e29';
+  ctx.lineWidth = 1;
+
+  // Draw several grass blades
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(83 + i * 2, 65);
+    ctx.bezierCurveTo(83 + i * 2 - 2, 60, 83 + i * 2 + 2, 55, 83 + i * 2 + Math.sin(i) * 2, 52);
+    ctx.stroke();
+  }
+
+  drawFrontLegs(ctx, legOffset, legPhase, legBend);
+}
 function drawCarrion(ctx: CanvasRenderingContext2D): void {
   // Draw the prey animal in a lying down position (carrion)
   ctx.fillStyle = colors.body;
   ctx.strokeStyle = colors.outline;
   ctx.lineWidth = 2;
 
-  // Rotated body
+  // Rotated body with more detail
   ctx.save();
   ctx.translate(50, 65);
   ctx.rotate(Math.PI * 0.5); // Rotate 90 degrees to lie on side
@@ -408,20 +522,46 @@ function drawCarrion(ctx: CanvasRenderingContext2D): void {
 
   ctx.restore();
 
-  // Legs sprawled out
+  // Legs sprawled out with more detail
   ctx.fillStyle = colors.legs;
 
-  // Front legs
+  // Front legs - more natural sprawled position
+  ctx.save();
+  ctx.translate(60, 65);
+  ctx.rotate(Math.PI * 0.2);
   ctx.beginPath();
-  ctx.roundRect(60, 70, 18, 4, 2);
+  ctx.roundRect(0, 0, 20, 4, 2);
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
 
-  // Hind legs
+  ctx.save();
+  ctx.translate(65, 70);
+  ctx.rotate(Math.PI * 0.3);
   ctx.beginPath();
-  ctx.roundRect(35, 70, 18, 4, 2);
+  ctx.roundRect(0, 0, 18, 4, 2);
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+
+  // Hind legs - more natural sprawled position
+  ctx.save();
+  ctx.translate(35, 65);
+  ctx.rotate(-Math.PI * 0.1);
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 20, 4, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(30, 70);
+  ctx.rotate(-Math.PI * 0.2);
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 18, 4, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 
   // Tail
   ctx.save();
@@ -442,4 +582,42 @@ function drawCarrion(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 
   ctx.restore();
+
+  // Add flies buzzing around for visual effect
+  drawFlies(ctx, 55, 55);
+}
+
+function drawFlies(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#000';
+
+  // Draw several small flies buzzing around
+  for (let i = 0; i < 5; i++) {
+    const flyX = x + Math.sin(i * Math.PI * 0.4) * 15;
+    const flyY = y + Math.cos(i * Math.PI * 0.6) * 10 - 10;
+
+    // Fly body
+    ctx.beginPath();
+    ctx.ellipse(flyX, flyY, 1, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fly wings
+    ctx.beginPath();
+    ctx.ellipse(flyX - 1.5, flyY - 0.5, 1, 0.5, Math.PI * 0.2, 0, Math.PI * 2);
+    ctx.ellipse(flyX + 1.5, flyY - 0.5, 1, 0.5, -Math.PI * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fly path
+    ctx.strokeStyle = '#0000001A'; // Transparent black
+    ctx.beginPath();
+    ctx.moveTo(flyX, flyY);
+    ctx.bezierCurveTo(
+      flyX + Math.sin(i) * 5,
+      flyY + Math.cos(i) * 5,
+      flyX + Math.cos(i) * 5,
+      flyY + Math.sin(i) * 5,
+      flyX,
+      flyY + 5,
+    );
+    ctx.stroke();
+  }
 }
