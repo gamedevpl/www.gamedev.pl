@@ -27,7 +27,7 @@
   },
   "modelOverrides": {
     "aiStudio": {
-      "default": "gemini-exp-1206",
+      "default": "gemini-exp-1206"
     }
   }
 }
