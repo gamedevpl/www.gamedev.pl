@@ -218,7 +218,7 @@ export async function runAssetGenerationPipeline(
     errorsFixed: false,
   };
 
-  if (!options.skipLinting) {
+  if (!options.skipLinting && !options.renderOnly) {
     for (let tryCount = 0; tryCount < 3; tryCount++) {
       console.log('\nLinting asset code...');
       const lintResults: LintResult = await lintAssetFile(assetName, assetPath);
