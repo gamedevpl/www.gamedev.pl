@@ -86,12 +86,12 @@ export interface VideoRenderOptions {
  */
 function shouldLog(currentLevel: VerbosityLevel, requiredLevel: VerbosityLevel): boolean {
   const levels: Record<VerbosityLevel, number> = {
-    'none': 0,
-    'minimal': 1,
-    'normal': 2,
-    'verbose': 3
+    none: 0,
+    minimal: 1,
+    normal: 2,
+    verbose: 3,
   };
-  
+
   return levels[currentLevel] >= levels[requiredLevel];
 }
 
@@ -123,7 +123,7 @@ export async function renderAssetVideos(
   }[]
 > {
   const { fps = 60, duration = 2, logProgress = true, verbosity = 'minimal' } = options;
-  
+
   // Create temporary directory for frames
   const { path: tempDir, cleanup } = await tmpDir({ unsafeCleanup: true });
 
@@ -131,18 +131,18 @@ export async function renderAssetVideos(
     log(`Rendering videos for asset: ${asset.name}`, verbosity, 'minimal');
 
     // Process all stances in parallel
-    const renderPromises = asset.stances.map(stance => 
-      renderStanceVideo(asset, assetPath, stance, tempDir, { 
-        fps, 
-        duration, 
-        logProgress, 
-        verbosity 
-      })
+    const renderPromises = asset.stances.map((stance) =>
+      renderStanceVideo(asset, assetPath, stance, tempDir, {
+        fps,
+        duration,
+        logProgress,
+        verbosity,
+      }),
     );
-    
+
     // Wait for all videos to render
     const results = await Promise.all(renderPromises);
-    
+
     log(`Completed rendering all videos for asset: ${asset.name}`, verbosity, 'minimal');
     return results;
   } finally {
@@ -257,8 +257,7 @@ async function generateFrames(
     framePaths.push(framePath);
 
     // Log progress only at specific intervals and only if verbosity is sufficient
-    if ((i === 0 || i === totalFrames - 1 || i % Math.ceil(totalFrames / 5) === 0) && 
-        shouldLog(verbosity, 'normal')) {
+    if ((i === 0 || i === totalFrames - 1 || i % Math.ceil(totalFrames / 5) === 0) && shouldLog(verbosity, 'normal')) {
       log(`  Generated frame ${i + 1}/${totalFrames} (${Math.round(progress * 100)}%)`, verbosity, 'normal');
     }
   }

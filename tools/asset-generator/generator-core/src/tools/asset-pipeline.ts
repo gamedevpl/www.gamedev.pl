@@ -261,7 +261,7 @@ export async function runAssetGenerationPipeline(
     throw new Error('Failed to load current asset after saving');
   }
 
-  if (!options.skipRender) {
+  if (!options.skipRender && !options.lintOnly && !options.renderOnly) {
     console.log('\nRendering improved asset...');
     await renderAsset(currentAsset, assetPath);
 
