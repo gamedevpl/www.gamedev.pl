@@ -35,13 +35,8 @@ A simple, seamless, top-down pixel-art grass tile suitable for retro-style or pi
   - \`calm\`: Subtle swaying animation (gentle breeze).
   - \`windy\`: Noticeable yet subtle swaying animation (moderate breeze).
 
-**Recommended Tile Sizes:**  
-- 32x32 pixels (standard)
-- 16x16 pixels (alternative)
-
 **Ideal for:**  
 - Retro games, RPGs, adventure games, farming sims, and pixel-art styled applications.
-
 `,
   render: renderGrass2d,
 };
