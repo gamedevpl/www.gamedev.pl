@@ -22,21 +22,27 @@ function renderGrass2d(
 export const Grass2d: Asset = {
   name: 'Grass2d',
   stances: ['default', 'windy', 'calm'],
-  description: `## 🌿 Pixel Art Grass Tile Asset
+  description: `## 🌿 Improved Pixel Art Grass Tile Asset Generation Prompt
 
-**Description:**  
-A simple, seamless, top-down pixel-art grass tile suitable for retro-style or pixel-art games. Tiles align seamlessly, allowing multiple instances to form a cohesive grassy field.
+**Objective:**  
+Generate a top-down pixel-art grass tile suitable for seamless tiling in games. The grass should appear stylized but natural, avoiding geometric regularity or overly distinct rectangular shapes. Grass pixels should overlap slightly to create a continuous, cohesive texture without gaps.
 
-**Features:**
-- 🎨 **Pixel Art Style:** Minimalistic, flat shading with a limited green color palette.
-- 🔄 **Seamless Tiling:** Designed to seamlessly connect horizontally and vertically.
-- 💨 **Animated States:** 
-  - \`default\`: Completely still.
-  - \`calm\`: Subtle swaying animation (gentle breeze).
-  - \`windy\`: Noticeable yet subtle swaying animation (moderate breeze).
+**Key Points:**
+- **Natural, subtle appearance**: Grass blades should be varied, organic, and irregular.
+- **No visible gaps**: Pixels should connect seamlessly.
+- **Limited color palette**: Approximately 4–6 subtle shades of green.
+- **Flat shading**: No gradients or realistic shading.
+- **Pixel-art style**: Clear and minimalistic, suitable for retro games.
+- **Perspective**: Purely top-down, no perspective distortion.
+- **Animated states**:
+  - \`default\`: Static grass.
+  - \`calm\`: Slight, gentle, looping sway (1 pixel displacement max).
+  - \`windy\`: Noticeably gentle, looping sway (up to 2 pixels displacement).
 
-**Ideal for:**  
-- Retro games, RPGs, adventure games, farming sims, and pixel-art styled applications.
+**Implementation Tips:**
+- Ensure the edges match perfectly to allow for infinite seamless tiling.
+- Maintain organic randomness to create natural grass texture, avoiding overly symmetrical patterns.
+
 `,
   render: renderGrass2d,
 };
