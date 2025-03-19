@@ -23,6 +23,8 @@ export interface AssetGenerationOptions {
   skipLinting?: boolean;
   /** Whether to only perform linting without rendering or generation */
   lintOnly?: boolean;
+  /** Whether to regenerate the asset from scratch, keeping the description but starting over the implementation */
+  fromScratch?: boolean;
   /** Video rendering options */
   videoOptions?: {
     /** Frames per second for the video (default: 30) */
@@ -110,6 +112,12 @@ export async function runAssetGenerationPipeline(
   if (currentAsset) {
     console.log('Current asset loaded successfully');
     currentContent = await fs.readFile(assetPath, 'utf-8');
+    
+    // If fromScratch is true, keep the asset for metadata but set content to null
+    if (options.fromScratch) {
+      console.log('Regenerating asset from scratch, keeping description but starting over implementation');
+      currentContent = null;
+    }
   } else {
     console.log('No existing asset found, will create new one');
 
@@ -200,6 +208,7 @@ export async function runAssetGenerationPipeline(
       currentContent,
       assessment,
       options.additionalPrompt,
+      options.fromScratch,
     );
 
     // Save new asset

@@ -8,6 +8,7 @@ import { ASSET_GENERATOR_PROMPT } from './prompts.js';
  * @param currentImplementation Current implementation of the asset (if exists)
  * @param assessment Assessment of the current implementation
  * @param additionalPrompt Additional user-provided prompt with special requirements
+ * @param fromScratch Whether to regenerate the asset from scratch, ignoring the current implementation
  * @returns Promise resolving to the improved implementation code
  */
 export async function generateImprovedAsset(
@@ -15,11 +16,15 @@ export async function generateImprovedAsset(
   currentImplementation: string | null,
   assessment: string,
   additionalPrompt?: string,
+  fromScratch?: boolean,
 ): Promise<string> {
+  // If fromScratch is true, ignore the current implementation
+  const effectiveImplementation = fromScratch ? null : currentImplementation;
+
   const basePromptMessage = `
-    Generate an improved implementation of the ${assetName} asset.
+    Generate ${fromScratch ? 'a new implementation from scratch' : 'an improved implementation'} of the ${assetName} asset.
     ${
-      currentImplementation
+      effectiveImplementation
         ? 'Current implementation:\\n```typescript\\n' + currentImplementation + '\\n```'
         : 'No current implementation exists.'
     }
@@ -28,6 +33,7 @@ export async function generateImprovedAsset(
     ${assessment}
 
     ${additionalPrompt ? `Special Requirements from User:\n    ${additionalPrompt}\n` : ''}
+    ${fromScratch ? 'IMPORTANT: Create a completely new implementation from scratch, ignoring any existing code structure.\n' : ''}
 
     Requirements:
     1. Implement the Asset interface with name and render method

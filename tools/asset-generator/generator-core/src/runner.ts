@@ -4,8 +4,7 @@ import { runAssetGenerationPipeline } from './tools/asset-pipeline.js';
  * Display help message for the CLI
  */
 function displayHelp() {
-  console.log(`
-Asset Generator - Create and improve game assets
+  console.log(`\nAsset Generator - Create and improve game assets
 
 Usage: asset-generator <asset-name> [options]
 
@@ -14,6 +13,7 @@ Options:
   --skip-render     Skip rendering and use existing renderings for assessment
   --skip-videos     Skip generating videos for each stance
   --lint-only       Only perform linting without rendering or generation
+  --from-scratch    Regenerate the asset from scratch, keeping the description but starting over the implementation
   --prompt <text>   Provide additional requirements for asset generation
   --help            Display this help message
   
@@ -22,6 +22,7 @@ Examples:
   asset-generator prey-2d --render-only
   asset-generator lion-2d --lint-only
   asset-generator hunter-2d --prompt "Make the hunter more aggressive looking"
+  asset-generator lion-2d --from-scratch
 `);
 }
 
@@ -47,6 +48,7 @@ export async function assetGenRunner() {
     const renderOnly = args.includes('--render-only');
     const skipRender = args.includes('--skip-render') || lintOnly;
     const skipVideos = args.includes('--skip-videos') || lintOnly;
+    const fromScratch = args.includes('--from-scratch');
 
     // Parse prompt option
     let additionalPrompt: string | undefined;
@@ -73,6 +75,7 @@ export async function assetGenRunner() {
       skipVideos,
       lintOnly,
       additionalPrompt,
+      fromScratch,
     });
 
     console.log(`\nAsset processing completed successfully for: ${assetName}`);
