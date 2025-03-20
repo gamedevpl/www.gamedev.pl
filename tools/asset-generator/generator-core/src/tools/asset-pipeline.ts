@@ -108,14 +108,19 @@ export async function runAssetGenerationPipeline(
   // Load current asset if exists
   let currentAsset = await loadAsset(assetPath);
   let currentContent: string | null = null;
+  
+  // Store the original description when regenerating from scratch
+  let originalDescription: string | undefined;
 
   if (currentAsset) {
     console.log('Current asset loaded successfully');
     currentContent = await fs.readFile(assetPath, 'utf-8');
     
-    // If fromScratch is true, keep the asset for metadata but set content to null
+    // If fromScratch is true, preserve the description but set content to null
     if (options.fromScratch) {
       console.log('Regenerating asset from scratch, keeping description but starting over implementation');
+      // Save the original description before setting currentContent to null
+      originalDescription = currentAsset.description;
       currentContent = null;
     }
   } else {
@@ -194,12 +199,22 @@ export async function runAssetGenerationPipeline(
 
   let assessment;
   if (!(options.renderOnly || options.lintOnly)) {
-    // Run inference for assessment
-    assessment = currentAsset
-      ? await assessAsset(assetPath, currentAsset, currentContent, renderingResult)
-      : 'No existing asset to assess';
-    console.log('\nAsset Assessment:');
-    console.log(assessment);
+    // Modify assessment approach for from-scratch generation
+    if (options.fromScratch) {
+      // When regenerating from scratch, we don't need to assess the current implementation
+      // since we're intentionally starting over
+      console.log('\nSkipping detailed assessment for from-scratch regeneration');
+      assessment = options.fromScratch
+        ? 'Asset is being regenerated from scratch. Create a new implementation following best practices.'
+        : 'No existing asset to assess';
+    } else {
+      // Run inference for assessment (normal flow)
+      assessment = currentAsset
+        ? await assessAsset(assetPath, currentAsset, currentContent, renderingResult)
+        : 'No existing asset to assess';
+      console.log('\nAsset Assessment:');
+      console.log(assessment);
+    }
 
     // Generate improved asset
     console.log('\nGenerating improved asset...');
@@ -209,6 +224,7 @@ export async function runAssetGenerationPipeline(
       assessment,
       options.additionalPrompt,
       options.fromScratch,
+      originalDescription, // Pass the original description when regenerating from scratch
     );
 
     // Save new asset

@@ -9,6 +9,7 @@ import { ASSET_GENERATOR_PROMPT } from './prompts.js';
  * @param assessment Assessment of the current implementation
  * @param additionalPrompt Additional user-provided prompt with special requirements
  * @param fromScratch Whether to regenerate the asset from scratch, ignoring the current implementation
+ * @param originalDescription Original description of the asset (used when fromScratch is true)
  * @returns Promise resolving to the improved implementation code
  */
 export async function generateImprovedAsset(
@@ -17,6 +18,7 @@ export async function generateImprovedAsset(
   assessment: string,
   additionalPrompt?: string,
   fromScratch?: boolean,
+  originalDescription?: string,
 ): Promise<string> {
   // If fromScratch is true, ignore the current implementation
   const effectiveImplementation = fromScratch ? null : currentImplementation;
@@ -32,8 +34,10 @@ export async function generateImprovedAsset(
     Assessment of current version:
     ${assessment}
 
-    ${additionalPrompt ? `Special Requirements from User:\n    ${additionalPrompt}\n` : ''}
-    ${fromScratch ? 'IMPORTANT: Create a completely new implementation from scratch, ignoring any existing code structure.\n' : ''}
+    ${additionalPrompt ? `Special Requirements from User:\\n    ${additionalPrompt}\\n` : ''}
+    ${fromScratch ? 'IMPORTANT: Create a completely new implementation from scratch, ignoring any existing code structure.\\n' : ''}
+
+    ${originalDescription ? `IMPORTANT: Preserve this original asset description exactly as provided:\\n\`\`\`\n${originalDescription}\n\`\`\`\n` : ''}
 
     Requirements:
     1. Implement the Asset interface with name and render method
@@ -50,6 +54,29 @@ export async function generateImprovedAsset(
     12. Your modifications should directly correspond to the issues identified in the assessment
     13. DO NOT refactor or rewrite the entire codebase unless the assessment explicitly requires it
     14. Focus on incremental, targeted improvements rather than complete overhauls
+
+    IMPORT STATEMENT AND ASSET FORMAT REQUIREMENTS:
+    1. ALWAYS use this exact import statement at the top of the file:
+       \`import { Asset } from '../../../generator-core/src/assets-types';\`
+    2. ALWAYS export the asset as a const object (NOT a class), following this format:
+       \`export const AssetName: Asset = { ... };\`
+    3. Include all required properties: name, description, stances, and render method
+
+    Example of correct asset format:
+    \`\`\`typescript
+    import { Asset } from '../../../generator-core/src/assets-types';
+
+    // Type definitions and helper functions here...
+
+    export const SomeAsset: Asset = {
+      name: 'SomeAsset',
+      description: \`Detailed description of the asset...\`,
+      stances: ['default', 'other'],
+      render: (ctx, x, y, width, height, progress, stance, direction) => {
+        // Rendering implementation
+      },
+    };
+    \`\`\`
 
     Provide only the necessary changes to address the issues in the assessment while maintaining the overall structure and approach of the existing code. If the current implementation is good in some areas, keep those parts unchanged.
 
