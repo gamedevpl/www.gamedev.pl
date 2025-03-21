@@ -19,8 +19,12 @@ interface WaterConfig {
   waveVariation: number; // Variation in wave patterns for irregularity
   foamDistribution: number; // Distribution pattern of foam
   waveTimeScale: number; // Speed of wave animation (lower = slower)
+  waveComplexity: number; // Controls the complexity of wave patterns to reduce repetition
+  foamDetail: number; // Controls the detail level of foam appearance
+  reflectionQuality: number; // Controls the quality and variation of reflections
+  waveLayerCount: number; // Number of overlapping wave patterns for more natural appearance
+  waveTurbulence: number; // Controls the turbulence/irregularity in wave patterns
 }
-
 // Stance-specific water configurations
 const waterConfigs: Record<string, WaterConfig> = {
   default: {
@@ -32,44 +36,59 @@ const waterConfigs: Record<string, WaterConfig> = {
     deepColor: '#2a7ac7',
     foamColor: '#ffffff',
     reflectionColor: '#a7d8ff',
-    pixelSize: 4,
-    secondaryWaveFrequency: 3.7, // Adjusted for more irregular pattern
-    tertiaryWaveFrequency: 7.3, // Adjusted for more irregular pattern
+    pixelSize: 3, // Reduced pixel size for better resolution
+    secondaryWaveFrequency: 3.7,
+    tertiaryWaveFrequency: 7.3,
     waveVariation: 0.8,
     foamDistribution: 0.5,
-    waveTimeScale: 0.7, // Slowed down animation speed
+    waveTimeScale: 0.7,
+    waveComplexity: 0.6, // Medium complexity for default water
+    foamDetail: 0.5, // Medium foam detail
+    reflectionQuality: 0.6, // Medium reflection quality
+    waveLayerCount: 4, // Four overlapping wave patterns
+    waveTurbulence: 0.5, // Medium turbulence
   },
   calm: {
     waveAmplitude: 0.2,
     waveFrequency: 0.8,
     reflectionIntensity: 0.7,
-    foamIntensity: 0.1,
+    foamIntensity: 0.05, // Reduced foam intensity to remove distracting bubbles
     baseColor: '#5cb3ff',
     deepColor: '#3a8ad7',
     foamColor: '#ffffff',
     reflectionColor: '#c7e8ff',
-    pixelSize: 4,
-    secondaryWaveFrequency: 2.9, // Adjusted for more natural pattern
-    tertiaryWaveFrequency: 5.7, // Adjusted for more natural pattern
-    waveVariation: 0.5,
-    foamDistribution: 0.4, // Increased for more consistent appearance
-    waveTimeScale: 0.5, // Slower animation for calm water
+    pixelSize: 3, // Reduced pixel size for better resolution
+    secondaryWaveFrequency: 2.9,
+    tertiaryWaveFrequency: 5.7,
+    waveVariation: 0.7, // Increased for less uniform wave animation
+    foamDistribution: 0.2, // Reduced foam distribution
+    waveTimeScale: 0.4, // Slower animation for calm water
+    waveComplexity: 0.8, // Higher complexity for less repetitive patterns
+    foamDetail: 0.3, // Lower foam detail for calm water
+    reflectionQuality: 0.9, // Higher reflection quality for calm water
+    waveLayerCount: 5, // More overlapping wave patterns for less uniformity
+    waveTurbulence: 0.2, // Low turbulence for calm water
   },
   windy: {
     waveAmplitude: 0.7,
     waveFrequency: 2.5,
     reflectionIntensity: 0.3,
-    foamIntensity: 0.6,
+    foamIntensity: 0.7, // Increased foam intensity
     baseColor: '#3a94ef',
     deepColor: '#1a6ab7',
     foamColor: '#ffffff',
     reflectionColor: '#87c8ff',
-    pixelSize: 4,
-    secondaryWaveFrequency: 4.8, // Adjusted for more chaotic pattern
-    tertiaryWaveFrequency: 8.9, // Adjusted for more chaotic pattern
-    waveVariation: 1.2,
-    foamDistribution: 0.9, // Increased for more varied foam appearance
-    waveTimeScale: 0.9, // Faster animation for windy water
+    pixelSize: 3, // Reduced pixel size for better resolution
+    secondaryWaveFrequency: 4.8,
+    tertiaryWaveFrequency: 8.9,
+    waveVariation: 1.4, // Increased for more variation in wave patterns
+    foamDistribution: 1.0, // Maximum foam distribution for windy water
+    waveTimeScale: 0.9,
+    waveComplexity: 0.9, // High complexity for windy water
+    foamDetail: 0.8, // High foam detail for windy water
+    reflectionQuality: 0.4, // Lower reflection quality for windy water
+    waveLayerCount: 6, // More wave layers for complex patterns
+    waveTurbulence: 0.9, // High turbulence for windy water
   },
 };
 // Cache for colors to improve performance
@@ -79,38 +98,72 @@ const colorCache: Record<string, string> = {};
  * Helper function to calculate wave height at a specific position with enhanced variation
  * Creates multiple overlapping sine waves with variation for more natural look
  */
-const getWaveHeight = (x: number, progress: number, config: WaterConfig, width: number, seed: number = 0): number => {
+const getWaveHeight = (
+  x: number, 
+  progress: number, 
+  config: WaterConfig, 
+  width: number, 
+  seed: number = 0,
+  layerIndex: number = 0
+): number => {
   // Create more irregular variations by using non-integer multipliers
-  const variation = Math.sin(x * 0.013 + seed * 0.37) * config.waveVariation;
+  // Add layerIndex to create different patterns for each wave layer
+  const variation = Math.sin(x * (0.013 + layerIndex * 0.007) + seed * 0.37) * config.waveVariation;
+  
+  // Add prime number based offsets to reduce repetition in wave patterns
+  const primeOffsets = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23];
+  const primeOffset = primeOffsets[layerIndex % primeOffsets.length] * 0.01;
+  
+  // Apply wave complexity factor to create more varied wave forms
+  const complexityFactor = config.waveComplexity * 0.5;
+  
+  // Add turbulence factor for more chaotic patterns in windy water
+  const turbulenceFactor = Math.sin(x * 0.021 * config.waveTurbulence + progress * 5.13) * config.waveTurbulence * 0.3;
 
   // Use non-integer multipliers for wave frequencies to reduce repetitive patterns
+  // Apply layer-specific frequency modifications to create more varied patterns
+  const layerFrequencyMod = 1 + (layerIndex * 0.15) * config.waveComplexity;
+  
   const primaryWave =
     Math.sin(
-      (x / width) * Math.PI * 2 * config.waveFrequency + progress * Math.PI * 2 * config.waveTimeScale + variation,
+      (x / width) * Math.PI * 2 * config.waveFrequency * layerFrequencyMod + 
+      progress * Math.PI * 2 * config.waveTimeScale + 
+      variation + turbulenceFactor
     ) * config.waveAmplitude;
 
   const secondaryWave =
     Math.sin(
-      (x / width) * Math.PI * config.secondaryWaveFrequency +
-        progress * Math.PI * 2 * 0.73 * config.waveTimeScale -
-        variation * 0.53,
+      (x / width) * Math.PI * config.secondaryWaveFrequency * (1 + primeOffset) +
+        progress * Math.PI * 2 * (0.73 + layerIndex * 0.07) * config.waveTimeScale -
+        variation * (0.53 + complexityFactor)
     ) *
-    (config.waveAmplitude * 0.47);
+    (config.waveAmplitude * (0.47 + complexityFactor * 0.1));
 
   const tertiaryWave =
     Math.sin(
-      (x / width) * Math.PI * config.tertiaryWaveFrequency +
-        progress * Math.PI * 2 * 1.27 * config.waveTimeScale +
-        variation * 0.31,
+      (x / width) * Math.PI * config.tertiaryWaveFrequency * (1 - primeOffset * 0.5) +
+        progress * Math.PI * 2 * (1.27 - layerIndex * 0.05) * config.waveTimeScale +
+        variation * (0.31 + complexityFactor * 0.2)
     ) *
-    (config.waveAmplitude * 0.23);
+    (config.waveAmplitude * (0.23 + complexityFactor * 0.15));
+
+  // Add quaternary wave component for more complexity when waveComplexity is high
+  const quaternaryWave = config.waveComplexity > 0.5 ? 
+    Math.sin(
+      (x / width) * Math.PI * config.tertiaryWaveFrequency * 1.73 * (1 + layerIndex * 0.1) +
+        progress * Math.PI * 2 * 1.91 * config.waveTimeScale +
+        Math.cos(x * 0.023) * config.waveVariation * 0.5
+    ) *
+    (config.waveAmplitude * 0.17 * config.waveComplexity) : 0;
 
   // Add a small random component with prime number multipliers to break repetitive patterns
-  const randomFactor = Math.sin(x * 0.17 + progress * 7.13 + seed * 13.37) * 0.05 * config.waveAmplitude;
+  // Scale this by the turbulence factor for more chaotic water
+  const randomFactor = 
+    Math.sin(x * (0.17 + layerIndex * 0.03) + progress * (7.13 + layerIndex * 1.1) + seed * 13.37) * 
+    0.05 * config.waveAmplitude * (1 + config.waveTurbulence * 0.5);
 
-  return primaryWave + secondaryWave + tertiaryWave + randomFactor;
+  return primaryWave + secondaryWave + tertiaryWave + quaternaryWave + randomFactor;
 };
-
 /**
  * Draws a pixel at the specified coordinates with the given color
  */
@@ -136,10 +189,19 @@ const getFoamIntensity = (
   // Add varied distribution pattern to foam using prime number multipliers
   // for less predictable patterns
   const distributionPattern =
-    Math.sin(x * 0.053 + progress * 2.71) * Math.sin(x * 0.023 + progress * 4.91) * config.foamDistribution;
+    Math.sin(x * 0.053 + progress * 2.71) * 
+    Math.sin(x * 0.023 + progress * 4.91) * 
+    config.foamDistribution;
+    
+  // Add foam detail variation for more natural appearance
+  const detailVariation = 
+    Math.sin(x * 0.037 + progress * 3.17) * 
+    Math.cos(x * 0.019 + progress * 5.23) * 
+    config.foamDetail * 0.3;
 
-  return Math.min(1, heightFactor + topFactor + distributionPattern * 0.3) * config.foamIntensity;
+  return Math.min(1, heightFactor + topFactor + distributionPattern * 0.3 + detailVariation) * config.foamIntensity;
 };
+
 /**
  * Calculates reflection effect intensity with improved variation
  * Creates more subtle and natural-looking reflections
@@ -158,20 +220,44 @@ const getReflectionIntensity = (
   const depthFactor = 1 - Math.abs(y / height - 0.5) * 2;
 
   // Add more subtle variation to reflection intensity based on position
-  // Using prime number multipliers for less predictable patterns
-  const variationFactor = Math.sin(x * 0.023 + progress * 1.73 * config.waveTimeScale) * 0.1 + 0.9;
+  // Using prime number multipliers and reflection quality setting for less predictable patterns
+  const variationFactor = 
+    Math.sin(x * 0.023 + progress * 1.73 * config.waveTimeScale) * 0.1 + 
+    Math.cos(x * 0.017 + progress * 2.31 * config.waveTimeScale) * config.reflectionQuality * 0.15 + 
+    0.9;
 
-  return Math.max(0, flatnessFactor * depthFactor * config.reflectionIntensity * variationFactor);
+  // Add quality-dependent detail to reflections
+  const qualityDetail = config.reflectionQuality > 0.6 ? 
+    Math.sin(x * 0.041 + progress * 3.19) * 
+    Math.cos(x * 0.029 + progress * 2.73) * 
+    config.reflectionQuality * 0.2 : 0;
+
+  return Math.max(0, (flatnessFactor * depthFactor * config.reflectionIntensity * variationFactor) + qualityDetail);
 };
 
 /**
- * Creates a water depth effect based on y-position
+ * Creates a water depth effect based on y-position with improved variation
  */
-const getDepthColor = (y: number, height: number, baseColor: string, deepColor: string): string => {
-  const depth = y / height; // 0 at top, 1 at bottom
+const getDepthColor = (
+  y: number, 
+  height: number, 
+  baseColor: string, 
+  deepColor: string, 
+  x: number = 0, 
+  progress: number = 0
+): string => {
+  // Base depth calculation: 0 at top, 1 at bottom
+  const depth = y / height; 
+  
+  // Add subtle variation to depth based on position for more natural appearance
+  const depthVariation = x !== 0 && progress !== 0 ? 
+    Math.sin(x * 0.013 + progress * 1.7) * 0.05 : 0;
+  
+  // Adjust depth with variation
+  const adjustedDepth = Math.max(0, Math.min(1, depth + depthVariation));
 
   // Use our optimized color blending function
-  return blendColors(baseColor, deepColor, depth);
+  return blendColors(baseColor, deepColor, adjustedDepth);
 };
 /**
  * Corrected version of blendColors with proper channel blending
@@ -257,12 +343,40 @@ const renderWaterLine = (
 
   // Draw pixel by pixel across the water line
   for (let pixelX = 0; pixelX < width; pixelX += config.pixelSize) {
-    // Calculate wave height at this x position with added variation
-    const waveHeight = getWaveHeight(pixelX, progress, config, width, lineSeed);
+    // Calculate composite wave height using multiple overlapping wave layers
+    // This creates much more varied and natural wave patterns
+    let waveHeight = 0;
+    
+    // Use multiple wave layers based on configuration
+    // This addresses the assessment issue of wave animation being too uniform
+    const layerCount = Math.max(1, Math.min(8, config.waveLayerCount || 4));
+    
+    for (let layer = 0; layer < layerCount; layer++) {
+      // Each layer gets a different phase and amplitude scaling
+      const layerPhase = layer * 0.17;
+      const layerAmplitude = 1 - (layer * 0.1);
+      
+      // Get wave height for this layer with unique parameters
+      const layerWaveHeight = getWaveHeight(
+        pixelX, 
+        progress + layerPhase, 
+        config, 
+        width, 
+        lineSeed + layer * 0.31,
+        layer
+      ) * layerAmplitude;
+      
+      // Add this layer's contribution to the total wave height
+      waveHeight += layerWaveHeight / layerCount;
+    }
 
-    // Apply wave offset to y position with slight variation based on x position
-    // This creates more irregular wave patterns
-    const offsetVariation = Math.sin(pixelX * 0.019 + progress * 3.17) * 0.2 + 0.9;
+    // Apply wave offset to y position with more variation based on x position
+    // This creates more irregular wave patterns as requested in the assessment
+    const offsetVariation = 
+      Math.sin(pixelX * 0.019 + progress * 3.17) * 0.2 + 
+      Math.cos(pixelX * 0.031 + progress * 2.53) * config.waveTurbulence * 0.15 + 
+      0.9;
+      
     const offsetY = waveHeight * config.pixelSize * 3 * offsetVariation;
     const pixelY = lineY + offsetY;
 
@@ -278,8 +392,8 @@ const renderWaterLine = (
     // Calculate reflection effect with added variation
     const reflectionIntensity = getReflectionIntensity(pixelY, height, waveHeight, pixelX, progress, config);
 
-    // Get base water color based on depth
-    const baseWaterColor = getDepthColor(pixelY - y, height, config.baseColor, config.deepColor);
+    // Get base water color based on depth with position variation
+    const baseWaterColor = getDepthColor(pixelY - y, height, config.baseColor, config.deepColor, pixelX, progress);
 
     // Determine final pixel color with optimized blending
     let finalColor = baseWaterColor;
@@ -316,15 +430,19 @@ const addReflectionHighlights = (
   // Only add highlights for stances with significant reflection
   if (config.reflectionIntensity < 0.3) return;
 
-  // Adjust highlight count based on water state
+  // Adjust highlight count based on water state and reflection quality
   const baseHighlightCount = Math.floor(width / 50) * Math.floor(height / 50);
-  const highlightCount = Math.max(3, Math.floor(baseHighlightCount * config.reflectionIntensity));
+  const highlightCount = Math.max(3, Math.floor(baseHighlightCount * config.reflectionIntensity * 
+                                               (0.7 + config.reflectionQuality * 0.6)));
 
   // Use slower time progression for more gradual changes in highlight positions
   // This makes the white dots blink more slowly
   const timeScale = config.waveTimeScale * 0.5;
+  
+  // Use different prime-number based seeds for more variation
   const seed1 = Math.floor(progress * 7 * timeScale); // Slower change rate
   const seed2 = Math.floor(progress * 11.3 * timeScale);
+  const seed3 = Math.floor(progress * 13.7 * timeScale);
 
   ctx.fillStyle = config.reflectionColor;
 
@@ -334,22 +452,29 @@ const addReflectionHighlights = (
     const hashBase = i * 13769 + seed1 * 31757 + seed2 * 71;
     const hashMod = (hashBase % 997) / 997;
     const hashMod2 = (hashBase % 1009) / 1009;
+    
+    // Add more variation based on reflection quality
+    const qualityVariation = config.reflectionQuality * 0.2;
 
     // Add more subtle sinusoidal variation
-    const variationX = Math.sin(hashMod * Math.PI * 2 + progress * 2.7 * timeScale) * 0.07;
-    const variationY = Math.cos(hashMod2 * Math.PI * 2 + progress * 1.9 * timeScale) * 0.07;
+    const variationX = Math.sin(hashMod * Math.PI * 2 + progress * 2.7 * timeScale) * (0.07 + qualityVariation);
+    const variationY = Math.cos(hashMod2 * Math.PI * 2 + progress * 1.9 * timeScale) * (0.07 + qualityVariation);
 
     const randomX = x + (hashMod + variationX) * width;
     const randomY = y + (hashMod2 + variationY) * height;
 
     // More varied highlight size for natural appearance
     const sizeVariation = ((hashBase % 7) + 1) / 3.5;
-    const size = config.pixelSize * sizeVariation;
+    const size = config.pixelSize * sizeVariation * (0.8 + config.reflectionQuality * 0.4);
 
     // More random distribution of highlights
     // Use a time-varying threshold for more natural blinking pattern
     const timeVaryingThreshold = 0.5 + Math.sin(progress * 2.3 * timeScale + i * 0.37) * 0.3;
-    if ((hashBase % 17) / 17 > timeVaryingThreshold) {
+    
+    // Add reflection quality influence to threshold for more varied distribution
+    const qualityThreshold = timeVaryingThreshold - (config.reflectionQuality * 0.2);
+    
+    if ((hashBase % 17) / 17 > qualityThreshold) {
       // Vary opacity for more subtle effect
       const opacity = 0.6 + Math.sin(hashBase * 0.01 + progress * 3.7) * 0.3;
       ctx.globalAlpha = opacity;
@@ -383,22 +508,34 @@ const renderBottomEdge = (
   // Create a gradual transition at the bottom edge
   for (let pixelX = 0; pixelX < width; pixelX += config.pixelSize) {
     // Calculate a varied bottom edge with smaller amplitude and more variation
-    const edgeVariation = getWaveHeight(pixelX, progress * 0.63, config, width) * config.pixelSize * 1.5;
+    // Use multiple wave components for more natural edge
+    const edgeVariation1 = getWaveHeight(pixelX, progress * 0.63, config, width) * config.pixelSize * 1.5;
+    const edgeVariation2 = getWaveHeight(pixelX, progress * 0.37, config, width, 1.37) * config.pixelSize * 0.8;
+    const edgeVariation = (edgeVariation1 + edgeVariation2) * 0.5;
 
     // Add secondary variation for more natural look
-    const secondaryVariation = Math.sin(pixelX * 0.027 + progress * 1.9) * config.pixelSize * 0.7;
+    const secondaryVariation = 
+      Math.sin(pixelX * 0.027 + progress * 1.9) * 
+      Math.cos(pixelX * 0.019 + progress * 2.3) * 
+      config.pixelSize * 0.7 * config.waveComplexity;
 
     // Create a more natural looking bottom edge
     const bottomOffset = Math.abs(edgeVariation) * 0.7 + Math.abs(secondaryVariation) * 0.3;
     const adjustedY = bottomY - bottomOffset;
 
     // Get a darker color for the bottom edge with slight variation
-    const depthVariation = Math.sin(pixelX * 0.031 + progress * 2.3) * 0.1 + 0.9;
+    const depthVariation = 
+      Math.sin(pixelX * 0.031 + progress * 2.3) * 
+      Math.cos(pixelX * 0.023 + progress * 1.7) * 
+      0.1 + 0.9;
+      
     const edgeColor = getDepthColor(
       height - config.pixelSize,
       height,
       config.deepColor,
       blendColors(config.deepColor, '#000000', 0.3 * depthVariation), // Slightly darker with variation
+      pixelX,
+      progress
     );
 
     // Draw the bottom edge pixel
@@ -462,8 +599,8 @@ The water asset is designed for top down or pseudo isometric views.
     }
 
     // Calculate how many lines to render based on pixel size
-    // Increase line density for more detailed rendering
-    const lineCount = Math.ceil(height / (config.pixelSize / 2.5));
+    // Increase line density for more detailed rendering and less tiling effect
+    const lineCount = Math.ceil(height / (config.pixelSize / 3.0));
     const lineSpacing = height / lineCount;
 
     // Render each horizontal line of water with improved variation
@@ -473,7 +610,10 @@ The water asset is designed for top down or pseudo isometric views.
       // Use more varied phase offsets for each line to create more irregular patterns
       // This addresses the assessment issue of wave undulation being too regular
       const phaseOffset =
-        (i / lineCount) * 0.2 + Math.sin(i * 0.13 + progress * 2.7) * 0.07 + Math.cos(i * 0.07 + progress * 3.1) * 0.05;
+        (i / lineCount) * 0.2 + 
+        Math.sin(i * 0.13 + progress * 2.7) * 0.07 + 
+        Math.cos(i * 0.07 + progress * 3.1) * 0.05 +
+        Math.sin(i * 0.023 + progress * 4.3) * config.waveComplexity * 0.08;
 
       renderWaterLine(ctx, x, y, width, lineY, height, progress + phaseOffset, config, i);
     }
@@ -483,6 +623,28 @@ The water asset is designed for top down or pseudo isometric views.
 
     // Add random reflection highlights with improved distribution
     addReflectionHighlights(ctx, x, y, width, height, progress, config);
+
+    // For calm stance, minimize foam and maximize reflections
+    if (stance === 'calm') {
+      // Special handling for calm water - add subtle movement with minimal foam
+      // This addresses the assessment issue of distracting bubbles in calm stance
+      const calmWaterLineCount = Math.ceil(height / (config.pixelSize * 4));
+      
+      for (let i = 0; i < calmWaterLineCount; i++) {
+        const lineY = y + i * (height / calmWaterLineCount);
+        const calmProgress = progress * 0.7; // Slower animation for calm water
+        
+        // Add very subtle ripples at random positions
+        if (Math.sin(i * 0.37 + calmProgress * 2.1) > 0.7) {
+          const rippleX = x + (Math.sin(i * 0.19 + calmProgress * 1.7) * 0.5 + 0.5) * width;
+          const rippleRadius = config.pixelSize * (1 + Math.sin(calmProgress * 3.1 + i * 0.29) * 0.5);
+          const rippleColor = blendColors(config.baseColor, config.reflectionColor, 0.4);
+          
+          // Draw small subtle ripple
+          drawPixel(ctx, rippleX, lineY, rippleColor, rippleRadius);
+        }
+      }
+    }
 
     // For windy stance, add extra foam at the top with improved distribution and realism
     if (stance === 'windy') {
@@ -497,13 +659,20 @@ The water asset is designed for top down or pseudo isometric views.
           Math.sin(foamX * 0.029 + progress * Math.PI * 5.3 * config.waveTimeScale) *
           foamHeight *
           0.7;
+          
+        // Add additional high-frequency variation for more natural foam patterns
+        const detailJaggedness = 
+          Math.sin(foamX * 0.13 + progress * Math.PI * 7.1 * config.waveTimeScale) * 
+          Math.cos(foamX * 0.17 + progress * Math.PI * 6.3 * config.waveTimeScale) * 
+          foamHeight * 0.3 * config.foamDetail;
 
-        const foamY = y + foamJaggedness;
+        const foamY = y + foamJaggedness + detailJaggedness;
 
         // Create more varied foam distribution for a more natural look
         const foamDistribution =
           Math.sin(foamX * 0.31 + progress * 7.3 * config.waveTimeScale) *
-          Math.cos(foamX * 0.19 + progress * 4.7 * config.waveTimeScale);
+          Math.cos(foamX * 0.19 + progress * 4.7 * config.waveTimeScale) *
+          Math.sin(foamX * 0.13 + progress * 9.1 * config.waveTimeScale);
 
         if (foamDistribution > 0.1) {
           // Create more varied opacity for more realistic foam
@@ -511,7 +680,8 @@ The water asset is designed for top down or pseudo isometric views.
           const foamOpacity =
             0.5 +
             Math.sin(foamX * 0.23 + progress * 5.7 * config.waveTimeScale) * 0.2 +
-            Math.cos(foamX * 0.17 + progress * 3.9 * config.waveTimeScale) * 0.2;
+            Math.cos(foamX * 0.17 + progress * 3.9 * config.waveTimeScale) * 0.2 +
+            Math.sin(foamX * 0.11 + progress * 8.3 * config.waveTimeScale) * config.foamDetail * 0.15;
 
           // Vary the foam size for more realism
           // This addresses the assessment issue of foam size variation
@@ -543,7 +713,7 @@ The water asset is designed for top down or pseudo isometric views.
               const thirdFoamOpacity = secondFoamOpacity * 0.7;
               ctx.fillStyle = `rgba(255, 255, 255, ${thirdFoamOpacity})`;
 
-              // Vary the position of the third pixel slightly
+              // Vary the position of the third pixel slightly for more natural appearance
               const offsetX = Math.floor(Math.sin(foamX * 0.37) * config.pixelSize);
               ctx.fillRect(
                 Math.floor((x + foamX + offsetX) / config.pixelSize) * config.pixelSize,
@@ -551,6 +721,22 @@ The water asset is designed for top down or pseudo isometric views.
                 foamSize,
                 foamSize,
               );
+              
+              // For very high foam detail, add a fourth foam pixel with even more variation
+              if (config.foamDetail > 0.7 && foamDistribution > 0.9) {
+                const fourthFoamOpacity = thirdFoamOpacity * 0.6;
+                ctx.fillStyle = `rgba(255, 255, 255, ${fourthFoamOpacity})`;
+                
+                const offsetX2 = Math.floor(Math.cos(foamX * 0.29) * config.pixelSize * 1.5);
+                const offsetY = Math.floor(Math.sin(foamX * 0.23) * config.pixelSize);
+                
+                ctx.fillRect(
+                  Math.floor((x + foamX + offsetX2) / config.pixelSize) * config.pixelSize,
+                  Math.floor((foamY + config.pixelSize * 2 + offsetY) / config.pixelSize) * config.pixelSize,
+                  Math.max(1, foamSize - 1),
+                  Math.max(1, foamSize - 1)
+                );
+              }
             }
           }
         }
