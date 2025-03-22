@@ -3,7 +3,7 @@ import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
 
-export type EntityType = 'lion' | 'prey' | 'carrion';
+export type EntityType = 'lion' | 'prey' | 'carrion' | 'hunter';
 
 export interface Entity {
   id: EntityId;
@@ -57,6 +57,25 @@ export interface PreyEntity extends Entity {
   thirstLevel: number;
   /** Stamina level (0-100). At 0, prey can't move */
   staminaLevel: number;
+  stateMachine: [StateType, StateData];
+}
+
+export interface HunterEntity extends Entity {
+  type: 'hunter';
+  /** Health level (0-100). At 0, hunter becomes carrion */
+  health: number;
+  /** Ammunition left in the gun */
+  ammunition: number;
+  /** Time needed to reload the gun in milliseconds */
+  reloadTime: number;
+  /** Range at which the hunter can detect lions */
+  detectionRange: number;
+  /** Base accuracy for shooting (0-1) */
+  shootingAccuracy: number;
+  /** Target lion entity ID if any */
+  targetLionId?: EntityId;
+  /** Last time when the hunter fired a shot */
+  lastShotTime?: number;
   stateMachine: [StateType, StateData];
 }
 

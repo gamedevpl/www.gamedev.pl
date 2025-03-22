@@ -3,9 +3,10 @@ import { RenderState } from './render-state';
 import { drawGround } from './ground-renderer';
 import { renderPrey } from './entity-renderers/prey-renderer';
 import { renderDebugInfo } from './debug-renderer';
-import { getLions, getPrey, getCarrion } from '../game-world/game-world-query';
+import { getLions, getPrey, getCarrion, getHunters } from '../game-world/game-world-query';
 import { drawLion } from './entity-renderers/lion-renderer';
 import { drawCarrion } from './entity-renderers/carrion-renderer';
+import { drawHunter } from './entity-renderers/hunter-renderer';
 import { renderEnvironment } from './environment-renderer';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
@@ -26,6 +27,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Render all prey entities
   getPrey(world).forEach((p) => renderPrey(ctx, p));
+
+  // Render all hunters
+  getHunters(world).forEach((h) => drawHunter(ctx, h));
 
   // Render all lions
   getLions(world).forEach((lion) => drawLion(ctx, world, lion));

@@ -2,6 +2,7 @@ import { Entity } from '../entities/entities-types';
 import { State, StateContext, StateData, StateType } from './state-machine-types';
 import { LION_STATES } from './states/lion';
 import { PREY_STATES } from './states/prey';
+import { HUNTER_STATES } from './states/hunter';
 import {
   findStateHandler,
   handleStateTransition,
@@ -10,7 +11,7 @@ import {
 } from './state-machine-utils';
 
 // Combine all states
-const STATES = [...LION_STATES, ...PREY_STATES] as unknown as State<Entity, StateData>[];
+const STATES = [...LION_STATES, ...PREY_STATES, ...HUNTER_STATES] as unknown as State<Entity, StateData>[];
 
 /**
  * Updates the state machine for an entity

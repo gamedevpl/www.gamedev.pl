@@ -4,7 +4,10 @@ import { preySpawn } from './prey-spawner';
 import { entityUpdate } from './entity-update';
 import { carrionUpdate } from './carrion-update';
 import { preyUpdate } from './prey-update';
+import { hunterUpdate } from './hunter-update';
 import { createLionStateMachine } from '../state-machine/states/lion';
+import { spawnHunter } from './hunter-update';
+import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world-consts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -17,6 +20,10 @@ export function entitiesUpdate(updateContext: UpdateContext): void {
 
     if (entity.type === 'prey') {
       preyUpdate(entity, updateContext, state);
+    }
+
+    if (entity.type === 'hunter') {
+      hunterUpdate(entity, updateContext, state);
     }
 
     // generic entity update
@@ -44,6 +51,12 @@ export function createEntities(): Entities {
     },
     hungerLevel: 100, // Initialize hunger level for lions
     stateMachine: createLionStateMachine(),
+  });
+
+  // Spawn a hunter at a random position
+  spawnHunter(state, {
+    x: Math.random() * (GAME_WORLD_WIDTH - 200) + 100,
+    y: Math.random() * (GAME_WORLD_HEIGHT - 200) + 100,
   });
 
   return state;

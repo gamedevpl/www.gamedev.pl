@@ -34,6 +34,20 @@
   * ☐ Advanced Group Dynamics: Leader-follower, cohesion
   * ☐ Flocking behavior
 
+* Hunter Core Systems
+  * ✅ Basic Implementation: Entity types, state machine, rendering
+  * ✅ Patrolling Behavior: Random movement, state transitions
+  * ✅ Waiting Behavior: Standing still, looking around
+  * ✅ Lion Detection: Range-based, direction-sensitive, ambush-aware
+  * ✅ Chasing Behavior: Following detected lions
+  * ✅ Shooting Mechanics: Accuracy based on distance and movement
+  * ✅ Reloading Mechanics: Ammunition management, timing
+  * ✅ Hunter-Lion Interaction: Lion can attack hunter
+  * ✅ Health System: Damage, death, conversion to carrion
+  * ☐ Enhanced AI: Improved tactics, group coordination
+  * ☐ Visual Feedback: Shooting effects, hit indicators
+  * ☐ Sound Effects: Shooting, reloading, detection
+
 ## Branch: Game World
 * ✅ Ground Rendering Implementation
 * ✅ Code Organization: Split into focused modules
