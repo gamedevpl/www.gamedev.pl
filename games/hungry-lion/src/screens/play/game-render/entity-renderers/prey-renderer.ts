@@ -32,8 +32,8 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
 
   Prey2d.render(
     ctx,
-    prey.position.x,
-    prey.position.y,
+    prey.position.x - 20,
+    prey.position.y - 20,
     40,
     40,
     (Date.now() % 1000) / 1000,

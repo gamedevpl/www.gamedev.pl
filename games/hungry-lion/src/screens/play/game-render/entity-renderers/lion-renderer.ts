@@ -45,5 +45,14 @@ export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
   const animationTime = (Date.now() % 1000) / 1000;
 
   // Render the lion with the appropriate stance and direction
-  Lion2d.render(ctx, position.x, position.y, width, height, animationTime, stance, facingDirection);
+  Lion2d.render(
+    ctx,
+    position.x - width / 2,
+    position.y - height / 2,
+    width,
+    height,
+    animationTime,
+    stance,
+    facingDirection,
+  );
 }
