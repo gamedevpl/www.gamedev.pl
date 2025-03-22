@@ -1,3 +1,6 @@
+import { Water2D } from '../../../../../../tools/asset-generator/generator-assets/src/water-2d/water-2d';
+import { Grass2d } from '../../../../../../tools/asset-generator/generator-assets/src/grass-2d/grass-2d';
+
 import {
   Environment,
   GrassSector,
@@ -17,11 +20,27 @@ export function renderEnvironment(ctx: CanvasRenderingContext2D, environment: En
 }
 
 function renderGrassSector(ctx: CanvasRenderingContext2D, sector: GrassSector): void {
-  ctx.fillStyle = 'green';
-  ctx.fillRect(sector.rect.x, sector.rect.y, sector.rect.width, sector.rect.height);
+  Grass2d.render(
+    ctx,
+    sector.rect.x,
+    sector.rect.y,
+    sector.rect.width,
+    sector.rect.height,
+    (Date.now() % 1000) / 1000,
+    'windy',
+    'right',
+  );
 }
 
 function renderWaterSector(ctx: CanvasRenderingContext2D, sector: WaterSector): void {
-  ctx.fillStyle = 'blue';
-  ctx.fillRect(sector.rect.x, sector.rect.y, sector.rect.width, sector.rect.height);
+  Water2D.render(
+    ctx,
+    sector.rect.x,
+    sector.rect.y,
+    sector.rect.width,
+    sector.rect.height,
+    (Date.now() % 1000) / 1000,
+    'default',
+    'right',
+  );
 }

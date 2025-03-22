@@ -1,29 +1,22 @@
 import { RenderState } from './render-state';
 
+import { Ground2D } from '../../../../../../tools/asset-generator/generator-assets/src/ground-2d/ground-2d';
+
 export function drawGround(ctx: CanvasRenderingContext2D, renderState: RenderState) {
   const { viewport } = renderState;
 
-  // Create a simple canvas pattern for the ground
-  const patternCanvas = document.createElement('canvas');
-  patternCanvas.width = 32;
-  patternCanvas.height = 32;
-  const patternCtx = patternCanvas.getContext('2d');
-  if (!patternCtx) return;
+  const leftX = Math.floor(-viewport.x / 32) * 32;
+  const rightX = Math.ceil((-viewport.x + ctx.canvas.width) / 32) * 32;
+  const topY = Math.floor(-viewport.y / 32) * 32;
+  const bottomY = Math.ceil((-viewport.y + ctx.canvas.height) / 32) * 32;
 
-  // Draw a simple grass pattern
-  patternCtx.fillStyle = '#228B22';
-  patternCtx.fillRect(0, 0, 32, 32);
-  patternCtx.fillStyle = '#32CD32';
-  patternCtx.fillRect(0, 0, 16, 16);
-  patternCtx.fillRect(16, 16, 16, 16);
+  for (let x = leftX; x < rightX; x += 32) {
+    for (let y = topY; y < bottomY; y += 32) {
+      renderGroundTile(ctx, x, y);
+    }
+  }
+}
 
-  // Create the pattern
-  const pattern = ctx.createPattern(patternCanvas, 'repeat');
-  if (!pattern) return;
-
-  // Apply the pattern to the ground
-  ctx.save();
-  ctx.fillStyle = pattern;
-  ctx.fillRect(-viewport.x, -viewport.y, ctx.canvas.width, ctx.canvas.height);
-  ctx.restore();
+function renderGroundTile(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  Ground2D.render(ctx, x, y, 32, 32, (Date.now() % 1000) / 1000, 'default', 'right');
 }
