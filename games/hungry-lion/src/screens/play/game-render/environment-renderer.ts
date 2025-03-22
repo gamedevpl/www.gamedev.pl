@@ -26,7 +26,7 @@ function renderGrassSector(ctx: CanvasRenderingContext2D, sector: GrassSector): 
     sector.rect.y,
     sector.rect.width,
     sector.rect.height,
-    (Date.now() % 1000) / 1000,
+    (Date.now() % 10000) / 10000,
     'windy',
     'right',
   );
@@ -39,7 +39,7 @@ function renderWaterSector(ctx: CanvasRenderingContext2D, sector: WaterSector): 
     sector.rect.y,
     sector.rect.width,
     sector.rect.height,
-    (Date.now() % 1000) / 1000,
+    (Date.now() % 10000) / 10000,
     'default',
     'right',
   );
