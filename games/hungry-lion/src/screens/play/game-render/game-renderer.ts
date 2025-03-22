@@ -12,10 +12,11 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   const { viewport } = renderState;
 
   ctx.save();
-  ctx.translate(viewport.x, viewport.y);
 
   // Draw the ground
   drawGround(ctx, renderState);
+
+  ctx.translate(viewport.x, viewport.y);
 
   // Render environment
   renderEnvironment(ctx, world.environment);
