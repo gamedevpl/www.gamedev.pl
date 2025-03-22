@@ -28,7 +28,7 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   getPrey(world).forEach((p) => renderPrey(ctx, p));
 
   // Render all lions
-  getLions(world).forEach((lion) => drawLion(ctx, lion));
+  getLions(world).forEach((lion) => drawLion(ctx, world, lion));
 
   // Render debug information
   renderDebugInfo(ctx, world);

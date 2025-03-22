@@ -4,6 +4,8 @@ import { vectorLength } from '../../game-world/utils/math-utils';
 
 import { Lion2d } from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
 import { drawHungerWarningBubble } from '../notifications/hunger-warning';
+import { drawTargetIcon } from '../notifications/target-notification';
+import { GameWorldState } from '../../game-world/game-world-types';
 
 // Hunger threshold constants
 const HUNGER_WARNING_THRESHOLD = 50; // When to start showing warnings
@@ -30,7 +32,7 @@ function getLionFacingDirection(lion: LionEntity): 'left' | 'right' {
   return lion.targetDirection > -Math.PI / 2 && lion.targetDirection < Math.PI / 2 ? 'right' : 'left';
 }
 
-export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
+export function drawLion(ctx: CanvasRenderingContext2D, gameState: GameWorldState, lion: LionEntity) {
   const width = LION_WIDTH;
   const height = LION_WIDTH;
 
@@ -65,4 +67,7 @@ export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
   if (lion.hungerLevel < HUNGER_WARNING_THRESHOLD) {
     drawHungerWarningBubble(ctx, position.x, position.y, lion.hungerLevel);
   }
+
+  // Draw target notification if lion has a target
+  drawTargetIcon(ctx, gameState, lion);
 }

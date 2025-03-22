@@ -32,6 +32,11 @@
                 *   ✅ Added flashing effect for urgent warnings
                 *   ✅ Set different warning messages based on hunger level
             *   ✅ Implemented starvation game over mechanic
+        *   ✅ Target Notification System
+            *   ✅ Implemented target notification bubble
+            *   ✅ Added support for displaying entity targets
+            *   ✅ Added support for displaying position targets
+            *   ✅ Positioned notification to avoid overlap with hunger warning
         *   ✅ Ambush Mechanics
             *   ✅ Added 'ambush' action button to action bar
             *   ✅ Implemented LION_AMBUSH state with no movement
@@ -204,6 +209,14 @@
     *   ☐ Add movement animations
     *   ☐ Implement direction indicators
     *   ☐ Add particle effects for movement
+    *   ✅ Enhanced Target Notification System
+        *   ✅ Replaced text-based target notifications with icon-based system
+        *   ✅ Moved notification display from lion to target location
+        *   ✅ Implemented different icons for different target types
+            *   ✅ Crosshair icon for prey targets
+            *   ✅ Food/meat icon for carrion targets
+            *   ✅ X marker for position targets
+        *   ✅ Enhanced visual feedback with pulsing and scaling effects
     *   ☐ Visual Feedback for Fleeing
         *   ☐ Add fleeing indicators
         *   ☐ Implement visual stress levels
