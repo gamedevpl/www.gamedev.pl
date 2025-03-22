@@ -27,6 +27,10 @@
             *   ✅ Fixed Initial Hunger Mechanics
             *   ✅ Hunger Bar and Starvation Warnings
             *   ✅ Updated hunger visualization with color interpolation
+            *   ✅ Added hunger warning visualization
+                *   ✅ Implemented warning bubble above lion
+                *   ✅ Added flashing effect for urgent warnings
+                *   ✅ Set different warning messages based on hunger level
             *   ✅ Implemented starvation game over mechanic
         *   ✅ Ambush Mechanics
             *   ✅ Added 'ambush' action button to action bar

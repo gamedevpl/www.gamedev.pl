@@ -3,6 +3,11 @@ import { LION_WIDTH } from '../../game-world/game-world-consts';
 import { vectorLength } from '../../game-world/utils/math-utils';
 
 import { Lion2d } from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
+import { drawHungerWarningBubble } from '../notifications/hunger-warning';
+
+// Hunger threshold constants
+const HUNGER_WARNING_THRESHOLD = 50; // When to start showing warnings
+export const HUNGER_CRITICAL_THRESHOLD = 25; // When to make warnings more urgent
 
 function getLionStance(stateType: string, isMoving: boolean): string {
   switch (stateType) {
@@ -55,4 +60,9 @@ export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
     stance,
     facingDirection,
   );
+
+  // Draw hunger warning bubble if hunger is below warning threshold
+  if (lion.hungerLevel < HUNGER_WARNING_THRESHOLD) {
+    drawHungerWarningBubble(ctx, position.x, position.y, lion.hungerLevel);
+  }
 }
