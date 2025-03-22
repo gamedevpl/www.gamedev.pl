@@ -1,225 +1,262 @@
 import { Asset } from '../../../generator-core/src/assets-types';
 
 /**
- * Renders a pixel art style ground tile with texture variations
- * @param ctx Canvas rendering context
- * @param x X position to render
- * @param y Y position to render
- * @param width Width of the ground
- * @param height Height of the ground
- * @param progress Animation progress (0-1)
- * @param stance Ground stance/style
- * @param direction Direction the ground faces
+ * Helper function to generate a deterministic value based on position
+ * This creates consistent variations without using random
  */
-function renderGround(
+const getPositionalVariation = (x: number, y: number, seed: number = 1): number => {
+  // Use a simple but effective hash function
+  const hash = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+  return hash - Math.floor(hash);
+};
+
+/**
+ * Get a color variation based on position
+ * Returns a slightly different shade of the base color
+ */
+const getColorVariation = (x: number, y: number, baseColor: string, variationAmount: number = 0.1): string => {
+  // Parse the base color
+  const r = parseInt(baseColor.slice(1, 3), 16);
+  const g = parseInt(baseColor.slice(3, 5), 16);
+  const b = parseInt(baseColor.slice(5, 7), 16);
+
+  // Get variation values
+  const v1 = getPositionalVariation(x, y, 1);
+  const v2 = getPositionalVariation(x, y, 2);
+  const v3 = getPositionalVariation(x, y, 3);
+
+  // Apply variations
+  const rVar = Math.max(0, Math.min(255, Math.round(r + (v1 - 0.5) * 2 * variationAmount * r)));
+  const gVar = Math.max(0, Math.min(255, Math.round(g + (v2 - 0.5) * 2 * variationAmount * g)));
+  const bVar = Math.max(0, Math.min(255, Math.round(b + (v3 - 0.5) * 2 * variationAmount * b)));
+
+  // Convert back to hex
+  return `#${rVar.toString(16).padStart(2, '0')}${gVar.toString(16).padStart(2, '0')}${bVar
+    .toString(16)
+    .padStart(2, '0')}`;
+};
+
+/**
+ * Draw a crack/detail on the ground based on position
+ */
+const drawGroundDetail = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   width: number,
   height: number,
-  progress: number,
-  stance: string,
-) {
-  // Base ground color
-  const groundColor = '#8B5E3C'; // Brown
+  detailColor: string,
+): void => {
+  const v1 = getPositionalVariation(x, y, 4);
+  const v2 = getPositionalVariation(x, y, 5);
 
-  // Render base ground
-  ctx.fillStyle = groundColor;
-  ctx.fillRect(x, y, width, height);
+  // Only draw details sometimes based on positional variation
+  if (v1 > 0.7) {
+    const startX = x + width * (0.2 + v1 * 0.6);
+    const startY = y + height * (0.2 + v2 * 0.6);
+    const length = Math.min(width, height) * (0.1 + v2 * 0.2);
+    const angle = v1 * Math.PI * 2;
 
-  // Add texture variations
-  addGroundTexture(ctx, x, y, width, height);
-
-  // Add top edge highlight
-  addGroundEdge(ctx, x, y, width, height);
-
-  // Add details based on stance
-  if (stance === 'default') {
-    addGroundDetails(ctx, x, y, width, height, progress);
-  }
-}
-
-/**
- * Adds texture variation to the ground
- */
-function addGroundTexture(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
-  // Create a grid pattern for pixel art style
-  const gridSize = Math.max(width / 20, 4); // Ensure we have reasonable sized grid cells
-
-  ctx.save();
-  ctx.globalAlpha = 0.2;
-
-  // Draw slightly darker spots randomly
-  for (let i = 0; i < (width / gridSize) * 2; i++) {
-    const spotX = x + Math.random() * width;
-    const spotY = y + Math.random() * height;
-    const spotSize = gridSize * (0.5 + Math.random() * 0.8);
-
-    ctx.fillStyle = Math.random() > 0.5 ? '#654321' : '#A67C52';
-    ctx.fillRect(Math.floor(spotX / gridSize) * gridSize, Math.floor(spotY / gridSize) * gridSize, spotSize, spotSize);
-  }
-
-  ctx.restore();
-}
-/**
- * Adds a highlighted edge to the top of the ground
- */
-function addGroundEdge(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
-  // Add top edge highlight
-  const edgeHeight = Math.max(height * 0.1, 3); // At least 3px for the edge
-
-  ctx.fillStyle = '#A67C52'; // Lighter brown for highlight
-  ctx.fillRect(x, y, width, edgeHeight);
-
-  // Add a subtle darker line at the bottom of the highlight for definition
-  ctx.strokeStyle = '#654321';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x, y + edgeHeight);
-  ctx.lineTo(x + width, y + edgeHeight);
-  ctx.stroke();
-
-  // Add some pixel-art style variations to the edge
-  const gridSize = Math.max(width / 20, 4);
-  ctx.fillStyle = '#8B5E3C'; // Base ground color
-
-  for (let i = 0; i < width; i += gridSize) {
-    if (Math.random() > 0.7) {
-      const variationWidth = gridSize * (Math.random() > 0.5 ? 1 : 2);
-      ctx.fillRect(x + i, y, variationWidth, edgeHeight);
-    }
-  }
-}
-
-/**
- * Adds details to the ground surface like small rocks, cracks, etc.
- */
-function addGroundDetails(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  progress: number,
-) {
-  const gridSize = Math.max(width / 20, 4);
-
-  // Add small rocks
-  ctx.save();
-  ctx.fillStyle = '#777777';
-
-  const numRocks = Math.floor(width / gridSize / 3);
-  for (let i = 0; i < numRocks; i++) {
-    const rockX = x + Math.random() * width;
-    const rockY = y + Math.random() * height * 0.7 + height * 0.2;
-    const rockSize = gridSize * (0.3 + Math.random() * 0.4);
-
-    // Ensure rocks align to grid for pixel art look
-    const alignedX = Math.floor(rockX / gridSize) * gridSize;
-    const alignedY = Math.floor(rockY / gridSize) * gridSize;
-
-    ctx.fillRect(alignedX, alignedY, rockSize, rockSize);
-  }
-
-  // Add cracks
-  ctx.strokeStyle = '#5D4037';
-  ctx.lineWidth = 1;
-
-  const numCracks = Math.floor(width / gridSize / 5);
-  for (let i = 0; i < numCracks; i++) {
-    const crackX = x + Math.random() * width;
-    const crackY = y + Math.random() * height * 0.8 + height * 0.1;
-
-    // Align to grid
-    const alignedX = Math.floor(crackX / gridSize) * gridSize;
-    const alignedY = Math.floor(crackY / gridSize) * gridSize;
-
+    ctx.save();
+    ctx.strokeStyle = detailColor;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(alignedX, alignedY);
-
-    // Create a simple zigzag crack
-    const crackLength = gridSize * (2 + Math.random() * 3);
-    const segments = Math.floor(2 + Math.random() * 3);
-
-    for (let j = 0; j < segments; j++) {
-      const nextX = alignedX + (crackLength / segments) * (j + 1);
-      const nextY = alignedY + (Math.random() * gridSize - gridSize / 2);
-      ctx.lineTo(nextX, nextY);
-    }
-
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(startX + Math.cos(angle) * length, startY + Math.sin(angle) * length);
     ctx.stroke();
+    ctx.restore();
   }
-
-  // Add subtle grass (if applicable) with animation
-  if (height > 10) {
-    drawGrass(ctx, x, y, width, height, progress, gridSize);
-  }
-
-  ctx.restore();
-}
+};
 /**
- * Draws small grass tufts on the ground with subtle animation
+ * Draw edge highlights for the ground tile
  */
-function drawGrass(
+const drawEdgeHighlights = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   width: number,
-  _height: number,
-  progress: number,
-  gridSize: number,
-) {
-  // Grass colors
-  const grassColors = ['#4CAF50', '#388E3C', '#2E7D32'];
+  height: number,
+  highlightColor: string,
+): void => {
+  const edgeWidth = Math.max(1, Math.min(width, height) * 0.03);
 
-  // Add subtle grass at the top edge
-  const grassCount = Math.floor(width / gridSize / 2);
-  const grassHeight = gridSize * 0.8;
+  // Top edge highlight (lighter)
+  const topGradient = ctx.createLinearGradient(x, y, x, y + edgeWidth * 3);
+  topGradient.addColorStop(0, highlightColor);
+  topGradient.addColorStop(1, 'rgba(0,0,0,0)');
 
-  for (let i = 0; i < grassCount; i++) {
-    const grassX = x + i * gridSize * 2 + Math.random() * gridSize;
-    // Align to grid
-    const alignedX = Math.floor(grassX / gridSize) * gridSize;
+  ctx.fillStyle = topGradient;
+  ctx.fillRect(x, y, width, edgeWidth * 3);
 
-    // Only draw grass on some spots
-    if (Math.random() > 0.6) {
-      // Pick a random grass color
-      ctx.fillStyle = grassColors[Math.floor(Math.random() * grassColors.length)];
+  // Left edge highlight (lighter)
+  const leftGradient = ctx.createLinearGradient(x, y, x + edgeWidth * 3, y);
+  leftGradient.addColorStop(0, highlightColor);
+  leftGradient.addColorStop(1, 'rgba(0,0,0,0)');
 
-      // Calculate grass sway based on progress
-      const sway = Math.sin(progress * Math.PI * 2 + i) * gridSize * 0.2;
+  ctx.fillStyle = leftGradient;
+  ctx.fillRect(x, y, edgeWidth * 3, height);
 
-      // Draw a simple grass tuft (2-3 blades)
-      const blades = 2 + Math.floor(Math.random() * 2);
-      for (let j = 0; j < blades; j++) {
-        const bladeX = alignedX + j * (gridSize / 3);
-        const bladeOffset = sway * (0.5 + Math.random() * 0.5);
+  // Bottom and right edges (darker shadow)
+  const shadowColor = 'rgba(0,0,0,0.2)';
+
+  // Bottom edge
+  const bottomGradient = ctx.createLinearGradient(x, y + height - edgeWidth * 3, x, y + height);
+  bottomGradient.addColorStop(0, 'rgba(0,0,0,0)');
+  bottomGradient.addColorStop(1, shadowColor);
+
+  ctx.fillStyle = bottomGradient;
+  ctx.fillRect(x, y + height - edgeWidth * 3, width, edgeWidth * 3);
+
+  // Right edge
+  const rightGradient = ctx.createLinearGradient(x + width - edgeWidth * 3, y, x + width, y);
+  rightGradient.addColorStop(0, 'rgba(0,0,0,0)');
+  rightGradient.addColorStop(1, shadowColor);
+
+  ctx.fillStyle = rightGradient;
+  ctx.fillRect(x + width - edgeWidth * 3, y, edgeWidth * 3, height);
+};
+
+/**
+ * Draw small stones/pebbles on the ground
+ */
+const drawStones = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stoneBaseColor: string,
+): void => {
+  // Generate a few stones based on position
+  const stoneCount = Math.floor(getPositionalVariation(x, y, 6) * 4) + 1;
+
+  for (let i = 0; i < stoneCount; i++) {
+    const stoneX = x + width * getPositionalVariation(x + i, y, 7);
+    const stoneY = y + height * getPositionalVariation(x, y + i, 8);
+    const stoneSize = Math.min(width, height) * (0.01 + getPositionalVariation(x + i, y + i, 9) * 0.02);
+
+    // Vary stone color slightly
+    const stoneColor = getColorVariation(stoneX, stoneY, stoneBaseColor, 0.15);
+
+    ctx.fillStyle = stoneColor;
+    ctx.beginPath();
+    ctx.arc(stoneX, stoneY, stoneSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Add a small highlight to the stone
+    const highlightSize = stoneSize * 0.4;
+    const highlightX = stoneX - stoneSize * 0.3;
+    const highlightY = stoneY - stoneSize * 0.3;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(highlightX, highlightY, highlightSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+};
+/**
+ * Draw texture pattern on the ground
+ */
+const drawTexturePattern = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  baseColor: string,
+): void => {
+  // Create a subtle texture using small dots/specs
+  const dotDensity = Math.min(width, height) * 0.15;
+  const dotSize = Math.max(1, Math.min(width, height) * 0.005);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+
+  for (let i = 0; i < dotDensity; i++) {
+    for (let j = 0; j < dotDensity; j++) {
+      // Use positional variation to determine if we draw a dot here
+      const drawDot = getPositionalVariation(x + i, y + j, 10) > 0.7;
+
+      if (drawDot) {
+        const dotX = x + (width / dotDensity) * i + getPositionalVariation(x + i, y, 11) * (width / dotDensity);
+        const dotY = y + (height / dotDensity) * j + getPositionalVariation(x, y + j, 12) * (height / dotDensity);
 
         ctx.beginPath();
-        ctx.moveTo(bladeX, y + gridSize * 0.5);
-        ctx.lineTo(bladeX + bladeOffset, y - grassHeight);
-        ctx.lineTo(bladeX + gridSize / 4, y + gridSize * 0.5);
+        ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
-}
+};
 
+/**
+ * Ground 2D tile asset implementation
+ */
 export const Ground2D: Asset = {
   name: 'Ground2D',
-  description: `## Ground 2D
+
+  description: `## Ground 2D tile
 
 A simple 2D ground asset.
 
 Pixel art style ground with a flat perspective, pseudo isometric.
 
+The asset is rendered as a tile and is visible from the top.
+
+Rendering can be procedural with variations in texture, details, and edge highlights based on the x, y, width, and height.
+
+It must be simple and efficient to render in a 2D game engine, because it will called many times to fill the ground.
+
+Cannot use random functions, because the asset must be consistent when called multiple times.
+
+There should be no border around the tile, so it can be seamlessly tiled with other tiles.
+
+### Style
+
+Ground in africa when there is no rain, no grass, just a flat ground.
+
 ### Stances
 
-- **default**: Default stance, just a ground.
-  
-`,
+- **default**: Default stance, just a ground, not animated.
+  `,
+
   stances: ['default'],
-  render: (ctx, x, y, width, height, progress, stance) => {
-    renderGround(ctx, x, y, width, height, progress, stance);
+
+  render: (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    progress: number,
+    stance: string,
+    direction: 'left' | 'right',
+  ): void => {
+    // Base colors for African dry ground
+    const baseColor = '#c2a378'; // Sandy brown base
+    const detailColor = '#a08561'; // Darker brown for cracks and details
+    const highlightColor = 'rgba(255,248,220,0.2)'; // Light cream highlight
+    const stoneBaseColor = '#8c7354'; // Darker brown for stones
+
+    // Draw base ground color with slight variation based on position
+    const tileBaseColor = getColorVariation(x, y, baseColor, 0.05);
+    ctx.fillStyle = tileBaseColor;
+    ctx.fillRect(x, y, width, height);
+
+    // Add texture pattern
+    drawTexturePattern(ctx, x, y, width, height, baseColor);
+
+    // Add some ground details (cracks)
+    // Use positional variation to determine details
+    const detailDensity = 3 + Math.floor(getPositionalVariation(x, y, 13) * 3);
+
+    for (let i = 0; i < detailDensity; i++) {
+      drawGroundDetail(ctx, x, y, width, height, getColorVariation(x + i, y + i, detailColor, 0.1));
+    }
+
+    // Add small stones/pebbles
+    drawStones(ctx, x, y, width, height, stoneBaseColor);
+
+    // Add edge highlights for subtle depth
+    drawEdgeHighlights(ctx, x, y, width, height, highlightColor);
   },
 };
