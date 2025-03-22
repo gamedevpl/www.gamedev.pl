@@ -12,20 +12,20 @@ const getPositionalVariation = (x: number, y: number, seed: number = 1): number 
 
 /**
  * Get a color variation based on position
- * Returns a slightly different shade of the base color
+ * Returns a slightly different shade of the base color with increased contrast
  */
-const getColorVariation = (x: number, y: number, baseColor: string, variationAmount: number = 0.1): string => {
+const getColorVariation = (x: number, y: number, baseColor: string, variationAmount: number = 0.15): string => {
   // Parse the base color
   const r = parseInt(baseColor.slice(1, 3), 16);
   const g = parseInt(baseColor.slice(3, 5), 16);
   const b = parseInt(baseColor.slice(5, 7), 16);
 
-  // Get variation values
+  // Get variation values with increased range for more pronounced variation
   const v1 = getPositionalVariation(x, y, 1);
   const v2 = getPositionalVariation(x, y, 2);
   const v3 = getPositionalVariation(x, y, 3);
 
-  // Apply variations
+  // Apply variations with higher contrast
   const rVar = Math.max(0, Math.min(255, Math.round(r + (v1 - 0.5) * 2 * variationAmount * r)));
   const gVar = Math.max(0, Math.min(255, Math.round(g + (v2 - 0.5) * 2 * variationAmount * g)));
   const bVar = Math.max(0, Math.min(255, Math.round(b + (v3 - 0.5) * 2 * variationAmount * b)));
@@ -35,38 +35,71 @@ const getColorVariation = (x: number, y: number, baseColor: string, variationAmo
     .toString(16)
     .padStart(2, '0')}`;
 };
-
 /**
- * Draw a crack/detail on the ground based on position
+ * Draw cracks in the dry ground based on position
+ * More prominent to simulate dry, cracked earth
  */
-const drawGroundDetail = (
+const drawGroundCracks = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   width: number,
   height: number,
-  detailColor: string,
+  crackColor: string,
 ): void => {
   const v1 = getPositionalVariation(x, y, 4);
   const v2 = getPositionalVariation(x, y, 5);
 
-  // Only draw details sometimes based on positional variation
-  if (v1 > 0.7) {
+  // Increased probability of drawing cracks (0.5 instead of 0.7)
+  // to make cracks more common in dry earth
+  if (v1 > 0.5) {
     const startX = x + width * (0.2 + v1 * 0.6);
     const startY = y + height * (0.2 + v2 * 0.6);
-    const length = Math.min(width, height) * (0.1 + v2 * 0.2);
+
+    // Increased crack length for more prominent appearance
+    const length = Math.min(width, height) * (0.15 + v2 * 0.25);
     const angle = v1 * Math.PI * 2;
 
+    // Draw main crack
     ctx.save();
-    ctx.strokeStyle = detailColor;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = crackColor;
+    ctx.lineWidth = 1.5; // Increased line width for visibility
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineTo(startX + Math.cos(angle) * length, startY + Math.sin(angle) * length);
     ctx.stroke();
+
+    // Add small branching cracks for more realistic appearance
+    if (v2 > 0.6) {
+      const branchAngle1 = angle + (v1 - 0.5) * Math.PI * 0.5;
+      const branchAngle2 = angle - (v1 - 0.5) * Math.PI * 0.5;
+      const branchLength = length * 0.6;
+
+      ctx.lineWidth = 1; // Thinner for branch cracks
+      ctx.beginPath();
+      ctx.moveTo(startX + Math.cos(angle) * (length * 0.5), startY + Math.sin(angle) * (length * 0.5));
+      ctx.lineTo(
+        startX + Math.cos(angle) * (length * 0.5) + Math.cos(branchAngle1) * branchLength,
+        startY + Math.sin(angle) * (length * 0.5) + Math.sin(branchAngle1) * branchLength,
+      );
+      ctx.stroke();
+
+      // Second branch only sometimes
+      if (v1 > 0.7) {
+        ctx.beginPath();
+        ctx.moveTo(startX + Math.cos(angle) * (length * 0.3), startY + Math.sin(angle) * (length * 0.3));
+        ctx.lineTo(
+          startX + Math.cos(angle) * (length * 0.3) + Math.cos(branchAngle2) * (branchLength * 0.7),
+          startY + Math.sin(angle) * (length * 0.3) + Math.sin(branchAngle2) * (branchLength * 0.7),
+        );
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 };
+
 /**
  * Draw edge highlights for the ground tile
  */
@@ -115,47 +148,86 @@ const drawEdgeHighlights = (
   ctx.fillStyle = rightGradient;
   ctx.fillRect(x + width - edgeWidth * 3, y, edgeWidth * 3, height);
 };
-
 /**
- * Draw small stones/pebbles on the ground
+ * Draw rocks on the ground instead of simple stones
+ * More varied in shape and size to look like natural rocks in dry soil
  */
-const drawStones = (
+const drawRocks = (
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   width: number,
   height: number,
-  stoneBaseColor: string,
+  rockBaseColor: string,
 ): void => {
-  // Generate a few stones based on position
-  const stoneCount = Math.floor(getPositionalVariation(x, y, 6) * 4) + 1;
+  // Generate rocks based on position
+  const rockCount = Math.floor(getPositionalVariation(x, y, 6) * 3) + 1;
 
-  for (let i = 0; i < stoneCount; i++) {
-    const stoneX = x + width * getPositionalVariation(x + i, y, 7);
-    const stoneY = y + height * getPositionalVariation(x, y + i, 8);
-    const stoneSize = Math.min(width, height) * (0.01 + getPositionalVariation(x + i, y + i, 9) * 0.02);
+  for (let i = 0; i < rockCount; i++) {
+    const rockX = x + width * getPositionalVariation(x + i, y, 7);
+    const rockY = y + height * getPositionalVariation(x, y + i, 8);
 
-    // Vary stone color slightly
-    const stoneColor = getColorVariation(stoneX, stoneY, stoneBaseColor, 0.15);
+    // Vary rock size more significantly for natural appearance
+    const rockSize = Math.min(width, height) * (0.015 + getPositionalVariation(x + i, y + i, 9) * 0.035);
 
-    ctx.fillStyle = stoneColor;
+    // Generate a rock color that varies more to simulate different minerals
+    const rockColor = getColorVariation(rockX, rockY, rockBaseColor, 0.25);
+
+    ctx.save();
+
+    // Draw irregular rock shape instead of perfect circle
+    ctx.fillStyle = rockColor;
     ctx.beginPath();
-    ctx.arc(stoneX, stoneY, stoneSize, 0, Math.PI * 2);
+
+    // Create irregular polygon for rock
+    const points = 5 + Math.floor(getPositionalVariation(rockX, rockY, 13) * 3);
+    const startAngle = getPositionalVariation(rockX, rockY, 14) * Math.PI * 2;
+
+    for (let p = 0; p < points; p++) {
+      const angle = startAngle + (p * Math.PI * 2) / points;
+      const pointRadius = rockSize * (0.8 + getPositionalVariation(rockX + p, rockY, 15) * 0.4);
+
+      if (p === 0) {
+        ctx.moveTo(rockX + Math.cos(angle) * pointRadius, rockY + Math.sin(angle) * pointRadius);
+      } else {
+        ctx.lineTo(rockX + Math.cos(angle) * pointRadius, rockY + Math.sin(angle) * pointRadius);
+      }
+    }
+
+    ctx.closePath();
     ctx.fill();
 
-    // Add a small highlight to the stone
-    const highlightSize = stoneSize * 0.4;
-    const highlightX = stoneX - stoneSize * 0.3;
-    const highlightY = stoneY - stoneSize * 0.3;
+    // Add subtle shading for 3D effect
+    const shadingAngle = Math.PI * 0.75; // Light from top-left
+    const shadingSide = ctx.createLinearGradient(
+      rockX,
+      rockY,
+      rockX + Math.cos(shadingAngle) * rockSize * 2,
+      rockY + Math.sin(shadingAngle) * rockSize * 2,
+    );
 
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    shadingSide.addColorStop(0, 'rgba(0,0,0,0.3)');
+    shadingSide.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = shadingSide;
+    ctx.fill();
+
+    // Add a subtle highlight to the rock
+    const highlightX = rockX - rockSize * 0.3;
+    const highlightY = rockY - rockSize * 0.3;
+    const highlightSize = rockSize * 0.3;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath();
     ctx.arc(highlightX, highlightY, highlightSize, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.restore();
   }
 };
+
 /**
- * Draw texture pattern on the ground
+ * Draw texture pattern on the ground to simulate soil particles
  */
 const drawTexturePattern = (
   ctx: CanvasRenderingContext2D,
@@ -163,28 +235,98 @@ const drawTexturePattern = (
   y: number,
   width: number,
   height: number,
-  baseColor: string,
 ): void => {
-  // Create a subtle texture using small dots/specs
-  const dotDensity = Math.min(width, height) * 0.15;
-  const dotSize = Math.max(1, Math.min(width, height) * 0.005);
+  // Create a more varied texture for dry earth appearance
+  const dotDensity = Math.min(width, height) * 0.2; // Increased density
 
-  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  // Different sizes of soil particles
+  const smallDotSize = Math.max(1, Math.min(width, height) * 0.003);
+  const mediumDotSize = Math.max(1, Math.min(width, height) * 0.006);
+
+  // Draw small dark specs (soil particles)
+  ctx.fillStyle = 'rgba(0,0,0,0.07)';
 
   for (let i = 0; i < dotDensity; i++) {
     for (let j = 0; j < dotDensity; j++) {
+      const dotX = x + (width / dotDensity) * i + getPositionalVariation(x + i, y, 11) * (width / dotDensity);
+      const dotY = y + (height / dotDensity) * j + getPositionalVariation(x, y + j, 12) * (height / dotDensity);
+
       // Use positional variation to determine if we draw a dot here
-      const drawDot = getPositionalVariation(x + i, y + j, 10) > 0.7;
+      const drawDot = getPositionalVariation(x + i, y + j, 10) > 0.4; // Increased probability
 
       if (drawDot) {
-        const dotX = x + (width / dotDensity) * i + getPositionalVariation(x + i, y, 11) * (width / dotDensity);
-        const dotY = y + (height / dotDensity) * j + getPositionalVariation(x, y + j, 12) * (height / dotDensity);
+        // Vary the dot size for more natural look
+        const dotSize = getPositionalVariation(dotX, dotY, 16) > 0.7 ? mediumDotSize : smallDotSize;
 
         ctx.beginPath();
         ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+  }
+
+  // Add some lighter specs for sand/dust particles
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+
+  for (let i = 0; i < dotDensity * 0.7; i++) {
+    for (let j = 0; j < dotDensity * 0.7; j++) {
+      const dotX =
+        x + (width / (dotDensity * 0.7)) * i + getPositionalVariation(x + i + 100, y, 17) * (width / dotDensity);
+      const dotY =
+        y + (height / (dotDensity * 0.7)) * j + getPositionalVariation(x, y + j + 100, 18) * (height / dotDensity);
+
+      // Less frequent light particles
+      const drawLightDot = getPositionalVariation(x + i + 50, y + j + 50, 19) > 0.75;
+
+      if (drawLightDot) {
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, smallDotSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+};
+/**
+ * Create subtle height variations to simulate uneven ground
+ */
+const drawHeightVariation = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void => {
+  // Create 2-3 subtle elevation changes per tile
+  const variationCount = Math.floor(getPositionalVariation(x, y, 20) * 2) + 1;
+
+  for (let i = 0; i < variationCount; i++) {
+    // Position of the height variation
+    const varX = x + width * getPositionalVariation(x + i * 10, y, 21);
+    const varY = y + height * getPositionalVariation(x, y + i * 10, 22);
+
+    // Size of the variation area
+    const varSize = Math.min(width, height) * (0.2 + getPositionalVariation(x + i, y + i, 23) * 0.3);
+
+    // Create a subtle gradient for height difference
+    const gradient = ctx.createRadialGradient(varX, varY, 0, varX, varY, varSize);
+
+    // Determine if this is a slight elevation or depression
+    const isElevated = getPositionalVariation(varX, varY, 24) > 0.5;
+
+    if (isElevated) {
+      // Lighter area for slight elevation
+      gradient.addColorStop(0, 'rgba(255,255,255,0.07)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    } else {
+      // Darker area for slight depression
+      gradient.addColorStop(0, 'rgba(0,0,0,0.07)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(varX, varY, varSize, 0, Math.PI * 2);
+    ctx.fill();
   }
 };
 
@@ -221,40 +363,50 @@ Ground in africa when there is no rain, no grass, just a flat ground.
 
   stances: ['default'],
 
-  render: (
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    progress: number,
-    stance: string,
-    direction: 'left' | 'right',
-  ): void => {
-    // Base colors for African dry ground
-    const baseColor = '#c2a378'; // Sandy brown base
-    const detailColor = '#a08561'; // Darker brown for cracks and details
-    const highlightColor = 'rgba(255,248,220,0.2)'; // Light cream highlight
-    const stoneBaseColor = '#8c7354'; // Darker brown for stones
+  render: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void => {
+    // Improved base colors for African dry ground - more reddish and varied
+    const baseColor = '#b3865a'; // More reddish brown base for dry African soil
+    const detailColor = '#8b5e3c'; // Darker brown for cracks and details
+    const highlightColor = 'rgba(255,248,220,0.15)'; // Light cream highlight
+    const rockBaseColor = '#6d4c33'; // Darker brown for rocks
 
-    // Draw base ground color with slight variation based on position
-    const tileBaseColor = getColorVariation(x, y, baseColor, 0.05);
+    // Add slight soil color variations across the tile for more natural appearance
+    const soilVariation = getPositionalVariation(x, y, 25);
+
+    // Choose between different soil types based on position for more varied terrain
+    let tileBaseColor;
+    if (soilVariation < 0.3) {
+      // More reddish soil
+      tileBaseColor = getColorVariation(x, y, '#c27749', 0.1);
+    } else if (soilVariation < 0.7) {
+      // Standard brown soil
+      tileBaseColor = getColorVariation(x, y, baseColor, 0.1);
+    } else {
+      // More grayish soil
+      tileBaseColor = getColorVariation(x, y, '#a79078', 0.1);
+    }
+
+    // Draw base ground color
     ctx.fillStyle = tileBaseColor;
     ctx.fillRect(x, y, width, height);
 
-    // Add texture pattern
-    drawTexturePattern(ctx, x, y, width, height, baseColor);
+    // Add subtle height variations
+    drawHeightVariation(ctx, x, y, width, height);
 
-    // Add some ground details (cracks)
+    // Add texture pattern with improved soil appearance
+    drawTexturePattern(ctx, x, y, width, height);
+
+    // Add ground cracks - more prominent now for dry earth appearance
     // Use positional variation to determine details
-    const detailDensity = 3 + Math.floor(getPositionalVariation(x, y, 13) * 3);
+    const crackDensity = 4 + Math.floor(getPositionalVariation(x, y, 13) * 4);
 
-    for (let i = 0; i < detailDensity; i++) {
-      drawGroundDetail(ctx, x, y, width, height, getColorVariation(x + i, y + i, detailColor, 0.1));
+    for (let i = 0; i < crackDensity; i++) {
+      // More pronounced cracks with darker color
+      drawGroundCracks(ctx, x, y, width, height, getColorVariation(x + i, y + i, detailColor, 0.15));
     }
 
-    // Add small stones/pebbles
-    drawStones(ctx, x, y, width, height, stoneBaseColor);
+    // Add rocks instead of simple stones/pebbles
+    drawRocks(ctx, x, y, width, height, rockBaseColor);
 
     // Add edge highlights for subtle depth
     drawEdgeHighlights(ctx, x, y, width, height, highlightColor);

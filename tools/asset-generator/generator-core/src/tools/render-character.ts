@@ -12,6 +12,7 @@ import * as os from 'os';
  * Renders an asset to canvas and saves it as PNG file in the asset directory
  */
 export async function renderAsset(
+  assetName: string,
   asset: Asset,
   assetPath: string,
 ): Promise<
@@ -43,7 +44,7 @@ export async function renderAsset(
 
       // Create output file path
       const assetDir = path.dirname(assetPath);
-      const outputPath = path.join(assetDir, `${asset.name.toLowerCase()}-${stance}.png`);
+      const outputPath = path.join(assetDir, `${assetName.toLowerCase()}-${stance}.png`);
 
       // Save the buffer as PNG file
       await fs.writeFile(outputPath, buffer);
@@ -104,14 +105,8 @@ function log(message: string, verbosity: VerbosityLevel, requiredLevel: Verbosit
   }
 }
 
-/**
- * Renders videos for each stance of an asset in parallel
- * @param asset The asset to render
- * @param assetPath Path to the asset's source file
- * @param options Video rendering options
- * @returns Array of video render results
- */
 export async function renderAssetVideos(
+  assetName: string,
   asset: Asset,
   assetPath: string,
   options: VideoRenderOptions = {},
@@ -132,7 +127,7 @@ export async function renderAssetVideos(
 
     // Process all stances in parallel
     const renderPromises = asset.stances.map((stance) =>
-      renderStanceVideo(asset, assetPath, stance, tempDir, {
+      renderStanceVideo(assetName, asset, assetPath, stance, tempDir, {
         fps,
         duration,
         logProgress,
@@ -156,16 +151,8 @@ export async function renderAssetVideos(
   }
 }
 
-/**
- * Renders a video for a specific stance
- * @param asset The asset to render
- * @param assetPath Path to the asset's source file
- * @param stance The stance to render
- * @param tempDir Temporary directory for frame storage
- * @param options Video rendering options
- * @returns Video render result
- */
 async function renderStanceVideo(
+  assetName: string,
   asset: Asset,
   assetPath: string,
   stance: string,
@@ -190,7 +177,7 @@ async function renderStanceVideo(
 
   // Create output path for video
   const assetDir = path.dirname(assetPath);
-  const videoFileName = `${asset.name.toLowerCase()}-${stance}.mp4`;
+  const videoFileName = `${assetName.toLowerCase()}-${stance}.mp4`;
   const videoPath = path.join(assetDir, videoFileName);
 
   // Create video from frames

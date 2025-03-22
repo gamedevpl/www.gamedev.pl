@@ -108,14 +108,14 @@ export async function runAssetGenerationPipeline(
   // Load current asset if exists
   let currentAsset = await loadAsset(assetPath);
   let currentContent: string | null = null;
-  
+
   // Store the original description when regenerating from scratch
   let originalDescription: string | undefined;
 
   if (currentAsset) {
     console.log('Current asset loaded successfully');
     currentContent = await fs.readFile(assetPath, 'utf-8');
-    
+
     // If fromScratch is true, preserve the description but set content to null
     if (options.fromScratch) {
       console.log('Regenerating asset from scratch, keeping description but starting over implementation');
@@ -159,7 +159,7 @@ export async function runAssetGenerationPipeline(
   // Render current asset if exists and not skipping render
   let renderingResult: { stance: string; mediaType: string; dataUrl: string }[] = [];
   if (currentAsset && (!options.skipRender || options.renderOnly)) {
-    renderingResult = await renderAsset(currentAsset, assetPath);
+    renderingResult = await renderAsset(assetName, currentAsset, assetPath);
     console.log('Asset rendered successfully');
 
     // Generate videos for each stance if not skipped
@@ -167,7 +167,7 @@ export async function runAssetGenerationPipeline(
       try {
         console.log('Generating videos for each stance...');
         renderingResult.push(
-          ...(await renderAssetVideos(currentAsset, assetPath, {
+          ...(await renderAssetVideos(assetName, currentAsset, assetPath, {
             fps: options.videoOptions?.fps,
             duration: options.videoOptions?.duration,
             verbosity: options.videoOptions?.verbosity || 'minimal',
@@ -288,13 +288,13 @@ export async function runAssetGenerationPipeline(
 
   if (!options.skipRender && !options.lintOnly && !options.renderOnly) {
     console.log('\nRendering improved asset...');
-    await renderAsset(currentAsset, assetPath);
+    await renderAsset(assetName, currentAsset, assetPath);
 
     // Generate videos for the improved asset if not skipped
     if (!options.skipVideos) {
       try {
         console.log('Generating videos for improved asset...');
-        await renderAssetVideos(currentAsset, assetPath, {
+        await renderAssetVideos(assetName, currentAsset, assetPath, {
           fps: options.videoOptions?.fps,
           duration: options.videoOptions?.duration,
           verbosity: options.videoOptions?.verbosity || 'minimal',
