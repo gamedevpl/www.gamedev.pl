@@ -20,6 +20,7 @@
         *   ✅ Fixed Lion Movement on Mouse Release
         *   ✅ Improved Lion Movement and Prey Catching
         *   ✅ Hunger Mechanics
+        *   ✅ Enhanced Lion Direction Rendering with State-Based Approach
             *   ✅ Implemented hunger state
             *   ✅ Implemented hunger decay and starvation
             *   ✅ Added visual feedback for hunger levels

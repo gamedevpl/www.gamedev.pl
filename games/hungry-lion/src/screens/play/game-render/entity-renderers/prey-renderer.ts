@@ -1,24 +1,34 @@
 import { PreyEntity } from '../../game-world/entities/entities-types';
 
-import {Prey2d} from '../../../../../../../tools/asset-generator/generator-assets/src/prey-2d/prey-2d'
+import { Prey2d } from '../../../../../../../tools/asset-generator/generator-assets/src/prey-2d/prey-2d';
 
 // Constants for rendering
 // const CRITICAL_HUNGER = 20;
 // const CRITICAL_THIRST = 15;
 
 export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
+  // stances: 'standing', 'walking', 'running', 'grazing', 'alert', 'carrion', 'drinking', 'eating'
   let stance;
   if (prey.stateMachine[0] === 'PREY_MOVING') {
     stance = 'running';
-  // } else if (prey.stateMachine[0] === 'PREY_EATING') {
-  //   stance = 'eating';
-  // } else if (prey.stateMachine[0] === 'PREY_DRINKING') {
-  //   stance = 'drinking';
+    // } else if (prey.stateMachine[0] === 'PREY_EATING') {
+    //   stance = 'eating';
+    // } else if (prey.stateMachine[0] === 'PREY_DRINKING') {
+    //   stance = 'drinking';
   } else {
     stance = 'standing';
   }
 
-  Prey2d.render(ctx, prey.position.x, prey.position.y, 40, 40, Date.now() % 1000 / 1000, stance, prey.velocity.x < 0 ? 'left' : 'right');
+  Prey2d.render(
+    ctx,
+    prey.position.x,
+    prey.position.y,
+    40,
+    40,
+    (Date.now() % 1000) / 1000,
+    stance,
+    prey.velocity.x < 0 ? 'left' : 'right',
+  );
   // ctx.save();
   // ctx.translate(prey.position.x, prey.position.y);
 

@@ -2,44 +2,53 @@ import { LionEntity } from '../../game-world/entities/entities-types';
 import { LION_WIDTH } from '../../game-world/game-world-consts';
 import { vectorLength } from '../../game-world/utils/math-utils';
 
-import {Lion2d} from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d'
+import { Lion2d } from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
+
+function getLionStance(stateType: string, isMoving: boolean, isEating: boolean): string {
+  if (isEating) {
+    return 'eating';
+  }
+
+  switch (stateType) {
+    case 'LION_IDLE':
+      return isMoving ? 'walking' : 'standing';
+    case 'LION_MOVING_TO_TARGET':
+      return 'walking';
+    case 'LION_CHASING':
+      return 'running';
+    case 'LION_AMBUSH':
+      return 'ambushing';
+    default:
+      return 'standing';
+  }
+}
+
+function getLionFacingDirection(lion: LionEntity): 'left' | 'right' {
+  return lion.targetDirection > -Math.PI / 2 && lion.targetDirection < Math.PI / 2 ? 'right' : 'left';
+}
 
 export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
   const width = LION_WIDTH;
   const height = LION_WIDTH;
 
   const position = lion.position;
-  const isMoving = vectorLength(lion.velocity) > 0;
+  const isMoving = vectorLength(lion.velocity) > 0.1;
 
-  let stance;
-  if (isMoving) {
-    stance = 'walking';
-  } else{
-    stance = 'standing';
-  }    
+  // Get the current state type from the lion's state machine
+  const currentStateType = lion.stateMachine?.[0] || 'LION_IDLE';
 
-  Lion2d.render(ctx, position.x, position.y, width, height, Date.now() % 1000 / 1000, stance, lion.velocity.x < 0 ? 'left' : 'right');
+  // Check if the lion is eating (when hunger level is changing)
+  const isEating = lion.hungerLevel < 100 && lion.target.entityId !== undefined && !isMoving;
 
-  // ctx.save();
-  // ctx.translate(position.x, position.y);
-  // ctx.rotate(lion.direction);
+  // Determine the appropriate stance based on state and movement
+  const stance = getLionStance(currentStateType, isMoving, isEating);
 
-  // // Draw the lion's body (triangle)
-  // ctx.beginPath();
-  // ctx.moveTo(width / 2, 0);
-  // ctx.lineTo(-width / 2, -height / 2);
-  // ctx.lineTo(-width / 2, height / 2);
-  // ctx.closePath();
+  // Determine the facing direction using the state-based approach
+  const facingDirection = getLionFacingDirection(lion);
 
-  // const hungerPercentage = lion.hungerLevel / 100;
-  // const intensity = isMoving ? '255' : '200';
-  // ctx.fillStyle = `rgba(${intensity}, ${intensity}, 0, ${hungerPercentage})`;
-  // ctx.fill();
+  // Determine animation frame based on time
+  const animationTime = (Date.now() % 1000) / 1000;
 
-  // // Add border
-  // ctx.strokeStyle = 'black';
-  // ctx.lineWidth = 2;
-  // ctx.stroke();
-
-  // ctx.restore();
+  // Render the lion with the appropriate stance and direction
+  Lion2d.render(ctx, position.x, position.y, width, height, animationTime, stance, facingDirection);
 }
