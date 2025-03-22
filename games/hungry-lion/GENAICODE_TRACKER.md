@@ -38,6 +38,15 @@
             *   ☐ Add visual feedback for ambush state
             *   ☐ Implement reduced visibility effect on prey behavior
             *   ☐ Add particle effects for speed boost
+        *   ✅ Eating Mechanics
+            *   ✅ Implemented dedicated LION_EATING state
+            *   ✅ Added state transitions in lion-carrion interaction
+            *   ✅ Updated lion renderer to use state-based eating detection
+            *   ✅ Improved visual feedback during eating
+            *   ✅ Added proper state transitions when eating is interrupted
+            *   ✅ Implemented carrion ID tracking in eating state
+            *   ✅ Added return to previous state when eating is complete
+            *   ✅ Ensured proper animation during eating
         *   ☐ Stealth movement mechanics
         *   ✅ Action Bar Implementation
             *   ✅ Basic action bar UI

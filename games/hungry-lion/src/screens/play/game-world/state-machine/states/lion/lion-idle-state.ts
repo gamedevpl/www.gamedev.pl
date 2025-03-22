@@ -1,4 +1,7 @@
 import { LionEntity } from '../../../entities/entities-types';
+import { MAX_EATING_DISTANCE } from '../../../game-world-consts';
+import { getCarrion } from '../../../game-world-query';
+import { vectorDistance } from '../../../utils/math-utils';
 import { BaseStateData, State } from '../../state-machine-types';
 
 /**
@@ -49,6 +52,18 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
     if (entity.actions.ambush.enabled) {
       return {
         nextState: 'LION_AMBUSH',
+        data: { enteredAt: context.updateContext.gameState.time },
+      };
+    }
+
+    // Check if there is carrion nearby
+    const carrion = getCarrion(context.updateContext.gameState).filter((c) => {
+      const distance = vectorDistance(context.entity.position, c.position);
+      return distance < MAX_EATING_DISTANCE && c.food > 0;
+    });
+    if (carrion.length > 0) {
+      return {
+        nextState: 'LION_EATING',
         data: { enteredAt: context.updateContext.gameState.time },
       };
     }

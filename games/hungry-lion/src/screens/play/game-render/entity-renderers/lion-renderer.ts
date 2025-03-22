@@ -4,11 +4,7 @@ import { vectorLength } from '../../game-world/utils/math-utils';
 
 import { Lion2d } from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
 
-function getLionStance(stateType: string, isMoving: boolean, isEating: boolean): string {
-  if (isEating) {
-    return 'eating';
-  }
-
+function getLionStance(stateType: string, isMoving: boolean): string {
   switch (stateType) {
     case 'LION_IDLE':
       return isMoving ? 'walking' : 'standing';
@@ -18,6 +14,8 @@ function getLionStance(stateType: string, isMoving: boolean, isEating: boolean):
       return 'running';
     case 'LION_AMBUSH':
       return 'ambushing';
+    case 'LION_EATING':
+      return 'eating';
     default:
       return 'standing';
   }
@@ -37,11 +35,8 @@ export function drawLion(ctx: CanvasRenderingContext2D, lion: LionEntity) {
   // Get the current state type from the lion's state machine
   const currentStateType = lion.stateMachine?.[0] || 'LION_IDLE';
 
-  // Check if the lion is eating (when hunger level is changing)
-  const isEating = lion.hungerLevel < 100 && lion.target.entityId !== undefined && !isMoving;
-
   // Determine the appropriate stance based on state and movement
-  const stance = getLionStance(currentStateType, isMoving, isEating);
+  const stance = getLionStance(currentStateType, isMoving);
 
   // Determine the facing direction using the state-based approach
   const facingDirection = getLionFacingDirection(lion);
