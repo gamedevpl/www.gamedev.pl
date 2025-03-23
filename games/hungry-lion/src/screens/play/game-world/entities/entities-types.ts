@@ -1,4 +1,5 @@
 import { StateData, StateType } from '../state-machine/state-machine-types';
+import { HunterStateType } from '../state-machine/states/hunter';
 import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
@@ -82,7 +83,7 @@ export interface HunterEntity extends Entity {
   currentPatrolPointIndex: number;
   /** Radius around each patrol point that the hunter considers 'close enough' */
   patrolRadius: number;
-  stateMachine: [StateType, StateData];
+  stateMachine: [HunterStateType, StateData];
 }
 
 export interface CarrionEntity extends Entity {
