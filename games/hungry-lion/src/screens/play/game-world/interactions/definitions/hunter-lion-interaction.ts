@@ -1,6 +1,7 @@
 import { InteractionDefinition } from '../interactions-types';
 import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
 import { LionEntity, HunterEntity } from '../../entities/entities-types';
+import { addDamageNotification } from '../../notifications/notifications-update';
 
 // Constants for lion-hunter interaction
 const HEALTH_DECREMENT = 2; // Damage done to hunter by lion attack
@@ -27,6 +28,13 @@ export const HUNTER_LION_INTERACTION: InteractionDefinition = {
 
     // Lion attacks hunter
     hunter.health = Math.max(hunter.health - HEALTH_DECREMENT, 0);
+
+    // Create damage notification
+    addDamageNotification(
+      updateContext.gameState,
+      hunter.position,
+      HEALTH_DECREMENT
+    );
 
     // Lion gains a small amount of hunger back from attacking
     lion.hungerLevel = Math.min(lion.hungerLevel + HUNGER_INCREASE, 100);

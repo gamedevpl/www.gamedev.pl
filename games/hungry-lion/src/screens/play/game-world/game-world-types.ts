@@ -1,5 +1,6 @@
 import { Entities } from './entities/entities-types';
 import { Environment } from './environment/environment-types';
+import { NotificationsState } from './notifications/notifications-types';
 
 export type GameWorldState = {
   /**
@@ -11,6 +12,11 @@ export type GameWorldState = {
    * Environment state.
    */
   environment: Environment;
+
+  /**
+   * Notifications state.
+   */
+  notifications: NotificationsState;
 
   /**
    * Time since the game started in milliseconds.

@@ -3,6 +3,7 @@ import { getEntityById } from '../../../game-world-query';
 import { shootLion } from '../../../entities/hunter-update';
 import { vectorDistance, vectorSubtract, vectorNormalize } from '../../../utils/math-utils';
 import { BaseStateData, State } from '../../state-machine-types';
+import { addHitNotification, addMissNotification } from '../../../notifications/notifications-update';
 
 // Constants for shooting behavior
 const SHOT_INTERVAL = 1000; // Time between shots in milliseconds
@@ -83,14 +84,25 @@ export const HUNTER_SHOOTING_STATE: State<HunterEntity, HunterShootingStateData>
       // Attempt to shoot the lion
       const hitSuccessful = shootLion(entity, targetLion, updateContext);
 
+      // Create appropriate notification based on hit result
+      if (hitSuccessful) {
+        // Create hit notification
+        addHitNotification(updateContext.gameState, targetLion.position);
+
+        // If lion is hit, it might change behavior, so we can reset the shooting duration
+        data.enteredAt = currentTime;
+      } else {
+        // Create miss notification - position it slightly off from the lion
+        const missOffset = {
+          x: targetLion.position.x + (Math.random() * 40 - 20),
+          y: targetLion.position.y + (Math.random() * 40 - 20),
+        };
+        addMissNotification(updateContext.gameState, missOffset);
+      }
+
       // Update shooting state data
       data.lastShotTime = currentTime;
       data.shotsAttempted++;
-
-      // If lion is hit, it might change behavior, so we can reset the shooting duration
-      if (hitSuccessful) {
-        data.enteredAt = currentTime;
-      }
     }
 
     // If out of ammunition, transition to reloading

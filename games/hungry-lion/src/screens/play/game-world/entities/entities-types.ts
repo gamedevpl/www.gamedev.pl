@@ -76,6 +76,12 @@ export interface HunterEntity extends Entity {
   targetLionId?: EntityId;
   /** Last time when the hunter fired a shot */
   lastShotTime?: number;
+  /** Array of patrol points that the hunter will move between */
+  patrolPoints: Vector2D[];
+  /** Index of the current patrol point */
+  currentPatrolPointIndex: number;
+  /** Radius around each patrol point that the hunter considers 'close enough' */
+  patrolRadius: number;
   stateMachine: [StateType, StateData];
 }
 

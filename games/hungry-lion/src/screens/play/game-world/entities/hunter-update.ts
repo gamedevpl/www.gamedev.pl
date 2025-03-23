@@ -4,6 +4,7 @@ import { createEntity } from './entities-update';
 import { getLions } from '../game-world-query';
 import { vectorDistance, vectorAngleBetween, vectorNormalize, vectorSubtract } from '../utils/math-utils';
 import { createHunterStateMachine } from '../state-machine/states/hunter';
+import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world-consts';
 
 // Constants for hunter behavior
 const HEALTH_DECREASE_RATE = 0.001; // Rate at which health decreases per millisecond when hungry
@@ -15,6 +16,9 @@ const AMBUSH_DETECTION_MODIFIER = 0.3; // Modifier for detecting lions in ambush
 const MOVING_ACCURACY_PENALTY = 0.4; // Penalty to accuracy when lion is moving
 const DISTANCE_ACCURACY_MODIFIER = 0.5; // How much distance affects accuracy
 const LION_DAMAGE = 15; // Damage done to lion when hit
+const DEFAULT_PATROL_RADIUS = 50; // Default radius for patrol points
+const NUM_PATROL_POINTS = 3; // Number of patrol points to generate
+const PATROL_MARGIN = 100; // Margin from world edges for patrol points
 
 /**
  * Updates hunter-specific state
@@ -158,12 +162,51 @@ export function shootLion(hunter: HunterEntity, lion: LionEntity, updateContext:
 }
 
 /**
+ * Generates a set of patrol points for a hunter
+ * @param startPosition The starting position for generating patrol points
+ * @param numPoints Number of patrol points to generate
+ * @param maxDistance Maximum distance from start position
+ * @returns Array of patrol points
+ */
+export function generatePatrolPoints(
+  startPosition: { x: number, y: number },
+  numPoints: number = NUM_PATROL_POINTS,
+  maxDistance: number = 300
+): { x: number, y: number }[] {
+  const patrolPoints: { x: number, y: number }[] = [];
+  
+  // Always include the start position as the first patrol point
+  patrolPoints.push({ ...startPosition });
+  
+  // Generate additional random points
+  for (let i = 1; i < numPoints; i++) {
+    // Generate a point within maxDistance of the start position
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * maxDistance;
+    
+    let x = startPosition.x + Math.cos(angle) * distance;
+    let y = startPosition.y + Math.sin(angle) * distance;
+    
+    // Ensure the point is within the game world bounds
+    x = Math.max(PATROL_MARGIN, Math.min(GAME_WORLD_WIDTH - PATROL_MARGIN, x));
+    y = Math.max(PATROL_MARGIN, Math.min(GAME_WORLD_HEIGHT - PATROL_MARGIN, y));
+    
+    patrolPoints.push({ x, y });
+  }
+  
+  return patrolPoints;
+}
+
+/**
  * Creates a new hunter entity
  * @param state Entities state
  * @param position Initial position
  * @returns The created hunter entity
  */
 export function spawnHunter(state: Entities, position: { x: number, y: number }): HunterEntity {
+  // Generate patrol points for the hunter
+  const patrolPoints = generatePatrolPoints(position);
+  
   return createEntity<HunterEntity>(state, 'hunter', {
     position: position,
     health: 100,
@@ -171,6 +214,9 @@ export function spawnHunter(state: Entities, position: { x: number, y: number })
     reloadTime: DEFAULT_RELOAD_TIME,
     detectionRange: DEFAULT_DETECTION_RANGE,
     shootingAccuracy: DEFAULT_SHOOTING_ACCURACY,
+    patrolPoints: patrolPoints,
+    currentPatrolPointIndex: 0,
+    patrolRadius: DEFAULT_PATROL_RADIUS,
     stateMachine: createHunterStateMachine(),
   });
 }

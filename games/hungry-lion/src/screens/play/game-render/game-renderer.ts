@@ -8,6 +8,7 @@ import { drawLion } from './entity-renderers/lion-renderer';
 import { drawCarrion } from './entity-renderers/carrion-renderer';
 import { drawHunter } from './entity-renderers/hunter-renderer';
 import { renderEnvironment } from './environment-renderer';
+import { drawAllNotifications } from './notifications/combat-notification';
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -33,6 +34,9 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Render all lions
   getLions(world).forEach((lion) => drawLion(ctx, world, lion));
+  
+  // Render all notifications
+  drawAllNotifications(ctx, world);
 
   // Render debug information
   renderDebugInfo(ctx, world);
