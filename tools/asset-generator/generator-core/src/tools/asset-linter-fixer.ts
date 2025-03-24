@@ -1,5 +1,5 @@
 import { LintResult, formatLintErrors } from './asset-linter.js';
-import { FunctionDef } from 'genaicode';
+import { FunctionDef, ModelType } from 'genaicode';
 import { generateImprovedAsset } from './asset-generator.js';
 
 /**
@@ -71,7 +71,15 @@ ${formattedErrors}
 `;
 
   try {
-    const newContent = await generateImprovedAsset(assetName, sourceCode, promptMessage);
+    const newContent = await generateImprovedAsset(
+      assetName,
+      sourceCode,
+      promptMessage,
+      undefined,
+      undefined,
+      undefined,
+      ModelType.CHEAP,
+    );
     return {
       newContent,
       success: true,

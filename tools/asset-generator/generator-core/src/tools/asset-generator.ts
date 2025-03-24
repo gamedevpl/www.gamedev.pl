@@ -10,6 +10,7 @@ import { ASSET_GENERATOR_PROMPT } from './prompts.js';
  * @param additionalPrompt Additional user-provided prompt with special requirements
  * @param fromScratch Whether to regenerate the asset from scratch, ignoring the current implementation
  * @param originalDescription Original description of the asset (used when fromScratch is true)
+ * @param modelType The model type to use for generation (default: ModelType.DEFAULT)
  * @returns Promise resolving to the improved implementation code
  */
 export async function generateImprovedAsset(
@@ -19,6 +20,7 @@ export async function generateImprovedAsset(
   additionalPrompt?: string,
   fromScratch?: boolean,
   originalDescription?: string,
+  modelType: ModelType = ModelType.DEFAULT,
 ): Promise<string> {
   // If fromScratch is true, ignore the current implementation
   const effectiveImplementation = fromScratch ? null : currentImplementation;
@@ -110,7 +112,7 @@ export async function generateImprovedAsset(
   // DO...UNTIL loop to generate chunks until complete
   do {
     // Generate the next chunk
-    const result = await generateAssetChunk(prompt, chunkIndex);
+    const result = await generateAssetChunk(prompt, chunkIndex, modelType);
 
     currentChunk = result.content;
     isComplete = result.isComplete;
@@ -157,8 +159,9 @@ export async function generateImprovedAsset(
 async function generateAssetChunk(
   prompt: PromptItem[],
   chunkIndex: number,
+  modelType: ModelType = ModelType.DEFAULT,
 ): Promise<{ content: string; isComplete: boolean }> {
-  const chunkResult = await generateCode(prompt, [saveAssetChunkDef], 'saveAssetChunk', 0.7, ModelType.DEFAULT);
+  const chunkResult = await generateCode(prompt, [saveAssetChunkDef], 'saveAssetChunk', 0.7, modelType);
 
   if (!chunkResult || chunkResult.length === 0 || !chunkResult[0]?.args) {
     throw new Error('Failed to generate asset chunk');
