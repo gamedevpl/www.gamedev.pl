@@ -110,7 +110,7 @@ export async function assessAsset(
             },
             {
               type: 'user',
-              text: 'Please analyze the reference image in detail',
+              text: 'Please analyze the reference image in detail. This will serve as the standard against which the rendered asset will be critically evaluated. Identify key visual elements, style characteristics, and essential features that should be present in the rendered asset.',
             },
           ],
           describeReferenceImageDef.name,
@@ -145,7 +145,7 @@ export async function assessAsset(
             ASSET_ASSESSOR_PROMPT,
             ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
               type: 'user',
-              text: `Rendered asset:`,
+              text: `Rendered asset`,
               images: [
                 {
                   mediaType: mediaType as PromptImageMediaType,
@@ -155,15 +155,15 @@ export async function assessAsset(
             })),
             {
               type: 'user',
-              text: `Please analyze the rendering of the asset in detail.`,
+              text: `Please analyze the rendering of the asset with a critical eye. Focus on visual fidelity, artistic quality, and how well it fulfills its intended purpose. Be particularly attentive to any discrepancies or visual issues that detract from the asset's effectiveness. Your analysis should be honest and unbiased, based solely on what you observe in the rendering, not what might have been intended.`,
             },
             {
               type: 'user',
-              text: 'IMPORTANT: Output maximum 200 words, not more!',
+              text: 'IMPORTANT: Output maximum 200 words, not more! Be direct and specific in your criticism.',
             },
           ],
           describeAssetRenderingDef.name,
-          `Rendered Asset Analysis`,
+          `Rendered Asset Analysis for stance "${stance}"`,
         );
 
         context.stanceDescriptions[stance] = renderStep.result.description;
@@ -183,7 +183,7 @@ export async function assessAsset(
           },
           {
             type: 'user',
-            text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled',
+            text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled. Identify any technical issues that might be causing visual discrepancies in the rendered output.',
           },
         ],
         describeCurrentImplementationDef.name,
@@ -201,9 +201,9 @@ export async function assessAsset(
       stanceDescriptionsText += `### Stance: ${stance}\n\n${description}\n\n`;
     }
 
-    // Prepare the final assessment prompt with enhanced structure
+    // Prepare the final assessment prompt with enhanced structure for critical evaluation
     const finalAssessmentPrompt = `
-Please provide the final assessment based on all previous analyses.
+Please provide a critical final assessment based on all previous analyses. Your assessment should be honest, unbiased, and based solely on the visual evidence in the rendered output.
 
 # Asset Information
 - **Name**: ${asset.name}
@@ -212,20 +212,29 @@ Please provide the final assessment based on all previous analyses.
 # Reference Image Analysis
 ${context.referenceImageDescription || 'No reference image provided.'}
 
-# Stance-Specific Analysis
+# Observed Stance Characteristics
 ${stanceDescriptionsText}
 
 # Implementation Analysis
 ${context.implementationDescription || 'No current implementation available.'}
 
 # Final Assessment Requirements
-1. Provide a comprehensive assessment that addresses ALL stances individually
-2. For each stance, identify specific issues and provide clear, actionable recommendations
+1. Provide a comprehensive, critical assessment that addresses EACH stance individually
+2. For each stance:
+   a. Clearly identify specific visual issues and discrepancies between expected and actual output
+   b. Rate the severity of each discrepancy (Minor, Moderate, Significant, Critical)
+   c. Provide clear, actionable recommendations to address each issue
+   d. Be direct and honest - if something looks wrong, say so explicitly
 3. Prioritize the most critical issues that need to be addressed
 4. Include both visual and technical aspects in your assessment
 5. Consider how stances work together as a cohesive asset
 6. IMPORTANT: Structure your assessment with clear headers for each stance
 7. Make sure each stance-specific issue has a corresponding recommendation
+8. Focus on what you SEE in the rendering, not what might have been intended
+9. Be especially critical when a rendered stance significantly deviates from its intended design
+10. Do not soften criticism - be clear and direct about problems
+
+Remember: You are evaluating ONLY what is visually presented, not the intentions or the code behind it. Your assessment should be unbiased and based solely on the quality and accuracy of the rendered output.
 `;
 
     // Step 4: Generate the final assessment
@@ -253,13 +262,15 @@ ${context.implementationDescription || 'No current implementation available.'}
  */
 const describeReferenceImageDef: FunctionDef = {
   name: 'describeReferenceImage',
-  description: 'Describe the reference image for an asset',
+  description:
+    'Describe the reference image for an asset in detail, identifying key visual elements and characteristics',
   parameters: {
     type: 'object',
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed description of the reference image',
+        description:
+          'Detailed description of the reference image, including style, proportions, colors, and key visual elements that define the asset',
       },
     },
     required: ['description'],
@@ -271,13 +282,24 @@ const describeReferenceImageDef: FunctionDef = {
  */
 const describeAssetRenderingDef: FunctionDef = {
   name: 'describeAssetRendering',
-  description: 'Describe the rendered asset',
+  description: 'Critically analyze the rendered asset, focusing on visual quality, accuracy, and potential issues',
   parameters: {
     type: 'object',
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed analysis of the rendered asset (max 1000 words)',
+        description: `Detailed critical analysis of the rendered asset (max 200 words).
+Include:
+1. Overall visual impression
+2. Key visual elements present or missing
+3. Quality of execution (proportions, colors, style)
+4. Specific visual issues or artifacts
+5. How well it fulfills its intended purpose
+6. Comparison to expected characteristics
+7. Clear identification of discrepancies
+8. Honest evaluation of visual quality
+
+Be direct and critical - if something looks wrong, say so explicitly. Focus on what you actually see, not what might have been intended.`,
         maxLength: 5000,
       },
     },
@@ -290,13 +312,14 @@ const describeAssetRenderingDef: FunctionDef = {
  */
 const describeCurrentImplementationDef: FunctionDef = {
   name: 'describeCurrentImplementation',
-  description: 'Describe the current implementation of the asset',
+  description: 'Describe the current implementation of the asset, focusing on how different stances are handled',
   parameters: {
     type: 'object',
     properties: {
       description: {
         type: 'string',
-        description: 'Detailed description of the current implementation',
+        description:
+          'Detailed description of the current implementation, with particular attention to technical aspects that might affect visual output',
       },
     },
     required: ['description'],
@@ -308,25 +331,27 @@ const describeCurrentImplementationDef: FunctionDef = {
  */
 const assessAssetDef: FunctionDef = {
   name: 'assessAsset',
-  description: 'Assess an asset by analyzing its rendering result',
+  description: 'Critically assess an asset by analyzing its rendering result against expected characteristics',
   parameters: {
     type: 'object',
     properties: {
       assessment: {
         type: 'string',
-        description: `Output the analysis in a structured format, including visual and technical aspects.
-Use not more than 200 words.
+        description: `Output a critical, structured analysis that honestly evaluates the rendered asset.
 
-Desired format of the assessment:
-\`\`\`
-<Identification of the stance>
-<Evaluation of the rendering quality>
-<Evaluation of the accuracy of the rendering>
-<Evaluation of the style of the rendering>
-<Evaluation of the overall impression of the rendering>
-<Summary of the rendering analysis>
-\`\`\``,
-        maxLength: 1000,
+For each stance, include:
+1. <Stance Name> - Clear header identifying the stance
+2. <Visual Assessment> - Critical evaluation of what you actually SEE in the rendering
+3. <Discrepancy Analysis> - Specific issues where rendered output deviates from expected characteristics
+4. <Severity Rating> - Rate each discrepancy as Minor, Moderate, Significant, or Critical
+5. <Recommendations> - Clear, actionable suggestions to address each issue
+
+Be direct and honest - if something looks wrong, say so explicitly. Do not soften criticism.
+Focus on what is visually presented, not what might have been intended.
+Be especially critical when a rendered stance significantly deviates from its intended design.
+
+Use not more than 200 words per stance.`,
+        maxLength: 2000,
       },
     },
     required: ['assessment'],
