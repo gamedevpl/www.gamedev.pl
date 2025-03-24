@@ -155,7 +155,11 @@ export async function assessAsset(
             })),
             {
               type: 'user',
-              text: `Please analyze the rendering of the asset in detail. (max 1000 words)`,
+              text: `Please analyze the rendering of the asset in detail.`,
+            },
+            {
+              type: 'user',
+              text: 'IMPORTANT: Output maximum 200 words, not more!',
             },
           ],
           describeAssetRenderingDef.name,
@@ -179,7 +183,7 @@ export async function assessAsset(
           },
           {
             type: 'user',
-            text: 'Please analyze the implementation in detail',
+            text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled',
           },
         ],
         describeCurrentImplementationDef.name,
@@ -197,32 +201,40 @@ export async function assessAsset(
       stanceDescriptionsText += `### Stance: ${stance}\n\n${description}\n\n`;
     }
 
+    // Prepare the final assessment prompt with enhanced structure
+    const finalAssessmentPrompt = `
+Please provide the final assessment based on all previous analyses.
+
+# Asset Information
+- **Name**: ${asset.name}
+- **Description**: ${asset.description}
+
+# Reference Image Analysis
+${context.referenceImageDescription || 'No reference image provided.'}
+
+# Stance-Specific Analysis
+${stanceDescriptionsText}
+
+# Implementation Analysis
+${context.implementationDescription || 'No current implementation available.'}
+
+# Final Assessment Requirements
+1. Provide a comprehensive assessment that addresses ALL stances individually
+2. For each stance, identify specific issues and provide clear, actionable recommendations
+3. Prioritize the most critical issues that need to be addressed
+4. Include both visual and technical aspects in your assessment
+5. Consider how stances work together as a cohesive asset
+6. IMPORTANT: Structure your assessment with clear headers for each stance
+7. Make sure each stance-specific issue has a corresponding recommendation
+`;
+
+    // Step 4: Generate the final assessment
     const assessStep = await executeStep<{ assessment: string }>(
       [
         ASSET_ASSESSOR_PROMPT,
         {
           type: 'user',
-          text: `Please provide the final assessment based on all previous analyses.
-
-## Asset Name
-
-${asset.name}
-
-## Asset Description
-
-${asset.description}
-
-## Reference Image Analysis
-
-${context.referenceImageDescription || 'No reference image provided.'}
-
-## Rendered Asset Analysis by Stance
-
-${stanceDescriptionsText}
-
-## Implementation Analysis
-
-${context.implementationDescription || 'No current implementation available.'}`,
+          text: finalAssessmentPrompt,
         },
       ],
       assessAssetDef.name,
@@ -302,7 +314,19 @@ const assessAssetDef: FunctionDef = {
     properties: {
       assessment: {
         type: 'string',
-        description: 'The outcome of the assessment',
+        description: `Output the analysis in a structured format, including visual and technical aspects.
+Use not more than 200 words.
+
+Desired format of the assessment:
+\`\`\`
+<Identification of the stance>
+<Evaluation of the rendering quality>
+<Evaluation of the accuracy of the rendering>
+<Evaluation of the style of the rendering>
+<Evaluation of the overall impression of the rendering>
+<Summary of the rendering analysis>
+\`\`\``,
+        maxLength: 1000,
       },
     },
     required: ['assessment'],

@@ -35,14 +35,19 @@ Follow this Chain of Thought (CoT) assessment process:
    - Note the use of colors, shapes, and proportions
    - Identify any visual artifacts or issues
    - Compare with reference image if available
-   - For character assets:
-     - Assess silhouette readability and distinctiveness
-     - Evaluate proportional harmony and anatomical consistency
-     - Analyze character expressiveness and visual identity
-     - Examine stance clarity and pose readability
-     - Evaluate animation fluidity and coherence across frames
-     - Check for proper application of animation principles (timing, anticipation, follow-through)
-     - Assess transition quality between different animation states
+   - IMPORTANT: Pay close attention to the specific stance being analyzed
+   - Clearly identify which stance you are analyzing in your description
+   - For each stance, assess:
+     - Stance-specific visual characteristics and uniqueness
+     - How well the stance fulfills its intended purpose
+     - Stance-specific issues or artifacts
+     - Silhouette readability and distinctiveness for this particular stance
+     - Proportional harmony and anatomical consistency in this stance
+     - Character expressiveness and visual identity in this stance
+     - Pose readability and clarity specific to this stance
+     - Animation fluidity and coherence across frames for this stance
+     - Proper application of animation principles for this specific stance
+     - Transition quality between this stance and other stances
 
 3. Functionality & Gameplay Integration Analysis:
    Then, call \`describeCurrentImplementation\` to analyze how the asset functions:
@@ -51,6 +56,9 @@ Follow this Chain of Thought (CoT) assessment process:
    - Evaluate how the asset's design integrates with game aesthetics
    - Note any functional limitations or opportunities
    - Consider how well it serves its intended purpose
+   - Analyze how different stances are implemented in the code
+   - Identify code patterns used for stance transitions and animations
+   - Evaluate code organization for handling multiple stances
    - For character assets:
      - Analyze gameplay visibility in different contexts
      - Evaluate character distinction within the game's visual hierarchy
@@ -66,11 +74,15 @@ Follow this Chain of Thought (CoT) assessment process:
    - Assess visual quality and artistic coherence
    - Provide specific, actionable improvements focused on design and functionality
    - Consider player experience and gameplay integration
-   - For character assets:
-     - Provide stance-specific feedback on poses, proportions, and expressiveness
-     - Suggest concrete animation improvements with reference to animation principles
-     - Recommend specific visual hierarchy enhancements for gameplay visibility
-     - Offer technical optimization suggestions if relevant
+   - CRITICAL: Structure your assessment with clear stance-specific sections
+   - For each stance, provide a dedicated section with:
+     - Stance name as a clear header (e.g., "## Stance: Walking")
+     - Stance-specific observations and analysis
+     - Stance-specific issues and challenges
+     - Prioritized, actionable recommendations for that specific stance
+     - Comparative analysis with other stances (consistency, transitions)
+   - Include a "Cross-Stance Issues" section for problems affecting multiple stances
+   - End with a "Priority Recommendations" section listing the most critical improvements
 
 Guidelines for assessment:
 
@@ -102,6 +114,20 @@ Guidelines for assessment:
    - Focus on visual and functional aspects
    - For character assets: provide specific animation, silhouette, and stance improvement suggestions
 
+5. Stance-Specific Assessment Guidelines:
+   - Treat each stance as a distinct asset requiring individual assessment
+   - Provide equal depth of analysis for each stance
+   - Identify stance-specific strengths and weaknesses
+   - Compare stances with each other to identify inconsistencies
+   - Evaluate how well each stance communicates its intended purpose
+   - Assess transitions between stances (if applicable)
+   - Consider how stances work together as a cohesive set
+   - Provide specific, actionable recommendations for each stance
+   - Prioritize stance-specific issues by impact on gameplay and player experience
+   - Ensure feedback for each stance is clearly labeled and separated
+   - Evaluate stance-specific animations for principles like anticipation, follow-through, etc.
+   - Assess technical implementation of each stance in the code
+
 IMPORTANT:
 - Always follow the CoT process in order
 - Use appropriate function calls at each step
@@ -111,6 +137,9 @@ IMPORTANT:
 - For character assets: address each stance/animation state individually
 - Avoid detailed commentary on code structure or implementation details
 - Stay within limit of 200 words per description/assessment
+- CRITICAL: Ensure each stance receives dedicated, thorough assessment
+- Structure the final assessment with clear stance-specific sections
+- Make stance-specific recommendations prominent and actionable
 `,
 } as const;
 
