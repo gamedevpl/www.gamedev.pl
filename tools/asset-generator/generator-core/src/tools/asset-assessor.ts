@@ -17,54 +17,76 @@ interface StepResult<T> {
 }
 
 /**
- * Execute a single step in the Chain of Thought process
+ * Helper function to introduce a delay.
+ * @param ms Milliseconds to wait.
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Execute a single step in the Chain of Thought process with retry logic.
  */
 async function executeStep<T>(
   promptItems: PromptItem[],
   requiredFunctionName: string,
   stepName: string,
+  maxRetries = 3,
+  retryDelay = 10000, // 10 seconds
 ): Promise<StepResult<T>> {
-  try {
-    console.log(`Executing ${stepName}...`);
-    const [result] = await generateContent(
-      promptItems,
-      [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-      requiredFunctionName,
-      0.7,
-      ModelType.CHEAP,
-    );
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    try {
+      console.log(`Executing ${stepName} (Attempt ${attempt + 1}/${maxRetries + 1})...`);
+      const [result] = await generateContent(
+        promptItems,
+        [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
+        requiredFunctionName,
+        0.7,
+        ModelType.CHEAP,
+      );
 
-    // Add assistant's response as a prompt item
-    const assistantPromptItem: PromptItem = {
-      type: 'assistant',
-      text: `${stepName} Result:`,
-      functionCalls: [
-        {
-          name: requiredFunctionName,
-          args: result.args,
-        },
-      ],
-    };
+      // Add assistant's response as a prompt item
+      const assistantPromptItem: PromptItem = {
+        type: 'assistant',
+        text: `${stepName} Result:`,
+        functionCalls: [
+          {
+            name: requiredFunctionName,
+            args: result.args,
+          },
+        ],
+      };
 
-    return {
-      result: result.args as T,
-      promptItems: [
-        assistantPromptItem,
-        {
-          type: 'user',
-          functionResponses: [
-            {
-              name: requiredFunctionName,
-              content: '',
-            },
-          ],
-        },
-      ],
-    };
-  } catch (error) {
-    console.error(`Error in ${stepName}:`, error);
-    throw new Error(`Failed to execute ${stepName}: ${(error as Error).message}`);
+      return {
+        result: result.args as T,
+        promptItems: [
+          assistantPromptItem,
+          {
+            type: 'user',
+            functionResponses: [
+              {
+                name: requiredFunctionName,
+                content: '',
+              },
+            ],
+          },
+        ],
+      };
+    } catch (error) {
+      attempt++;
+      console.error(`Error in ${stepName} (Attempt ${attempt}/${maxRetries + 1}):`, error);
+      if (attempt <= maxRetries) {
+        console.log(`Retrying ${stepName} in ${retryDelay / 1000} seconds...`);
+        await delay(retryDelay);
+      } else {
+        console.error(`Failed to execute ${stepName} after ${maxRetries + 1} attempts.`);
+        throw new Error(`Failed to execute ${stepName}: ${(error as Error).message}`);
+      }
+    }
   }
+  // This line should theoretically not be reached, but satisfies TypeScript's need for a return path.
+  throw new Error(`Failed to execute ${stepName} after all retries.`);
 }
 
 /**
@@ -179,11 +201,15 @@ export async function assessAsset(
           ASSET_ASSESSOR_PROMPT,
           {
             type: 'user',
-            text: 'Current implementation:\n\n' + `\`\`\`typescript\n${currentImplementation}\n\`\`\``,
+            text: `Current implementation:\n\n\`\`\`typescript\n${currentImplementation}\n\`\`\``,
           },
           {
             type: 'user',
             text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled. Identify any technical issues that might be causing visual discrepancies in the rendered output.',
+          },
+          {
+            type: 'user',
+            text: 'IMPORTANT: Output maximum 1000 words, not more! Be direct and specific in your analysis.',
           },
         ],
         describeCurrentImplementationDef.name,
