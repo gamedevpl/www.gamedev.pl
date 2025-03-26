@@ -11,84 +11,6 @@ interface AssessmentContext {
   implementationDescription?: string;
 }
 
-interface StepResult<T> {
-  result: T;
-  promptItems: PromptItem[];
-}
-
-/**
- * Helper function to introduce a delay.
- * @param ms Milliseconds to wait.
- */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Execute a single step in the Chain of Thought process with retry logic.
- */
-async function executeStep<T>(
-  promptItems: PromptItem[],
-  requiredFunctionName: string,
-  stepName: string,
-  maxRetries = 3,
-  retryDelay = 10000, // 10 seconds
-): Promise<StepResult<T>> {
-  let attempt = 0;
-  while (attempt <= maxRetries) {
-    try {
-      console.log(`Executing ${stepName} (Attempt ${attempt + 1}/${maxRetries + 1})...`);
-      const [result] = await generateContent(
-        promptItems,
-        [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-        requiredFunctionName,
-        0.7,
-        ModelType.CHEAP,
-      );
-
-      // Add assistant's response as a prompt item
-      const assistantPromptItem: PromptItem = {
-        type: 'assistant',
-        text: `${stepName} Result:`,
-        functionCalls: [
-          {
-            name: requiredFunctionName,
-            args: result.args,
-          },
-        ],
-      };
-
-      return {
-        result: result.args as T,
-        promptItems: [
-          assistantPromptItem,
-          {
-            type: 'user',
-            functionResponses: [
-              {
-                name: requiredFunctionName,
-                content: '',
-              },
-            ],
-          },
-        ],
-      };
-    } catch (error) {
-      attempt++;
-      console.error(`Error in ${stepName} (Attempt ${attempt}/${maxRetries + 1}):`, error);
-      if (attempt <= maxRetries) {
-        console.log(`Retrying ${stepName} in ${retryDelay / 1000} seconds...`);
-        await delay(retryDelay);
-      } else {
-        console.error(`Failed to execute ${stepName} after ${maxRetries + 1} attempts.`);
-        throw new Error(`Failed to execute ${stepName}: ${(error as Error).message}`);
-      }
-    }
-  }
-  // This line should theoretically not be reached, but satisfies TypeScript's need for a return path.
-  throw new Error(`Failed to execute ${stepName} after all retries.`);
-}
-
 /**
  * Assess an asset by analyzing its rendering result
  */
@@ -117,7 +39,7 @@ export async function assessAsset(
         referenceImageData = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
         // Step 1: Describe reference image
-        const refImageStep = await executeStep<{ description: string }>(
+        const [refImageResult] = await generateContent(
           [
             ASSET_ASSESSOR_PROMPT,
             {
@@ -135,13 +57,15 @@ export async function assessAsset(
               text: 'Please analyze the reference image in detail. This will serve as the standard against which the rendered asset will be critically evaluated. Identify key visual elements, style characteristics, and essential features that should be present in the rendered asset.',
             },
           ],
+          [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
           describeReferenceImageDef.name,
-          'Reference Image Analysis',
+          0.7,
+          ModelType.CHEAP,
         );
 
-        context.referenceImageDescription = refImageStep.result.description;
+        context.referenceImageDescription = (refImageResult.args as { description: string }).description;
 
-        console.log('Reference image analysis completed:', refImageStep.result.description);
+        console.log('Reference image analysis completed:', context.referenceImageDescription);
       } catch (error) {
         console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
       }
@@ -162,7 +86,7 @@ export async function assessAsset(
       Object.entries(stanceGroups).map(async ([stance, mediaItems]) => {
         console.log(`Analyzing stance: ${stance}`);
 
-        const renderStep = await executeStep<{ description: string }>(
+        const [renderResult] = await generateContent(
           [
             ASSET_ASSESSOR_PROMPT,
             ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
@@ -184,19 +108,21 @@ export async function assessAsset(
               text: 'IMPORTANT: Output maximum 200 words, not more! Be direct and specific in your criticism.',
             },
           ],
+          [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
           describeAssetRenderingDef.name,
-          `Rendered Asset Analysis for stance "${stance}"`,
+          0.7,
+          ModelType.CHEAP,
         );
 
-        context.stanceDescriptions[stance] = renderStep.result.description;
+        context.stanceDescriptions[stance] = (renderResult.args as { description: string }).description;
 
-        console.log(`Analysis for stance "${stance}" completed:`, renderStep.result.description);
+        console.log(`Analysis for stance "${stance}" completed:`, context.stanceDescriptions[stance]);
       }),
     );
 
     // Step 3: Describe implementation (if available)
     if (currentImplementation) {
-      const implStep = await executeStep<{ description: string }>(
+      const [implResult] = await generateContent(
         [
           ASSET_ASSESSOR_PROMPT,
           {
@@ -212,13 +138,15 @@ export async function assessAsset(
             text: 'IMPORTANT: Output maximum 1000 words, not more! Be direct and specific in your analysis.',
           },
         ],
+        [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
         describeCurrentImplementationDef.name,
-        'Implementation Analysis',
+        0.7,
+        ModelType.CHEAP,
       );
 
-      context.implementationDescription = implStep.result.description;
+      context.implementationDescription = (implResult.args as { description: string }).description;
 
-      console.log('Implementation analysis completed:', implStep.result.description);
+      console.log('Implementation analysis completed:', context.implementationDescription);
     }
 
     // Prepare stance descriptions for the final assessment
@@ -264,7 +192,7 @@ Remember: You are evaluating ONLY what is visually presented, not the intentions
 `;
 
     // Step 4: Generate the final assessment
-    const assessStep = await executeStep<{ assessment: string }>(
+    const [assessResult] = await generateContent(
       [
         ASSET_ASSESSOR_PROMPT,
         {
@@ -272,11 +200,13 @@ Remember: You are evaluating ONLY what is visually presented, not the intentions
           text: finalAssessmentPrompt,
         },
       ],
+      [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
       assessAssetDef.name,
-      'Final Assessment',
+      0.7,
+      ModelType.CHEAP,
     );
 
-    return assessStep.result.assessment;
+    return (assessResult.args as { assessment: string }).assessment;
   } catch (error) {
     console.error('Error during asset assessment:', error);
     throw new Error(`Failed to assess asset: ${(error as Error).message}`);
