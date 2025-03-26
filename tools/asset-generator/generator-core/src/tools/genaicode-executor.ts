@@ -33,6 +33,9 @@ function retryWrapper(
     while (attempt <= maxRetries) {
       try {
         const result = await func(promptItems, functions, requiredFunctionName, temperature, modelType);
+        if (requiredFunctionName && !result.find((call) => call.name === requiredFunctionName)) {
+          throw new Error(`Function ${requiredFunctionName} not found in the result.`);
+        }
         return result;
       } catch (error) {
         attempt++;
