@@ -15,6 +15,8 @@ export interface AssetGenerationOptions {
     skipLinting?: boolean;
     /** Whether to only perform linting without rendering or generation */
     lintOnly?: boolean;
+    /** Whether to regenerate the asset from scratch, keeping the description but starting over the implementation */
+    fromScratch?: boolean;
     /** Video rendering options */
     videoOptions?: {
         /** Frames per second for the video (default: 30) */

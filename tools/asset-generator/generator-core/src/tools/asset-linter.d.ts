@@ -23,6 +23,8 @@ export interface LintError {
  * Interface for linting results
  */
 export interface LintResult {
+    /** Asset name */
+    assetName: string;
     /** Path to the file that was linted */
     filePath: string;
     /** Whether any errors were found */
@@ -36,11 +38,12 @@ export interface LintResult {
 }
 /**
  * Lint an asset file using ESLint
+ * @param assetName
  * @param filePath Path to the asset file to lint
  * @returns Promise resolving to the linting results
  * @throws Error if linting fails
  */
-export declare function lintAssetFile(filePath: string): Promise<LintResult>;
+export declare function lintAssetFile(assetName: string, filePath: string): Promise<LintResult>;
 /**
  * Format linting errors for display
  * @param lintResult Linting results

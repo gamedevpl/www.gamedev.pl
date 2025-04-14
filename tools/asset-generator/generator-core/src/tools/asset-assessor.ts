@@ -39,29 +39,46 @@ export async function assessAsset(
         referenceImageData = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
         // Step 1: Describe reference image
-        const [refImageResult] = await generateContent(
-          [
-            ASSET_ASSESSOR_PROMPT,
+        const [refImageResult] = (
+          await generateContent(
+            [
+              ASSET_ASSESSOR_PROMPT,
+              {
+                type: 'user',
+                text: 'Reference image for analysis:',
+                images: [
+                  {
+                    mediaType: 'image/png',
+                    base64url: referenceImageData.split('data:image/png;base64,')[1],
+                  },
+                ],
+              },
+              {
+                type: 'user',
+                text: 'Please analyze the reference image in detail. This will serve as the standard against which the rendered asset will be critically evaluated. Identify key visual elements, style characteristics, and essential features that should be present in the rendered asset.',
+              },
+            ],
             {
-              type: 'user',
-              text: 'Reference image for analysis:',
-              images: [
-                {
-                  mediaType: 'image/png',
-                  base64url: referenceImageData.split('data:image/png;base64,')[1],
-                },
+              functionDefs: [
+                describeReferenceImageDef,
+                describeAssetRenderingDef,
+                describeCurrentImplementationDef,
+                assessAssetDef,
               ],
+              requiredFunctionName: describeReferenceImageDef.name,
+              temperature: 0.7,
+              modelType: ModelType.CHEAP,
+              expectedResponseType: {
+                text: false,
+                functionCall: true,
+                media: false,
+              },
             },
-            {
-              type: 'user',
-              text: 'Please analyze the reference image in detail. This will serve as the standard against which the rendered asset will be critically evaluated. Identify key visual elements, style characteristics, and essential features that should be present in the rendered asset.',
-            },
-          ],
-          [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-          describeReferenceImageDef.name,
-          0.7,
-          ModelType.CHEAP,
-        );
+            {},
+          )
+        )
+          .filter((item) => item.type === 'functionCall')
+          .map((item) => item.functionCall);
 
         context.referenceImageDescription = (refImageResult.args as { description: string }).description;
 
@@ -86,33 +103,50 @@ export async function assessAsset(
       Object.entries(stanceGroups).map(async ([stance, mediaItems]) => {
         console.log(`Analyzing stance: ${stance}`);
 
-        const [renderResult] = await generateContent(
-          [
-            ASSET_ASSESSOR_PROMPT,
-            ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
-              type: 'user',
-              text: `Rendered asset`,
-              images: [
-                {
-                  mediaType: mediaType as PromptImageMediaType,
-                  base64url: dataUrl.split(`data:${mediaType};base64,`)[1],
-                },
+        const [renderResult] = (
+          await generateContent(
+            [
+              ASSET_ASSESSOR_PROMPT,
+              ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
+                type: 'user',
+                text: `Rendered asset`,
+                images: [
+                  {
+                    mediaType: mediaType as PromptImageMediaType,
+                    base64url: dataUrl.split(`data:${mediaType};base64,`)[1],
+                  },
+                ],
+              })),
+              {
+                type: 'user',
+                text: `Please analyze the rendering of the asset with a critical eye. Focus on visual fidelity, artistic quality, and how well it fulfills its intended purpose. Be particularly attentive to any discrepancies or visual issues that detract from the asset's effectiveness. Your analysis should be honest and unbiased, based solely on what you observe in the rendering, not what might have been intended.`,
+              },
+              {
+                type: 'user',
+                text: 'IMPORTANT: Output maximum 200 words, not more! Be direct and specific in your criticism.',
+              },
+            ],
+            {
+              functionDefs: [
+                describeReferenceImageDef,
+                describeAssetRenderingDef,
+                describeCurrentImplementationDef,
+                assessAssetDef,
               ],
-            })),
-            {
-              type: 'user',
-              text: `Please analyze the rendering of the asset with a critical eye. Focus on visual fidelity, artistic quality, and how well it fulfills its intended purpose. Be particularly attentive to any discrepancies or visual issues that detract from the asset's effectiveness. Your analysis should be honest and unbiased, based solely on what you observe in the rendering, not what might have been intended.`,
+              requiredFunctionName: describeAssetRenderingDef.name,
+              temperature: 0.7,
+              modelType: ModelType.CHEAP,
+              expectedResponseType: {
+                functionCall: true,
+                text: false,
+                media: false,
+              },
             },
-            {
-              type: 'user',
-              text: 'IMPORTANT: Output maximum 200 words, not more! Be direct and specific in your criticism.',
-            },
-          ],
-          [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-          describeAssetRenderingDef.name,
-          0.7,
-          ModelType.CHEAP,
-        );
+            {},
+          )
+        )
+          .filter((item) => item.type === 'functionCall')
+          .map((item) => item.functionCall);
 
         context.stanceDescriptions[stance] = (renderResult.args as { description: string }).description;
 
@@ -122,27 +156,39 @@ export async function assessAsset(
 
     // Step 3: Describe implementation (if available)
     if (currentImplementation) {
-      const [implResult] = await generateContent(
-        [
-          ASSET_ASSESSOR_PROMPT,
+      const [implResult] = (
+        await generateContent(
+          [
+            ASSET_ASSESSOR_PROMPT,
+            {
+              type: 'user',
+              text: `Current implementation:\n\n\`\`\`typescript\n${currentImplementation}\n\`\`\``,
+            },
+            {
+              type: 'user',
+              text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled. Identify any technical issues that might be causing visual discrepancies in the rendered output.',
+            },
+            {
+              type: 'user',
+              text: 'IMPORTANT: Output maximum 1000 words, not more! Be direct and specific in your analysis.',
+            },
+          ],
           {
-            type: 'user',
-            text: `Current implementation:\n\n\`\`\`typescript\n${currentImplementation}\n\`\`\``,
+            functionDefs: [
+              describeReferenceImageDef,
+              describeAssetRenderingDef,
+              describeCurrentImplementationDef,
+              assessAssetDef,
+            ],
+            requiredFunctionName: describeCurrentImplementationDef.name,
+            temperature: 0.7,
+            modelType: ModelType.CHEAP,
           },
-          {
-            type: 'user',
-            text: 'Please analyze the implementation in detail, with particular attention to how different stances are handled. Identify any technical issues that might be causing visual discrepancies in the rendered output.',
-          },
-          {
-            type: 'user',
-            text: 'IMPORTANT: Output maximum 1000 words, not more! Be direct and specific in your analysis.',
-          },
-        ],
-        [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-        describeCurrentImplementationDef.name,
-        0.7,
-        ModelType.CHEAP,
-      );
+          {},
+        )
+      )
+        .filter((item) => item.type === 'functionCall')
+        .map((item) => item.functionCall);
 
       context.implementationDescription = (implResult.args as { description: string }).description;
 
@@ -192,19 +238,32 @@ Remember: You are evaluating ONLY what is visually presented, not the intentions
 `;
 
     // Step 4: Generate the final assessment
-    const [assessResult] = await generateContent(
-      [
-        ASSET_ASSESSOR_PROMPT,
+    const [assessResult] = (
+      await generateContent(
+        [
+          ASSET_ASSESSOR_PROMPT,
+          {
+            type: 'user',
+            text: finalAssessmentPrompt,
+          },
+        ],
         {
-          type: 'user',
-          text: finalAssessmentPrompt,
+          functionDefs: [
+            describeReferenceImageDef,
+            describeAssetRenderingDef,
+            describeCurrentImplementationDef,
+            assessAssetDef,
+          ],
+          requiredFunctionName: assessAssetDef.name,
+          temperature: 0.7,
+          modelType: ModelType.CHEAP,
+          expectedResponseType: { functionCall: true, text: false, media: false },
         },
-      ],
-      [describeReferenceImageDef, describeAssetRenderingDef, describeCurrentImplementationDef, assessAssetDef],
-      assessAssetDef.name,
-      0.7,
-      ModelType.CHEAP,
-    );
+        {},
+      )
+    )
+      .filter((item) => item.type === 'functionCall')
+      .map((item) => item.functionCall);
 
     return (assessResult.args as { assessment: string }).assessment;
   } catch (error) {

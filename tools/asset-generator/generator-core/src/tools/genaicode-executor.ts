@@ -22,21 +22,11 @@ function retryWrapper(
   maxRetries = 3,
   retryDelay = 10000, // 10 seconds
 ): GenerateContentFunction {
-  return async (
-    promptItems: PromptItem[],
-    functions?: FunctionDef[],
-    requiredFunctionName?: string,
-    temperature?: number,
-    modelType?: ModelType,
-  ): Promise<FunctionCall[]> => {
+  const wrapped: GenerateContentFunction = async (...args) => {
     let attempt = 0;
     while (attempt <= maxRetries) {
       try {
-        const result = await func(promptItems, functions, requiredFunctionName, temperature, modelType);
-        if (requiredFunctionName && !result.find((call) => call.name === requiredFunctionName)) {
-          throw new Error(`Function ${requiredFunctionName} not found in the result.`);
-        }
-        return result;
+        return await func(...args);
       } catch (error) {
         attempt++;
         console.error(`Error in AI call (Attempt ${attempt}/${maxRetries + 1}):`, error);
@@ -52,6 +42,7 @@ function retryWrapper(
     // This line should theoretically not be reached, but satisfies TypeScript's need for a return path.
     throw new Error('Failed AI call after all retries.');
   };
+  return wrapped;
 }
 
 // Wrap the original functions with the retry mechanism

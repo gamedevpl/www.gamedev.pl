@@ -26,7 +26,9 @@ export async function generateImprovedAsset(
   const effectiveImplementation = fromScratch ? null : currentImplementation;
 
   const basePromptMessage = `
-    Generate ${fromScratch ? 'a new implementation from scratch' : 'an improved implementation'} of the ${assetName} asset.
+    Generate ${
+      fromScratch ? 'a new implementation from scratch' : 'an improved implementation'
+    } of the ${assetName} asset.
     ${
       effectiveImplementation
         ? 'Current implementation:\\n```typescript\\n' + currentImplementation + '\\n```'
@@ -37,9 +39,17 @@ export async function generateImprovedAsset(
     ${assessment}
 
     ${additionalPrompt ? `Special Requirements from User:\\n    ${additionalPrompt}\\n` : ''}
-    ${fromScratch ? 'IMPORTANT: Create a completely new implementation from scratch, ignoring any existing code structure.\\n' : ''}
+    ${
+      fromScratch
+        ? 'IMPORTANT: Create a completely new implementation from scratch, ignoring any existing code structure.\\n'
+        : ''
+    }
 
-    ${originalDescription ? `IMPORTANT: Preserve this original asset description exactly as provided:\\n\`\`\`\n${originalDescription}\n\`\`\`\n` : ''}
+    ${
+      originalDescription
+        ? `IMPORTANT: Preserve this original asset description exactly as provided:\\n\`\`\`\n${originalDescription}\n\`\`\`\n`
+        : ''
+    }
 
     Requirements:
     1. Implement the Asset interface with name and render method
@@ -161,7 +171,21 @@ async function generateAssetChunk(
   chunkIndex: number,
   modelType: ModelType = ModelType.DEFAULT,
 ): Promise<{ content: string; isComplete: boolean }> {
-  const chunkResult = await generateCode(prompt, [saveAssetChunkDef], 'saveAssetChunk', 0.7, modelType);
+  const chunkResult = (
+    await generateCode(
+      prompt,
+      {
+        functionDefs: [saveAssetChunkDef],
+        requiredFunctionName: 'saveAssetChunk',
+        temperature: 0.7,
+        modelType,
+        expectedResponseType: { functionCall: true, text: false, media: false },
+      },
+      {},
+    )
+  )
+    .filter((item) => item.type === 'functionCall')
+    .map((item) => item.functionCall);
 
   if (!chunkResult || chunkResult.length === 0 || !chunkResult[0]?.args) {
     throw new Error('Failed to generate asset chunk');
