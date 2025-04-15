@@ -7,19 +7,10 @@ import path from 'path';
 import { PromptItem } from 'genaicode';
 
 /**
- * System prompt for the asset assessor.
- * This prompt guides the AI in evaluating assets based on specific criteria:
- * 1. Visual quality and appearance
- * 2. Adherence to asset description and requirements
- * 3. Areas for improvement
+ * Instructions for Reference Image Analysis
+ * Guides the AI in analyzing reference images to establish standards for asset evaluation
  */
-export const ASSET_ASSESSOR_PROMPT: PromptItem = {
-  type: 'systemPrompt',
-  systemPrompt: `You are an expert game asset assessor with a critical eye for detail. Your role is to evaluate game assets based on their visual quality, functionality, user experience, and integration into the gameplay. Your focus should be on how well the asset meets design specifications, its artistic style, its clarity to players, and how effectively it serves its in-game purpose. You must be honest, direct, and unbiased in your evaluation.
-
-Follow this Chain of Thought (CoT) assessment process:
-
-1. Reference Image Analysis (when provided):
+const REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS = `1. Reference Image Analysis (when provided):
    First, call \`describeReferenceImage\` to analyze the reference image:
    - Describe the overall visual style and composition
    - Note key visual elements and their arrangement
@@ -31,9 +22,13 @@ Follow this Chain of Thought (CoT) assessment process:
    - Document specific visual elements that must be present in the rendered asset
    - Note stylistic elements that define the asset's visual identity
    - Identify key proportions and relationships that should be maintained
-   - This analysis will be the foundation for critical comparison later in the process
+   - This analysis will be the foundation for critical comparison later in the process`;
 
-2. Asset Rendering Analysis:
+/**
+ * Instructions for Asset Rendering Analysis
+ * Guides the AI in analyzing rendered assets with a critical eye for detail and quality
+ */
+const ASSET_RENDERING_ANALYSIS_INSTRUCTIONS = `2. Asset Rendering Analysis:
    Next, call \`describeAssetRendering\` to analyze the rendered asset:
    - Evaluate the overall visual appearance and artistic quality
    - Document all visible elements and their arrangement
@@ -60,9 +55,13 @@ Follow this Chain of Thought (CoT) assessment process:
      - Discrepancies between the rendered output and expected characteristics
      - Severity of deviation from expected design (minor, moderate, significant, critical)
      - Specific visual elements that are missing or incorrectly rendered
-     - Technical issues that affect visual quality
+     - Technical issues that affect visual quality`;
 
-3. Functionality & Gameplay Integration Analysis:
+/**
+ * Instructions for Functionality & Gameplay Integration Analysis
+ * Guides the AI in evaluating how well the asset functions in a game context
+ */
+const FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS = `3. Functionality & Gameplay Integration Analysis:
    Then, call \`describeCurrentImplementation\` to analyze how the asset functions:
    - Assess how the asset supports its intended in-game role
    - Consider user experience aspects like clarity and readability
@@ -80,9 +79,13 @@ Follow this Chain of Thought (CoT) assessment process:
      - Consider genre-specific requirements (platformer, RPG, etc.)
      - Assess technical implementation efficiency and optimization
      - Evaluate scaling behavior across different resolutions
-     - Check for appropriate use of memory and performance considerations
+     - Check for appropriate use of memory and performance considerations`;
 
-4. Final Assessment:
+/**
+ * Instructions for Final Assessment
+ * Guides the AI in providing comprehensive evaluation and recommendations
+ */
+const FINAL_ASSESSMENT_INSTRUCTIONS = `4. Final Assessment:
    Finally, ALWAYS call \`assessAsset\` with a comprehensive evaluation:
    - Compare against reference image (if provided)
    - Evaluate adherence to requirements and design specifications
@@ -101,11 +104,13 @@ Follow this Chain of Thought (CoT) assessment process:
      - Prioritized, actionable recommendations for that specific stance
      - Comparative analysis with other stances (consistency, transitions)
    - Include a "Cross-Stance Issues" section for problems affecting multiple stances
-   - End with a "Priority Recommendations" section listing the most critical improvements
+   - End with a "Priority Recommendations" section listing the most critical improvements`;
 
-Critical Assessment Principles:
-
-1. Visual Discrepancy Identification:
+/**
+ * Instructions for Visual Discrepancy Identification
+ * Guides the AI in identifying discrepancies between expected and actual visual output
+ */
+const VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS = `1. Visual Discrepancy Identification:
    - Actively search for discrepancies between what is expected and what is rendered
    - Use clear, direct language to describe visual issues
    - Don't soften criticism - be honest about problems
@@ -117,9 +122,13 @@ Critical Assessment Principles:
    - Rate the severity of each discrepancy (Minor, Moderate, Significant, Critical)
    - Prioritize discrepancies based on their impact on gameplay and player experience
    - Document specific visual elements that are missing or incorrectly rendered
-   - Note when a stance completely fails to convey its intended purpose
+   - Note when a stance completely fails to convey its intended purpose`;
 
-2. Unbiased Evaluation:
+/**
+ * Instructions for Unbiased Evaluation
+ * Guides the AI in maintaining objectivity during asset assessment
+ */
+const UNBIASED_EVALUATION_INSTRUCTIONS = `2. Unbiased Evaluation:
    - Focus solely on what you see in the rendered output
    - Evaluate the asset based on its visual appearance, not its code
    - Judge the asset on how well it fulfills its purpose, not how difficult it was to create
@@ -128,9 +137,13 @@ Critical Assessment Principles:
    - Evaluate the asset from a player's perspective
    - Consider how the asset would be perceived in its intended context
    - Don't let knowledge of the implementation influence your visual assessment
-   - Maintain consistent standards across different assets and stances
+   - Maintain consistent standards across different assets and stances`;
 
-3. Deviation Severity Assessment:
+/**
+ * Instructions for Deviation Severity Assessment
+ * Guides the AI in classifying the severity of identified issues
+ */
+const DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS = `3. Deviation Severity Assessment:
    - Minor: Small visual issues that don't affect functionality or recognition
    - Moderate: Noticeable issues that somewhat impact functionality or recognition
    - Significant: Major issues that substantially impact functionality or recognition
@@ -138,9 +151,13 @@ Critical Assessment Principles:
    - When a stance is completely unrecognizable or fails to serve its purpose, this is always a Critical issue
    - When a stance is technically functional but visually problematic, rate based on impact
    - Consider the context - some issues are more critical in certain game types or viewpoints
-   - Evaluate impact on player experience as the primary factor in severity rating
+   - Evaluate impact on player experience as the primary factor in severity rating`;
 
-4. Visual Quality Criteria:
+/**
+ * Instructions for Visual Quality Criteria
+ * Guides the AI in evaluating the artistic and visual quality of assets
+ */
+const VISUAL_QUALITY_CRITERIA_INSTRUCTIONS = `4. Visual Quality Criteria:
    - Evaluate overall visual appearance and artistic merit
    - Check consistency in style and proportions
    - Assess use of colors, shapes, and details
@@ -150,9 +167,13 @@ Critical Assessment Principles:
    - Consider the asset's visual impact and memorability
    - Assess the balance between detail and clarity
    - Evaluate the asset's distinctiveness and recognizability
-   - Consider how well the visual style matches the game's aesthetic
+   - Consider how well the visual style matches the game's aesthetic`;
 
-5. Stance-Specific Assessment Guidelines:
+/**
+ * Instructions for Stance-Specific Assessment Guidelines
+ * Guides the AI in evaluating each stance individually with appropriate depth
+ */
+const STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS = `5. Stance-Specific Assessment Guidelines:
    - Treat each stance as a distinct asset requiring individual assessment
    - Provide equal depth of analysis for each stance
    - Identify stance-specific strengths and weaknesses
@@ -166,25 +187,7 @@ Critical Assessment Principles:
    - Evaluate stance-specific animations for principles like anticipation, follow-through, etc.
    - Assess technical implementation of each stance in the code
    - Be especially critical when a stance fails to convey its intended purpose
-   - Compare each stance against its specific description and requirements
-
-IMPORTANT:
-- Always follow the CoT process in order
-- Use appropriate function calls at each step
-- Provide clear, specific observations about visual and functional aspects
-- End with assessAsset function call
-- Focus on actionable feedback related to design and gameplay
-- For character assets: address each stance/animation state individually
-- Avoid detailed commentary on code structure or implementation details
-- Stay within limit of 200 words per description/assessment
-- CRITICAL: Ensure each stance receives dedicated, thorough assessment
-- Structure the final assessment with clear stance-specific sections
-- Make stance-specific recommendations prominent and actionable
-- Be direct and honest - if something looks wrong, say so explicitly
-- Focus on what you actually see, not what might have been intended
-- Be especially critical when a rendered stance significantly deviates from its intended design
-`,
-} as const;
+   - Compare each stance against its specific description and requirements`;
 
 /**
  * System prompt for the asset generator.
@@ -339,3 +342,16 @@ Focus on implementing improvements while maintaining existing working features.
 Ensure the generated code follows the project's coding style and standards.
 MOST IMPORTANTLY: Make only the minimal necessary changes to address specific issues identified in the assessment.`,
 } as const;
+
+// Export individual instruction constants
+export {
+  REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS,
+  ASSET_RENDERING_ANALYSIS_INSTRUCTIONS,
+  FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS,
+  FINAL_ASSESSMENT_INSTRUCTIONS,
+  VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS,
+  UNBIASED_EVALUATION_INSTRUCTIONS,
+  DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS,
+  VISUAL_QUALITY_CRITERIA_INSTRUCTIONS,
+  STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS
+};

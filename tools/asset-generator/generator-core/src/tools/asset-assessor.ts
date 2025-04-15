@@ -3,7 +3,17 @@ import * as fs from 'fs/promises';
 import { FunctionDef, ModelType, PromptImageMediaType, PromptItem } from 'genaicode';
 import { Asset } from '../assets-types.js';
 import { generateContent } from './genaicode-executor.js';
-import { ASSET_ASSESSOR_PROMPT } from './prompts.js';
+import {
+  REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS,
+  ASSET_RENDERING_ANALYSIS_INSTRUCTIONS,
+  FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS,
+  FINAL_ASSESSMENT_INSTRUCTIONS,
+  VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS,
+  UNBIASED_EVALUATION_INSTRUCTIONS,
+  DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS,
+  VISUAL_QUALITY_CRITERIA_INSTRUCTIONS,
+  STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS,
+} from './prompts.js';
 
 interface AssessmentContext {
   referenceImageDescription?: string;
@@ -39,10 +49,34 @@ export async function assessAsset(
         referenceImageData = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
         // Step 1: Describe reference image
+        const referenceImageSystemPrompt: PromptItem = {
+          type: 'systemPrompt',
+          systemPrompt: `You are an expert game asset assessor with a critical eye for detail. Your role is to evaluate game assets based on their visual quality, functionality, user experience, and integration into the gameplay. Your focus should be on how well the asset meets design specifications, its artistic style, its clarity to players, and how effectively it serves its in-game purpose. You must be honest, direct, and unbiased in your evaluation.
+
+Follow this Chain of Thought (CoT) assessment process:
+
+${REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS}
+
+Critical Assessment Principles:
+
+${VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS}
+
+${UNBIASED_EVALUATION_INSTRUCTIONS}
+
+IMPORTANT:
+- Always follow the CoT process in order
+- Use appropriate function calls at each step
+- Provide clear, specific observations about visual and functional aspects
+- Focus on actionable feedback related to design and gameplay
+- Be direct and honest - if something looks wrong, say so explicitly
+- Focus on what you actually see, not what might have been intended
+`,
+        };
+
         const [refImageResult] = (
           await generateContent(
             [
-              ASSET_ASSESSOR_PROMPT,
+              referenceImageSystemPrompt,
               {
                 type: 'user',
                 text: 'Reference image for analysis:',
@@ -98,6 +132,37 @@ export async function assessAsset(
       stanceGroups[media.stance]!.push(media);
     });
 
+    // Construct system prompt for asset rendering analysis
+    const assetRenderingSystemPrompt: PromptItem = {
+      type: 'systemPrompt',
+      systemPrompt: `You are an expert game asset assessor with a critical eye for detail. Your role is to evaluate game assets based on their visual quality, functionality, user experience, and integration into the gameplay. Your focus should be on how well the asset meets design specifications, its artistic style, its clarity to players, and how effectively it serves its in-game purpose. You must be honest, direct, and unbiased in your evaluation.
+
+Follow this Chain of Thought (CoT) assessment process:
+
+${ASSET_RENDERING_ANALYSIS_INSTRUCTIONS}
+
+Critical Assessment Principles:
+
+${VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS}
+
+${UNBIASED_EVALUATION_INSTRUCTIONS}
+
+${DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS}
+
+${VISUAL_QUALITY_CRITERIA_INSTRUCTIONS}
+
+IMPORTANT:
+- Use appropriate function calls at each step
+- Provide clear, specific observations about visual and functional aspects
+- Focus on actionable feedback related to design and gameplay
+- For character assets: address each stance/animation state individually
+- Stay within limit of 200 words per description/assessment
+- Be direct and honest - if something looks wrong, say so explicitly
+- Focus on what you actually see, not what might have been intended
+- Be especially critical when a rendered stance significantly deviates from its intended design
+`,
+    };
+
     // Process each stance individually
     await Promise.all(
       Object.entries(stanceGroups).map(async ([stance, mediaItems]) => {
@@ -106,7 +171,7 @@ export async function assessAsset(
         const [renderResult] = (
           await generateContent(
             [
-              ASSET_ASSESSOR_PROMPT,
+              assetRenderingSystemPrompt,
               ...mediaItems.map<PromptItem>(({ mediaType, dataUrl }) => ({
                 type: 'user',
                 text: `Rendered asset`,
@@ -156,10 +221,34 @@ export async function assessAsset(
 
     // Step 3: Describe implementation (if available)
     if (currentImplementation) {
+      // Construct system prompt for implementation analysis
+      const implementationSystemPrompt: PromptItem = {
+        type: 'systemPrompt',
+        systemPrompt: `You are an expert game asset assessor with a critical eye for detail. Your role is to evaluate game assets based on their visual quality, functionality, user experience, and integration into the gameplay. Your focus should be on how well the asset meets design specifications, its artistic style, its clarity to players, and how effectively it serves its in-game purpose. You must be honest, direct, and unbiased in your evaluation.
+
+Follow this Chain of Thought (CoT) assessment process:
+
+${FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS}
+
+Critical Assessment Principles:
+
+${UNBIASED_EVALUATION_INSTRUCTIONS}
+
+${DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS}
+
+IMPORTANT:
+- Use appropriate function calls at each step
+- Provide clear, specific observations about technical aspects
+- Focus on actionable feedback related to implementation
+- Avoid detailed commentary on code structure or implementation details unless relevant to visual issues
+- Be direct and honest - if something looks wrong, say so explicitly
+`,
+      };
+
       const [implResult] = (
         await generateContent(
           [
-            ASSET_ASSESSOR_PROMPT,
+            implementationSystemPrompt,
             {
               type: 'user',
               text: `Current implementation:\n\n\`\`\`typescript\n${currentImplementation}\n\`\`\``,
@@ -237,11 +326,45 @@ ${context.implementationDescription || 'No current implementation available.'}
 Remember: You are evaluating ONLY what is visually presented, not the intentions or the code behind it. Your assessment should be unbiased and based solely on the quality and accuracy of the rendered output.
 `;
 
+    // Construct system prompt for final assessment
+    const finalAssessmentSystemPrompt: PromptItem = {
+      type: 'systemPrompt',
+      systemPrompt: `You are an expert game asset assessor with a critical eye for detail. Your role is to evaluate game assets based on their visual quality, functionality, user experience, and integration into the gameplay. Your focus should be on how well the asset meets design specifications, its artistic style, its clarity to players, and how effectively it serves its in-game purpose. You must be honest, direct, and unbiased in your evaluation.
+
+Follow this Chain of Thought (CoT) assessment process:
+
+${FINAL_ASSESSMENT_INSTRUCTIONS}
+
+Critical Assessment Principles:
+
+${VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS}
+
+${UNBIASED_EVALUATION_INSTRUCTIONS}
+
+${DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS}
+
+${VISUAL_QUALITY_CRITERIA_INSTRUCTIONS}
+
+${STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS}
+
+IMPORTANT:
+- End with assessAsset function call
+- Focus on actionable feedback related to design and gameplay
+- For character assets: address each stance/animation state individually
+- CRITICAL: Ensure each stance receives dedicated, thorough assessment
+- Structure the final assessment with clear stance-specific sections
+- Make stance-specific recommendations prominent and actionable
+- Be direct and honest - if something looks wrong, say so explicitly
+- Focus on what you actually see, not what might have been intended
+- Be especially critical when a rendered stance significantly deviates from its intended design
+`,
+    };
+
     // Step 4: Generate the final assessment
     const [assessResult] = (
       await generateContent(
         [
-          ASSET_ASSESSOR_PROMPT,
+          finalAssessmentSystemPrompt,
           {
             type: 'user',
             text: finalAssessmentPrompt,
