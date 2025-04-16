@@ -26,6 +26,8 @@ The lion's animation is achieved using a simple bounce effect, where the lion mo
 The lion's position and size are adjustable, allowing for customization based on the game's requirements. The canvas is responsive, adapting to different screen sizes while maintaining the aspect ratio of the lion and background.
 The splash screen is designed to be lightweight and efficient, ensuring quick loading times and smooth performance. The colors are bright and vibrant, making the lion stand out against the jungle background. The overall design is fun and engaging, perfect for attracting players' attention and setting the mood for the game.
 
+Do not use gradients or complex patterns in the rendering. The lion should be drawn using solid colors and simple shapes to maintain a cartoonish style. The background should also be simple, with a focus on vibrant colors rather than intricate details.
+
 Render function should be hermetic, meaning it should not depend on any external state or variables. It should only use the parameters passed to it to render the lion and background. This ensures that the rendering is consistent and reliable, regardless of the environment or context in which it is used.
 `,
   render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number): void {},
