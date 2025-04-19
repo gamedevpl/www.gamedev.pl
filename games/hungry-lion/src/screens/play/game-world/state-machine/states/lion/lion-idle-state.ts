@@ -18,6 +18,16 @@ export const LION_IDLE_STATE: State<LionEntity, LionIdleStateData> = {
   update: (data, context) => {
     const { entity } = context;
 
+    // Check for keyboard movement first
+    if (entity.movementVector.x !== 0 || entity.movementVector.y !== 0) {
+      return {
+        nextState: 'LION_MOVING_TO_TARGET',
+        data: {
+          ...data,
+        },
+      };
+    }
+
     // Check if we have a target
     if (
       (entity.target.entityId && entity.actions.attack.enabled) ||

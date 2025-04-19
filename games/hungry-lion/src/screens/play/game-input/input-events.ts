@@ -11,16 +11,30 @@ export enum GameEvents {
   TOUCH_MOVE = 'game:touch-move',
   TOUCH_END = 'game:touch-end',
 
-  // Lion movement events
-  SET_LION_TARGET = 'game:set-lion-target',
-  CANCEL_CHASE = 'game:cancel-chase',
-  TOGGLE_ACTION = 'game:toggle-action',
+  // Keyboard input events
+  KEY_DOWN = 'game:key-down',
+  KEY_UP = 'game:key-up',
+
+  // Lion control events
+  SET_LION_TARGET = 'game:set-lion-target', // From mouse/touch
+  SET_LION_MOVEMENT_VECTOR = 'game:set-lion-movement-vector', // From keyboard
+  LION_ACTION_ACTIVATE = 'game:lion-action-activate', // From keyboard (Space key)
+  CANCEL_CHASE = 'game:cancel-chase', // From mouse/touch (potentially keyboard?)
+  TOGGLE_ACTION = 'game:toggle-action', // From UI buttons
 }
 
-// Lion Movement Events
+// Lion Control Events
 export type LionTargetEvent = {
   position: Vector2D | undefined;
   preyId?: EntityId | undefined;
+};
+
+export type LionMovementVectorEvent = {
+  vector: Vector2D;
+};
+
+export type LionActionActivateEvent = {
+  timestamp: number;
 };
 
 export type CancelChaseEvent = {
@@ -33,6 +47,15 @@ export type CancelChaseEvent = {
 export type ToggleActionEvent = {
   action: 'walk' | 'attack' | 'ambush';
   enabled: boolean;
+};
+
+// Keyboard Events
+export type KeyDownEvent = {
+  key: string;
+};
+
+export type KeyUpEvent = {
+  key: string;
 };
 
 // Common position type for both mouse and touch events

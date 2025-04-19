@@ -11,3 +11,4 @@ export const LION_STEP_SIZE = LION_WIDTH / 3;
 export const LION_MAX_SPEED = 200; // units per second
 
 export const MAX_EATING_DISTANCE = 30;
+export const ATTACK_INITIATE_DISTANCE = 200; // Distance to check for nearby prey for SPACE action

@@ -43,6 +43,7 @@ export function createEntities(): Entities {
   createEntity<LionEntity>(state, 'lion', {
     position: { x: 100, y: 100 },
     isPlayer: true,
+    movementVector: { x: 0, y: 0 },
     target: {},
     actions: {
       walk: { enabled: false },

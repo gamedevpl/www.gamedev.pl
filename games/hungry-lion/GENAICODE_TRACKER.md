@@ -15,6 +15,18 @@
   * ✅ Eating Mechanics: Dedicated state, transitions, visual feedback
   * ✅ Action Bar Implementation: Basic UI, state management
     * ☐ Enhanced styling, cooldowns, icons, tooltips
+  * ✅ Implement Keyboard Controls (WASD/Arrows + SPACE): Movement via keys, context-aware SPACE action (attack/ambush/walk).
+    * Affected files:
+      * `src/screens/play/game-input/input-events.ts`
+      * `src/screens/play/game-input/keyboard-input-controller.ts` (new)
+      * `src/screens/play/game-viewport.tsx`
+      * `src/screens/play/game-world/entities/entities-types.ts`
+      * `src/screens/play/game-world/entities/entities-update.ts`
+      * `src/screens/play/game-controller.tsx`
+      * `src/screens/play/game-world/state-machine/states/lion/lion-moving-state.ts`
+      * `src/screens/play/game-world/state-machine/states/lion/lion-idle-state.ts`
+      * `src/screens/play/game-world/state-machine/states/lion/lion-ambush-state.ts`
+      * `src/screens/play/game-world/game-world-consts.ts`
   * ☐ Stealth movement mechanics
   * ☐ Pathfinding for obstacle avoidance
   * ☐ Movement sound effects
