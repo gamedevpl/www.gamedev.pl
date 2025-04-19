@@ -1,8 +1,10 @@
 import { LionEntity } from '../../../entities/entities-types';
+import { vectorDistance } from '../../../utils/math-utils';
 import { BaseStateData, State } from '../../state-machine-types';
 
 // Constants for ambush state
 const AMBUSH_SNEAK_ACCELERATION = 0.002; // Low acceleration for sneaking
+const TARGET_REACHED_DISTANCE = 10;
 
 /**
  * State data interface for lion ambush state
@@ -29,8 +31,8 @@ export const LION_AMBUSH_STATE: State<LionEntity, LionAmbushStateData> = {
     // --- Check for transitions out of Ambush ---
 
     // If we have a target and attack is enabled (SPACE pressed near prey, or clicked prey), transition to chasing with speed boost
-    if (entity.target.entityId && entity.actions.attack.enabled) {
-      entity.actions.ambush.enabled = false;
+    if (entity.target.entityId && entity.activeAction === 'attack') {
+      // No need to explicitly disable ambush.enabled, activeAction handles it
       return {
         nextState: 'LION_CHASING',
         data: {
@@ -42,17 +44,16 @@ export const LION_AMBUSH_STATE: State<LionEntity, LionAmbushStateData> = {
     }
 
     // Transition to idle if walk action is enabled (e.g., SPACE pressed with no target to break ambush)
-    if (entity.actions.walk.enabled) {
-      entity.actions.ambush.enabled = false; // Ensure ambush is disabled
-      entity.actions.walk.enabled = false; // Reset walk action immediately
+    if (entity.activeAction === 'walk') {
+      // GameController sets activeAction to 'walk', so we transition
       return {
         nextState: 'LION_IDLE',
         data: { enteredAt: context.updateContext.gameState.time },
       };
     }
 
-    // If ambush action itself got disabled externally (e.g., UI button), return to idle
-    if (!entity.actions.ambush.enabled) {
+    // If ambush action itself got changed externally (e.g., UI button clicked walk/attack), return to idle
+    if (entity.activeAction !== 'ambush') {
       return {
         nextState: 'LION_IDLE',
         data: { enteredAt: context.updateContext.gameState.time },
@@ -77,12 +78,19 @@ export const LION_AMBUSH_STATE: State<LionEntity, LionAmbushStateData> = {
           const dx = targetEntity.position.x - entity.position.x;
           const dy = targetEntity.position.y - entity.position.y;
           entity.targetDirection = Math.atan2(dy, dx);
+          entity.acceleration = AMBUSH_SNEAK_ACCELERATION;
         }
       } else if (entity.target.position) {
-        // Or face movement target if set by mouse/touch while ambushing (less common)
-        const dx = entity.target.position.x - entity.position.x;
-        const dy = entity.target.position.y - entity.position.y;
-        entity.targetDirection = Math.atan2(dy, dx);
+        const distance = vectorDistance(entity.position, entity.target.position);
+
+        // Check if target reached
+        if (distance > TARGET_REACHED_DISTANCE) {
+          // Or face movement target if set by mouse/touch while ambushing (less common)
+          const dx = entity.target.position.x - entity.position.x;
+          const dy = entity.target.position.y - entity.position.y;
+          entity.targetDirection = Math.atan2(dy, dx);
+          entity.acceleration = AMBUSH_SNEAK_ACCELERATION;
+        }
       }
     }
 

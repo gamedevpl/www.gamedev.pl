@@ -1,4 +1,4 @@
-import { RefObject, useRef } from 'react';
+import { RefObject, useRef, useCallback } from 'react';
 import { dispatchCustomEvent, useCustomEvent } from '../../utils/custom-events';
 import { GameWorldState } from './game-world/game-world-types';
 import { RenderState } from './game-render/render-state';
@@ -8,18 +8,19 @@ import {
   MouseButtonEvent,
   TouchStartEvent,
   TouchMoveEvent,
-  ToggleActionEvent,
   TouchEndEvent,
   InputPosition,
   LionTargetEvent,
   CancelChaseEvent,
   LionMovementVectorEvent,
   LionActionActivateEvent,
+  SetActiveActionEvent,
 } from './game-input/input-events';
 import { Entity, LionEntity } from './game-world/entities/entities-types';
 import { getPlayerLion, getPrey } from './game-world/game-world-query';
 import { vectorDistance } from './game-world/utils/math-utils';
 import { ATTACK_INITIATE_DISTANCE } from './game-world/game-world-consts';
+import { LionStateType } from './game-world/state-machine/states/lion';
 
 export function GameController({ gameStateRef }: GameControllerProps) {
   const touchStateRef = useRef<TouchState>({
@@ -28,20 +29,23 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   });
 
   // Helper to find the closest prey within a given distance
-  const findClosestPrey = (lion: LionEntity, maxDistance: number): Entity | null => {
-    if (!gameStateRef.current) return null;
-    let closestPrey: Entity | null = null;
-    let minDistance = maxDistance;
+  const findClosestPrey = useCallback(
+    (lion: LionEntity, maxDistance: number): Entity | null => {
+      if (!gameStateRef.current) return null;
+      let closestPrey: Entity | null = null;
+      let minDistance = maxDistance;
 
-    for (const prey of getPrey(gameStateRef.current.gameWorldState)) {
-      const distance = vectorDistance(lion.position, prey.position);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestPrey = prey;
+      for (const prey of getPrey(gameStateRef.current.gameWorldState)) {
+        const distance = vectorDistance(lion.position, prey.position);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestPrey = prey;
+        }
       }
-    }
-    return closestPrey;
-  };
+      return closestPrey;
+    },
+    [gameStateRef],
+  ); // Add gameStateRef as dependency
 
   const findPreyAtPosition = (position: InputPosition): Entity | null => {
     if (!gameStateRef.current) return null;
@@ -58,6 +62,31 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     return null;
   };
 
+  /**
+   * Handles the logic for initiating an attack, finding nearby prey, and setting the target.
+   * @param lion The player lion entity.
+   * @returns `true` if prey was found and targeted, `false` otherwise.
+   */
+  const handleLionAttackInitiation = useCallback(
+    (lion: LionEntity): boolean => {
+      const nearbyPrey = findClosestPrey(lion, ATTACK_INITIATE_DISTANCE);
+      if (nearbyPrey) {
+        lion.target.entityId = nearbyPrey.id;
+        lion.target.position = undefined;
+        lion.activeAction = 'attack';
+        return true;
+      } else {
+        // If no prey found, still set action to attack, but clear target
+        // The state machine will handle the lack of target (e.g., stay idle or move if input dictates)
+        lion.target.entityId = undefined;
+        lion.target.position = undefined;
+        lion.activeAction = 'attack'; // Indicate intent, even without target
+        return false;
+      }
+    },
+    [findClosestPrey],
+  ); // Add findClosestPrey as dependency
+
   // --- Mouse/Touch Input Handlers ---
 
   const handleTargeting = (position: InputPosition) => {
@@ -65,31 +94,38 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (!lion) return;
 
-    // If keyboard is controlling movement, mouse clicks might only target prey
+    const prey = findPreyAtPosition(position);
+
+    // If keyboard is controlling movement, mouse clicks primarily target prey for attack
     if (lion.movementVector.x !== 0 || lion.movementVector.y !== 0) {
-      const prey = findPreyAtPosition(position);
       if (prey) {
         lion.target.position = undefined; // Clear position target
         lion.target.entityId = prey.id;
-        lion.actions.attack.enabled = true;
-        lion.actions.walk.enabled = false;
-        lion.actions.ambush.enabled = false;
+        lion.activeAction = 'attack'; // Set action to attack
       }
-      // Don't set position target if keyboard is moving
+      // If no prey clicked and keyboard is active, don't change activeAction or target
       return;
     }
 
-    // Original logic: target prey if found, otherwise set position target
-    const prey = findPreyAtPosition(position);
-    dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
-      position: prey
-        ? undefined
-        : {
-            x: position.worldX,
-            y: position.worldY,
-          },
-      preyId: prey?.id,
-    });
+    // If not moving via keyboard, mouse click sets target and action
+    if (prey) {
+      // Clicked on prey -> Attack
+      dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
+        position: undefined,
+        preyId: prey.id,
+      });
+      // The SET_LION_TARGET listener will set activeAction = 'attack'
+    } else {
+      // Clicked on ground -> Walk
+      dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
+        position: {
+          x: position.worldX,
+          y: position.worldY,
+        },
+        preyId: undefined,
+      });
+      // The SET_LION_TARGET listener will set activeAction = 'walk'
+    }
   };
 
   const handleFollowCursor = (position: InputPosition) => {
@@ -97,15 +133,22 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (!lion) return;
 
-    // Only follow cursor if keyboard is not moving and mouse/touch is active
-    if (lion.movementVector.x === 0 && lion.movementVector.y === 0 && touchStateRef.current.isActive) {
-      if (lion.actions.walk.enabled && !lion.target.entityId) {
+    // Only follow cursor if keyboard is not moving, mouse/touch is active, AND the active action is 'walk'
+    if (
+      lion.movementVector.x === 0 &&
+      lion.movementVector.y === 0 &&
+      touchStateRef.current.isActive &&
+      lion.activeAction === 'walk'
+    ) {
+      // Only update position target if no entity is targeted
+      if (!lion.target.entityId) {
         dispatchCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, {
           position: {
             x: position.worldX,
             y: position.worldY,
           },
         });
+        // Don't change activeAction here, just update position
       }
     }
   };
@@ -113,7 +156,7 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   const handleCancelChase = () => {
     if (!gameStateRef.current) return;
     dispatchCustomEvent<CancelChaseEvent>(GameEvents.CANCEL_CHASE, {
-      position: null,
+      position: null, // Signal cancellation
     });
   };
 
@@ -127,18 +170,13 @@ export function GameController({ gameStateRef }: GameControllerProps) {
       lion.movementVector = event.vector;
 
       // Prioritize keyboard movement: If moving via keys, clear mouse/touch target position
+      // but *don't* change activeAction set by UI or SPACE
       if (event.vector.x !== 0 || event.vector.y !== 0) {
         lion.target.position = undefined;
-        lion.actions.walk.enabled = false; // Disable walk action tied to mouse/touch
-        // Keep attack/ambush enabled if they were set by SPACE
       } else {
-        // If keyboard stops, allow mouse/touch walk again if input is active
-        if (touchStateRef.current.isActive && touchStateRef.current.position) {
-          lion.actions.walk.enabled = true;
-          // Optionally re-target last mouse/touch position
-          // handleFollowCursor(touchStateRef.current.position);
-        } else {
-          lion.actions.walk.enabled = false;
+        // If keyboard stops, re-enable mouse follow *if* action is walk and input is active
+        if (touchStateRef.current.isActive && touchStateRef.current.position && lion.activeAction === 'walk') {
+          handleFollowCursor(touchStateRef.current.position);
         }
       }
     }
@@ -150,69 +188,57 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (!lion) return;
 
-    const nearbyPrey = findClosestPrey(lion, ATTACK_INITIATE_DISTANCE);
+    const currentState = lion.stateMachine[0] as LionStateType;
 
-    if (lion.actions.ambush.enabled) {
-      // Currently in Ambush
-      if (nearbyPrey) {
-        // Ambush -> Attack Prey
-        lion.target.entityId = nearbyPrey.id;
-        lion.target.position = undefined;
-        lion.actions.attack.enabled = true;
-        lion.actions.ambush.enabled = false;
-        lion.actions.walk.enabled = false;
-      } else {
-        // Ambush -> Walk (break ambush)
-        lion.actions.walk.enabled = true; // Signal state machine to transition
-        lion.actions.ambush.enabled = false;
-        lion.actions.attack.enabled = false;
+    if (currentState === 'LION_AMBUSH') {
+      // Currently in Ambush: Space tries to attack or breaks ambush
+      const preyTargeted = handleLionAttackInitiation(lion);
+      if (!preyTargeted) {
+        // No prey found, break ambush -> Walk
+        lion.activeAction = 'walk';
         lion.target = {}; // Clear target
       }
+      // If prey was targeted, handleLionAttackInitiation already set action to 'attack'
     } else {
-      // Not in Ambush
-      if (nearbyPrey) {
-        // Idle/Moving/Chasing -> Attack Prey
-        lion.target.entityId = nearbyPrey.id;
-        lion.target.position = undefined;
-        lion.actions.attack.enabled = true;
-        lion.actions.ambush.enabled = false;
-        lion.actions.walk.enabled = false;
-      } else {
-        // Idle/Moving/Chasing -> Ambush
-        lion.actions.ambush.enabled = true;
-        lion.actions.attack.enabled = false;
-        lion.actions.walk.enabled = false;
+      // Not in Ambush (Walk, Attack, Idle): Space tries to attack or enters ambush
+      const preyTargeted = handleLionAttackInitiation(lion);
+      if (!preyTargeted) {
+        // No prey found, enter Ambush
+        lion.activeAction = 'ambush';
         lion.target = {}; // Clear target
       }
+      // If prey was targeted, handleLionAttackInitiation already set action to 'attack'
     }
   });
 
-  // Original mouse/touch target setting
+  // Listen for mouse/touch target setting
   useCustomEvent<LionTargetEvent>(GameEvents.SET_LION_TARGET, (event) => {
     if (!gameStateRef.current) return;
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (!lion) return;
 
-    // Ignore if keyboard is active (unless targeting specific prey)
-    if ((lion.movementVector.x !== 0 || lion.movementVector.y !== 0) && !event.preyId) {
+    // Ignore position targets if keyboard is active
+    if ((lion.movementVector.x !== 0 || lion.movementVector.y !== 0) && !event.preyId && event.position) {
       return;
     }
 
+    // Set active action based on target type
     if (event.preyId) {
-      lion.actions.attack.enabled = true;
-      lion.actions.walk.enabled = false;
-      lion.actions.ambush.enabled = false;
-    } else if (event.position) {
-      lion.actions.walk.enabled = true;
-      lion.actions.attack.enabled = false;
-      lion.actions.ambush.enabled = false;
-    }
+      lion.activeAction = 'attack';
+    } /* else if (event.position) {
+      if (lion.activeAction !== 'ambush') {
+        lion.activeAction = 'walk';
+      }
+    } else {
+      // If both are undefined (e.g., cancel chase), default to walk
+      lion.activeAction = 'walk';
+    }*/
 
     lion.target.position = event.position;
     lion.target.entityId = event.preyId;
   });
 
-  // Cancel chase (e.g., mouse up)
+  // Cancel chase (e.g., touch end)
   useCustomEvent<CancelChaseEvent>(GameEvents.CANCEL_CHASE, () => {
     if (!gameStateRef.current) return;
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
@@ -221,29 +247,35 @@ export function GameController({ gameStateRef }: GameControllerProps) {
       if (lion.movementVector.x === 0 && lion.movementVector.y === 0) {
         lion.target.position = undefined;
         lion.target.entityId = undefined;
-        lion.actions.walk.enabled = false;
-        lion.actions.attack.enabled = false;
-        // Don't disable ambush here, SPACE controls it
+        // Set action back to walk when cancelling mouse/touch interaction
+        lion.activeAction = 'walk';
       }
     }
   });
 
-  // UI Button Toggles (might need adjustment or removal if SPACE is primary)
-  useCustomEvent<ToggleActionEvent>(GameEvents.TOGGLE_ACTION, (event) => {
+  // Listen for UI Button Clicks (Exclusive Actions)
+  useCustomEvent<SetActiveActionEvent>(GameEvents.SET_ACTIVE_ACTION, (event) => {
     if (!gameStateRef.current) return;
     const lion = getPlayerLion(gameStateRef.current.gameWorldState);
     if (lion) {
-      // This logic might conflict with SPACE key, consider simplifying or removing
-      // For now, let UI buttons override keyboard state if needed
-      lion.actions[event.action].enabled = event.enabled;
+      // Set the intended action first
+      lion.activeAction = event.action;
 
-      if (event.action === 'ambush' && event.enabled) {
-        lion.actions.walk.enabled = lion.actions.attack.enabled = false;
-        lion.target = {}; // Clear target when manually entering ambush
-      }
-      // If disabling an action via UI, clear targets
-      if (!event.enabled) {
-        handleCancelChase();
+      // Handle specific logic for each action
+      if (event.action === 'ambush') {
+        lion.target = {}; // Clear target when manually entering ambush via UI
+      } else if (event.action === 'walk') {
+        // If walk is selected via UI, ensure no entity target remains
+        lion.target.entityId = undefined;
+        // If mouse/touch is currently active, start following cursor
+        if (touchStateRef.current.isActive && touchStateRef.current.position) {
+          handleFollowCursor(touchStateRef.current.position);
+        }
+      } else if (event.action === 'attack') {
+        // If attack is selected via UI, attempt to initiate attack (find nearby prey)
+        handleLionAttackInitiation(lion);
+        // The shared function handles setting target.entityId if prey is found
+        // and clears target.position.
       }
     }
   });
@@ -270,7 +302,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
   useCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, () => {
     if (!gameStateRef.current) return;
     touchStateRef.current.isActive = false;
-    handleCancelChase(); // Cancel mouse/touch target on touch end
+    // We call handleCancelChase here specifically for touch end
+    handleCancelChase();
   });
 
   useCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, (event) => {
@@ -285,8 +318,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     if (event.position && event.isPressed) {
       handleTargeting(event.position);
     } else if (!event.isPressed) {
-      // Mouse button released
-      handleCancelChase();
+      // Mouse button released - don't cancel chase, allow movement to continue
+      // touchStateRef.current.isActive is already set to false above
     }
   });
 

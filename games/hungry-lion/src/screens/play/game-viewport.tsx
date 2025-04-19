@@ -114,15 +114,7 @@ export function GameViewport({ gameStateRef, children }: PropsWithChildren<GameV
       <KeyboardInputController />
       <GameController gameStateRef={gameStateRef} />
       {gameStateRef.current && (
-        <ActionBar
-          actions={
-            getPlayerLion(gameStateRef.current.gameWorldState)?.actions || {
-              walk: { enabled: false },
-              attack: { enabled: false },
-              ambush: { enabled: false },
-            }
-          }
-        />
+        <ActionBar activeAction={getPlayerLion(gameStateRef.current.gameWorldState)?.activeAction ?? 'walk'} />
       )}
       {children}
     </ViewportContainer>

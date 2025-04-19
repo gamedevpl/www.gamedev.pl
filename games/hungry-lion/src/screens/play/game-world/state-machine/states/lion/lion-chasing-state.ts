@@ -27,8 +27,8 @@ export const LION_CHASING_STATE: State<LionEntity, LionChasingStateData> = {
     const { entity } = context;
     const currentTime = context.updateContext.gameState.time;
 
-    // Return to idle if attack action is disabled
-    if (!entity.actions.attack.enabled) {
+    // Return to idle if attack action is no longer active (e.g., user selected walk/ambush)
+    if (entity.activeAction !== 'attack') {
       entity.target = {}; // Clear target
       return {
         nextState: 'LION_IDLE',

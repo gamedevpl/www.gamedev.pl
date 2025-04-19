@@ -49,7 +49,7 @@ export const LION_MOVING_TO_TARGET_STATE: State<LionEntity, LionMovingStateData>
       const targetPosition = entity.target.position;
 
       // If no keyboard input, check for mouse/touch target position
-      if (targetPosition && entity.actions.walk.enabled) {
+      if (targetPosition) {
         const distance = vectorDistance(entity.position, targetPosition);
 
         // Check if target reached

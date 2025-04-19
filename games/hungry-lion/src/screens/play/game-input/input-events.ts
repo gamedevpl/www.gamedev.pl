@@ -20,7 +20,9 @@ export enum GameEvents {
   SET_LION_MOVEMENT_VECTOR = 'game:set-lion-movement-vector', // From keyboard
   LION_ACTION_ACTIVATE = 'game:lion-action-activate', // From keyboard (Space key)
   CANCEL_CHASE = 'game:cancel-chase', // From mouse/touch (potentially keyboard?)
-  TOGGLE_ACTION = 'game:toggle-action', // From UI buttons
+  /** @deprecated Use SET_ACTIVE_ACTION for exclusive walk/attack/ambush actions */
+  TOGGLE_ACTION = 'game:toggle-action', // From UI buttons (legacy for walk/attack/ambush)
+  SET_ACTIVE_ACTION = 'game:set-active-action', // NEW: From UI buttons for exclusive actions
 }
 
 // Lion Control Events
@@ -47,6 +49,10 @@ export type CancelChaseEvent = {
 export type ToggleActionEvent = {
   action: 'walk' | 'attack' | 'ambush';
   enabled: boolean;
+};
+
+export type SetActiveActionEvent = {
+  action: 'walk' | 'attack' | 'ambush';
 };
 
 // Keyboard Events

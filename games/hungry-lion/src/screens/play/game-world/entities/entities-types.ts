@@ -32,6 +32,8 @@ export interface ActiveDebuff {
   duration: number;
 }
 
+export type LionActionType = 'walk' | 'attack' | 'ambush';
+
 export interface LionEntity extends Entity {
   type: 'lion';
   target: {
@@ -40,11 +42,8 @@ export interface LionEntity extends Entity {
   };
   /** Movement input vector from keyboard */
   movementVector: Vector2D;
-  actions: {
-    walk: { enabled: boolean };
-    attack: { enabled: boolean };
-    ambush: { enabled: boolean };
-  };
+  /** Currently active action selected by the player */
+  activeAction: LionActionType;
   stateMachine: [StateType, StateData];
   /** Hunger level (0-100). At 0, lion starts starving */
   hungerLevel: number;

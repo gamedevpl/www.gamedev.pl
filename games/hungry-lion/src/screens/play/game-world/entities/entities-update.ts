@@ -45,11 +45,7 @@ export function createEntities(): Entities {
     isPlayer: true,
     movementVector: { x: 0, y: 0 },
     target: {},
-    actions: {
-      walk: { enabled: false },
-      attack: { enabled: false },
-      ambush: { enabled: false },
-    },
+    activeAction: 'walk',
     hungerLevel: 100, // Initialize hunger level for lions
     stateMachine: createLionStateMachine(),
   });
