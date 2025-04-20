@@ -10,6 +10,7 @@ import { drawHunter } from './entity-renderers/hunter-renderer';
 import { renderEnvironment } from './environment-renderer';
 import { drawAllNotifications } from './notifications/combat-notification';
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-consts';
+import { drawHungerIndicator } from './hunger-renderer';
 import { Entity } from '../game-world/entities/entities-types';
 
 // Helper function to draw an entity potentially multiple times for wrapping
@@ -118,4 +119,7 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Restore context to remove viewport translation
   ctx.restore();
+
+  // Draw UI elements (like hunger indicator) in screen space AFTER restoring context
+  drawHungerIndicator(ctx, world);
 };

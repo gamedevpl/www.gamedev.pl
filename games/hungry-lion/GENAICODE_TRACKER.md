@@ -11,7 +11,7 @@
   - ✅ Movement: Basic/continuous movement, mouse/touch input, viewport tracking
   - ✅ Chase Mechanism and Prey Catching
   - ✅ Fix mouse click movement: Ensure lion continues moving to clicked point after mouse button release.
-  - ✅ Hunger Mechanics: Decay, starvation, visual feedback
+  - ✅ Hunger Mechanics: Decay, starvation, visual feedback (Updated pixel art stomach shape on canvas)
   - ✅ Target Notification System
   - ✅ Ambush Mechanics: State management, speed boost
     - ✅ Fix: Clicking ground while in ambush no longer switches state to 'walk'.
