@@ -1,5 +1,84 @@
 import OpenAI from 'openai';
-import { FunctionCall, FunctionDef, PromptItem, Plugin, ModelType } from 'genaicode';
+import { PromptItem, Plugin, ModelType, GenerateContentFunction, FunctionDef, GenerateContentResult } from 'genaicode';
+
+const generateContent: GenerateContentFunction = async (
+  prompt: PromptItem[],
+  { functionDefs, requiredFunctionName, temperature, modelType },
+) => {
+  const { getServiceConfig } = await import('genaicode/ai-service/service-configurations.js');
+  const serviceConfig = getServiceConfig('plugin:deepseek-ai-service');
+
+  const openai = new OpenAI({
+    apiKey: serviceConfig.apiKey,
+    baseURL: 'https://api.deepseek.com',
+  });
+
+  const { internalGenerateContent } = await import('genaicode/ai-service/openai.js');
+  const { processFunctionCalls } = await import('genaicode/ai-service/common.js');
+
+  const last = prompt.slice(-1)[0];
+  const lastText = last.text;
+  if (requiredFunctionName) {
+    if (last.type === 'user' && last.text && !last.text.includes('IMPORTANT REQUIREMENT')) {
+      /* sometimes it is broken :( */
+      last.text += `\n\nIMPORTANT REQUIREMENT: Please respond to me with only one function call. The function called must be \`${requiredFunctionName}\`.`;
+    }
+  }
+
+  let content: Awaited<ReturnType<typeof internalGenerateContent>>;
+  try {
+    content = await internalGenerateContent(
+      prompt,
+      {
+        functionDefs,
+        requiredFunctionName,
+        temperature,
+        modelType,
+        expectedResponseType: {
+          functionCall: true,
+          text: false,
+          media: false,
+        },
+      },
+      modelType === ModelType.CHEAP
+        ? serviceConfig.modelOverrides?.cheap ?? 'deepseek-chat'
+        : modelType === ModelType.REASONING
+        ? 'deepseek-reasoner'
+        : serviceConfig.modelOverrides?.default ?? 'deepseek-chat',
+      openai,
+    );
+  } finally {
+    if (lastText) {
+      last.text = lastText;
+    }
+  }
+
+  let toolCalls = content.filter((item) => item.type === 'functionCall').map((item) => item.functionCall);
+
+  if (requiredFunctionName && toolCalls.length > 1) {
+    /* sometimes it is broken :( */
+    console.log('Multiple function calls, but all are the same, so keeping only one.');
+    toolCalls = toolCalls.filter((call) => call.name === requiredFunctionName).slice(0, 1);
+  }
+
+  const functionCalls = toolCalls.map((call) => {
+    const name =
+      call.name /* sometimes it is broken :( */
+        .match(/\w+/)?.[0] ?? call.name;
+    const args = call.args;
+
+    return {
+      id: call.id,
+      name,
+      args,
+    };
+  });
+
+  return processFunctionCalls(functionCalls, functionDefs).map((item) => ({
+    type: 'functionCall',
+    functionCall: item,
+  }));
+};
 
 export const deepseekAiService: Plugin = {
   name: 'deepseek-ai-service',
@@ -19,75 +98,68 @@ export const deepseekAiService: Plugin = {
   },
 };
 
-async function generateContent(
+/**
+ * This function generates content using the Grok models with the new interface.
+ */
+const generateContentGrok: GenerateContentFunction = async function generateContent(
   prompt: PromptItem[],
-  functionDefs: FunctionDef[],
-  requiredFunctionName: string | null,
-  temperature: number,
-  modelType = ModelType.DEFAULT,
-): Promise<FunctionCall[]> {
+  config: {
+    modelType?: ModelType;
+    temperature?: number;
+    functionDefs?: FunctionDef[];
+    requiredFunctionName?: string | null;
+    expectedResponseType?: {
+      text: boolean;
+      functionCall: boolean;
+      media: boolean;
+    };
+  },
+): Promise<GenerateContentResult> {
   const { getServiceConfig } = await import('genaicode/ai-service/service-configurations.js');
-  const serviceConfig = getServiceConfig('plugin:deepseek-ai-service');
+  const serviceConfig = getServiceConfig('plugin:grok-ai-service');
 
   const openai = new OpenAI({
     apiKey: serviceConfig.apiKey,
-    baseURL: 'https://api.deepseek.com',
+    baseURL: 'https://api.x.ai/v1',
   });
 
-  const { internalGenerateToolCalls } = await import('genaicode/ai-service/openai.js');
-  const { processFunctionCalls } = await import('genaicode/ai-service/common.js');
+  const { internalGenerateContent } = await import('genaicode/ai-service/openai.js');
 
-  const last = prompt.slice(-1)[0];
-  const lastText = last.text;
-  if (requiredFunctionName) {
-    if (last.type === 'user' && last.text && !last.text.includes('IMPORTANT REQUIREMENT')) {
-      /* sometimes it is broken :( */
-      last.text += `\n\nIMPORTANT REQUIREMENT: Please respond to me with only one function call. The function called must be \`${requiredFunctionName}\`.`;
-    }
-  }
+  const modelType = config.modelType ?? ModelType.DEFAULT;
 
-  let toolCalls: Awaited<ReturnType<typeof internalGenerateToolCalls>>;
-  try {
-    toolCalls = await internalGenerateToolCalls(
-      prompt,
-      functionDefs,
-      requiredFunctionName,
-      temperature,
-      modelType,
-      modelType === ModelType.CHEAP
-        ? serviceConfig.modelOverrides?.cheap ?? 'deepseek-chat'
-        : modelType === ModelType.REASONING
-        ? 'deepseek-reasoner'
-        : serviceConfig.modelOverrides?.default ?? 'deepseek-chat',
-      openai,
-    );
-  } finally {
-    if (lastText) {
-      last.text = lastText;
-    }
-  }
+  // Determine the model to use based on modelType and service config
+  const model =
+    modelType === ModelType.CHEAP
+      ? serviceConfig.modelOverrides?.cheap ?? 'grok-3-mini-beta'
+      : modelType === ModelType.REASONING
+      ? serviceConfig.modelOverrides?.reasoning ?? 'grok-3-mini-beta'
+      : serviceConfig.modelOverrides?.default ?? 'grok-3-beta';
 
-  if (requiredFunctionName && toolCalls.length > 1) {
-    /* sometimes it is broken :( */
-    console.log('Multiple function calls, but all are the same, so keeping only one.');
-    toolCalls = toolCalls.filter((call) => call.function.name === requiredFunctionName).slice(0, 1);
-  }
+  // Call internalGenerateContent from openai.ts with the new signature
+  return await internalGenerateContent(
+    prompt.map((item) => ({ ...item, text: item.text ?? ' ' })),
+    config,
+    model,
+    openai,
+  );
+};
 
-  const functionCalls = toolCalls.map((call) => {
-    const name =
-      call.function.name /* sometimes it is broken :( */
-        .match(/\w+/)?.[0] ?? call.function.name;
-    const args = JSON.parse(call.function.arguments);
-
-    return {
-      id: call.id,
-      name,
-      args,
-    };
-  });
-
-  return processFunctionCalls(functionCalls, functionDefs);
-}
+export const grokAiService: Plugin = {
+  name: 'grok-ai-service',
+  aiServices: {
+    'grok-ai-service': {
+      generateContent: generateContentGrok,
+      serviceConfig: {
+        apiKey: process.env.GROK_OPENAI_API_KEY,
+        modelOverrides: {
+          default: 'grok-3-beta',
+          cheap: 'grok-3-mini-beta',
+          reasoning: 'grok-3-mini-beta',
+        },
+      },
+    },
+  },
+};
 
 /**
  * Example plugin demonstrating the usage of planning hook with enhanced issue tracking

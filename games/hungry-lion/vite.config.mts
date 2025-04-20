@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import checker from 'vite-plugin-checker';
 import genaicodeVite from 'genaicode/vite-plugin';
-import { genaicodeTracker, deepseekAiService } from './genaicode_plugins';
+import { genaicodeTracker, deepseekAiService, grokAiService } from './genaicode_plugins';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -19,7 +19,7 @@ export default defineConfig({
         disableContextOptimization: false,
       },
       {
-        plugins: [genaicodeTracker, deepseekAiService],
+        plugins: [genaicodeTracker, deepseekAiService, grokAiService],
       },
     ),
   ],
