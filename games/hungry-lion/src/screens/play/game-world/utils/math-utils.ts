@@ -36,6 +36,40 @@ export function vectorDistance(v1: Vector2D, v2: Vector2D): number {
   return vectorLength(vectorSubtract(v1, v2));
 }
 
+/**
+ * Calculates the shortest vector difference between two points in a wrapping world.
+ * @param v1 - The first vector.
+ * @param v2 - The second vector.
+ * @returns The shortest vector difference (dx, dy).
+ */
+export function calculateWrappedVectorDifference(v1: Vector2D, v2: Vector2D): Vector2D {
+  let dx = v1.x - v2.x;
+  let dy = v1.y - v2.y;
+
+  // Wrap around horizontally if shorter
+  if (Math.abs(dx) > GAME_WORLD_WIDTH / 2) {
+    dx = dx - Math.sign(dx) * GAME_WORLD_WIDTH;
+  }
+
+  // Wrap around vertically if shorter
+  if (Math.abs(dy) > GAME_WORLD_HEIGHT / 2) {
+    dy = dy - Math.sign(dy) * GAME_WORLD_HEIGHT;
+  }
+
+  return { x: dx, y: dy };
+}
+
+/**
+ * Calculates the shortest distance between two points in a wrapping world.
+ * @param v1 - The first vector.
+ * @param v2 - The second vector.
+ * @returns The shortest distance.
+ */
+export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D): number {
+  const difference = calculateWrappedVectorDifference(v1, v2);
+  return vectorLength(difference);
+}
+
 export function vectorDot(v1: Vector2D, v2: Vector2D): number {
   return v1.x * v2.x + v1.y * v2.y;
 }
@@ -45,7 +79,9 @@ export function vectorAngleBetween(v1: Vector2D, v2: Vector2D): number {
   const length1 = vectorLength(v1);
   const length2 = vectorLength(v2);
   if (length1 === 0 || length2 === 0) return 0;
-  return Math.acos(dot / (length1 * length2));
+  // Clamp the dot product ratio to avoid floating point errors leading to Math.acos returning NaN
+  const cosTheta = Math.max(-1, Math.min(1, dot / (length1 * length2)));
+  return Math.acos(cosTheta);
 }
 
 export function vectorRotate(v: Vector2D, angle: number): Vector2D {
@@ -57,21 +93,4 @@ export function vectorRotate(v: Vector2D, angle: number): Vector2D {
   };
 }
 
-export function calculateBoundaryForce(position: Vector2D, boundaryRange: number, boundaryStrength: number): Vector2D {
-  const force = { x: 0, y: 0 };
-
-  if (position.x < boundaryRange) {
-    force.x += boundaryStrength * (boundaryRange - position.x);
-  }
-  if (position.x > GAME_WORLD_WIDTH - boundaryRange) {
-    force.x -= boundaryStrength * (position.x - (GAME_WORLD_WIDTH - boundaryRange));
-  }
-  if (position.y < boundaryRange) {
-    force.y += boundaryStrength * (boundaryRange - position.y);
-  }
-  if (position.y > GAME_WORLD_HEIGHT - boundaryRange) {
-    force.y -= boundaryStrength * (position.y - (GAME_WORLD_HEIGHT - boundaryRange));
-  }
-
-  return force;
-}
+// Removed calculateBoundaryForce as it's replaced by world wrapping

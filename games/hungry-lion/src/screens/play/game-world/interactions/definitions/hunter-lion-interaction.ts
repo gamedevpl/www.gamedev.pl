@@ -1,5 +1,5 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
+import { calculateWrappedDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils'; // Import calculateWrappedDistance
 import { LionEntity, HunterEntity } from '../../entities/entities-types';
 import { addDamageNotification } from '../../notifications/notifications-update';
 
@@ -18,7 +18,8 @@ export const HUNTER_LION_INTERACTION: InteractionDefinition = {
   maxDistance: INTERACTION_DISTANCE,
 
   checker: (source, target) => {
-    const distance = vectorDistance(source.position, target.position);
+    // Use wrapped distance for checking interaction range
+    const distance = calculateWrappedDistance(source.position, target.position);
     return distance < INTERACTION_DISTANCE;
   },
 
@@ -47,7 +48,8 @@ export const HUNTER_LION_INTERACTION: InteractionDefinition = {
     });
 
     // Apply force towards lion (hunter is pulled toward lion during attack)
-    const direction = vectorNormalize(vectorSubtract(source.position, hunter.position));
+    // Note: This direction might not be the shortest path in wrapped world, but represents direct pull
+    const direction = vectorNormalize(vectorSubtract(source.position, hunter.position)); 
     const force = vectorScale(direction, FORCE_STRENGTH);
     hunter.forces.push(force);
 

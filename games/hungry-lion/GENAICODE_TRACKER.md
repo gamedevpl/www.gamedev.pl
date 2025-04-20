@@ -64,6 +64,8 @@
   - ✅ Prey Spawning System
   - ☐ Advanced Interactions and Behaviors
 
+  - ✅ Planet-like Recursive World: Implemented seamless position/visual wrapping and updated distance calculations.
+
 ## Branch: Interactions
 
 - ✅ Lion Targeting System
@@ -82,6 +84,7 @@
 - ☐ Add movement animations and direction indicators
 - ✅ Enhanced Target Notification System: Icon-based, visual feedback
 - ✅ Combat Feedback: Hit/miss indicators, damage notifications
+- ✅ Fix Environment Rendering Wrap: Ensured grass and water sectors render correctly across world boundaries.
 - ☐ Visual Feedback for Fleeing
 
 ## Branch: Technical Improvements

@@ -27,7 +27,7 @@ function initGroundCache() {
 }
 
 /**
- * Update the cached ground canvas (for animation)
+ * Update the cached ground canvas (for animation or changes)
  */
 function updateGroundCache() {
   if (!cachedContext || !cachedCanvas) return;
@@ -41,7 +41,7 @@ function updateGroundCache() {
 }
 
 /**
- * Draw the ground on the main canvas using the cached ground image
+ * Draw the ground on the main canvas using the cached ground image, tiling it for wrapping.
  */
 export function drawGround(ctx: CanvasRenderingContext2D, renderState: RenderState) {
   // Initialize the ground cache if not already done
@@ -50,31 +50,44 @@ export function drawGround(ctx: CanvasRenderingContext2D, renderState: RenderSta
   }
 
   if (!cachedCanvas || !cachedContext) {
-    return;
+    return; // Exit if cache initialization failed
   }
 
   const { viewport } = renderState;
+  const canvasWidth = ctx.canvas.width;
+  const canvasHeight = ctx.canvas.height;
+  const ww = GAME_WORLD_WIDTH;
+  const wh = GAME_WORLD_HEIGHT;
 
-  // Calculate the visible area of the ground
-  const sourceX = Math.max(0, -viewport.x);
-  const sourceY = Math.max(0, -viewport.y);
-  const sourceWidth = Math.min(ctx.canvas.width, GAME_WORLD_WIDTH - sourceX);
-  const sourceHeight = Math.min(ctx.canvas.height, GAME_WORLD_HEIGHT - sourceY);
+  // --- Tiling Logic for Wrapped World (Modulo Approach) ---
 
-  // Destination coordinates (where to draw on the main canvas)
-  const destX = Math.max(0, viewport.x);
-  const destY = Math.max(0, viewport.y);
+  // Calculate the effective offset of the world origin (0,0) on the canvas,
+  // wrapped within the dimensions of the cached world texture.
+  const offsetX = ((viewport.x % ww) + ww) % ww;
+  const offsetY = ((viewport.y % wh) + wh) % wh;
 
-  // Copy the visible portion from the cached canvas to the main canvas
-  ctx.drawImage(
-    cachedCanvas,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight, // Source rectangle
-    destX,
-    destY,
-    sourceWidth,
-    sourceHeight, // Destination rectangle
-  );
+  // Calculate the canvas coordinates for the top-left corner of the *first* tile instance.
+  const startDrawX = offsetX - ww;
+  const startDrawY = offsetY - wh;
+
+  // Draw the cached canvas repeatedly to cover the entire visible area.
+  // Extend the loop condition to ensure coverage beyond the immediate canvas dimensions.
+  for (let tileX = startDrawX; tileX < canvasWidth + ww; tileX += ww) {
+    // Extend loop condition
+    for (let tileY = startDrawY; tileY < canvasHeight + wh; tileY += wh) {
+      // Extend loop condition
+      ctx.drawImage(
+        cachedCanvas,
+        0, // Source X
+        0, // Source Y
+        ww, // Source Width
+        wh, // Source Height
+        tileX, // Destination X
+        tileY, // Destination Y
+        ww, // Destination Width
+        wh, // Destination Height
+      );
+    }
+  }
+  // --- End Tiling Logic ---
 }
