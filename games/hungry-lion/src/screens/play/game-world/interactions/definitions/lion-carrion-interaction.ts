@@ -1,5 +1,5 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance } from '../../utils/math-utils';
+import { calculateWrappedDistance } from '../../utils/math-utils'; // Import calculateWrappedDistance
 import { CarrionEntity, LionEntity } from '../../entities/entities-types';
 import { MAX_EATING_DISTANCE } from '../../game-world-consts';
 
@@ -18,7 +18,7 @@ export const LION_CARRION_INTERACTION: InteractionDefinition<LionEntity, Carrion
       return false;
     }
 
-    const distance = vectorDistance(source.position, target.position);
+    const distance = calculateWrappedDistance(source.position, target.position);
     return distance < MAX_EATING_DISTANCE && (target as CarrionEntity).food > 0;
   },
 

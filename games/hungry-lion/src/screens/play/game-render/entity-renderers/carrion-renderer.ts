@@ -1,8 +1,9 @@
 import { CarrionEntity } from '../../game-world/entities/entities-types';
 
 import { Prey2d } from '../../../../../../../tools/asset-generator/generator-assets/src/prey-2d/prey-2d';
+import { GameWorldState } from '../../game-world/game-world-types';
 
-export function drawCarrion(ctx: CanvasRenderingContext2D, carrion: CarrionEntity) {
+export function drawCarrion(ctx: CanvasRenderingContext2D, _: GameWorldState, carrion: CarrionEntity) {
   const width = 30,
     height = 30;
 

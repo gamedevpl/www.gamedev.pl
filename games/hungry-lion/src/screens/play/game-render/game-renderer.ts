@@ -13,13 +13,13 @@ import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-co
 import { Entity } from '../game-world/entities/entities-types';
 
 // Helper function to draw an entity potentially multiple times for wrapping
-const drawWrappedEntity = (
+function drawWrappedEntity<T extends Entity>(
   ctx: CanvasRenderingContext2D,
   world: GameWorldState,
-  entity: Entity,
+  entity: T,
   renderState: RenderState,
-  drawFn: (ctx: CanvasRenderingContext2D, world: GameWorldState | Entity, entity?: Entity) => void,
-) => {
+  drawFn: (ctx: CanvasRenderingContext2D, world: GameWorldState, entity: T) => void,
+) {
   const { viewport } = renderState;
   const canvasWidth = ctx.canvas.width;
   const canvasHeight = ctx.canvas.height;
@@ -74,17 +74,11 @@ const drawWrappedEntity = (
         // This avoids changing all renderer signatures immediately.
         const tempEntity = { ...entity, position: { x: entityWorldX, y: entityWorldY } };
 
-        // Adjust drawFn call based on its expected signature
-        if (entity.type === 'lion') {
-          drawFn(ctx, world, tempEntity); // drawLion expects world and lion
-        } else {
-          // renderPrey, drawCarrion, drawHunter expect ctx and entity
-          drawFn(ctx, tempEntity as any, undefined as any);
-        }
+        drawFn(ctx, world, tempEntity);
       }
     }
   }
-};
+}
 
 export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
   const { viewport } = renderState;
@@ -105,16 +99,16 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   renderEnvironment(ctx, world.environment, renderState, ctx.canvas.width, ctx.canvas.height);
 
   // Render all carrion entities with wrapping
-  getCarrion(world).forEach((c) => drawWrappedEntity(ctx, world, c, renderState, drawCarrion as any));
+  getCarrion(world).forEach((c) => drawWrappedEntity(ctx, world, c, renderState, drawCarrion));
 
   // Render all prey entities with wrapping
-  getPrey(world).forEach((p) => drawWrappedEntity(ctx, world, p, renderState, renderPrey as any));
+  getPrey(world).forEach((p) => drawWrappedEntity(ctx, world, p, renderState, renderPrey));
 
   // Render all hunters with wrapping
-  getHunters(world).forEach((h) => drawWrappedEntity(ctx, world, h, renderState, drawHunter as any));
+  getHunters(world).forEach((h) => drawWrappedEntity(ctx, world, h, renderState, drawHunter));
 
   // Render all lions with wrapping
-  getLions(world).forEach((lion) => drawWrappedEntity(ctx, world, lion, renderState, drawLion as any));
+  getLions(world).forEach((lion) => drawWrappedEntity(ctx, world, lion, renderState, drawLion));
 
   // Render all notifications (relative to viewport is usually fine)
   drawAllNotifications(ctx, world);

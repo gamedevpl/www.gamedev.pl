@@ -1,5 +1,11 @@
 import { InteractionDefinition } from '../interactions-types';
-import { vectorDistance, vectorNormalize, vectorSubtract, vectorScale } from '../../utils/math-utils';
+import {
+  calculateWrappedDistance,
+  vectorNormalize,
+  vectorSubtract,
+  vectorScale,
+  vectorDistance,
+} from '../../utils/math-utils'; // Import calculateWrappedDistance
 
 // Basic collision detection and response between any entities
 export const COLLISIONS: InteractionDefinition = {
@@ -12,7 +18,8 @@ export const COLLISIONS: InteractionDefinition = {
     if (source.type === 'carrion' || target.type === 'carrion') {
       return false;
     }
-    const distance = vectorDistance(source.position, target.position);
+    // Use calculateWrappedDistance for collision check
+    const distance = calculateWrappedDistance(source.position, target.position);
     return distance < 30; // Same as maxDistance for consistency
   },
 

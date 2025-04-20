@@ -1,12 +1,13 @@
 import { PreyEntity } from '../../game-world/entities/entities-types';
 
 import { Prey2d } from '../../../../../../../tools/asset-generator/generator-assets/src/prey-2d/prey-2d';
+import { GameWorldState } from '../../game-world/game-world-types';
 
 function getPreyFacingDirection(prey: PreyEntity): 'left' | 'right' {
   return prey.targetDirection > -Math.PI / 2 && prey.targetDirection < Math.PI / 2 ? 'right' : 'left';
 }
 
-export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity) {
+export function renderPrey(ctx: CanvasRenderingContext2D, _: GameWorldState, prey: PreyEntity) {
   let stance;
 
   switch (prey.stateMachine[0]) {

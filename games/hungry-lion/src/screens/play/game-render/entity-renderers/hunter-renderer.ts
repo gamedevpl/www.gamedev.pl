@@ -2,6 +2,7 @@ import { HunterEntity } from '../../game-world/entities/entities-types';
 import { vectorLength } from '../../game-world/utils/math-utils';
 import { Hunter2d } from '../../../../../../../tools/asset-generator/generator-assets/src/hunter-2d/hunter-2d';
 import { HunterStateType } from '../../game-world/state-machine/states/hunter';
+import { GameWorldState } from '../../game-world/game-world-types';
 
 // Constants for hunter rendering
 const HUNTER_WIDTH = 40;
@@ -37,7 +38,7 @@ function getHunterFacingDirection(hunter: HunterEntity): 'left' | 'right' {
 /**
  * Draws the hunter entity on the canvas
  */
-export function drawHunter(ctx: CanvasRenderingContext2D, hunter: HunterEntity) {
+export function drawHunter(ctx: CanvasRenderingContext2D, _: GameWorldState, hunter: HunterEntity) {
   const width = HUNTER_WIDTH;
   const height = HUNTER_HEIGHT;
   const position = hunter.position;

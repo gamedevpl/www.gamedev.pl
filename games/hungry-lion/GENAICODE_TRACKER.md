@@ -24,6 +24,7 @@
     - ☐ Enhanced styling, cooldowns, icons, tooltips
   - ✅ Implement Keyboard Controls (WASD/Arrows + SPACE): Movement via keys, context-aware SPACE action (attack/ambush/walk).
   - ☐ Stealth movement mechanics
+  - ✅ Fix lion targeting and chasing across world wrap boundaries
   - ☐ Pathfinding for obstacle avoidance
   - ☐ Movement sound effects
 
@@ -58,6 +59,7 @@
 - ✅ Ground Rendering Implementation
 - ✅ Code Organization: Split into focused modules
 - ✅ Game World V2 Implementation
+
   - ✅ Entity System: Types, states, management
   - ✅ Core Interactions: Collision detection/response
   - ✅ Basic Behaviors: Movement, bounds handling

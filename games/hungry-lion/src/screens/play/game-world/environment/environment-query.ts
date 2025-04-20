@@ -1,7 +1,7 @@
 import { Entity } from '../entities/entities-types';
 import { Environment, Sector, SectorType } from './environment-types';
 import { Rect2D } from '../utils/math-types';
-import { vectorDistance } from '../utils/math-utils';
+import { calculateWrappedDistance } from '../utils/math-utils'; // Import calculateWrappedDistance
 
 export function getOverlappingSectors(environment: Environment, rect: Rect2D): Sector[] {
   return environment.sectors.filter((sector) => {
@@ -26,6 +26,7 @@ export function getSectorAtEntity<T = Sector>(
     height: 30,
   };
 
+  // getOverlappingSectors uses rectangle overlap, which is appropriate here.
   const sectors = getOverlappingSectors(environment, entityRect).filter((sector) => sector.type === type);
   return sectors[0] as T | undefined;
 }
@@ -40,7 +41,8 @@ export function findClosestSector<T = Sector>(
   let closestDistance = Infinity;
 
   for (const sector of sectors) {
-    const distance = vectorDistance(entity.position, {
+    // Use calculateWrappedDistance for finding the closest sector
+    const distance = calculateWrappedDistance(entity.position, {
       x: sector.rect.x + sector.rect.width / 2,
       y: sector.rect.y + sector.rect.height / 2,
     });

@@ -18,7 +18,7 @@ import {
 } from './game-input/input-events';
 import { Entity, LionEntity } from './game-world/entities/entities-types';
 import { getPlayerLion, getPrey } from './game-world/game-world-query';
-import { vectorDistance } from './game-world/utils/math-utils';
+import { calculateWrappedDistance } from './game-world/utils/math-utils'; // Import calculateWrappedDistance
 import { ATTACK_INITIATE_DISTANCE } from './game-world/game-world-consts';
 import { LionStateType } from './game-world/state-machine/states/lion';
 
@@ -36,7 +36,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
       let minDistance = maxDistance;
 
       for (const prey of getPrey(gameStateRef.current.gameWorldState)) {
-        const distance = vectorDistance(lion.position, prey.position);
+        // Use calculateWrappedDistance for prey distance
+        const distance = calculateWrappedDistance(lion.position, prey.position);
         if (distance < minDistance) {
           minDistance = distance;
           closestPrey = prey;
@@ -52,9 +53,8 @@ export function GameController({ gameStateRef }: GameControllerProps) {
     const catchDistance = 80; // Existing catch distance for clicks
 
     for (const prey of getPrey(gameStateRef.current.gameWorldState)) {
-      const distance = Math.sqrt(
-        Math.pow(prey.position.x - position.worldX, 2) + Math.pow(prey.position.y - position.worldY, 2),
-      );
+      // Use calculateWrappedDistance for prey distance check
+      const distance = calculateWrappedDistance(prey.position, { x: position.worldX, y: position.worldY });
       if (distance < catchDistance) {
         return prey;
       }
