@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, RefObject } from 'react';
-import { dispatchCustomEvent } from '../../../utils/custom-events';
+import { useCallback, useEffect, useState, RefObject } from "react";
+import { dispatchCustomEvent } from "../../../utils/custom-events";
 import {
   GameEvents,
   MouseMoveEvent,
@@ -10,9 +10,14 @@ import {
   InputPosition,
   TouchPoint,
   TouchRole,
-} from './input-events';
-import { RenderState, ViewportState } from '../game-render/render-state';
-import { GameWorldState } from '../game-world/game-world-types';
+  SetActiveActionEvent,
+} from "./input-events";
+import { RenderState, ViewportState } from "../game-render/render-state";
+import { GameWorldState } from "../game-world/game-world-types";
+import {
+  getActionBarLayout,
+  ActionButtonLayout,
+} from "../game-render/action-bar-renderer"; // Import layout info
 
 type InputControllerProps = {
   gameStateRef: RefObject<{
@@ -32,53 +37,126 @@ const initialInputState: InputState = {
   activeTouches: new Map(),
 };
 
-export function InputController({ gameStateRef, canvasRef }: InputControllerProps) {
+// Helper function to check if a point is within a button's bounds
+function isPointInButton(
+  x: number,
+  y: number,
+  button: ActionButtonLayout
+): boolean {
+  return (
+    x >= button.x &&
+    x <= button.x + button.width &&
+    y >= button.y &&
+    y <= button.y + button.height
+  );
+}
+
+export function InputController({
+  gameStateRef,
+  canvasRef,
+}: InputControllerProps) {
   const [inputState, setInputState] = useState<InputState>(initialInputState);
 
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
-      if (!gameStateRef.current) return;
+      if (!gameStateRef.current || !canvasRef.current) return;
 
-      const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
-      
+      const position = calculateInputPosition(
+        event.clientX,
+        event.clientY,
+        gameStateRef.current.renderState.viewport,
+        canvasRef.current
+      );
+
       dispatchCustomEvent<MouseMoveEvent>(GameEvents.MOUSE_MOVE, {
         position,
         timestamp: Date.now(),
       });
     },
-    [gameStateRef],
+    [gameStateRef, canvasRef]
   );
 
   const handleMouseButtons = useCallback(
     (event: MouseEvent, isDown: boolean) => {
       event.preventDefault();
 
-      if (event.button !== 0 || !gameStateRef.current) return;
+      if (event.button !== 0 || !gameStateRef.current || !canvasRef.current)
+        return;
 
-      const position = calculateInputPosition(event.clientX, event.clientY, gameStateRef.current.renderState.viewport);
+      const canvas = canvasRef.current;
+      const screenX = event.clientX;
+      const screenY = event.clientY;
+
+      // --- Action Bar Hit Test (Only on Mouse Down) ---
+      if (isDown) {
+        const actionBarLayout = getActionBarLayout(canvas.width, canvas.height);
+        for (const buttonLayout of actionBarLayout.buttons) {
+          if (isPointInButton(screenX, screenY, buttonLayout)) {
+            dispatchCustomEvent<SetActiveActionEvent>(
+              GameEvents.SET_ACTIVE_ACTION,
+              { action: buttonLayout.action }
+            );
+            return; // Prevent default world click if UI button is hit
+          }
+        }
+      }
+      // --- End Action Bar Hit Test ---
+
+      const position = calculateInputPosition(
+        screenX,
+        screenY,
+        gameStateRef.current.renderState.viewport,
+        canvas
+      );
 
       setInputState((prev) => ({ ...prev, isPressed: isDown }));
 
       dispatchCustomEvent<MouseButtonEvent>(GameEvents.MOUSE_BUTTON, {
-        button: 'left',
+        button: "left",
         isPressed: isDown,
         position,
         timestamp: Date.now(),
       });
     },
-    [gameStateRef],
+    [gameStateRef, canvasRef]
   );
 
   const handleTouchStart = useCallback(
     (event: TouchEvent) => {
       event.preventDefault();
-      if (!gameStateRef.current) return;
+      if (!gameStateRef.current || !canvasRef.current) return;
 
-      const viewport = gameStateRef.current.renderState.viewport;
+      const canvas = canvasRef.current;
       const touch = event.touches[0];
       if (!touch) return;
 
-      const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
+      const screenX = touch.clientX;
+      const screenY = touch.clientY;
+
+      // --- Action Bar Hit Test ---
+      const actionBarLayout = getActionBarLayout(canvas.width, canvas.height);
+      for (const buttonLayout of actionBarLayout.buttons) {
+        if (isPointInButton(screenX, screenY, buttonLayout)) {
+          dispatchCustomEvent<SetActiveActionEvent>(
+            GameEvents.SET_ACTIVE_ACTION,
+            { action: buttonLayout.action }
+          );
+          // For touch, we might still want to register the touch start
+          // but prevent the default game world interaction (setting target)
+          // We'll let the touch proceed but the game controller should check
+          // if the touch started on the UI.
+          // For simplicity now, let's just prevent default world interaction.
+          return; // Prevent default world interaction
+        }
+      }
+      // --- End Action Bar Hit Test ---
+
+      const position = calculateInputPosition(
+        screenX,
+        screenY,
+        gameStateRef.current.renderState.viewport,
+        canvas
+      );
 
       setInputState((prev) => ({ ...prev, isPressed: true }));
       dispatchCustomEvent<TouchStartEvent>(GameEvents.TOUCH_START, {
@@ -92,31 +170,37 @@ export function InputController({ gameStateRef, canvasRef }: InputControllerProp
         timestamp: Date.now(),
       });
     },
-    [gameStateRef],
+    [gameStateRef, canvasRef]
   );
 
   const handleTouchMove = useCallback(
     (event: TouchEvent) => {
       event.preventDefault();
-      if (!gameStateRef.current || !inputState.isPressed) return;
+      if (!gameStateRef.current || !inputState.isPressed || !canvasRef.current)
+        return;
 
       const viewport = gameStateRef.current.renderState.viewport;
       const touch = event.touches[0];
       if (!touch) return;
 
-      const position = calculateInputPosition(touch.clientX, touch.clientY, viewport);
+      const position = calculateInputPosition(
+        touch.clientX,
+        touch.clientY,
+        viewport,
+        canvasRef.current
+      );
       dispatchCustomEvent<TouchMoveEvent>(GameEvents.TOUCH_MOVE, {
         touches: [],
         primaryTouch: {
           identifier: touch.identifier,
           position,
           role: TouchRole.MOVEMENT,
-          startTime: Date.now(),
+          startTime: Date.now(), // This startTime isn't really correct for move, consider removing or tracking properly
         },
         timestamp: Date.now(),
       });
     },
-    [gameStateRef, inputState.isPressed],
+    [gameStateRef, canvasRef, inputState.isPressed]
   );
 
   const handleTouchEnd = useCallback(
@@ -124,14 +208,17 @@ export function InputController({ gameStateRef, canvasRef }: InputControllerProp
       event.preventDefault();
       if (!gameStateRef.current) return;
 
+      // Check if the touch ended over an action bar button (optional, could trigger action on lift)
+      // Currently, action triggers on touch start.
+
       setInputState((prev) => ({ ...prev, isPressed: false }));
       dispatchCustomEvent<TouchEndEvent>(GameEvents.TOUCH_END, {
         touches: [],
-        changedTouches: [],
+        changedTouches: [], // Populate properly if needed
         timestamp: Date.now(),
       });
     },
-    [gameStateRef],
+    [gameStateRef]
   );
 
   useEffect(() => {
@@ -145,60 +232,72 @@ export function InputController({ gameStateRef, canvasRef }: InputControllerProp
 
     const canvas = canvasRef.current;
 
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('contextmenu', handleContextMenu);
+    canvas.addEventListener("mousedown", handleMouseDown);
+    canvas.addEventListener("mouseup", handleMouseUp);
+    canvas.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("contextmenu", handleContextMenu);
 
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
+    canvas.addEventListener("touchcancel", handleTouchEnd, { passive: false });
 
     return () => {
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener("mousedown", handleMouseDown);
+      canvas.removeEventListener("mouseup", handleMouseUp);
+      canvas.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
 
-      canvas.removeEventListener('touchstart', handleTouchStart);
-      canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleTouchEnd);
-      canvas.removeEventListener('touchcancel', handleTouchEnd);
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+      canvas.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [handleMouseButtons, handleMouseMove, handleTouchStart, handleTouchMove, handleTouchEnd]);
+  }, [
+    handleMouseButtons,
+    handleMouseMove,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    canvasRef, // Add canvasRef dependency
+  ]);
 
   return null;
 }
 
-function calculateInputPosition(clientX: number, clientY: number, viewport: ViewportState): InputPosition {
-  const { innerWidth, innerHeight } = window;
-  const centerX = innerWidth / 2;
-  const centerY = innerHeight / 2;
+function calculateInputPosition(
+  clientX: number,
+  clientY: number,
+  viewport: ViewportState,
+  canvas: HTMLCanvasElement
+): InputPosition {
+  const rect = canvas.getBoundingClientRect();
+  const canvasWidth = rect.width;
+  const canvasHeight = rect.height;
 
-  const normalizedX = (clientX - centerX) / centerX;
-  const normalizedY = (clientY - centerY) / centerY;
+  // Adjust client coordinates relative to the canvas element
+  const screenX = clientX - rect.left;
+  const screenY = clientY - rect.top;
 
-  const { worldX, worldY } = calculateWorldCoordinates(clientX, clientY, viewport);
+  // Normalize based on canvas dimensions
+  const normalizedX = (screenX / canvasWidth) * 2 - 1;
+  const normalizedY = (screenY / canvasHeight) * 2 - 1;
+
+  // Calculate world coordinates by reversing the viewport translation
+  // worldX + viewport.x = screenX => worldX = screenX - viewport.x
+  const worldX = screenX - viewport.x;
+  const worldY = screenY - viewport.y;
 
   return {
     normalizedX,
     normalizedY,
-    screenX: clientX,
-    screenY: clientY,
+    screenX: screenX, // Use coordinates relative to canvas
+    screenY: screenY, // Use coordinates relative to canvas
     worldX,
     worldY,
-    viewportWidth: innerWidth,
-    viewportHeight: innerHeight,
+    viewportWidth: canvasWidth, // Use canvas dimensions
+    viewportHeight: canvasHeight, // Use canvas dimensions
   };
 }
 
-function calculateWorldCoordinates(
-  screenX: number,
-  screenY: number,
-  viewport: ViewportState,
-): { worldX: number; worldY: number } {
-  const worldX = screenX - viewport.x;
-  const worldY = screenY - viewport.y;
-  return { worldX, worldY };
-}
+// Removed calculateWorldCoordinates as its logic is integrated into calculateInputPosition

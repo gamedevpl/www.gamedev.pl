@@ -11,7 +11,8 @@
   - ✅ Movement: Basic/continuous movement, mouse/touch input, viewport tracking
   - ✅ Chase Mechanism and Prey Catching
   - ✅ Fix mouse click movement: Ensure lion continues moving to clicked point after mouse button release.
-  - ✅ Hunger Mechanics: Decay, starvation, visual feedback (Updated pixel art stomach shape on canvas)
+  - ✅ Hunger Mechanics: Decay, starvation, visual feedback (Pixel art stomach icon on canvas, size adjusted to match action bar buttons)
+    - ✅ Add pulsing effect to hunger icon when critically low
   - ✅ Target Notification System
   - ✅ Ambush Mechanics: State management, speed boost
     - ✅ Fix: Clicking ground while in ambush no longer switches state to 'walk'.
@@ -79,6 +80,17 @@
   - ✅ Notification Management: Creation, updating, and cleanup
   - ☐ Advanced Effects: Particle effects, sound integration
   - ☐ Notification Aggregation: Combining similar notifications
+
+## Branch: UI Improvements
+
+- ✅ Convert Action Bar to Canvas Rendering
+  - ✅ Create action-bar-renderer.ts
+  - ✅ Update hunger-renderer.ts positioning
+  - ✅ Integrate renderers in game-renderer.ts
+  - ✅ Update input-controller.ts for canvas button interaction
+  - ✅ Remove ActionBar React component from game-viewport.tsx
+  - ✅ Delete action-bar.tsx file
+  *Description: Replaced the React-based Action Bar with direct canvas rendering for better integration and consistent UI layer. Buttons are drawn in `action-bar-renderer.ts` and interactions handled in `input-controller.ts`. Positioned at bottom-center alongside the hunger indicator.*
 
 ## Branch: Visual Improvements
 

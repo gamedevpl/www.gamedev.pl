@@ -1,17 +1,26 @@
-import { GameWorldState } from '../game-world/game-world-types';
-import { RenderState } from './render-state';
-import { drawGround } from './ground-renderer';
-import { renderPrey } from './entity-renderers/prey-renderer';
-import { renderDebugInfo } from './debug-renderer';
-import { getLions, getPrey, getCarrion, getHunters } from '../game-world/game-world-query';
-import { drawLion } from './entity-renderers/lion-renderer';
-import { drawCarrion } from './entity-renderers/carrion-renderer';
-import { drawHunter } from './entity-renderers/hunter-renderer';
-import { renderEnvironment } from './environment-renderer';
-import { drawAllNotifications } from './notifications/combat-notification';
-import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-consts';
-import { drawHungerIndicator } from './hunger-renderer';
-import { Entity } from '../game-world/entities/entities-types';
+import { GameWorldState } from "../game-world/game-world-types";
+import { RenderState } from "./render-state";
+import { drawGround } from "./ground-renderer";
+import { renderPrey } from "./entity-renderers/prey-renderer";
+import { renderDebugInfo } from "./debug-renderer";
+import {
+  getLions,
+  getPrey,
+  getCarrion,
+  getHunters,
+} from "../game-world/game-world-query";
+import { drawLion } from "./entity-renderers/lion-renderer";
+import { drawCarrion } from "./entity-renderers/carrion-renderer";
+import { drawHunter } from "./entity-renderers/hunter-renderer";
+import { renderEnvironment } from "./environment-renderer";
+import { drawAllNotifications } from "./notifications/combat-notification";
+import {
+  GAME_WORLD_WIDTH,
+  GAME_WORLD_HEIGHT,
+} from "../game-world/game-world-consts";
+import { drawHungerIndicator } from "./hunger-renderer";
+import { Entity } from "../game-world/entities/entities-types";
+import { drawActionBar } from "./action-bar-renderer"; // Import the new action bar renderer
 
 // Helper function to draw an entity potentially multiple times for wrapping
 function drawWrappedEntity<T extends Entity>(
@@ -19,7 +28,7 @@ function drawWrappedEntity<T extends Entity>(
   world: GameWorldState,
   entity: T,
   renderState: RenderState,
-  drawFn: (ctx: CanvasRenderingContext2D, world: GameWorldState, entity: T) => void,
+  drawFn: (ctx: CanvasRenderingContext2D, world: GameWorldState, entity: T) => void
 ) {
   const { viewport } = renderState;
   const canvasWidth = ctx.canvas.width;
@@ -49,28 +58,6 @@ function drawWrappedEntity<T extends Entity>(
         canvasY + entityRadius > 0 &&
         canvasY - entityRadius < canvasHeight
       ) {
-        // Draw the entity at the offset world position
-        // The context is already translated by the viewport, so we draw relative to that
-        // We need to pass the *original* entity state but modify the position for the renderer
-        // or ensure the renderer uses the absolute offset position.
-        // Let's pass the original entity and let the specific renderer handle drawing at the correct offset.
-        // We need a way to tell the renderer *where* to draw this instance.
-
-        // Option: Temporarily modify entity position (less clean)
-        // const originalPos = { ...entity.position };
-        // entity.position = { x: entityWorldX, y: entityWorldY };
-        // drawFn(ctx, world, entity); // Assumes drawFn uses entity.position
-        // entity.position = originalPos;
-
-        // Option B: Pass offset position to renderer (cleaner if renderers support it)
-        // This requires modifying drawLion, renderPrey, etc.
-        // drawFn(ctx, world, entity, { x: entityWorldX, y: entityWorldY });
-
-        // Option C: Draw relative to the current transform (Simplest)
-        // Since ctx is translated by (viewport.x, viewport.y), drawing at (entityWorldX, entityWorldY)
-        // should place it correctly on the canvas.
-        // The specific render functions need to accept the absolute position to draw at.
-
         // Let's try modifying the entity passed to the draw function temporarily.
         // This avoids changing all renderer signatures immediately.
         const tempEntity = { ...entity, position: { x: entityWorldX, y: entityWorldY } };
@@ -81,13 +68,19 @@ function drawWrappedEntity<T extends Entity>(
   }
 }
 
-export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState, renderState: RenderState) => {
+export const renderGame = (
+  ctx: CanvasRenderingContext2D,
+  world: GameWorldState,
+  renderState: RenderState
+) => {
   const { viewport } = renderState;
+  const canvasWidth = ctx.canvas.width;
+  const canvasHeight = ctx.canvas.height;
 
   ctx.save();
 
   // Clear canvas (optional, depending on background drawing)
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   // Draw the wrapping ground first
   drawGround(ctx, renderState);
@@ -97,19 +90,27 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
 
   // Render environment with wrapping
   // Pass renderState and canvas dimensions needed for wrapping calculations
-  renderEnvironment(ctx, world.environment, renderState, ctx.canvas.width, ctx.canvas.height);
+  renderEnvironment(ctx, world.environment, renderState, canvasWidth, canvasHeight);
 
   // Render all carrion entities with wrapping
-  getCarrion(world).forEach((c) => drawWrappedEntity(ctx, world, c, renderState, drawCarrion));
+  getCarrion(world).forEach((c) =>
+    drawWrappedEntity(ctx, world, c, renderState, drawCarrion)
+  );
 
   // Render all prey entities with wrapping
-  getPrey(world).forEach((p) => drawWrappedEntity(ctx, world, p, renderState, renderPrey));
+  getPrey(world).forEach((p) =>
+    drawWrappedEntity(ctx, world, p, renderState, renderPrey)
+  );
 
   // Render all hunters with wrapping
-  getHunters(world).forEach((h) => drawWrappedEntity(ctx, world, h, renderState, drawHunter));
+  getHunters(world).forEach((h) =>
+    drawWrappedEntity(ctx, world, h, renderState, drawHunter)
+  );
 
   // Render all lions with wrapping
-  getLions(world).forEach((lion) => drawWrappedEntity(ctx, world, lion, renderState, drawLion));
+  getLions(world).forEach((lion) =>
+    drawWrappedEntity(ctx, world, lion, renderState, drawLion)
+  );
 
   // Render all notifications (relative to viewport is usually fine)
   drawAllNotifications(ctx, world);
@@ -120,6 +121,7 @@ export const renderGame = (ctx: CanvasRenderingContext2D, world: GameWorldState,
   // Restore context to remove viewport translation
   ctx.restore();
 
-  // Draw UI elements (like hunger indicator) in screen space AFTER restoring context
-  drawHungerIndicator(ctx, world);
+  // --- Draw UI elements (like hunger indicator and action bar) in screen space AFTER restoring context ---
+  drawHungerIndicator(ctx, world, canvasWidth, canvasHeight); // Pass canvas dimensions
+  drawActionBar(ctx, world, canvasWidth, canvasHeight); // Draw the action bar
 };
