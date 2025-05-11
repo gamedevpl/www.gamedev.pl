@@ -1,4 +1,4 @@
-import { Entities, Entity, EntityId, EntityType, LionEntity } from './entities-types';
+import { Entities, Entity, EntityId, EntityType, LionEntity, PreyEntity } from './entities-types';
 import { UpdateContext } from '../game-world-types';
 import { preySpawn } from './prey-spawner';
 import { entityUpdate } from './entity-update';
@@ -8,6 +8,10 @@ import { hunterUpdate } from './hunter-update';
 import { createLionStateMachine } from '../state-machine/states/lion';
 import { spawnHunter } from './hunter-update';
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world-consts';
+import { createPreyStateMachine } from '../state-machine/states/prey';
+
+const INITIAL_PREY_COUNT = 5;
+const INITIAL_HUNTER_COUNT = 2;
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -50,11 +54,30 @@ export function createEntities(): Entities {
     stateMachine: createLionStateMachine(),
   });
 
-  // Spawn a hunter at a random position
-  spawnHunter(state, {
-    x: Math.random() * (GAME_WORLD_WIDTH - 200) + 100,
-    y: Math.random() * (GAME_WORLD_HEIGHT - 200) + 100,
-  });
+  // Spawn initial prey
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const preyPosition = {
+      x: Math.random() * (GAME_WORLD_WIDTH - 200) + 100,
+      y: Math.random() * (GAME_WORLD_HEIGHT - 200) + 100,
+    };
+    createEntity<PreyEntity>(state, 'prey', {
+      position: preyPosition,
+      stateMachine: createPreyStateMachine(),
+      health: 100,
+      hungerLevel: Math.random() * 50 + 50, // Range 50-100
+      thirstLevel: Math.random() * 50 + 50, // Range 50-100
+      staminaLevel: Math.random() * 30 + 70, // Range 70-100
+    });
+  }
+
+  // Spawn initial hunters
+  for (let i = 0; i < INITIAL_HUNTER_COUNT; i++) {
+    const hunterPosition = {
+      x: Math.random() * (GAME_WORLD_WIDTH - 200) + 100,
+      y: Math.random() * (GAME_WORLD_HEIGHT - 200) + 100,
+    };
+    spawnHunter(state, hunterPosition);
+  }
 
   return state;
 }

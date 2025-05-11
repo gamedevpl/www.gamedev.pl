@@ -15,7 +15,7 @@
     - ✅ Add pulsing effect to hunger icon when critically low
   - ✅ Target Notification System
   - ✅ Ambush Mechanics: State management, speed boost
-    - ✅ Fix: Clicking ground while in ambush no longer switches state to 'walk'.
+    - ✅ Fix: Clicking ground while in ambush no longer switches state to \'walk\'.
     - ☐ Visual feedback for ambush state
     - ☐ Reduced visibility effect on prey
   - ✅ Eating Mechanics: Dedicated state, transitions, visual feedback
@@ -66,6 +66,7 @@
   - ✅ Basic Behaviors: Movement, bounds handling
   - ✅ Prey Spawning System
   - ☐ Advanced Interactions and Behaviors
+  - ☐ Enhance environment sector generation for more organic shapes
 
   - ✅ Planet-like Recursive World: Implemented seamless position/visual wrapping and updated distance calculations.
 
@@ -90,7 +91,6 @@
   - ✅ Update input-controller.ts for canvas button interaction
   - ✅ Remove ActionBar React component from game-viewport.tsx
   - ✅ Delete action-bar.tsx file
-  *Description: Replaced the React-based Action Bar with direct canvas rendering for better integration and consistent UI layer. Buttons are drawn in `action-bar-renderer.ts` and interactions handled in `input-controller.ts`. Positioned at bottom-center alongside the hunger indicator.*
 
 ## Branch: Visual Improvements
 
@@ -106,6 +106,7 @@
 - ✅ Enhanced Debug System: Configurable timing, state visualization
 - ✅ Ground Rendering Optimization: Canvas caching
 - ✅ Notification System: Modular, extensible framework for game feedback
+- ✅ Fix Incorrect Game Over Time Display
 - ☐ Movement optimizations and prediction
 - ☐ Performance Optimizations: Spatial partitioning, behavior caching
 
