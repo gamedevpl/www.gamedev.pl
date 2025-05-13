@@ -1,6 +1,6 @@
 import { GenerateContentFunction, FunctionDef, ModelType, PromptItem, FunctionCall } from 'genaicode';
 import { generateContent as generateContentAiStudio } from 'genaicode/ai-service/ai-studio.js';
-import { generateContent as generateContentAnthropic } from 'genaicode/ai-service/anthropic.js';
+// import { generateContent as generateContentAnthropic } from 'genaicode/ai-service/anthropic.js';
 
 /**
  * Helper function to introduce a delay.
@@ -47,4 +47,4 @@ function retryWrapper(
 
 // Wrap the original functions with the retry mechanism
 export const generateContent: GenerateContentFunction = retryWrapper(generateContentAiStudio);
-export const generateCode: GenerateContentFunction = retryWrapper(generateContentAnthropic);
+export const generateCode: GenerateContentFunction = retryWrapper(generateContentAiStudio);

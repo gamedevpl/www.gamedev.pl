@@ -11,7 +11,7 @@ import { PromptItem } from 'genaicode';
  * Guides the AI in analyzing reference images to establish standards for asset evaluation
  */
 const REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS = `1. Reference Image Analysis (when provided):
-   First, call \`describeReferenceImage\` to analyze the reference image:
+   First analyze the reference image:
    - Describe the overall visual style and composition
    - Note key visual elements and their arrangement
    - Identify important details and characteristics
@@ -29,7 +29,7 @@ const REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS = `1. Reference Image Analysis (when
  * Guides the AI in analyzing rendered assets with a critical eye for detail and quality
  */
 const ASSET_RENDERING_ANALYSIS_INSTRUCTIONS = `2. Asset Rendering Analysis:
-   Next, call \`describeAssetRendering\` to analyze the rendered asset:
+   Next analyze the rendered asset:
    - Evaluate the overall visual appearance and artistic quality
    - Document all visible elements and their arrangement
    - Note the use of colors, shapes, and proportions
@@ -62,7 +62,7 @@ const ASSET_RENDERING_ANALYSIS_INSTRUCTIONS = `2. Asset Rendering Analysis:
  * Guides the AI in evaluating how well the asset functions in a game context
  */
 const FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS = `3. Functionality & Gameplay Integration Analysis:
-   Then, call \`describeCurrentImplementation\` to analyze how the asset functions:
+   Then analyze how the asset functions:
    - Assess how the asset supports its intended in-game role
    - Consider user experience aspects like clarity and readability
    - Evaluate how the asset's design integrates with game aesthetics
@@ -86,7 +86,7 @@ const FUNCTIONALITY_GAMEPLAY_INTEGRATION_INSTRUCTIONS = `3. Functionality & Game
  * Guides the AI in providing comprehensive evaluation and recommendations
  */
 const FINAL_ASSESSMENT_INSTRUCTIONS = `4. Final Assessment:
-   Finally, ALWAYS call \`assessAsset\` with a comprehensive evaluation:
+   Finally do a comprehensive evaluation:
    - Compare against reference image (if provided)
    - Evaluate adherence to requirements and design specifications
    - Assess visual quality and artistic coherence
@@ -340,7 +340,9 @@ ${fs.readFileSync(path.join(import.meta.dirname, '../assets-types.ts'), 'utf-8')
 Generate code that is not only functional but also maintainable and efficient.
 Focus on implementing improvements while maintaining existing working features.
 Ensure the generated code follows the project's coding style and standards.
-MOST IMPORTANTLY: Make only the minimal necessary changes to address specific issues identified in the assessment.`,
+MOST IMPORTANTLY: Make only the minimal necessary changes to address specific issues identified in the assessment.
+Instruct the AI to generate the entire asset implementation in a single, complete response. Do not use chunk-based generation.
+`,
 } as const;
 
 // Export individual instruction constants
@@ -353,5 +355,5 @@ export {
   UNBIASED_EVALUATION_INSTRUCTIONS,
   DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS,
   VISUAL_QUALITY_CRITERIA_INSTRUCTIONS,
-  STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS
+  STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS,
 };

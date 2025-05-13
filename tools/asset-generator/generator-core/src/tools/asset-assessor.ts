@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { FunctionDef, ModelType, PromptImageMediaType, PromptItem } from 'genaicode';
+import { ModelType, PromptImageMediaType, PromptItem } from 'genaicode';
 import { Asset } from '../assets-types.js';
 import { generateContent } from './genaicode-executor.js';
 import {
@@ -65,7 +65,6 @@ ${UNBIASED_EVALUATION_INSTRUCTIONS}
 
 IMPORTANT:
 - Always follow the CoT process in order
-- Use appropriate function calls at each step
 - Provide clear, specific observations about visual and functional aspects
 - Focus on actionable feedback related to design and gameplay
 - Be direct and honest - if something looks wrong, say so explicitly
@@ -93,28 +92,21 @@ IMPORTANT:
               },
             ],
             {
-              functionDefs: [
-                describeReferenceImageDef,
-                describeAssetRenderingDef,
-                describeCurrentImplementationDef,
-                assessAssetDef,
-              ],
-              requiredFunctionName: describeReferenceImageDef.name,
               temperature: 0.7,
               modelType: ModelType.CHEAP,
               expectedResponseType: {
-                text: false,
-                functionCall: true,
+                text: true,
+                functionCall: false,
                 media: false,
               },
             },
             {},
           )
         )
-          .filter((item) => item.type === 'functionCall')
-          .map((item) => item.functionCall);
+          .filter((item) => item.type === 'text')
+          .map((item) => item.text);
 
-        context.referenceImageDescription = (refImageResult.args as { description: string }).description;
+        context.referenceImageDescription = refImageResult;
 
         console.log('Reference image analysis completed:', context.referenceImageDescription);
       } catch (error) {
@@ -152,7 +144,6 @@ ${DEVIATION_SEVERITY_ASSESSMENT_INSTRUCTIONS}
 ${VISUAL_QUALITY_CRITERIA_INSTRUCTIONS}
 
 IMPORTANT:
-- Use appropriate function calls at each step
 - Provide clear, specific observations about visual and functional aspects
 - Focus on actionable feedback related to design and gameplay
 - For character assets: address each stance/animation state individually
@@ -192,28 +183,21 @@ IMPORTANT:
               },
             ],
             {
-              functionDefs: [
-                describeReferenceImageDef,
-                describeAssetRenderingDef,
-                describeCurrentImplementationDef,
-                assessAssetDef,
-              ],
-              requiredFunctionName: describeAssetRenderingDef.name,
               temperature: 0.7,
               modelType: ModelType.CHEAP,
               expectedResponseType: {
-                functionCall: true,
-                text: false,
+                functionCall: false,
+                text: true,
                 media: false,
               },
             },
             {},
           )
         )
-          .filter((item) => item.type === 'functionCall')
-          .map((item) => item.functionCall);
+          .filter((item) => item.type === 'text')
+          .map((item) => item.text);
 
-        context.stanceDescriptions[stance] = (renderResult.args as { description: string }).description;
+        context.stanceDescriptions[stance] = renderResult;
 
         console.log(`Analysis for stance "${stance}" completed:`, context.stanceDescriptions[stance]);
       }),
@@ -263,23 +247,21 @@ IMPORTANT:
             },
           ],
           {
-            functionDefs: [
-              describeReferenceImageDef,
-              describeAssetRenderingDef,
-              describeCurrentImplementationDef,
-              assessAssetDef,
-            ],
-            requiredFunctionName: describeCurrentImplementationDef.name,
             temperature: 0.7,
             modelType: ModelType.CHEAP,
+            expectedResponseType: {
+              functionCall: false,
+              text: true,
+              media: false,
+            },
           },
           {},
         )
       )
-        .filter((item) => item.type === 'functionCall')
-        .map((item) => item.functionCall);
+        .filter((item) => item.type === 'text')
+        .map((item) => item.text);
 
-      context.implementationDescription = (implResult.args as { description: string }).description;
+      context.implementationDescription = implResult;
 
       console.log('Implementation analysis completed:', context.implementationDescription);
     }
@@ -348,7 +330,6 @@ ${VISUAL_QUALITY_CRITERIA_INSTRUCTIONS}
 ${STANCE_SPECIFIC_ASSESSMENT_GUIDELINES_INSTRUCTIONS}
 
 IMPORTANT:
-- End with assessAsset function call
 - Focus on actionable feedback related to design and gameplay
 - For character assets: address each stance/animation state individually
 - CRITICAL: Ensure each stance receives dedicated, thorough assessment
@@ -371,127 +352,19 @@ IMPORTANT:
           },
         ],
         {
-          functionDefs: [
-            describeReferenceImageDef,
-            describeAssetRenderingDef,
-            describeCurrentImplementationDef,
-            assessAssetDef,
-          ],
-          requiredFunctionName: assessAssetDef.name,
           temperature: 0.7,
           modelType: ModelType.CHEAP,
-          expectedResponseType: { functionCall: true, text: false, media: false },
+          expectedResponseType: { functionCall: false, text: true, media: false },
         },
         {},
       )
     )
-      .filter((item) => item.type === 'functionCall')
-      .map((item) => item.functionCall);
+      .filter((item) => item.type === 'text')
+      .map((item) => item.text);
 
-    return (assessResult.args as { assessment: string }).assessment;
+    return assessResult;
   } catch (error) {
     console.error('Error during asset assessment:', error);
     throw new Error(`Failed to assess asset: ${(error as Error).message}`);
   }
 }
-
-/**
- * Function definition for describing a reference image
- */
-const describeReferenceImageDef: FunctionDef = {
-  name: 'describeReferenceImage',
-  description:
-    'Describe the reference image for an asset in detail, identifying key visual elements and characteristics',
-  parameters: {
-    type: 'object',
-    properties: {
-      description: {
-        type: 'string',
-        description:
-          'Detailed description of the reference image, including style, proportions, colors, and key visual elements that define the asset',
-      },
-    },
-    required: ['description'],
-  },
-};
-
-/**
- * Function definition for describing an asset rendering
- */
-const describeAssetRenderingDef: FunctionDef = {
-  name: 'describeAssetRendering',
-  description: 'Critically analyze the rendered asset, focusing on visual quality, accuracy, and potential issues',
-  parameters: {
-    type: 'object',
-    properties: {
-      description: {
-        type: 'string',
-        description: `Detailed critical analysis of the rendered asset (max 200 words).
-Include:
-1. Overall visual impression
-2. Key visual elements present or missing
-3. Quality of execution (proportions, colors, style)
-4. Specific visual issues or artifacts
-5. How well it fulfills its intended purpose
-6. Comparison to expected characteristics
-7. Clear identification of discrepancies
-8. Honest evaluation of visual quality
-
-Be direct and critical - if something looks wrong, say so explicitly. Focus on what you actually see, not what might have been intended.`,
-        maxLength: 5000,
-      },
-    },
-    required: ['description'],
-  },
-};
-
-/**
- * Function definition for describing current implementation
- */
-const describeCurrentImplementationDef: FunctionDef = {
-  name: 'describeCurrentImplementation',
-  description: 'Describe the current implementation of the asset, focusing on how different stances are handled',
-  parameters: {
-    type: 'object',
-    properties: {
-      description: {
-        type: 'string',
-        description:
-          'Detailed description of the current implementation, with particular attention to technical aspects that might affect visual output',
-      },
-    },
-    required: ['description'],
-  },
-};
-
-/**
- * Function definition for the final assessment
- */
-const assessAssetDef: FunctionDef = {
-  name: 'assessAsset',
-  description: 'Critically assess an asset by analyzing its rendering result against expected characteristics',
-  parameters: {
-    type: 'object',
-    properties: {
-      assessment: {
-        type: 'string',
-        description: `Output a critical, structured analysis that honestly evaluates the rendered asset.
-
-For each stance, include:
-1. <Stance Name> - Clear header identifying the stance
-2. <Visual Assessment> - Critical evaluation of what you actually SEE in the rendering
-3. <Discrepancy Analysis> - Specific issues where rendered output deviates from expected characteristics
-4. <Severity Rating> - Rate each discrepancy as Minor, Moderate, Significant, or Critical
-5. <Recommendations> - Clear, actionable suggestions to address each issue
-
-Be direct and honest - if something looks wrong, say so explicitly. Do not soften criticism.
-Focus on what is visually presented, not what might have been intended.
-Be especially critical when a rendered stance significantly deviates from its intended design.
-
-Use not more than 200 words per stance.`,
-        maxLength: 2000,
-      },
-    },
-    required: ['assessment'],
-  },
-};
