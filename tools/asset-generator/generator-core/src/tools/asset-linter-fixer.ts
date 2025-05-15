@@ -78,7 +78,7 @@ ${formattedErrors}
       undefined,
       undefined,
       undefined,
-      ModelType.CHEAP,
+      ModelType.DEFAULT,
     );
     return {
       newContent,
