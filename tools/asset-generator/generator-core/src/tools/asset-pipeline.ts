@@ -1,3 +1,4 @@
+
 import * as fs from 'fs/promises';
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
 import { renderAsset, renderAssetVideos, VerbosityLevel } from './render-character.js';
@@ -6,7 +7,9 @@ import { saveAsset } from './asset-saver.js';
 import { lintAssetFile, LintResult, formatLintErrors } from './asset-linter.js';
 import { fixLintErrors, LintFixResult } from './asset-linter-fixer.js';
 import * as path from 'path';
-import { Asset } from '../assets-types.js'; // Added to handle currentAsset being null
+import { Asset } from '../assets-types.js';
+import { createInterface } from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
 
 /**
  * Interface for asset generation options
@@ -64,9 +67,44 @@ export interface AssetGenerationResult {
   /** Whether asset was regenerated or just rendered */
   regenerated: boolean;
   /** Results of asset rendering */
-  renderingResult?: { stance: string; mediaType: string; dataUrl: string }[];
+  renderingResult?: { stance: string; mediaType: string; dataUrl: string; filePath: string }[];
   /** Results of linting process */
   linting?: AssetLintingResult;
+}
+
+/**
+ * Converts a kebab-case string to PascalCase.
+ * e.g., 'my-asset-name' becomes 'MyAssetName'
+ * @param str The input string in kebab-case.
+ * @returns The string in PascalCase.
+ */
+function pascalCase(str: string): string {
+  return str.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+
+/**
+ * Generates the initial TypeScript content for a new asset.
+ * @param assetName The original name of the asset (e.g., kebab-case).
+ * @param assetDescription The user-provided description for the asset.
+ * @returns A string containing the initial TypeScript code for the asset.
+ */
+function generateInitialAssetContent(assetName: string, assetDescription: string): string {
+  const pascalAssetName = pascalCase(assetName);
+  const escapedDescription = assetDescription.replace(/'/g, "\\'");
+
+  return `import { Asset } from '../../../generator-core/src/assets-types.ts';
+
+export const ${pascalAssetName}: Asset = {
+  name: '${assetName}',
+  description: '${escapedDescription}',
+  stances: ['idle'], // Default stance
+  render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: 'left' | 'right'): void {
+    ctx.fillStyle = 'grey';
+    ctx.fillRect(x, y, width, height);
+    console.log("'Render method for ${assetName} - stance: " + stance + ", direction: " + direction + ", progress: " + progress.toFixed(2));
+  }
+};
+`;
 }
 
 /**
@@ -109,7 +147,37 @@ export async function runAssetGenerationPipeline(
   let currentContent: string | null = null;
   let definitiveDescription: string | undefined;
 
-  if (currentAsset) {
+  if (!currentAsset) {
+    console.log(`Asset '${assetName}' not found at ${assetPath}.`);
+    if (options.lintOnly || options.renderOnly) {
+      throw new Error(
+        `Cannot perform '${options.lintOnly ? '--lint-only' : '--render-only'}' operation: Asset '${assetName}' does not exist and creation was not confirmed or is not applicable.`
+      );
+    }
+
+    const rl = createInterface({ input, output });
+    try {
+      const answer = await rl.question(`Create new asset '${assetName}'? (yes/no): `);
+      if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
+        const description = await rl.question(`Enter a brief description for '${assetName}': `);
+        const initialContent = generateInitialAssetContent(assetName, description || `Initial description for new asset '${assetName}'.`);
+        await saveAsset(assetPath, initialContent);
+        console.log(`Asset '${assetName}' created successfully at ${assetPath}.`);
+        currentAsset = await loadAsset(assetPath);
+        if (!currentAsset) {
+          throw new Error(`Failed to load newly created asset '${assetName}'. Please check file system permissions and asset structure.`);
+        }
+        currentContent = await fs.readFile(assetPath, 'utf-8');
+        definitiveDescription = currentAsset.description;
+        options.fromScratch = true; // Ensure new assets are generated from scratch with the new description
+      } else {
+        console.log('Asset creation declined by user. Exiting.');
+        process.exit(0);
+      }
+    } finally {
+      rl.close();
+    }
+  } else {
     console.log('Current asset loaded successfully');
     currentContent = await fs.readFile(assetPath, 'utf-8');
     definitiveDescription = currentAsset.description;
@@ -118,30 +186,22 @@ export async function runAssetGenerationPipeline(
       // The definitiveDescription is already captured from currentAsset.description
       currentContent = null; // Asset code will be regenerated
     }
-  } else {
-    console.log('No existing asset found, will create new one');
-    if (options.lintOnly) {
-      throw new Error('Cannot perform lint-only operation when no existing asset is found.');
-    }
-    if (options.skipRender && !options.renderOnly) {
-      throw new Error('Cannot skip rendering when no existing asset is found. Remove the --skip-render flag.');
-    }
-    // For new assets, definitiveDescription will be undefined here.
+  }
+  
+  //This check is important because currentAsset could have been null and then created.
+  if (!currentAsset) {
+    // This case should ideally not be reached if the creation logic is sound and exit conditions are met.
+    throw new Error(`Asset '${assetName}' could not be loaded or created. Critical error.`);
   }
 
   let descriptionForGenerator: string;
-  if (currentAsset) {
-    descriptionForGenerator = currentAsset.description; // Always use the description from the loaded asset
-  } else {
-    // For new assets, the description might come from an initial prompt or be a default.
-    descriptionForGenerator = options.additionalPrompt || "New asset - description to be filled by user.";
-  }
-  // If fromScratch is true and currentAsset exists, descriptionForGenerator is already correctly set to currentAsset.description.
+  // definitiveDescription is set either from existing asset or from user prompt for new asset
+  descriptionForGenerator = definitiveDescription!;
 
   let renderingResult: { stance: string; mediaType: string; dataUrl: string; filePath: string }[] = [];
-  if (currentAsset && options.fromScratch) {
-    console.log('Skipping rendering of existing asset as --from-scratch is enabled');
-  } else if (currentAsset && (!options.skipRender || options.renderOnly)) {
+  if (options.fromScratch && !options.renderOnly) { // If fromScratch (could be new or explicit), skip initial render unless renderOnly
+    console.log('Skipping rendering of existing/new asset as --from-scratch is enabled (and not --render-only)');
+  } else if ((!options.skipRender || options.renderOnly)) {
     renderingResult = await renderAsset(assetName, currentAsset, assetPath);
     console.log('Asset rendered successfully');
     if (!options.skipVideos) {
@@ -159,7 +219,7 @@ export async function runAssetGenerationPipeline(
         console.error('Error generating videos:', error);
       }
     }
-  } else if (currentAsset && options.skipRender) {
+  } else if (options.skipRender) {
     console.log('Skipping rendering of existing asset (--skip-render flag is enabled), using existing renderings');
     const assetDir = path.dirname(assetPath);
     const files = await fs.readdir(assetDir);
@@ -167,7 +227,7 @@ export async function runAssetGenerationPipeline(
     for (const file of files) {
       if (file.endsWith('.mp4') || file.endsWith('.png')) {
         const mediaType = file.endsWith('mp4') ? 'video/mp4' : 'image/png';
-        const stanceName = file.replace(`${assetName.toLowerCase()}-`, '').replace(/\textension/g, '');
+        const stanceName = file.replace(`${assetName.toLowerCase()}-`, '').replace(/\.(mp4|png)$/g, '');
         renderingResult.push({
           stance: stanceName,
           mediaType: mediaType,
@@ -182,17 +242,19 @@ export async function runAssetGenerationPipeline(
   if (!(options.renderOnly || options.lintOnly)) {
     console.log('\nGenerating improved asset using direct visual input...');
 
+    // For a brand new asset (options.fromScratch was set to true), mediaForGenerator should be null.
+    // If --from-scratch was explicitly passed for an existing asset, also null.
     const mediaForGenerator = options.fromScratch ? null : renderingResult;
 
     const improvedImplementation = await generateImprovedAsset(
       assetName,
       assetPath, 
       currentAsset, 
-      currentContent,
+      currentContent, // This will be null if fromScratch is true (new or explicit)
       mediaForGenerator, 
-      options.additionalPrompt, // This is still passed for any other special requirements
-      options.fromScratch,
-      descriptionForGenerator, // This is the definitive description to be preserved
+      options.additionalPrompt,
+      options.fromScratch, // True for new assets or if explicitly requested
+      descriptionForGenerator, // This is the definitive description
     );
 
     console.log('\nSaving improved asset...');
@@ -236,6 +298,10 @@ export async function runAssetGenerationPipeline(
           console.log('Fixed asset code saved successfully');
           lintingResult.errorsFixed = true;
           currentContent = fixResult.code; 
+          currentAsset = await loadAsset(assetPath); // Reload after fixing
+          if (!currentAsset) {
+             throw new Error('Failed to reload asset after lint fixes.');
+          }
           break; 
         } else {
           console.error('\nFailed to fix linting issues after attempt', tryCount + 1, fixResult.error);
@@ -249,14 +315,26 @@ export async function runAssetGenerationPipeline(
     }
   }
 
+  // Reload currentAsset if it might have changed (e.g. due to generation or linting fixes)
+  // and it's not renderOnly or lintOnly (where it might not exist or not be relevant to reload)
   if (!(options.renderOnly || options.lintOnly)) {
-    currentAsset = await loadAsset(assetPath);
-    if (!currentAsset) {
-      throw new Error('Failed to load current asset after potential modifications.');
-    }
+      currentAsset = await loadAsset(assetPath);
+      if (!currentAsset) {
+          throw new Error('Failed to load current asset after potential modifications.');
+      }
   }
 
-  if (currentAsset && !options.skipRender && !(options.renderOnly && renderingResult.length > 0) && !options.lintOnly) {
+
+  // Final Rendering Logic
+  // Re-render if:
+  // 1. An asset exists (currentAsset is not null).
+  // 2. Rendering is not skipped (options.skipRender is false).
+  // 3. It's NOT (renderOnly AND we already have rendering results from the initial render pass).
+  // 4. It's NOT lintOnly.
+  if (currentAsset && 
+      !options.skipRender && 
+      !((options.renderOnly || options.fromScratch) && renderingResult.length > 0) && // if renderOnly/fromScratch, and we already rendered, don't re-render
+      !options.lintOnly) {
     console.log('\nRendering final version of the asset...');
     const finalRenderingResult = await renderAsset(assetName, currentAsset, assetPath);
     if (!options.skipVideos) {
@@ -274,14 +352,14 @@ export async function runAssetGenerationPipeline(
         console.error('Error generating videos for final asset:', error);
       }
     }
-    renderingResult = finalRenderingResult;
+    renderingResult = finalRenderingResult; // Update with final renderings
   } else if (!currentAsset && !(options.renderOnly || options.lintOnly)) {
     console.warn(
       'Warning: Asset could not be loaded for final rendering. This might indicate an issue in generation or saving.',
     );
   } else {
     console.log(
-      '\nSkipping final rendering of asset (e.g. --skip-render, --render-only, or --lint-only used appropriately).',
+      '\nSkipping final rendering of asset (e.g. --skip-render, --render-only, or --lint-only used appropriately, or asset was just created and rendered).',
     );
   }
 

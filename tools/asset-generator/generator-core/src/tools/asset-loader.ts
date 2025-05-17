@@ -57,7 +57,10 @@ export async function loadAsset(assetPath: string): Promise<Asset | null> {
 
     return asset;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
+    if (
+      (error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND' ||
+      (error.message.includes('Cannot find module') && error.message.includes(assetPath))
+    ) {
       console.error(error);
       return null;
     }
