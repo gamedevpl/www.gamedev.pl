@@ -77,7 +77,7 @@ export async function generateImprovedAsset(
   }
 
   if (renderedMedia && renderedMedia.length > 0) {
-    renderedMedia.forEach(media => {
+    renderedMedia.forEach((media) => {
       if (media.mediaType.startsWith('image/')) {
         promptItems.push({
           type: 'user',
@@ -85,13 +85,13 @@ export async function generateImprovedAsset(
           images: [
             {
               mediaType: media.mediaType as PromptImageMediaType,
-              base64url: media.dataUrl.split(";base64,")[1],
+              base64url: media.dataUrl.split(';base64,')[1],
             },
           ],
         });
       } else if (media.mediaType.startsWith('video/')) {
         // Note: Standard PromptItem doesn't explicitly support video URLs directly in 'images'.
-        // This assumes the model can process base64 video data if provided this way or 
+        // This assumes the model can process base64 video data if provided this way or
         // that 'genaicode' library handles it. For now, we'll add it similarly to images.
         // This might need adjustment based on actual LLM capabilities for video data in prompts.
         promptItems.push({
@@ -102,7 +102,7 @@ export async function generateImprovedAsset(
           images: [
             {
               mediaType: media.mediaType as PromptImageMediaType, // Casting, but 'video/*' might not be valid for 'PromptImageMediaType'
-              base64url: media.dataUrl.split(";base64,")[1],
+              base64url: media.dataUrl.split(';base64,')[1],
             },
           ],
         });
@@ -115,14 +115,17 @@ export async function generateImprovedAsset(
 
   const generationMode = fromScratch ? 'a new implementation from scratch' : 'an improved implementation';
   let mainPromptText = `\
-    Please generate ${generationMode} of the \"${assetName}\" asset.\n    Asset's target description is:\n    ${originalDescription || asset?.description || 'No detailed description provided.'}\
+    Please generate ${generationMode} of the \"${assetName}\" asset.\n    Asset's target description is:\n    ${
+    originalDescription || asset?.description || 'No detailed description provided.'
+  }\
 \
 `;
 
   if (effectiveImplementation) {
     mainPromptText += `Current implementation to be improved:\\n\\n\\n${effectiveImplementation}\\n\\n\\n`;
   } else {
-    mainPromptText += 'No current implementation exists. Generate the code from scratch based on the description, reference image (if any), and desired visual characteristics.\n';
+    mainPromptText +=
+      'No current implementation exists. Generate the code from scratch based on the description, reference image (if any), and desired visual characteristics.\n';
   }
 
   if (additionalPrompt) {
