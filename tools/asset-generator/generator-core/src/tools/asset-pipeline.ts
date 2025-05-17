@@ -107,16 +107,16 @@ export async function runAssetGenerationPipeline(
 
   let currentAsset: Asset | null = await loadAsset(assetPath);
   let currentContent: string | null = null;
-  let originalDescription: string | undefined;
+  let definitiveDescription: string | undefined;
 
   if (currentAsset) {
     console.log('Current asset loaded successfully');
     currentContent = await fs.readFile(assetPath, 'utf-8');
+    definitiveDescription = currentAsset.description;
     if (options.fromScratch) {
       console.log('Regenerating asset from scratch, keeping description but starting over implementation');
-      originalDescription = currentAsset.description;
+      // The definitiveDescription is already captured from currentAsset.description
       currentContent = null; // Asset code will be regenerated
-      // currentAsset itself remains for reference image, but its content is ignored by generator
     }
   } else {
     console.log('No existing asset found, will create new one');
@@ -126,12 +126,19 @@ export async function runAssetGenerationPipeline(
     if (options.skipRender && !options.renderOnly) {
       throw new Error('Cannot skip rendering when no existing asset is found. Remove the --skip-render flag.');
     }
-    // For new assets, originalDescription will be the main description used by the generator.
-    // This is typically set via CLI or other means if not creating from an existing asset object.
-    // For this flow, we assume if `currentAsset` is null, `originalDescription` must be provided if needed.
+    // For new assets, definitiveDescription will be undefined here.
   }
 
-  let renderingResult: { stance: string; mediaType: string; dataUrl: string }[] = [];
+  let descriptionForGenerator: string;
+  if (currentAsset) {
+    descriptionForGenerator = currentAsset.description; // Always use the description from the loaded asset
+  } else {
+    // For new assets, the description might come from an initial prompt or be a default.
+    descriptionForGenerator = options.additionalPrompt || "New asset - description to be filled by user.";
+  }
+  // If fromScratch is true and currentAsset exists, descriptionForGenerator is already correctly set to currentAsset.description.
+
+  let renderingResult: { stance: string; mediaType: string; dataUrl: string; filePath: string }[] = [];
   if (currentAsset && options.fromScratch) {
     console.log('Skipping rendering of existing asset as --from-scratch is enabled');
   } else if (currentAsset && (!options.skipRender || options.renderOnly)) {
@@ -159,13 +166,13 @@ export async function runAssetGenerationPipeline(
     console.log('Files in asset directory:', files);
     for (const file of files) {
       if (file.endsWith('.mp4') || file.endsWith('.png')) {
-        // Ensure PNGs are also loaded if they exist as primary renderings
         const mediaType = file.endsWith('mp4') ? 'video/mp4' : 'image/png';
         const stanceName = file.replace(`${assetName.toLowerCase()}-`, '').replace(/\textension/g, '');
         renderingResult.push({
           stance: stanceName,
           mediaType: mediaType,
           dataUrl: `data:${mediaType};base64,${(await fs.readFile(path.join(assetDir, file))).toString('base64')}`,
+          filePath: path.join(assetDir, file),
         });
       }
     }
@@ -175,30 +182,24 @@ export async function runAssetGenerationPipeline(
   if (!(options.renderOnly || options.lintOnly)) {
     console.log('\nGenerating improved asset using direct visual input...');
 
-    // If fromScratch, renderedMedia from previous version is not applicable.
     const mediaForGenerator = options.fromScratch ? null : renderingResult;
-
-    // The originalDescription is used if fromScratch or if there is no current asset.
-    // If there is a current asset and not fromScratch, its description is used implicitly via the Asset object.
-    const descriptionForGenerator =
-      options.fromScratch || !currentAsset ? originalDescription : currentAsset.description;
 
     const improvedImplementation = await generateImprovedAsset(
       assetName,
-      assetPath, // Pass assetPath for reference image loading
-      currentAsset, // Pass currentAsset for reference image field and description
+      assetPath, 
+      currentAsset, 
       currentContent,
-      mediaForGenerator, // Pass the collected rendering results (or null if fromScratch)
-      options.additionalPrompt,
+      mediaForGenerator, 
+      options.additionalPrompt, // This is still passed for any other special requirements
       options.fromScratch,
-      descriptionForGenerator, // Pass the definitive original/target description
+      descriptionForGenerator, // This is the definitive description to be preserved
     );
 
     console.log('\nSaving improved asset...');
     await saveAsset(assetPath, improvedImplementation);
     console.log('Asset saved successfully');
-    currentContent = improvedImplementation; // Update currentContent for subsequent steps if any
-    currentAsset = await loadAsset(assetPath); // Reload asset after saving
+    currentContent = improvedImplementation; 
+    currentAsset = await loadAsset(assetPath); 
     if (!currentAsset) {
       throw new Error('Failed to reload asset after saving improved version.');
     }
@@ -234,8 +235,8 @@ export async function runAssetGenerationPipeline(
           await saveAsset(assetPath, fixResult.code);
           console.log('Fixed asset code saved successfully');
           lintingResult.errorsFixed = true;
-          currentContent = fixResult.code; // Update content after successful fix
-          break; // Exit loop if fixes are successful
+          currentContent = fixResult.code; 
+          break; 
         } else {
           console.error('\nFailed to fix linting issues after attempt', tryCount + 1, fixResult.error);
           lintingResult.errorsFixed = false;
@@ -248,7 +249,6 @@ export async function runAssetGenerationPipeline(
     }
   }
 
-  // Reload asset if it was modified by linting or generation
   if (!(options.renderOnly || options.lintOnly)) {
     currentAsset = await loadAsset(assetPath);
     if (!currentAsset) {
@@ -256,10 +256,8 @@ export async function runAssetGenerationPipeline(
     }
   }
 
-  // Render the final version of the asset if it was (re)generated or lint-fixed, and not skipping render
   if (currentAsset && !options.skipRender && !(options.renderOnly && renderingResult.length > 0) && !options.lintOnly) {
     console.log('\nRendering final version of the asset...');
-    // This rendering will overwrite previous files if names are the same.
     const finalRenderingResult = await renderAsset(assetName, currentAsset, assetPath);
     if (!options.skipVideos) {
       try {
@@ -276,7 +274,6 @@ export async function runAssetGenerationPipeline(
         console.error('Error generating videos for final asset:', error);
       }
     }
-    // Update renderingResult with the final renderings if they were made
     renderingResult = finalRenderingResult;
   } else if (!currentAsset && !(options.renderOnly || options.lintOnly)) {
     console.warn(
@@ -290,9 +287,9 @@ export async function runAssetGenerationPipeline(
 
   return {
     assetPath,
-    assessment: null, // Assessment is now implicit in the generator
+    assessment: null, 
     regenerated: !(options.renderOnly || options.lintOnly),
-    renderingResult, // Return the latest rendering results
+    renderingResult, 
     linting: lintingResult,
   };
 }

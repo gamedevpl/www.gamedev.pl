@@ -4,6 +4,8 @@ import { ASSET_GENERATOR_PROMPT } from './prompts.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Asset } from '../assets-types.js';
+import { FileState, GoogleGenAI } from '@google/genai';
+import { getServiceConfig } from 'genaicode/ai-service/service-configurations.js';
 
 /**
  * Function definition for generating a complete asset implementation in one shot.
@@ -45,7 +47,7 @@ export async function generateImprovedAsset(
   assetPath: string,
   asset: Asset | null, // Can be null if asset doesn't exist yet
   currentImplementation: string | null,
-  renderedMedia: { stance: string; mediaType: string; dataUrl: string }[] | null,
+  renderedMedia: { stance: string; mediaType: string; dataUrl: string; filePath: string }[] | null,
   additionalPrompt?: string,
   fromScratch?: boolean,
   originalDescription?: string,
@@ -53,6 +55,8 @@ export async function generateImprovedAsset(
 ): Promise<string> {
   const effectiveImplementation = fromScratch ? null : currentImplementation;
   const promptItems: PromptItem[] = [ASSET_GENERATOR_PROMPT];
+
+  const genAI = new GoogleGenAI({ apiKey: getServiceConfig('ai-studio').apiKey });
 
   let referenceImageDataBase64: string | undefined;
   if (asset?.referenceImage) {
@@ -77,11 +81,11 @@ export async function generateImprovedAsset(
   }
 
   if (renderedMedia && renderedMedia.length > 0) {
-    renderedMedia.forEach((media) => {
+    for (const media of renderedMedia) {
       if (media.mediaType.startsWith('image/')) {
         promptItems.push({
           type: 'user',
-          text: `Rendered image for stance: \"${media.stance}\". Please analyze this visual output. If a reference image is provided, compare this rendering to it. Identify any discrepancies or areas for improvement based on the asset description and visual quality.`,
+          text: `Rendered image for stance: "${media.stance}". Please analyze this visual output. If a reference image is provided, compare this rendering to it. Identify any discrepancies or areas for improvement based on the asset description and visual quality.`,
           images: [
             {
               mediaType: media.mediaType as PromptImageMediaType,
@@ -90,57 +94,75 @@ export async function generateImprovedAsset(
           ],
         });
       } else if (media.mediaType.startsWith('video/')) {
-        // Note: Standard PromptItem doesn't explicitly support video URLs directly in 'images'.
-        // This assumes the model can process base64 video data if provided this way or
-        // that 'genaicode' library handles it. For now, we'll add it similarly to images.
-        // This might need adjustment based on actual LLM capabilities for video data in prompts.
+        const file = await genAI.files.upload({
+          file: media.filePath,
+        });
+        while ((await genAI.files.get({ name: file.name })).state !== FileState.ACTIVE) {
+          console.log(`Waiting for video file ${file.name} to be processed...`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
         promptItems.push({
           type: 'user',
-          text: `Rendered video for stance: \"${media.stance}\". Please analyze this animation. Consider smoothness, correctness of motion, and overall visual appeal according to the asset description and desired stance characteristics. If a reference image is provided, ensure the style is consistent. `,
-          // Videos might need a different handling or a specific field if supported by the model/library
-          // For now, adding as if it's an image, which might not be optimal or work for all models.
+          text: `Rendered video for stance: "${media.stance}". Please analyze this animation. Consider smoothness, correctness of motion, and overall visual appeal according to the asset description and desired stance characteristics. If a reference image is provided, ensure the style is consistent. `,
           images: [
             {
-              mediaType: media.mediaType as PromptImageMediaType, // Casting, but 'video/*' might not be valid for 'PromptImageMediaType'
+              mediaType: media.mediaType as PromptImageMediaType,
+              uri: file.uri,
               base64url: media.dataUrl.split(';base64,')[1],
             },
           ],
         });
       }
-    });
+    }
     console.log(`Added ${renderedMedia.length} rendered media items to prompt.`);
   } else {
     console.log('No rendered media provided to generator (e.g., from scratch or render skipped).');
   }
 
   const generationMode = fromScratch ? 'a new implementation from scratch' : 'an improved implementation';
-  let mainPromptText = `\
-    Please generate ${generationMode} of the \"${assetName}\" asset.\n    Asset's target description is:\n    ${
-    originalDescription || asset?.description || 'No detailed description provided.'
-  }\
-\
+  let mainPromptText = `
+    Please generate ${generationMode} of the "${assetName}" asset.
+    Asset's target description is:
+
+<description>
+${originalDescription || 'No detailed description provided.'}
+</description>
 `;
 
   if (effectiveImplementation) {
-    mainPromptText += `Current implementation to be improved:\\n\\n\\n${effectiveImplementation}\\n\\n\\n`;
+    mainPromptText += `Current implementation to be improved:
+<code>
+${effectiveImplementation}
+</code>
+`;
   } else {
-    mainPromptText +=
-      'No current implementation exists. Generate the code from scratch based on the description, reference image (if any), and desired visual characteristics.\n';
+    mainPromptText += `No current implementation exists. Generate the code from scratch based on the description, reference image (if any), and desired visual characteristics.
+`;
   }
 
   if (additionalPrompt) {
-    mainPromptText += `Special Requirements from User:\\n${additionalPrompt}\n`;
+    mainPromptText += `Special Requirements from User:
+${additionalPrompt}
+`;
   }
 
   mainPromptText += `\
-    Based on your analysis of the asset description, the reference image (if provided), and the rendered media for each stance (if provided), please generate the complete TypeScript code for the asset.\n\
-    Key Instructions:\n    1. Analyze all provided visual materials (reference image, rendered stance images/videos) and the asset description.\n    2. Identify areas where the current implementation (if any) succeeds or fails to meet the visual and functional requirements.\n    3. If improving existing code, make targeted, minimal changes to address identified issues. Preserve working parts.\n    4. If generating from scratch, create a robust implementation based on the description and any visual references.\n    5. Ensure the output strictly adheres to the Asset interface and all coding/formatting requirements detailed in the system prompt (e.g., imports, export const AssetName: Asset = { ... }, no canvas clearing).\n    6. The code must be complete, valid, and error-free TypeScript.\n\
+    Based on your analysis of the asset description, the reference image (if provided), and the rendered media for each stance (if provided), please generate the complete TypeScript code for the asset.
+
+    Key Instructions:
+    1. Analyze all provided visual materials (reference image, rendered stance images/videos) and the asset description.
+    2. Identify areas where the current implementation (if any) succeeds or fails to meet the visual and functional requirements.
+    3. If improving existing code, make targeted, minimal changes to address identified issues. Preserve working parts.
+    4. If generating from scratch, create a robust implementation based on the description and any visual references.
+    5. Ensure the output strictly adheres to the Asset interface and all coding/formatting requirements detailed in the system prompt (e.g., imports, export const AssetName: Asset = { ... }, no canvas clearing).
+    6. The code must be complete, valid, and error-free TypeScript.
+
     Provide the full, updated asset code.`;
 
   promptItems.push({
     type: 'user',
     text: mainPromptText,
-    cache: true, // Cache if the core request (description, code) is the same
+    cache: true,
   });
 
   const result = await generateCode(
@@ -148,7 +170,7 @@ export async function generateImprovedAsset(
     {
       functionDefs: [generateCompleteAssetDef],
       requiredFunctionName: generateCompleteAssetDef.name,
-      temperature: 0.7, // Adjusted temperature for potentially more creative visual interpretation
+      temperature: 0.7,
       modelType,
       expectedResponseType: { functionCall: true, text: false, media: false },
     },

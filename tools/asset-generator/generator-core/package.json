@@ -29,9 +29,10 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@google/genai": "^0.14.1",
     "canvas": "^3.1.0",
     "eslint": "^8.54.0",
-    "genaicode": "^0.10.2",
+    "genaicode": "^0.10.3",
     "please-upgrade-node": "^3.2.0",
     "tmp-promise": "^3.0.3",
     "typescript": "^5.3.3",

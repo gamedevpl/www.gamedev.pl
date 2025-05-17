@@ -20,6 +20,7 @@ export async function renderAsset(
     stance: string;
     mediaType: string;
     dataUrl: string;
+    filePath: string;
   }[]
 > {
   const canvas = createCanvas(1024, 1024);
@@ -49,15 +50,16 @@ export async function renderAsset(
       // Save the buffer as PNG file
       await fs.writeFile(outputPath, buffer);
       console.log(`Rendered asset saved to: ${outputPath}`);
+
+      result.push({
+        stance,
+        mediaType: 'image/png',
+        dataUrl,
+        filePath: outputPath,
+      });
     } catch (error) {
       console.error('Failed to save rendered asset:', error);
     }
-
-    result.push({
-      stance,
-      mediaType: 'image/png',
-      dataUrl,
-    });
   }
 
   return result;
@@ -115,6 +117,7 @@ export async function renderAssetVideos(
     stance: string;
     mediaType: string;
     dataUrl: string;
+    filePath: string;
   }[]
 > {
   const { fps = 60, duration = 2, logProgress = true, verbosity = 'minimal' } = options;
@@ -162,6 +165,7 @@ async function renderStanceVideo(
   stance: string;
   mediaType: string;
   dataUrl: string;
+  filePath: string;
 }> {
   const { fps = 60, duration = 2, verbosity = 'minimal' } = options;
   const totalFrames = fps * duration;
@@ -191,6 +195,7 @@ async function renderStanceVideo(
     stance,
     mediaType: 'video/mp4',
     dataUrl,
+    filePath: videoPath,
   };
 }
 

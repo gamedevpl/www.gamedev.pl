@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { PromptItem } from 'genaicode';
-import { Asset } from '../assets-types'; // Added to ensure Asset type is available for context if needed
+import '../assets-types.js'; // Added to ensure Asset type is available for context if needed
 
 // --- Existing Assessment-Related Instructions (to be integrated or referenced by the new generator prompt) ---
 
@@ -66,9 +66,7 @@ Your process involves two main phases: Visual Analysis (when applicable) and Cod
    Based on the asset's textual description AND your visual analysis (from Phase 1), you will generate or refine the TypeScript code for the asset.
 
    **Core Coding Requirements:**
-   1.  **Implement the Asset Interface:** ALL assets MUST implement the 
-AAsset
- interface. Its definition is:
+   1.  **Implement the Asset Interface:** ALL assets MUST implement the 'Asset' interface. Its definition is:
        
 ${
   fs
@@ -76,82 +74,50 @@ ${
     .match(/export interface Asset {[^}]*}/)?.[0] || 'Error: Could not load Asset interface definition.'
 }
 
-       Ensure all properties (
-name
-, 
-description
-, 
-stances
-) and the 
-render
- method signature are EXACTLY as defined.
+       Ensure all properties ('name', 'description', 'stances') and the 'render' method signature are EXACTLY as defined.
    2.  **TypeScript & Canvas API:** Use TypeScript and the HTML Canvas 2D API for rendering. Code must be valid, error-free, and well-typed.
    3.  **Visual Fidelity:** The primary goal is to produce code that renders visuals matching the asset description and aligning with the style/features of the reference image (if provided). Address issues identified in your visual analysis of rendered media.
    4.  **Code Structure & Quality:**
        - Write clean, readable, and well-organized code. Use meaningful names.
        - Code should be compact yet understandable. Employ functional programming principles where appropriate.
        - Avoid syntax errors, type mismatches, and runtime errors. Use type guards if necessary.
-       - DO NOT clear the canvas in the 
-render
- method; assume it's prepared by the caller.
+       - DO NOT clear the canvas in the 'render' method; assume it's prepared by the caller.
    5.  **Import Statement:** ALWAYS use this exact import statement at the top of the file:
        
 import { Asset } from '../../../generator-core/src/assets-types';
 
-   6.  **Export Format:** ALWAYS export the asset as a 
-const
- object (NOT a class), like this:
+   6.  **Export Format:** ALWAYS export the asset as a const object (NOT a class), like this:
        
 export const AssetName: Asset = { /* ... implementation ... */ };
 
+   7.  **Preserve Description:** The  'description' field in the 'Asset' object is critical and defines the core concept of the asset. You MUST NOT modify or change the content of the 'description' field provided in the prompt. It should remain exactly as given in the input description for the asset.
+
    **Behavior Based on Inputs:**
    *   **From Scratch (No Current Implementation, No Prior Rendered Media):**
-       - Generate a complete new asset implementation based SOLELY on the 
-originalDescription
- and the 
-referenceImage
- (if provided).
+       - Generate a complete new asset implementation based SOLELY on the 'originalDescription' and the 'referenceImage' (if provided).
        - Focus on creating a high-quality initial version that meets all requirements.
    *   **Improving Existing Implementation (Current Implementation & Rendered Media Provided):**
-       - Your primary task is to REFINE the 
-currentImplementation
-.
-       - Use your visual analysis of the 
-renderedMedia
- (compared against description/reference) to identify specific visual flaws or deviations.
+       - Your primary task is to REFINE the 'currentImplementation'.
+       - Use your visual analysis of the 'renderedMedia' (compared against description/reference) to identify specific visual flaws or deviations.
        - Make MINIMAL, TARGETED changes to the code to address these identified visual issues.
        - PRESERVE all parts of the code that are already working well and do not contribute to the visual problems.
        - DO NOT refactor or rewrite the entire codebase unless the visual issues are systemic and require it.
        - Your modifications should directly correspond to the visual problems you observed.
    *   **Improving Existing Implementation (Current Implementation Provided, but NO Rendered Media):**
        - This scenario implies the user wants general improvements based on the description or reference image, or to fix non-visual bugs if described.
-       - Carefully review the 
-currentImplementation
- against the 
-originalDescription
- and 
-referenceImage
-.
+       - Carefully review the 'currentImplementation' against the 'originalDescription' and 'referenceImage'.
        - Make improvements to better align the code with these references.
 
    **General Guidelines:**
    - Focus on visual quality and performance.
    - Include proper type annotations.
    - Follow best practices for code organization and maintainability.
-   - If 
-additionalPrompt
- requirements are given by the user, ensure they are addressed.
+   - If 'additionalPrompt' requirements are given by the user, ensure they are addressed.
 
 **Output Requirement:**
-   - You MUST call the function 
-generateCompleteAsset
- with the following parameters:
-     - 
-content
-: The complete, final TypeScript code for the asset as a single string.
-     - 
-summaryOfChanges
-: A brief textual summary of the visual analysis performed and the key changes made to the code (or a description of the newly generated asset).
+   - You MUST call the function 'generateCompleteAsset' with the following parameters:
+     - content: The complete, final TypeScript code for the asset as a single string.
+     - summaryOfChanges: A brief textual summary of the visual analysis performed and the key changes made to the code (or a description of the newly generated asset).
 
 Remember: Your strength is combining visual understanding with code generation. Use the visual inputs effectively to create or improve assets that meet the desired aesthetic and functional goals. Prioritize addressing visual discrepancies when media is provided.
 `,
