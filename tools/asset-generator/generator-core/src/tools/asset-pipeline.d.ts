@@ -23,7 +23,7 @@ export interface AssetGenerationOptions {
         fps?: number;
         /** Duration of the video in seconds (default: 2) */
         duration?: number;
-        /** Verbosity level for logging (default: 'minimal') */
+        /** Verbosity level for logging (default:_minimal_) */
         verbosity?: VerbosityLevel;
     };
 }
@@ -48,8 +48,8 @@ export interface AssetLintingResult {
 export interface AssetGenerationResult {
     /** Path to the asset file */
     assetPath: string;
-    /** Assessment of the asset if available */
-    assessment?: string;
+    /** Assessment of the asset if available, or null if direct visual generation was used */
+    assessment?: string | null;
     /** Whether asset was regenerated or just rendered */
     regenerated: boolean;
     /** Results of asset rendering */

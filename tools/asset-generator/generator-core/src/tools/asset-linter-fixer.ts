@@ -1,6 +1,7 @@
 import { LintResult, formatLintErrors } from './asset-linter.js';
 import { FunctionDef, ModelType } from 'genaicode';
 import { generateImprovedAsset } from './asset-generator.js';
+import { Asset } from '../assets-types.js';
 
 /**
  * Interface for the result of fixing linting errors
@@ -17,10 +18,12 @@ export interface LintFixResult {
 /**
  * Fix linting errors using GenAIcode
  * @param lintResult Results from linting an asset file
+ * @param asset The Asset object (can be null if not available)
+ * @param assetPath Path to the asset file
  * @returns Promise resolving to the fixed code and summary
  * @throws Error if fixing fails
  */
-export async function fixLintErrors(lintResult: LintResult): Promise<LintFixResult> {
+export async function fixLintErrors(lintResult: LintResult, asset: Asset | null, assetPath: string): Promise<LintFixResult> {
   try {
     if (!lintResult.hasErrors && !lintResult.hasWarnings) {
       return {
@@ -36,7 +39,7 @@ export async function fixLintErrors(lintResult: LintResult): Promise<LintFixResu
     console.log(`Found ${lintResult.errors.length} linting issues.`);
 
     // Generate a patch to fix the linting errors
-    const fixedContent = await generateFixedContent(lintResult.assetName, currentCode, formattedErrors);
+    const fixedContent = await generateFixedContent(lintResult.assetName, assetPath, asset, currentCode, formattedErrors);
 
     if (!fixedContent.success || !fixedContent.newContent) {
       return {
@@ -62,29 +65,27 @@ export async function fixLintErrors(lintResult: LintResult): Promise<LintFixResu
   }
 }
 
-async function generateFixedContent(assetName: string, sourceCode: string, formattedErrors: string) {
+async function generateFixedContent(assetName: string, assetPath: string, asset: Asset | null, sourceCode: string, formattedErrors: string) {
   // Create the prompt for GenAIcode
-  const promptMessage = `
-Here are the linting errors that need to be fixed:
-
-${formattedErrors}
-`;
+  // The `formattedErrors` string now serves as the `additionalPrompt` to `generateImprovedAsset`
 
   try {
     const newContent = await generateImprovedAsset(
       assetName,
-      sourceCode,
-      promptMessage,
-      undefined,
-      undefined,
-      undefined,
-      ModelType.DEFAULT,
+      assetPath,
+      asset,
+      sourceCode, // currentImplementation
+      null,       // renderedMedia (not needed for lint fixing)
+      formattedErrors, // additionalPrompt (contains lint errors)
+      false,      // fromScratch (false, as we are fixing existing code)
+      undefined,  // originalDescription (not needed)
+      ModelType.CHEAP // modelType (use cheaper model for lint fixes)
     );
     return {
       newContent,
       success: true,
     };
-  } catch (error) {
+  } catch (error) {console.error('Error during generateFixedContent:', error);
     return {
       newContent: null,
       success: false,

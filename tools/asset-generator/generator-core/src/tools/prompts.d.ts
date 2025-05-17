@@ -1,18 +1,13 @@
 import { PromptItem } from 'genaicode';
 /**
- * System prompt for the asset assessor.
- * This prompt guides the AI in evaluating assets based on specific criteria:
- * 1. Visual quality and appearance
- * 2. Adherence to asset description and requirements
- * 3. Areas for improvement
+ * Instructions for Reference Image Analysis
+ * Guides the AI in analyzing reference images to establish standards for asset evaluation
  */
-export declare const ASSET_ASSESSOR_PROMPT: PromptItem;
+declare const REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS = "1. Reference Image Analysis (when provided in the user prompt):\n   First analyze the reference image:\n   - Describe its overall visual style, composition, mood, and artistic choices (e.g., color palette, lighting, level of detail).\n   - Note key visual elements, their arrangement, and their significance to the asset's identity.\n   - Identify important details, textures, patterns, and characteristics that define the asset.\n   - Document color schemes, material properties, and artistic choices.\n   - Describe proportions, scale relationships, and anatomical features if it's a character.\n   - For character assets: analyze silhouette clarity, pose, expression, and overall character identity.\n   - IMPORTANT: This reference image serves as a primary visual guide. The generated/improved asset should align with its style and key features.\n   - Document specific visual elements from the reference that MUST be present or strongly influential in the rendered asset.\n   - Note stylistic elements (e.g., cel-shaded, realistic, pixel art) that define the asset's visual identity.\n   - Identify key proportions and relationships that should be maintained for consistency.";
 /**
- * System prompt for the asset generator.
- * This prompt guides the AI in generating improved asset implementations based on:
- * 1. Assessment feedback
- * 2. Coding standards and best practices
- * 3. Performance considerations
- * 4. Maintainability requirements
+ * Instructions for Visual Discrepancy Identification (when comparing rendered media to reference/description)
+ * Guides the AI in identifying discrepancies between expected and actual visual output
  */
+declare const VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS = "2. Visual Discrepancy Identification (when rendered media is provided):\n   - Actively search for discrepancies between the rendered media, the asset description, and the reference image (if available).\n   - Use clear, direct language to describe visual issues, missing elements, or incorrect representations.\n   - Don't soften criticism - be honest about problems in the rendered media.\n   - Compare rendered output for each stance against:\n     a) The reference image (if provided): Check for stylistic consistency, key feature matching, and overall feel.\n     b) The asset description: Ensure the rendering fulfills the described purpose and appearance for that stance.\n     c) General principles of good game art and animation (e.g., clarity, appeal, readability, correct perspective).\n   - Document specific visual elements that are missing, incorrect, or poorly executed in the rendered media.\n   - Note when a rendered stance fails to convey its intended purpose or looks significantly different from expectations.";
 export declare const ASSET_GENERATOR_PROMPT: PromptItem;
+export { REFERENCE_IMAGE_ANALYSIS_INSTRUCTIONS, VISUAL_DISCREPANCY_IDENTIFICATION_INSTRUCTIONS };
