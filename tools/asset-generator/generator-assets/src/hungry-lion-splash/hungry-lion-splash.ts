@@ -52,8 +52,8 @@ Render function should be hermetic, meaning it should not depend on any external
     const titleBaseFontSize = Math.min(width, height) * 0.08;
 
     // Define new body proportions here for consistent use
-    const lionBodyProportionX = 0.40;
-    const lionBodyProportionY = 0.45; // Made taller for a "big, round belly"
+    const lionBodyProportionX = 0.50; // Made wider for a "big, round belly"
+    const lionBodyProportionY = 0.48; // Adjusted for plumpness, was 0.45
 
     const drawBackground = (bgAlpha: number) => {
       ctx.globalAlpha = bgAlpha;
