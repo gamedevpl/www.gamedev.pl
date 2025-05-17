@@ -91,6 +91,7 @@ import { Asset } from '../../../generator-core/src/assets-types';
 export const AssetName: Asset = { /* ... implementation ... */ };
 
    7.  **Preserve Description:** The  'description' field in the 'Asset' object is critical and defines the core concept of the asset. You MUST NOT modify or change the content of the 'description' field provided in the prompt. It should remain exactly as given in the input description for the asset.
+   8.  **Reference Image:** If reference image is not provided, it means it does not exist, and the author of the asset does not want to use it. In this case, you should not use the reference image for any analysis or generation of the asset. You also can't output reference image in the output code.
 
    **Behavior Based on Inputs:**
    *   **From Scratch (No Current Implementation, No Prior Rendered Media):**
