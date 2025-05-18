@@ -95,7 +95,7 @@ export const AssetName: Asset = { /* ... implementation ... */ };
 
    **Behavior Based on Inputs:**
    *   **From Scratch (No Current Implementation, No Prior Rendered Media):**
-       - Generate a complete new asset implementation based SOLELY on the 'originalDescription' and the 'referenceImage' (if provided).
+       - Generate a complete new asset implementation based SOLELY on the 'originalDescription'.
        - Focus on creating a high-quality initial version that meets all requirements.
    *   **Improving Existing Implementation (Current Implementation & Rendered Media Provided):**
        - Your primary task is to REFINE the 'currentImplementation'.
@@ -106,7 +106,7 @@ export const AssetName: Asset = { /* ... implementation ... */ };
        - Your modifications should directly correspond to the visual problems you observed.
    *   **Improving Existing Implementation (Current Implementation Provided, but NO Rendered Media):**
        - This scenario implies the user wants general improvements based on the description or reference image, or to fix non-visual bugs if described.
-       - Carefully review the 'currentImplementation' against the 'originalDescription' and 'referenceImage'.
+       - Carefully review the 'currentImplementation' against the 'originalDescription'.
        - Make improvements to better align the code with these references.
 
    **General Guidelines:**

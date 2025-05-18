@@ -3,11 +3,22 @@ export interface Asset {
 
   description: string;
 
+  // Optional reference image for the asset
+  // DO NOT specify the path here, if it was not present in the original asset
   referenceImage?: string;
 
   stances: string[];
 
-  render(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, progress: number, stance: string, direction: 'left' | 'right'): void;
+  render(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    progress: number,
+    stance: string,
+    direction: 'left' | 'right',
+  ): void;
 }
 
 /**

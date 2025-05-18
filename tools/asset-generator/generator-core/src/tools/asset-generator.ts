@@ -78,6 +78,8 @@ export async function generateImprovedAsset(
     } catch (error) {
       console.warn(`Warning: Could not load reference image ${asset.referenceImage}:`, (error as Error).message);
     }
+  } else {
+    console.log('No reference image provided for the asset.');
   }
 
   if (renderedMedia && renderedMedia.length > 0) {
@@ -85,7 +87,11 @@ export async function generateImprovedAsset(
       if (media.mediaType.startsWith('image/')) {
         promptItems.push({
           type: 'user',
-          text: `Rendered image for stance: "${media.stance}". Please analyze this visual output. If a reference image is provided, compare this rendering to it. Identify any discrepancies or areas for improvement based on the asset description and visual quality.`,
+          text: `Rendered image for stance: "${
+            media.stance
+          }". Please analyze this visual output. Identify any discrepancies or areas for improvement based on the asset description and visual quality. ${
+            asset?.referenceImage ? 'Ensure the style is consistent with the reference image.' : ''
+          }`,
           images: [
             {
               mediaType: media.mediaType as PromptImageMediaType,
@@ -103,7 +109,11 @@ export async function generateImprovedAsset(
         }
         promptItems.push({
           type: 'user',
-          text: `Rendered video for stance: "${media.stance}". Please analyze this animation. Consider smoothness, correctness of motion, and overall visual appeal according to the asset description and desired stance characteristics. If a reference image is provided, ensure the style is consistent. `,
+          text: `Rendered video for stance: "${
+            media.stance
+          }". Please analyze this animation. Consider smoothness, correctness of motion, and overall visual appeal according to the asset description and desired stance characteristics.${
+            asset?.referenceImage ? ' Ensure the style is consistent with the reference image.' : ''
+          }`,
           images: [
             {
               mediaType: media.mediaType as PromptImageMediaType,
@@ -136,7 +146,9 @@ ${effectiveImplementation}
 </code>
 `;
   } else {
-    mainPromptText += `No current implementation exists. Generate the code from scratch based on the description, reference image (if any), and desired visual characteristics.
+    mainPromptText += `No current implementation exists. Generate the code from scratch based on the description, ${
+      asset?.referenceImage ? 'the reference image,' : ''
+    } and desired visual characteristics.
 `;
   }
 
@@ -147,10 +159,14 @@ ${additionalPrompt}
   }
 
   mainPromptText += `\
-    Based on your analysis of the asset description, the reference image (if provided), and the rendered media for each stance (if provided), please generate the complete TypeScript code for the asset.
+    Based on your analysis of the asset description, ${
+      asset?.referenceImage ? 'the reference image, ' : ''
+    }and the rendered media for each stance (if provided), please generate the complete TypeScript code for the asset.
 
     Key Instructions:
-    1. Analyze all provided visual materials (reference image, rendered stance images/videos) and the asset description.
+    1. Analyze all provided visual materials (${
+      asset?.referenceImage ? 'reference image, ' : ''
+    }rendered stance images/videos) and the asset description.
     2. Identify areas where the current implementation (if any) succeeds or fails to meet the visual and functional requirements.
     3. If improving existing code, make targeted, minimal changes to address identified issues. Preserve working parts.
     4. If generating from scratch, create a robust implementation based on the description and any visual references.
