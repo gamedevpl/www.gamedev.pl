@@ -134,10 +134,15 @@ export async function generateImprovedAsset(
     Please generate ${generationMode} of the "${assetName}" asset.
     Asset's target description is:
 
-<description>
 ${originalDescription || 'No detailed description provided.'}
-</description>
+
 `;
+
+  if (asset?.referenceImage && fromScratch) {
+    // because the initial code is not available, we need to add the reference image to the prompt
+    mainPromptText += `Path to the reference image: ${asset.referenceImage}
+    `;
+  }
 
   if (effectiveImplementation) {
     mainPromptText += `Current implementation to be improved:

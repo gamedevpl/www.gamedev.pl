@@ -82,6 +82,8 @@ ${
        - Code should be compact yet understandable. Employ functional programming principles where appropriate.
        - Avoid syntax errors, type mismatches, and runtime errors. Use type guards if necessary.
        - DO NOT clear the canvas in the 'render' method; assume it's prepared by the caller.
+       - Helper functions are allowed but should be defined within the asset file. Avoid external dependencies.
+       - Do not add any extra methods or properties to the asset object.
    5.  **Import Statement:** ALWAYS use this exact import statement at the top of the file:
        
 import { Asset } from '../../../generator-core/src/assets-types';
@@ -97,6 +99,8 @@ export const AssetName: Asset = { /* ... implementation ... */ };
    *   **From Scratch (No Current Implementation, No Prior Rendered Media):**
        - Generate a complete new asset implementation based SOLELY on the 'originalDescription'.
        - Focus on creating a high-quality initial version that meets all requirements.
+       - You must maintain the original description and not modify it.
+       - You must maintain the original reference image path and not modify it if it exists and not add any new reference image.
    *   **Improving Existing Implementation (Current Implementation & Rendered Media Provided):**
        - Your primary task is to REFINE the 'currentImplementation'.
        - Use your visual analysis of the 'renderedMedia' (compared against description/reference) to identify specific visual flaws or deviations.
@@ -104,10 +108,13 @@ export const AssetName: Asset = { /* ... implementation ... */ };
        - PRESERVE all parts of the code that are already working well and do not contribute to the visual problems.
        - DO NOT refactor or rewrite the entire codebase unless the visual issues are systemic and require it.
        - Your modifications should directly correspond to the visual problems you observed.
+       - You must maintain the original reference image path and not modify it if it exists and not add any new reference image.
    *   **Improving Existing Implementation (Current Implementation Provided, but NO Rendered Media):**
        - This scenario implies the user wants general improvements based on the description or reference image, or to fix non-visual bugs if described.
        - Carefully review the 'currentImplementation' against the 'originalDescription'.
        - Make improvements to better align the code with these references.
+       - You must maintain the original description and not modify it.
+       - You must maintain the original reference image path and not modify it if it exists and not add any new reference image.
 
    **General Guidelines:**
    - Focus on visual quality and performance.
