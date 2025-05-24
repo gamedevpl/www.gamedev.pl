@@ -13,6 +13,20 @@ import { SOLDIER_WIDTH } from '../consts';
 
 const params = process.argv.slice(2);
 
+if (params.includes('--help')) {
+  console.log(`
+Usage: node train.ts [options]
+
+Options:
+  --gen-count=<number>  Number of generations to simulate (default: 5)
+  --plan-count=<number> Number of plans to use from hardcoded list (default: all plans)
+  --new-model           Train a new model from scratch
+  --epochs=<number>     Number of epochs for training (default: 50)
+  --help                Display this help message
+  `);
+  process.exit(0);
+}
+
 let genCount = parseInt(params.find((p) => p.startsWith('--gen-count='))?.split('=')[1] || '5', 10);
 const planCount = parseInt(
   params.find((p) => p.startsWith('--plan-count='))?.split('=')[1] || String(allPlans.length),

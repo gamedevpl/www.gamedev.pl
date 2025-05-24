@@ -1,4 +1,4 @@
-import { FunctionDef, PromptItem } from 'genaicode/ai-service/common.js';
+import { FunctionDef, ModelType, PromptItem } from 'genaicode/ai-service/common-types.js';
 import { Unit } from '../../designer/designer-types';
 import { MAX_COL, MAX_ROW } from '../consts';
 import { countSoldiers } from './units-trim';
@@ -63,9 +63,27 @@ I will be able to provide you with feedback on the generated plan based on the r
       .flat(),
   ];
 
-  const [saveMasterplan] = await generateContent(prompt, FUNCTION_DEFS, 'saveMasterplan', 0.5, false, {
-    aiService: 'anthropic',
-  });
+  const [saveMasterplan] = (
+    await generateContent(
+      prompt,
+      {
+        functionDefs: FUNCTION_DEFS,
+        requiredFunctionName: 'saveMasterplan',
+        temperature: 0.5,
+        modelType: ModelType.DEFAULT,
+        expectedResponseType: {
+          text: false,
+          functionCall: true,
+          media: false,
+        },
+      },
+      {
+        aiService: 'anthropic',
+      },
+    )
+  )
+    .filter((item) => item.type === 'functionCall')
+    .map((item) => item.functionCall);
 
   return {
     name: saveMasterplan.args?.name as string,
