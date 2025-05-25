@@ -1,0 +1,36 @@
+{
+  "name": "tribe",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tribe game",
+  "devDependencies": {
+    "@fontsource/press-start-2p": "^5.1.0",
+    "@tensorflow/tfjs": "^4.21.0",
+    "@tensorflow/tfjs-node": "^4.21.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^8.54.0",
+    "flatbush": "^4.4.0",
+    "genaicode": "^0.10.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "react-use": "^17.5.1",
+    "styled-components": "^6.1.13",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.6.2",
+    "vite": "^6.3.5",
+    "vite-plugin-checker": "^0.8.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "vite",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "author": "gtanczyk",
+  "license": "ISC"
+}
