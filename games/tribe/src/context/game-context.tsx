@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
-type AppState = 'intro' | 'game';
+export type AppState = 'intro' | 'game';
 
 interface GameContextType {
   appState: AppState;
@@ -9,14 +9,13 @@ interface GameContextType {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [appState, setAppState] = useState<AppState>('intro');
+export const GameProvider: React.FC<{ initialAppState: AppState; children: ReactNode }> = ({
+  initialAppState,
+  children,
+}) => {
+  const [appState, setAppState] = useState<AppState>(initialAppState);
 
-  return (
-    <GameContext.Provider value={{ appState, setAppState }}>
-      {children}
-    </GameContext.Provider>
-  );
+  return <GameContext.Provider value={{ appState, setAppState }}>{children}</GameContext.Provider>;
 };
 
 export const useGameContext = () => {

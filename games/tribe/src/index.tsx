@@ -7,7 +7,9 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <GameProvider>
+      <GameProvider initialAppState={document.location.hash === '#game' ? 'game' : 'intro'}>
+        {' '}
+        {/* Set initial app state to 'intro' */}
         <App />
       </GameProvider>
     </React.StrictMode>,
