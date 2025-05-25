@@ -6,6 +6,7 @@ import nukesHighlight from '../assets/nukes-highlight.png';
 import monsterStepsHighlight from '../assets/monster-steps-highlight.png';
 import masterplanHighlight from '../assets/masterplan-highlight.png';
 import xmasHighlight from '../assets/xmas-highlight.png';
+import hungryLionHighlight from '../assets/hungry-lion-highlights.png';
 
 export default function OurGames() {
   const { t } = useTranslation();
@@ -26,7 +27,7 @@ export default function OurGames() {
         highlight={nukesHighlight}
         href={'/games/nukes/'}
         githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/nukes"
-        inProgress={true}
+        inProgress={false}
       />
       <GameBox
         title={t('Monster steps')}
@@ -42,7 +43,15 @@ export default function OurGames() {
         highlight={masterplanHighlight}
         href={'/games/masterplan/'}
         githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/masterplan"
-        inProgress={true}
+        inProgress={false}
+      />
+      <GameBox
+        title={t('Hungry Lion')}
+        description={t('You are a hungry lion! You need to eat.')}
+        highlight={hungryLionHighlight}
+        href={'/games/hungry-lion/'}
+        githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/hungry-lion'}
+        inProgress={false}
       />
     </Section>
   );
