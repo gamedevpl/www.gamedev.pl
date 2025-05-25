@@ -12,7 +12,7 @@ export async function generateMasterplan(
     result: 'won' | 'lost' | 'drawed';
   }[],
 ): Promise<{ reasoning: string; changes: string; name: string; units: Unit[] }> {
-  const { generateContent } = await import('genaicode/ai-service/anthropic.js');
+  const { generateContent } = await import('genaicode/ai-service/ai-studio.js');
   const prompt: PromptItem[] = [
     {
       type: 'systemPrompt',
@@ -70,7 +70,7 @@ I will be able to provide you with feedback on the generated plan based on the r
         functionDefs: FUNCTION_DEFS,
         requiredFunctionName: 'saveMasterplan',
         temperature: 0.5,
-        modelType: ModelType.DEFAULT,
+        modelType: ModelType.CHEAP,
         expectedResponseType: {
           text: false,
           functionCall: true,
@@ -78,7 +78,7 @@ I will be able to provide you with feedback on the generated plan based on the r
         },
       },
       {
-        aiService: 'anthropic',
+        aiService: 'ai-studio',
       },
     )
   )
@@ -161,8 +161,8 @@ const FUNCTION_DEFS: FunctionDef[] = [
                 enum: ['advance-wait', 'advance', 'wait-advance', 'flank-left', 'flank-right'],
               },
             },
+            required: ['type', 'col', 'row', 'sizeCol', 'sizeRow', 'command'],
           },
-          required: ['type', 'col', 'row', 'sizeCol', 'sizeRow', 'command'],
         },
       },
       required: ['reasoning', 'changes', 'units'],

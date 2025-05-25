@@ -2423,5 +2423,2804 @@
     "reasoning": "The 'Quantum Decoherence Trap' plan relies on forcing enemy units into definite states through observation and interaction. To counter this, 'Quantum Flux Vortex' aims to create a constantly shifting battlefield presence that resists decoherence while overwhelming the enemy's ability to pin down our units.\n\nOur strategy involves:\n1. Positioning artillery units as \"flux generators\" at the edges of the formation, creating a constantly shifting energy field that obscures our units' true positions.\n2. Using tanks as \"vortex cores\" that move in unpredictable patterns, dragging nearby units in their wake and creating a swirling, chaotic battlefield presence.\n3. Deploying warriors in a fluid, constantly moving formation that rides the quantum flux, making them nearly impossible to observe or interact with consistently.\n4. Placing archers at key points within the vortex to exploit momentary advantages and fire from unexpected angles.\n5. Creating a highly dynamic, asymmetrical layout that continuously reshapes itself, preventing the enemy from establishing effective observation points.\n\nThis approach aims to negate the enemy's decoherence tactics by presenting a battlefield presence that is too dynamic and chaotic to be pinned down or forced into definite states. Our units will ride the quantum flux, appearing and disappearing, always in motion and resistant to observation.\n\nThe Quantum Flux Vortex strategy seeks to create a battlefield environment where the very act of observation becomes unreliable and disorienting for the enemy. By generating a constant state of quantum flux, we aim to maintain our quantum advantages while simultaneously disrupting the enemy's ability to effectively deploy their forces or maintain coherent tactics.",
     "changes": "This plan introduces a revolutionary strategy based on creating a dynamic, ever-shifting vortex of quantum flux on the battlefield. The layout is highly asymmetrical and fluid, designed to constantly change and adapt, making it resistant to decoherence while maintaining offensive capabilities.",
     "result": "won"
+  },
+  {
+    "name": "Quantum Crystallization Matrix",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -16,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "archer",
+        "col": 4,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": -4,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 16,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Flux Vortex' plan relies on a constantly shifting, chaotic battlefield presence that resists observation and prediction. To counter this, 'Quantum Crystallization Matrix' aims to create a rigid, immutable structure that is immune to the disruptive effects of quantum flux while projecting power across the battlefield.\n\nOur strategy involves:\n1. Positioning artillery units as \"crystallization nodes\" at precise geometric points, creating a stable framework that anchors our entire formation.\n2. Using tanks as \"lattice enforcers\" that maintain the structural integrity of our formation, preventing enemy flux from disrupting our positions.\n3. Deploying warriors in a crystalline pattern that allows them to channel and redirect enemy flux energy, turning the enemy's chaos against them.\n4. Placing archers at calculated vertices of our crystal structure, allowing them to fire along precise geometric lines that cut through the enemy's vortex.\n5. Creating a highly ordered yet asymmetrical layout that follows specific mathematical principles, making it resistant to chaotic disruption while remaining unpredictable to the enemy.\n\nThis approach aims to counter the enemy's flux vortex by establishing a battlefield presence that is too rigid and structured to be affected by chaotic quantum fluctuations. Our crystalline formation will stand as an immovable object against the enemy's unstoppable force, channeling and redirecting their energy while maintaining perfect positional integrity.\n\nThe Quantum Crystallization Matrix strategy seeks to impose order on chaos, creating a battlefield environment where precision and structure triumph over fluidity and unpredictability. By establishing a quantum-locked crystalline formation, we aim to negate the enemy's advantages while exploiting the inherent weaknesses of their chaotic approach.",
+    "changes": "This plan introduces a revolutionary strategy based on creating a rigid, crystalline structure of quantum-locked units that resists the chaotic effects of the enemy's flux vortex. The layout is highly asymmetrical and geometrically precise, designed to create a stable framework that can withstand and counter dynamic, fluid formations.",
+    "result": "drawed"
+  },
+  {
+    "name": "Quantum Harmonic Disruptor",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -10,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -9,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 20,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -15,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -1,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 5,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      }
+    ],
+    "reasoning": "The 'Quantum Crystallization Matrix' plan relies on a rigid, crystalline structure that resists chaotic effects. To counter this, 'Quantum Harmonic Disruptor' aims to identify and exploit the natural resonance frequencies of the enemy's crystal structure, creating targeted vibrations that can shatter their formation from within.\n\nOur strategy involves:\n1. Positioning artillery units as \"frequency generators\" at calculated points to create specific harmonic waves that target the enemy's crystallization nodes.\n2. Using tanks as \"resonance amplifiers\" that increase the amplitude of our harmonic attacks, creating destructive interference patterns within the enemy's structure.\n3. Deploying warriors in a wave-like formation that allows them to ride the harmonic patterns, delivering precisely timed strikes at the enemy's structural weak points.\n4. Placing archers at harmonic nodes to deliver attacks that synchronize with our resonance waves, maximizing their impact on the enemy's crystal lattice.\n5. Creating a highly unconventional, asymmetrical layout based on musical harmonic principles, making our attack pattern unpredictable while maintaining perfect resonance targeting.\n\nThis approach aims to counter the enemy's crystalline formation by exploiting the fundamental weakness of all rigid structures: their vulnerability to resonance at specific frequencies. By generating precisely calibrated harmonic disruptions, we can create catastrophic structural failures within the enemy's formation, shattering their crystal matrix from within.\n\nThe Quantum Harmonic Disruptor strategy seeks to turn the enemy's greatest strength into their greatest weakness. By leveraging the principles of resonance and harmonic interference, we aim to create a battlefield environment where rigid structures become inherently vulnerable, while our fluid, frequency-based formation adapts and thrives.",
+    "changes": "This plan introduces a revolutionary strategy based on creating targeted harmonic disruptions that can shatter crystalline quantum structures. The layout is highly asymmetrical and frequency-based, designed to generate specific resonance patterns that exploit the rigid nature of the enemy's formation.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Phase Dampening Field",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -17,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -7,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 12,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": -3,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 7,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": -13,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -9,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Harmonic Disruptor' plan relies on generating specific resonance patterns to shatter rigid structures. To counter this, 'Quantum Phase Dampening Field' aims to create a battlefield environment where harmonic vibrations are absorbed, dissipated, and nullified before they can cause damage.\n\nOur strategy involves:\n1. Positioning artillery units as \"phase dampeners\" at irregular intervals to create overlapping fields that absorb harmonic energy.\n2. Using tanks as \"null-point generators\" that create zones of complete harmonic cancellation, protecting our forces from resonance attacks.\n3. Deploying warriors in a deliberately scattered pattern that prevents the formation of standing waves within our formation.\n4. Placing archers at calculated anti-nodal points where they can fire from positions of minimal vibrational exposure.\n5. Creating a highly irregular, asymmetrical layout that lacks any consistent pattern or frequency, making it impossible for the enemy to find a resonant frequency that affects our entire formation.\n\nThis approach aims to counter the enemy's harmonic disruptions by creating a battlefield environment where vibrations are dampened, scattered, and nullified. By generating overlapping phase-dampening fields, we can protect our forces from resonance attacks while maintaining offensive capabilities.\n\nThe Quantum Phase Dampening Field strategy seeks to create a battlefield where the enemy's harmonic weapons become ineffective. By leveraging principles of wave interference, phase cancellation, and energy absorption, we aim to neutralize the enemy's primary advantage while exploiting the gaps in their offense to launch devastating counterattacks.",
+    "changes": "This plan introduces a revolutionary strategy based on generating a phase-dampening field that neutralizes harmonic vibrations. The layout is highly asymmetrical and deliberately scattered, designed to create overlapping dampening zones that absorb and nullify the enemy's harmonic disruptions.",
+    "result": "lost"
+  },
+  {
+    "name": "Quantum Harmonic Amplifier",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -5,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 8,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": 16,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -12,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 10,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -8,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 4,
+        "row": 2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Phase Dampening Field' plan relies on absorbing and nullifying harmonic vibrations. To counter this, 'Quantum Harmonic Amplifier' aims to turn the enemy's dampening fields into weapons by capturing, amplifying, and redirecting their energy.\n\nOur strategy involves:\n1. Positioning artillery units as \"harmonic collectors\" at specific points to capture the residual energy from the enemy's dampening fields.\n2. Using tanks as \"amplification chambers\" that magnify the captured harmonic energy to levels far beyond what the enemy can dampen.\n3. Deploying warriors in a pattern that creates \"harmonic channels,\" guiding the amplified energy directly back at the enemy's formation.\n4. Placing archers at \"focal points\" where the redirected energy converges, allowing them to launch attacks enhanced by the enemy's own dampening fields.\n5. Creating a highly specialized, asymmetrical layout that functions like an acoustic lens, focusing and redirecting energy rather than generating it.\n\nThis approach aims to counter the enemy's dampening fields by treating them as energy sources rather than obstacles. By capturing, amplifying, and redirecting the enemy's own dampening energy, we create a feedback loop that overwhelms their defenses with their own power.\n\nThe Quantum Harmonic Amplifier strategy seeks to turn the enemy's defensive measures into offensive weapons. By leveraging principles of resonance amplification, wave focusing, and energy redirection, we aim to create a battlefield where the stronger the enemy's dampening fields, the more powerful our attacks become.",
+    "changes": "This plan introduces a revolutionary strategy based on amplifying and redirecting harmonic energies rather than generating them. The layout is highly asymmetrical and strategically positioned to capture, amplify, and redirect the enemy's own dampening fields against them.",
+    "result": "won"
+  },
+  {
+    "name": "Quantum Vacuum Collapse",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -16,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -6,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 5,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 15,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 10,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": -10,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -18,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": -3,
+        "row": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Harmonic Amplifier' plan relies on capturing, amplifying, and redirecting harmonic energies. To counter this, 'Quantum Vacuum Collapse' aims to create localized areas where energy itself cannot be amplified or redirected, effectively creating \"dead zones\" in the battlefield.\n\nOur strategy involves:\n1. Positioning artillery units as \"vacuum initiators\" that create localized collapses in the quantum field, generating zones where energy cannot be amplified.\n2. Using tanks as \"null-space anchors\" that maintain and expand these vacuum zones, creating stable areas where the enemy's amplification tactics fail completely.\n3. Deploying warriors in a pattern that exploits the boundaries between normal space and vacuum zones, allowing them to strike from positions the enemy cannot effectively target.\n4. Placing archers at the periphery of vacuum zones, allowing them to fire into areas where the enemy's defenses are weakened by the energy vacuum.\n5. Creating a highly unconventional, asymmetrical layout that generates an unpredictable pattern of vacuum zones across the battlefield, making it impossible for the enemy to establish stable amplification channels.\n\nThis approach aims to counter the enemy's amplification strategy by creating conditions where amplification is physically impossible. By generating localized quantum vacuum collapses, we create areas where the fundamental laws of energy conservation are temporarily altered, rendering the enemy's entire strategy ineffective.\n\nThe Quantum Vacuum Collapse strategy seeks to change the rules of engagement at the most fundamental level. By creating zones where energy manipulation is impossible, we aim to nullify the enemy's primary advantage while exploiting the resulting chaos to launch devastating attacks from positions of absolute advantage.",
+    "changes": "This plan introduces a revolutionary strategy based on creating localized quantum vacuum collapses that neutralize all energy amplification. The layout is highly asymmetrical and strategically positioned to generate energy-nullifying zones that render harmonic amplification impossible.",
+    "result": "drawed"
+  },
+  {
+    "name": "Quantum Inflation Burst",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 20,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -15,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Vacuum Collapse' plan relies on creating localized areas where energy cannot be amplified or redirected. To counter this, 'Quantum Inflation Burst' aims to generate sudden, explosive expansions of quantum energy that overwhelm and destabilize these vacuum zones before they can fully form.\n\nOur strategy involves:\n1. Positioning artillery units as \"inflation initiators\" that create rapid expansions in the quantum field, generating overwhelming energy bursts that flood vacuum zones.\n2. Using tanks as \"expansion engines\" that maintain continuous pressure against the enemy's vacuum zones, preventing them from stabilizing.\n3. Deploying warriors in a scattered, asymmetrical pattern that allows them to ride the inflation waves, surfing on the expanding energy to penetrate deep into enemy territory.\n4. Placing archers at calculated positions to fire along the expansion fronts, their attacks accelerated and amplified by the inflation bursts.\n5. Creating a highly dynamic, asymmetrical layout that generates unpredictable inflation patterns, making it impossible for the enemy to establish stable vacuum zones anywhere on the battlefield.\n\nThis approach aims to counter the enemy's vacuum strategy by overwhelming it with excessive energy before vacuum zones can stabilize. By generating rapid quantum inflation bursts, we create conditions where the enemy's vacuum collapses are instantly flooded with more energy than they can nullify.\n\nThe Quantum Inflation Burst strategy seeks to counter the enemy's attempt to change the rules of engagement by introducing an even more fundamental force. By leveraging principles similar to cosmic inflation in the early universe, we aim to create a battlefield environment where energy nullification is overwhelmed by explosive energy creation, turning the enemy's vacuum zones into catastrophic energy release points that damage their own forces.",
+    "changes": "This plan introduces a revolutionary strategy based on creating rapid quantum field expansions that overwhelm vacuum collapses. The layout is highly asymmetrical and explosively positioned to generate sudden, overwhelming energy bursts that flood and destabilize energy-nullifying zones.",
+    "result": "drawed"
+  },
+  {
+    "name": "Temporal Stasis Field",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -16,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "wait-advance"
+      },
+      {
+        "type": "tank",
+        "col": -4,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "archer",
+        "col": 8,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 16,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "artillery",
+        "col": 4,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "wait-advance"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "archer",
+        "col": -18,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 12,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Inflation Burst' plan relies on generating sudden, explosive expansions of quantum energy. To counter this, 'Temporal Stasis Field' aims to create localized areas where time itself flows at a drastically reduced rate, effectively containing and neutralizing rapid energy expansions before they can affect our forces.\n\nOur strategy involves:\n1. Positioning artillery units as \"temporal anchors\" that create bubbles of slowed time, trapping enemy inflation bursts in temporal stasis where they can't expand.\n2. Using tanks as \"chronostatic generators\" that maintain and expand these temporal anomalies, creating stable zones where enemy attacks are slowed to near-standstill.\n3. Deploying warriors in a pattern that exploits the boundaries between normal and slowed time, allowing them to step in and out of temporal anomalies to attack with impunity.\n4. Placing archers at calculated positions outside temporal zones, allowing them to fire into areas where enemy units are moving in slow motion, making them easy targets.\n5. Creating a highly unconventional, asymmetrical layout with units positioned at specific temporal coordinates rather than just spatial ones, making our formation incomprehensible and unpredictable to the enemy.\n\nThis approach aims to counter the enemy's inflation strategy by creating conditions where rapid expansion is physically impossible. By generating localized temporal stasis fields, we create areas where the concept of \"rapid\" ceases to exist, rendering the enemy's entire strategy ineffective.\n\nThe Temporal Stasis Field strategy seeks to control the flow of time itself on the battlefield. By creating zones where time flows at different rates, we aim to nullify the enemy's speed advantage while exploiting the resulting temporal disparities to launch devastating attacks from positions of absolute temporal advantage.",
+    "changes": "This plan introduces a revolutionary strategy based on creating localized pockets of slowed time that neutralize rapid energy expansions. The layout is highly asymmetrical and strategically positioned to generate temporal anomalies that trap and contain explosive energy bursts before they can propagate.",
+    "result": "drawed"
+  },
+  {
+    "name": "Chrono-Acceleration Nexus",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -18,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -8,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": 0,
+        "row": -9,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 18,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -12,
+        "row": -3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -4,
+        "row": -1,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 6,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 14,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      }
+    ],
+    "reasoning": "The 'Temporal Stasis Field' plan relies on creating areas where time flows at a drastically reduced rate. To counter this, 'Chrono-Acceleration Nexus' aims to create opposing zones where time is dramatically accelerated, allowing our forces to operate at vastly increased speeds that overwhelm the enemy's temporal defenses.\n\nOur strategy involves:\n1. Positioning artillery units as \"chrono-accelerators\" that create bubbles of hyper-accelerated time, allowing our attacks to develop and impact before the enemy can react even in normal time.\n2. Using tanks as \"temporal momentum engines\" that can store kinetic energy while moving through accelerated time, then release devastating impacts when entering enemy stasis fields.\n3. Deploying warriors in patterns that allow them to \"surf\" the boundaries between accelerated and normal time, effectively teleporting from the enemy's perspective as they leap from one time-rate to another.\n4. Placing archers in accelerated zones where they can fire volleys of arrows that, from the enemy's perspective, appear as unblockable storms of projectiles arriving simultaneously.\n5. Creating a highly dynamic, asymmetrical layout with units positioned to generate overlapping zones of acceleration that create a \"temporal maze\" the enemy cannot navigate effectively.\n\nThis approach aims to counter the enemy's stasis strategy by creating conditions where we operate at such accelerated time-rates that even their \"normal\" time appears frozen to us. By generating chrono-acceleration nexuses, we create areas where our forces can develop and execute entire attack sequences in what appears to the enemy as a single moment.\n\nThe Chrono-Acceleration Nexus strategy seeks to win the temporal arms race by pushing to the opposite extreme. Rather than trying to counter stasis directly, we embrace extreme acceleration, creating a battlefield where our forces operate at time-rates so advanced that the enemy's temporal manipulations become irrelevant.",
+    "changes": "This plan introduces a revolutionary strategy based on creating localized pockets of accelerated time that overwhelm and outpace temporal stasis fields. The layout is highly asymmetrical and strategically positioned to generate chrono-acceleration zones that allow our units to move and attack at vastly increased speeds relative to the enemy's slowed time bubbles.",
+    "result": "won"
+  },
+  {
+    "name": "Temporal Paradox Cascade",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -15,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -9,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -5,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "row": -4,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 10,
+        "row": -2,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "archer",
+        "col": -20,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Chrono-Acceleration Nexus' plan relies on creating zones of accelerated time to overwhelm temporal defenses. To counter this, 'Temporal Paradox Cascade' aims to introduce deliberate causality violations that create unstable temporal paradoxes, causing accelerated time zones to collapse in on themselves.\n\nOur strategy involves:\n1. Positioning artillery units as \"paradox generators\" that fire shells which exist in multiple temporal states simultaneously, creating causality violations when they interact with accelerated time zones.\n2. Using tanks as \"temporal contradiction engines\" that move in patterns violating cause-and-effect, creating unstable loops when they encounter accelerated time.\n3. Deploying warriors in formations that allow them to meet their own future/past selves when entering enemy acceleration zones, creating micro-paradoxes that disrupt the time flow.\n4. Placing archers at calculated positions to fire arrows that arrive before they're shot when passing through accelerated zones, creating devastating causality breaches.\n5. Creating a highly unconventional, asymmetrical layout with units positioned to maximize paradoxical interactions with the enemy's time manipulation effects.\n\nThis approach aims to counter the enemy's acceleration strategy by exploiting a fundamental weakness in temporal manipulation: paradoxes. By deliberately creating situations where cause and effect are violated, we force the enemy's accelerated time zones to become unstable and collapse.\n\nThe Temporal Paradox Cascade strategy seeks to turn the enemy's temporal manipulation against itself. By introducing paradoxes that cannot be resolved within the framework of their accelerated time, we create cascading failures in their temporal manipulation, while our forces operate in carefully calibrated patterns that avoid paradox backlash.",
+    "changes": "This plan introduces a revolutionary strategy based on creating deliberate temporal paradoxes that disrupt and collapse accelerated time zones. The layout is highly asymmetrical and strategically positioned to generate causality violations that unravel the enemy's chrono-acceleration effects.",
+    "result": "drawed"
+  },
+  {
+    "name": "Quantum Determinism Field",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -17,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -7,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 13,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 19,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -13,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 11,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Temporal Paradox Cascade' plan relies on creating deliberate causality violations and temporal paradoxes. To counter this, 'Quantum Determinism Field' aims to impose rigid causal determinism that prevents paradoxes from forming by forcing all events into a single, predetermined timeline that we control.\n\nOur strategy involves:\n1. Positioning artillery units as \"determinism anchors\" that create expanding fields where cause and effect become absolutely fixed, preventing paradoxes from forming.\n2. Using tanks as \"causal enforcers\" that move along predetermined paths, establishing fixed timelines that cannot be altered or disrupted by paradoxes.\n3. Deploying warriors in a highly unconventional pattern that appears random but actually follows precise mathematical sequences, making their movements predictable to us but appearing chaotic to the enemy.\n4. Placing archers at calculated positions to establish \"certainty nodes\" where the outcome of any interaction is predetermined, nullifying the enemy's attempts to create causality violations.\n5. Creating a highly asymmetrical layout with units positioned according to prime number coordinates, establishing a battlefield geometry that resists temporal manipulation.\n\nThis approach aims to counter the enemy's paradox strategy by creating conditions where paradoxes cannot form. By generating quantum determinism fields, we force all events into a single timeline that we have calculated in advance, turning the chaotic potential of paradoxes into a predictable, manageable system.\n\nThe Quantum Determinism Field strategy seeks to impose order on temporal chaos. By establishing fixed causal relationships across the battlefield, we aim to create an environment where our predetermined tactical sequences unfold exactly as planned, while the enemy's attempts to create paradoxes are neutralized by the rigid determinism we've imposed on reality itself.",
+    "changes": "This plan introduces a revolutionary strategy based on imposing absolute causal determinism that neutralizes paradoxes and temporal anomalies. The layout is highly asymmetrical and strategically positioned to generate fields of quantum certainty that force all events into a single, predetermined timeline.",
+    "result": "drawed"
+  },
+  {
+    "name": "Quantum Free Will Manifold",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -19,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "warrior",
+        "col": -11,
+        "row": -8,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "tank",
+        "col": -3,
+        "row": -9,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 7,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": -5,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 3,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -9,
+        "row": -1,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -17,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 11,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Determinism Field' plan relies on imposing rigid causal determinism that forces events into a predetermined timeline. To counter this, 'Quantum Free Will Manifold' aims to amplify quantum indeterminacy to levels where determinism becomes impossible, creating a battlefield governed by probability waves and conscious choice rather than fixed causality.\n\nOur strategy involves:\n1. Positioning artillery units as \"uncertainty amplifiers\" that create expanding fields where quantum indeterminacy is magnified to macroscopic levels, making deterministic prediction impossible.\n2. Using tanks as \"probability wave generators\" that exist in multiple potential states simultaneously, collapsing into different positions only when observed, making their movements inherently unpredictable.\n3. Deploying warriors in formations that maximize quantum entanglement between units, allowing instantaneous coordination that bypasses causal chains entirely.\n4. Placing archers at positions calculated to exploit the \"observer effect,\" where the act of the enemy attempting to predict their actions changes the outcome in our favor.\n5. Creating a highly non-linear, asymmetrical layout with units positioned to generate overlapping fields of quantum possibility that resist any attempt to impose deterministic order.\n\nThis approach aims to counter the enemy's determinism strategy by creating conditions where determinism itself breaks down at a fundamental level. By generating quantum free will manifolds, we create a battlefield environment where probability, choice, and uncertainty reign supreme, rendering the enemy's predetermined tactical sequences useless.\n\nThe Quantum Free Will Manifold strategy seeks to liberate the battlefield from causal constraints. By leveraging quantum indeterminacy, observer effects, and probability wave functions, we aim to create a combat environment where our forces operate with true tactical freedom, while the enemy's attempts to impose deterministic order collapse into quantum chaos.",
+    "changes": "This plan introduces a revolutionary strategy based on exploiting quantum indeterminacy to create a battlefield where free will and probability dominate over determinism. The layout is highly asymmetrical and deliberately unpredictable, designed to generate zones of pure quantum possibility that shatter deterministic fields.",
+    "result": "drawed"
+  },
+  {
+    "name": "Quantum Wavefunction Collapse",
+    "units": [
+      {
+        "type": "artillery",
+        "col": -20,
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": -10,
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": 0,
+        "row": -9,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": 10,
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left"
+      },
+      {
+        "type": "artillery",
+        "col": 20,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "row": -3,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "col": -5,
+        "row": -1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "type": "archer",
+        "col": -15,
+        "row": 1,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-right"
+      },
+      {
+        "type": "warrior",
+        "col": 15,
+        "row": 3,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Free Will Manifold' plan relies on amplifying quantum indeterminacy to create a battlefield of pure possibility and probability. To counter this, 'Quantum Wavefunction Collapse' aims to force these quantum possibilities to collapse into fixed realities at precisely the moments most beneficial to our forces, effectively weaponizing the measurement problem of quantum mechanics.\n\nOur strategy involves:\n1. Positioning artillery units as \"wavefunction collapsers\" that create targeted observation fields, forcing enemy units in quantum superposition to collapse into their least advantageous states.\n2. Using tanks as \"reality anchors\" that establish fixed reference frames, creating zones where quantum indeterminacy is forcibly resolved according to our tactical preferences.\n3. Deploying warriors in patterns that maximize their ability to serve as \"observers,\" strategically collapsing enemy probability waves at critical moments of vulnerability.\n4. Placing archers at calculated vantage points that allow them to \"observe\" the maximum battlefield area, forcing widespread wavefunction collapse that favors our tactical positioning.\n5. Creating a highly unconventional, asymmetrical layout with units positioned to generate overlapping observation fields that can collapse enemy quantum states from multiple angles simultaneously.\n\nThis approach aims to counter the enemy's quantum indeterminacy by forcing premature resolution of quantum states. By generating strategic observation points across the battlefield, we create conditions where the enemy's quantum possibilities collapse into fixed realities at moments of our choosing, turning their quantum advantage into a predictable, exploitable pattern.\n\nThe Quantum Wavefunction Collapse strategy seeks to control the transition from quantum possibility to classical reality. By leveraging the fundamental principle that observation collapses quantum states, we aim to create a battlefield where we determine when and how quantum indeterminacy resolves into fixed reality, giving us unprecedented tactical control over the enemy's quantum-based strategy.",
+    "changes": "This plan introduces a revolutionary strategy based on forcing premature wavefunction collapse across the battlefield. The layout is highly asymmetrical and strategically positioned to create observation points that collapse quantum possibilities into fixed realities at moments most advantageous to our forces.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "col": -20,
+        "sizeRow": 2,
+        "sizeCol": 4,
+        "row": -10,
+        "command": "advance-wait",
+        "type": "artillery"
+      },
+      {
+        "type": "tank",
+        "col": -8,
+        "command": "advance",
+        "row": -8,
+        "sizeCol": 4,
+        "sizeRow": 4
+      },
+      {
+        "sizeCol": 3,
+        "type": "warrior",
+        "row": -9,
+        "sizeRow": 2,
+        "col": 0,
+        "command": "flank-left"
+      },
+      {
+        "command": "flank-left",
+        "row": -7,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "col": 10,
+        "type": "archer"
+      },
+      {
+        "col": 18,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "row": -5,
+        "type": "artillery",
+        "command": "advance-wait"
+      },
+      {
+        "type": "tank",
+        "col": 5,
+        "command": "advance",
+        "sizeCol": 4,
+        "row": -3,
+        "sizeRow": 4
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": -5,
+        "row": -1,
+        "type": "warrior",
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "command": "flank-right",
+        "row": 1,
+        "col": -15,
+        "sizeRow": 2,
+        "sizeCol": 3
+      },
+      {
+        "sizeCol": 3,
+        "command": "advance",
+        "col": 12,
+        "type": "warrior",
+        "sizeRow": 2,
+        "row": 3
+      }
+    ],
+    "reasoning": "The 'Quantum Wavefunction Collapse' plan relies on forcing quantum possibilities to collapse into fixed realities through strategic observation. To counter this, 'Quantum Entropic Dispersal' aims to create a battlefield environment that is inherently unobservable and constantly increasing in entropy, thereby preventing the enemy from making the necessary measurements to achieve wavefunction collapse.\n\nOur strategy involves:\n1. Positioning artillery units as 'Entropy Accelerators' at irregular intervals to create expanding zones of quantum noise and unpredictability, overwhelming enemy observation capabilities.\n2. Using tanks as 'Dispersal Anchors' that absorb enemy observation attempts and then rapidly disperse their energy, further spreading chaos across the battlefield.\n3. Deploying warriors as 'Chaos Agents' in a fluid, constantly shifting pattern, making them difficult to observe or pin down for wavefunction collapse.\n4. Placing archers as 'Probability Cloud Generators' to fire volleys that create dense, localized areas of quantum uncertainty, obscuring allied unit positions and making precise observation impossible.\n5. Creating a highly dynamic, asymmetrical layout where units are designed for continuous, unpredictable interactions, turning the battlefield into a quantum foam where stable observation is impossible.\n\nThis approach aims to negate the enemy's wavefunction collapse tactics by making the act of observation itself unreliable and disorienting. By constantly increasing the entropy of the battlefield, we force the enemy into a state of perpetual uncertainty, preventing them from achieving the fixed realities necessary for their strategy to succeed.",
+    "changes": "This plan introduces a revolutionary strategy based on increasing the overall entropy of the battlefield, making it too chaotic and unpredictable for the enemy to establish stable observation points for wavefunction collapse. The layout is highly asymmetrical and designed for continuous, unpredictable movement and dissipation of energy.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "sizeCol": 4,
+        "command": "advance",
+        "type": "tank",
+        "row": -8,
+        "col": 0,
+        "sizeRow": 4
+      },
+      {
+        "type": "warrior",
+        "sizeCol": 3,
+        "command": "advance",
+        "sizeRow": 2,
+        "row": -6,
+        "col": -3
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": 3,
+        "type": "warrior",
+        "command": "advance",
+        "row": -6
+      },
+      {
+        "sizeRow": 2,
+        "row": -10,
+        "type": "artillery",
+        "sizeCol": 4,
+        "col": -10,
+        "command": "advance-wait"
+      },
+      {
+        "command": "advance-wait",
+        "col": 10,
+        "row": -10,
+        "sizeCol": 4,
+        "type": "artillery",
+        "sizeRow": 2
+      },
+      {
+        "col": -15,
+        "sizeCol": 3,
+        "command": "flank-right",
+        "sizeRow": 2,
+        "row": -7,
+        "type": "archer"
+      },
+      {
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "flank-left",
+        "row": -7,
+        "type": "archer",
+        "col": 15
+      },
+      {
+        "command": "advance",
+        "sizeRow": 4,
+        "row": -4,
+        "type": "tank",
+        "sizeCol": 4,
+        "col": -6
+      },
+      {
+        "row": -4,
+        "type": "tank",
+        "sizeRow": 4,
+        "command": "advance",
+        "sizeCol": 4,
+        "col": 6
+      },
+      {
+        "sizeCol": 3,
+        "row": -2,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "advance",
+        "col": 0
+      }
+    ],
+    "reasoning": "The 'Quantum Entropic Dispersal' plan thrives on unpredictability and making observation difficult. 'Quantum Predictive Strike' counters this by not needing to observe every unit, but rather by predicting the statistical likelihood of where units will be or must be to achieve their objectives. By focusing fire and movement on these high-probability zones, we force the enemy to either consolidate (making them vulnerable to concentrated attack) or remain dispersed and ineffective. This strategy turns their chaos into a predictable pattern of statistical likelihoods.",
+    "changes": "This plan introduces a strategy focused on predictive analysis and targeted strikes to cut through the enemy's entropic noise. The layout is asymmetrical, designed to create overlapping fields of predictive fire and rapid response, forcing the enemy's dispersed units into observable states.",
+    "result": "won"
+  },
+  {
+    "units": [
+      {
+        "type": "tank",
+        "row": -15,
+        "sizeCol": 4,
+        "col": 0,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": -8,
+        "type": "warrior",
+        "command": "flank-right",
+        "row": -12
+      },
+      {
+        "col": 8,
+        "command": "flank-left",
+        "sizeCol": 3,
+        "type": "warrior",
+        "row": -12,
+        "sizeRow": 2
+      },
+      {
+        "sizeCol": 4,
+        "type": "artillery",
+        "sizeRow": 2,
+        "col": -12,
+        "row": -10,
+        "command": "advance-wait"
+      },
+      {
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "col": 12,
+        "command": "advance-wait",
+        "type": "artillery"
+      },
+      {
+        "command": "wait-advance",
+        "sizeRow": 2,
+        "type": "archer",
+        "row": -7,
+        "col": -4,
+        "sizeCol": 3
+      },
+      {
+        "type": "archer",
+        "col": 4,
+        "sizeRow": 2,
+        "command": "wait-advance",
+        "row": -7,
+        "sizeCol": 3
+      },
+      {
+        "command": "advance",
+        "type": "tank",
+        "sizeCol": 4,
+        "col": -6,
+        "row": -5,
+        "sizeRow": 4
+      },
+      {
+        "type": "tank",
+        "col": 6,
+        "sizeRow": 4,
+        "row": -5,
+        "sizeCol": 4,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Quantum Predictive Strike' plan relies on predicting enemy movements and forcing units into observable states. To counter this, 'Quantum Tunneling Assault' aims to render prediction useless by having units appear to 'tunnel' directly to strategic points, making their movements impossible to anticipate. By placing a strong force far forward, we create an immediate, overwhelming threat that forces the enemy into a reactive, confused state, negating their predictive advantage and rapid response capabilities. Artillery units create 'disruption zones' to further obscure our true movements and disorient enemy sensors, while fast-moving warriors and archers exploit the chaos created by the sudden appearance of our main force.",
+    "changes": "This plan introduces a revolutionary strategy based on simulated quantum tunneling, aiming to bypass enemy defenses and predictive models by appearing at unexpected, forward positions. The layout is highly asymmetrical, with units deployed deep into enemy territory or in flanking positions, creating immediate and overwhelming threats that disrupt the enemy's ability to react.",
+    "result": "drawed"
+  },
+  {
+    "name": "Temporal Anomaly Interdiction",
+    "units": [
+      {
+        "sizeCol": 2,
+        "sizeRow": 3,
+        "row": -8,
+        "col": -5,
+        "type": "tank",
+        "command": "wait-advance"
+      },
+      {
+        "command": "wait-advance",
+        "sizeRow": 3,
+        "sizeCol": 3,
+        "col": 5,
+        "type": "tank",
+        "row": -8
+      },
+      {
+        "type": "tank",
+        "row": -2,
+        "col": 0,
+        "command": "advance",
+        "sizeCol": 3,
+        "sizeRow": 3
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 3,
+        "row": -2,
+        "type": "tank",
+        "col": -10,
+        "command": "advance"
+      },
+      {
+        "row": -2,
+        "sizeCol": 3,
+        "command": "advance",
+        "col": 10,
+        "sizeRow": 3,
+        "type": "tank"
+      },
+      {
+        "row": -10,
+        "sizeCol": 3,
+        "command": "wait-advance",
+        "col": 0,
+        "type": "artillery",
+        "sizeRow": 1
+      },
+      {
+        "command": "advance-wait",
+        "col": -15,
+        "type": "artillery",
+        "sizeRow": 1,
+        "row": -5,
+        "sizeCol": 3
+      },
+      {
+        "row": -5,
+        "command": "advance-wait",
+        "type": "artillery",
+        "sizeCol": 3,
+        "col": 15,
+        "sizeRow": 1
+      },
+      {
+        "command": "flank-right",
+        "col": -12,
+        "sizeCol": 3,
+        "row": -3,
+        "sizeRow": 1,
+        "type": "archer"
+      },
+      {
+        "row": -3,
+        "type": "archer",
+        "command": "flank-left",
+        "sizeCol": 4,
+        "col": 12,
+        "sizeRow": 2
+      },
+      {
+        "row": -1,
+        "type": "archer",
+        "sizeCol": 4,
+        "command": "flank-right",
+        "col": -18,
+        "sizeRow": 2
+      },
+      {
+        "type": "archer",
+        "sizeRow": 2,
+        "sizeCol": 4,
+        "col": 18,
+        "row": -1,
+        "command": "flank-left"
+      },
+      {
+        "row": -6,
+        "col": -10,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "advance",
+        "type": "warrior"
+      },
+      {
+        "sizeRow": 2,
+        "col": 10,
+        "sizeCol": 3,
+        "command": "advance",
+        "row": -6,
+        "type": "warrior"
+      },
+      {
+        "sizeCol": 3,
+        "command": "advance",
+        "sizeRow": 2,
+        "type": "warrior",
+        "row": -4,
+        "col": -3
+      },
+      {
+        "command": "advance",
+        "row": -4,
+        "type": "warrior",
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "col": 3
+      }
+    ],
+    "reasoning": "The 'Quantum Tunneling Assault' plan relies on speed and surprise through units appearing at unexpected, forward positions. To counter this, 'Temporal Anomaly Interdiction' aims to negate their speed advantage and turn their surprise into a trap by manipulating time itself. By strategically positioning artillery to create temporal distortion zones (some slowing, others unpredictable), tanks to absorb initial impacts and push into these zones, warriors to exploit slowed enemies, and archers to target from a distance, we can disrupt the enemy's ability to tunnel effectively. Any units that 'tunnel' into our temporal anomalies will be either slowed down and vulnerable, or their 'tunneling' will become erratic and unreliable, allowing our forces to react and counter with overwhelming precision.",
+    "changes": "This plan introduces a strategy focused on creating localized temporal anomalies to disrupt and neutralize the enemy's quantum tunneling. The layout is asymmetrical, designed to create overlapping fields of slowed or accelerated time that trap, disorient, or outpace the enemy's sudden appearances.",
+    "result": "won"
+  },
+  {
+    "units": [
+      {
+        "col": -5,
+        "sizeRow": 3,
+        "sizeCol": 2,
+        "command": "advance",
+        "type": "tank",
+        "row": -8
+      },
+      {
+        "row": -8,
+        "sizeRow": 3,
+        "col": 5,
+        "sizeCol": 3,
+        "command": "advance",
+        "type": "tank"
+      },
+      {
+        "sizeRow": 3,
+        "type": "tank",
+        "sizeCol": 3,
+        "col": -12,
+        "command": "advance",
+        "row": -4
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 3,
+        "row": -4,
+        "col": 12,
+        "type": "tank",
+        "command": "advance"
+      },
+      {
+        "col": 0,
+        "command": "advance",
+        "row": -2,
+        "sizeRow": 1,
+        "type": "warrior",
+        "sizeCol": 3
+      },
+      {
+        "type": "artillery",
+        "command": "advance-wait",
+        "sizeRow": 1,
+        "sizeCol": 3,
+        "col": 0,
+        "row": -10
+      },
+      {
+        "col": -18,
+        "sizeRow": 2,
+        "type": "artillery",
+        "row": -10,
+        "sizeCol": 4,
+        "command": "advance-wait"
+      },
+      {
+        "type": "artillery",
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "col": 18,
+        "row": -10,
+        "command": "advance-wait"
+      },
+      {
+        "sizeCol": 3,
+        "col": -3,
+        "command": "advance",
+        "sizeRow": 2,
+        "type": "warrior",
+        "row": -6
+      },
+      {
+        "type": "warrior",
+        "col": 3,
+        "row": -6,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "advance"
+      },
+      {
+        "row": -2,
+        "command": "advance",
+        "sizeRow": 2,
+        "type": "warrior",
+        "col": -9,
+        "sizeCol": 3
+      },
+      {
+        "command": "advance",
+        "type": "warrior",
+        "row": -2,
+        "col": 9,
+        "sizeCol": 3,
+        "sizeRow": 2
+      },
+      {
+        "command": "flank-right",
+        "row": -7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": -15,
+        "type": "archer"
+      },
+      {
+        "type": "archer",
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left",
+        "row": -7,
+        "col": 15
+      },
+      {
+        "col": -5,
+        "command": "advance",
+        "sizeCol": 3,
+        "type": "archer",
+        "sizeRow": 2,
+        "row": -4
+      },
+      {
+        "sizeRow": 2,
+        "command": "advance",
+        "type": "archer",
+        "col": 5,
+        "row": -4,
+        "sizeCol": 3
+      }
+    ],
+    "reasoning": "The 'Temporal Anomaly Interdiction' plan relies on localized temporal distortions and a scattered defensive layout. To counter this, 'Localized Temporal Overload' aims to create highly concentrated, mobile 'overload' zones that can push through or bypass these anomalies. By focusing overwhelming force on specific enemy clusters, we can negate their ability to effectively apply temporal distortions across the entire battlefield. Fast-moving tanks will spearhead the assault, supported by artillery to create zones of intense pressure and disrupt enemy formations. Warriors will follow closely to clear out resistance, while archers on the flanks provide critical supporting fire and harass enemy long-range units. The asymmetrical deployment allows us to concentrate force on perceived weak points or less dense temporal fields, preventing the enemy from effectively reacting to multiple, strong localized threats simultaneously.",
+    "changes": "This plan introduces a strategy focused on creating localized, overwhelming force to break through the enemy's scattered temporal defenses. It shifts from direct temporal manipulation to a concentrated assault, using multiple strong tank pushes supported by artillery and a mix of warriors and archers to exploit gaps and overwhelm key enemy units.",
+    "result": "drawed"
+  },
+  {
+    "name": "Dispersed Harassment & Encirclement",
+    "units": [
+      {
+        "col": 0,
+        "type": "artillery",
+        "command": "advance-wait",
+        "sizeCol": 4,
+        "row": -15,
+        "sizeRow": 2
+      },
+      {
+        "command": "advance-wait",
+        "row": -12,
+        "sizeCol": 4,
+        "col": -10,
+        "sizeRow": 2,
+        "type": "artillery"
+      },
+      {
+        "command": "advance-wait",
+        "type": "artillery",
+        "row": -12,
+        "sizeRow": 2,
+        "col": 10,
+        "sizeCol": 4
+      },
+      {
+        "row": -10,
+        "col": -18,
+        "type": "archer",
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "flank-right"
+      },
+      {
+        "type": "archer",
+        "row": -10,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "col": 18,
+        "sizeCol": 3
+      },
+      {
+        "sizeCol": 3,
+        "col": -12,
+        "sizeRow": 2,
+        "command": "flank-right",
+        "type": "warrior",
+        "row": -8
+      },
+      {
+        "sizeCol": 3,
+        "type": "warrior",
+        "command": "flank-left",
+        "sizeRow": 2,
+        "col": 12,
+        "row": -8
+      },
+      {
+        "col": -15,
+        "row": -5,
+        "sizeCol": 4,
+        "command": "advance",
+        "sizeRow": 4,
+        "type": "tank"
+      },
+      {
+        "type": "tank",
+        "command": "advance",
+        "col": 15,
+        "row": -5,
+        "sizeCol": 4,
+        "sizeRow": 4
+      },
+      {
+        "row": -7,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "col": 0,
+        "type": "warrior",
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Localized Temporal Overload' plan relies on concentrated pushes with tanks and supporting units. To counter this, 'Dispersed Harassment & Encirclement' aims to avoid direct confrontation with their strong points and instead spread out our forces to harass them from multiple angles, forcing them to disperse or suffer continuous damage. By using artillery and archers at range, we can soften their concentrated pushes. Simultaneously, flanking warrior and tank units will aim to encircle and cut off their concentrated forces, turning their strength into a vulnerability. The non-symmetrical layout will make it harder for them to predict our main attack vectors.",
+    "changes": "This plan shifts from direct confrontation to a strategy of attrition and encirclement. It utilizes a more spread-out formation to avoid the enemy's concentrated pushes, focusing on long-range attacks and flanking maneuvers to disrupt their cohesive assault. Artillery and archers are positioned to continuously harass and weaken the enemy from a distance, while mobile warrior and tank units are deployed on the flanks to encircle and cut off their advance. The non-symmetrical layout will make it harder for them to predict our main attack vectors.",
+    "result": "lost"
+  },
+  {
+    "units": [
+      {
+        "row": -10,
+        "type": "tank",
+        "col": -10,
+        "sizeRow": 4,
+        "sizeCol": 4,
+        "command": "advance"
+      },
+      {
+        "col": -6,
+        "row": -9,
+        "type": "tank",
+        "command": "advance",
+        "sizeRow": 4,
+        "sizeCol": 4
+      },
+      {
+        "type": "tank",
+        "sizeRow": 4,
+        "sizeCol": 4,
+        "row": -8,
+        "col": -14,
+        "command": "advance"
+      },
+      {
+        "row": -7,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "advance",
+        "col": -8,
+        "type": "warrior"
+      },
+      {
+        "command": "advance",
+        "row": -6,
+        "col": -4,
+        "type": "warrior",
+        "sizeRow": 2,
+        "sizeCol": 3
+      },
+      {
+        "command": "advance-wait",
+        "sizeRow": 2,
+        "sizeCol": 4,
+        "col": -12,
+        "type": "artillery",
+        "row": -12
+      },
+      {
+        "type": "artillery",
+        "command": "advance-wait",
+        "sizeRow": 2,
+        "row": -11,
+        "sizeCol": 4,
+        "col": -2
+      },
+      {
+        "type": "archer",
+        "sizeRow": 2,
+        "row": -10,
+        "col": 10,
+        "sizeCol": 3,
+        "command": "flank-left"
+      },
+      {
+        "command": "flank-left",
+        "sizeRow": 2,
+        "col": 14,
+        "type": "archer",
+        "sizeCol": 3,
+        "row": -8
+      },
+      {
+        "sizeCol": 3,
+        "type": "warrior",
+        "row": -6,
+        "col": 5,
+        "command": "advance",
+        "sizeRow": 2
+      }
+    ],
+    "reasoning": "The 'Dispersed Harassment & Encirclement' plan relies on spreading out and flanking. To counter this, 'Unilateral Breakthrough' aims to create an extremely strong, focused spearhead aimed directly at one of their flanks, forcing their dispersed units to either converge (making them vulnerable to the spearhead) or be cut off and defeated in detail. The asymmetry of the central push versus minimal, but effective, flank protection will overwhelm their ability to react and maintain their dispersed formation.",
+    "changes": "This plan abandons the dispersed strategy and instead concentrates an overwhelming force on one side of the battlefield, aiming for a rapid, asymmetrical breakthrough. This counters the enemy's harassment by forcing a decisive engagement and negates their encirclement attempts by collapsing one of their flanks.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "sizeRow": 2,
+        "type": "artillery",
+        "row": -10,
+        "command": "advance-wait",
+        "col": -5,
+        "sizeCol": 4
+      },
+      {
+        "command": "wait-advance",
+        "sizeCol": 4,
+        "type": "tank",
+        "sizeRow": 4,
+        "col": -10,
+        "row": -8
+      },
+      {
+        "col": -15,
+        "type": "tank",
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "row": -6,
+        "command": "wait-advance"
+      },
+      {
+        "type": "warrior",
+        "row": -6,
+        "command": "wait-advance",
+        "sizeRow": 2,
+        "col": -7,
+        "sizeCol": 3
+      },
+      {
+        "sizeRow": 4,
+        "col": 10,
+        "type": "tank",
+        "sizeCol": 4,
+        "command": "flank-left",
+        "row": -8
+      },
+      {
+        "sizeCol": 4,
+        "type": "tank",
+        "row": -6,
+        "col": 15,
+        "sizeRow": 4,
+        "command": "flank-left"
+      },
+      {
+        "col": 7,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "flank-left",
+        "type": "warrior",
+        "row": -6
+      },
+      {
+        "sizeCol": 3,
+        "type": "warrior",
+        "command": "flank-left",
+        "row": -4,
+        "col": 12,
+        "sizeRow": 2
+      },
+      {
+        "command": "flank-right",
+        "col": -18,
+        "sizeRow": 2,
+        "row": -4,
+        "sizeCol": 3,
+        "type": "archer"
+      },
+      {
+        "type": "archer",
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "row": -4,
+        "col": 18,
+        "command": "flank-left"
+      }
+    ],
+    "reasoning": "The 'Unilateral Breakthrough' plan commits heavily to one side, leaving its other flank vulnerable. To counter this, 'Flanking Hammer & Anvil' will leverage this commitment by creating a smaller, but resilient 'anvil' to absorb or delay their main push. Simultaneously, a strong 'hammer' composed of the majority of our tanks and warriors will rapidly advance and flank their exposed side. Artillery will be positioned to target their concentrated force, providing crucial support, and archers will be split to support both the delaying 'anvil' and the aggressive 'hammer', providing long-range fire and protection against any stray units. This asymmetry aims to overwhelm their weaker flank and disrupt their concentrated assault.",
+    "changes": "This plan shifts from a direct counter to a more aggressive, asymmetrical flanking maneuver. It uses a resilient 'anvil' on the left/center to absorb or delay the enemy's main push, while a strong 'hammer' of tanks and warriors rapidly flanks their exposed right side. Artillery targets their concentrated force, and archers support both the anvil and the hammer.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "col": 0,
+        "command": "advance",
+        "type": "tank",
+        "row": -10,
+        "sizeCol": 4,
+        "sizeRow": 4
+      },
+      {
+        "row": -9,
+        "type": "tank",
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "col": -5,
+        "command": "advance"
+      },
+      {
+        "col": 5,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance",
+        "type": "tank",
+        "row": -9
+      },
+      {
+        "col": -2,
+        "row": -7,
+        "sizeCol": 3,
+        "type": "warrior",
+        "sizeRow": 2,
+        "command": "advance"
+      },
+      {
+        "row": -7,
+        "col": 2,
+        "type": "warrior",
+        "command": "advance",
+        "sizeRow": 2,
+        "sizeCol": 3
+      },
+      {
+        "type": "artillery",
+        "col": 0,
+        "sizeRow": 2,
+        "command": "advance-wait",
+        "sizeCol": 4,
+        "row": -12
+      },
+      {
+        "sizeCol": 3,
+        "command": "flank-right",
+        "type": "archer",
+        "row": -8,
+        "col": -15,
+        "sizeRow": 2
+      },
+      {
+        "sizeCol": 3,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "row": -8,
+        "col": 15,
+        "type": "archer"
+      },
+      {
+        "col": 0,
+        "command": "advance",
+        "row": -4,
+        "sizeCol": 3,
+        "type": "warrior",
+        "sizeRow": 2
+      }
+    ],
+    "reasoning": "The 'Flanking Hammer & Anvil' plan relies on its two distinct forces coordinating. By launching a rapid, overwhelming assault directly through their center, we aim to split their formation, preventing the hammer from effectively flanking and isolating the anvil. This forces them to react defensively to a central threat, disrupting their planned coordinated attack.",
+    "changes": "This plan shifts from a flanking counter to a direct, concentrated assault on the enemy's center. It utilizes a strong central force of tanks and warriors to break through, supported by artillery targeting their core. Archers are positioned on the far flanks to create diversions and exploit any disarray caused by the central push, preventing their hammer from completing its encirclement.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "sizeRow": 4,
+        "row": -10,
+        "type": "tank",
+        "col": -15,
+        "sizeCol": 4,
+        "command": "flank-right"
+      },
+      {
+        "sizeRow": 2,
+        "type": "warrior",
+        "sizeCol": 3,
+        "command": "flank-right",
+        "col": -10,
+        "row": -8
+      },
+      {
+        "command": "flank-right",
+        "col": -12,
+        "row": -6,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "type": "tank"
+      },
+      {
+        "sizeRow": 4,
+        "row": -10,
+        "command": "wait-advance",
+        "col": 0,
+        "type": "tank",
+        "sizeCol": 4
+      },
+      {
+        "sizeRow": 2,
+        "type": "warrior",
+        "col": 5,
+        "row": -8,
+        "sizeCol": 3,
+        "command": "wait-advance"
+      },
+      {
+        "row": -10,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "type": "archer",
+        "col": 15
+      },
+      {
+        "row": -8,
+        "sizeRow": 2,
+        "type": "warrior",
+        "sizeCol": 3,
+        "col": 10,
+        "command": "flank-left"
+      },
+      {
+        "sizeCol": 4,
+        "type": "artillery",
+        "sizeRow": 2,
+        "command": "advance-wait",
+        "row": -12,
+        "col": -8
+      },
+      {
+        "command": "advance-wait",
+        "row": -12,
+        "sizeCol": 4,
+        "type": "artillery",
+        "sizeRow": 2,
+        "col": 8
+      },
+      {
+        "sizeCol": 4,
+        "command": "wait-advance",
+        "row": -6,
+        "sizeRow": 2,
+        "col": 0,
+        "type": "artillery"
+      }
+    ],
+    "reasoning": "The enemy's 'Centralized Breakthrough' plan relies on a strong, focused push. Our 'Asymmetrical Envelopment' plan aims to absorb this central thrust with a resilient, slightly offset defensive line (tanks and warriors), while simultaneously launching a powerful, concentrated flanking attack on one side (left flank with more tanks and warriors) and a lighter, harassing flank on the other (right flank with archers and fewer warriors). Artillery will provide crucial support by targeting their central, concentrated force, and archers on the right flank will harass and disrupt their advance. This asymmetry will force the enemy to commit resources unevenly, creating exploitable weaknesses.",
+    "changes": "This plan shifts from a direct central counter to an asymmetrical double envelopment strategy. It establishes a robust, slightly offset central defensive line to absorb the enemy's breakthrough. Concurrently, a heavier, more aggressive flanking maneuver is initiated on the left with a concentration of tanks and warriors, aiming for a decisive breakthrough. On the right, a lighter flank composed of archers and fewer warriors focuses on harassment and disruption. Artillery units are strategically positioned to target the enemy's central, concentrated force, providing crucial long-range support to both the central defense and the flanking forces. The intentional asymmetry aims to create an unpredictable threat, forcing the enemy to react unevenly and exposing vulnerabilities.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "type": "artillery",
+        "row": -10,
+        "command": "advance-wait",
+        "sizeRow": 2,
+        "col": -8,
+        "sizeCol": 4
+      },
+      {
+        "type": "artillery",
+        "sizeCol": 4,
+        "col": 0,
+        "row": -11,
+        "sizeRow": 2,
+        "command": "advance-wait"
+      },
+      {
+        "col": 10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "flank-left",
+        "type": "tank",
+        "row": -8
+      },
+      {
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "flank-left",
+        "row": -6,
+        "col": 14,
+        "type": "tank"
+      },
+      {
+        "sizeRow": 2,
+        "row": -4,
+        "command": "flank-left",
+        "sizeCol": 3,
+        "type": "warrior",
+        "col": 8
+      },
+      {
+        "sizeRow": 2,
+        "row": -2,
+        "type": "warrior",
+        "col": 12,
+        "command": "flank-left",
+        "sizeCol": 3
+      },
+      {
+        "command": "wait-advance",
+        "sizeRow": 4,
+        "type": "tank",
+        "col": -15,
+        "row": -7,
+        "sizeCol": 4
+      },
+      {
+        "row": -5,
+        "sizeRow": 2,
+        "type": "warrior",
+        "col": -10,
+        "command": "wait-advance",
+        "sizeCol": 3
+      },
+      {
+        "sizeCol": 3,
+        "col": -20,
+        "command": "advance-wait",
+        "sizeRow": 2,
+        "row": -6,
+        "type": "archer"
+      },
+      {
+        "sizeCol": 3,
+        "type": "archer",
+        "sizeRow": 2,
+        "row": -6,
+        "col": 20,
+        "command": "advance-wait"
+      }
+    ],
+    "reasoning": "The 'Asymmetrical Envelopment' plan has a strong left flank and a lighter right flank. To counter this, 'Flank Overwhelm' will concentrate a significant portion of our force on their right flank (our right), aiming for a rapid breakthrough to collapse their lighter harassment flank and roll up their main formation from the side. Simultaneously, artillery and archers will target their central defensive line and strong left flank, forcing them to divert resources or suffer heavy losses, preventing them from effectively supporting their left flank. A smaller, resilient force on our far left will act as a defensive anchor.",
+    "changes": "This plan shifts from a direct central counter to an asymmetrical flanking overwhelm strategy. It establishes a resilient, slightly offset central defensive line to absorb the enemy's breakthrough. Concurrently, a heavier, more aggressive flanking maneuver is initiated on the right with a concentration of tanks and warriors, aiming for a decisive breakthrough. On the far left, archers and a defensive tank/warrior force focus on holding and harassing. Artillery units are strategically positioned to target the enemy's central, concentrated force, providing crucial long-range support to both the central defense and the flanking forces. The intentional asymmetry aims to create an unpredictable threat, forcing the enemy to react unevenly and exposing vulnerabilities.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "sizeCol": 4,
+        "type": "artillery",
+        "command": "advance-wait",
+        "row": -12,
+        "col": -10,
+        "sizeRow": 2
+      },
+      {
+        "sizeRow": 2,
+        "col": 5,
+        "sizeCol": 4,
+        "type": "artillery",
+        "row": -10,
+        "command": "advance-wait"
+      },
+      {
+        "sizeRow": 4,
+        "command": "wait-advance",
+        "row": -8,
+        "sizeCol": 4,
+        "col": -15,
+        "type": "tank"
+      },
+      {
+        "sizeRow": 4,
+        "row": -8,
+        "sizeCol": 4,
+        "type": "tank",
+        "command": "flank-left",
+        "col": 10
+      },
+      {
+        "sizeRow": 4,
+        "command": "flank-left",
+        "col": 18,
+        "sizeCol": 4,
+        "row": -6,
+        "type": "tank"
+      },
+      {
+        "row": -6,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "type": "warrior",
+        "command": "wait-advance",
+        "col": -8
+      },
+      {
+        "command": "flank-left",
+        "col": 12,
+        "row": -4,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "type": "warrior"
+      },
+      {
+        "sizeCol": 3,
+        "col": 20,
+        "type": "warrior",
+        "row": -2,
+        "command": "flank-left",
+        "sizeRow": 2
+      },
+      {
+        "command": "advance-wait",
+        "row": -4,
+        "col": -20,
+        "sizeCol": 3,
+        "type": "archer",
+        "sizeRow": 2
+      },
+      {
+        "row": -6,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "type": "archer",
+        "command": "advance-wait",
+        "col": 0
+      }
+    ],
+    "reasoning": "The 'Flank Overwhelm' plan commits heavily to one side (their right, our left) and has a weaker left flank (our right). To counter this, 'Deep Envelopment' will leverage their commitment by creating a resilient 'anvil' on our left to absorb or delay their main push. Simultaneously, a strong 'hammer' composed of the majority of our tanks and warriors will rapidly advance and flank their exposed left side, aiming to bypass their main force and strike at their rear or artillery. Artillery will be positioned to target their concentrated force, providing crucial support, and archers will be split to support both the delaying 'anvil' and the aggressive 'hammer', providing long-range fire and protection against any stray units. This asymmetry aims to overwhelm their weaker flank and disrupt their concentrated assault from behind.",
+    "changes": "This plan shifts from a direct central counter to an asymmetrical deep envelopment strategy. It establishes a resilient, slightly offset central-left defensive line to absorb the enemy's main push. Concurrently, a heavier, more aggressive flanking maneuver is initiated on the far right with a concentration of tanks and warriors, aiming for a decisive breakthrough behind enemy lines. Artillery units are strategically positioned to target the enemy's central, concentrated force and also support the deep flanking maneuver. Archers are deployed for harassment and support on both flanks. The intentional asymmetry aims to create an unpredictable threat, forcing the enemy to react unevenly and exposing vulnerabilities.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "col": 0,
+        "row": -10,
+        "sizeCol": 4,
+        "type": "tank",
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "command": "advance",
+        "sizeCol": 3,
+        "row": -8,
+        "col": -3,
+        "sizeRow": 2,
+        "type": "warrior"
+      },
+      {
+        "row": -8,
+        "col": 3,
+        "sizeCol": 3,
+        "type": "warrior",
+        "command": "advance",
+        "sizeRow": 2
+      },
+      {
+        "col": -5,
+        "sizeRow": 2,
+        "row": -12,
+        "command": "advance-wait",
+        "type": "artillery",
+        "sizeCol": 4
+      },
+      {
+        "sizeRow": 2,
+        "row": -12,
+        "sizeCol": 4,
+        "col": 5,
+        "type": "artillery",
+        "command": "advance-wait"
+      },
+      {
+        "command": "flank-left",
+        "sizeRow": 2,
+        "row": -6,
+        "sizeCol": 3,
+        "type": "warrior",
+        "col": 10
+      },
+      {
+        "sizeCol": 3,
+        "command": "flank-left",
+        "row": -8,
+        "col": 15,
+        "sizeRow": 2,
+        "type": "archer"
+      },
+      {
+        "row": -4,
+        "col": 12,
+        "type": "tank",
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "command": "advance"
+      },
+      {
+        "command": "flank-right",
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": -15,
+        "row": -8,
+        "type": "archer"
+      },
+      {
+        "sizeRow": 2,
+        "col": -10,
+        "type": "warrior",
+        "sizeCol": 3,
+        "row": -6,
+        "command": "wait-advance"
+      }
+    ],
+    "reasoning": "The 'Deep Envelopment' plan commits heavily to a deep flank on the far right, leaving its center and potentially its connection to the deep flank vulnerable. By launching a strong, rapid central breach, we can split their forces and force them to react defensively. Simultaneously, we can use fast warriors, archers, and a supporting tank to isolate and neutralize their deep flank as it attempts to envelop, cutting off their hammer from their anvil. This asymmetric approach aims to disrupt their coordinated deep envelopment and defeat their forces in detail.",
+    "changes": "This plan shifts from a deep envelopment counter to a strategy of rapid central breach and flank isolation. It focuses on a strong, rapid central push to split the enemy's forces, while simultaneously deploying units to intercept and cut off their deep flanking maneuver. Artillery provides concentrated fire on their main force, and archers support both the central advance and the flank isolation.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "command": "advance-wait",
+        "col": -10,
+        "sizeCol": 4,
+        "type": "artillery",
+        "sizeRow": 2,
+        "row": -15
+      },
+      {
+        "sizeRow": 2,
+        "sizeCol": 4,
+        "command": "advance-wait",
+        "row": -15,
+        "type": "artillery",
+        "col": 10
+      },
+      {
+        "col": -18,
+        "command": "flank-right",
+        "row": -10,
+        "sizeRow": 4,
+        "sizeCol": 4,
+        "type": "tank"
+      },
+      {
+        "command": "flank-right",
+        "sizeRow": 4,
+        "col": -14,
+        "sizeCol": 4,
+        "type": "tank",
+        "row": -8
+      },
+      {
+        "sizeCol": 3,
+        "command": "flank-right",
+        "row": -6,
+        "col": -10,
+        "sizeRow": 2,
+        "type": "warrior"
+      },
+      {
+        "command": "flank-right",
+        "row": -4,
+        "type": "warrior",
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": -6
+      },
+      {
+        "type": "archer",
+        "sizeCol": 3,
+        "col": -16,
+        "sizeRow": 2,
+        "command": "flank-right",
+        "row": -12
+      },
+      {
+        "type": "tank",
+        "row": -10,
+        "sizeCol": 4,
+        "col": 18,
+        "command": "flank-left",
+        "sizeRow": 4
+      },
+      {
+        "col": 14,
+        "row": -8,
+        "type": "warrior",
+        "sizeCol": 3,
+        "command": "flank-left",
+        "sizeRow": 2
+      },
+      {
+        "type": "archer",
+        "col": 16,
+        "command": "flank-left",
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "row": -12
+      },
+      {
+        "sizeRow": 2,
+        "col": 0,
+        "row": -7,
+        "command": "advance",
+        "type": "warrior",
+        "sizeCol": 3
+      }
+    ],
+    "reasoning": "The enemy's 'Rapid Central Breach and Flank Isolation' plan relies on a strong central push and isolating a deep flank. 'Crescent Moon Embrace' counters this by forming a wide, enveloping crescent. Our artillery will continuously bombard their central force, weakening it before impact. Our tanks and warriors will form the 'arms' of the crescent, pushing forward on both flanks to envelop their central thrust. This forces their concentrated units into a bottleneck, where they will be hit from multiple directions. The asymmetry of the crescent allows for a stronger push on one side to break through faster, while the other side maintains pressure, preventing their flank isolation tactics.",
+    "changes": "This plan abandons the direct central counter and instead adopts a wide, enveloping crescent formation. It focuses on absorbing the enemy's central thrust while simultaneously encircling them from both sides. Artillery is positioned for continuous, widespread bombardment, and units are distributed to create a flexible, multi-pronged attack that can adapt to the enemy's movements.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "command": "advance",
+        "col": 0,
+        "type": "tank",
+        "row": -10,
+        "sizeRow": 4,
+        "sizeCol": 4
+      },
+      {
+        "sizeRow": 2,
+        "col": -3,
+        "command": "advance",
+        "type": "warrior",
+        "row": -8,
+        "sizeCol": 3
+      },
+      {
+        "col": 3,
+        "command": "advance",
+        "sizeRow": 2,
+        "type": "warrior",
+        "row": -8,
+        "sizeCol": 3
+      },
+      {
+        "sizeCol": 4,
+        "command": "advance",
+        "row": -6,
+        "type": "tank",
+        "col": -5,
+        "sizeRow": 4
+      },
+      {
+        "col": 5,
+        "sizeRow": 4,
+        "command": "advance",
+        "type": "tank",
+        "sizeCol": 4,
+        "row": -6
+      },
+      {
+        "sizeCol": 4,
+        "row": -12,
+        "command": "advance-wait",
+        "type": "artillery",
+        "sizeRow": 2,
+        "col": -8
+      },
+      {
+        "type": "artillery",
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "row": -12,
+        "command": "advance-wait",
+        "col": 8
+      },
+      {
+        "row": -10,
+        "sizeCol": 3,
+        "command": "flank-right",
+        "sizeRow": 2,
+        "col": -15,
+        "type": "archer"
+      },
+      {
+        "sizeCol": 3,
+        "type": "archer",
+        "command": "flank-left",
+        "row": -10,
+        "col": 15,
+        "sizeRow": 2
+      },
+      {
+        "row": -4,
+        "sizeRow": 2,
+        "command": "advance",
+        "sizeCol": 3,
+        "type": "warrior",
+        "col": -1
+      },
+      {
+        "sizeCol": 3,
+        "col": 1,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "advance",
+        "row": -4
+      }
+    ],
+    "reasoning": "The 'Crescent Moon Embrace' plan relies on a wide, enveloping formation to bottleneck and overwhelm. To counter this, 'Iron Fist Thrust' aims to create a highly concentrated, unstoppable force that punches directly through the enemy's center. By focusing overwhelming power on a narrow front, we can break their crescent formation, split their forces, and prevent their envelopment. Artillery will soften their central line, while a dense formation of tanks and warriors will spearhead the assault. Archers will provide focused fire on the flanks of the breach to prevent quick re-enforcement. This strategy aims to shatter their cohesion and defeat them in detail.",
+    "changes": "This plan abandons the wide, enveloping strategy and instead concentrates an overwhelming force into a narrow, powerful thrust aimed at the enemy's center. It prioritizes breaking through their formation rather than encircling, using a dense formation of tanks and warriors as the spearhead, supported by concentrated artillery fire. Archers are positioned to provide focused fire on the flanks of the breach, preventing the enemy from closing the gap.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "sizeRow": 3,
+        "type": "tank",
+        "sizeCol": 3,
+        "command": "wait-advance",
+        "row": -8,
+        "col": 0
+      },
+      {
+        "row": -10,
+        "col": -10,
+        "sizeRow": 3,
+        "type": "tank",
+        "sizeCol": 3,
+        "command": "flank-right"
+      },
+      {
+        "sizeRow": 3,
+        "row": -9,
+        "sizeCol": 3,
+        "command": "flank-right",
+        "col": -14,
+        "type": "tank"
+      },
+      {
+        "type": "tank",
+        "command": "flank-left",
+        "row": -10,
+        "sizeRow": 3,
+        "sizeCol": 3,
+        "col": 10
+      },
+      {
+        "row": -12,
+        "sizeRow": 1,
+        "sizeCol": 3,
+        "command": "advance-wait",
+        "col": -5,
+        "type": "artillery"
+      },
+      {
+        "col": 5,
+        "row": -12,
+        "sizeRow": 1,
+        "type": "artillery",
+        "sizeCol": 3,
+        "command": "advance-wait"
+      },
+      {
+        "command": "wait-advance",
+        "sizeRow": 1,
+        "type": "warrior",
+        "row": -6,
+        "col": -3,
+        "sizeCol": 2
+      },
+      {
+        "sizeCol": 3,
+        "command": "wait-advance",
+        "col": 3,
+        "sizeRow": 2,
+        "row": -6,
+        "type": "warrior"
+      },
+      {
+        "sizeRow": 2,
+        "type": "archer",
+        "row": -4,
+        "col": 0,
+        "sizeCol": 3,
+        "command": "wait-advance"
+      },
+      {
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "row": -8,
+        "col": -12,
+        "command": "flank-right",
+        "type": "warrior"
+      },
+      {
+        "command": "flank-right",
+        "type": "warrior",
+        "col": -16,
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "row": -7
+      },
+      {
+        "type": "warrior",
+        "col": -18,
+        "sizeRow": 2,
+        "row": -5,
+        "command": "flank-right",
+        "sizeCol": 3
+      },
+      {
+        "command": "flank-right",
+        "row": -4,
+        "col": -20,
+        "sizeRow": 2,
+        "type": "archer",
+        "sizeCol": 3
+      },
+      {
+        "sizeRow": 2,
+        "command": "flank-left",
+        "type": "warrior",
+        "sizeCol": 3,
+        "row": -8,
+        "col": 12
+      },
+      {
+        "type": "warrior",
+        "col": 16,
+        "sizeCol": 3,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "row": -7
+      },
+      {
+        "sizeRow": 2,
+        "sizeCol": 3,
+        "command": "flank-left",
+        "col": 18,
+        "type": "warrior",
+        "row": -5
+      },
+      {
+        "sizeRow": 2,
+        "command": "flank-left",
+        "col": 20,
+        "type": "archer",
+        "row": -4,
+        "sizeCol": 3
+      }
+    ],
+    "reasoning": "The 'Iron Fist Thrust' plan relies on a concentrated, narrow push through the center. To counter this, 'Hydra's Embrace' will absorb the central thrust with a resilient, slightly staggered central formation of tanks and warriors. Simultaneously, two powerful, fast-moving 'heads' of tanks and warriors will rapidly advance on the flanks, aiming to bypass or quickly eliminate the enemy's supporting archers and then converge to encircle their main force. Artillery will focus on continuously bombarding their central thrust, weakening it before it makes full contact and disrupting its cohesion. This multi-pronged approach aims to break the enemy's concentrated formation by attacking it from multiple directions, turning their narrow strength into a vulnerability.",
+    "changes": "This plan shifts from a direct central counter to a multi-headed, enveloping strategy. It absorbs the enemy's central thrust with a robust, slightly staggered central defensive line. Concurrently, two aggressive flanking maneuvers are initiated with tanks and warriors, aiming to bypass or quickly eliminate the enemy's supporting archers and then converge on their main force. Artillery units are strategically positioned for continuous bombardment of the enemy's central, concentrated force, providing crucial long-range support to both the central defense and the flanking forces. The multi-pronged, enveloping nature aims to create an unpredictable threat, forcing the enemy to react unevenly and exposing vulnerabilities.",
+    "result": "won"
+  },
+  {
+    "units": [
+      {
+        "command": "advance",
+        "type": "tank",
+        "col": -8,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "row": -10
+      },
+      {
+        "sizeRow": 4,
+        "type": "tank",
+        "command": "advance",
+        "sizeCol": 4,
+        "col": -4,
+        "row": -10
+      },
+      {
+        "command": "advance",
+        "col": -6,
+        "sizeCol": 3,
+        "row": -8,
+        "type": "warrior",
+        "sizeRow": 2
+      },
+      {
+        "col": -2,
+        "sizeCol": 3,
+        "command": "advance",
+        "type": "warrior",
+        "sizeRow": 2,
+        "row": -8
+      },
+      {
+        "sizeRow": 2,
+        "command": "advance-wait",
+        "type": "artillery",
+        "row": -12,
+        "sizeCol": 4,
+        "col": -12
+      },
+      {
+        "sizeCol": 4,
+        "sizeRow": 2,
+        "type": "artillery",
+        "row": -12,
+        "command": "advance-wait",
+        "col": 0
+      },
+      {
+        "command": "flank-left",
+        "col": 15,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "row": -10,
+        "type": "archer"
+      },
+      {
+        "row": -8,
+        "sizeCol": 3,
+        "col": 18,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "type": "archer"
+      },
+      {
+        "row": -6,
+        "command": "wait-advance",
+        "sizeRow": 4,
+        "type": "tank",
+        "sizeCol": 4,
+        "col": 8
+      },
+      {
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "col": 12,
+        "row": -4,
+        "command": "wait-advance",
+        "type": "warrior"
+      }
+    ],
+    "reasoning": "The 'Hydra's Embrace' plan relies on a multi-headed, enveloping strategy with a strong central line and aggressive flanks. To counter this, 'Viper Strike' aims to concentrate an overwhelming force into a narrow, rapid thrust aimed at a specific, vulnerable point on one of the enemy's flanks. By creating a decisive breakthrough on one side, we can then roll up their entire formation, negating their multi-pronged envelopment. Artillery will provide focused, overwhelming fire on the target point, softening defenses and disrupting enemy artillery. A dense formation of tanks and warriors will spearhead this assault. Archers will be positioned on the opposite flank to provide diversionary fire and harass enemy support units, preventing them from reinforcing the breached flank. This asymmetrical, concentrated attack aims to shatter their cohesion and defeat them in detail by collapsing one of their 'heads' and then their entire body.",
+    "changes": "This plan shifts from a multi-headed, enveloping strategy to a highly concentrated, rapid breakthrough on one flank. It uses a dense formation of tanks and warriors as a spearhead, supported by focused artillery fire, to punch through a specific point in the enemy's line. Archers are positioned on the far opposite flank to create diversions and exploit any disarray caused by the central push, preventing the enemy from reinforcing the breached area. The layout is asymmetrical, with the majority of offensive power concentrated on one side, aiming to overwhelm a single point rather than engaging across a wide front.",
+    "result": "lost"
+  },
+  {
+    "units": [
+      {
+        "col": -10,
+        "type": "tank",
+        "row": -8,
+        "sizeRow": 4,
+        "command": "wait-advance",
+        "sizeCol": 4
+      },
+      {
+        "command": "wait-advance",
+        "col": -14,
+        "sizeCol": 4,
+        "row": -6,
+        "type": "tank",
+        "sizeRow": 4
+      },
+      {
+        "sizeRow": 2,
+        "command": "wait-advance",
+        "sizeCol": 3,
+        "type": "warrior",
+        "col": -8,
+        "row": -6
+      },
+      {
+        "col": -12,
+        "command": "advance-wait",
+        "type": "artillery",
+        "row": -10,
+        "sizeRow": 2,
+        "sizeCol": 4
+      },
+      {
+        "command": "flank-left",
+        "type": "tank",
+        "col": 10,
+        "sizeCol": 4,
+        "sizeRow": 4,
+        "row": -8
+      },
+      {
+        "col": 8,
+        "sizeCol": 3,
+        "row": -6,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "type": "warrior"
+      },
+      {
+        "sizeRow": 2,
+        "type": "archer",
+        "command": "flank-left",
+        "col": 15,
+        "sizeCol": 3,
+        "row": -10
+      },
+      {
+        "col": 12,
+        "sizeCol": 3,
+        "row": -4,
+        "command": "flank-left",
+        "type": "archer",
+        "sizeRow": 2
+      },
+      {
+        "sizeRow": 2,
+        "type": "artillery",
+        "row": -12,
+        "col": 5,
+        "command": "advance-wait",
+        "sizeCol": 4
+      },
+      {
+        "type": "warrior",
+        "row": -7,
+        "col": 0,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "command": "advance"
+      }
+    ],
+    "reasoning": "The 'Viper Strike' plan relies on a highly concentrated, rapid breakthrough on one flank (their right, our left). To counter this, 'Coiling Dragon' aims to absorb this concentrated thrust with a strong, resilient 'head' on our left flank, composed of tanks and supporting warriors. Simultaneously, a larger, more mobile 'body' of tanks, warriors, and archers will rapidly advance and envelop their exposed right flank, aiming to bypass their main force and strike at their rear or artillery. Artillery will be positioned to target their concentrated force, providing crucial support, and archers will be split to support both the delaying 'head' and the aggressive 'body', providing long-range fire and protection against any stray units. This asymmetry aims to overwhelm their weaker flank and disrupt their concentrated assault from behind, turning their strength into a vulnerability.",
+    "changes": "This plan shifts from a direct central counter to an asymmetrical 'Coiling Dragon' strategy. It establishes a robust defensive 'head' on the left flank (our left, their main thrust side) to absorb and redirect the enemy's concentrated push. Concurrently, a mobile 'body' composed of tanks, warriors, and archers initiates a wide, aggressive envelopment on the right flank, aiming to coil around and cut off the enemy's main force. Artillery units are strategically positioned to provide continuous fire on the enemy's concentrated thrust and support the flanking maneuver. The intentional asymmetry aims to turn the enemy's focused strength into a vulnerability by encircling it.",
+    "result": "drawed"
+  },
+  {
+    "units": [
+      {
+        "row": -8,
+        "command": "wait-advance",
+        "col": -3,
+        "sizeRow": 3,
+        "sizeCol": 2,
+        "type": "tank"
+      },
+      {
+        "sizeRow": 3,
+        "sizeCol": 3,
+        "row": -8,
+        "type": "tank",
+        "col": 3,
+        "command": "wait-advance"
+      },
+      {
+        "sizeRow": 3,
+        "command": "flank-right",
+        "col": -15,
+        "sizeCol": 3,
+        "type": "tank",
+        "row": -10
+      },
+      {
+        "sizeCol": 3,
+        "row": -7,
+        "command": "flank-right",
+        "sizeRow": 3,
+        "col": -12,
+        "type": "tank"
+      },
+      {
+        "sizeCol": 5,
+        "command": "advance-wait",
+        "row": -12,
+        "type": "artillery",
+        "col": 0,
+        "sizeRow": 1
+      },
+      {
+        "sizeCol": 5,
+        "type": "artillery",
+        "sizeRow": 1,
+        "col": -8,
+        "command": "advance-wait",
+        "row": -14
+      },
+      {
+        "sizeRow": 2,
+        "row": -14,
+        "sizeCol": 6,
+        "command": "advance-wait",
+        "type": "artillery",
+        "col": 8
+      },
+      {
+        "sizeRow": 2,
+        "row": -6,
+        "sizeCol": 3,
+        "command": "wait-advance",
+        "type": "warrior",
+        "col": -2
+      },
+      {
+        "row": -6,
+        "sizeCol": 3,
+        "type": "warrior",
+        "sizeRow": 2,
+        "col": 2,
+        "command": "wait-advance"
+      },
+      {
+        "row": -5,
+        "sizeCol": 3,
+        "sizeRow": 2,
+        "type": "warrior",
+        "col": -10,
+        "command": "flank-right"
+      },
+      {
+        "col": -7,
+        "row": -3,
+        "sizeRow": 2,
+        "type": "warrior",
+        "command": "flank-right",
+        "sizeCol": 3
+      },
+      {
+        "sizeCol": 3,
+        "col": 15,
+        "row": -10,
+        "command": "flank-left",
+        "sizeRow": 2,
+        "type": "archer"
+      },
+      {
+        "col": 12,
+        "row": -7,
+        "type": "archer",
+        "sizeCol": 3,
+        "command": "flank-left",
+        "sizeRow": 2
+      },
+      {
+        "col": 10,
+        "row": -5,
+        "sizeCol": 3,
+        "type": "warrior",
+        "command": "flank-left",
+        "sizeRow": 2
+      },
+      {
+        "type": "warrior",
+        "sizeRow": 2,
+        "col": 7,
+        "command": "flank-left",
+        "row": -3,
+        "sizeCol": 3
+      }
+    ],
+    "reasoning": "The 'Coiling Dragon' plan aims to envelop, using a strong 'head' on their left and a 'body' on their right. 'Crushing Embrace' will counter this by allowing their 'body' to advance slightly, then rapidly converging our own strong flanks to crush their 'body' against their 'head' or against our own central line. We will use a strong central line to absorb their initial thrust, while our flanks move quickly to encircle. Artillery will target their main concentrations, especially their 'body' as it gets trapped. This strategy aims to turn their enveloping maneuver into a trap for themselves, by creating a powerful pincer movement.",
+    "changes": "This plan shifts from a multi-headed, enveloping strategy to a dual-flank, converging attack. It establishes a robust central defensive line to absorb the enemy's thrust, while simultaneously launching aggressive flanking maneuvers from both sides to encircle and crush the enemy. Artillery provides continuous, widespread bombardment to soften the enemy's main force.",
+    "result": "won"
   }
 ]
