@@ -4,8 +4,8 @@
  * This file serves as the entry point for the game's core logic.
  * It will contain functions to initialize and manage the game state.
  */
-import { initWorld } from './world-init';
-import { GameWorldState } from './world-types';
+import { initWorld } from "./world-init";
+import { GameWorldState } from "./world-types";
 
 /**
  * Initialize the game
@@ -13,7 +13,7 @@ import { GameWorldState } from './world-types';
  * It sets up the initial state of the game world according to the MVP GDD.
  */
 export function initGame(): GameWorldState {
-  console.log('Tribe game initialized with 2D positions.');
+  console.log("Tribe game initialized with detailed 2D world state.");
 
   const initialWorldState = initWorld();
 
