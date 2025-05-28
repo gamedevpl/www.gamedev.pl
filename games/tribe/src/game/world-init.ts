@@ -24,6 +24,7 @@ export function initWorld(): GameWorldState {
     inventory: 0,
     isAlive: true,
     procreationCooldownEndsAtGameTime: 0,
+    velocity: { x: 0, y: 0 },
     causeOfDeath: "none",
   };
 
@@ -37,6 +38,7 @@ export function initWorld(): GameWorldState {
     inventory: 0,
     isAlive: true,
     procreationCooldownEndsAtGameTime: 0,
+    velocity: { x: 0, y: 0 },
     causeOfDeath: "none",
   };
 

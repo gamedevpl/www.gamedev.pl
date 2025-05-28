@@ -28,7 +28,7 @@ export const GameScreen: React.FC = () => {
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const gameStateRef = useRef<GameWorldState>(INITIAL_STATE);
   const lastUpdateTimeRef = useRef<number>();
-  const deltaTimeRef = useRef<number>(1 / 60); // Store deltaTime from game loop
+  const pressedKeysRef = useRef(new Set<string>());
 
   const { appState, setAppState } = useGameContext();
 
@@ -41,8 +41,6 @@ export const GameScreen: React.FC = () => {
       if (canvas && ctxRef.current) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        // Adjust MAP_WIDTH and MAP_HEIGHT if they should be dynamic
-        // For now, assuming fixed map size and canvas adapts to window
         gameStateRef.current.mapDimensions = { width: MAP_WIDTH, height: MAP_HEIGHT };
         renderGame(ctxRef.current, gameStateRef.current);
       }
@@ -58,13 +56,11 @@ export const GameScreen: React.FC = () => {
       return;
     }
     const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
-    deltaTimeRef.current = deltaTime; // Update ref with current deltaTime
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     renderGame(ctxRef.current, gameStateRef.current);
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {
-      // Pass details to gameOver state if context is set up for it
       const currentPlayer = gameStateRef.current.characters.find((c) => c.id === gameStateRef.current.currentPlayerId);
       const cause = currentPlayer?.causeOfDeath
         ? gameStateRef.current.causeOfGameOver || `Player died of ${currentPlayer.causeOfDeath}`
@@ -82,42 +78,55 @@ export const GameScreen: React.FC = () => {
   }, [startLoop, stopLoop]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const updatePlayerVelocity = () => {
       if (!isActive() || gameStateRef.current.gameOver) return;
-
       const player = gameStateRef.current.characters.find((c) => c.id === gameStateRef.current.currentPlayerId);
-
       if (!player || !player.isAlive) return;
 
       let playerSpeed = BASE_SPEED_PIXELS_PER_SECOND;
       if (player.hunger > HUNGER_MOVEMENT_THRESHOLD) {
         playerSpeed *= HUNGER_SPEED_MULTIPLIER;
       }
-      // Use deltaTime from the game loop for consistent movement speed
-      const moveAmount = playerSpeed * deltaTimeRef.current;
 
-      let dx = 0;
-      let dy = 0;
+      let targetVelocityX = 0;
+      let targetVelocityY = 0;
 
-      switch (event.key.toLowerCase()) {
-        case 'w':
-        case 'arrowup':
-          dy = -moveAmount;
-          break;
-        case 's':
-        case 'arrowdown':
-          dy = moveAmount;
-          break;
-        case 'a':
-        case 'arrowleft':
-          dx = -moveAmount;
-          break;
-        case 'd':
-        case 'arrowright':
-          dx = moveAmount;
-          break;
+      pressedKeysRef.current.forEach(key => {
+        switch (key) {
+          case 'w':
+          case 'arrowup':
+            targetVelocityY -= playerSpeed;
+            break;
+          case 's':
+          case 'arrowdown':
+            targetVelocityY += playerSpeed;
+            break;
+          case 'a':
+          case 'arrowleft':
+            targetVelocityX -= playerSpeed;
+            break;
+          case 'd':
+          case 'arrowright':
+            targetVelocityX += playerSpeed;
+            break;
+        }
+      });
+      player.velocity = { x: targetVelocityX, y: targetVelocityY };
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver) return;
+      const player = gameStateRef.current.characters.find((c) => c.id === gameStateRef.current.currentPlayerId);
+      if (!player || !player.isAlive) return;
+
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        pressedKeysRef.current.add(key);
+        updatePlayerVelocity();
+      }
+
+      switch (key) {
         case 'e': { // Interact
-          // Try to interact with a berry bush first
           let interacted = false;
           for (const bush of gameStateRef.current.berryBushes) {
             const distance = Math.sqrt(
@@ -132,13 +141,12 @@ export const GameScreen: React.FC = () => {
           }
           if (interacted) break;
 
-          // Try to interact with a partner for procreation
           for (const partner of gameStateRef.current.characters) {
             if (
               partner.id !== player.id &&
               partner.isAlive &&
-              partner.type !== 'child' && // Must be adult
-              player.type !== 'child' && // Player must be adult
+              partner.type !== 'child' &&
+              player.type !== 'child' &&
               partner.gender !== player.gender &&
               player.age >= CHILD_TO_ADULT_AGE_YEARS &&
               partner.age >= CHILD_TO_ADULT_AGE_YEARS &&
@@ -159,14 +167,11 @@ export const GameScreen: React.FC = () => {
 
                 const female = player.gender === 'female' ? player : partner;
                 female.gestationEndsAtGameTime = gameStateRef.current.time + GESTATION_DAYS * HOURS_PER_GAME_DAY;
-                // Store fatherId for lineage tracking
-                // Simplified: assuming player is male, partner is female as per initial setup for first procreation
-                if (female.id === player.id) { // player is female
+                if (female.id === player.id) {
                   female.fatherId = partner.id;
-                } else { // partner is female
+                } else {
                   female.fatherId = player.id;
                 }
-
                 console.log(
                   `Procreation initiated between ${player.id} and ${partner.id}. Gestation ends at ${female.gestationEndsAtGameTime}`,
                 );
@@ -182,23 +187,25 @@ export const GameScreen: React.FC = () => {
             player.hunger = Math.max(0, player.hunger - BERRY_NUTRITION);
           }
           break;
-        default:
-          return; // Exit if not a handled key
       }
+    };
 
-      if (dx !== 0 || dy !== 0) {
-        player.position.x = (player.position.x + dx + MAP_WIDTH) % MAP_WIDTH;
-        player.position.y = (player.position.y + dy + MAP_HEIGHT) % MAP_HEIGHT;
-        // Ensure positive result for modulo with negative numbers if necessary, though % in JS for positive divisor usually works as expected for wrapping.
-        if (player.position.x < 0) player.position.x += MAP_WIDTH;
-        if (player.position.y < 0) player.position.y += MAP_HEIGHT;
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver) return;
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        pressedKeysRef.current.delete(key);
+        updatePlayerVelocity();
       }
-      // No explicit re-render call here, relying on the next rAF tick
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isActive, appState, setAppState, startLoop, stopLoop]); // Dependencies for input handler
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isActive, appState, setAppState, startLoop, stopLoop]);
 
   return <canvas ref={canvasRef} style={{ display: 'block', background: '#2c5234' }} />;
 };

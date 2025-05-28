@@ -32,6 +32,7 @@ export interface Character {
   currentAction?: NPCAction;
   targetBushId?: string;
   targetPosition?: Position;
+  velocity: Position;
 }
 
 export interface BerryBush {

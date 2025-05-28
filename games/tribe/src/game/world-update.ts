@@ -20,8 +20,8 @@ import {
   HUNGER_MOVEMENT_THRESHOLD,
   MAP_WIDTH,
   MAP_HEIGHT,
-} from './world-types';
-import { v4 as uuidv4 } from 'uuid'; // Assuming uuid is available for unique IDs
+} from "./world-types";
+import { v4 as uuidv4 } from "uuid"; // Assuming uuid is available for unique IDs
 
 /**
  * Creates a deep copy of the game state.
@@ -87,73 +87,72 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Aging
     character.age += gameHoursDelta / HOURS_PER_GAME_DAY / 365.0;
-    if (character.type === 'child' && character.age >= CHILD_TO_ADULT_AGE_YEARS) {
-      character.type = 'partner'; // Promote to partner, player type is assigned on succession
+    if (character.type === "child" && character.age >= CHILD_TO_ADULT_AGE_YEARS) {
+      character.type = "partner"; // Promote to partner, player type is assigned on succession
     }
 
     // Hunger
-    // TODO: Implement GDD rule: "If parents have no berries, the child's hunger increases at a faster rate than an adult's."
-    // This requires checking parent inventory, which is complex if parents are not directly linked or accessible here easily.
-    // For MVP, all characters (including children) might have the same hunger increase rate.
     character.hunger += HUNGER_INCREASE_PER_HOUR * gameHoursDelta;
     character.hunger = Math.max(0, Math.min(character.hunger, MAX_HUNGER));
 
     // Death by Hunger
     if (character.hunger >= MAX_HUNGER) {
       character.isAlive = false;
-      character.causeOfDeath = 'hunger';
+      character.causeOfDeath = "hunger";
+      character.velocity = { x: 0, y: 0 }; // Stop movement on death
     }
 
     // Death by Old Age
     if (character.age >= MAX_AGE_YEARS) {
       character.isAlive = false;
-      character.causeOfDeath = 'oldAge';
+      character.causeOfDeath = "oldAge";
+      character.velocity = { x: 0, y: 0 }; // Stop movement on death
     }
 
     // Gestation & Birth
     if (
-      character.gender === 'female' &&
+      character.gender === "female" &&
       character.gestationEndsAtGameTime &&
       newState.time >= character.gestationEndsAtGameTime
     ) {
-      const father = newState.characters.find((c) => c.id === character.fatherId); // Assuming fatherId is set during procreation
+      const father = newState.characters.find((c) => c.id === character.fatherId);
       const newChild: Character = {
         id: uuidv4(),
-        type: 'child',
-        gender: Math.random() < 0.5 ? 'male' : 'female',
+        type: "child",
+        gender: Math.random() < 0.5 ? "male" : "female",
         age: 0,
-        hunger: 50, // Initial hunger for a newborn
-        position: { ...character.position }, // Born at mother's position
+        hunger: 50,
+        position: { ...character.position },
         inventory: 0,
         isAlive: true,
         procreationCooldownEndsAtGameTime: 0,
         motherId: character.id,
-        fatherId: father?.id, // May need to ensure fatherId is always set if procreation logic implies it
-        causeOfDeath: 'none',
-        currentAction: 'idle', // Initialize NPC action
+        fatherId: father?.id,
+        causeOfDeath: "none",
+        currentAction: "idle",
+        velocity: { x: 0, y: 0 }, // Initialize velocity
       };
       newCharacters.push(newChild);
-      character.gestationEndsAtGameTime = undefined; // Clear gestation
+      character.gestationEndsAtGameTime = undefined;
     }
 
     // NPC AI Logic for adult NPCs (partners)
-    if (character.isAlive && character.id !== newState.currentPlayerId && character.type === 'partner') {
-      // Initialize currentAction if not set
+    if (character.isAlive && character.id !== newState.currentPlayerId && character.type === "partner") {
       if (!character.currentAction) {
-        character.currentAction = 'idle';
+        character.currentAction = "idle";
+      }
+      if (!character.velocity) {
+        character.velocity = { x: 0, y: 0 }; // Ensure velocity is initialized
       }
 
-      // Eating Logic: If hungry enough and has berries, eat one
       if (character.hunger > NPC_EAT_FOOD_HUNGER_THRESHOLD && character.inventory > 0) {
         character.inventory--;
         character.hunger = Math.max(0, character.hunger - BERRY_NUTRITION);
-        character.currentAction = 'eatingBerry';
-      }
-      // Food Seeking & Collection Logic
-      else if (character.hunger > NPC_SEEK_FOOD_HUNGER_THRESHOLD && character.inventory < PLAYER_MAX_INVENTORY) {
-        // If not currently moving to a bush or target is invalid, find a new target
+        character.currentAction = "eatingBerry";
+        character.velocity = { x: 0, y: 0 }; // Stop while eating
+      } else if (character.hunger > NPC_SEEK_FOOD_HUNGER_THRESHOLD && character.inventory < PLAYER_MAX_INVENTORY) {
         if (
-          character.currentAction !== 'movingToBush' ||
+          character.currentAction !== "movingToBush" ||
           !character.targetBushId ||
           !character.targetPosition ||
           !newState.berryBushes.find((b) => b.id === character.targetBushId && b.berriesAvailable > 0)
@@ -162,80 +161,74 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
           if (nearestBush) {
             character.targetBushId = nearestBush.id;
             character.targetPosition = { ...nearestBush.position };
-            character.currentAction = 'movingToBush';
+            character.currentAction = "movingToBush";
           } else {
-            character.currentAction = 'idle';
+            character.currentAction = "idle";
             character.targetBushId = undefined;
             character.targetPosition = undefined;
+            character.velocity = { x: 0, y: 0 };
           }
         }
 
-        // If moving to bush and target is valid
-        if (character.currentAction === 'movingToBush' && character.targetPosition && character.targetBushId) {
+        if (character.currentAction === "movingToBush" && character.targetPosition && character.targetBushId) {
           const targetBush = newState.berryBushes.find((b) => b.id === character.targetBushId);
-
-          // Check if target bush is still valid
           if (!targetBush || targetBush.berriesAvailable <= 0) {
-            character.currentAction = 'idle';
+            character.currentAction = "idle";
             character.targetBushId = undefined;
             character.targetPosition = undefined;
+            character.velocity = { x: 0, y: 0 };
           } else {
             const distanceToBush = distance(character.position, character.targetPosition);
-
-            // If at the bush (within interaction range)
             if (distanceToBush < INTERACTION_RANGE) {
               if (character.inventory < PLAYER_MAX_INVENTORY && targetBush.berriesAvailable > 0) {
-                // Collect berry
                 targetBush.berriesAvailable--;
                 character.inventory++;
-                character.currentAction = 'collectingBerry';
-                // Reset to idle after collecting
-                character.currentAction = 'idle';
-                character.targetBushId = undefined;
-                character.targetPosition = undefined;
-              } else {
-                // Cannot collect (inventory full or no berries)
-                character.currentAction = 'idle';
-                character.targetBushId = undefined;
-                character.targetPosition = undefined;
-              }
+                character.currentAction = "collectingBerry";
+              } // Else, cannot collect (inventory full or no berries)
+              character.currentAction = "idle";
+              character.targetBushId = undefined;
+              character.targetPosition = undefined;
+              character.velocity = { x: 0, y: 0 }; // Stop after reaching/collecting
             } else {
-              // Move towards the bush
+              // Move towards the bush by setting velocity
               const dx = character.targetPosition.x - character.position.x;
               const dy = character.targetPosition.y - character.position.y;
-              const moveDistance = Math.sqrt(dx * dx + dy * dy);
-
-              if (moveDistance > 0) {
-                // Normalize direction
-                const moveX = dx / moveDistance;
-                const moveY = dy / moveDistance;
-
-                // Calculate speed (apply hunger modifier if needed)
-                let speed = BASE_SPEED_PIXELS_PER_SECOND;
-                if (character.hunger > HUNGER_MOVEMENT_THRESHOLD) {
-                  speed *= HUNGER_SPEED_MULTIPLIER;
-                }
-
-                // Update position
-                const moveAmount = speed * realDeltaTimeSeconds;
-                character.position.x += moveX * moveAmount;
-                character.position.y += moveY * moveAmount;
-
-                // Apply world wrapping
-                character.position.x = (character.position.x + MAP_WIDTH) % MAP_WIDTH;
-                character.position.y = (character.position.y + MAP_HEIGHT) % MAP_HEIGHT;
-                if (character.position.x < 0) character.position.x += MAP_WIDTH;
-                if (character.position.y < 0) character.position.y += MAP_HEIGHT;
+              const moveMagnitude = Math.sqrt(dx * dx + dy * dy);
+              let speed = BASE_SPEED_PIXELS_PER_SECOND;
+              if (character.hunger > HUNGER_MOVEMENT_THRESHOLD) {
+                speed *= HUNGER_SPEED_MULTIPLIER;
+              }
+              if (moveMagnitude > 0) {
+                character.velocity.x = (dx / moveMagnitude) * speed;
+                character.velocity.y = (dy / moveMagnitude) * speed;
+              } else {
+                character.velocity = { x: 0, y: 0 }; // Should not happen if distanceToBush > INTERACTION_RANGE
               }
             }
           }
         }
       } else {
-        // Not hungry enough to seek food or inventory is full
-        character.currentAction = 'idle';
+        character.currentAction = "idle";
         character.targetBushId = undefined;
         character.targetPosition = undefined;
+        if (character.id !== newState.currentPlayerId) { // Only reset NPC velocity if idle
+            character.velocity = { x: 0, y: 0 };
+        }
       }
+    }
+
+    // Universal Position Update based on Velocity
+    if (character.isAlive && character.velocity) {
+      const dx = character.velocity.x * realDeltaTimeSeconds;
+      const dy = character.velocity.y * realDeltaTimeSeconds;
+      character.position.x += dx;
+      character.position.y += dy;
+
+      // Apply world wrapping
+      character.position.x = (character.position.x + MAP_WIDTH) % MAP_WIDTH;
+      character.position.y = (character.position.y + MAP_HEIGHT) % MAP_HEIGHT;
+      if (character.position.x < 0) character.position.x += MAP_WIDTH;
+      if (character.position.y < 0) character.position.y += MAP_HEIGHT;
     }
 
     newCharacters.push(character);
@@ -265,27 +258,16 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
       livingOffspring.sort((a, b) => b.age - a.age); // Sort by age, descending (oldest first)
       const heir = livingOffspring[0];
       newState.currentPlayerId = heir.id;
-      // If heir was a child and now becomes player, their type might need adjustment if player interactions differ
-      // For now, the 'player' type is mainly a tag for control, and 'partner' for adult non-player.
-      // If the heir is a child who just became adult in this same tick, type would be 'partner'.
-      // If still a child, they become a child player. GDD implies control transfers regardless of age if they are the oldest.
-      // The GDD states "seamlessly transition control to the next generation (oldest offspring)".
-
-      // // It also says "If a character reaches maximum age and has no living offspring, it results in a game over".
-      // This implies children can inherit.
-
-      if (
-        newState.characters.find((c) => c.id === heir.id)!.type === 'child' &&
-        newState.characters.find((c) => c.id === heir.id)!.age < CHILD_TO_ADULT_AGE_YEARS
-      ) {
-        // Player is a child, this is fine by GDD.
-      } else {
-        newState.characters.find((c) => c.id === heir.id)!.type = 'player'; // Or ensure it's marked as player if it was 'partner'
+      const heirCharacter = newState.characters.find((c) => c.id === heir.id)!;
+      heirCharacter.type = "player"; // Explicitly set heir as player type
+      // Ensure heir also has velocity initialized if it wasn't already (e.g. if it was a child promoted this tick)
+      if (!heirCharacter.velocity) {
+        heirCharacter.velocity = { x: 0, y: 0 };
       }
       newState.generationCount++;
     } else {
       newState.gameOver = true;
-      newState.causeOfGameOver = `Lineage Extinct: Player died of ${currentPlayer.causeOfDeath || 'unknown reasons'}.`;
+      newState.causeOfGameOver = `Lineage Extinct: Player died of ${currentPlayer.causeOfDeath || "unknown reasons"}.`;
       newState.currentPlayerId = null;
     }
   }
