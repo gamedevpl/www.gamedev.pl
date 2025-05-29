@@ -12,14 +12,7 @@ export type Position = {
 export type CharacterType = 'player' | 'partner' | 'child';
 export type Gender = 'male' | 'female';
 export type CauseOfDeath = 'hunger' | 'oldAge' | 'none';
-export type NPCAction =
-  | 'idle'
-  | 'seekingFood'
-  | 'movingToBush'
-  | 'collectingBerry'
-  | 'eatingBerry'
-  | 'childWandering'
-  | 'childSeekingParentForFood';
+export type NPCAction = 'idle' | 'seekingFood' | 'movingToBush' | 'collectingBerry' | 'eatingBerry';
 
 // Entity Interfaces
 export interface Character {
@@ -73,7 +66,8 @@ export const PLAYER_INITIAL_AGE: number = 20; // years
 export const PARTNER_INITIAL_AGE: number = 20; // years
 export const INITIAL_HUNGER: number = 50; // 0-100
 export const MAX_HUNGER: number = 100;
-export const HUNGER_INCREASE_PER_HOUR: number = 0.5; // hunger points per game hour for adults
+export const HUNGER_INCREASE_PER_HOUR: number = 0.5; // hunger points per game hour
+export const CHILD_HUNGER_INCREASE_MULTIPLIER: number = 2.0; // Rate multiplier for unfed children
 export const HUNGER_MOVEMENT_THRESHOLD: number = 80; // Hunger level above which movement is slowed
 export const HUNGER_PROCREATION_THRESHOLD: number = 95; // Hunger level above which procreation is not possible
 export const MAX_AGE_YEARS: number = 60; // years
@@ -104,7 +98,7 @@ export const BERRY_REGEN_PER_DAY: number = 1; // berries regenerated per bush pe
 // Time Constants
 export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10;
-export const REAL_SECONDS_PER_GAME_YEAR = 3;
+export const REAL_SECONDS_PER_GAME_YEAR = 30;
 
 // World and Movement Constants
 export const MAP_WIDTH: number = 800; // pixels

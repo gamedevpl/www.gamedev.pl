@@ -92,7 +92,7 @@ export const GameScreen: React.FC = () => {
       let targetVelocityX = 0;
       let targetVelocityY = 0;
 
-      pressedKeysRef.current.forEach(key => {
+      pressedKeysRef.current.forEach((key) => {
         switch (key) {
           case 'w':
           case 'arrowup':
@@ -127,9 +127,10 @@ export const GameScreen: React.FC = () => {
       }
 
       switch (key) {
-        case 'e': { // Interact
+        case 'e': {
+          // Interact
           let interacted = false;
-          
+
           // Berry Bush Interaction
           for (const bush of gameStateRef.current.berryBushes) {
             const distance = Math.sqrt(
