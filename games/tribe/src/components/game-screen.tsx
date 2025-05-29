@@ -17,6 +17,7 @@ import {
   PLAYER_MAX_INVENTORY,
   CHILD_TO_ADULT_AGE_YEARS,
   HUNGER_PROCREATION_THRESHOLD,
+  CHILD_HUNGER_THRESHOLD_FOR_SEEKING_PARENT,
 } from '../game/world-types';
 import { useGameContext } from '../context/game-context';
 import { renderGame } from '../game/render';
@@ -128,6 +129,8 @@ export const GameScreen: React.FC = () => {
       switch (key) {
         case 'e': { // Interact
           let interacted = false;
+          
+          // Berry Bush Interaction
           for (const bush of gameStateRef.current.berryBushes) {
             const distance = Math.sqrt(
               (player.position.x - bush.position.x) ** 2 + (player.position.y - bush.position.y) ** 2,
@@ -141,6 +144,7 @@ export const GameScreen: React.FC = () => {
           }
           if (interacted) break;
 
+          // Procreation Interaction
           for (const partner of gameStateRef.current.characters) {
             if (
               partner.id !== player.id &&
@@ -175,6 +179,31 @@ export const GameScreen: React.FC = () => {
                 console.log(
                   `Procreation initiated between ${player.id} and ${partner.id}. Gestation ends at ${female.gestationEndsAtGameTime}`,
                 );
+                interacted = true;
+                break;
+              }
+            }
+          }
+          if (interacted) break;
+
+          // Child Feeding Interaction
+          for (const character of gameStateRef.current.characters) {
+            if (
+              character.id !== player.id &&
+              character.isAlive &&
+              character.type === 'child' &&
+              player.inventory > 0 &&
+              character.hunger >= CHILD_HUNGER_THRESHOLD_FOR_SEEKING_PARENT
+            ) {
+              const distance = Math.sqrt(
+                (player.position.x - character.position.x) ** 2 + (player.position.y - character.position.y) ** 2,
+              );
+              if (distance < INTERACTION_RANGE) {
+                player.inventory--;
+                character.hunger = Math.max(0, character.hunger - BERRY_NUTRITION);
+                character.velocity = { x: 0, y: 0 }; // Make child pause briefly
+                character.currentAction = 'idle';
+                interacted = true;
                 break;
               }
             }
