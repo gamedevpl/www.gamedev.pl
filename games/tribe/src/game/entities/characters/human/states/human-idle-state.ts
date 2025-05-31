@@ -1,15 +1,13 @@
-import { State } from '../../../../state-machine/state-machine-types';
-import { HUMAN_HUNGER_DEATH, HUMAN_MAX_AGE_YEARS, HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../../world-consts';
-import { HumanEntity } from '../human-types';
+import { State } from "../../../../state-machine/state-machine-types";
+import { HUMAN_HUNGER_THRESHOLD_SLOW } from "../../../../world-consts";
+import { HumanEntity } from "../human-types";
 import {
   HumanStateData,
   HUMAN_IDLE,
-  HUMAN_DYING,
-  HUMAN_HUNGRY,
   HUMAN_MOVING,
   HUMAN_GATHERING,
   HUMAN_EATING,
-} from './human-state-types';
+} from "./human-state-types";
 
 // Define the human idle state
 export const humanIdleState: State<HumanEntity, HumanStateData> = {
@@ -17,44 +15,20 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    // Check for death conditions
-    if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          cause: 'hunger',
-        },
-      };
-    }
-
-    if (entity.age >= HUMAN_MAX_AGE_YEARS) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          cause: 'oldAge',
-        },
-      };
-    }
-
-    // Check for hunger threshold
+    // Apply slow debuff if hunger is high
     if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      return {
-        nextState: HUMAN_HUNGRY,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-        },
-      };
+      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== "slow");
+      entity.debuffs.push({
+        type: "slow",
+        startTime: updateContext.gameState.time,
+        duration: 0.1, // Very short duration, will be reapplied each update cycle while condition met
+      });
+    } else {
+      // Remove slow debuff if hunger is not high
+      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== "slow");
     }
 
-    if (entity.activeAction === 'moving') {
+    if (entity.activeAction === "moving") {
       return {
         nextState: HUMAN_MOVING,
         data: {
@@ -66,21 +40,19 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
       };
     }
 
-    if (entity.activeAction === 'gathering') {
-      // If the entity is gathering, it should not be idle
+    if (entity.activeAction === "gathering") {
       return {
         nextState: HUMAN_GATHERING,
         data: {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          targetPosition: entity.targetPosition,
+          targetPosition: entity.targetPosition, // Target position might be relevant for gathering
         },
       };
     }
 
-    if (entity.activeAction === 'eating') {
-      // If the entity is eating, it should not be idle
+    if (entity.activeAction === "eating") {
       return {
         nextState: HUMAN_EATING,
         data: {

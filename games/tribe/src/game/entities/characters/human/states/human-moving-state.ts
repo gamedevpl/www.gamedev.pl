@@ -1,13 +1,8 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, vectorAdd } from '../../../../utils/math-utils';
-import {
-  HUMAN_HUNGER_DEATH,
-  HUMAN_MAX_AGE_YEARS,
-  HUMAN_HUNGER_THRESHOLD_SLOW,
-  HUMAN_BASE_SPEED,
-} from '../../../../world-consts';
+import { HUMAN_BASE_SPEED } from '../../../../world-consts';
 import { HumanEntity } from '../human-types';
-import { HUMAN_MOVING, HumanMovingStateData, HUMAN_DYING, HUMAN_HUNGRY, HUMAN_IDLE } from './human-state-types';
+import { HUMAN_MOVING, HumanMovingStateData, HUMAN_IDLE } from './human-state-types';
 
 const MOVEMENT_THRESHOLD = 5; // Distance to consider "close enough" to target
 
@@ -16,43 +11,6 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
   update(movingData: HumanMovingStateData, context: StateContext<HumanEntity>) {
     const { entity, updateContext } = context;
-
-    // Check for death conditions
-    if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_MOVING,
-          cause: 'hunger',
-        },
-      };
-    }
-
-    if (entity.age >= HUMAN_MAX_AGE_YEARS) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_MOVING,
-          cause: 'oldAge',
-        },
-      };
-    }
-
-    // Check for hunger threshold
-    if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      return {
-        nextState: HUMAN_HUNGRY,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_MOVING,
-        },
-      };
-    }
 
     if (entity.activeAction !== 'moving') {
       // If not actively moving, return to idle state

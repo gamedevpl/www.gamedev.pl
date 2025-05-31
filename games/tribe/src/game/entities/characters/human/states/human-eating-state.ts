@@ -1,7 +1,7 @@
-import { State } from '../../../../state-machine/state-machine-types';
-import { HUMAN_HUNGER_DEATH, HUMAN_MAX_AGE_YEARS, HUMAN_BERRY_HUNGER_REDUCTION } from '../../../../world-consts';
-import { HumanEntity } from '../human-types';
-import { HumanStateData, HUMAN_EATING, HUMAN_DYING, HUMAN_IDLE } from './human-state-types';
+import { State } from "../../../../state-machine/state-machine-types";
+import { HUMAN_BERRY_HUNGER_REDUCTION } from "../../../../world-consts";
+import { HumanEntity } from "../human-types";
+import { HumanStateData, HUMAN_EATING, HUMAN_IDLE } from "./human-state-types";
 
 // Define the human eating state
 export const humanEatingState: State<HumanEntity, HumanStateData> = {
@@ -9,32 +9,7 @@ export const humanEatingState: State<HumanEntity, HumanStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    // Check for death conditions
-    if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_EATING,
-          cause: 'hunger',
-        },
-      };
-    }
-
-    if (entity.age >= HUMAN_MAX_AGE_YEARS) {
-      return {
-        nextState: HUMAN_DYING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_EATING,
-          cause: 'oldAge',
-        },
-      };
-    }
-
-    if (entity.activeAction !== 'eating') {
+    if (entity.activeAction !== "eating") {
       // If not actively eating, return to idle state
       return {
         nextState: HUMAN_IDLE,
@@ -50,16 +25,29 @@ export const humanEatingState: State<HumanEntity, HumanStateData> = {
     if (
       entity.berries > 0 &&
       (!entity.eatingCooldownTime || updateContext.gameState.time >= entity.eatingCooldownTime) &&
-      entity.hunger > HUMAN_BERRY_HUNGER_REDUCTION
+      entity.hunger > HUMAN_BERRY_HUNGER_REDUCTION // Ensure eating is beneficial
     ) {
       entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
       entity.berries = Math.max(0, entity.berries - 1);
       entity.eatingCooldownTime = updateContext.gameState.time + 1; // 1 second cooldown after eating
     }
 
-    // After eating, return to idle
+    // After eating, or if unable to eat, human might do something else (e.g. become idle if no more berries or not hungry enough)
+    // For now, we assume it stays in eating if action is 'eating', or transitions to IDLE if action changes.
+    // If hunger is very low or no berries, the game logic/player should change activeAction.
+    if (entity.hunger <= 0 || entity.berries <= 0) {
+        return {
+            nextState: HUMAN_IDLE,
+            data: {
+                ...data,
+                enteredAt: updateContext.gameState.time,
+                previousState: HUMAN_EATING,
+            }
+        };
+    }
+
     return {
-      nextState: HUMAN_EATING,
+      nextState: HUMAN_EATING, // Remain in eating state if conditions still met / action active
       data: data,
     };
   },
