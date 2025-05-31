@@ -1,5 +1,5 @@
 import { Entity } from '../entities/entities-types';
-import { State, StateContext, StateData, StateType } from './state-machine-types';
+import { StateData, State, StateContext, StateType } from './state-machine-types';
 
 /**
  * Handles state transition, including calling exit and enter handlers

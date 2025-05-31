@@ -11,7 +11,12 @@ import {
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
   BERRY_BUSH_SPREAD_CHANCE,
   BERRY_BUSH_SPREAD_RADIUS,
+  HUMAN_INITIAL_AGE,
+  HUMAN_INITIAL_HUNGER,
+  HUMAN_MAX_AGE_YEARS,
 } from "../world-consts";
+import { HumanEntity } from "./characters/human/human-types";
+import { HUMAN_IDLE } from "./characters/human/states/human-state-types";
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -70,6 +75,27 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
     stateMachine: [BUSH_GROWING, { enteredAt: currentTime, previousState: undefined }],
   });
   return bush;
+}
+
+export function createHuman(
+  state: Entities, 
+  initialPosition: Vector2D, 
+  currentTime: number, 
+  gender: 'male' | 'female', 
+  isPlayer: boolean = false
+): HumanEntity {
+  const human = createEntity<HumanEntity>(state, "human", {
+    position: initialPosition,
+    hunger: HUMAN_INITIAL_HUNGER,
+    age: HUMAN_INITIAL_AGE,
+    gender,
+    isPlayer,
+    berries: 0,
+    maxBerries: 10, // Maximum berries a human can carry
+    maxAge: HUMAN_MAX_AGE_YEARS,
+    stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
+  });
+  return human;
 }
 
 export function updateEntity(state: Entities, entityId: EntityId, updates: Partial<Entity>): Entity | null {

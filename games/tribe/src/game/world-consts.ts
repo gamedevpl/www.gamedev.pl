@@ -15,3 +15,16 @@ export const BERRY_BUSH_SPREAD_CHANCE: number = 0.05; // 5% chance per attempt
 export const BERRY_BUSH_SPREAD_RADIUS: number = 100; // pixels
 export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 120; // 5 game days
 export const INITIAL_BERRY_BUSH_COUNT: number = 5;
+
+// Human Constants
+export const HUMAN_MAX_AGE_YEARS: number = 60; // Maximum lifespan in game years
+export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
+export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
+export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = 95; // Hunger level that prevents procreation
+export const HUMAN_HUNGER_DEATH: number = 100; // Hunger level that causes death
+export const HUMAN_BERRY_HUNGER_REDUCTION: number = 25; // How much hunger is reduced by eating a berry
+export const HUMAN_BASE_SPEED: number = 100; // Base movement speed in pixels per second
+export const HUMAN_SLOW_SPEED_MODIFIER: number = 0.5; // Speed modifier when hunger > threshold
+export const HUMAN_INTERACTION_RANGE: number = 30; // Range in pixels for interactions
+export const HUMAN_INITIAL_HUNGER: number = 50; // Initial hunger level for new humans
+export const HUMAN_INITIAL_AGE: number = 20; // Initial age in years for new humans

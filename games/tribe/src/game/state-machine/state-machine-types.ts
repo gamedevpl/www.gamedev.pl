@@ -1,13 +1,12 @@
 import { Entity } from '../entities/entities-types';
 import { UpdateContext } from '../world-types';
-import { BerryBushStateData } from '../entities/plants/berry-bush/states/bush-state-types'; // Added import
 
 export type StateType = string;
 
 /**
  * Base interface for all state data
  */
-export interface BaseStateData {
+export interface StateData {
   /** Timestamp when the state was entered */
   enteredAt: number;
   /** Previous state type */
@@ -37,7 +36,7 @@ export interface StateTransition {
 /**
  * State update function type
  */
-export type StateUpdate<T extends Entity = Entity, D extends BaseStateData = BaseStateData> = (
+export type StateUpdate<T extends Entity = Entity, D extends StateData = StateData> = (
   data: D,
   context: StateContext<T>,
 ) => StateTransition;
@@ -45,7 +44,7 @@ export type StateUpdate<T extends Entity = Entity, D extends BaseStateData = Bas
 /**
  * State definition interface
  */
-export interface State<T extends Entity = Entity, D extends BaseStateData = BaseStateData> {
+export interface State<T extends Entity = Entity, D extends StateData = StateData> {
   /** Unique identifier of the state */
   id: StateType;
   /** Function to update the state */
@@ -55,6 +54,3 @@ export interface State<T extends Entity = Entity, D extends BaseStateData = Base
   /** Optional function called when leaving the state */
   onExit?: (context: StateContext<T>, nextState: StateType) => void;
 }
-
-/** Union type for all possible state data */
-export type StateData = BaseStateData | BerryBushStateData; // Added BerryBushStateData

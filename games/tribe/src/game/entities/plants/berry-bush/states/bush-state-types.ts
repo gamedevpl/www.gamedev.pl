@@ -1,17 +1,21 @@
-import { BaseStateData } from "../../../../state-machine/state-machine-types";
+import { StateData } from '../../../../state-machine/state-machine-types';
 
-export const BUSH_GROWING = "bushGrowing";
-export const BUSH_FULL = "bushFull";
-export const BUSH_SPREADING = "bushSpreading";
-export const BUSH_DYING = "bushDying";
+export const BUSH_GROWING = 'bushGrowing';
+export const BUSH_FULL = 'bushFull';
+export const BUSH_SPREADING = 'bushSpreading';
+export const BUSH_DYING = 'bushDying';
 
-export interface BushGrowingStateData extends BaseStateData {}
-export interface BushFullStateData extends BaseStateData {}
-export interface BushSpreadingStateData extends BaseStateData {}
-export interface BushDyingStateData extends BaseStateData {}
+export interface BushGrowingStateData extends StateData {
+  state: 'growing'; // Explicitly define state for clarity
+}
+export interface BushFullStateData extends StateData {
+  state: 'full';
+}
+export interface BushSpreadingStateData extends StateData {
+  state: 'spreading';
+}
+export interface BushDyingStateData extends StateData {
+  state: 'dying';
+}
 
-export type BerryBushStateData =
-  | BushGrowingStateData
-  | BushFullStateData
-  | BushSpreadingStateData
-  | BushDyingStateData;
+export type BerryBushStateData = StateData;

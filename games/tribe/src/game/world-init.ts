@@ -1,6 +1,6 @@
-import { createEntities, createBerryBush } from "./entities/entities-update"; // Added createBerryBush
-import { GameWorldState } from "./world-types";
-import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from "./world-consts"; // Added INITIAL_BERRY_BUSH_COUNT
+import { createEntities, createBerryBush, createHuman } from './entities/entities-update'; // Added createHuman
+import { GameWorldState } from './world-types';
+import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from './world-consts'; // Added INITIAL_BERRY_BUSH_COUNT
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -15,6 +15,28 @@ export function initWorld(): GameWorldState {
     createBerryBush(entities, randomPosition, initialTime);
   }
 
+  // Define the center of the map for character spawning
+  const centerX = MAP_WIDTH / 2;
+  const centerY = MAP_HEIGHT / 2;
+
+  // Spawn player character (male) at center
+  createHuman(
+    entities,
+    { x: centerX, y: centerY },
+    initialTime,
+    'male',
+    true, // isPlayer = true
+  );
+
+  // Spawn partner character (female) near the player
+  createHuman(
+    entities,
+    { x: centerX + 50, y: centerY },
+    initialTime,
+    'female',
+    false, // isPlayer = false
+  );
+
   const initialWorldState: GameWorldState = {
     time: initialTime,
     entities: entities,
@@ -26,12 +48,7 @@ export function initWorld(): GameWorldState {
     gameOver: false,
   };
 
-  // TODO: Initialize player character and partner as per GDD
-  // Example (needs Character type and createCharacter function):
-  // const player = createCharacter(initialWorldState.entities, { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2}, initialTime, true);
-  // const partner = createCharacter(initialWorldState.entities, { x: MAP_WIDTH / 2 + 50, y: MAP_HEIGHT / 2}, initialTime, false);
-
-  console.log("Game world initialized:", initialWorldState);
+  console.log('Game world initialized:', initialWorldState);
 
   return initialWorldState;
 }
