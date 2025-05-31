@@ -26,11 +26,11 @@ export interface StateContext<T = Entity> {
 /**
  * Result of state update, including next state and its data
  */
-export interface StateTransition {
+export interface StateTransition<D extends StateData = StateData> {
   /** Next state type */
   nextState: StateType;
   /** Data for the next state */
-  data: StateData;
+  data: D;
 }
 
 /**

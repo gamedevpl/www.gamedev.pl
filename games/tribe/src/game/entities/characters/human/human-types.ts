@@ -25,4 +25,10 @@ export interface HumanEntity extends Entity {
 
   /** Maximum number of berries the human can carry. */
   maxBerries: number;
+
+  /** Current active action */
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle';
+
+  /** Target position */
+  targetPosition?: { x: number; y: number };
 }

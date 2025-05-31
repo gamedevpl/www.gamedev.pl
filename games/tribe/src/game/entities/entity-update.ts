@@ -1,7 +1,9 @@
 import { UpdateContext } from '../world-types';
 import { stateUpdate } from '../state-machine/state-machine-update';
-import { vectorScale, vectorAdd, vectorLength } from '../utils/math-utils';
+import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
 import { Entity } from './entities-types';
+import { humanUpdate } from './characters/human/human-update';
+import { HumanEntity } from './characters/human/human-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -12,10 +14,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // entity.forces.push(boundaryForce);
 
   // Apply acceleration force based on direction
-  const accelerationForce = vectorScale(
-    { x: Math.cos(entity.direction), y: Math.sin(entity.direction) },
-    entity.acceleration,
-  );
+  const accelerationForce = vectorScale(vectorNormalize(entity.direction), entity.acceleration);
   entity.forces.push(accelerationForce);
 
   // Process each active debuff
@@ -37,9 +36,6 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
 
   // Apply accumulated forces to velocity
   entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
-
-  // TODO: Introduce angular velocity
-  entity.direction = entity.targetDirection;
 
   // Zero velocity if it's too small to prevent drifting
   if (vectorLength(entity.velocity) < 0.001) {
@@ -66,5 +62,9 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Update state machine if present
   if (entity.stateMachine) {
     entity.stateMachine = stateUpdate(...entity.stateMachine, { entity, updateContext });
+  }
+
+  if (entity.type === 'human') {
+    humanUpdate(entity as HumanEntity, updateContext.deltaTime);
   }
 }

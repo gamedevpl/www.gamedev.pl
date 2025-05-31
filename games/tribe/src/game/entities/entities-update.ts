@@ -1,9 +1,9 @@
-import { Entities, Entity, EntityId, EntityType } from "./entities-types";
-import { UpdateContext } from "../world-types";
-import { entityUpdate } from "./entity-update";
-import { Vector2D } from "../utils/math-types";
-import { BerryBushEntity } from "./plants/berry-bush/berry-bush-types";
-import { BUSH_GROWING } from "./plants/berry-bush/states/bush-state-types";
+import { Entities, Entity, EntityId, EntityType } from './entities-types';
+import { UpdateContext } from '../world-types';
+import { entityUpdate } from './entity-update';
+import { Vector2D } from '../utils/math-types';
+import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
+import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
   BERRY_BUSH_INITIAL_BERRIES,
   BERRY_BUSH_MAX_BERRIES,
@@ -14,9 +14,9 @@ import {
   HUMAN_INITIAL_AGE,
   HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
-} from "../world-consts";
-import { HumanEntity } from "./characters/human/human-types";
-import { HUMAN_IDLE } from "./characters/human/states/human-state-types";
+} from '../world-consts';
+import { HumanEntity } from './characters/human/human-types';
+import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -39,21 +39,20 @@ export function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
   initialState: Partial<Entity> &
-    Omit<T, "id" | "type" | "velocity" | "forces" | "direction" | "targetDirection" | "acceleration" | "debuffs">,
+    Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'targetDirection' | 'acceleration' | 'debuffs'>,
 ): T {
-  const entity: T = {
+  const entity: Entity = {
     id: state.nextEntityId++,
     type,
     velocity: { x: 0, y: 0 },
-    direction: 0,
-    targetDirection: 0,
+    direction: { x: 0, y: 0 },
     acceleration: 0,
     forces: [],
     debuffs: [],
     ...initialState,
-  } as unknown as T;
+  };
   state.entities.set(entity.id, entity);
-  return entity;
+  return entity as T;
 }
 
 export function createBerryBush(state: Entities, initialPosition: Vector2D, currentTime: number): BerryBushEntity {
@@ -61,7 +60,7 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
   // If BERRY_BUSH_REGENERATION_HOURS is hours per berry, then rate is 1 / hours_per_berry
   const regenerationRate = BERRY_BUSH_REGENERATION_HOURS > 0 ? 1 / BERRY_BUSH_REGENERATION_HOURS : 0;
 
-  const bush = createEntity<BerryBushEntity>(state, "berryBush", {
+  const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
     currentBerries: BERRY_BUSH_INITIAL_BERRIES,
     maxBerries: BERRY_BUSH_MAX_BERRIES,
@@ -78,13 +77,13 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
 }
 
 export function createHuman(
-  state: Entities, 
-  initialPosition: Vector2D, 
-  currentTime: number, 
-  gender: 'male' | 'female', 
-  isPlayer: boolean = false
+  state: Entities,
+  initialPosition: Vector2D,
+  currentTime: number,
+  gender: 'male' | 'female',
+  isPlayer: boolean = false,
 ): HumanEntity {
-  const human = createEntity<HumanEntity>(state, "human", {
+  const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
     hunger: HUMAN_INITIAL_HUNGER,
     age: HUMAN_INITIAL_AGE,

@@ -46,9 +46,6 @@ export const GameScreen: React.FC = () => {
     }
     const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
 
-    // Handle player movement based on keys pressed
-    handlePlayerMovement();
-
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     renderGame(ctxRef.current, gameStateRef.current);
     lastUpdateTimeRef.current = time;
@@ -60,36 +57,6 @@ export const GameScreen: React.FC = () => {
       });
     }
   }, false);
-
-  const handlePlayerMovement = () => {
-    // Find the player entity
-    const playerEntity = findPlayerEntity();
-    if (!playerEntity) return;
-
-    // Calculate movement direction based on keys pressed
-    let directionX = 0;
-    let directionY = 0;
-
-    if (keysPressed.current.has('w') || keysPressed.current.has('arrowup')) directionY -= 1;
-    if (keysPressed.current.has('s') || keysPressed.current.has('arrowdown')) directionY += 1;
-    if (keysPressed.current.has('a') || keysPressed.current.has('arrowleft')) directionX -= 1;
-    if (keysPressed.current.has('d') || keysPressed.current.has('arrowright')) directionX += 1;
-
-    // Normalize diagonal movement
-    if (directionX !== 0 && directionY !== 0) {
-      const length = Math.sqrt(directionX * directionX + directionY * directionY);
-      directionX /= length;
-      directionY /= length;
-    }
-
-    // Set player direction and acceleration
-    if (directionX !== 0 || directionY !== 0) {
-      playerEntity.targetDirection = Math.atan2(directionY, directionX);
-      playerEntity.acceleration = 10; // Adjust as needed
-    } else {
-      playerEntity.acceleration = 0;
-    }
-  };
 
   const findPlayerEntity = (): HumanEntity | undefined => {
     for (const entity of gameStateRef.current.entities.entities.values()) {
@@ -111,17 +78,31 @@ export const GameScreen: React.FC = () => {
 
       const key = event.key.toLowerCase();
       keysPressed.current.add(key);
+      const playerEntity = findPlayerEntity();
+
+      if (!playerEntity) return;
 
       // Handle interaction and eating
       if (key === 'e') {
-        // TODO: Implement interaction with nearby entities (e.g., berry bushes)
+        playerEntity.activeAction = 'gathering'; // Set to gathering when 'e' is pressed
       } else if (key === 'f') {
-        // TODO: Implement eating from inventory
-        const playerEntity = findPlayerEntity();
-        if (playerEntity && playerEntity.berries > 0) {
-          playerEntity.berries--;
-          playerEntity.hunger = Math.max(0, playerEntity.hunger - 25); // Reduce hunger by 25 points
-        }
+        playerEntity.activeAction = 'eating'; // Set to eating when 'f' is pressed
+      } else if (key === 'arrowup' || key === 'w') {
+        playerEntity.direction.y = -1; // Move up
+        playerEntity.activeAction = 'moving';
+      } else if (key === 'arrowdown' || key === 's') {
+        playerEntity.direction.y = 1; // Move down
+        playerEntity.activeAction = 'moving';
+      } else if (key === 'arrowleft' || key === 'a') {
+        playerEntity.direction.x = -1; // Move left
+        playerEntity.activeAction = 'moving';
+      } else if (key === 'arrowright' || key === 'd') {
+        playerEntity.direction.x = 1; // Move right
+        playerEntity.activeAction = 'moving';
+      } else if (key === ' ') {
+        playerEntity.activeAction = 'idle'; // Set to idle when space is pressed
+      } else {
+        return; // Ignore other keys
       }
     };
 
@@ -129,6 +110,43 @@ export const GameScreen: React.FC = () => {
       if (!isActive() || gameStateRef.current.gameOver) return;
       const key = event.key.toLowerCase();
       keysPressed.current.delete(key);
+
+      const playerEntity = findPlayerEntity();
+      if (!playerEntity) return;
+
+      if (key === 'arrowup' || key === 'w') {
+        playerEntity.direction.y = 0; // Stop moving up
+      } else if (key === 'arrowdown' || key === 's') {
+        playerEntity.direction.y = 0; // Stop moving down
+      } else if (key === 'arrowleft' || key === 'a') {
+        playerEntity.direction.x = 0; // Stop moving left
+      } else if (key === 'arrowright' || key === 'd') {
+        playerEntity.direction.x = 0; // Stop moving right
+      }
+
+      // if none of the movement keys are pressed, set activeAction to idle
+      if (
+        !keysPressed.current.has('arrowup') &&
+        !keysPressed.current.has('arrowdown') &&
+        !keysPressed.current.has('arrowleft') &&
+        !keysPressed.current.has('arrowright') &&
+        !keysPressed.current.has('w') &&
+        !keysPressed.current.has('a') &&
+        !keysPressed.current.has('s') &&
+        !keysPressed.current.has('d')
+      ) {
+        if (playerEntity && playerEntity.activeAction === 'moving') {
+          playerEntity.activeAction = 'idle'; // Set to idle when no movement keys are pressed
+        }
+      }
+
+      if (
+        !keysPressed.current.has('e') &&
+        !keysPressed.current.has('f') &&
+        (playerEntity.activeAction === 'gathering' || playerEntity.activeAction === 'eating')
+      ) {
+        playerEntity.activeAction = 'idle'; // Set to idle when not gathering or eating
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

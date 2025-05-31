@@ -11,13 +11,14 @@ export interface Entity {
   isPlayer?: boolean;
   type: EntityType;
   position: Vector2D;
-  direction: number;
-  targetDirection: number;
+  direction: Vector2D;
   acceleration: number;
   forces: Vector2D[];
   velocity: Vector2D;
   stateMachine?: [StateType, StateData];
   debuffs: ActiveDebuff[];
+  gatheringCooldownTime?: number;
+  eatingCooldownTime?: number;
 }
 
 /**
