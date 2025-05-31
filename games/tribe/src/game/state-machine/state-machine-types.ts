@@ -1,5 +1,6 @@
 import { Entity } from '../entities/entities-types';
 import { UpdateContext } from '../world-types';
+import { BerryBushStateData } from '../entities/plants/berry-bush/states/bush-state-types'; // Added import
 
 export type StateType = string;
 
@@ -56,4 +57,4 @@ export interface State<T extends Entity = Entity, D extends BaseStateData = Base
 }
 
 /** Union type for all possible state data */
-export type StateData = BaseStateData;
+export type StateData = BaseStateData | BerryBushStateData; // Added BerryBushStateData

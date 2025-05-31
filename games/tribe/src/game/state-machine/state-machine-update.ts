@@ -6,10 +6,12 @@ import {
   isStateTransitionNeeded,
   logStateHandlerNotFound,
 } from './state-machine-utils';
+import { allBerryBushStates } from '../entities/plants/berry-bush/states'; // Added import
 
 // Combine all states
 const STATES = [
-  // TODO: add states
+  ...allBerryBushStates, // Added berry bush states
+  // TODO: add other states
 ] as unknown as State<Entity, StateData>[];
 
 /**

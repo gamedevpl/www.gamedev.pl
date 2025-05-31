@@ -1,5 +1,8 @@
 import { GameWorldState } from './world-types';
 import { HOURS_PER_GAME_DAY } from './world-consts';
+import { renderBerryBush } from './render/render-bush'; // Added import
+import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types'; // Added import
+import { Entity } from './entities/entities-types'; // Added import for type casting
 
 export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -23,7 +26,13 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     return;
   }
 
-  // TODO: Implement rendering of entities like characters, berry bushes, etc.
+  // Render entities
+  gameState.entities.entities.forEach((entity: Entity) => {
+    if (entity.type === 'berryBush') {
+      renderBerryBush(ctx, entity as BerryBushEntity);
+    }
+    // TODO: Implement rendering for other entity types like characters
+  });
 
   // Render UI
   ctx.fillStyle = 'white';
@@ -33,5 +42,12 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
   const lineHeight = 22;
 
   ctx.fillText(`Generation: ${gameState.generationCount}`, 20, lineHeight * uiLine++);
-  ctx.fillText(`Time: Day ${Math.floor(gameState.time / HOURS_PER_GAME_DAY)}`, 20, lineHeight * uiLine++);
+  ctx.fillText(
+    `Time: Day ${Math.floor(gameState.time / HOURS_PER_GAME_DAY)} Hour: ${(gameState.time % HOURS_PER_GAME_DAY).toFixed(
+      0,
+    )}`,
+    20,
+    lineHeight * uiLine++,
+  );
+  // TODO: Add rendering for player-specific UI (hunger, berries)
 }
