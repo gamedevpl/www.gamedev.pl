@@ -26,9 +26,9 @@ export interface HumanEntity extends Entity {
   /** Maximum number of berries the human can carry. */
   maxBerries: number;
 
-  /** Current active action */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle';
+  /** Current active action. Set by player input or AI decision. */
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle'; // Current action: e.g., 'moving', 'eating', 'gathering', 'idle'. Set by player input or AI decision.
 
-  /** Target position */
-  targetPosition?: { x: number; y: number };
+  /** Target position for 'moving' action. Set by player input or AI decision. */
+  targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.
 }

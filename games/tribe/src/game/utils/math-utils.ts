@@ -1,5 +1,4 @@
 import { Vector2D } from './math-types';
-import { Entity, EntityId } from '../entities/entities-types'; // Added import
 
 export function vectorAdd(v1: Vector2D, v2: Vector2D): Vector2D {
   return {
@@ -85,74 +84,3 @@ export function vectorRotate(v: Vector2D, angle: number): Vector2D {
     y: v.x * sin + v.y * cos,
   };
 }
-
-/**
- * Generates a random position within a radius of a center point, accounting for world wrapping
- * @param center The center position
- * @param radius The maximum distance from the center
- * @param worldWidth The width of the world
- * @param worldHeight The height of the world
- * @returns A new random position
- */
-export function getRandomNearbyPosition(center: Vector2D, radius: number, worldWidth: number, worldHeight: number): Vector2D {
-  // Generate a random angle in radians (0 to 2π)
-  const randomAngle = Math.random() * Math.PI * 2;
-  
-  // Generate a random distance (0 to radius)
-  // Using square root to ensure uniform distribution in the circle
-  const randomDistance = Math.sqrt(Math.random()) * radius;
-  
-  // Calculate the offset from the center
-  const offset = {
-    x: Math.cos(randomAngle) * randomDistance,
-    y: Math.sin(randomAngle) * randomDistance
-  };
-  
-  // Add the offset to the center
-  const newPosition = vectorAdd(center, offset);
-  
-  // Wrap the position to ensure it's within world boundaries
-  return {
-    x: ((newPosition.x % worldWidth) + worldWidth) % worldWidth,
-    y: ((newPosition.y % worldHeight) + worldHeight) % worldHeight
-  };
-}
-
-/**
- * Checks if a position is occupied by any entity within a specified radius
- * @param position The position to check
- * @param entities Map of all entities
- * @param checkRadius The radius to check for occupation
- * @returns True if the position is occupied, false otherwise
- */
-export function isPositionOccupied(position: Vector2D, entities: Map<EntityId, Entity>, checkRadius: number): boolean {
-  // Iterate through all entities
-  for (const entity of entities.values()) {
-    // Skip checking against the position itself if it's an entity
-    if (entity.position === position) continue;
-    
-    // Calculate the wrapped distance between the entity and the position
-    // Note: This requires worldWidth and worldHeight, which we don't have here
-    // Ideally, this function would also take worldWidth and worldHeight as parameters
-    // For now, we'll assume entities have access to these values or use a large value
-    const WORLD_WIDTH = 10000; // Use a large value as fallback
-    const WORLD_HEIGHT = 10000; // Use a large value as fallback
-    
-    const distance = calculateWrappedDistance(
-      position,
-      entity.position,
-      WORLD_WIDTH,
-      WORLD_HEIGHT
-    );
-    
-    // If the distance is less than the check radius, the position is occupied
-    if (distance < checkRadius) {
-      return true;
-    }
-  }
-  
-  // If we've checked all entities and none are within the radius, the position is not occupied
-  return false;
-}
-
-// Removed calculateBoundaryForce as it's replaced by world wrapping

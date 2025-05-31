@@ -28,3 +28,9 @@ export const HUMAN_SLOW_SPEED_MODIFIER: number = 0.5; // Speed modifier when hun
 export const HUMAN_INTERACTION_RANGE: number = 30; // Range in pixels for interactions
 export const HUMAN_INITIAL_HUNGER: number = 50; // Initial hunger level for new humans
 export const HUMAN_INITIAL_AGE: number = 20; // Initial age in years for new humans
+
+// Human AI Constants
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 70; // AI decides to eat if hunger >= this and has berries
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
+export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
+export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering

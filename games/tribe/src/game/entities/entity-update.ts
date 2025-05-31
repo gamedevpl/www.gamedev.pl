@@ -1,9 +1,10 @@
-import { UpdateContext } from "../world-types";
-import { stateUpdate } from "../state-machine/state-machine-update";
-import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from "../utils/math-utils";
-import { Entity } from "./entities-types";
-import { humanUpdate } from "./characters/human/human-update";
-import { HumanEntity } from "./characters/human/human-types";
+import { UpdateContext } from '../world-types';
+import { stateUpdate } from '../state-machine/state-machine-update';
+import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
+import { Entity } from './entities-types';
+import { humanUpdate } from './characters/human/human-update';
+import { HumanEntity } from './characters/human/human-types';
+import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -21,7 +22,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.debuffs.forEach((debuff) => {
     const debuffElapsed = updateContext.gameState.time - debuff.startTime;
 
-    if (debuffElapsed < debuff.duration && debuff.type === "slow") {
+    if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
       // Apply debuff effect - currently all debuffs reduce velocity by 50%
       // Multiple debuffs stack multiplicatively
       entity.velocity = vectorScale(entity.velocity, 0.5);
@@ -59,13 +60,19 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Reset forces for the next frame
   entity.forces = [];
 
+  // Specific entity type updates (e.g., physiological changes)
+  if (entity.type === 'human') {
+    // Pass the full updateContext and deltaTime to humanUpdate
+    humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
+  }
+
+  // AI decision making for non-player humans
+  if (entity.type === 'human' && !(entity as HumanEntity).isPlayer) {
+    humanAIUpdate(entity as HumanEntity, updateContext);
+  }
+
   // Update state machine if present
   if (entity.stateMachine) {
     entity.stateMachine = stateUpdate(...entity.stateMachine, { entity, updateContext });
-  }
-
-  if (entity.type === "human") {
-    // Pass the full updateContext and deltaTime to humanUpdate
-    humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
   }
 }

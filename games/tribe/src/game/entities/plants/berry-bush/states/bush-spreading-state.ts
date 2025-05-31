@@ -1,7 +1,8 @@
 import { State, StateContext, StateTransition } from '../../../../state-machine/state-machine-types';
 import { BerryBushEntity } from '../berry-bush-types';
 import { BushSpreadingStateData, BUSH_DYING, BUSH_FULL, BUSH_SPREADING } from './bush-state-types';
-import { getRandomNearbyPosition, isPositionOccupied } from '../../../../utils/math-utils';
+import { isPositionOccupied } from '../../../../utils/world-utils';
+import { getRandomNearbyPosition } from '../../../../utils/world-utils';
 import { createBerryBush } from '../../../entities-update'; // Adjusted path
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../world-consts';
 
@@ -27,7 +28,15 @@ export const bushSpreadingState: State<BerryBushEntity, BushSpreadingStateData> 
     // Using a check radius, e.g., 15 pixels, to avoid bushes spawning too close or overlapping.
     // This radius should ideally be related to the visual size of the bush.
     const SPREAD_CHECK_RADIUS = 15;
-    if (!isPositionOccupied(newPosition, gameState.entities.entities, SPREAD_CHECK_RADIUS)) {
+    if (
+      !isPositionOccupied(
+        newPosition,
+        gameState.entities.entities,
+        SPREAD_CHECK_RADIUS,
+        gameState.mapDimensions.width, // Pass worldWidth
+        gameState.mapDimensions.height, // Pass worldHeight
+      )
+    ) {
       createBerryBush(gameState.entities, newPosition, gameState.time);
     }
 
