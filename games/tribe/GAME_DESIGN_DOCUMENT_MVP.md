@@ -1,4 +1,4 @@
-# Game Design Document: Tribe (MVP)
+# Game Design Document: Tribe (MVP) Hills
 
 ## 1. Game Overview (MVP)
 
@@ -13,6 +13,7 @@
 ## 2. Core Mechanics (MVP)
 
 - **Movement & Spatial Interaction:**
+
   - **Movement System:** Characters move freely in 2D space using continuous positioning (not grid-based). Movement is smooth and immediate in response to player input.
   - **Base Speed:** All characters have a standard movement speed of 100 pixels per second.
   - **Speed Modifiers:** When hunger exceeds 80/100, movement speed is reduced to 50% of base speed (50 pixels per second).
@@ -22,30 +23,37 @@
   - **Pathfinding:** Direct movement toward target locations. No complex pathfinding required due to simple environment with no obstacles beyond other characters.
 
 - **Survival (Hunger Focus):**
+
   - **Attribute:** Characters possess a 'hunger' level (0-100).
   - **Progression:** Hunger increases automatically over time (e.g., +5 per game hour). If hunger reaches 80/100, movement speed is reduced. If hunger is above 95/100, procreation is not possible.
   - **Satisfaction:** Consuming 'berries' (the basic food item) reduces hunger (e.g., 1 berry = -25 hunger).
   - **Consequence:** If hunger reaches 100, the character dies.
 
 - **Procreation & Offspring (Basic):**
-  - **Initiation:** The player character (initially male) can interact with an initial female character to attempt procreation. A cooldown period (e.g., 1 game day) applies to both characters after a procreation event.
-  - **Gestation:** After a successful procreation attempt, a 'gestation' period begins (e.g., 3 game days).
-  - **Birth:** An offspring (child) is born after the gestation period.
-  - **Parentage:** Offspring are linked to their parents.
-  - **Aging:** Children age over time, eventually becoming adults after a set duration (e.g., 5 game years).
-  - **Needs (Simplified):** Children also have hunger needs. Parents' berry inventory is automatically shared if available (1 berry consumed by child reduces child's hunger and parent's inventory). If parents have no berries, the child's hunger increases at a faster rate than an adult's. Direct management of children's needs by the player is deferred.
+
+  - **Initiation:** A male and female human can attempt procreation if both are adults (e.g., age >= 16), not critically hungry (hunger < 95), and not currently on procreation cooldown. Procreation is initiated via interaction (e.g., 'E' key for player, AI decision for NPC).
+  - **Food Availability Check for AI:** AI-controlled characters will only attempt procreation if they detect a sufficient number of food sources (e.g., at least 2 berry bushes) within a certain radius (e.g., 200 pixels) around them. This ensures that procreation is more likely to occur in resource-rich areas, contributing to the sustainability of the tribe.
+  - **Gestation:** Upon successful procreation, the female enters a 'pregnant' state. A gestation period begins (e.g., 3 game days/72 game hours). During gestation, the female's hunger increases at a slightly faster rate.
+  - **Birth:** After the gestation period, a new child (human entity) is born at the mother's position. The child's gender is randomly determined. Both parents (if alive) are linked to the child. The mother and father (if applicable) enter a procreation cooldown.
+  - **Procreation Cooldown:** After a successful procreation (or birth), both the male and female involved enter a cooldown period (e.g., 1 game day/24 game hours) during which they cannot initiate or be involved in another procreation attempt.
+  - **Parentage:** All offspring are linked to their biological mother and father.
+  - **Aging & Child Development:** Children are born with 0 age. They age over time. At a certain age (e.g., 16 game years), they become adults, capable of independent actions, including procreation.
+  - **Child Needs (Simplified):** Children have hunger needs. Their hunger increases at a faster rate than adults. If a child is hungry and its parents (if alive and nearby) have berries, one berry is automatically consumed from the parent's inventory to feed the child. If no berries are available from parents, the child's hunger continues to increase, potentially leading to death. Direct player management of children's needs is deferred.
 
 - **Generational Transfer:**
+
   - **Trigger:** Occurs when the currently controlled player character dies (due to hunger or reaching a maximum age).
   - **Mechanism:** Control automatically transfers to the character's oldest living offspring. If multiple offspring were created at the exact same internal timestamp, the first one created in the game's internal list is chosen. If no living offspring exist, the game ends with a "Lineage Extinct" message.
 
 - **Resource Gathering (Simplified):**
+
   - **Resource:** A single food resource: 'Berries'. Player inventory limit is 10 berries.
   - **Source:** Berries can be collected from static 'Berry Bush' locations on the map. Each bush is finite (e.g., holds a maximum of 5 berries).
   - **Collection:** Player interacts with a Berry Bush to gather 1 berry at a time, added to their inventory, if the bush has berries and player inventory is not full.
   - **Regeneration:** Berry Bushes regenerate berries (e.g., 1 berry per game day, up to its maximum of 5). If all bushes are empty and none are regenerating, the player must wait or manage existing resources carefully.
 
 - **Time Progression & Aging:**
+
   - **Clock:** A simple game clock tracks passing days/years. 1 game day = 10 real seconds.
   - **Aging:** Characters (player, partner, offspring) age as game time progresses.
   - **Old Age Death:** Characters have a maximum lifespan (e.g., 60 game years) and will die of old age if they survive hunger. If a character reaches maximum age and has no living offspring, it results in a game over upon their death.

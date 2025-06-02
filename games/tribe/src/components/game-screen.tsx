@@ -9,6 +9,9 @@ import { useGameContext } from '../context/game-context';
 import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
+import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
+import { findClosestEntity } from '../game/utils/world-utils';
+import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../game/world-consts';
 
 const INITIAL_STATE = initGame();
 
@@ -84,7 +87,50 @@ export const GameScreen: React.FC = () => {
 
       // Handle interaction and eating
       if (key === 'e') {
-        playerEntity.activeAction = 'gathering'; // Set to gathering when 'e' is pressed
+        // Try to find a berry bush first
+        const nearbyBush = findClosestEntity<BerryBushEntity>(
+          playerEntity,
+          gameStateRef.current.entities.entities,
+          'berryBush',
+          gameStateRef.current.mapDimensions.width,
+          gameStateRef.current.mapDimensions.height,
+          HUMAN_INTERACTION_RANGE,
+          (b) => (b as BerryBushEntity).currentBerries > 0 && playerEntity.berries < playerEntity.maxBerries,
+        );
+
+        if (nearbyBush) {
+          playerEntity.activeAction = 'gathering';
+        } else {
+          // If no bush to gather from, try procreation
+          const potentialPartner = findClosestEntity<HumanEntity>(
+            playerEntity,
+            gameStateRef.current.entities.entities,
+            'human',
+            gameStateRef.current.mapDimensions.width,
+            gameStateRef.current.mapDimensions.height,
+            HUMAN_INTERACTION_RANGE,
+            (h) => {
+              const human = h as HumanEntity;
+              return (
+                (human.id !== playerEntity.id &&
+                  human.gender !== playerEntity.gender &&
+                  human.isAdult &&
+                  playerEntity.isAdult &&
+                  human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+                  playerEntity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+                  (human.procreationCooldown || 0) <= 0 &&
+                  (playerEntity.procreationCooldown || 0) <= 0 &&
+                  (human.gender === 'female' ? !human.isPregnant : !playerEntity.isPregnant)) ||
+                false
+              );
+            },
+          );
+
+          if (potentialPartner) {
+            playerEntity.activeAction = 'procreating';
+          }
+          // If neither gathering nor procreating is possible, do nothing
+        }
       } else if (key === 'f') {
         playerEntity.activeAction = 'eating'; // Set to eating when 'f' is pressed
       } else if (key === 'arrowup' || key === 'w') {
@@ -143,9 +189,11 @@ export const GameScreen: React.FC = () => {
       if (
         !keysPressed.current.has('e') &&
         !keysPressed.current.has('f') &&
-        (playerEntity.activeAction === 'gathering' || playerEntity.activeAction === 'eating')
+        (playerEntity.activeAction === 'gathering' ||
+          playerEntity.activeAction === 'eating' ||
+          playerEntity.activeAction === 'procreating')
       ) {
-        playerEntity.activeAction = 'idle'; // Set to idle when not gathering or eating
+        playerEntity.activeAction = 'idle'; // Set to idle when not gathering, eating, or procreating
       }
     };
 

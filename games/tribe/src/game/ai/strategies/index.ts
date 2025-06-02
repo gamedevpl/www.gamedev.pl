@@ -1,6 +1,7 @@
 import { EatingStrategy } from "./eating-strategy";
 import { GatheringStrategy } from "./gathering-strategy";
 import { IdleWanderStrategy } from "./idle-wander-strategy";
+import { ProcreationStrategy } from "./procreation-strategy";
 import { HumanAIStrategy } from "./ai-strategy-types";
 
 /**
@@ -11,5 +12,6 @@ import { HumanAIStrategy } from "./ai-strategy-types";
 export const humanAIStrategies: HumanAIStrategy[] = [
   new EatingStrategy(),
   new GatheringStrategy(),
+  new ProcreationStrategy(), // Added procreation strategy with medium priority
   new IdleWanderStrategy(), // Fallback, should always be last
 ];

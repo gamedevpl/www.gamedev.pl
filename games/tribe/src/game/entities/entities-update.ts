@@ -2,6 +2,7 @@ import { Entities, Entity, EntityId, EntityType } from './entities-types';
 import { UpdateContext } from '../world-types';
 import { entityUpdate } from './entity-update';
 import { Vector2D } from '../utils/math-types';
+import { vectorAdd } from '../utils/math-utils';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
@@ -14,6 +15,7 @@ import {
   HUMAN_INITIAL_AGE,
   HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
+  CHILD_TO_ADULT_AGE,
 } from '../world-consts';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
@@ -82,19 +84,54 @@ export function createHuman(
   currentTime: number,
   gender: 'male' | 'female',
   isPlayer: boolean = false,
+  initialAge: number = HUMAN_INITIAL_AGE,
+  initialHunger: number = HUMAN_INITIAL_HUNGER,
+  motherId?: EntityId,
+  fatherId?: EntityId
 ): HumanEntity {
+  const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
+  
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
-    hunger: HUMAN_INITIAL_HUNGER,
-    age: HUMAN_INITIAL_AGE,
+    hunger: initialHunger,
+    age: initialAge,
     gender,
     isPlayer,
     berries: 0,
     maxBerries: 10, // Maximum berries a human can carry
     maxAge: HUMAN_MAX_AGE_YEARS,
+    isAdult,
+    isPregnant: false,
+    gestationTime: 0,
+    procreationCooldown: 0,
+    motherId,
+    fatherId,
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
   });
   return human;
+}
+
+export function giveBirth(mother: HumanEntity, fatherId: EntityId | undefined, updateContext: UpdateContext): HumanEntity | undefined {
+  // Generate random gender
+  const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
+  
+  // Create a slightly offset position to avoid exact overlap
+  const childPosition = vectorAdd(mother.position, { x: 5, y: 5 });
+  
+  // Create the child entity
+  const child = createHuman(
+    updateContext.gameState.entities,
+    childPosition,
+    updateContext.gameState.time,
+    childGender,
+    false, // Not player-controlled
+    0, // Age 0
+    HUMAN_INITIAL_HUNGER / 2, // Start with half hunger
+    mother.id, // Mother ID
+    fatherId // Father ID
+  );
+  
+  return child;
 }
 
 export function updateEntity(state: Entities, entityId: EntityId, updates: Partial<Entity>): Entity | null {

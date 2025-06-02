@@ -6,6 +6,7 @@ export const HUMAN_IDLE = 'humanIdle';
 export const HUMAN_MOVING = 'humanMoving';
 export const HUMAN_EATING = 'humanEating';
 export const HUMAN_GATHERING = 'humanGathering'; // When gathering resources
+export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
 
 export interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -23,8 +24,15 @@ export interface HumanGatheringStateData extends StateData {
   state: 'gathering';
 }
 
+export interface HumanProcreatingStateData extends StateData {
+  partnerId?: EntityId; // The ID of the partner for procreation
+  duration?: number; // Duration of the procreation process
+  procreationEndTime?: number; // When the procreation process ends
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
   | HumanEatingStateData
-  | HumanGatheringStateData;
+  | HumanGatheringStateData
+  | HumanProcreatingStateData;

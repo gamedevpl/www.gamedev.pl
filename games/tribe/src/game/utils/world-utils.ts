@@ -105,3 +105,31 @@ export function findClosestEntity<T extends Entity>(
 
   return closestEntity;
 }
+
+/**
+ * Counts the number of entities of a specific type within a radius of a source position.
+ * @param sourcePosition The position from which to measure distance.
+ * @param allEntities A map of all entities in the game.
+ * @param targetType The type of entity to count.
+ * @param radius The maximum distance to consider entities within.
+ * @param worldWidth The width of the game world for wrapped distance calculation.
+ * @param worldHeight The height of the game world for wrapped distance calculation.
+ * @returns The number of entities of the specified type within the radius.
+ */
+export function countEntitiesOfTypeInRadius(
+  sourcePosition: Vector2D,
+  allEntities: Map<EntityId, Entity>,
+  targetType: EntityType,
+  radius: number,
+  worldWidth: number,
+  worldHeight: number,
+): number {
+  let count = 0;
+  for (const entity of allEntities.values()) {
+    if (entity.type === targetType && 
+        calculateWrappedDistance(sourcePosition, entity.position, worldWidth, worldHeight) <= radius) {
+      count++;
+    }
+  }
+  return count;
+}
