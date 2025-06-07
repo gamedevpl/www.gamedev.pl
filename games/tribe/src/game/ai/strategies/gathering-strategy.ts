@@ -9,6 +9,11 @@ import { HumanAIStrategy } from './ai-strategy-types';
 
 export class GatheringStrategy implements HumanAIStrategy {
   check(human: HumanEntity): boolean {
+    // Non-adult children should not gather resources
+    if (!human.isAdult) {
+      return false;
+    }
+
     // Check if human needs to gather (hungry enough and not at berry capacity)
     if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING && human.berries < human.maxBerries) {
       return true;

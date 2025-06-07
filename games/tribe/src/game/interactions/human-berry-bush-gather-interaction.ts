@@ -11,10 +11,12 @@ export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity,
   maxDistance: HUMAN_INTERACTION_RANGE,
   checker: (human: HumanEntity, berryBush: BerryBushEntity, context): boolean => {
     return (
-      berryBush.currentBerries > 0 &&
-      human.stateMachine?.[0] === HUMAN_GATHERING &&
-      human.berries < human.maxBerries &&
-      (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)
+      (human.isAdult && // Ensure human is an adult to gather
+        berryBush.currentBerries > 0 &&
+        human.stateMachine?.[0] === HUMAN_GATHERING &&
+        human.berries < human.maxBerries &&
+        (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)) ||
+      false
     );
   },
   perform: (human, berryBush, context): void => {

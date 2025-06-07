@@ -45,6 +45,12 @@ export interface HumanEntity extends Entity {
   /** ID of the human's mother, if known. */
   motherId?: EntityId;
 
+  /** Cooldown time for a parent to feed a child. */
+  feedChildCooldownTime?: number;
+
+  /** Cooldown time for feeding a parent. */
+  feedParentCooldownTime?: number;
+
   /** Current active action. Set by player input or AI decision. */
   activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating'; // Current action: e.g., 'moving', 'eating', 'gathering', 'idle', 'procreating'. Set by player input or AI decision.
 

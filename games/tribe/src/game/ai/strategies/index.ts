@@ -2,6 +2,8 @@ import { EatingStrategy } from "./eating-strategy";
 import { GatheringStrategy } from "./gathering-strategy";
 import { IdleWanderStrategy } from "./idle-wander-strategy";
 import { ProcreationStrategy } from "./procreation-strategy";
+import { ChildSeekingFoodStrategy } from "./child-seeking-food-strategy"; // New import
+import { ParentFeedingChildStrategy } from "./parent-feeding-child-strategy";
 import { HumanAIStrategy } from "./ai-strategy-types";
 
 /**
@@ -11,7 +13,9 @@ import { HumanAIStrategy } from "./ai-strategy-types";
  */
 export const humanAIStrategies: HumanAIStrategy[] = [
   new EatingStrategy(),
+  new ParentFeedingChildStrategy(), // Added
   new GatheringStrategy(),
-  new ProcreationStrategy(), // Added procreation strategy with medium priority
+  new ProcreationStrategy(),
+  new ChildSeekingFoodStrategy(), // Strategy for children to seek food from parents
   new IdleWanderStrategy(), // Fallback, should always be last
 ];

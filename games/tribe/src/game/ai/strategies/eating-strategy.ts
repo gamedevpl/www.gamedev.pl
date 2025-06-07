@@ -4,15 +4,26 @@ import { HumanAIStrategy } from './ai-strategy-types';
 
 export class EatingStrategy implements HumanAIStrategy {
   check(human: HumanEntity): boolean {
-    // Condition to STOP eating
+    // Prevent non-adult children from using this strategy to eat from their own inventory
+    if (!human.isAdult) {
+      return false;
+    }
+
+    // If human is a child and not currently eating, this strategy is not for them (they get fed by parents)
+    if (!human.isAdult && human.activeAction !== 'eating') {
+      return false;
+    }
+
+    // Condition to STOP eating (applies to adults and children if they are already eating)
     if (human.activeAction === 'eating') {
       if (human.berries <= 0 || human.hunger <= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING - HUMAN_BERRY_HUNGER_REDUCTION) {
         return true; // Conditions met to stop eating (will execute to change action to idle)
       }
       return true; // Still actively eating and should continue (will execute to essentially no-op or confirm eating state)
     }
-    // Condition to START eating
-    if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
+
+    // Condition to START eating (only for adults)
+    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
       return true;
     }
     return false;
@@ -31,9 +42,9 @@ export class EatingStrategy implements HumanAIStrategy {
       return;
     }
 
-    // Logic for STARTING eating
-    if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
-      human.activeAction = 'eating';
+
+    // Logic for STARTING eating (now implicitly for adults due to the check method)
+    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
       return;

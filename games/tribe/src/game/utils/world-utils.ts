@@ -1,6 +1,8 @@
 import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
 import { calculateWrappedDistance, vectorAdd } from './math-utils';
+import { HumanEntity } from '../entities/characters/human/human-types'; // Added import
+import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts'; // Added import
 
 /**
  * Generates a random position within a radius of a center point, accounting for world wrapping
@@ -132,4 +134,82 @@ export function countEntitiesOfTypeInRadius(
     }
   }
   return count;
+}
+
+/**
+ * Counts the number of living offspring for a given human entity.
+ * @param humanId The ID of the human entity whose offspring are to be counted.
+ * @param allEntities A map of all entities in the game.
+ * @returns The number of living offspring.
+ */
+export function countLivingOffspring(humanId: EntityId, allEntities: Map<EntityId, Entity>): number {
+  let offspringCount = 0;
+  for (const entity of allEntities.values()) {
+    if (entity.type === 'human') {
+      const humanEntity = entity as HumanEntity;
+      if (humanEntity.motherId === humanId || humanEntity.fatherId === humanId) {
+        // Could add a check here to ensure the offspring is 'alive' if a specific flag for that exists
+        // For now, presence in allEntities implies living.
+        offspringCount++;
+      }
+    }
+  }
+  return offspringCount;
+}
+
+/**
+ * Finds potential new partners for a given human entity, excluding direct relatives.
+ * @param sourceHuman The human entity looking for new partners.
+ * @param allEntities A map of all entities in the game.
+ * @param radius The search radius for potential partners.
+ * @param worldWidth The width of the game world for wrapped distance calculation.
+ * @param worldHeight The height of the game world for wrapped distance calculation.
+ * @returns An array of HumanEntity objects representing potential new partners.
+ */
+export function findPotentialNewPartners(
+  sourceHuman: HumanEntity,
+  allEntities: Map<EntityId, Entity>,
+  radius: number,
+  worldWidth: number,
+  worldHeight: number,
+): HumanEntity[] {
+  const potentialPartners: HumanEntity[] = [];
+
+  for (const entity of allEntities.values()) {
+    if (entity.type !== 'human') {
+      continue;
+    }
+    const partner = entity as HumanEntity;
+
+    // Basic procreation checks for the potential partner
+    if (
+      partner.id !== sourceHuman.id &&
+      partner.gender !== sourceHuman.gender &&
+      partner.isAdult &&
+      partner.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+      (partner.procreationCooldown || 0) <= 0 &&
+      (partner.gender === 'female' ? !partner.isPregnant : true)
+    ) {
+      // Check for direct familial relationship (parent or child)
+      const isParentOfSource = partner.id === sourceHuman.motherId || partner.id === sourceHuman.fatherId;
+      const isChildOfSource = sourceHuman.id === partner.motherId || sourceHuman.id === partner.fatherId;
+
+      if (isParentOfSource || isChildOfSource) {
+        continue; // Skip direct relatives
+      }
+
+      // Check distance
+      const distance = calculateWrappedDistance(
+        sourceHuman.position,
+        partner.position,
+        worldWidth,
+        worldHeight,
+      );
+
+      if (distance <= radius) {
+        potentialPartners.push(partner);
+      }
+    }
+  }
+  return potentialPartners;
 }

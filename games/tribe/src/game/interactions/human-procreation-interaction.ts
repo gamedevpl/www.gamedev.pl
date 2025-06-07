@@ -20,33 +20,45 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
   // Prevent self-interaction
   if (source.id === target.id) return false;
 
-  // Both entities must be actively trying to procreate
-  if (source.activeAction !== 'procreating' || target.activeAction !== 'procreating') {
-    return false;
-  }
-
   // Must be of opposite genders
   if (source.gender === target.gender) return false;
 
-  // Identify male and female
-  const female = source.gender === 'female' ? source : target;
-  const male = source.gender === 'male' ? source : target;
+  // Helper function to check common eligibility criteria for an individual
+  const isIndividuallyEligible = (entity: HumanEntity, isEntityFemale: boolean): boolean => {
+    const commonConditions =
+      entity.isAdult &&
+      entity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+      (entity.procreationCooldown || 0) <= 0;
 
-  // This check is technically redundant if the gender check above is correct,
-  // but ensures we have one of each.
-  if (!male || !female || male.gender === female.gender) return false;
+    if (!commonConditions) return false;
 
-  // Check all conditions for procreation
-  return (
-    (male.isAdult &&
-      female.isAdult &&
-      male.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-      female.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-      (male.procreationCooldown || 0) <= 0 &&
-      (female.procreationCooldown || 0) <= 0 &&
-      !female.isPregnant) ||
-    false
-  );
+    if (isEntityFemale) { // Specific checks if the entity being checked is female
+      return !entity.isPregnant;
+    }
+    return true; // No further specific checks if the entity being checked is male
+  };
+
+  // Apply checks based on the source's gender
+  if (source.gender === 'male') {
+    // Source is MALE, Target is FEMALE
+    // Check male's (source) eligibility
+    if (!isIndividuallyEligible(source, false)) return false;
+    // Check female's (target) eligibility
+    if (!isIndividuallyEligible(target, true)) return false;
+
+    // Male (source) must be 'procreating'. Female's (target) activeAction is not checked.
+    return source.activeAction === 'procreating';
+
+  } else { // source.gender === 'female'
+    // Source is FEMALE, Target is MALE
+    // Check female's (source) eligibility
+    if (!isIndividuallyEligible(source, true)) return false;
+    // Check male's (target) eligibility
+    if (!isIndividuallyEligible(target, false)) return false;
+
+    // Female (source) must be 'procreating', AND Male (target) must also be 'procreating'.
+    return source.activeAction === 'procreating' && target.activeAction === 'procreating';
+  }
 };
 
 const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContext): void => {

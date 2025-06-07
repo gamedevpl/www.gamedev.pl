@@ -8,11 +8,16 @@ import {
   HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER,
   CHILD_HUNGER_INCREASE_RATE_MODIFIER,
   HUMAN_BERRY_HUNGER_REDUCTION,
+  HUMAN_OLD_AGE_THRESHOLD,
+  HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING,
+  ADULT_CHILD_FEEDING_RANGE,
+  ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
+import { calculateWrappedDistance } from '../../../utils/math-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   // Calculate game hours delta for time-based updates
@@ -58,23 +63,65 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.procreationCooldown < 0) entity.procreationCooldown = 0;
   }
 
-  // Handle child-specific hunger increase
+  // Handle feed parent cooldown
+  if (entity.feedParentCooldownTime) {
+    entity.feedParentCooldownTime -= gameHoursDelta;
+    if (entity.feedParentCooldownTime < 0) entity.feedParentCooldownTime = 0;
+  }
+
+  // Handle parent feed child cooldown
+  if (entity.feedChildCooldownTime) {
+    entity.feedChildCooldownTime -= gameHoursDelta;
+    if (entity.feedChildCooldownTime < 0) entity.feedChildCooldownTime = 0;
+  }
+
+  // Handle child-specific updates
   if (!entity.isAdult) {
+    // Child-specific hunger increase
     entity.hunger +=
       deltaTime *
       ((HUMAN_HUNGER_INCREASE_PER_HOUR * CHILD_HUNGER_INCREASE_RATE_MODIFIER - HUMAN_HUNGER_INCREASE_PER_HOUR) /
         (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
 
-    // TODO: Add child feeding logic here if not handled by AI/Interaction
-    // if (entity.hunger > 50) {
-    //   // Check parents, consume berry if available
-    // }
+    // Implicit child feeding logic removed, now handled by humanChildFeedingInteraction
+  }
+
+  // Adult child feeds old parent logic
+  if (entity.isAdult && entity.berries > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {
+    for (const potentialParent of updateContext.gameState.entities.entities.values()) {
+      if (potentialParent.type === 'human') {
+        const parentEntity = potentialParent as HumanEntity;
+        if (
+          parentEntity.id !== entity.id &&
+          (entity.motherId === parentEntity.id || entity.fatherId === parentEntity.id)
+        ) {
+          if (
+            parentEntity.age >= HUMAN_OLD_AGE_THRESHOLD &&
+            parentEntity.hunger >= HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING
+          ) {
+            const distance = calculateWrappedDistance(
+              entity.position,
+              parentEntity.position,
+              updateContext.gameState.mapDimensions.width,
+              updateContext.gameState.mapDimensions.height,
+            );
+            if (distance <= ADULT_CHILD_FEEDING_RANGE) {
+              entity.berries--;
+              parentEntity.hunger = Math.max(0, parentEntity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
+              entity.feedParentCooldownTime = ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS;
+              break; // Feed only one parent per tick
+            }
+          }
+        }
+      }
+    }
   }
 
   // Check for death conditions
   let causeOfDeath: string | undefined = undefined;
   if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-    if (entity.berries > 0) {
+    if (entity.berries > 0 && entity.isAdult) {
+      // Adults can auto-eat, children rely on parents
       // If the human has berries, they can eat one to reduce hunger
       // This is auto eat logic, not player-driven, because without it
       // The player would may forget to feed the human and they would die of hunger
