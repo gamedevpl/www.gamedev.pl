@@ -17,7 +17,7 @@ export interface Asset {
     height: number,
     progress: number,
     stance: string,
-    direction: 'left' | 'right',
+    ...anyArgs: unknown[]
   ): void;
 }
 

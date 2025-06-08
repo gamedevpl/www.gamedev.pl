@@ -56,4 +56,10 @@ export interface HumanEntity extends Entity {
 
   /** Target position for 'moving' action. Set by player input or AI decision. */
   targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.
+
+  /** The current progress of the entity's animation (0-1). */
+  animationProgress?: number;
+
+  /** The speed at which the entity's animation plays. */
+  animationSpeed?: number;
 }

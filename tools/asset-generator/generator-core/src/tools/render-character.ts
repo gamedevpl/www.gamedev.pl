@@ -32,7 +32,7 @@ export async function renderAsset(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     try {
-      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, 0, stance, 'right');
+      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, 0, stance);
     } catch (error) {
       console.error('Failed to render asset:', error);
     }
@@ -233,7 +233,7 @@ async function generateFrames(
     // Create state with the current stance and progress
     // Render the asset with the current state
     try {
-      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, progress, stance, 'right');
+      asset.render(ctx as any, canvas.width / 2 - 512, canvas.height / 2 - 512, 1024, 1024, progress, stance);
     } catch {
       // ignore errors, to not spam the console
     }

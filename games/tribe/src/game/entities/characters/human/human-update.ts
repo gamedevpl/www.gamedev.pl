@@ -175,4 +175,17 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     // No further updates for this entity as it's being removed
     return;
   }
+
+  // Animation update
+  if (entity.animationProgress === undefined) {
+    entity.animationProgress = 0;
+  }
+  if (entity.animationSpeed === undefined) {
+    entity.animationSpeed = 1;
+  }
+
+  entity.animationProgress += deltaTime * entity.animationSpeed;
+  if (entity.animationProgress >= 1) {
+    entity.animationProgress = 0;
+  }
 }
