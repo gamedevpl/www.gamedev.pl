@@ -18,4 +18,6 @@ export interface BerryBushEntity extends PlantEntity {
   spreadRadius: number;
   /** Game hours passed since the last spread attempt. */
   timeSinceLastSpreadAttempt: number;
+  /** Game time when the bush was last harvested. */
+  timeSinceLastHarvest: number;
 }

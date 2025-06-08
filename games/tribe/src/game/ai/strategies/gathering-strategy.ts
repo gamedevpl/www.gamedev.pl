@@ -15,7 +15,7 @@ export class GatheringStrategy implements HumanAIStrategy {
     }
 
     // Check if human needs to gather (hungry enough and not at berry capacity)
-    if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING && human.berries < human.maxBerries) {
+    if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING && human.berries < human.maxBerries / 2) {
       return true;
     }
     return false;

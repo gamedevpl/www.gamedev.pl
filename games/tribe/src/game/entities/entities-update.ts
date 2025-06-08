@@ -74,6 +74,7 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
     spreadRadius: BERRY_BUSH_SPREAD_RADIUS,
     timeSinceLastBerryRegen: 0,
     timeSinceLastSpreadAttempt: 0,
+    timeSinceLastHarvest: 0,
     stateMachine: [BUSH_GROWING, { enteredAt: currentTime, previousState: undefined }],
   });
   return bush;

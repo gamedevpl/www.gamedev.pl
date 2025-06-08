@@ -3,7 +3,6 @@ import {
   HOURS_PER_GAME_DAY,
   HUMAN_HUNGER_INCREASE_PER_HOUR,
   HUMAN_HUNGER_DEATH,
-  HUMAN_GESTATION_PERIOD_HOURS,
   CHILD_TO_ADULT_AGE,
   HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER,
   CHILD_HUNGER_INCREASE_RATE_MODIFIER,
@@ -12,6 +11,7 @@ import {
   HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING,
   ADULT_CHILD_FEEDING_RANGE,
   ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS,
+  HUMAN_YEAR_IN_REAL_SECONDS,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -29,10 +29,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   // Check for hunger increase (base rate)
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
 
-  const realSecondsPerGestationPeriod = (HUMAN_GESTATION_PERIOD_HOURS / HOURS_PER_GAME_DAY) * GAME_DAY_IN_REAL_SECONDS;
-  // Check for age increase
-  entity.age += deltaTime / realSecondsPerGestationPeriod;
-
+  entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
   // Handle pregnancy and gestation for females
   if (entity.gender === 'female' && entity.isPregnant && entity.gestationTime) {
     // Reduce gestation time

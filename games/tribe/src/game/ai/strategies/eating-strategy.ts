@@ -42,11 +42,11 @@ export class EatingStrategy implements HumanAIStrategy {
       return;
     }
 
-
     // Logic for STARTING eating (now implicitly for adults due to the check method)
     if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
+      human.activeAction = 'eating';
       return;
     }
   }

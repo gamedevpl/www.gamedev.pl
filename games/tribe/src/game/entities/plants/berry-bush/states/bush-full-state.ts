@@ -21,8 +21,12 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
 
     entity.timeSinceLastSpreadAttempt += gameHoursDelta;
     if (entity.timeSinceLastSpreadAttempt >= BERRY_BUSH_SPREAD_COOLDOWN_HOURS) {
-      entity.timeSinceLastSpreadAttempt = 0; // Reset cooldown
-      if (Math.random() < entity.spreadChance) {
+      entity.timeSinceLastSpreadAttempt = 0; // Reset cooldown before the next attempt
+
+      const timeSinceHarvest = updateContext.gameState.time - entity.timeSinceLastHarvest;
+      const hasBeenLeftAlone = timeSinceHarvest >= BERRY_BUSH_SPREAD_COOLDOWN_HOURS;
+
+      if (hasBeenLeftAlone && Math.random() < entity.spreadChance) {
         return { nextState: BUSH_SPREADING, data: { ...data, enteredAt: updateContext.gameState.time, previousState: BUSH_FULL } };
       }
     }

@@ -23,5 +23,6 @@ export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity,
     human.berries += 1;
     berryBush.currentBerries -= 1;
     human.gatheringCooldownTime = context.gameState.time + 1; // 1 second cooldown
+    berryBush.timeSinceLastHarvest = context.gameState.time;
   },
 };
