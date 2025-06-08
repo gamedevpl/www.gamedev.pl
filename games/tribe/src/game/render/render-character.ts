@@ -13,6 +13,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   eating: 'eat',
   procreating: 'procreate',
   idle: 'idle',
+  seekingFood: 'idle',
 };
 
 /**

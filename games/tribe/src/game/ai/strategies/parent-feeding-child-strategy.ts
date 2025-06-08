@@ -36,7 +36,7 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy {
           (childEntity.motherId === human.id || childEntity.fatherId === human.id) &&
           childEntity.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD
         );
-      }
+      },
     );
 
     return !!hungryChild;
@@ -57,7 +57,7 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy {
           (childEntity.motherId === human.id || childEntity.fatherId === human.id) &&
           childEntity.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD
         );
-      }
+      },
     );
 
     if (!hungryChild) {
@@ -72,7 +72,7 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy {
       human.position,
       childToFeed.position,
       context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height
+      context.gameState.mapDimensions.height,
     );
 
     if (distance > PARENT_FEEDING_RANGE) {

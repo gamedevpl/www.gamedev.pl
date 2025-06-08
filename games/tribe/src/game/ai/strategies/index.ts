@@ -13,9 +13,9 @@ import { HumanAIStrategy } from "./ai-strategy-types";
  */
 export const humanAIStrategies: HumanAIStrategy[] = [
   new EatingStrategy(),
-  new ParentFeedingChildStrategy(), // Added
+  new ChildSeekingFoodStrategy(),
+  new ParentFeedingChildStrategy(),
   new GatheringStrategy(),
   new ProcreationStrategy(),
-  new ChildSeekingFoodStrategy(), // Strategy for children to seek food from parents
   new IdleWanderStrategy(), // Fallback, should always be last
 ];
