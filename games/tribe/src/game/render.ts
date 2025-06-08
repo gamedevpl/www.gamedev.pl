@@ -28,8 +28,14 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     return;
   }
 
+  // Sort entities by Y
+  const sortedEntities = Array.from(gameState.entities.entities.values()).sort((a, b) => {
+    // Sort by Y position, then by ID for deterministic rendering
+    return a.position.y - b.position.y || a.id - b.id;
+  });
+
   // Render entities
-  gameState.entities.entities.forEach((entity: Entity) => {
+  sortedEntities.forEach((entity: Entity) => {
     if (entity.type === 'berryBush') {
       renderBerryBush(ctx, entity as BerryBushEntity);
     } else if (entity.type === 'human') {
@@ -53,7 +59,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     20,
     lineHeight * uiLine++,
   );
-  
+
   // Render player-specific UI if player exists
   const player = findPlayerEntity(gameState);
   if (player) {

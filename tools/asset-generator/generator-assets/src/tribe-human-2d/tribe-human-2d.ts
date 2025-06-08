@@ -1,45 +1,35 @@
 import { Asset } from '../../../generator-core/src/assets-types';
 
-// Define base dimensions and positions for character parts for Sensible Soccer style
-const HEAD_W = 2; // Virtual pixels
-const HEAD_H = 2;
-const HAIR_TOP_H = 1; // Portion of head height that is hair on top
+// Adjusted Sensible Soccer-style proportions and constants
+const SS_HEAD_W = 2.0;
+const SS_HEAD_H = 1.2;
+const SS_HAIR_TOP_H = 0.6; // Portion of SS_HEAD_H that is hair on top
 
-const TORSO_W = 2;
-const TORSO_H = 3;
+const SS_TORSO_W_BASE = 1.8;
+const SS_TORSO_H = 1.5;
 
-const ARM_W = 1;
-const ARM_H = 2; // Shorter arms for SS style
+const SS_ARM_W_BASE = 0.6;
+const SS_ARM_H = 1.4;
 
-const LEG_W = 1;
-const LEG_H = 2;
+const SS_LEG_W_BASE = 0.7;
+const SS_LEG_H = 1.3;
 
-// Overall character virtual dimensions (standing)
-const CHARACTER_STANDING_VIRTUAL_WIDTH = 4; // Max width including arms at sides
-const CHARACTER_STANDING_VIRTUAL_HEIGHT = HEAD_H + TORSO_H + LEG_H; // 2 + 3 + 2 = 7
+const MALE_PANTS_H = 0.6; // Height of the pants/loincloth for males
+const FEMALE_TOP_H_ADJUST = 0.1; // Females might have slightly longer looking tops
 
-// Relative positions (in virtual pixel units, before scaling)
-const HEAD_X_OFFSET = (CHARACTER_STANDING_VIRTUAL_WIDTH - HEAD_W) / 2; // (4 - 2) / 2 = 1
-const TORSO_X_OFFSET = (CHARACTER_STANDING_VIRTUAL_WIDTH - TORSO_W) / 2; // (4 - 2) / 2 = 1
+const SS_CHARACTER_VIRTUAL_WIDTH = 3.0;
+const SS_CHARACTER_VIRTUAL_HEIGHT = SS_HEAD_H + SS_TORSO_H + SS_LEG_H; // 1.2 + 1.5 + 1.3 = 4.0
 
-const HEAD_Y_POS = 0;
-const TORSO_Y_POS = HEAD_Y_POS + HEAD_H; // 2
-const ARM_Y_POS = TORSO_Y_POS + 0.25; // Arms start slightly into torso height: 2.25
-const LEG_Y_POS = TORSO_Y_POS + TORSO_H; // Legs start below torso: 2 + 3 = 5
+const SS_HEAD_Y_OFFSET = 0;
+const SS_TORSO_Y_OFFSET = SS_HEAD_Y_OFFSET + SS_HEAD_H;
+const SS_ARM_Y_OFFSET = SS_TORSO_Y_OFFSET + 0.1;
+const SS_LEG_Y_OFFSET = SS_TORSO_Y_OFFSET + SS_TORSO_H;
 
-// Arms positioned slightly overlapping/beside the torso for SS feel
-const LEFT_ARM_X_POS = TORSO_X_OFFSET - ARM_W * 0.5; // 1 - 0.5 = 0.5
-const RIGHT_ARM_X_POS = TORSO_X_OFFSET + TORSO_W - ARM_W * 0.5; // 1 + 2 - 0.5 = 2.5
-
-const LEFT_LEG_X_POS = TORSO_X_OFFSET + 0.25; // Legs slightly inwards from torso edge
-const RIGHT_LEG_X_POS = TORSO_X_OFFSET + TORSO_W - LEG_W - 0.25;
-
-// Shadow parameters (Sensible Soccer style)
-const SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)'; // Darker, slightly less opaque
-const STANDING_SHADOW_W_PX = 3;
-const STANDING_SHADOW_H_PX = 1;
-const SHADOW_OFFSET_Y_PX = 0.5; // Offset below the character
-const SHADOW_OFFSET_X_PX = 0.5; // Offset to the side (non-flipped direction)
+const SHADOW_COLOR = 'rgba(0, 0, 0, 0.45)';
+const SS_SHADOW_RADIUS_X = 1.2;
+const SS_SHADOW_RADIUS_Y = 0.35;
+const SS_SHADOW_OFFSET_X = 0.5;
+const SS_SHADOW_OFFSET_Y = 0.1;
 
 export const tribeHuman2D: Asset = {
   name: 'tribeHuman2D',
@@ -59,6 +49,19 @@ The rendering function must be simple and efficient, it should not use complex p
 
 15% padding from all edges of the rendering box is required to ensure the character is not cut off during rendering.
 
+# Rendering parameters
+
+- age: The age of the character, which affects the size and proportions of the body parts. Age is a number between 1 and 60, with 20 being the average age.
+- gender: 
+  - The male characters should have only pants, while female cover their breasts with a top. The clothing should be simple and muted, reflecting a stone-age style.
+  - Female characters should have long hair, while male should have short hair and beard.
+  - Male characters should have a more robust, muscular build
+  - Female characters should have thinner arms and legs, with a more pronounced waist and hips.
+- isPregnant: (applicable only for females) Indicates if the character is pregnant, like significatly bigger belly, and more pronounced breasts. Pregnant characters should have a larger torso and slightly larger arms and legs to reflect the pregnancy.
+- direction: A vector indicating the character's facing direction. There should be at least 8 directions (like in Sensible Soccer): top left, top, top right, left, right, bottom left, bottom, bottom right. The character should be flipped horizontally if the direction vector's X component is negative.
+             When moving up(Y < 0), the character back of the head should be visible, when moving down(Y > 0), the character face should be visible.
+- hungryLevel: A number between 0 and 100 indicating how hungry the character is, hunger level 100 means the character is starving, 0 means the character is not hungry at all. So hungry characters should be thinner, with less body fat, and more pronounced muscles. The character's hunger level affects the size and proportions of the body parts, with hungrier characters being smaller and more gaunt.
+
 # Rendering details
 
 - All parts of the body must be connected
@@ -71,7 +74,7 @@ The rendering function must be simple and efficient, it should not use complex p
 - 'walk': The character moves forward, with legs and arms in motion.
 - 'gathering': The character is gathering food from berry bushes, with arms reaching out and a slight bend at the knees.
 - 'eat': The character holds food and brings it to their mouth, with a slight bend at the knees.
-- 'procreate': The character performs a mating animation, with a specific pose and movement.
+- 'procreate': The character performs a mating animation, with a specific pose and movement. There should be some additional visual effects to indicate this action, such as a slight glow or aura around the characters, or dust particles to indicate movement.
 - 'dead': The character lies on the ground, with limbs relaxed and a neutral expression, slowly turns into a skeleton over time.
 
 `,
@@ -87,8 +90,11 @@ The rendering function must be simple and efficient, it should not use complex p
     gender: 'male' | 'female' = 'male',
     age: number = 20,
     direction: [number, number] = [1, 0],
+    isPregnant: boolean = false,
+    hungryLevel: number = 0,
   ) {
     const directionX = direction[0];
+    const directionY = direction[1];
 
     const padRatio = 0.15;
     const actualX = x + width * padRatio;
@@ -96,25 +102,19 @@ The rendering function must be simple and efficient, it should not use complex p
     const actualWidth = width * (1 - 2 * padRatio);
     const actualHeight = height * (1 - 2 * padRatio);
 
-    let charPixelDimX = CHARACTER_STANDING_VIRTUAL_WIDTH;
-    let charPixelDimY = CHARACTER_STANDING_VIRTUAL_HEIGHT;
+    let charPixelDimX = SS_CHARACTER_VIRTUAL_WIDTH;
+    let charPixelDimY = SS_CHARACTER_VIRTUAL_HEIGHT;
 
     if (stance === 'dead') {
-      // When dead, character is horizontal. Length is old height, thickness is related to old width.
-      charPixelDimX = CHARACTER_STANDING_VIRTUAL_HEIGHT; // Length on ground
-      charPixelDimY = TORSO_W + 1; // Thickness on ground (max of torso/head thickness)
+      charPixelDimX = SS_CHARACTER_VIRTUAL_HEIGHT;
+      charPixelDimY = SS_TORSO_W_BASE + 0.5;
     }
 
-    let unit: number;
-    if (actualWidth / charPixelDimX < actualHeight / charPixelDimY) {
-      unit = actualWidth / charPixelDimX;
-    } else {
-      unit = actualHeight / charPixelDimY;
-    }
+    const unit = Math.min(actualWidth / charPixelDimX, actualHeight / charPixelDimY);
 
     const ageMin = 1;
     const ageMax = 60;
-    const minScale = 0.7; // Adjusted min scale for smaller base size
+    const minScale = 0.7;
     const maxScale = 1.0;
     const ageClamped = Math.max(ageMin, Math.min(age, ageMax));
     const ageScaleFactor = minScale + ((ageClamped - ageMin) / (ageMax - ageMin)) * (maxScale - minScale);
@@ -124,27 +124,44 @@ The rendering function must be simple and efficient, it should not use complex p
     const charRenderHeight = charPixelDimY * scaledUnit;
 
     const startDrawX = actualX + (actualWidth - charRenderWidth) / 2;
-    const startDrawY = actualY + (actualHeight - charRenderHeight); // Align bottom for standing/actions
-    const deadStartDrawY = actualY + (actualHeight - charRenderHeight) / 2; // Align center for dead
+    const baseStartDrawY = actualY + (actualHeight - charRenderHeight);
+    const deadStartDrawY = actualY + (actualHeight - charRenderHeight) / 2;
+    const currentStartDrawY = stance === 'dead' ? deadStartDrawY : baseStartDrawY;
 
     ctx.save();
 
     const flip = directionX < 0;
     if (flip) {
-      ctx.translate(startDrawX + charRenderWidth, stance === 'dead' ? deadStartDrawY : startDrawY);
+      ctx.translate(startDrawX + charRenderWidth, currentStartDrawY);
       ctx.scale(-1, 1);
     } else {
-      ctx.translate(startDrawX, stance === 'dead' ? deadStartDrawY : startDrawY);
+      ctx.translate(startDrawX, currentStartDrawY);
     }
 
-    const baseSkinColor = gender === 'female' ? '#E8B97C' : '#D09A5A'; // Slightly adjusted skin tones
-    const baseHairColor = '#281808'; // Darker, more solid hair
-    const baseClothingColor = gender === 'female' ? '#9A6A3F' : '#7F5C4A'; // Muted stone-age clothes
-    const boneColor = '#E0D8C0'; // Off-white bone color
-    const foodColor = '#A0522D'; // Sienna for food
+    const skinColor = gender === 'female' ? '#E8B97C' : '#D09A5A';
+    const hairColor = '#281808';
+    const malePantsColor = '#7F5C4A';
+    const femaleTopColor = '#6B4F3A'; // Slightly different brown for female top
+    const boneColor = '#E0D8C0';
+    const foodColor = '#A0522D';
+
+    const hungerFactor = 1.0 - (Math.max(0, Math.min(100, hungryLevel)) / 100) * 0.3;
+    const maleBuildFactor = gender === 'male' ? 1.05 : 1.0; // Males slightly more robust
+
+    const currentTorsoW = SS_TORSO_W_BASE * hungerFactor * maleBuildFactor;
+    const currentArmW = SS_ARM_W_BASE * hungerFactor * maleBuildFactor;
+    const currentLegW = SS_LEG_W_BASE * hungerFactor; // Legs less affected by maleBuildFactor for SS look
+    const currentHeadW = SS_HEAD_W;
+
+    const currentHeadX = (SS_CHARACTER_VIRTUAL_WIDTH - currentHeadW) / 2;
+    const currentTorsoX = (SS_CHARACTER_VIRTUAL_WIDTH - currentTorsoW) / 2;
+    const currentLeftArmX = currentTorsoX - currentArmW * 0.5;
+    const currentRightArmX = currentTorsoX + currentTorsoW - currentArmW * 0.5;
+    const currentLeftLegX = currentTorsoX + currentTorsoW * 0.5 - currentLegW - 0.05; // Legs closer together
+    const currentRightLegX = currentTorsoX + currentTorsoW * 0.5 + 0.05;
 
     const drawPixelRect = (px: number, py: number, pw: number, ph: number, color: string) => {
-      if (color === 'transparent') return;
+      if (color === 'transparent' || pw <= 0 || ph <= 0) return;
       ctx.fillStyle = color;
       const xPos = Math.floor(px * scaledUnit);
       const yPos = Math.floor(py * scaledUnit);
@@ -153,236 +170,361 @@ The rendering function must be simple and efficient, it should not use complex p
       ctx.fillRect(xPos, yPos, rectWidth, rectHeight);
     };
 
-    const drawShadow = (charX: number, charY: number, shadowW: number, shadowH: number) => {
-      const shadowActualX = charX + (flip ? -SHADOW_OFFSET_X_PX : SHADOW_OFFSET_X_PX);
-      const shadowActualY = charY + SHADOW_OFFSET_Y_PX;
-      drawPixelRect(shadowActualX, shadowActualY, shadowW, shadowH, SHADOW_COLOR);
+    const drawShadow = (charFeetY: number, shadowRadiusX: number, shadowRadiusY: number) => {
+      ctx.fillStyle = SHADOW_COLOR;
+      ctx.beginPath();
+      const shadowCenterX = SS_CHARACTER_VIRTUAL_WIDTH / 2 + (flip ? -SS_SHADOW_OFFSET_X : SS_SHADOW_OFFSET_X);
+      const shadowCenterY = charFeetY + SS_SHADOW_OFFSET_Y + shadowRadiusY;
+      ctx.ellipse(
+        Math.floor(shadowCenterX * scaledUnit),
+        Math.floor(shadowCenterY * scaledUnit),
+        Math.max(1, Math.floor(shadowRadiusX * scaledUnit)),
+        Math.max(1, Math.floor(shadowRadiusY * scaledUnit)),
+        0,
+        0,
+        2 * Math.PI,
+      );
+      ctx.fill();
     };
+
+    const showBackOfHead = directionY < -0.2 && Math.abs(directionX) < 0.7; // Prioritize back view if moving mostly up
+
+    const drawHair = (
+      hx: number,
+      hy: number,
+      hw: number,
+      hh: number,
+      gender: 'male' | 'female',
+      isBackView: boolean,
+    ) => {
+      if (isBackView) {
+        drawPixelRect(hx, hy, hw, hh, hairColor); // Full hair for back view
+        if (gender === 'female') {
+          // Simple block for long hair from back view
+          drawPixelRect(hx, hy + hh, hw, hh * 0.5, hairColor);
+        }
+      } else {
+        drawPixelRect(hx, hy, hw, SS_HAIR_TOP_H, hairColor); // Basic top hair
+        if (gender === 'female') {
+          drawPixelRect(hx - 0.15, hy + SS_HAIR_TOP_H * 0.7, hw * 0.3, hh * 1.2, hairColor); // Left long part
+          drawPixelRect(hx + hw * 0.85, hy + SS_HAIR_TOP_H * 0.7, hw * 0.3, hh * 1.2, hairColor); // Right long part
+        }
+        if (gender === 'male') {
+          // Beard for front/side view
+          drawPixelRect(hx + hw * 0.25, hy + hh * 0.6, hw * 0.5, hh * 0.4, hairColor);
+        }
+      }
+    };
+
+    let effectiveTorsoW = currentTorsoW;
+    let effectiveTorsoX = currentTorsoX;
+    let torsoColor = skinColor;
+    let pantsColor = 'transparent';
+
+    if (gender === 'female') {
+      torsoColor = femaleTopColor;
+      if (isPregnant) {
+        effectiveTorsoW = currentTorsoW * 1.3;
+        effectiveTorsoX = (SS_CHARACTER_VIRTUAL_WIDTH - effectiveTorsoW) / 2;
+      }
+    } else {
+      pantsColor = malePantsColor;
+    }
+
+    // Common body part Y positions
+    let headYPos = SS_HEAD_Y_OFFSET;
+    let torsoYPos = SS_TORSO_Y_OFFSET;
+    let armYPos = SS_ARM_Y_OFFSET;
+    let legYPos = SS_LEG_Y_OFFSET;
 
     switch (stance) {
       case 'idle': {
-        drawShadow(
-          (CHARACTER_STANDING_VIRTUAL_WIDTH - STANDING_SHADOW_W_PX) / 2,
-          CHARACTER_STANDING_VIRTUAL_HEIGHT - STANDING_SHADOW_H_PX / 2,
-          STANDING_SHADOW_W_PX,
-          STANDING_SHADOW_H_PX,
-        );
-        const sway = Math.sin(progress * Math.PI * 2) * 0.15;
-        const bodySwayEffect = sway * 0.5;
+        drawShadow(SS_LEG_Y_OFFSET + SS_LEG_H, SS_SHADOW_RADIUS_X, SS_SHADOW_RADIUS_Y);
+        const idleCycle = progress * Math.PI * 2;
+        const legSwayAmount = 0.1;
+        const rightLegSway = Math.sin(idleCycle) * legSwayAmount;
+        const leftLegSway = Math.sin(idleCycle + Math.PI) * legSwayAmount;
+        // Removed bodyBob as per description to emphasize leg sway
 
-        drawPixelRect(LEFT_LEG_X_POS + bodySwayEffect, LEG_Y_POS, LEG_W, LEG_H, baseSkinColor);
-        drawPixelRect(RIGHT_LEG_X_POS + sway + bodySwayEffect, LEG_Y_POS, LEG_W, LEG_H, baseSkinColor);
-        drawPixelRect(TORSO_X_OFFSET + bodySwayEffect, TORSO_Y_POS, TORSO_W, TORSO_H, baseClothingColor);
-        drawPixelRect(LEFT_ARM_X_POS + bodySwayEffect, ARM_Y_POS, ARM_W, ARM_H, baseSkinColor);
-        drawPixelRect(RIGHT_ARM_X_POS + bodySwayEffect, ARM_Y_POS, ARM_W, ARM_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET + bodySwayEffect, HEAD_Y_POS, HEAD_W, HEAD_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET + bodySwayEffect, HEAD_Y_POS, HEAD_W, HAIR_TOP_H, baseHairColor);
+        // Y positions remain static relative to baseStartDrawY for idle
+
+        drawPixelRect(currentLeftLegX + leftLegSway, legYPos, currentLegW, SS_LEG_H, skinColor);
+        drawPixelRect(currentRightLegX + rightLegSway, legYPos, currentLegW, SS_LEG_H, skinColor);
+
+        if (gender === 'male') {
+          drawPixelRect(
+            effectiveTorsoX,
+            torsoYPos + SS_TORSO_H - MALE_PANTS_H,
+            effectiveTorsoW,
+            MALE_PANTS_H,
+            pantsColor,
+          );
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H - MALE_PANTS_H, torsoColor); // Skin for upper torso
+        } else {
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H + FEMALE_TOP_H_ADJUST, torsoColor); // Female top
+        }
+
+        drawPixelRect(currentLeftArmX + leftLegSway * 0.2, armYPos, currentArmW, SS_ARM_H, skinColor);
+        drawPixelRect(currentRightArmX + rightLegSway * 0.2, armYPos, currentArmW, SS_ARM_H, skinColor);
+
+        if (!showBackOfHead) drawPixelRect(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, skinColor);
+        drawHair(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, gender, showBackOfHead);
         break;
       }
       case 'walk': {
-        drawShadow(
-          (CHARACTER_STANDING_VIRTUAL_WIDTH - STANDING_SHADOW_W_PX) / 2,
-          CHARACTER_STANDING_VIRTUAL_HEIGHT - STANDING_SHADOW_H_PX / 2,
-          STANDING_SHADOW_W_PX,
-          STANDING_SHADOW_H_PX,
-        );
+        drawShadow(SS_LEG_Y_OFFSET + SS_LEG_H, SS_SHADOW_RADIUS_X, SS_SHADOW_RADIUS_Y);
         const angle = progress * Math.PI * 2;
-        const legMove = Math.sin(angle) * 0.75; // Adjusted for smaller legs
-        const armMove = Math.sin(angle + Math.PI) * 0.5;
-        const bodyBob = Math.abs(Math.cos(angle)) * 0.25; // Subtle bob
+        const legMove = Math.sin(angle) * 0.4; // More pronounced SS style leg move
+        const armMove = Math.sin(angle + Math.PI) * 0.3;
+        const bodyBob = Math.abs(Math.cos(angle)) * 0.15;
 
-        const currentLegY = LEG_Y_POS + bodyBob;
-        const currentTorsoY = TORSO_Y_POS + bodyBob;
-        const currentArmY = ARM_Y_POS + bodyBob;
-        const currentHeadY = HEAD_Y_POS + bodyBob;
+        headYPos += bodyBob;
+        torsoYPos += bodyBob;
+        armYPos += bodyBob;
+        legYPos += bodyBob;
 
-        drawPixelRect(LEFT_LEG_X_POS + legMove, currentLegY, LEG_W, LEG_H, baseSkinColor);
-        drawPixelRect(RIGHT_LEG_X_POS - legMove, currentLegY, LEG_W, LEG_H, baseSkinColor);
-        drawPixelRect(TORSO_X_OFFSET, currentTorsoY, TORSO_W, TORSO_H, baseClothingColor);
-        drawPixelRect(LEFT_ARM_X_POS + armMove, currentArmY, ARM_W, ARM_H, baseSkinColor);
-        drawPixelRect(RIGHT_ARM_X_POS - armMove, currentArmY, ARM_W, ARM_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HEAD_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HAIR_TOP_H, baseHairColor);
+        drawPixelRect(currentLeftLegX + legMove, legYPos, currentLegW, SS_LEG_H, skinColor);
+        drawPixelRect(currentRightLegX - legMove, legYPos, currentLegW, SS_LEG_H, skinColor);
+
+        if (gender === 'male') {
+          drawPixelRect(
+            effectiveTorsoX,
+            torsoYPos + SS_TORSO_H - MALE_PANTS_H,
+            effectiveTorsoW,
+            MALE_PANTS_H,
+            pantsColor,
+          );
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H - MALE_PANTS_H, skinColor);
+        } else {
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H + FEMALE_TOP_H_ADJUST, torsoColor);
+        }
+
+        drawPixelRect(currentLeftArmX + armMove, armYPos, currentArmW, SS_ARM_H, skinColor);
+        drawPixelRect(currentRightArmX - armMove, armYPos, currentArmW, SS_ARM_H, skinColor);
+
+        if (!showBackOfHead) drawPixelRect(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, skinColor);
+        drawHair(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, gender, showBackOfHead);
         break;
       }
       case 'gathering': {
-        drawShadow(
-          (CHARACTER_STANDING_VIRTUAL_WIDTH - STANDING_SHADOW_W_PX) / 2,
-          CHARACTER_STANDING_VIRTUAL_HEIGHT - STANDING_SHADOW_H_PX / 2,
-          STANDING_SHADOW_W_PX,
-          STANDING_SHADOW_H_PX,
-        );
-        const kneeBendAmount = 0.5;
+        drawShadow(SS_LEG_Y_OFFSET + SS_LEG_H, SS_SHADOW_RADIUS_X * 1.1, SS_SHADOW_RADIUS_Y);
+        const kneeBendAmount = 0.2;
         const bodyYOffset = kneeBendAmount * 0.5;
+        const legH = SS_LEG_H - kneeBendAmount;
 
-        const currentLegY = LEG_Y_POS + bodyYOffset;
-        const currentLegH = LEG_H - kneeBendAmount;
-        const currentTorsoY = TORSO_Y_POS + bodyYOffset;
-        const currentArmY = ARM_Y_POS + bodyYOffset;
-        const currentHeadY = HEAD_Y_POS + bodyYOffset;
+        headYPos += bodyYOffset;
+        torsoYPos += bodyYOffset;
+        armYPos += bodyYOffset;
+        legYPos += bodyYOffset + kneeBendAmount;
 
-        drawPixelRect(LEFT_LEG_X_POS, currentLegY, LEG_W, currentLegH, baseSkinColor);
-        drawPixelRect(RIGHT_LEG_X_POS, currentLegY, LEG_W, currentLegH, baseSkinColor);
-        drawPixelRect(TORSO_X_OFFSET, currentTorsoY, TORSO_W, TORSO_H, baseClothingColor);
+        drawPixelRect(currentLeftLegX, legYPos, currentLegW, legH, skinColor);
+        drawPixelRect(currentRightLegX, legYPos, currentLegW, legH, skinColor);
+
+        if (gender === 'male') {
+          drawPixelRect(
+            effectiveTorsoX,
+            torsoYPos + SS_TORSO_H - MALE_PANTS_H,
+            effectiveTorsoW,
+            MALE_PANTS_H,
+            pantsColor,
+          );
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H - MALE_PANTS_H, skinColor);
+        } else {
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H + FEMALE_TOP_H_ADJUST, torsoColor);
+        }
 
         const reachCycle = (Math.sin(progress * Math.PI * 2) + 1) / 2;
-        const armReachExtent = 1.0;
-
-        drawPixelRect(LEFT_ARM_X_POS, currentArmY, ARM_W, ARM_H, baseSkinColor); // Static arm
+        const armReachExtent = 0.6;
+        const armOffsetY = -0.2 * reachCycle;
         drawPixelRect(
-          RIGHT_ARM_X_POS,
-          currentArmY - 0.1 * reachCycle,
-          ARM_W + armReachExtent * reachCycle,
-          ARM_H,
-          baseSkinColor,
-        ); // Reaching arm
+          currentLeftArmX - armReachExtent * reachCycle * 0.4,
+          armYPos + armOffsetY,
+          currentArmW + armReachExtent * reachCycle * 0.4,
+          SS_ARM_H,
+          skinColor,
+        );
+        drawPixelRect(
+          currentRightArmX + armReachExtent * reachCycle * 0.2,
+          armYPos + armOffsetY,
+          currentArmW + armReachExtent * reachCycle * 0.6,
+          SS_ARM_H,
+          skinColor,
+        );
 
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HEAD_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HAIR_TOP_H, baseHairColor);
+        if (!showBackOfHead) drawPixelRect(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, skinColor);
+        drawHair(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, gender, showBackOfHead);
         break;
       }
       case 'eat': {
-        drawShadow(
-          (CHARACTER_STANDING_VIRTUAL_WIDTH - STANDING_SHADOW_W_PX) / 2,
-          CHARACTER_STANDING_VIRTUAL_HEIGHT - STANDING_SHADOW_H_PX / 2,
-          STANDING_SHADOW_W_PX,
-          STANDING_SHADOW_H_PX,
-        );
-        const kneeBendAmount = 0.25;
+        drawShadow(SS_LEG_Y_OFFSET + SS_LEG_H, SS_SHADOW_RADIUS_X, SS_SHADOW_RADIUS_Y);
+        const kneeBendAmount = 0.1;
         const bodyYOffset = kneeBendAmount;
+        const legH = SS_LEG_H - kneeBendAmount;
 
-        const currentLegY = LEG_Y_POS + bodyYOffset;
-        const currentLegH = LEG_H - kneeBendAmount;
-        const currentTorsoY = TORSO_Y_POS + bodyYOffset;
-        const currentArmY = ARM_Y_POS + bodyYOffset;
-        const currentHeadY = HEAD_Y_POS + bodyYOffset;
+        headYPos += bodyYOffset;
+        torsoYPos += bodyYOffset;
+        armYPos += bodyYOffset;
+        legYPos += bodyYOffset + kneeBendAmount;
 
-        drawPixelRect(LEFT_LEG_X_POS, currentLegY, LEG_W, currentLegH, baseSkinColor);
-        drawPixelRect(RIGHT_LEG_X_POS, currentLegY, LEG_W, currentLegH, baseSkinColor);
-        drawPixelRect(TORSO_X_OFFSET, currentTorsoY, TORSO_W, TORSO_H, baseClothingColor);
+        drawPixelRect(currentLeftLegX, legYPos, currentLegW, legH, skinColor);
+        drawPixelRect(currentRightLegX, legYPos, currentLegW, legH, skinColor);
 
-        const eatAnimProgress = (Math.sin(progress * Math.PI * 2 * 2) + 1) / 2; // Faster eating anim
+        if (gender === 'male') {
+          drawPixelRect(
+            effectiveTorsoX,
+            torsoYPos + SS_TORSO_H - MALE_PANTS_H,
+            effectiveTorsoW,
+            MALE_PANTS_H,
+            pantsColor,
+          );
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H - MALE_PANTS_H, skinColor);
+        } else {
+          drawPixelRect(effectiveTorsoX, torsoYPos, effectiveTorsoW, SS_TORSO_H + FEMALE_TOP_H_ADJUST, torsoColor);
+        }
 
-        const foodHandTargetX = HEAD_X_OFFSET + HEAD_W / 2 - 0.5;
-        const foodHandTargetY = HEAD_Y_POS + HEAD_H / 3;
-
-        const armOriginX = RIGHT_ARM_X_POS + ARM_W / 2;
-        const armOriginY = currentArmY + ARM_H / 2;
-
+        const eatAnimProgress = (Math.sin(progress * Math.PI * 4) + 1) / 2;
+        const foodHandTargetX = currentHeadX + currentHeadW / 2 - currentArmW / 2;
+        const foodHandTargetY = headYPos + SS_HEAD_H / 2.5;
+        const armOriginX = currentRightArmX + currentArmW / 2;
+        const armOriginY = armYPos + SS_ARM_H / 2;
         const currentHandX = armOriginX - (armOriginX - foodHandTargetX) * eatAnimProgress;
         const currentHandY = armOriginY - (armOriginY - foodHandTargetY) * eatAnimProgress;
 
-        drawPixelRect(LEFT_ARM_X_POS, currentArmY, ARM_W, ARM_H, baseSkinColor); // Static arm
-        drawPixelRect(currentHandX - ARM_W / 2, currentHandY - ARM_H / 2, ARM_W, ARM_H * 0.8, baseSkinColor); // Eating Arm
-        drawPixelRect(currentHandX - 0.5, currentHandY - 0.75, 1, 0.75, foodColor); // Food item slightly above hand center
+        drawPixelRect(currentLeftArmX, armYPos, currentArmW, SS_ARM_H, skinColor); // Static left arm
+        drawPixelRect(
+          currentHandX - currentArmW / 2,
+          currentHandY - SS_ARM_H / 2,
+          currentArmW,
+          SS_ARM_H * 0.9,
+          skinColor,
+        ); // Right arm bringing food
+        drawPixelRect(currentHandX - 0.2, currentHandY - 0.4, 0.4, 0.4, foodColor); // Food item
 
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HEAD_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET, currentHeadY, HEAD_W, HAIR_TOP_H, baseHairColor);
+        if (!showBackOfHead) drawPixelRect(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, skinColor);
+        drawHair(currentHeadX, headYPos, currentHeadW, SS_HEAD_H, gender, showBackOfHead);
         break;
       }
       case 'procreate': {
-        const procreateShadowWidthPx = STANDING_SHADOW_W_PX + 1;
-        drawShadow(
-          (CHARACTER_STANDING_VIRTUAL_WIDTH - procreateShadowWidthPx) / 2,
-          CHARACTER_STANDING_VIRTUAL_HEIGHT - STANDING_SHADOW_H_PX / 2,
-          procreateShadowWidthPx,
-          STANDING_SHADOW_H_PX,
-        );
-
-        const thrust = (Math.sin(progress * Math.PI * 4) * 0.5 + 0.5) * 0.3; // Reduced thrust intensity
-        const kneeBendAmount = 0.75;
+        drawShadow(SS_LEG_Y_OFFSET + SS_LEG_H, SS_SHADOW_RADIUS_X * 1.2, SS_SHADOW_RADIUS_Y);
+        const thrust = (Math.sin(progress * Math.PI * 4) * 0.5 + 0.5) * 0.15; // Subtle thrust
+        const kneeBendAmount = 0.3;
         const bodyYOffset = kneeBendAmount * 0.5;
+        const legH = SS_LEG_H - kneeBendAmount;
 
-        const currentLegY = LEG_Y_POS + bodyYOffset;
-        const currentLegH = LEG_H - kneeBendAmount;
-        const procreateLeftLegX = LEFT_LEG_X_POS - 0.25;
-        const procreateRightLegX = RIGHT_LEG_X_POS + 0.25;
+        headYPos += bodyYOffset - thrust * 0.4;
+        torsoYPos += bodyYOffset - thrust * 0.2;
+        armYPos += bodyYOffset - thrust * 0.1;
+        legYPos += bodyYOffset + kneeBendAmount;
 
-        drawPixelRect(procreateLeftLegX, currentLegY, LEG_W, currentLegH, baseSkinColor);
-        drawPixelRect(procreateRightLegX, currentLegY, LEG_W, currentLegH, baseSkinColor);
+        const torsoDrawX = currentTorsoX + thrust * 0.1;
+        const headDrawX = currentHeadX + thrust * 0.1;
 
-        const torsoThrustX = thrust * 0.2;
-        const torsoThrustY = -thrust * 0.3;
-        const currentTorsoY = TORSO_Y_POS + bodyYOffset + torsoThrustY;
-        const currentHeadY = HEAD_Y_POS + bodyYOffset - thrust * 0.15 + torsoThrustY;
+        drawPixelRect(currentLeftLegX - 0.05, legYPos, currentLegW, legH, skinColor);
+        drawPixelRect(currentRightLegX + 0.05, legYPos, currentLegW, legH, skinColor);
 
-        drawPixelRect(TORSO_X_OFFSET + torsoThrustX, currentTorsoY, TORSO_W, TORSO_H, baseClothingColor);
-        // Arms slightly splayed during procreate
-        drawPixelRect(
-          LEFT_ARM_X_POS - 0.2 + torsoThrustX * 0.5,
-          ARM_Y_POS + bodyYOffset + 0.25,
-          ARM_W,
-          ARM_H - 0.5,
-          baseSkinColor,
-        );
-        drawPixelRect(
-          RIGHT_ARM_X_POS + 0.2 + torsoThrustX * 0.5,
-          ARM_Y_POS + bodyYOffset + 0.25,
-          ARM_W,
-          ARM_H - 0.5,
-          baseSkinColor,
-        );
+        if (gender === 'male') {
+          drawPixelRect(torsoDrawX, torsoYPos + SS_TORSO_H - MALE_PANTS_H, effectiveTorsoW, MALE_PANTS_H, pantsColor);
+          drawPixelRect(torsoDrawX, torsoYPos, effectiveTorsoW, SS_TORSO_H - MALE_PANTS_H, skinColor);
+        } else {
+          // Pregnant female torso already handled by effectiveTorsoW/X
+          drawPixelRect(
+            effectiveTorsoX + thrust * 0.1,
+            torsoYPos,
+            effectiveTorsoW,
+            SS_TORSO_H + FEMALE_TOP_H_ADJUST,
+            torsoColor,
+          );
+        }
 
-        drawPixelRect(HEAD_X_OFFSET + torsoThrustX, currentHeadY, HEAD_W, HEAD_H, baseSkinColor);
-        drawPixelRect(HEAD_X_OFFSET + torsoThrustX, currentHeadY, HEAD_W, HAIR_TOP_H, baseHairColor);
+        drawPixelRect(currentLeftArmX - 0.05 + thrust * 0.05, armYPos, currentArmW, SS_ARM_H, skinColor);
+        drawPixelRect(currentRightArmX + 0.05 + thrust * 0.05, armYPos, currentArmW, SS_ARM_H, skinColor);
+
+        // Ensure no color flashing or lines by using standard skin/hair drawing
+        if (!showBackOfHead) drawPixelRect(headDrawX, headYPos, currentHeadW, SS_HEAD_H, skinColor);
+        drawHair(headDrawX, headYPos, currentHeadW, SS_HEAD_H, gender, showBackOfHead);
         break;
       }
       case 'dead': {
-        // Dead shadow is wider, reflecting character lying down
-        const deadShadowW = charPixelDimX * 0.7;
-        const deadShadowH = STANDING_SHADOW_H_PX * 0.8;
-        drawShadow(
-          (charPixelDimX - deadShadowW) / 2,
-          charPixelDimY - deadShadowH * 0.7, // Shadow slightly under the body
-          deadShadowW,
-          deadShadowH,
-        );
+        const deadShadowRadiusX = charPixelDimX * 0.3;
+        const deadShadowRadiusY = SS_SHADOW_RADIUS_Y * 0.6;
+        drawShadow(charPixelDimY - deadShadowRadiusY * 1.5, deadShadowRadiusX, deadShadowRadiusY);
 
-        const skeletonProgress = Math.max(0, Math.min(1, (progress - 0.2) / 0.8)); // Decay starts sooner, lasts longer
+        const skeletonProgress = Math.max(0, Math.min(1, (progress - 0.1) / 0.9));
+        const dSkin = skeletonProgress > 0.2 ? boneColor : skinColor;
+        const dClothMale = skeletonProgress > 0.5 ? boneColor : malePantsColor; // Changed to const
+        const dClothFemale = skeletonProgress > 0.5 ? boneColor : femaleTopColor; // Changed to const
+        const dHair = skeletonProgress > 0.75 ? 'transparent' : hairColor;
 
-        const currentSkinColor = skeletonProgress > 0.15 ? boneColor : baseSkinColor;
-        const currentClothingColor = skeletonProgress > 0.4 ? boneColor : baseClothingColor;
-        const currentHairColor = skeletonProgress > 0.7 ? 'transparent' : baseHairColor;
-
-        const bodyCenterY = charPixelDimY / 2; // Center of the character's thickness on ground
-
-        // Parts are laid out along the new X axis (which is charPixelDimX = old CHARACTER_STANDING_VIRTUAL_HEIGHT)
-        // HEAD: Length on ground = original HEAD_W, Thickness on ground = original HEAD_H
+        const bodyCenterY = charPixelDimY / 2;
+        const deadHeadW = SS_HEAD_H;
+        const deadHeadH = SS_HEAD_W;
         const deadHeadX = 0;
-        drawPixelRect(deadHeadX, bodyCenterY - HEAD_H / 2, HEAD_W, HEAD_H, currentSkinColor);
-        if (currentHairColor !== 'transparent') {
-          drawPixelRect(deadHeadX, bodyCenterY - HEAD_H / 2, HEAD_W, HAIR_TOP_H, currentHairColor);
+        drawPixelRect(deadHeadX, bodyCenterY - deadHeadH / 2, deadHeadW, deadHeadH, dSkin);
+        if (dHair !== 'transparent') {
+          drawPixelRect(
+            deadHeadX,
+            bodyCenterY - deadHeadH / 2,
+            deadHeadW,
+            SS_HAIR_TOP_H * (deadHeadH / SS_HEAD_H),
+            dHair,
+          );
         }
 
-        // TORSO: Length on ground = original TORSO_H, Thickness on ground = original TORSO_W
-        const deadTorsoX = deadHeadX + HEAD_W;
-        drawPixelRect(deadTorsoX, bodyCenterY - TORSO_W / 2, TORSO_H, TORSO_W, currentClothingColor);
+        const deadTorsoL = SS_TORSO_H;
+        const deadTorsoT = currentTorsoW * 0.8; // Torso thickness when dead
+        const deadTorsoX = deadHeadW;
 
-        const limbThickness = LEG_W; // Use LEG_W for consistent limb thickness
-        // ARMS: Length on ground = original ARM_H, Thickness = ARM_W
+        if (gender === 'male') {
+          drawPixelRect(
+            deadTorsoX,
+            bodyCenterY - deadTorsoT / 2 + deadTorsoT * (1 - MALE_PANTS_H / SS_TORSO_H),
+            deadTorsoL,
+            deadTorsoT * (MALE_PANTS_H / SS_TORSO_H),
+            dClothMale,
+          );
+          drawPixelRect(
+            deadTorsoX,
+            bodyCenterY - deadTorsoT / 2,
+            deadTorsoL,
+            deadTorsoT * (1 - MALE_PANTS_H / SS_TORSO_H),
+            dSkin,
+          ); // Skin part for male
+        } else {
+          drawPixelRect(deadTorsoX, bodyCenterY - deadTorsoT / 2, deadTorsoL, deadTorsoT, dClothFemale);
+        }
+
+        const deadArmL = SS_ARM_H;
+        const deadArmT = currentArmW * 0.8;
         drawPixelRect(
-          deadTorsoX + 0.25,
-          bodyCenterY - TORSO_W / 2 - limbThickness + 0.2,
-          ARM_H * 0.8,
-          limbThickness,
-          currentSkinColor,
-        ); // Upper arm
-        drawPixelRect(deadTorsoX + 0.25, bodyCenterY + TORSO_W / 2 - 0.2, ARM_H * 0.8, limbThickness, currentSkinColor); // Lower arm
+          deadTorsoX + deadTorsoL * 0.1,
+          bodyCenterY - deadTorsoT / 2 - deadArmT * 0.8,
+          deadArmL * 0.9,
+          deadArmT,
+          dSkin,
+        ); // Upper arm splayed
+        drawPixelRect(
+          deadTorsoX + deadTorsoL * 0.15,
+          bodyCenterY + deadTorsoT / 2 - deadArmT * 0.2,
+          deadArmL * 0.9,
+          deadArmT,
+          dSkin,
+        ); // Lower arm splayed
 
-        // LEGS: Length on ground = original LEG_H, Thickness = LEG_W
-        const deadLegsX = deadTorsoX + TORSO_H;
-        drawPixelRect(deadLegsX, bodyCenterY - limbThickness * 1.2, LEG_H * 0.9, limbThickness, currentSkinColor); // Upper leg
-        drawPixelRect(deadLegsX, bodyCenterY + limbThickness * 0.2, LEG_H * 0.9, limbThickness, currentSkinColor); // Lower leg
+        const deadLegL = SS_LEG_H;
+        const deadLegT = currentLegW * 0.8;
+        const deadLegsX = deadTorsoX + deadTorsoL;
+        drawPixelRect(deadLegsX, bodyCenterY - deadLegT * 1.2, deadLegL, deadLegT, dSkin);
+        drawPixelRect(deadLegsX, bodyCenterY + deadLegT * 0.2, deadLegL, deadLegT, dSkin);
 
-        if (skeletonProgress > 0.5 && currentClothingColor === boneColor) {
-          const ribColor = 'rgba(0,0,0,0.3)';
-          const numRibs = 2; // Fewer ribs for smaller torso
-          for (let i = 0; i < numRibs; i++) {
+        if (skeletonProgress > 0.6 && (dClothMale === boneColor || dClothFemale === boneColor)) {
+          const ribColor = '#555555'; // Dark grey for pixel rib detail
+          const ribWidth = 0.2; // Virtual width for a thin rib line
+          for (let i = 0; i < 2; i++) {
             drawPixelRect(
-              deadTorsoX + TORSO_H * 0.25 + i * ((TORSO_H * 0.4) / numRibs),
-              bodyCenterY - TORSO_W / 2,
-              limbThickness * 0.4,
-              TORSO_W,
+              deadTorsoX + deadTorsoL * 0.3 + i * (deadTorsoL * 0.25),
+              bodyCenterY - deadTorsoT / 2,
+              ribWidth,
+              deadTorsoT,
               ribColor,
             );
           }

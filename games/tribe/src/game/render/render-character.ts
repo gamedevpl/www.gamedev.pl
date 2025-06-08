@@ -39,5 +39,7 @@ export function renderCharacter(ctx: CanvasRenderingContext2D, human: HumanEntit
     human.gender,
     human.age,
     [human.direction.x, human.direction.y],
+    human.isPregnant ?? false,
+    human.hunger,
   );
 }
