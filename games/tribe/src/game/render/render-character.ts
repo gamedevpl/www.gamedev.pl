@@ -1,6 +1,6 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 
-import { tribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
+import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 
 const CHARACTER_RADIUS = 30;
 
@@ -28,7 +28,7 @@ export function renderCharacter(ctx: CanvasRenderingContext2D, human: HumanEntit
 
   const stance: Stance = actionToStanceMap[activeAction] || 'idle';
 
-  tribeHuman2D.render(
+  TribeHuman2D.render(
     ctx,
     position.x - currentCharacterRadius,
     position.y - currentCharacterRadius,
