@@ -15,7 +15,7 @@ import {
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
-import { removeEntity } from '../../entities-update';
+import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 
@@ -170,6 +170,15 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       }
     }
 
+    // Create a corpse at the position of the dying human
+    createHumanCorpse(
+      updateContext.gameState.entities,
+      entity.position,
+      entity.gender,
+      entity.age,
+      entity.id,
+      updateContext.gameState.time,
+    );
     // Remove the deceased entity
     removeEntity(updateContext.gameState.entities, entity.id);
     // No further updates for this entity as it's being removed

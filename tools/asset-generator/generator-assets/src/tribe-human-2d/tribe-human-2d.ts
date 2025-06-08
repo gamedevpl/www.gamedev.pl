@@ -108,8 +108,8 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
     let charPixelDimY = SS_CHARACTER_VIRTUAL_HEIGHT;
 
     if (stance === 'dead') {
-      charPixelDimX = SS_CHARACTER_VIRTUAL_HEIGHT; 
-      charPixelDimY = SS_TORSO_W_BASE + SS_HEAD_H * 0.5; 
+      charPixelDimX = SS_CHARACTER_VIRTUAL_HEIGHT;
+      charPixelDimY = SS_TORSO_W_BASE + SS_HEAD_H * 0.5;
     }
 
     const unit = Math.min(actualWidth / charPixelDimX, actualHeight / charPixelDimY);
@@ -127,7 +127,7 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
 
     const startDrawX = actualX + (actualWidth - charRenderWidth) / 2;
     const baseStartDrawY = actualY + (actualHeight - charRenderHeight);
-    const deadStartDrawY = actualY + (actualHeight - charRenderHeight) / 2; 
+    const deadStartDrawY = actualY + (actualHeight - charRenderHeight) / 2;
     const currentStartDrawY = stance === 'dead' ? deadStartDrawY : baseStartDrawY;
 
     ctx.save();
@@ -149,7 +149,7 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
 
     const hungerFactor = 1.0 - (Math.max(0, Math.min(100, hungryLevel)) / 100) * 0.3;
     // Adjusted: Males more robust, females slightly leaner, affects arms and legs.
-    const genderBuildFactor = gender === 'male' ? 1.05 : 0.95; 
+    const genderBuildFactor = gender === 'male' ? 1.05 : 0.95;
 
     let currentTorsoW = SS_TORSO_W_BASE * hungerFactor * genderBuildFactor;
     let currentArmW = SS_ARM_W_BASE * hungerFactor * genderBuildFactor;
@@ -157,8 +157,8 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
     const currentHeadW = SS_HEAD_W;
 
     if (isPregnant && gender === 'female') {
-      currentTorsoW *= 1.3;
-      currentArmW *= 1.1; 
+      currentTorsoW *= 2.3;
+      currentArmW *= 1.1;
       currentLegW *= 1.1;
     }
 
@@ -203,10 +203,10 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
     const showBackOfHead = directionY < -0.2 && Math.abs(directionX) < 0.7;
 
     const drawHair = (
-      hx: number, 
-      hy: number, 
-      hw: number, 
-      hh: number, 
+      hx: number,
+      hy: number,
+      hw: number,
+      hh: number,
       gender: 'male' | 'female',
       isBackView: boolean,
     ) => {
@@ -219,9 +219,9 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
         if (gender === 'female') {
           // Female: Wider top hair for SS style + voluminous side hair
           drawPixelRect(hx - hw * 0.05, hy, hw * 1.1, SS_HAIR_TOP_H, hairColor); // Wider hair cap
-          const sideHairW = hw * 0.55; 
-          const sideHairH = hh * 1.1; 
-          const sideHairY = hy + SS_HAIR_TOP_H * 0.3; 
+          const sideHairW = hw * 0.55;
+          const sideHairH = hh * 1.1;
+          const sideHairY = hy + SS_HAIR_TOP_H * 0.3;
           drawPixelRect(hx - sideHairW * 0.35, sideHairY, sideHairW, sideHairH, hairColor);
           drawPixelRect(hx + hw * 1.1 - sideHairW * 0.65, sideHairY, sideHairW, sideHairH, hairColor);
         } else {
@@ -450,15 +450,15 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
           const radius = radiusBase + (Math.random() * 0.6 + particleCycle * 0.4) * radiusBase;
           const pX = torsoDrawX + effectiveTorsoW / 2 + Math.cos(angle) * radius - thrust * 0.5;
           const pY = torsoYPos + SS_TORSO_H / 2 + Math.sin(angle) * radius * 0.7 - thrust * 0.2;
-          
+
           // Adjusted particle size and alpha for subtlety and to prevent body color washout
-          const particleAlpha = (0.1 + Math.random() * 0.15) * (1 - particleCycle * 0.6); 
+          const particleAlpha = (0.1 + Math.random() * 0.15) * (1 - particleCycle * 0.6);
           const pSize = (0.02 + Math.random() * 0.04) * (1 - particleCycle * 0.4);
 
           if (pSize < 0.015) continue; // Ensure particles are not too small
           if (particleAlpha > 0.05) {
             // Changed particle color to a soft yellow glow/dust
-            drawPixelRect(pX, pY, pSize, pSize, `rgba(255, 255, 120, ${particleAlpha.toFixed(2)})`); 
+            drawPixelRect(pX, pY, pSize, pSize, `rgba(255, 255, 120, ${particleAlpha.toFixed(2)})`);
           }
         }
         break;
@@ -488,8 +488,8 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
         const dHair = skeletonProgress > 0.75 ? 'transparent' : hairColor;
 
         const bodyCenterY = charPixelDimY / 2;
-        const deadHeadW = SS_HEAD_H; 
-        const deadHeadH = SS_HEAD_W; 
+        const deadHeadW = SS_HEAD_H;
+        const deadHeadH = SS_HEAD_W;
         const deadHeadX = 0;
 
         drawPixelRect(deadHeadX, bodyCenterY - deadHeadH / 2, deadHeadW, deadHeadH, dSkin);
@@ -562,7 +562,7 @@ Subtle shadow should be drawn under the character to give it a sense of depth.
       }
       default:
         // Fallback for unknown stances, helps in debugging.
-        drawPixelRect(0, 0, charPixelDimX, charPixelDimY, 'magenta'); 
+        drawPixelRect(0, 0, charPixelDimX, charPixelDimY, 'magenta');
     }
 
     ctx.restore();

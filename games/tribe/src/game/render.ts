@@ -3,6 +3,8 @@ import { HOURS_PER_GAME_DAY } from './world-consts';
 import { renderBerryBush } from './render/render-bush'; // Added import
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types'; // Added import
 import { Entity } from './entities/entities-types'; // Added import for type casting
+import { renderHumanCorpse } from './render/render-human-corpse';
+import { HumanCorpseEntity } from './entities/characters/human/human-corpse-types';
 import { renderCharacter } from './render/render-character'; // Added import for character rendering
 import { HumanEntity } from './entities/characters/human/human-types'; // Added import for HumanEntity
 
@@ -40,6 +42,8 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
       renderBerryBush(ctx, entity as BerryBushEntity);
     } else if (entity.type === 'human') {
       renderCharacter(ctx, entity as HumanEntity);
+    } else if (entity.type === 'humanCorpse') {
+      renderHumanCorpse(ctx, entity as HumanCorpseEntity);
     }
     // TODO: Implement rendering for other entity types
   });

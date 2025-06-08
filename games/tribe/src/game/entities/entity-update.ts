@@ -3,6 +3,8 @@ import { stateUpdate } from '../state-machine/state-machine-update';
 import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
+import { humanCorpseUpdate } from './characters/human/human-corpse-update';
+import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
 
@@ -64,6 +66,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   if (entity.type === 'human') {
     // Pass the full updateContext and deltaTime to humanUpdate
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
+  } else if (entity.type === 'humanCorpse') {
+    humanCorpseUpdate(entity as HumanCorpseEntity, updateContext);
   }
 
   // AI decision making for non-player humans

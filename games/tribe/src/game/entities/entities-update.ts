@@ -17,6 +17,7 @@ import {
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
 } from '../world-consts';
+import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 
@@ -87,10 +88,10 @@ export function createHuman(
   initialAge: number = HUMAN_INITIAL_AGE,
   initialHunger: number = HUMAN_INITIAL_HUNGER,
   motherId?: EntityId,
-  fatherId?: EntityId
+  fatherId?: EntityId,
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
-  
+
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
     hunger: initialHunger,
@@ -111,13 +112,38 @@ export function createHuman(
   return human;
 }
 
-export function giveBirth(mother: HumanEntity, fatherId: EntityId | undefined, updateContext: UpdateContext): HumanEntity | undefined {
+export function createHumanCorpse(
+  state: Entities,
+  position: Vector2D,
+  gender: 'male' | 'female',
+  age: number,
+  originalHumanId: EntityId,
+  currentTime: number,
+): HumanCorpseEntity {
+  const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
+    position,
+    gender,
+    age,
+    originalHumanId,
+    timeOfDeath: currentTime,
+    decayProgress: 0,
+    // Corpses don't have these properties, so set to default/null values
+    stateMachine: undefined,
+  });
+  return corpse;
+}
+
+export function giveBirth(
+  mother: HumanEntity,
+  fatherId: EntityId | undefined,
+  updateContext: UpdateContext,
+): HumanEntity | undefined {
   // Generate random gender
   const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
-  
+
   // Create a slightly offset position to avoid exact overlap
   const childPosition = vectorAdd(mother.position, { x: 5, y: 5 });
-  
+
   // Create the child entity
   const child = createHuman(
     updateContext.gameState.entities,
@@ -128,9 +154,9 @@ export function giveBirth(mother: HumanEntity, fatherId: EntityId | undefined, u
     0, // Age 0
     HUMAN_INITIAL_HUNGER / 2, // Start with half hunger
     mother.id, // Mother ID
-    fatherId // Father ID
+    fatherId, // Father ID
   );
-  
+
   return child;
 }
 

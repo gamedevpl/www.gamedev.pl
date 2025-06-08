@@ -49,6 +49,9 @@ export const HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING: number = 80; // Hung
 export const ADULT_CHILD_FEEDING_RANGE: number = 50; // Range in pixels for an adult child to feed an old parent
 export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for an adult child after feeding a parent
 
+// Human Corpse Constants
+export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 4; // Corpses remain for 4 game hours
+
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 70; // AI decides to eat if hunger >= this and has berries
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
