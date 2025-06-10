@@ -3,6 +3,7 @@ import { Vector2D } from './math-types';
 import { calculateWrappedDistance, vectorAdd } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types'; // Added import
 import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts'; // Added import
+import { GameWorldState } from '../world-types';
 
 /**
  * Generates a random position within a radius of a center point, accounting for world wrapping
@@ -128,8 +129,10 @@ export function countEntitiesOfTypeInRadius(
 ): number {
   let count = 0;
   for (const entity of allEntities.values()) {
-    if (entity.type === targetType && 
-        calculateWrappedDistance(sourcePosition, entity.position, worldWidth, worldHeight) <= radius) {
+    if (
+      entity.type === targetType &&
+      calculateWrappedDistance(sourcePosition, entity.position, worldWidth, worldHeight) <= radius
+    ) {
       count++;
     }
   }
@@ -199,12 +202,7 @@ export function findPotentialNewPartners(
       }
 
       // Check distance
-      const distance = calculateWrappedDistance(
-        sourceHuman.position,
-        partner.position,
-        worldWidth,
-        worldHeight,
-      );
+      const distance = calculateWrappedDistance(sourceHuman.position, partner.position, worldWidth, worldHeight);
 
       if (distance <= radius) {
         potentialPartners.push(partner);
@@ -212,4 +210,58 @@ export function findPotentialNewPartners(
     }
   }
   return potentialPartners;
+}
+
+export function findHeir(potentialHeirs: HumanEntity[]): HumanEntity | undefined {
+  if (potentialHeirs.length === 0) {
+    return undefined; // No potential heirs provided
+  }
+
+  const males = potentialHeirs.filter((h) => h.gender === 'male');
+  const females = potentialHeirs.filter((h) => h.gender === 'female');
+
+  const sortFn = (a: HumanEntity, b: HumanEntity) => {
+    if (a.age !== b.age) {
+      return b.age - a.age; // Descending age
+    }
+    return a.id - b.id; // Ascending ID for tie-breaking
+  };
+
+  males.sort(sortFn);
+  if (males.length > 0) {
+    return males[0];
+  }
+
+  females.sort(sortFn);
+  if (females.length > 0) {
+    return females[0];
+  }
+
+  return undefined;
+}
+
+// Helper function to find the player entity
+export function findPlayerEntity(gameState: GameWorldState): HumanEntity | undefined {
+  for (const entity of gameState.entities.entities.values()) {
+    if (entity.isPlayer && entity.type === 'human') {
+      return entity as HumanEntity;
+    }
+  }
+  return undefined;
+}
+
+// Helper function to find children of the player entity
+export function findChildren(gameState: GameWorldState, parent: HumanEntity): HumanEntity[] {
+  const children: HumanEntity[] = [];
+
+  for (const entity of gameState.entities.entities.values()) {
+    if (entity.type === 'human') {
+      const human = entity as HumanEntity;
+      if (human.motherId === parent.id || human.fatherId === parent.id) {
+        children.push(human);
+      }
+    }
+  }
+
+  return children;
 }

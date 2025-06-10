@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from '../context/game-context';
 
-export function usePersistState(appState: string, setAppState: (state: AppState) => void): void {
+export function usePersistState(appState: AppState, setAppState: (state: AppState) => void): void {
   useEffect(() => {
     // This effect runs once when the component mounts
     const handleHashChange = () => {
@@ -19,8 +19,10 @@ export function usePersistState(appState: string, setAppState: (state: AppState)
     // This effect runs whenever appState changes
     if (appState === 'game') {
       document.location.hash = '#game';
-    } else {
+    } else if (appState === 'intro') {
       document.location.hash = '';
     }
+    // When appState is 'gameOver', we do nothing to the hash. This prevents
+    // the hashchange event from firing and resetting the state to 'intro'.
   }, [appState]);
 }

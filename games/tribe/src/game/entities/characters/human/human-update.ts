@@ -18,6 +18,7 @@ import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { findChildren, findHeir } from '../../../utils/world-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   // Calculate game hours delta for time-based updates
@@ -136,24 +137,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   if (causeOfDeath) {
     // If this is the player character, handle generational transfer or game over
     if (entity.isPlayer) {
-      // Try to find an offspring to transfer control to
-      let oldestOffspring: HumanEntity | undefined = undefined;
-      let maxAge = -1;
-
-      // Iterate through all entities to find offspring
-      for (const potentialOffspring of updateContext.gameState.entities.entities.values()) {
-        if (potentialOffspring.type === 'human') {
-          const human = potentialOffspring as HumanEntity;
-          // Check if this human is an offspring of the deceased player
-          if ((human.motherId === entity.id || human.fatherId === entity.id) && !human.isPlayer) {
-            // If this offspring is older than our current oldest (or same age but lower ID for determinism)
-            if (human.age > maxAge || (human.age === maxAge && human.id < (oldestOffspring?.id || Infinity))) {
-              oldestOffspring = human;
-              maxAge = human.age;
-            }
-          }
-        }
-      }
+      const oldestOffspring = findHeir(findChildren(updateContext.gameState, entity));
 
       // If we found a suitable offspring, transfer control
       if (oldestOffspring) {

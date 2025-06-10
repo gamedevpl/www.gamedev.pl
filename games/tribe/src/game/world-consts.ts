@@ -63,3 +63,13 @@ export const PROCREATION_FOOD_SEARCH_RADIUS: number = 200; // Radius in pixels t
 export const PROCREATION_MAX_CHILDREN_FOR_AI: number = 3; // Max children an AI aims for before seeking new lineage
 export const PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE: number = 250; // Radius AI searches for new unrelated partners
 export const PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE: number = 1; // Min unrelated partners to start new lineage
+
+// Highlight Colors
+export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green
+export const PLAYER_CHILD_HIGHLIGHT_COLOR: string = '#2196F3'; // Blue
+export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
+
+// Crown Sizes
+export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character
+export const PLAYER_HEIR_CROWN_SIZE: number = 8; // Size of the crown for player's heir
+export const PLAYER_CHILD_CROWN_SIZE: number = 6; // Size of the crown for player's children

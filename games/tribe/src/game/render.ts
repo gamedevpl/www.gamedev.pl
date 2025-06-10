@@ -6,7 +6,8 @@ import { Entity } from './entities/entities-types'; // Added import for type cas
 import { renderHumanCorpse } from './render/render-human-corpse';
 import { HumanCorpseEntity } from './entities/characters/human/human-corpse-types';
 import { renderCharacter } from './render/render-character'; // Added import for character rendering
-import { HumanEntity } from './entities/characters/human/human-types'; // Added import for HumanEntity
+import { HumanEntity } from './entities/characters/human/human-types';
+import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 
 export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -30,6 +31,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     return;
   }
 
+  const player = findPlayerEntity(gameState);
+  const playerChildren = player ? findChildren(gameState, player) : [];
+  const playerHeir = findHeir(playerChildren);
+
   // Sort entities by Y
   const sortedEntities = Array.from(gameState.entities.entities.values()).sort((a, b) => {
     // Sort by Y position, then by ID for deterministic rendering
@@ -41,7 +46,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     if (entity.type === 'berryBush') {
       renderBerryBush(ctx, entity as BerryBushEntity);
     } else if (entity.type === 'human') {
-      renderCharacter(ctx, entity as HumanEntity);
+      const human = entity as HumanEntity;
+      const isPlayer = human.id === player?.id;
+      const isPlayerChild = playerChildren.some((child) => child.id === human.id);
+      const isPlayerHeir = human.id === playerHeir?.id;
+      renderCharacter(ctx, human, isPlayer, isPlayerChild, isPlayerHeir);
     } else if (entity.type === 'humanCorpse') {
       renderHumanCorpse(ctx, entity as HumanCorpseEntity);
     }
@@ -65,20 +74,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
   );
 
   // Render player-specific UI if player exists
-  const player = findPlayerEntity(gameState);
   if (player) {
     ctx.fillText(`Hunger: ${Math.floor(player.hunger)}/100`, 20, lineHeight * uiLine++);
     ctx.fillText(`Berries: ${player.berries}/${player.maxBerries}`, 20, lineHeight * uiLine++);
     ctx.fillText(`Age: ${Math.floor(player.age)} years`, 20, lineHeight * uiLine++);
   }
-}
-
-// Helper function to find the player entity
-function findPlayerEntity(gameState: GameWorldState): HumanEntity | undefined {
-  for (const entity of gameState.entities.entities.values()) {
-    if (entity.isPlayer && entity.type === 'human') {
-      return entity as HumanEntity;
-    }
-  }
-  return undefined;
 }
