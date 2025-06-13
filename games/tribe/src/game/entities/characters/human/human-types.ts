@@ -52,7 +52,13 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood';
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'stunned';
+
+  /** Cooldown time before being able to attack again. */
+  attackCooldown?: number;
+  isStunned?: boolean;
+  stunnedUntil?: number;
+  attackTargetId?: EntityId;
 
   /** Target position for 'moving' action. Set by player input or AI decision. */
   targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.

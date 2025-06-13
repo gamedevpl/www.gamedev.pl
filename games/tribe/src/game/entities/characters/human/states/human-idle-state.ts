@@ -1,13 +1,15 @@
-import { State } from "../../../../state-machine/state-machine-types";
-import { HUMAN_HUNGER_THRESHOLD_SLOW } from "../../../../world-consts";
-import { HumanEntity } from "../human-types";
+import { State } from '../../../../state-machine/state-machine-types';
+import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../../world-consts';
+import { HumanEntity } from '../human-types';
 import {
   HumanStateData,
   HUMAN_IDLE,
   HUMAN_MOVING,
   HUMAN_GATHERING,
   HUMAN_EATING,
-} from "./human-state-types";
+  HUMAN_ATTACKING,
+  HUMAN_STUNNED,
+} from './human-state-types';
 
 // Define the human idle state
 export const humanIdleState: State<HumanEntity, HumanStateData> = {
@@ -15,20 +17,42 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
+    if (entity.activeAction === 'attacking') {
+      return {
+        nextState: HUMAN_ATTACKING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          attackTargetId: entity.attackTargetId,
+        },
+      };
+    } else if (entity.activeAction === 'stunned') {
+      return {
+        nextState: HUMAN_STUNNED,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          stunnedUntil: entity.stunnedUntil,
+        },
+      };
+    }
+
     // Apply slow debuff if hunger is high
     if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== "slow");
+      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== 'slow');
       entity.debuffs.push({
-        type: "slow",
+        type: 'slow',
         startTime: updateContext.gameState.time,
         duration: 0.1, // Very short duration, will be reapplied each update cycle while condition met
       });
     } else {
       // Remove slow debuff if hunger is not high
-      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== "slow");
+      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== 'slow');
     }
 
-    if (entity.activeAction === "moving") {
+    if (entity.activeAction === 'moving') {
       return {
         nextState: HUMAN_MOVING,
         data: {
@@ -40,7 +64,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
       };
     }
 
-    if (entity.activeAction === "gathering") {
+    if (entity.activeAction === 'gathering') {
       return {
         nextState: HUMAN_GATHERING,
         data: {
@@ -52,7 +76,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
       };
     }
 
-    if (entity.activeAction === "eating") {
+    if (entity.activeAction === 'eating') {
       return {
         nextState: HUMAN_EATING,
         data: {

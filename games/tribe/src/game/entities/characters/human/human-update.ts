@@ -61,6 +61,19 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.procreationCooldown < 0) entity.procreationCooldown = 0;
   }
 
+  // Handle attack cooldown
+  if (entity.attackCooldown) {
+    entity.attackCooldown -= gameHoursDelta;
+    if (entity.attackCooldown < 0) entity.attackCooldown = 0;
+  }
+
+  // Handle stun recovery
+  if (entity.isStunned && entity.stunnedUntil && entity.stunnedUntil <= updateContext.gameState.time) {
+    entity.isStunned = false;
+    entity.stunnedUntil = 0;
+    entity.activeAction = 'idle';
+  }
+
   // Handle feed parent cooldown
   if (entity.feedParentCooldownTime) {
     entity.feedParentCooldownTime -= gameHoursDelta;

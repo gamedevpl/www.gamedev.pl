@@ -53,6 +53,12 @@ export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in 
 // Human Corpse Constants
 export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 4; // Corpses remain for 4 game hours
 
+// Human Attack Constants
+export const HUMAN_ATTACK_RANGE: number = 30; // Range in pixels for attack interaction
+export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for a human after attacking
+export const HUMAN_ATTACK_STUN_CHANCE: number = 0.5; // Chance (0-1) to stun a target on attack
+export const HUMAN_STUN_DURATION_HOURS: number = 2; // Duration in game hours for a stun
+
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has berries
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this

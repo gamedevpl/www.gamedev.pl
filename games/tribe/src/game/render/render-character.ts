@@ -22,6 +22,8 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   procreating: 'procreate',
   idle: 'idle',
   seekingFood: 'idle',
+  attacking: 'procreate', // Placeholder stance
+  stunned: 'dead', // Placeholder stance
 };
 
 /**
