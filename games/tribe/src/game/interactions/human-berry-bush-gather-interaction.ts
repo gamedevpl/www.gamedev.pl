@@ -2,7 +2,7 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HUMAN_GATHERING } from '../entities/characters/human/states/human-state-types';
-import { HUMAN_INTERACTION_RANGE } from '../world-consts';
+import { BERRY_BUSH_CLAIM_DURATION_HOURS, HUMAN_INTERACTION_RANGE } from '../world-consts';
 
 export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity, BerryBushEntity> = {
   id: 'humanBerryBushGather',
@@ -24,5 +24,9 @@ export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity,
     berryBush.currentBerries -= 1;
     human.gatheringCooldownTime = context.gameState.time + 1; // 1 second cooldown
     berryBush.timeSinceLastHarvest = context.gameState.time;
+
+    // Claim the bush
+    berryBush.ownerId = human.id;
+    berryBush.claimedUntil = context.gameState.time + BERRY_BUSH_CLAIM_DURATION_HOURS;
   },
 };

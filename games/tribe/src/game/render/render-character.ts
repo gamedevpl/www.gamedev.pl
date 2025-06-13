@@ -12,7 +12,7 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 
 const CHARACTER_RADIUS = 30;
 
-type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead';
+type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'stunned';
 
 // Mapping from HumanEntity activeAction to render stance
 const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance> = {
@@ -22,8 +22,8 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   procreating: 'procreate',
   idle: 'idle',
   seekingFood: 'idle',
-  attacking: 'procreate', // Placeholder stance
-  stunned: 'dead', // Placeholder stance
+  attacking: 'attacking',
+  stunned: 'stunned',
 };
 
 /**

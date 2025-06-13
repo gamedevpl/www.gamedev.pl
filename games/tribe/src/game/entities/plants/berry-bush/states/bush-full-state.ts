@@ -19,6 +19,12 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
         return { nextState: BUSH_GROWING, data: { ...data, enteredAt: updateContext.gameState.time, previousState: BUSH_FULL } };
     }
 
+    // Check for claim expiration
+    if (entity.ownerId && entity.claimedUntil && updateContext.gameState.time > entity.claimedUntil) {
+      entity.ownerId = undefined;
+      entity.claimedUntil = undefined;
+    }
+
     entity.timeSinceLastSpreadAttempt += gameHoursDelta;
     if (entity.timeSinceLastSpreadAttempt >= BERRY_BUSH_SPREAD_COOLDOWN_HOURS) {
       entity.timeSinceLastSpreadAttempt = 0; // Reset cooldown before the next attempt

@@ -14,6 +14,12 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
       return { nextState: BUSH_DYING, data: { ...data, enteredAt: updateContext.gameState.time } };
     }
 
+    // Check for claim expiration
+    if (entity.ownerId && entity.claimedUntil && updateContext.gameState.time > entity.claimedUntil) {
+      entity.ownerId = undefined;
+      entity.claimedUntil = undefined;
+    }
+
     entity.timeSinceLastBerryRegen += gameHoursDelta;
     // Ensure berryRegenerationRate is positive to avoid division by zero or negative rates
     if (entity.berryRegenerationRate > 0 && entity.timeSinceLastBerryRegen >= (1 / entity.berryRegenerationRate)) {

@@ -1,3 +1,4 @@
+import { EntityId } from "../../entities-types";
 import { PlantEntity } from "../plant-types";
 
 /**
@@ -20,4 +21,8 @@ export interface BerryBushEntity extends PlantEntity {
   timeSinceLastSpreadAttempt: number;
   /** Game time when the bush was last harvested. */
   timeSinceLastHarvest: number;
+  /** The ID of the human entity that currently claims the bush. */
+  ownerId?: EntityId;
+  /** The game time (in hours) until which the bush is claimed. */
+  claimedUntil?: number;
 }

@@ -15,6 +15,7 @@ export const BERRY_BUSH_SPREAD_CHANCE: number = 0.8; // 20% chance per attempt
 export const BERRY_BUSH_SPREAD_RADIUS: number = 25; // pixels
 export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 30; // 5 game days
 export const INITIAL_BERRY_BUSH_COUNT: number = 5;
+export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 24; // This constant represents the duration in game hours for which a human's claim on a berry bush remains active.
 
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;

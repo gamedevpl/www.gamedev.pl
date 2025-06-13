@@ -74,7 +74,10 @@ export class GatheringStrategy implements HumanAIStrategy {
       gameState.mapDimensions.width,
       gameState.mapDimensions.height,
       HUMAN_INTERACTION_RANGE * 10, // Search in a wider range
-      (bush) => (bush as BerryBushEntity).currentBerries > 0,
+      (bush) => {
+        const berryBush = bush as BerryBushEntity;
+        return berryBush.currentBerries > 0 && (!berryBush.ownerId || berryBush.ownerId === human.id);
+      },
     );
 
     if (closestBush && closestBush.currentBerries > 0) {

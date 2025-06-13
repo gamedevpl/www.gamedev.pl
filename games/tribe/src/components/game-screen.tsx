@@ -145,6 +145,20 @@ export const GameScreen: React.FC = () => {
       } else if (key === 'arrowright' || key === 'd') {
         playerEntity.direction.x = 1; // Move right
         playerEntity.activeAction = 'moving';
+      } else if (key === 'q') {
+        const target = findClosestEntity<HumanEntity>(
+          playerEntity,
+          gameStateRef.current.entities.entities,
+          'human',
+          gameStateRef.current.mapDimensions.width,
+          gameStateRef.current.mapDimensions.height,
+          HUMAN_INTERACTION_RANGE,
+          (h) => (h as HumanEntity).id !== playerEntity.id,
+        );
+        if (target) {
+          playerEntity.activeAction = 'attacking';
+          playerEntity.attackTargetId = target.id;
+        }
       } else if (key === ' ') {
         playerEntity.activeAction = 'idle'; // Set to idle when space is pressed
       } else {
