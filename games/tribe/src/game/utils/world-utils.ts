@@ -217,8 +217,8 @@ export function findHeir(potentialHeirs: HumanEntity[]): HumanEntity | undefined
     return undefined; // No potential heirs provided
   }
 
-  const males = potentialHeirs.filter((h) => h.isAdult && h.gender === 'male');
-  const females = potentialHeirs.filter((h) => h.isAdult && h.gender === 'female');
+  const males = potentialHeirs.filter((h) => h.gender === 'male');
+  const females = potentialHeirs.filter((h) => h.gender === 'female');
 
   const sortFn = (a: HumanEntity, b: HumanEntity) => {
     if (a.age !== b.age) {
