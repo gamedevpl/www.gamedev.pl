@@ -333,3 +333,50 @@ export function findProcreationThreat(
 
   return null;
 }
+
+/**
+ * Checks if two humans are closely related (parents, children, siblings, partners, grandparents, grandchildren).
+ * @param human1 The first human.
+ * @param human2 The second human.
+ * @param allEntities A map of all entities to look up relatives.
+ * @returns True if they are family, false otherwise.
+ */
+export function areFamily(human1: HumanEntity, human2: HumanEntity, allEntities: Map<EntityId, Entity>): boolean {
+  if (human1.id === human2.id) return true; // Same person
+
+  // Parent/Child check
+  if (human1.motherId === human2.id || human1.fatherId === human2.id) return true;
+  if (human2.motherId === human1.id || human2.fatherId === human1.id) return true;
+
+  // Sibling check
+  const areSiblings =
+    (human1.motherId && human1.motherId === human2.motherId) ||
+    (human1.fatherId && human1.fatherId === human2.fatherId);
+  if (areSiblings) return true;
+
+  // Partner check
+  if (human1.partnerIds?.includes(human2.id)) return true;
+
+  // Grandparent/Grandchild check
+  // Is human2 a grandparent of human1?
+  if (human1.motherId) {
+    const mother = allEntities.get(human1.motherId) as HumanEntity | undefined;
+    if (mother && (mother.motherId === human2.id || mother.fatherId === human2.id)) return true;
+  }
+  if (human1.fatherId) {
+    const father = allEntities.get(human1.fatherId) as HumanEntity | undefined;
+    if (father && (father.motherId === human2.id || father.fatherId === human2.id)) return true;
+  }
+
+  // Is human1 a grandparent of human2?
+  if (human2.motherId) {
+    const mother = allEntities.get(human2.motherId) as HumanEntity | undefined;
+    if (mother && (mother.motherId === human1.id || mother.fatherId === human1.id)) return true;
+  }
+  if (human2.fatherId) {
+    const father = allEntities.get(human2.fatherId) as HumanEntity | undefined;
+    if (father && (father.motherId === human1.id || father.fatherId === human1.id)) return true;
+  }
+
+  return false;
+}

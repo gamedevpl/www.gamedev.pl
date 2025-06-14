@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { findAggressor, findClosestEntity, findProcreationThreat } from '../../utils/world-utils';
+import { findAggressor, findClosestEntity, findProcreationThreat, areFamily } from '../../utils/world-utils';
 import {
   AI_ATTACK_HUNGER_THRESHOLD,
   AI_ATTACK_TARGET_MIN_BERRY_COUNT,
@@ -64,6 +64,11 @@ export class AttackingStrategy implements HumanAIStrategy {
         const otherHuman = entity as HumanEntity;
         if (otherHuman.activeAction !== 'gathering') return false;
 
+        // Don't attack family over resources
+        if (areFamily(human, otherHuman, allEntities)) {
+          return false;
+        }
+
         const targetBush = findClosestEntity<BerryBushEntity>(
           otherHuman,
           allEntities,
@@ -93,12 +98,11 @@ export class AttackingStrategy implements HumanAIStrategy {
         undefined, // No max range
         (entity) => {
           const otherHuman = entity as HumanEntity;
-          return (
-            otherHuman.id !== human.id &&
-            otherHuman.berries >= AI_ATTACK_TARGET_MIN_BERRY_COUNT &&
-            otherHuman.motherId !== human.id &&
-            otherHuman.fatherId !== human.id
-          );
+          // Don't attack family for food
+          if (areFamily(human, otherHuman, allEntities)) {
+            return false;
+          }
+          return otherHuman.berries >= AI_ATTACK_TARGET_MIN_BERRY_COUNT;
         },
       );
       if (target) {
