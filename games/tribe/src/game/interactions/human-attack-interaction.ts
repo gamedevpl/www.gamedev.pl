@@ -5,8 +5,8 @@ import {
   HUMAN_ATTACK_COOLDOWN_HOURS,
   HUMAN_ATTACK_STUN_CHANCE,
   HUMAN_STUN_DURATION_HOURS,
+  HUMAN_ATTACK_KILL_CHANCE,
 } from '../world-consts';
-import { createHumanCorpse, removeEntity } from '../entities/entities-update';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
@@ -32,18 +32,10 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   perform: (source, target, context) => {
     // If the target is already stunned, the attack is fatal
     if (target.isStunned) {
-      // Create a corpse for the target
-      createHumanCorpse(
-        context.gameState.entities,
-        target.position,
-        target.gender,
-        target.age,
-        target.id,
-        context.gameState.time,
-      );
-      // Remove the target entity
-      removeEntity(context.gameState.entities, target.id);
-      playSound(SoundType.HumanDeath);
+      if (Math.random() < HUMAN_ATTACK_KILL_CHANCE) {
+        target.isKilled = true;
+        playSound(SoundType.HumanDeath);
+      }
     } else {
       // If the target is not stunned, there's a chance to stun them
       if (Math.random() < HUMAN_ATTACK_STUN_CHANCE) {

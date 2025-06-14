@@ -60,6 +60,7 @@ export interface HumanEntity extends Entity {
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
   isStunned?: boolean;
+  isKilled?: boolean;
   stunnedUntil?: number;
   attackTargetId?: EntityId;
 

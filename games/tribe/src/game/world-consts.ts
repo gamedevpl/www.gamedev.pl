@@ -59,6 +59,7 @@ export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 4; // Corpses remain for 4 
 export const HUMAN_ATTACK_RANGE: number = 30; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for a human after attacking
 export const HUMAN_ATTACK_STUN_CHANCE: number = 0.5; // Chance (0-1) to stun a target on attack
+export const HUMAN_ATTACK_KILL_CHANCE: number = 0.5; // Chance (0-1) to kill a target on attack
 export const HUMAN_STUN_DURATION_HOURS: number = 2; // Duration in game hours for a stun
 
 // Human AI Constants

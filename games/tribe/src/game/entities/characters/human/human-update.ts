@@ -141,6 +141,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     }
   } else if (entity.age >= entity.maxAge) {
     causeOfDeath = 'oldAge';
+  } else if (entity.isKilled) {
+    causeOfDeath = 'killed';
   }
 
   if (causeOfDeath) {
