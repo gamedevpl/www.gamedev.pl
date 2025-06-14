@@ -4,6 +4,7 @@
  */
 
 import { Entities } from './entities/entities-types';
+import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 
 // Basic Types
 export type Position = {
@@ -15,6 +16,8 @@ export type Position = {
 export interface GameWorldState {
   time: number; // Total game hours passed since the start of the game, float
   entities: Entities;
+  visualEffects: VisualEffect[];
+  nextVisualEffectId: VisualEffectId;
   mapDimensions: {
     width: number;
     height: number;

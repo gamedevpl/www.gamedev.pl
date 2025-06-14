@@ -8,6 +8,7 @@ import { HumanCorpseEntity } from './entities/characters/human/human-corpse-type
 import { renderCharacter } from './render/render-character'; // Added import for character rendering
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
+import { renderVisualEffect } from './render/render-effects';
 
 export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -55,6 +56,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
       renderHumanCorpse(ctx, entity as HumanCorpseEntity);
     }
     // TODO: Implement rendering for other entity types
+  });
+
+  // Render visual effects
+  gameState.visualEffects.forEach((effect) => {
+    renderVisualEffect(ctx, effect, gameState.time);
   });
 
   // Render UI

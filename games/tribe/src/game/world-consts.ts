@@ -83,3 +83,10 @@ export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
 export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character
 export const PLAYER_HEIR_CROWN_SIZE: number = 8; // Size of the crown for player's heir
 export const PLAYER_CHILD_CROWN_SIZE: number = 6; // Size of the crown for player's children
+
+// Visual Effects Constants
+export const EFFECT_DURATION_SHORT_HOURS: number = 1;
+export const EFFECT_DURATION_MEDIUM_HOURS: number = 3;
+export const EFFECT_DURATION_LONG_HOURS: number = 6;
+export const HUNGER_EFFECT_THRESHOLD: number = 70;
+

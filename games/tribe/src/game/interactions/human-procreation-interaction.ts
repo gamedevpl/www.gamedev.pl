@@ -3,7 +3,10 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
 import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
+import { addVisualEffect } from '../utils/visual-effects-utils';
+import { VisualEffectType } from '../visual-effects/visual-effect-types';
 
 /**
  * Defines an interaction for human procreation.
@@ -26,13 +29,12 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
   // Helper function to check common eligibility criteria for an individual
   const isIndividuallyEligible = (entity: HumanEntity, isEntityFemale: boolean): boolean => {
     const commonConditions =
-      entity.isAdult &&
-      entity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-      (entity.procreationCooldown || 0) <= 0;
+      entity.isAdult && entity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL && (entity.procreationCooldown || 0) <= 0;
 
     if (!commonConditions) return false;
 
-    if (isEntityFemale) { // Specific checks if the entity being checked is female
+    if (isEntityFemale) {
+      // Specific checks if the entity being checked is female
       return !entity.isPregnant;
     }
     return true; // No further specific checks if the entity being checked is male
@@ -48,8 +50,8 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
 
     // Male (source) must be 'procreating'. Female's (target) activeAction is not checked.
     return source.activeAction === 'procreating';
-
-  } else { // source.gender === 'female'
+  } else {
+    // source.gender === 'female'
     // Source is FEMALE, Target is MALE
     // Check female's (source) eligibility
     if (!isIndividuallyEligible(source, true)) return false;
@@ -62,13 +64,18 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
 };
 
 const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContext): void => {
+  const { gameState } = context;
+  const procreationPosition = {
+    x: (source.position.x + target.position.x) / 2,
+    y: (source.position.y + target.position.y) / 2,
+  };
+
   // Both entities are initiators now, confirmed by the checker.
   // Set both entities to the procreating state
   source.stateMachine = [
     HUMAN_PROCREATING,
     {
       partnerId: target.id,
-      enteredAt: context.gameState.time,
       previousState: source.stateMachine?.[0],
     } as HumanProcreatingStateData,
   ];
@@ -77,7 +84,6 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     HUMAN_PROCREATING,
     {
       partnerId: source.id,
-      enteredAt: context.gameState.time,
       previousState: target.stateMachine?.[0],
     } as HumanProcreatingStateData,
   ];
@@ -99,6 +105,13 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
 
   // Clear active actions - the state machine will handle the behavior
   source.activeAction = undefined;
+
+  // Add visual effects
+  addVisualEffect(gameState, VisualEffectType.Procreation, procreationPosition, EFFECT_DURATION_MEDIUM_HOURS);
+  addVisualEffect(gameState, VisualEffectType.Partnered, source.position, EFFECT_DURATION_SHORT_HOURS, source.id);
+  addVisualEffect(gameState, VisualEffectType.Partnered, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
+  source.lastPartneredEffectTime = gameState.time;
+  target.lastPartneredEffectTime = gameState.time;
   target.activeAction = undefined;
 };
 

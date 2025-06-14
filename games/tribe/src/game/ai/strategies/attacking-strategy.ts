@@ -8,6 +8,9 @@ import {
   HUMAN_ATTACK_RANGE,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
+import { addVisualEffect } from '../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../visual-effects/visual-effect-types';
+import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
 import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
@@ -107,7 +110,15 @@ export class AttackingStrategy implements HumanAIStrategy {
     return false;
   }
 
-  execute(human: HumanEntity): void {
+  execute(human: HumanEntity, context: UpdateContext): void {
+    if (
+      this._threat &&
+      (!human.lastTargetAcquiredEffectTime ||
+        context.gameState.time - human.lastTargetAcquiredEffectTime > EFFECT_DURATION_SHORT_HOURS * 5)
+    ) {
+      addVisualEffect(context.gameState, VisualEffectType.TargetAcquired, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
+      human.lastTargetAcquiredEffectTime = context.gameState.time;
+    }
     if (!this._threat) {
       return;
     }

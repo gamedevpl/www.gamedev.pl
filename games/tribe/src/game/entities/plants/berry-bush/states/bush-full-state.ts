@@ -2,6 +2,9 @@ import { State, StateContext, StateTransition } from "../../../../state-machine/
 import { BerryBushEntity } from "../berry-bush-types";
 import { BushFullStateData, BUSH_DYING, BUSH_SPREADING, BUSH_FULL, BUSH_GROWING } from "./bush-state-types";
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS, BERRY_BUSH_SPREAD_COOLDOWN_HOURS } from "../../../../world-consts";
+import { addVisualEffect } from "../../../../utils/visual-effects-utils";
+import { VisualEffectType } from "../../../../visual-effects/visual-effect-types";
+import { EFFECT_DURATION_SHORT_HOURS } from "../../../../world-consts";
 
 export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
   id: BUSH_FULL,
@@ -21,6 +24,7 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
 
     // Check for claim expiration
     if (entity.ownerId && entity.claimedUntil && updateContext.gameState.time > entity.claimedUntil) {
+      addVisualEffect(updateContext.gameState, VisualEffectType.BushClaimLost, entity.position, EFFECT_DURATION_SHORT_HOURS);
       entity.ownerId = undefined;
       entity.claimedUntil = undefined;
     }

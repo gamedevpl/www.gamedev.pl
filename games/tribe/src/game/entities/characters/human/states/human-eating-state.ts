@@ -1,7 +1,9 @@
-import { State } from "../../../../state-machine/state-machine-types";
-import { HUMAN_BERRY_HUNGER_REDUCTION } from "../../../../world-consts";
-import { HumanEntity } from "../human-types";
-import { HumanStateData, HUMAN_EATING, HUMAN_IDLE } from "./human-state-types";
+import { State } from '../../../../state-machine/state-machine-types';
+import { HUMAN_BERRY_HUNGER_REDUCTION, EFFECT_DURATION_SHORT_HOURS } from '../../../../world-consts';
+import { HumanEntity } from '../human-types';
+import { HumanStateData, HUMAN_EATING, HUMAN_IDLE } from './human-state-types';
+import { addVisualEffect } from '../../../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
 
 // Define the human eating state
 export const humanEatingState: State<HumanEntity, HumanStateData> = {
@@ -9,7 +11,7 @@ export const humanEatingState: State<HumanEntity, HumanStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    if (entity.activeAction !== "eating") {
+    if (entity.activeAction !== 'eating') {
       // If not actively eating, return to idle state
       return {
         nextState: HUMAN_IDLE,
@@ -30,20 +32,32 @@ export const humanEatingState: State<HumanEntity, HumanStateData> = {
       entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
       entity.berries = Math.max(0, entity.berries - 1);
       entity.eatingCooldownTime = updateContext.gameState.time + 1; // 1 second cooldown after eating
+
+      // Trigger eating visual effect
+      if (!entity.lastEatingEffectTime || updateContext.gameState.time - entity.lastEatingEffectTime > 2) {
+        addVisualEffect(
+          updateContext.gameState,
+          VisualEffectType.Eating,
+          entity.position,
+          EFFECT_DURATION_SHORT_HOURS,
+          entity.id,
+        );
+        entity.lastEatingEffectTime = updateContext.gameState.time;
+      }
     }
 
     // After eating, or if unable to eat, human might do something else (e.g. become idle if no more berries or not hungry enough)
     // For now, we assume it stays in eating if action is 'eating', or transitions to IDLE if action changes.
     // If hunger is very low or no berries, the game logic/player should change activeAction.
     if (entity.hunger <= 0 || entity.berries <= 0) {
-        return {
-            nextState: HUMAN_IDLE,
-            data: {
-                ...data,
-                enteredAt: updateContext.gameState.time,
-                previousState: HUMAN_EATING,
-            }
-        };
+      return {
+        nextState: HUMAN_IDLE,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_EATING,
+        },
+      };
     }
 
     return {

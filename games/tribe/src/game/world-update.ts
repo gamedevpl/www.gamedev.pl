@@ -3,6 +3,7 @@ import { GAME_DAY_IN_REAL_SECONDS } from './world-consts';
 import { HOURS_PER_GAME_DAY } from './world-consts';
 import { interactionsUpdate } from './interactions/interactions-update'; // Added import
 import { entitiesUpdate } from './entities/entities-update';
+import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
 
 export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: number): GameWorldState {
   const newState = structuredClone(currentState);
@@ -22,6 +23,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
   // Process entity interactions
   interactionsUpdate({ gameState: newState, deltaTime: realDeltaTimeSeconds }); // Added call
+
+  // Process visual effects
+  visualEffectsUpdate(newState);
 
   return newState;
 }

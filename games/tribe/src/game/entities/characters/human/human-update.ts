@@ -12,6 +12,8 @@ import {
   ADULT_CHILD_FEEDING_RANGE,
   ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
+  HUNGER_EFFECT_THRESHOLD,
+  EFFECT_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -19,8 +21,11 @@ import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findChildren, findHeir } from '../../../utils/world-utils';
+import { addVisualEffect } from '../../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
+  const { gameState } = updateContext;
   // Calculate game hours delta for time-based updates
   const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
@@ -29,6 +34,15 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   // Check for hunger increase (base rate)
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+
+  // Trigger hunger visual effect
+  if (
+    entity.hunger > HUNGER_EFFECT_THRESHOLD &&
+    (!entity.lastHungerEffectTime || gameState.time - entity.lastHungerEffectTime > EFFECT_DURATION_MEDIUM_HOURS * 2)
+  ) {
+    addVisualEffect(gameState, VisualEffectType.Hunger, entity.position, EFFECT_DURATION_MEDIUM_HOURS, entity.id);
+    entity.lastHungerEffectTime = gameState.time;
+  }
 
   entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
   // Handle pregnancy and gestation for females
@@ -42,6 +56,15 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       ((HUMAN_HUNGER_INCREASE_PER_HOUR * HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER -
         HUMAN_HUNGER_INCREASE_PER_HOUR) /
         (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+
+    // Trigger pregnant visual effect
+    if (
+      !entity.lastPregnantEffectTime ||
+      gameState.time - entity.lastPregnantEffectTime > EFFECT_DURATION_MEDIUM_HOURS * 3
+    ) {
+      addVisualEffect(gameState, VisualEffectType.Pregnant, entity.position, EFFECT_DURATION_MEDIUM_HOURS, entity.id);
+      entity.lastPregnantEffectTime = gameState.time;
+    }
 
     // Check if gestation is complete
     if (entity.gestationTime <= 0) {

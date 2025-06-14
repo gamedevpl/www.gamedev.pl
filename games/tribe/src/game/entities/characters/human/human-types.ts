@@ -71,4 +71,12 @@ export interface HumanEntity extends Entity {
 
   /** The speed at which the entity's animation plays. */
   animationSpeed?: number;
+
+  // Visual effect cooldowns
+  lastHungerEffectTime?: number;
+  lastPregnantEffectTime?: number;
+  lastPartneredEffectTime?: number;
+  lastTargetAcquiredEffectTime?: number;
+  lastEatingEffectTime?: number;
+  lastChildFedEffectTime?: number;
 }

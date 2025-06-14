@@ -46,6 +46,8 @@ export function initWorld(): GameWorldState {
     },
     generationCount: 1, // Start with generation 1 as per GDD context for player
     gameOver: false,
+    visualEffects: [],
+    nextVisualEffectId: 0,
   };
 
   console.log('Game world initialized:', initialWorldState);

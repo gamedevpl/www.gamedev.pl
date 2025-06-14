@@ -7,6 +7,9 @@ import {
   HUMAN_STUN_DURATION_HOURS,
 } from '../world-consts';
 import { createHumanCorpse, removeEntity } from '../entities/entities-update';
+import { addVisualEffect } from '../utils/visual-effects-utils';
+import { VisualEffectType } from '../visual-effects/visual-effect-types';
+import { EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 
 export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
   id: 'human-attack',
@@ -48,6 +51,9 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
     source.attackCooldown = HUMAN_ATTACK_COOLDOWN_HOURS;
     // Reset the attacker's action to idle after the attack
     source.activeAction = 'idle';
+
+    // Add visual effect for the attack
+    addVisualEffect(context.gameState, VisualEffectType.Attack, source.position, EFFECT_DURATION_SHORT_HOURS, source.id);
     source.attackTargetId = undefined;
   },
 };
