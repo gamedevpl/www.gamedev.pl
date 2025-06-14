@@ -15,18 +15,14 @@ import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/mat
 import { EntityType } from '../../entities/entities-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 
-export class AttackingStrategy implements HumanAIStrategy {
-  private _threat: HumanEntity | null = null;
-
-  check(human: HumanEntity, context: UpdateContext): boolean {
-    this._threat = null;
+export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
+  check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     const { gameState } = context;
 
     // 1. Self-Defense
-    let aggressor = findAggressor(human.id, gameState);
+    const aggressor = findAggressor(human.id, gameState);
     if (aggressor) {
-      this._threat = aggressor;
-      return true;
+      return aggressor;
     }
 
     // 2. Family-Defense
@@ -34,10 +30,9 @@ export class AttackingStrategy implements HumanAIStrategy {
       if (entity.type === 'human') {
         const potentialChild = entity as HumanEntity;
         if (potentialChild.motherId === human.id || potentialChild.fatherId === human.id) {
-          aggressor = findAggressor(potentialChild.id, gameState);
-          if (aggressor) {
-            this._threat = aggressor;
-            return true;
+          const childAggressor = findAggressor(potentialChild.id, gameState);
+          if (childAggressor) {
+            return childAggressor;
           }
         }
       }
@@ -46,8 +41,7 @@ export class AttackingStrategy implements HumanAIStrategy {
     // 3. Procreation-Defense
     const procreationThreat = findProcreationThreat(human, gameState);
     if (procreationThreat) {
-      this._threat = procreationThreat;
-      return true;
+      return procreationThreat;
     }
 
     // 4. Resource-Defense
@@ -76,8 +70,7 @@ export class AttackingStrategy implements HumanAIStrategy {
     );
 
     if (intruder) {
-      this._threat = intruder;
-      return true;
+      return intruder;
     }
 
     // 5. Hunger-Driven Attack
@@ -96,37 +89,32 @@ export class AttackingStrategy implements HumanAIStrategy {
         },
       );
       if (target) {
-        this._threat = target;
-        return true;
+        return target;
       }
     }
 
-    return false;
+    return null;
   }
 
-  execute(human: HumanEntity, context: UpdateContext): void {
+  execute(human: HumanEntity, context: UpdateContext, threat: HumanEntity): void {
     if (
-      this._threat &&
-      (!human.lastTargetAcquiredEffectTime ||
-        context.gameState.time - human.lastTargetAcquiredEffectTime > EFFECT_DURATION_SHORT_HOURS * 5)
+      !human.lastTargetAcquiredEffectTime ||
+      context.gameState.time - human.lastTargetAcquiredEffectTime > EFFECT_DURATION_SHORT_HOURS * 5
     ) {
       addVisualEffect(context.gameState, VisualEffectType.TargetAcquired, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
       human.lastTargetAcquiredEffectTime = context.gameState.time;
     }
-    if (!this._threat) {
-      return;
-    }
 
-    const distance = vectorDistance(human.position, this._threat.position);
+    const distance = vectorDistance(human.position, threat.position);
 
     if (distance > HUMAN_ATTACK_RANGE) {
       human.activeAction = 'moving';
-      human.targetPosition = { ...this._threat.position };
-      const dirToTarget = vectorSubtract(this._threat.position, human.position);
+      human.targetPosition = { ...threat.position };
+      const dirToTarget = vectorSubtract(threat.position, human.position);
       human.direction = vectorNormalize(dirToTarget);
     } else {
       human.activeAction = 'attacking';
-      human.attackTargetId = this._threat.id;
+      human.attackTargetId = threat.id;
       human.targetPosition = undefined;
       human.direction = { x: 0, y: 0 };
     }

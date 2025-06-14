@@ -5,12 +5,14 @@ import { humanAIStrategies } from "./strategies";
 /**
  * Updates the AI decision-making for a human entity using a strategy pattern.
  * It iterates through a prioritized list of strategies and executes the first one
- * whose conditions are met.
+ * whose `check` method returns a truthy result.
  */
 export function humanAIUpdate(human: HumanEntity, context: UpdateContext): void {
   for (const strategy of humanAIStrategies) {
-    if (strategy.check(human, context)) {
-      strategy.execute(human, context);
+    const checkResult = strategy.check(human, context);
+    if (checkResult) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      strategy.execute(human, context, checkResult as any);
       return; // Strategy executed, decision made for this tick
     }
   }

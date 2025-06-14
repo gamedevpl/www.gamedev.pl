@@ -11,24 +11,16 @@ import { findClosestEntity, findParents, getRandomNearbyPosition } from '../../u
 import { calculateWrappedDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
 
-export class ChildSeekingFoodStrategy implements HumanAIStrategy {
-  check(human: HumanEntity): boolean {
-    if (!human.isAdult && human.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD) {
-      return true;
+export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | boolean> {
+  check(human: HumanEntity, context: UpdateContext): HumanEntity | boolean | null {
+    if (human.isAdult || human.hunger < CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD) {
+      return null;
     }
-    return false;
-  }
 
-  execute(human: HumanEntity, context: UpdateContext): void {
     const { gameState } = context;
 
-    const findParentWithFoodFn = (p: HumanEntity) => {
-      if (p.type !== 'human') return false;
-      const parentCandidate = p as HumanEntity;
-      return (
-        (parentCandidate.id === human.motherId || parentCandidate.id === human.fatherId) &&
-        parentCandidate.berries > 0
-      );
+    const findParentWithFoodFn = (p: HumanEntity): boolean => {
+      return (p.id === human.motherId || p.id === human.fatherId) && p.berries > 0;
     };
 
     // 1. Local search for parent with food
@@ -37,7 +29,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
       gameState,
       'human' as EntityType,
       CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
-      (p) => findParentWithFoodFn(p as HumanEntity),
+      findParentWithFoodFn,
     );
 
     // 2. Global search if local search fails
@@ -46,12 +38,25 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         human,
         gameState,
         'human' as EntityType,
-        undefined, // No radius limit for global search
-        (p) => findParentWithFoodFn(p as HumanEntity),
+        undefined, // No radius limit
+        findParentWithFoodFn,
       );
     }
 
     if (parentWithFood) {
+      return parentWithFood; // Return the parent entity if found
+    }
+
+    // If no parent with food is found, but the child is hungry, return true to trigger execute.
+    return true;
+  }
+
+  execute(human: HumanEntity, context: UpdateContext, checkResult: HumanEntity | boolean): void {
+    const { gameState } = context;
+
+    if (typeof checkResult === 'object') {
+      // This means a parent with food was found and passed in checkResult
+      const parentWithFood = checkResult;
       const distance = calculateWrappedDistance(
         human.position,
         parentWithFood.position,
@@ -59,7 +64,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         gameState.mapDimensions.height,
       );
 
-      // 3. Move towards parent with food
+      // Move towards parent with food
       if (distance > PARENT_FEEDING_RANGE) {
         human.activeAction = 'moving';
         human.targetPosition = { ...parentWithFood.position };
@@ -72,7 +77,8 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         human.targetPosition = undefined;
       }
     } else {
-      // 4. No parent with food found, try to find any parent to stay close to.
+      // This means no parent with food was found, but the child is hungry.
+      // 4. Try to find any parent to stay close to.
       const parents = findParents(human, gameState);
       if (parents.length > 0) {
         const parentToFollow = parents[0]; // Just follow the first one found

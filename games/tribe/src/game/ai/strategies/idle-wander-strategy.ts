@@ -11,10 +11,9 @@ import {
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 
-export class IdleWanderStrategy implements HumanAIStrategy {
+export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
   check(): boolean {
     // This strategy is a fallback, so it always applies if no other strategy has taken precedence.
-    // The main AI loop will ensure this is called last.
     return true;
   }
 
@@ -74,11 +73,8 @@ export class IdleWanderStrategy implements HumanAIStrategy {
       return; // Continue wandering or just switched to idle
     }
 
-    // Fallback: If somehow reached here with an undefined state, or an action not handled above (e.g. mid-eating/gathering but this strategy was forced)
-    // It is assumed higher priority strategies would have handled eating/gathering.
-    // If activeAction is something else, it might be an issue, but for now, reset to idle.
+    // Fallback: If somehow reached here with an undefined state, or an action not handled above
     if (human.activeAction !== 'moving') {
-      // If not moving (wandering), and not idle (handled above), reset to idle as a safe default.
       human.activeAction = 'idle';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;

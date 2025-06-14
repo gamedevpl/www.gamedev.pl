@@ -2,7 +2,7 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING, HUMAN_BERRY_HUNGER_REDUCTION } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 
-export class EatingStrategy implements HumanAIStrategy {
+export class EatingStrategy implements HumanAIStrategy<boolean> {
   check(human: HumanEntity): boolean {
     // Prevent non-adult children from using this strategy to eat from their own inventory
     if (!human.isAdult) {
@@ -47,7 +47,6 @@ export class EatingStrategy implements HumanAIStrategy {
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
       human.activeAction = 'eating';
-      return;
     }
   }
 }

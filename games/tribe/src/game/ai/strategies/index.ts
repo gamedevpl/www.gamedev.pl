@@ -1,18 +1,18 @@
-import { AttackingStrategy } from "./attacking-strategy";
-import { EatingStrategy } from "./eating-strategy";
-import { GatheringStrategy } from "./gathering-strategy";
-import { IdleWanderStrategy } from "./idle-wander-strategy";
-import { ProcreationStrategy } from "./procreation-strategy";
-import { ChildSeekingFoodStrategy } from "./child-seeking-food-strategy"; // New import
-import { ParentFeedingChildStrategy } from "./parent-feeding-child-strategy";
-import { HumanAIStrategy } from "./ai-strategy-types";
+import { AttackingStrategy } from './attacking-strategy';
+import { EatingStrategy } from './eating-strategy';
+import { GatheringStrategy } from './gathering-strategy';
+import { IdleWanderStrategy } from './idle-wander-strategy';
+import { ProcreationStrategy } from './procreation-strategy';
+import { ChildSeekingFoodStrategy } from './child-seeking-food-strategy'; // New import
+import { ParentFeedingChildStrategy } from './parent-feeding-child-strategy';
+import { HumanAIStrategy } from './ai-strategy-types';
 
 /**
  * A list of all available human AI strategies, ordered by priority.
  * The AI will iterate through this list and execute the first strategy
  * whose conditions are met.
  */
-export const humanAIStrategies: HumanAIStrategy[] = [
+export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new AttackingStrategy(),
   new EatingStrategy(),
   new ChildSeekingFoodStrategy(),
