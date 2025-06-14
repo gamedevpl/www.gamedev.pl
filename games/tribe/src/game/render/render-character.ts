@@ -27,6 +27,25 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
 };
 
 /**
+ * Renders debug information for a human character.
+ * @param ctx Canvas rendering context
+ * @param human The human entity to render debug info for
+ */
+function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): void {
+  const { position, activeAction = 'idle' } = human;
+  const stateName = human.stateMachine?.[0] || 'N/A';
+  const yOffset = human.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
+
+  ctx.save();
+  ctx.fillStyle = 'white';
+  ctx.font = '10px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Action: ${activeAction}`, position.x, position.y - yOffset);
+  ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
+  ctx.restore();
+}
+
+/**
  * Draws a crown above the character
  * @param ctx Canvas rendering context
  * @param position Character position
@@ -86,6 +105,7 @@ export function renderCharacter(
   isPlayer: boolean = false,
   isPlayerChild: boolean = false,
   isPlayerHeir: boolean = false,
+  isDebugOn: boolean = false,
 ): void {
   const { position, activeAction = 'idle' } = human;
 
@@ -126,5 +146,9 @@ export function renderCharacter(
 
   if (crownSize && highlightColor) {
     drawCrown(ctx, position, currentCharacterRadius, crownSize, highlightColor);
+  }
+
+  if (isDebugOn) {
+    renderDebugInfo(ctx, human);
   }
 }

@@ -10,7 +10,7 @@ import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
 
-export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
+export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState, isDebugOn: boolean): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // Background
@@ -51,7 +51,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
       const isPlayer = human.id === player?.id;
       const isPlayerChild = playerChildren.some((child) => child.id === human.id);
       const isPlayerHeir = human.id === playerHeir?.id;
-      renderCharacter(ctx, human, isPlayer, isPlayerChild, isPlayerHeir);
+      renderCharacter(ctx, human, isPlayer, isPlayerChild, isPlayerHeir, isDebugOn);
     } else if (entity.type === 'humanCorpse') {
       renderHumanCorpse(ctx, entity as HumanCorpseEntity);
     }
