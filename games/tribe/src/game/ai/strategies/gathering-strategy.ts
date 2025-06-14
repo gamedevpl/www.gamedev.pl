@@ -10,15 +10,14 @@ import {
 } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 
 export class GatheringStrategy implements HumanAIStrategy {
   check(human: HumanEntity): boolean {
-    // Non-adult children should not gather resources
     if (!human.isAdult) {
       return false;
     }
 
-    // Check if human needs to gather (hungry enough and not at berry capacity)
     if (human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING && human.berries < human.maxBerries) {
       return true;
     }
@@ -27,46 +26,31 @@ export class GatheringStrategy implements HumanAIStrategy {
 
   execute(human: HumanEntity, context: UpdateContext): void {
     const { gameState } = context;
-    const allEntities = gameState.entities.entities;
+    const indexedState = gameState as IndexedWorldState;
 
-    // 1. Categorize all available berry bushes
-    const myBushes: BerryBushEntity[] = [];
-    const familyBushes: BerryBushEntity[] = [];
-    const unclaimedBushes: BerryBushEntity[] = [];
-
-    for (const entity of allEntities.values()) {
-      if (entity.type === 'berryBush') {
-        const bush = entity as BerryBushEntity;
-        if (bush.currentBerries > 0) {
-          if (bush.ownerId === human.id) {
-            myBushes.push(bush);
-          } else if (!bush.ownerId) {
-            unclaimedBushes.push(bush);
-          } else {
-            const owner = allEntities.get(bush.ownerId) as HumanEntity | undefined;
-            if (owner && areFamily(human, owner, allEntities)) {
-              familyBushes.push(bush);
-            }
-            // Ignore bushes owned by non-family for now
-          }
+    const myBushes = indexedState.search.berryBush.byProperty('ownerId', human.id).filter((b) => b.currentBerries > 0);
+    const unclaimedBushes = indexedState.search.berryBush.byProperty('ownerId', undefined).filter((b) => b.currentBerries > 0);
+    const familyBushes = indexedState.search.berryBush
+      .byProperty('ownerId', undefined)
+      .filter((b) => {
+        if (b.ownerId && b.currentBerries > 0) {
+          const owner = gameState.entities.entities.get(b.ownerId) as HumanEntity | undefined;
+          return owner && areFamily(human, owner, gameState);
         }
-      }
-    }
+        return false;
+      });
 
     let targetBush: BerryBushEntity | null = null;
 
-    // 2. Territorial Search: If I own bushes, try to gather near them
     if (myBushes.length > 0) {
       const preferredTargets = [...myBushes, ...unclaimedBushes, ...familyBushes];
       let closestTerritorialBush: BerryBushEntity | null = null;
       let minDistance = Infinity;
 
       for (const ownedBush of myBushes) {
-        for (const target of preferredTargets) {
-          if (target.id === ownedBush.id) continue; // Don't target a bush we're using as an anchor
-          const distanceToAnchor = vectorDistance(ownedBush.position, target.position);
-
-          if (distanceToAnchor <= AI_GATHERING_TERRITORY_RADIUS) {
+        const candidates = indexedState.search.berryBush.byRadius(ownedBush.position, AI_GATHERING_TERRITORY_RADIUS);
+        for (const target of candidates) {
+          if (preferredTargets.find((p) => p.id === target.id)) {
             const distanceToTarget = vectorDistance(human.position, target.position);
             if (distanceToTarget < minDistance) {
               minDistance = distanceToTarget;
@@ -78,26 +62,24 @@ export class GatheringStrategy implements HumanAIStrategy {
       targetBush = closestTerritorialBush;
     }
 
-    // 3. Prioritized Global Search (Fallback)
     if (!targetBush) {
       const searchOrder = [myBushes, unclaimedBushes, familyBushes];
       for (const bushList of searchOrder) {
         if (bushList.length > 0) {
           targetBush = findClosestEntity<BerryBushEntity>(
             human,
-            new Map(bushList.map((b) => [b.id, b])), // Create a map for findClosestEntity
+            gameState,
             'berryBush' as EntityType,
-            gameState.mapDimensions.width,
-            gameState.mapDimensions.height,
+            undefined,
+            (b) => bushList.some((bl) => bl.id === b.id),
           );
           if (targetBush) {
-            break; // Found a target in the current priority list
+            break;
           }
         }
       }
     }
 
-    // 4. Update AI Action
     if (targetBush) {
       const distance = vectorDistance(human.position, targetBush.position);
       if (distance < HUMAN_INTERACTION_RANGE) {
@@ -111,7 +93,6 @@ export class GatheringStrategy implements HumanAIStrategy {
         human.direction = vectorNormalize(dirToTarget);
       }
     } else {
-      // No suitable bush found, become idle
       human.activeAction = 'idle';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;

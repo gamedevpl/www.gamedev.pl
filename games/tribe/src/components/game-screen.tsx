@@ -10,7 +10,7 @@ import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
-import { findClosestEntity } from '../game/utils/world-utils';
+import { findClosestEntity, findPlayerEntity } from '../game/utils/world-utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { SoundType } from '../game/sound/sound-types';
@@ -65,15 +65,6 @@ export const GameScreen: React.FC = () => {
     }
   }, false);
 
-  const findPlayerEntity = (): HumanEntity | undefined => {
-    for (const entity of gameStateRef.current.entities.entities.values()) {
-      if (entity.isPlayer && entity.type === 'human') {
-        return entity as HumanEntity;
-      }
-    }
-    return undefined;
-  };
-
   useEffect(() => {
     startLoop();
     return stopLoop;
@@ -90,19 +81,15 @@ export const GameScreen: React.FC = () => {
       }
 
       keysPressed.current.add(key);
-      const playerEntity = findPlayerEntity();
+      const playerEntity = findPlayerEntity(gameStateRef.current);
 
       if (!playerEntity) return;
 
-      // Handle interaction and eating
       if (key === 'e') {
-        // Try to find a berry bush first
         const nearbyBush = findClosestEntity<BerryBushEntity>(
           playerEntity,
-          gameStateRef.current.entities.entities,
+          gameStateRef.current,
           'berryBush',
-          gameStateRef.current.mapDimensions.width,
-          gameStateRef.current.mapDimensions.height,
           HUMAN_INTERACTION_RANGE,
           (b) => (b as BerryBushEntity).currentBerries > 0 && playerEntity.berries < playerEntity.maxBerries,
         );
@@ -111,13 +98,10 @@ export const GameScreen: React.FC = () => {
           playerEntity.activeAction = 'gathering';
           playSound(SoundType.Gather);
         } else {
-          // If no bush to gather from, try procreation
           const potentialPartner = findClosestEntity<HumanEntity>(
             playerEntity,
-            gameStateRef.current.entities.entities,
+            gameStateRef.current,
             'human',
-            gameStateRef.current.mapDimensions.width,
-            gameStateRef.current.mapDimensions.height,
             HUMAN_INTERACTION_RANGE,
             (h) => {
               const human = h as HumanEntity;
@@ -140,30 +124,27 @@ export const GameScreen: React.FC = () => {
             playerEntity.activeAction = 'procreating';
             playSound(SoundType.Procreate);
           }
-          // If neither gathering nor procreating is possible, do nothing
         }
       } else if (key === 'f') {
-        playerEntity.activeAction = 'eating'; // Set to eating when "f" is pressed
+        playerEntity.activeAction = 'eating';
         playSound(SoundType.Eat);
       } else if (key === 'arrowup' || key === 'w') {
-        playerEntity.direction.y = -1; // Move up
+        playerEntity.direction.y = -1;
         playerEntity.activeAction = 'moving';
       } else if (key === 'arrowdown' || key === 's') {
-        playerEntity.direction.y = 1; // Move down
+        playerEntity.direction.y = 1;
         playerEntity.activeAction = 'moving';
       } else if (key === 'arrowleft' || key === 'a') {
-        playerEntity.direction.x = -1; // Move left
+        playerEntity.direction.x = -1;
         playerEntity.activeAction = 'moving';
       } else if (key === 'arrowright' || key === 'd') {
-        playerEntity.direction.x = 1; // Move right
+        playerEntity.direction.x = 1;
         playerEntity.activeAction = 'moving';
       } else if (key === 'q') {
         const target = findClosestEntity<HumanEntity>(
           playerEntity,
-          gameStateRef.current.entities.entities,
+          gameStateRef.current,
           'human',
-          gameStateRef.current.mapDimensions.width,
-          gameStateRef.current.mapDimensions.height,
           HUMAN_INTERACTION_RANGE,
           (h) => (h as HumanEntity).id !== playerEntity.id,
         );
@@ -173,9 +154,9 @@ export const GameScreen: React.FC = () => {
           playSound(SoundType.Attack);
         }
       } else if (key === ' ') {
-        playerEntity.activeAction = 'idle'; // Set to idle when space is pressed
+        playerEntity.activeAction = 'idle';
       } else {
-        return; // Ignore other keys
+        return;
       }
     };
 
@@ -184,20 +165,19 @@ export const GameScreen: React.FC = () => {
       const key = event.key.toLowerCase();
       keysPressed.current.delete(key);
 
-      const playerEntity = findPlayerEntity();
+      const playerEntity = findPlayerEntity(gameStateRef.current);
       if (!playerEntity) return;
 
       if (key === 'arrowup' || key === 'w') {
-        playerEntity.direction.y = 0; // Stop moving up
+        playerEntity.direction.y = 0;
       } else if (key === 'arrowdown' || key === 's') {
-        playerEntity.direction.y = 0; // Stop moving down
+        playerEntity.direction.y = 0;
       } else if (key === 'arrowleft' || key === 'a') {
-        playerEntity.direction.x = 0; // Stop moving left
+        playerEntity.direction.x = 0;
       } else if (key === 'arrowright' || key === 'd') {
-        playerEntity.direction.x = 0; // Stop moving right
+        playerEntity.direction.x = 0;
       }
 
-      // if none of the movement keys are pressed, set activeAction to idle
       if (
         !keysPressed.current.has('arrowup') &&
         !keysPressed.current.has('arrowdown') &&
@@ -209,7 +189,7 @@ export const GameScreen: React.FC = () => {
         !keysPressed.current.has('d')
       ) {
         if (playerEntity && playerEntity.activeAction === 'moving') {
-          playerEntity.activeAction = 'idle'; // Set to idle when no movement keys are pressed
+          playerEntity.activeAction = 'idle';
         }
       }
 
@@ -220,7 +200,7 @@ export const GameScreen: React.FC = () => {
           playerEntity.activeAction === 'eating' ||
           playerEntity.activeAction === 'procreating')
       ) {
-        playerEntity.activeAction = 'idle'; // Set to idle when not gathering, eating, or procreating
+        playerEntity.activeAction = 'idle';
       }
     };
 

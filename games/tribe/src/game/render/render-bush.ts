@@ -34,7 +34,7 @@ export function renderBerryBush(
 
       if (owner.id === player.id) {
         claimColor = PLAYER_HIGHLIGHT_COLOR;
-      } else if (areFamily(player, owner, gameState.entities.entities)) {
+      } else if (areFamily(player, owner, gameState)) {
         claimColor = FAMILY_CLAIM_COLOR;
       } else {
         claimColor = NON_FAMILY_CLAIM_COLOR;

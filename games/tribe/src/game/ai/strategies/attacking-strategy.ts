@@ -21,22 +21,20 @@ export class AttackingStrategy implements HumanAIStrategy {
   check(human: HumanEntity, context: UpdateContext): boolean {
     this._threat = null;
     const { gameState } = context;
-    const allEntities = gameState.entities.entities;
-    const { mapDimensions } = gameState;
 
     // 1. Self-Defense
-    let aggressor = findAggressor(human.id, allEntities);
+    let aggressor = findAggressor(human.id, gameState);
     if (aggressor) {
       this._threat = aggressor;
       return true;
     }
 
     // 2. Family-Defense
-    for (const entity of allEntities.values()) {
+    for (const entity of gameState.entities.entities.values()) {
       if (entity.type === 'human') {
         const potentialChild = entity as HumanEntity;
         if (potentialChild.motherId === human.id || potentialChild.fatherId === human.id) {
-          aggressor = findAggressor(potentialChild.id, allEntities);
+          aggressor = findAggressor(potentialChild.id, gameState);
           if (aggressor) {
             this._threat = aggressor;
             return true;
@@ -46,7 +44,7 @@ export class AttackingStrategy implements HumanAIStrategy {
     }
 
     // 3. Procreation-Defense
-    const procreationThreat = findProcreationThreat(human, allEntities, mapDimensions.width, mapDimensions.height);
+    const procreationThreat = findProcreationThreat(human, gameState);
     if (procreationThreat) {
       this._threat = procreationThreat;
       return true;
@@ -55,26 +53,21 @@ export class AttackingStrategy implements HumanAIStrategy {
     // 4. Resource-Defense
     const intruder = findClosestEntity<HumanEntity>(
       human,
-      allEntities,
+      gameState,
       'human' as EntityType,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
       AI_DEFEND_CLAIMED_BUSH_RANGE,
       (entity) => {
         const otherHuman = entity as HumanEntity;
         if (otherHuman.activeAction !== 'gathering') return false;
 
-        // Don't attack family over resources
-        if (areFamily(human, otherHuman, allEntities)) {
+        if (areFamily(human, otherHuman, gameState)) {
           return false;
         }
 
         const targetBush = findClosestEntity<BerryBushEntity>(
           otherHuman,
-          allEntities,
+          gameState,
           'berryBush' as EntityType,
-          gameState.mapDimensions.width,
-          gameState.mapDimensions.height,
           HUMAN_ATTACK_RANGE,
         );
 
@@ -91,15 +84,12 @@ export class AttackingStrategy implements HumanAIStrategy {
     if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
       const target = findClosestEntity<HumanEntity>(
         human,
-        allEntities,
+        gameState,
         'human' as EntityType,
-        gameState.mapDimensions.width,
-        gameState.mapDimensions.height,
         undefined, // No max range
         (entity) => {
           const otherHuman = entity as HumanEntity;
-          // Don't attack family for food
-          if (areFamily(human, otherHuman, allEntities)) {
+          if (areFamily(human, otherHuman, gameState)) {
             return false;
           }
           return otherHuman.berries >= AI_ATTACK_TARGET_MIN_BERRY_COUNT;

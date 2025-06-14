@@ -1,6 +1,7 @@
-import { createEntities, createBerryBush, createHuman } from './entities/entities-update'; // Added createHuman
+import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
 import { GameWorldState } from './world-types';
-import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from './world-consts'; // Added INITIAL_BERRY_BUSH_COUNT
+import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from './world-consts';
+import { indexWorldState } from './world-index/world-state-index';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -50,7 +51,9 @@ export function initWorld(): GameWorldState {
     nextVisualEffectId: 0,
   };
 
-  console.log('Game world initialized:', initialWorldState);
+  const indexedWorldState = indexWorldState(initialWorldState);
 
-  return initialWorldState;
+  console.log('Game world initialized:', indexedWorldState);
+
+  return indexedWorldState;
 }

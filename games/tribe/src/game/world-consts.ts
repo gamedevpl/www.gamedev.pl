@@ -92,4 +92,3 @@ export const EFFECT_DURATION_SHORT_HOURS: number = 1;
 export const EFFECT_DURATION_MEDIUM_HOURS: number = 3;
 export const EFFECT_DURATION_LONG_HOURS: number = 6;
 export const HUNGER_EFFECT_THRESHOLD: number = 70;
-

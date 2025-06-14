@@ -3,7 +3,7 @@ import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
 
-export type EntityType = 'character' | 'berryBush' | 'human' | 'humanCorpse';
+export type EntityType = 'berryBush' | 'human' | 'humanCorpse';
 
 // Base Entity interface, now extended by more specific types
 export interface Entity {

@@ -1,31 +1,29 @@
 import { UpdateContext } from '../world-types';
 import { interactionsDefinitions } from './index';
 import { calculateWrappedDistance } from '../utils/math-utils';
+import { IndexedWorldState } from '../world-index/world-index-types';
 
 export function interactionsUpdate(context: UpdateContext): void {
   const { gameState } = context;
-  const entitiesMap = gameState.entities.entities;
-  const allEntities = Array.from(entitiesMap.values());
+  const indexedState = gameState as IndexedWorldState;
+  const allEntities = Array.from(gameState.entities.entities.values());
 
   for (const interaction of interactionsDefinitions) {
     for (const sourceEntity of allEntities) {
-      // Check source type if specified
       if (interaction.sourceType && sourceEntity.type !== interaction.sourceType) {
         continue;
       }
 
-      for (const targetEntity of allEntities) {
-        // Entity cannot interact with itself
+      const potentialTargets = indexedState.search[interaction.targetType].byRadius(
+        sourceEntity.position,
+        interaction.maxDistance,
+      );
+
+      for (const targetEntity of potentialTargets) {
         if (sourceEntity.id === targetEntity.id) {
           continue;
         }
 
-        // Check target type if specified
-        if (interaction.targetType && targetEntity.type !== interaction.targetType) {
-          continue;
-        }
-
-        // Check distance
         const distance = calculateWrappedDistance(
           sourceEntity.position,
           targetEntity.position,
@@ -34,7 +32,6 @@ export function interactionsUpdate(context: UpdateContext): void {
         );
 
         if (distance <= interaction.maxDistance) {
-          // Check custom conditions and perform if met
           if (interaction.checker(sourceEntity, targetEntity, context)) {
             interaction.perform(sourceEntity, targetEntity, context);
           }

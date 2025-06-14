@@ -28,15 +28,7 @@ export const bushSpreadingState: State<BerryBushEntity, BushSpreadingStateData> 
     // Using a check radius, e.g., 15 pixels, to avoid bushes spawning too close or overlapping.
     // This radius should ideally be related to the visual size of the bush.
     const SPREAD_CHECK_RADIUS = 15;
-    if (
-      !isPositionOccupied(
-        newPosition,
-        gameState.entities.entities,
-        SPREAD_CHECK_RADIUS,
-        gameState.mapDimensions.width, // Pass worldWidth
-        gameState.mapDimensions.height, // Pass worldHeight
-      )
-    ) {
+    if (!isPositionOccupied(newPosition, gameState, SPREAD_CHECK_RADIUS)) {
       createBerryBush(gameState.entities, newPosition, gameState.time);
     }
 

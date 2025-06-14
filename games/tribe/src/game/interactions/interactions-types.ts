@@ -10,11 +10,9 @@ export interface InteractionDefinition<S extends Entity = Entity, T extends Enti
   /** A unique identifier for the interaction, useful for debugging or logging. */
   id: string;
 
-  /** Optional: Specifies the required type of the source entity for this interaction. */
-  sourceType?: EntityType;
+  sourceType: EntityType;
 
-  /** Optional: Specifies the required type of the target entity for this interaction. */
-  targetType?: EntityType;
+  targetType: EntityType;
 
   /** The maximum distance (in pixels) between source and target for the interaction to be considered. */
   maxDistance: number;

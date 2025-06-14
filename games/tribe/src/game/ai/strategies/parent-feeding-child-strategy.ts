@@ -24,10 +24,8 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy {
 
     const hungryChild = findClosestEntity<HumanEntity>(
       human,
-      context.gameState.entities.entities,
+      context.gameState,
       'human' as EntityType,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
       CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
       (entity) => {
         const childEntity = entity as HumanEntity;
@@ -45,10 +43,8 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy {
   execute(human: HumanEntity, context: UpdateContext): void {
     const hungryChild = findClosestEntity<HumanEntity>(
       human,
-      context.gameState.entities.entities,
+      context.gameState,
       'human' as EntityType,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
       CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
       (entity) => {
         const childEntity = entity as HumanEntity;

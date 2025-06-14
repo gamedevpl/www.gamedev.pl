@@ -33,10 +33,8 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
     // 1. Local search
     let parentWithFood = findClosestEntity<HumanEntity>(
       human,
-      gameState.entities.entities,
+      gameState,
       'human' as EntityType,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
       CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
       (p) => findParentFn(p as HumanEntity),
     );
@@ -45,10 +43,8 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
     if (!parentWithFood) {
       parentWithFood = findClosestEntity<HumanEntity>(
         human,
-        gameState.entities.entities,
+        gameState,
         'human' as EntityType,
-        gameState.mapDimensions.width,
-        gameState.mapDimensions.height,
         undefined, // No radius limit for global search
         (p) => findParentFn(p as HumanEntity),
       );
