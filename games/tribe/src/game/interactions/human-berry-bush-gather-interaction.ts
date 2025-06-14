@@ -6,6 +6,8 @@ import { BERRY_BUSH_CLAIM_DURATION_HOURS, HUMAN_INTERACTION_RANGE } from '../wor
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
+import { playSound } from '../sound/sound-utils';
+import { SoundType } from '../sound/sound-types';
 
 export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity, BerryBushEntity> = {
   id: 'humanBerryBushGather',
@@ -34,5 +36,8 @@ export const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity,
 
     // Add visual effect for claiming the bush
     addVisualEffect(context.gameState, VisualEffectType.BushClaimed, berryBush.position, EFFECT_DURATION_SHORT_HOURS);
+
+    // Play sound
+    playSound(SoundType.Gather);
   },
 };

@@ -7,6 +7,8 @@ import {
   HUMAN_PROCREATION_COOLDOWN_HOURS,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
 } from '../../../../world-consts';
+import { playSound } from '../../../../sound/sound-utils';
+import { SoundType } from '../../../../sound/sound-types';
 
 /**
  * Handles the procreation state for humans.
@@ -50,6 +52,8 @@ const update = (data: HumanProcreatingStateData, context: StateContext<HumanEnti
       female.fatherId = male.id; // Store father ID on mother for birth process
       entity.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
       partner.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
+
+      playSound(SoundType.Procreate);
     }
   }
 

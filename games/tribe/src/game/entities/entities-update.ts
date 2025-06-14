@@ -20,6 +20,8 @@ import {
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
+import { playSound } from '../sound/sound-utils';
+import { SoundType } from '../sound/sound-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -160,6 +162,9 @@ export function giveBirth(
     mother.id, // Mother ID
     fatherId, // Father ID
   );
+
+  // Play birth sound
+  playSound(SoundType.Birth);
 
   return child;
 }

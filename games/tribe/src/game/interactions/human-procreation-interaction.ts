@@ -7,6 +7,8 @@ import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../wo
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
+import { playSound } from '../sound/sound-utils';
+import { SoundType } from '../sound/sound-types';
 
 /**
  * Defines an interaction for human procreation.
@@ -113,6 +115,9 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
   source.lastPartneredEffectTime = gameState.time;
   target.lastPartneredEffectTime = gameState.time;
   target.activeAction = undefined;
+
+  // Play procreation sound
+  playSound(SoundType.Procreate);
 };
 
 export const humanProcreationInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
