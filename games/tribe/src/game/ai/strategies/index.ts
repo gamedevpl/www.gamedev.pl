@@ -1,3 +1,4 @@
+import { AttackingStrategy } from "./attacking-strategy";
 import { EatingStrategy } from "./eating-strategy";
 import { GatheringStrategy } from "./gathering-strategy";
 import { IdleWanderStrategy } from "./idle-wander-strategy";
@@ -12,6 +13,7 @@ import { HumanAIStrategy } from "./ai-strategy-types";
  * whose conditions are met.
  */
 export const humanAIStrategies: HumanAIStrategy[] = [
+  new AttackingStrategy(),
   new EatingStrategy(),
   new ChildSeekingFoodStrategy(),
   new ParentFeedingChildStrategy(),

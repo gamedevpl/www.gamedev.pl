@@ -45,6 +45,9 @@ export interface HumanEntity extends Entity {
   /** ID of the human's mother, if known. */
   motherId?: EntityId;
 
+  /** IDs of the human's partners. */
+  partnerIds?: EntityId[];
+
   /** Cooldown time for a parent to feed a child. */
   feedChildCooldownTime?: number;
 

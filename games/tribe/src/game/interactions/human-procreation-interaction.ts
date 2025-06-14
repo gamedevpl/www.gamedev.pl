@@ -82,6 +82,21 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     } as HumanProcreatingStateData,
   ];
 
+  // Update partnerIds for both entities
+  if (!source.partnerIds) {
+    source.partnerIds = [];
+  }
+  if (!source.partnerIds.includes(target.id)) {
+    source.partnerIds.push(target.id);
+  }
+
+  if (!target.partnerIds) {
+    target.partnerIds = [];
+  }
+  if (!target.partnerIds.includes(source.id)) {
+    target.partnerIds.push(source.id);
+  }
+
   // Clear active actions - the state machine will handle the behavior
   source.activeAction = undefined;
   target.activeAction = undefined;

@@ -1,7 +1,7 @@
 import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { EntityType } from '../../entities/entities-types';
+import { Entity, EntityType } from '../../entities/entities-types';
 import {
   findClosestEntity,
   countEntitiesOfTypeInRadius,
@@ -28,26 +28,51 @@ import {
  */
 export class ProcreationStrategy implements HumanAIStrategy {
   private findRegularPartner(human: HumanEntity, context: UpdateContext): HumanEntity | null {
-    return findClosestEntity<HumanEntity>(
+    const { gameState } = context;
+    const allEntities = gameState.entities.entities;
+    const { mapDimensions } = gameState;
+
+    const baseFilter = (p: Entity): p is HumanEntity => {
+      const other = p as HumanEntity;
+      return (
+        (other.type === 'human' &&
+          other.id !== human.id && // Not the same human
+          other.gender !== human.gender && // Opposite gender
+          other.isAdult && // Must be an adult
+          other.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL && // Not too hungry
+          (other.procreationCooldown || 0) <= 0 && // Not on cooldown
+          (other.gender === 'female' ? !other.isPregnant : true)) ?? // If female, not pregnant
+        false
+      );
+    };
+
+    // --- Pass 1: Find unpartnered individuals (the "safe" option) ---
+    const unpartneredPartner = findClosestEntity<HumanEntity>(
       human,
-      context.gameState.entities.entities,
+      allEntities,
       'human' as EntityType,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
-      HUMAN_AI_WANDER_RADIUS * 2, // Using existing wander radius for regular partner search range
-      (p) => {
-        const other = p as HumanEntity;
-        return (
-          (other.id !== human.id && // Not the same human
-            other.gender !== human.gender && // Opposite gender
-            other.isAdult && // Must be an adult
-            other.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL && // Not too hungry
-            (other.procreationCooldown || 0) <= 0 && // Not on cooldown
-            (other.gender === 'female' ? !other.isPregnant : true)) || // If female, not pregnant
-          false
-        );
-      },
+      mapDimensions.width,
+      mapDimensions.height,
+      HUMAN_AI_WANDER_RADIUS * 2,
+      (p) => baseFilter(p) && (!p.partnerIds || p.partnerIds.length === 0),
     );
+
+    if (unpartneredPartner) {
+      return unpartneredPartner;
+    }
+
+    // --- Pass 2: Find any eligible partner (the "risky" option) ---
+    const anyPartner = findClosestEntity<HumanEntity>(
+      human,
+      allEntities,
+      'human' as EntityType,
+      mapDimensions.width,
+      mapDimensions.height,
+      HUMAN_AI_WANDER_RADIUS * 2,
+      (p) => baseFilter(p),
+    );
+
+    return anyPartner;
   }
 
   /**

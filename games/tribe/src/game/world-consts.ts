@@ -70,6 +70,9 @@ export const PROCREATION_FOOD_SEARCH_RADIUS: number = 200; // Radius in pixels t
 export const PROCREATION_MAX_CHILDREN_FOR_AI: number = 3; // Max children an AI aims for before seeking new lineage
 export const PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE: number = 250; // Radius AI searches for new unrelated partners
 export const PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE: number = 1; // Min unrelated partners to start new lineage
+export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
+export const AI_ATTACK_TARGET_MIN_BERRY_COUNT: number = 5;
+export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green

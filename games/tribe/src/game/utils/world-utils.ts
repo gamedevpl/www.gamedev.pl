@@ -2,7 +2,7 @@ import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
 import { calculateWrappedDistance, vectorAdd } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types'; // Added import
-import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts'; // Added import
+import { HUMAN_HUNGER_THRESHOLD_CRITICAL, HUMAN_INTERACTION_RANGE } from '../world-consts'; // Added import
 import { GameWorldState } from '../world-types';
 
 /**
@@ -217,8 +217,8 @@ export function findHeir(potentialHeirs: HumanEntity[]): HumanEntity | undefined
     return undefined; // No potential heirs provided
   }
 
-  const males = potentialHeirs.filter((h) => h.gender === 'male');
-  const females = potentialHeirs.filter((h) => h.gender === 'female');
+  const males = potentialHeirs.filter((h) => h.isAdult && h.gender === 'male');
+  const females = potentialHeirs.filter((h) => h.isAdult && h.gender === 'female');
 
   const sortFn = (a: HumanEntity, b: HumanEntity) => {
     if (a.age !== b.age) {
@@ -264,4 +264,72 @@ export function findChildren(gameState: GameWorldState, parent: HumanEntity): Hu
   }
 
   return children;
+}
+
+/**
+ * Finds the entity that is actively attacking a specified target.
+ * @param targetId The ID of the entity being targeted.
+ * @param allEntities A map of all entities in the game.
+ * @returns The `HumanEntity` that is attacking the target, or `null` if no aggressor is found.
+ */
+export function findAggressor(targetId: EntityId, allEntities: Map<EntityId, Entity>): HumanEntity | null {
+  for (const entity of allEntities.values()) {
+    if (entity.type === 'human') {
+      const human = entity as HumanEntity;
+      if (human.activeAction === 'attacking' && human.attackTargetId === targetId) {
+        return human;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Finds a threat related to procreation partnerships.
+ * A threat is another human engaging in procreation with one of this human's partners.
+ * @param human The human entity (the potential defender).
+ * @param allEntities A map of all entities in the game.
+ * @param worldWidth The width of the world for distance calculations.
+ * @param worldHeight The height of the world for distance calculations.
+ * @returns The `HumanEntity` that is considered a threat, or `null`.
+ */
+export function findProcreationThreat(
+  human: HumanEntity,
+  allEntities: Map<EntityId, Entity>,
+  worldWidth: number,
+  worldHeight: number,
+): HumanEntity | null {
+  if (!human.partnerIds || human.partnerIds.length === 0) {
+    return null;
+  }
+
+  for (const partnerId of human.partnerIds) {
+    const partner = allEntities.get(partnerId) as HumanEntity | undefined;
+
+    // If partner doesn't exist or is not in a procreating action, they can't be part of a threat right now.
+    if (!partner || partner.activeAction !== 'procreating') {
+      continue;
+    }
+
+    // Partner is procreating. Find who they are procreating with.
+    for (const otherHumanEntity of allEntities.values()) {
+      if (otherHumanEntity.type !== 'human' || otherHumanEntity.id === human.id || otherHumanEntity.id === partner.id) {
+        continue;
+      }
+
+      const otherHuman = otherHumanEntity as HumanEntity;
+
+      if (otherHuman.activeAction === 'procreating') {
+        const distance = calculateWrappedDistance(partner.position, otherHuman.position, worldWidth, worldHeight);
+
+        // If partner and otherHuman are close and both trying to procreate, we have a threat.
+        if (distance < HUMAN_INTERACTION_RANGE * 1.5) {
+          // The other human is the threat.
+          return otherHuman;
+        }
+      }
+    }
+  }
+
+  return null;
 }
