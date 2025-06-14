@@ -45,7 +45,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
   // Render entities
   sortedEntities.forEach((entity: Entity) => {
     if (entity.type === 'berryBush') {
-      renderBerryBush(ctx, entity as BerryBushEntity);
+      renderBerryBush(ctx, entity as BerryBushEntity, gameState, player, gameState.time);
     } else if (entity.type === 'human') {
       const human = entity as HumanEntity;
       const isPlayer = human.id === player?.id;

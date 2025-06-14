@@ -73,11 +73,14 @@ export const PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE: number = 1; // 
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_BERRY_COUNT: number = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
+export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green
 export const PLAYER_CHILD_HIGHLIGHT_COLOR: string = '#2196F3'; // Blue
 export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
+export const FAMILY_CLAIM_COLOR: string = '#FFD700'; // Gold
+export const NON_FAMILY_CLAIM_COLOR: string = '#DC143C'; // Crimson
 
 // Crown Sizes
 export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character
