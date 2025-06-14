@@ -5,8 +5,9 @@ import {
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   PARENT_FEEDING_RANGE,
   CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
+  CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
 } from '../../world-consts';
-import { findClosestEntity, getRandomNearbyPosition } from '../../utils/world-utils';
+import { findClosestEntity, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
 import { calculateWrappedDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
 
@@ -21,7 +22,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
   execute(human: HumanEntity, context: UpdateContext): void {
     const { gameState } = context;
 
-    const findParentFn = (p: HumanEntity) => {
+    const findParentWithFoodFn = (p: HumanEntity) => {
       if (p.type !== 'human') return false;
       const parentCandidate = p as HumanEntity;
       return (
@@ -30,13 +31,13 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
       );
     };
 
-    // 1. Local search
+    // 1. Local search for parent with food
     let parentWithFood = findClosestEntity<HumanEntity>(
       human,
       gameState,
       'human' as EntityType,
       CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
-      (p) => findParentFn(p as HumanEntity),
+      (p) => findParentWithFoodFn(p as HumanEntity),
     );
 
     // 2. Global search if local search fails
@@ -46,7 +47,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         gameState,
         'human' as EntityType,
         undefined, // No radius limit for global search
-        (p) => findParentFn(p as HumanEntity),
+        (p) => findParentWithFoodFn(p as HumanEntity),
       );
     }
 
@@ -58,7 +59,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         gameState.mapDimensions.height,
       );
 
-      // 3. Move towards parent
+      // 3. Move towards parent with food
       if (distance > PARENT_FEEDING_RANGE) {
         human.activeAction = 'moving';
         human.targetPosition = { ...parentWithFood.position };
@@ -71,24 +72,45 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy {
         human.targetPosition = undefined;
       }
     } else {
-      // 4. No parent found, stay idle but with a chance to move slightly
-      human.activeAction = 'seekingFood';
-      human.targetPosition = undefined;
-
-      // 5. Small chance to move to avoid getting stuck
-      if (Math.random() < 0.05) {
-        // 5% chance
-        human.activeAction = 'moving';
-        human.targetPosition = getRandomNearbyPosition(
+      // 4. No parent with food found, try to find any parent to stay close to.
+      const parents = findParents(human, gameState);
+      if (parents.length > 0) {
+        const parentToFollow = parents[0]; // Just follow the first one found
+        const distance = calculateWrappedDistance(
           human.position,
-          10, // Small radius
+          parentToFollow.position,
           gameState.mapDimensions.width,
           gameState.mapDimensions.height,
         );
-        const dirToTarget = vectorSubtract(human.targetPosition, human.position);
-        human.direction = vectorNormalize(dirToTarget);
+
+        if (distance > CHILD_MAX_WANDER_DISTANCE_FROM_PARENT) {
+          human.activeAction = 'moving';
+          human.targetPosition = { ...parentToFollow.position };
+          const dirToTarget = vectorSubtract(parentToFollow.position, human.position);
+          human.direction = vectorNormalize(dirToTarget);
+        } else {
+          human.activeAction = 'seekingFood'; // Stay idle near parent
+          human.direction = { x: 0, y: 0 };
+          human.targetPosition = undefined;
+        }
       } else {
-        human.direction = { x: 0, y: 0 };
+        // 5. No parents found at all, stay idle with a small chance to move to avoid getting stuck
+        human.activeAction = 'seekingFood';
+        human.targetPosition = undefined;
+
+        if (Math.random() < 0.05) {
+          human.activeAction = 'moving';
+          human.targetPosition = getRandomNearbyPosition(
+            human.position,
+            10, // Small radius
+            gameState.mapDimensions.width,
+            gameState.mapDimensions.height,
+          );
+          const dirToTarget = vectorSubtract(human.targetPosition, human.position);
+          human.direction = vectorNormalize(dirToTarget);
+        } else {
+          human.direction = { x: 0, y: 0 };
+        }
       }
     }
   }

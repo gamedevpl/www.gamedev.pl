@@ -1,8 +1,14 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
-import { getRandomNearbyPosition } from '../../utils/world-utils';
-import { HUMAN_AI_IDLE_WANDER_CHANCE, HUMAN_AI_WANDER_RADIUS, HUMAN_INTERACTION_RANGE } from '../../world-consts';
+import { findMalePartner, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
+import {
+  CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
+  FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER,
+  HUMAN_AI_IDLE_WANDER_CHANCE,
+  HUMAN_AI_WANDER_RADIUS,
+  HUMAN_INTERACTION_RANGE,
+} from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 
 export class IdleWanderStrategy implements HumanAIStrategy {
@@ -20,11 +26,28 @@ export class IdleWanderStrategy implements HumanAIStrategy {
       human.activeAction = 'idle'; // Ensure activeAction is set
 
       if (Math.random() < HUMAN_AI_IDLE_WANDER_CHANCE) {
+        let anchorPoint = human.position;
+        let wanderRadius = HUMAN_AI_WANDER_RADIUS;
+
+        if (!human.isAdult) {
+          const parents = findParents(human, gameState);
+          if (parents.length > 0) {
+            anchorPoint = parents[0].position; // Wander around the first available parent
+            wanderRadius = CHILD_MAX_WANDER_DISTANCE_FROM_PARENT;
+          }
+        } else if (human.gender === 'female') {
+          const malePartner = findMalePartner(human, gameState);
+          if (malePartner) {
+            anchorPoint = malePartner.position;
+            wanderRadius = FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER;
+          }
+        }
+
         // Start wandering
         human.activeAction = 'moving';
         human.targetPosition = getRandomNearbyPosition(
-          human.position,
-          HUMAN_AI_WANDER_RADIUS,
+          anchorPoint,
+          wanderRadius,
           gameState.mapDimensions.width,
           gameState.mapDimensions.height,
         );

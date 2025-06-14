@@ -11,7 +11,7 @@ export const BERRY_BUSH_MAX_BERRIES: number = 5;
 export const BERRY_BUSH_INITIAL_BERRIES: number = 3;
 export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 berry to grow
 export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 720; // 30 game days
-export const BERRY_BUSH_SPREAD_CHANCE: number = 0.8; // 20% chance per attempt
+export const BERRY_BUSH_SPREAD_CHANCE: number = 0.25; // 10% chance per attempt
 export const BERRY_BUSH_SPREAD_RADIUS: number = 25; // pixels
 export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 30; // 5 game days
 export const INITIAL_BERRY_BUSH_COUNT: number = 5;
@@ -35,6 +35,7 @@ export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for o
 
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
+export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
 export const HUMAN_PROCREATION_COOLDOWN_HOURS: number = 24; // 1 game day
@@ -65,11 +66,10 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
+export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
+export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 200;
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 200; // Radius in pixels to search for food sources when considering procreation
-export const PROCREATION_MAX_CHILDREN_FOR_AI: number = 3; // Max children an AI aims for before seeking new lineage
-export const PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE: number = 250; // Radius AI searches for new unrelated partners
-export const PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE: number = 1; // Min unrelated partners to start new lineage
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_BERRY_COUNT: number = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
@@ -77,6 +77,8 @@ export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for 
 
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green
+export const PLAYER_PARENT_HIGHLIGHT_COLOR: string = '#FF5722'; // Deep Orange
+export const PLAYER_PARTNER_HIGHLIGHT_COLOR: string = '#9C27B0'; // Purple
 export const PLAYER_CHILD_HIGHLIGHT_COLOR: string = '#2196F3'; // Blue
 export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
 export const FAMILY_CLAIM_COLOR: string = '#FFD700'; // Gold
@@ -86,6 +88,8 @@ export const NON_FAMILY_CLAIM_COLOR: string = '#DC143C'; // Crimson
 export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character
 export const PLAYER_HEIR_CROWN_SIZE: number = 8; // Size of the crown for player's heir
 export const PLAYER_CHILD_CROWN_SIZE: number = 6; // Size of the crown for player's children
+export const PLAYER_PARENT_CROWN_SIZE: number = 10; // Size of the crown for player's parents
+export const PLAYER_PARTNER_CROWN_SIZE: number = 10; // Size of the crown for player's partner
 
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;

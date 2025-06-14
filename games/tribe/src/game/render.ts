@@ -47,7 +47,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
       const isPlayer = human.id === player?.id;
       const isPlayerChild = playerChildren.some((child) => child.id === human.id);
       const isPlayerHeir = human.id === playerHeir?.id;
-      renderCharacter(ctx, human, isPlayer, isPlayerChild, isPlayerHeir, isDebugOn);
+      const isPlayerParent = player && (human.id === player.motherId || human.id === player.fatherId);
+      const isPlayerPartner =
+        player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
+      renderCharacter(ctx, human, isPlayer, isPlayerParent, isPlayerChild, isPlayerPartner, isPlayerHeir, isDebugOn);
     } else if (entity.type === 'humanCorpse') {
       renderHumanCorpse(ctx, entity as HumanCorpseEntity);
     }

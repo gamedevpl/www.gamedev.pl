@@ -2,7 +2,11 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
-import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import {
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+} from '../world-consts';
 import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
@@ -37,7 +41,7 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
 
     if (isEntityFemale) {
       // Specific checks if the entity being checked is female
-      return !entity.isPregnant;
+      return !entity.isPregnant && entity.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE;
     }
     return true; // No further specific checks if the entity being checked is male
   };

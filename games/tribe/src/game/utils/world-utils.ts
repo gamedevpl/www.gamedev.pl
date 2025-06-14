@@ -244,3 +244,31 @@ export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: G
 
   return false;
 }
+
+export function findParents(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
+  const parents: HumanEntity[] = [];
+  if (human.motherId) {
+    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
+    if (mother) {
+      parents.push(mother);
+    }
+  }
+  if (human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    if (father) {
+      parents.push(father);
+    }
+  }
+  return parents;
+}
+
+export function findMalePartner(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
+  if (human.gender !== 'female' || !human.partnerIds || human.partnerIds.length === 0) {
+    return null;
+  }
+  for (const partnerId of human.partnerIds) {
+    const partner = gameState.entities.entities.get(partnerId) as HumanEntity | undefined;
+    if (partner && partner.gender === 'male') return partner;
+  }
+  return null;
+}

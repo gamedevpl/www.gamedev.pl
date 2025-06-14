@@ -6,6 +6,10 @@ import {
   PLAYER_CROWN_SIZE,
   PLAYER_HEIR_CROWN_SIZE,
   PLAYER_CHILD_CROWN_SIZE,
+  PLAYER_PARENT_CROWN_SIZE,
+  PLAYER_PARENT_HIGHLIGHT_COLOR,
+  PLAYER_PARTNER_CROWN_SIZE,
+  PLAYER_PARTNER_HIGHLIGHT_COLOR,
 } from '../world-consts';
 
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
@@ -103,7 +107,9 @@ export function renderCharacter(
   ctx: CanvasRenderingContext2D,
   human: HumanEntity,
   isPlayer: boolean = false,
+  isPlayerParent: boolean = false,
   isPlayerChild: boolean = false,
+  isPlayerPartner: boolean = false,
   isPlayerHeir: boolean = false,
   isDebugOn: boolean = false,
 ): void {
@@ -142,6 +148,12 @@ export function renderCharacter(
   } else if (isPlayerChild) {
     crownSize = PLAYER_CHILD_CROWN_SIZE;
     highlightColor = PLAYER_CHILD_HIGHLIGHT_COLOR;
+  } else if (isPlayerParent) {
+    crownSize = PLAYER_PARENT_CROWN_SIZE;
+    highlightColor = PLAYER_PARENT_HIGHLIGHT_COLOR;
+  } else if (isPlayerPartner) {
+    crownSize = PLAYER_PARTNER_CROWN_SIZE; // Partners also get a crown
+    highlightColor = PLAYER_PARTNER_HIGHLIGHT_COLOR;
   }
 
   if (crownSize && highlightColor) {

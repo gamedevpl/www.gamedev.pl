@@ -2,12 +2,7 @@ import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { Entity, EntityType } from '../../entities/entities-types';
-import {
-  findClosestEntity,
-  countEntitiesOfTypeInRadius,
-  countLivingOffspring,
-  findPotentialNewPartners,
-} from '../../utils/world-utils';
+import { findClosestEntity, countEntitiesOfTypeInRadius } from '../../utils/world-utils';
 import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -15,9 +10,7 @@ import {
   HUMAN_AI_WANDER_RADIUS,
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
   PROCREATION_FOOD_SEARCH_RADIUS,
-  PROCREATION_MAX_CHILDREN_FOR_AI,
-  PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE,
-  PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
 } from '../../world-consts';
 
 export class ProcreationStrategy implements HumanAIStrategy {
@@ -26,30 +19,32 @@ export class ProcreationStrategy implements HumanAIStrategy {
 
     const baseFilter = (p: Entity): p is HumanEntity => {
       const other = p as HumanEntity;
-      return (
-        (other.type === 'human' &&
-          other.id !== human.id &&
-          other.gender !== human.gender &&
-          other.isAdult &&
-          other.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-          (other.procreationCooldown || 0) <= 0 &&
-          (other.gender === 'female' ? !other.isPregnant : true)) ??
-        false
-      );
+      const isFemale = other.gender === 'female';
+      const isMale = other.gender === 'male';
+
+      const commonConditions =
+        other.type === 'human' &&
+        other.id !== human.id &&
+        other.gender !== human.gender &&
+        other.isAdult &&
+        other.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+        (other.procreationCooldown || 0) <= 0;
+
+      if (!commonConditions) return false;
+
+      if (isFemale) {
+        // Female specific conditions: not pregnant and within procreation age
+        return !other.isPregnant && other.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE;
+      } else if (isMale) {
+        // Male specific conditions: only interested in females who are actively procreating
+        // This logic is for the male's perspective when searching for a partner.
+        // The female's activeAction is checked here.
+        return true; //other.activeAction === 'procreating';
+      }
+      return false; // Should not happen if genders are opposite
     };
 
-    const unpartneredPartner = findClosestEntity<HumanEntity>(
-      human,
-      gameState,
-      'human' as EntityType,
-      HUMAN_AI_WANDER_RADIUS * 2,
-      (p) => baseFilter(p) && (!p.partnerIds || p.partnerIds.length === 0),
-    );
-
-    if (unpartneredPartner) {
-      return unpartneredPartner;
-    }
-
+    // Find any eligible partner based on the updated filter
     const anyPartner = findClosestEntity<HumanEntity>(
       human,
       gameState,
@@ -73,44 +68,21 @@ export class ProcreationStrategy implements HumanAIStrategy {
       human.isAdult &&
       human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
       (human.procreationCooldown || 0) <= 0 &&
-      (human.gender === 'female' ? !human.isPregnant : true) &&
+      (human.gender === 'female' ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE : true) &&
       nearbyBerryBushesCount >= PROCREATION_MIN_NEARBY_BERRY_BUSHES;
 
     if (!canProcreateBasically) {
       return false;
     }
 
-    const livingOffspringCount = countLivingOffspring(human.id, context.gameState);
-
-    if (livingOffspringCount < PROCREATION_MAX_CHILDREN_FOR_AI) {
-      const regularPartner = this.findRegularPartner(human, context);
-      return !!regularPartner;
-    } else {
-      const newPotentialPartners = findPotentialNewPartners(
-        human,
-        context.gameState,
-        PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE,
-      );
-      return newPotentialPartners.length >= PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE;
-    }
+    const partner = this.findRegularPartner(human, context);
+    return !!partner;
   }
 
   execute(human: HumanEntity, context: UpdateContext): void {
-    const livingOffspringCount = countLivingOffspring(human.id, context.gameState);
     let partnerToPursue: HumanEntity | null = null;
 
-    if (livingOffspringCount < PROCREATION_MAX_CHILDREN_FOR_AI) {
-      partnerToPursue = this.findRegularPartner(human, context);
-    } else {
-      const newPotentialPartners = findPotentialNewPartners(
-        human,
-        context.gameState,
-        PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE,
-      );
-      if (newPotentialPartners.length > 0) {
-        partnerToPursue = newPotentialPartners[0];
-      }
-    }
+    partnerToPursue = this.findRegularPartner(human, context);
 
     if (partnerToPursue) {
       const distance = vectorDistance(human.position, partnerToPursue.position);
