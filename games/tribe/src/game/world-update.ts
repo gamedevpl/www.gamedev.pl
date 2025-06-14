@@ -5,27 +5,35 @@ import { interactionsUpdate } from './interactions/interactions-update'; // Adde
 import { entitiesUpdate } from './entities/entities-update';
 import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
 
-export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: number): GameWorldState {
-  const newState = structuredClone(currentState);
+const MAX_REAL_TIME_DELTA = 0.001; // Maximum delta time to prevent large jumps
 
-  if (newState.gameOver) {
-    return newState;
+export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: number): GameWorldState {
+  while (realDeltaTimeSeconds > 0) {
+    const newState = structuredClone(currentState);
+    const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
+
+    if (newState.gameOver) {
+      return newState;
+    }
+
+    const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+    newState.time += gameHoursDelta;
+
+    // Entities update
+    entitiesUpdate({
+      gameState: newState,
+      deltaTime: deltaTime,
+    });
+
+    // Process entity interactions
+    interactionsUpdate({ gameState: newState, deltaTime: deltaTime }); // Added call
+
+    // Process visual effects
+    visualEffectsUpdate(newState);
+
+    currentState = newState;
+    realDeltaTimeSeconds -= deltaTime;
   }
 
-  const gameHoursDelta = realDeltaTimeSeconds * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
-  newState.time += gameHoursDelta;
-
-  // Entities update
-  entitiesUpdate({
-    gameState: newState,
-    deltaTime: realDeltaTimeSeconds,
-  });
-
-  // Process entity interactions
-  interactionsUpdate({ gameState: newState, deltaTime: realDeltaTimeSeconds }); // Added call
-
-  // Process visual effects
-  visualEffectsUpdate(newState);
-
-  return newState;
+  return currentState;
 }
