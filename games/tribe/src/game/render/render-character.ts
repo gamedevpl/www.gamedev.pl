@@ -10,11 +10,10 @@ import {
   PLAYER_PARENT_HIGHLIGHT_COLOR,
   PLAYER_PARTNER_CROWN_SIZE,
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
+  CHARACTER_RADIUS,
 } from '../world-consts';
 
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
-
-const CHARACTER_RADIUS = 30;
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'stunned';
 

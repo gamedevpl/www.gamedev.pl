@@ -11,6 +11,7 @@ export interface Entity {
   isPlayer?: boolean;
   type: EntityType;
   position: Vector2D;
+  radius: number;
   direction: Vector2D;
   acceleration: number;
   forces: Vector2D[];

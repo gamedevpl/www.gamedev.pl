@@ -2,9 +2,73 @@ import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
 import { calculateWrappedDistance, vectorAdd } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { HUMAN_HUNGER_THRESHOLD_CRITICAL, HUMAN_INTERACTION_RANGE } from '../world-consts';
+import {
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  HUMAN_HUNGER_THRESHOLD_SLOW,
+} from '../world-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
+import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
+import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+
+export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
+  const actions: PlayerActionHint[] = [];
+
+  // Check for Eating
+  if (player.berries > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
+    actions.push({ type: PlayerActionType.Eat, key: 'f' });
+  }
+
+  // Check for Gathering
+  const gatherTarget = findClosestEntity<BerryBushEntity>(
+    player,
+    gameState,
+    'berryBush',
+    HUMAN_INTERACTION_RANGE,
+    (b) => (b as BerryBushEntity).currentBerries > 0,
+  );
+  if (gatherTarget && player.berries < player.maxBerries) {
+    actions.push({ type: PlayerActionType.Gather, key: 'e', targetEntity: gatherTarget });
+  }
+
+  // Check for Procreation
+  const procreationTarget = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_INTERACTION_RANGE, (h) => {
+    const human = h as HumanEntity;
+    return (
+      (human.id !== player.id &&
+        human.gender !== player.gender &&
+        human.isAdult &&
+        player.isAdult &&
+        human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+        player.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+        (human.procreationCooldown || 0) <= 0 &&
+        (player.procreationCooldown || 0) <= 0 &&
+        (human.gender === 'female'
+          ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
+          : !player.isPregnant && player.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE)) ??
+      false
+    );
+  });
+  if (procreationTarget) {
+    actions.push({ type: PlayerActionType.Procreate, key: 'r', targetEntity: procreationTarget });
+  }
+
+  // Check for Attacking
+  const attackTarget = findClosestEntity<HumanEntity>(
+    player,
+    gameState,
+    'human',
+    HUMAN_INTERACTION_RANGE,
+    (h) => (h as HumanEntity).id !== player.id,
+  );
+  if (attackTarget) {
+    actions.push({ type: PlayerActionType.Attack, key: 'q', targetEntity: attackTarget });
+  }
+
+  return actions;
+}
 
 export function getRandomNearbyPosition(
   center: Vector2D,

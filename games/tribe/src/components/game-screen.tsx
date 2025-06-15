@@ -8,13 +8,14 @@ import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
-import { findClosestEntity, findPlayerEntity } from '../game/utils/world-utils';
+import { findClosestEntity, findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
 import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
+import { PlayerActionHint } from '../game/ui/ui-types';
 
 const INITIAL_STATE = initGame();
 
@@ -26,6 +27,7 @@ export const GameScreen: React.FC = () => {
   const keysPressed = useRef<Set<string>>(new Set());
   const isDebugOnRef = useRef<boolean>(false);
   const viewportCenterRef = useRef<Vector2D>(INITIAL_STATE.viewportCenter);
+  const playerActionHintsRef = useRef<PlayerActionHint[]>([]);
 
   const { appState, setAppState } = useGameContext();
 
@@ -39,7 +41,13 @@ export const GameScreen: React.FC = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         // gameStateRef.current.mapDimensions is already set in initGame
-        renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current);
+        renderGame(
+          ctxRef.current,
+          gameStateRef.current,
+          isDebugOnRef.current,
+          viewportCenterRef.current,
+          playerActionHintsRef.current,
+        );
       }
     };
     handleResize();
@@ -58,10 +66,17 @@ export const GameScreen: React.FC = () => {
       gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     }
 
+    const player = findPlayerEntity(gameStateRef.current);
+
+    if (player) {
+      playerActionHintsRef.current = getAvailablePlayerActions(gameStateRef.current, player);
+    } else {
+      playerActionHintsRef.current = [];
+    }
+
     // Bug fix for viewport wrapping. This is a workaround, as the core logic
     // is in updateWorld. This component now maintains its own viewport position
     // for rendering purposes to ensure smooth wrapping.
-    const player = findPlayerEntity(gameStateRef.current);
     if (player) {
       const { mapDimensions } = gameStateRef.current;
       const { width, height } = mapDimensions;
@@ -102,7 +117,13 @@ export const GameScreen: React.FC = () => {
       viewportCenterRef.current = gameStateRef.current.viewportCenter;
     }
 
-    renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current, viewportCenterRef.current);
+    renderGame(
+      ctxRef.current,
+      gameStateRef.current,
+      isDebugOnRef.current,
+      viewportCenterRef.current,
+      playerActionHintsRef.current,
+    );
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {
@@ -171,33 +192,32 @@ export const GameScreen: React.FC = () => {
         if (nearbyBush) {
           playerEntity.activeAction = 'gathering';
           playSoundAt(updateContext, SoundType.Gather, playerEntity.position);
-        } else {
-          const potentialPartner = findClosestEntity<HumanEntity>(
-            playerEntity,
-            gameStateRef.current,
-            'human',
-            HUMAN_INTERACTION_RANGE,
-            (h) => {
-              const human = h as HumanEntity;
-              return (
-                (human.id !== playerEntity.id &&
-                  human.gender !== playerEntity.gender &&
-                  human.isAdult &&
-                  playerEntity.isAdult &&
-                  human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-                  playerEntity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-                  (human.procreationCooldown || 0) <= 0 &&
-                  (playerEntity.procreationCooldown || 0) <= 0 &&
-                  (human.gender === 'female' ? !human.isPregnant : !playerEntity.isPregnant)) ||
-                false
-              );
-            },
-          );
-
-          if (potentialPartner) {
-            playerEntity.activeAction = 'procreating';
-            playSoundAt(updateContext, SoundType.Procreate, playerEntity.position);
-          }
+        }
+      } else if (key === 'r') {
+        const potentialPartner = findClosestEntity<HumanEntity>(
+          playerEntity,
+          gameStateRef.current,
+          'human',
+          HUMAN_INTERACTION_RANGE,
+          (h) => {
+            const human = h as HumanEntity;
+            return (
+              (human.id !== playerEntity.id &&
+                human.gender !== playerEntity.gender &&
+                human.isAdult &&
+                playerEntity.isAdult &&
+                human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+                playerEntity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+                (human.procreationCooldown || 0) <= 0 &&
+                (playerEntity.procreationCooldown || 0) <= 0 &&
+                (human.gender === 'female' ? !human.isPregnant : !playerEntity.isPregnant)) ||
+              false
+            );
+          },
+        );
+        if (potentialPartner) {
+          playerEntity.activeAction = 'procreating';
+          playSoundAt(updateContext, SoundType.Procreate, playerEntity.position);
         }
       } else if (key === 'f') {
         playerEntity.activeAction = 'eating';
@@ -265,13 +285,13 @@ export const GameScreen: React.FC = () => {
         }
       }
 
-      if (
-        !keysPressed.current.has('e') &&
-        !keysPressed.current.has('f') &&
-        (playerEntity.activeAction === 'gathering' ||
-          playerEntity.activeAction === 'eating' ||
-          playerEntity.activeAction === 'procreating')
-      ) {
+      if (!keysPressed.current.has('e') && playerEntity.activeAction === 'gathering') {
+        playerEntity.activeAction = 'idle';
+      }
+      if (!keysPressed.current.has('f') && playerEntity.activeAction === 'eating') {
+        playerEntity.activeAction = 'idle';
+      }
+      if (!keysPressed.current.has('r') && playerEntity.activeAction === 'procreating') {
         playerEntity.activeAction = 'idle';
       }
     };

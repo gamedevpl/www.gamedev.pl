@@ -16,6 +16,8 @@ import {
   HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
+  CHARACTER_RADIUS,
+  CHARACTER_CORPSE_RADIUS,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -67,6 +69,7 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
 
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
+    radius: BERRY_BUSH_SPREAD_RADIUS,
     currentBerries: BERRY_BUSH_INITIAL_BERRIES,
     maxBerries: BERRY_BUSH_MAX_BERRIES,
     berryRegenerationRate: regenerationRate,
@@ -97,6 +100,7 @@ export function createHuman(
 
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
+    radius: CHARACTER_RADIUS,
     hunger: initialHunger,
     age: initialAge,
     gender,
@@ -128,6 +132,7 @@ export function createHumanCorpse(
 ): HumanCorpseEntity {
   const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
     position,
+    radius: CHARACTER_CORPSE_RADIUS,
     gender,
     age,
     originalHumanId,

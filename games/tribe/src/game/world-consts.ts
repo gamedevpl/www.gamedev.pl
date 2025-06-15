@@ -77,6 +77,10 @@ export const AI_ATTACK_TARGET_MIN_BERRY_COUNT: number = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 
+// Rendering Constants
+export const CHARACTER_RADIUS = 30;
+export const CHARACTER_CORPSE_RADIUS = 30;
+
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green
 export const PLAYER_PARENT_HIGHLIGHT_COLOR: string = '#FF5722'; // Deep Orange
@@ -85,6 +89,10 @@ export const PLAYER_CHILD_HIGHLIGHT_COLOR: string = '#2196F3'; // Blue
 export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
 export const FAMILY_CLAIM_COLOR: string = '#FFD700'; // Gold
 export const NON_FAMILY_CLAIM_COLOR: string = '#DC143C'; // Crimson
+export const PLAYER_ACTION_OUTLINE_COLOR: string = '#FFFFFF';
+export const PLAYER_ACTION_OUTLINE_DASH_PATTERN: number[] = [5, 5];
+export const PLAYER_ACTION_OUTLINE_RADIUS_OFFSET: number = 5;
+export const PLAYER_ACTION_HINT_FONT_SIZE: number = 20;
 
 // Crown Sizes
 export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character

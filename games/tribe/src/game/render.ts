@@ -11,6 +11,8 @@ import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect } from './visual-effects/visual-effect-types';
+import { PlayerActionHint } from './ui/ui-types';
+import { renderPlayerActionHints } from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
@@ -39,7 +41,8 @@ export function renderGame(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   isDebugOn: boolean,
-  viewportCenter?: Vector2D,
+  viewportCenter: Vector2D,
+  playerActionHints: PlayerActionHint[],
 ): void {
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -47,9 +50,7 @@ export function renderGame(
   ctx.fillStyle = '#2c5234';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  if (viewportCenter) {
-    ctx.translate(ctx.canvas.width / 2 - viewportCenter.x, ctx.canvas.height / 2 - viewportCenter.y);
-  }
+  ctx.translate(ctx.canvas.width / 2 - viewportCenter.x, ctx.canvas.height / 2 - viewportCenter.y);
 
   if (gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
@@ -148,6 +149,10 @@ export function renderGame(
 
   if (gameState.isMuted) {
     ctx.fillText('MUTED', 20, lineHeight * uiLine++);
+  }
+
+  if (player && playerActionHints.length > 0) {
+    renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
   }
 
   if (gameState.isPaused) {
