@@ -5,6 +5,7 @@ export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Consta
 
 export const MAP_WIDTH: number = 1600; // pixels
 export const MAP_HEIGHT: number = 1200; // pixels
+export const VIEWPORT_FOLLOW_SPEED = 2.0;
 
 // Berry Bush Constants
 export const BERRY_BUSH_MAX_BERRIES: number = 5;
@@ -97,3 +98,7 @@ export const EFFECT_DURATION_SHORT_HOURS: number = 1;
 export const EFFECT_DURATION_MEDIUM_HOURS: number = 3;
 export const EFFECT_DURATION_LONG_HOURS: number = 6;
 export const HUNGER_EFFECT_THRESHOLD: number = 70;
+
+// Sound Constants
+export const SOUND_MAX_DISTANCE = 600;
+export const SOUND_FALLOFF = 1.5;

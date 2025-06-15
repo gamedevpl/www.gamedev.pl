@@ -1,7 +1,7 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { HumanEntity } from '../human-types';
 import { HUMAN_ATTACKING, HumanAttackingStateData, HUMAN_IDLE } from './human-state-types';
-import { playSound } from '../../../../sound/sound-utils';
+import { playSoundAt } from '../../../../sound/sound-manager';
 import { SoundType } from '../../../../sound/sound-types';
 
 export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = {
@@ -11,7 +11,7 @@ export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = 
     context.entity.acceleration = 0;
     context.entity.velocity = { x: 0, y: 0 };
 
-    playSound(SoundType.Attack);
+    playSoundAt(context.updateContext, SoundType.Attack, context.entity.position);
 
     return {
       ...nextData,

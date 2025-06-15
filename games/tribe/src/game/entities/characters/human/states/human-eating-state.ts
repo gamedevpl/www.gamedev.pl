@@ -4,7 +4,7 @@ import { HumanEntity } from '../human-types';
 import { HumanStateData, HUMAN_EATING, HUMAN_IDLE } from './human-state-types';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
-import { playSound } from '../../../../sound/sound-utils';
+import { playSoundAt } from '../../../../sound/sound-manager';
 import { SoundType } from '../../../../sound/sound-types';
 
 // Define the human eating state
@@ -34,7 +34,7 @@ export const humanEatingState: State<HumanEntity, HumanStateData> = {
       entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
       entity.berries = Math.max(0, entity.berries - 1);
       entity.eatingCooldownTime = updateContext.gameState.time + 1; // 1 second cooldown after eating
-      playSound(SoundType.Eat);
+      playSoundAt(updateContext, SoundType.Eat, entity.position);
 
       // Trigger eating visual effect
       if (!entity.lastEatingEffectTime || updateContext.gameState.time - entity.lastEatingEffectTime > 2) {

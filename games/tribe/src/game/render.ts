@@ -146,6 +146,10 @@ export function renderGame(
     ctx.fillText('AUTOPILOT', 20, lineHeight * uiLine++);
   }
 
+  if (gameState.isMuted) {
+    ctx.fillText('MUTED', 20, lineHeight * uiLine++);
+  }
+
   if (gameState.isPaused) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);

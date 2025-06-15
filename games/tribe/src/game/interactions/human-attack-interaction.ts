@@ -10,7 +10,7 @@ import {
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
-import { playSound } from '../sound/sound-utils';
+import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_ATTACKING } from '../entities/characters/human/states/human-state-types';
 
@@ -34,7 +34,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
     if (target.isStunned) {
       if (Math.random() < HUMAN_ATTACK_KILL_CHANCE) {
         target.isKilled = true;
-        playSound(SoundType.HumanDeath);
+        playSoundAt(context, SoundType.HumanDeath, target.position);
       }
     } else {
       // If the target is not stunned, there's a chance to stun them
@@ -43,7 +43,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
         target.stunnedUntil = context.gameState.time + HUMAN_STUN_DURATION_HOURS;
         target.activeAction = 'stunned';
       }
-      playSound(SoundType.Attack);
+      playSoundAt(context, SoundType.Attack, source.position);
     }
 
     // Set the attacker's cooldown

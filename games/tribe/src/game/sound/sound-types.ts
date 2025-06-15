@@ -1,3 +1,5 @@
+import { Vector2D } from '../utils/math-types';
+
 export enum SoundType {
   // Player/Human Actions
   Attack,
@@ -11,4 +13,15 @@ export enum SoundType {
   // UI/Game State
   GameOver,
   ButtonClick,
+}
+
+export interface SoundOptions {
+  position?: Vector2D;
+  listenerPosition?: Vector2D;
+  worldDimensions?: {
+    width: number;
+    height: number;
+  };
+  masterVolume?: number;
+  isMuted?: boolean;
 }

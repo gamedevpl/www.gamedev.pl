@@ -9,9 +9,12 @@ import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
 import { findClosestEntity, findPlayerEntity } from '../game/utils/world-utils';
-import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../game/world-consts';
+import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
+import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
+import { vectorLerp } from '../game/utils/math-utils';
+import { Vector2D } from '../game/utils/math-types';
 
 const INITIAL_STATE = initGame();
 
@@ -22,6 +25,7 @@ export const GameScreen: React.FC = () => {
   const lastUpdateTimeRef = useRef<number>();
   const keysPressed = useRef<Set<string>>(new Set());
   const isDebugOnRef = useRef<boolean>(false);
+  const viewportCenterRef = useRef<Vector2D>(INITIAL_STATE.viewportCenter);
 
   const { appState, setAppState } = useGameContext();
 
@@ -53,16 +57,59 @@ export const GameScreen: React.FC = () => {
     if (!gameStateRef.current.isPaused) {
       gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     }
-    renderGame(
-      ctxRef.current,
-      gameStateRef.current,
-      isDebugOnRef.current,
-      findPlayerEntity(gameStateRef.current)?.position,
-    );
+
+    // Bug fix for viewport wrapping. This is a workaround, as the core logic
+    // is in updateWorld. This component now maintains its own viewport position
+    // for rendering purposes to ensure smooth wrapping.
+    const player = findPlayerEntity(gameStateRef.current);
+    if (player) {
+      const { mapDimensions } = gameStateRef.current;
+      const { width, height } = mapDimensions;
+      // Create a target position for the lerp that may be outside the world bounds
+      // to ensure the lerp takes the shortest path.
+      let targetPosition = { ...player.position };
+
+      const dx = targetPosition.x - viewportCenterRef.current.x;
+      if (Math.abs(dx) > width / 2) {
+        if (dx > 0) {
+          targetPosition.x -= width;
+        } else {
+          targetPosition.x += width;
+        }
+      }
+
+      const dy = targetPosition.y - viewportCenterRef.current.y;
+      if (Math.abs(dy) > height / 2) {
+        if (dy > 0) {
+          targetPosition.y -= height;
+        } else {
+          targetPosition.y += height;
+        }
+      }
+
+      // Lerp towards the adjusted target.
+      let newViewportCenter = vectorLerp(viewportCenterRef.current, targetPosition, VIEWPORT_FOLLOW_SPEED * deltaTime);
+
+      // Wrap the new viewport center to stay within the world bounds.
+      newViewportCenter = {
+        x: ((newViewportCenter.x % width) + width) % width,
+        y: ((newViewportCenter.y % height) + height) % height,
+      };
+
+      viewportCenterRef.current = newViewportCenter;
+    } else {
+      // If there's no player, keep the viewport ref in sync with the game state
+      viewportCenterRef.current = gameStateRef.current.viewportCenter;
+    }
+
+    renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current, viewportCenterRef.current);
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {
-      playSound(SoundType.GameOver);
+      playSound(SoundType.GameOver, {
+        masterVolume: gameStateRef.current.masterVolume,
+        isMuted: gameStateRef.current.isMuted,
+      });
       setAppState('gameOver', {
         generations: gameStateRef.current.generationCount,
         cause: gameStateRef.current.causeOfGameOver || 'Unknown',
@@ -80,6 +127,11 @@ export const GameScreen: React.FC = () => {
       if (!isActive() || gameStateRef.current.gameOver) return;
 
       const key = event.key.toLowerCase();
+
+      if (key === 'm') {
+        gameStateRef.current.isMuted = !gameStateRef.current.isMuted;
+        return;
+      }
 
       if (key === ' ') {
         event.preventDefault();
@@ -105,6 +157,7 @@ export const GameScreen: React.FC = () => {
       const playerEntity = findPlayerEntity(gameStateRef.current);
 
       if (!playerEntity) return;
+      const updateContext = { gameState: gameStateRef.current, deltaTime: 0 };
 
       if (key === 'e') {
         const nearbyBush = findClosestEntity<BerryBushEntity>(
@@ -117,7 +170,7 @@ export const GameScreen: React.FC = () => {
 
         if (nearbyBush) {
           playerEntity.activeAction = 'gathering';
-          playSound(SoundType.Gather);
+          playSoundAt(updateContext, SoundType.Gather, playerEntity.position);
         } else {
           const potentialPartner = findClosestEntity<HumanEntity>(
             playerEntity,
@@ -143,12 +196,12 @@ export const GameScreen: React.FC = () => {
 
           if (potentialPartner) {
             playerEntity.activeAction = 'procreating';
-            playSound(SoundType.Procreate);
+            playSoundAt(updateContext, SoundType.Procreate, playerEntity.position);
           }
         }
       } else if (key === 'f') {
         playerEntity.activeAction = 'eating';
-        playSound(SoundType.Eat);
+        playSoundAt(updateContext, SoundType.Eat, playerEntity.position);
       } else if (key === 'arrowup' || key === 'w') {
         playerEntity.direction.y = -1;
         playerEntity.activeAction = 'moving';
@@ -172,7 +225,7 @@ export const GameScreen: React.FC = () => {
         if (target) {
           playerEntity.activeAction = 'attacking';
           playerEntity.attackTargetId = target.id;
-          playSound(SoundType.Attack);
+          playSoundAt(updateContext, SoundType.Attack, playerEntity.position);
         }
       } else {
         return;

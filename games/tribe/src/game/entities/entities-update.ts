@@ -20,7 +20,7 @@ import {
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
-import { playSound } from '../sound/sound-utils';
+import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
@@ -164,7 +164,7 @@ export function giveBirth(
   );
 
   // Play birth sound
-  playSound(SoundType.Birth);
+  playSoundAt(updateContext, SoundType.Birth, mother.position);
 
   return child;
 }

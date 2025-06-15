@@ -21,13 +21,7 @@ export function initWorld(): GameWorldState {
   const centerY = MAP_HEIGHT / 2;
 
   // Spawn player character (male) at center
-  createHuman(
-    entities,
-    { x: centerX, y: centerY },
-    initialTime,
-    'male',
-    true, // isPlayer = true
-  );
+  const player = createHuman(entities, { x: centerX, y: centerY }, initialTime, 'male', true);
 
   // Spawn partner character (female) near the player
   createHuman(
@@ -49,8 +43,11 @@ export function initWorld(): GameWorldState {
     gameOver: false,
     visualEffects: [],
     nextVisualEffectId: 0,
+    viewportCenter: { ...player.position },
     isPaused: false,
     isPlayerOnAutopilot: false,
+    masterVolume: 0.5,
+    isMuted: false,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);

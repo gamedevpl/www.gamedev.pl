@@ -35,6 +35,13 @@ export function vectorDistance(v1: Vector2D, v2: Vector2D): number {
   return vectorLength(vectorSubtract(v1, v2));
 }
 
+export function vectorLerp(v1: Vector2D, v2: Vector2D, t: number): Vector2D {
+  return {
+    x: v1.x + (v2.x - v1.x) * t,
+    y: v1.y + (v2.y - v1.y) * t,
+  };
+}
+
 export function getDirectionVectorOnTorus(
   from: Vector2D,
   to: Vector2D,

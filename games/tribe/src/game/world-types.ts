@@ -4,6 +4,7 @@
  */
 
 import { Entities } from './entities/entities-types';
+import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 
 // Basic Types
@@ -25,8 +26,11 @@ export interface GameWorldState {
   generationCount: number; // Number of generations that have passed
   gameOver: boolean; // Flag to indicate if the game is over
   causeOfGameOver?: string; // Optional cause of game over
+  viewportCenter: Vector2D;
   isPaused: boolean;
   isPlayerOnAutopilot: boolean;
+  masterVolume: number;
+  isMuted: boolean;
 }
 
 export type UpdateContext = {
