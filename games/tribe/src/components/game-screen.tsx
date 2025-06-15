@@ -10,12 +10,13 @@ import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
 import { findClosestEntity, findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
-import { playSound, updateMasterVolume } from '../game/sound/sound-utils';
+import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
 import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint, UIButtonActionType } from '../game/ui/ui-types';
+import { setMasterVolume } from '../game/sound/sound-loader';
 
 const INITIAL_STATE = initGame();
 
@@ -191,21 +192,21 @@ export const GameScreen: React.FC = () => {
 
       if (key === 'm') {
         gameStateRef.current.isMuted = !gameStateRef.current.isMuted;
-        updateMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
+        setMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
         return;
       }
 
       if (key === '=' || key === '+') {
         const newVolume = Math.min(1, gameStateRef.current.masterVolume + 0.1);
         gameStateRef.current.masterVolume = parseFloat(newVolume.toFixed(1));
-        updateMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
+        setMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
         return;
       }
 
       if (key === '-') {
         const newVolume = Math.max(0, gameStateRef.current.masterVolume - 0.1);
         gameStateRef.current.masterVolume = parseFloat(newVolume.toFixed(1));
-        updateMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
+        setMasterVolume(gameStateRef.current.masterVolume, gameStateRef.current.isMuted);
         return;
       }
 

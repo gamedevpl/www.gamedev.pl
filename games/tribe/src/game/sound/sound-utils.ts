@@ -3,15 +3,6 @@ import { SOUND_FALLOFF, SOUND_MAX_DISTANCE } from '../world-consts';
 import { SoundOptions, SoundType } from './sound-types';
 import { getAudioContext, soundBuffers, getMasterGainNode } from './sound-loader';
 
-export function updateMasterVolume(masterVolume: number, isMuted: boolean): void {
-  const masterGainNode = getMasterGainNode();
-  const context = getAudioContext();
-  if (masterGainNode && context) {
-    const newVolume = isMuted ? 0 : masterVolume;
-    masterGainNode.gain.value = newVolume / 10;
-  }
-}
-
 export function playSound(soundType: SoundType, options?: SoundOptions): void {
   const context = getAudioContext();
   const masterGainNode = getMasterGainNode();

@@ -19,15 +19,15 @@ export function getAudioContext(): AudioContext | undefined {
     audioContext = new window.AudioContext();
     masterGainNode = audioContext.createGain();
     masterGainNode.connect(audioContext.destination);
-    setMasterVolume(0.1);
+    setMasterVolume(0.1, false);
   }
   return audioContext;
 }
 
-export function setMasterVolume(volume: number): void {
+export function setMasterVolume(volume: number, isMuted: boolean): void {
   if (masterGainNode) {
     // Use setTargetAtTime for smoother volume changes
-    masterGainNode.gain.value = volume / 10;
+    masterGainNode.gain.value = isMuted ? 0 : volume / 10;
   }
 }
 
