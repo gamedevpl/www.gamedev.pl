@@ -123,6 +123,7 @@ export const UI_BAR_BACKGROUND_COLOR = '#555';
 export const UI_HUNGER_BAR_COLOR = '#f44336';
 export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
+export const UI_MASTER_VOLUME_BAR_COLOR = '#808080';
 export const UI_BERRY_ICON_SIZE = 20;
 export const UI_MINIATURE_CHARACTER_SIZE = 32;
 
@@ -143,3 +144,5 @@ export const HUNGER_EFFECT_THRESHOLD: number = 70;
 // Sound Constants
 export const SOUND_MAX_DISTANCE = 600;
 export const SOUND_FALLOFF = 1.5;
+export const INITIAL_MASTER_VOLUME = 0.1;
+export const MASTER_VOLUME_CHANGE_STEP = 0.1;

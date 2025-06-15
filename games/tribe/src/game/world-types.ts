@@ -30,8 +30,8 @@ export interface GameWorldState {
   viewportCenter: Vector2D;
   isPaused: boolean;
   isPlayerOnAutopilot: boolean;
-  masterVolume: number;
-  isMuted: boolean;
+  masterVolume: number; // Global volume level (0.0 to 1.0)
+  isMuted: boolean; // Global mute state
   uiButtons: ClickableUIButton[];
 }
 

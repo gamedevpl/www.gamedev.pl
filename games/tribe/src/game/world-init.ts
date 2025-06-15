@@ -1,6 +1,6 @@
 import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
 import { GameWorldState } from './world-types';
-import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from './world-consts';
+import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT, INITIAL_MASTER_VOLUME } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 
@@ -66,7 +66,7 @@ export function initWorld(): GameWorldState {
     viewportCenter: { ...player.position },
     isPaused: false,
     isPlayerOnAutopilot: false,
-    masterVolume: 0.5,
+    masterVolume: INITIAL_MASTER_VOLUME,
     isMuted: false,
     uiButtons,
   };
