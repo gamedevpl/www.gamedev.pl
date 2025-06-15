@@ -3,6 +3,12 @@
 export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Constants
 
+// Time Constants
+export const MONTHS_PER_YEAR = 12;
+export const DAYS_PER_MONTH = 30;
+export const HOURS_PER_GAME_MONTH: number = HOURS_PER_GAME_DAY * DAYS_PER_MONTH;
+export const HOURS_PER_GAME_YEAR: number = HOURS_PER_GAME_MONTH * MONTHS_PER_YEAR;
+
 export const MAP_WIDTH: number = 1600; // pixels
 export const MAP_HEIGHT: number = 1200; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
@@ -100,6 +106,33 @@ export const PLAYER_HEIR_CROWN_SIZE: number = 8; // Size of the crown for player
 export const PLAYER_CHILD_CROWN_SIZE: number = 6; // Size of the crown for player's children
 export const PLAYER_PARENT_CROWN_SIZE: number = 10; // Size of the crown for player's parents
 export const PLAYER_PARTNER_CROWN_SIZE: number = 10; // Size of the crown for player's partner
+
+// UI Constants
+export const UI_TEXT_COLOR: string = '#FFFFFF';
+export const UI_FONT_SIZE: number = 18;
+export const UI_LINE_HEIGHT: number = 24;
+export const UI_PADDING: number = 15;
+export const UI_TEXT_SHADOW_COLOR: string = 'rgba(0, 0, 0, 0.7)';
+export const UI_TEXT_SHADOW_BLUR: number = 4;
+
+// UI Bar Constants
+export const UI_BAR_WIDTH = 150;
+export const UI_BAR_HEIGHT = 15;
+export const UI_BAR_PADDING = 10;
+export const UI_BAR_BACKGROUND_COLOR = '#555';
+export const UI_HUNGER_BAR_COLOR = '#f44336';
+export const UI_AGE_BAR_COLOR = '#2196F3';
+export const UI_TIME_BAR_COLOR = '#FFC107';
+export const UI_BERRY_ICON_SIZE = 20;
+export const UI_MINIATURE_CHARACTER_SIZE = 32;
+
+// UI Button Constants
+export const UI_BUTTON_WIDTH: number = 120;
+export const UI_BUTTON_HEIGHT: number = 30;
+export const UI_BUTTON_SPACING: number = 20;
+export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
+export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
+export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
 
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;

@@ -19,3 +19,34 @@ export interface PlayerActionHint {
   key: string;
   targetEntity?: Entity;
 }
+
+export enum UIStatusType {
+  Time = 'Time',
+  Hunger = 'Hunger',
+  Berries = 'Berries',
+  // Age = 'Age',
+  Autopilot = 'Autopilot',
+  Muted = 'Muted',
+}
+
+export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
+  [UIStatusType.Time]: '🗓️',
+  [UIStatusType.Hunger]: '🍖',
+  [UIStatusType.Berries]: '🍓',
+  [UIStatusType.Autopilot]: '🤖',
+  [UIStatusType.Muted]: '🔇',
+};
+
+export enum UIButtonActionType {
+  ToggleAutopilot = 'ToggleAutopilot',
+  ToggleMute = 'ToggleMute',
+}
+
+export interface ClickableUIButton {
+  id: string;
+  action: UIButtonActionType;
+  rect: { x: number; y: number; width: number; height: number };
+  text: string;
+  backgroundColor: string;
+  textColor: string;
+}

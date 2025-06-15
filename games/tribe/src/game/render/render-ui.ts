@@ -6,7 +6,8 @@ import {
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
 } from '../world-consts';
 import { Vector2D } from '../utils/math-types';
-import { PlayerActionHint, PLAYER_ACTION_EMOJIS } from '../ui/ui-types';
+import { PlayerActionHint, PLAYER_ACTION_EMOJIS, ClickableUIButton } from '../ui/ui-types';
+import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 
 const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;
@@ -111,4 +112,107 @@ export function renderPlayerActionHints(
   });
 
   ctx.restore();
+}
+
+export function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton): void {
+  ctx.save();
+
+  // Draw button background
+  ctx.fillStyle = button.backgroundColor;
+  ctx.fillRect(button.rect.x, button.rect.y, button.rect.width, button.rect.height);
+
+  // Draw button text
+  ctx.fillStyle = button.textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(button.text, button.rect.x + button.rect.width / 2, button.rect.y + button.rect.height / 2);
+
+  ctx.restore();
+}
+
+export function drawProgressBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  progress: number, // 0 to 1
+  backgroundColor: string,
+  foregroundColor: string,
+): void {
+  ctx.save();
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(x, y, width, height);
+  ctx.fillStyle = foregroundColor;
+  ctx.fillRect(x, y, width * Math.max(0, progress), height);
+  ctx.restore();
+}
+
+export function drawDiscreteBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  emoji: string,
+  _maxItems: number,
+  currentItems: number,
+  iconSize: number,
+  maxWidth: number,
+): void {
+  ctx.save();
+
+  if (currentItems <= 0) {
+    ctx.restore();
+    return;
+  }
+
+  // Calculate the total width of all icons without padding
+  const totalIconWidth = currentItems * iconSize;
+  let padding: number;
+
+  // If the total width exceeds maxWidth, squeeze the icons together
+  if (totalIconWidth > maxWidth) {
+    padding = (maxWidth - totalIconWidth) / (currentItems - 1);
+  } else {
+    // Otherwise, use a default padding, ensuring it doesn't push the bar beyond maxWidth
+    const defaultPadding = 4; // A reasonable default padding
+    const totalWidthWithDefaultPadding = totalIconWidth + (currentItems - 1) * defaultPadding;
+    if (totalWidthWithDefaultPadding > maxWidth) {
+      padding = (maxWidth - totalIconWidth) / (currentItems - 1);
+    } else {
+      padding = defaultPadding;
+    }
+  }
+
+  // Ensure padding is not negative if there's only one item
+  if (currentItems === 1) {
+    padding = 0;
+  }
+
+  for (let i = 0; i < currentItems; i++) {
+    ctx.fillText(emoji, x + i * (iconSize + padding), y);
+  }
+  ctx.restore();
+}
+
+export function renderMiniatureCharacter(
+  ctx: CanvasRenderingContext2D,
+  position: Vector2D,
+  size: number,
+  age: number,
+  gender: 'male' | 'female',
+): void {
+  TribeHuman2D.render(
+    ctx,
+    position.x - size / 2,
+    position.y - size / 2,
+    size,
+    size,
+    0, // animationProgress
+    'idle', // stance
+    gender,
+    age,
+    [0, 0], // direction
+    false, // isPregnant
+    0, // hunger
+  );
 }

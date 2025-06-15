@@ -15,7 +15,7 @@ import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
 import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
-import { PlayerActionHint } from '../game/ui/ui-types';
+import { PlayerActionHint, UIButtonActionType } from '../game/ui/ui-types';
 
 const INITIAL_STATE = initGame();
 
@@ -142,6 +142,46 @@ export const GameScreen: React.FC = () => {
     startLoop();
     return stopLoop;
   }, [startLoop, stopLoop]);
+
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      const updateContext = { gameState: gameStateRef.current, deltaTime: 0 };
+
+      gameStateRef.current.uiButtons.forEach((button) => {
+        if (
+          mouseX >= button.rect.x &&
+          mouseX <= button.rect.x + button.rect.width &&
+          mouseY >= button.rect.y &&
+          mouseY <= button.rect.y + button.rect.height
+        ) {
+          const player = findPlayerEntity(gameStateRef.current);
+          if (player) {
+            playSoundAt(updateContext, SoundType.ButtonClick, player.position);
+          }
+
+          switch (button.action) {
+            case UIButtonActionType.ToggleAutopilot:
+              gameStateRef.current.isPlayerOnAutopilot = !gameStateRef.current.isPlayerOnAutopilot;
+              break;
+            case UIButtonActionType.ToggleMute:
+              gameStateRef.current.isMuted = !gameStateRef.current.isMuted;
+              break;
+          }
+        }
+      });
+    };
+
+    window.addEventListener('mousedown', handleMouseDown);
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [isActive]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

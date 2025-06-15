@@ -145,7 +145,6 @@ export function playSound(soundType: SoundType, options?: SoundOptions): void {
       oscillator.start(now);
       oscillator.stop(now + 1.5);
       break;
-
     case SoundType.ButtonClick:
       gainNode.gain.value = 0.1 * masterVolume;
       oscillator.type = 'sine';

@@ -1,5 +1,30 @@
 import { GameWorldState } from './world-types';
-import { HOURS_PER_GAME_DAY } from './world-consts';
+import {
+  UI_FONT_SIZE,
+  UI_PADDING,
+  UI_TEXT_COLOR,
+  UI_TEXT_SHADOW_BLUR,
+  UI_TEXT_SHADOW_COLOR,
+  UI_BAR_WIDTH,
+  UI_BAR_HEIGHT,
+  UI_BAR_PADDING,
+  UI_BAR_BACKGROUND_COLOR,
+  UI_HUNGER_BAR_COLOR,
+  UI_AGE_BAR_COLOR,
+  HUMAN_MAX_AGE_YEARS,
+  UI_BERRY_ICON_SIZE,
+  UI_TIME_BAR_COLOR,
+  HOURS_PER_GAME_DAY,
+  GAME_DAY_IN_REAL_SECONDS,
+  HUMAN_YEAR_IN_REAL_SECONDS,
+  UI_MINIATURE_CHARACTER_SIZE,
+  UI_BUTTON_WIDTH,
+  UI_BUTTON_HEIGHT,
+  UI_BUTTON_SPACING,
+  UI_BUTTON_BACKGROUND_COLOR,
+  UI_BUTTON_TEXT_COLOR,
+  UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
+} from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
 import { Entity } from './entities/entities-types';
@@ -11,8 +36,14 @@ import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect } from './visual-effects/visual-effect-types';
-import { PlayerActionHint } from './ui/ui-types';
-import { renderPlayerActionHints } from './render/render-ui';
+import { PlayerActionHint, UIStatusType, UI_STATUS_EMOJIS, UIButtonActionType } from './ui/ui-types';
+import {
+  drawDiscreteBar,
+  drawProgressBar,
+  renderMiniatureCharacter,
+  renderPlayerActionHints,
+  drawButton,
+} from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
@@ -59,11 +90,7 @@ export function renderGame(
     ctx.textAlign = 'center';
     ctx.fillText('Game Over!', ctx.canvas.width / 2, ctx.canvas.height / 2 - 60);
     ctx.font = '20px "Press Start 2P", Arial';
-    ctx.fillText(
-      `Lineage Extinct. Generations Survived: ${gameState.generationCount}`,
-      ctx.canvas.width / 2,
-      ctx.canvas.height / 2 - 20,
-    );
+    ctx.fillText(`Lineage Extinct.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
     ctx.fillText(`Cause: ${gameState.causeOfGameOver || 'Unknown'}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     return;
   }
@@ -122,34 +149,134 @@ export function renderGame(
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  ctx.fillStyle = 'white';
-  ctx.font = '14px "Press Start 2P", Arial';
-  ctx.textAlign = 'left';
-  let uiLine = 1;
-  const lineHeight = 22;
+  // --- UI Rendering ---
+  ctx.fillStyle = UI_TEXT_COLOR;
+  ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+  ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
+  ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  ctx.fillText(`Generation: ${gameState.generationCount}`, 20, lineHeight * uiLine++);
-  ctx.fillText(
-    `Time: Day ${Math.floor(gameState.time / HOURS_PER_GAME_DAY)} Hour: ${(gameState.time % HOURS_PER_GAME_DAY).toFixed(
-      0,
-    )}`,
-    20,
-    lineHeight * uiLine++,
+  // --- Top-Left UI ---
+  ctx.textAlign = 'left';
+  let uiLineY = UI_PADDING + UI_FONT_SIZE;
+
+  // Time Display
+  const year = gameState.time / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS) / HUMAN_YEAR_IN_REAL_SECONDS;
+  const yearProgress = year % 1; // Fractional part for progress bar
+  const timeEmoji = UI_STATUS_EMOJIS[UIStatusType.Time];
+  const iconTextPadding = 25;
+  const barX = UI_PADDING + iconTextPadding;
+
+  ctx.fillText(timeEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+  drawProgressBar(
+    ctx,
+    barX,
+    uiLineY,
+    UI_BAR_WIDTH,
+    UI_BAR_HEIGHT,
+    yearProgress,
+    UI_BAR_BACKGROUND_COLOR,
+    UI_TIME_BAR_COLOR,
   );
 
+  uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
   if (player) {
-    ctx.fillText(`Hunger: ${Math.floor(player.hunger)}/100`, 20, lineHeight * uiLine++);
-    ctx.fillText(`Berries: ${player.berries}/${player.maxBerries}`, 20, lineHeight * uiLine++);
-    ctx.fillText(`Age: ${Math.floor(player.age)} years`, 20, lineHeight * uiLine++);
+    // Age Bar
+    const miniatureY = uiLineY + UI_MINIATURE_CHARACTER_SIZE / 2;
+    const ageBarY = uiLineY + (UI_MINIATURE_CHARACTER_SIZE - UI_BAR_HEIGHT) / 2;
+    const miniaturePadding = 5;
+
+    // Draw child miniature
+    renderMiniatureCharacter(ctx, { x: UI_PADDING * 2, y: miniatureY }, UI_MINIATURE_CHARACTER_SIZE, 5, player.gender);
+
+    const ageBarX = UI_PADDING + UI_MINIATURE_CHARACTER_SIZE + miniaturePadding;
+    const ageBarWidth = UI_BAR_WIDTH + iconTextPadding - (UI_MINIATURE_CHARACTER_SIZE + miniaturePadding) * 2;
+
+    drawProgressBar(
+      ctx,
+      ageBarX,
+      ageBarY,
+      ageBarWidth,
+      UI_BAR_HEIGHT,
+      Math.floor(player.age) / HUMAN_MAX_AGE_YEARS,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_AGE_BAR_COLOR,
+    );
+
+    // Draw elder miniature
+    renderMiniatureCharacter(
+      ctx,
+      { x: ageBarX + ageBarWidth + miniaturePadding + UI_MINIATURE_CHARACTER_SIZE / 2, y: miniatureY },
+      UI_MINIATURE_CHARACTER_SIZE,
+      HUMAN_MAX_AGE_YEARS,
+      player.gender,
+    );
+    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
+
+    // Hunger Bar
+    const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
+    ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+    drawProgressBar(
+      ctx,
+      barX,
+      uiLineY,
+      UI_BAR_WIDTH,
+      UI_BAR_HEIGHT,
+      (100 - player.hunger) / 100,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_HUNGER_BAR_COLOR,
+    );
+    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
+    // Berries Bar
+    const berriesEmoji = UI_STATUS_EMOJIS[UIStatusType.Berries];
+    ctx.textBaseline = 'middle';
+    drawDiscreteBar(
+      ctx,
+      barX,
+      uiLineY + UI_BERRY_ICON_SIZE / 2,
+      berriesEmoji,
+      player.maxBerries,
+      player.berries,
+      UI_BERRY_ICON_SIZE,
+      UI_BAR_WIDTH,
+    );
+    ctx.textBaseline = 'alphabetic'; // Reset baseline
+    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING;
   }
 
-  if (gameState.isPlayerOnAutopilot) {
-    ctx.fillText('AUTOPILOT', 20, lineHeight * uiLine++);
-  }
+  // --- Top-Right UI ---
+  ctx.textAlign = 'right';
+  let currentButtonX = ctx.canvas.width - UI_PADDING;
 
-  if (gameState.isMuted) {
-    ctx.fillText('MUTED', 20, lineHeight * uiLine++);
-  }
+  gameState.uiButtons.forEach((button) => {
+    const buttonY = UI_PADDING;
+    const buttonX = currentButtonX - UI_BUTTON_WIDTH;
+
+    // Update button state before drawing
+    button.rect = { x: buttonX, y: buttonY, width: UI_BUTTON_WIDTH, height: UI_BUTTON_HEIGHT };
+    button.textColor = UI_BUTTON_TEXT_COLOR;
+
+    switch (button.action) {
+      case UIButtonActionType.ToggleAutopilot:
+        button.text = `[AUTO]`;
+        button.backgroundColor = gameState.isPlayerOnAutopilot
+          ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
+          : UI_BUTTON_BACKGROUND_COLOR;
+        break;
+      case UIButtonActionType.ToggleMute:
+        button.text = gameState.isMuted ? `[UNMUTE]` : `[MUTE]`;
+        button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+        break;
+    }
+
+    drawButton(ctx, button);
+    currentButtonX -= UI_BUTTON_WIDTH + UI_BUTTON_SPACING;
+  });
+
+  // Reset shadow for other UI elements if needed
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
 
   if (player && playerActionHints.length > 0) {
     renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);

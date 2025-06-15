@@ -4,6 +4,7 @@
  */
 
 import { Entities } from './entities/entities-types';
+import { ClickableUIButton } from './ui/ui-types';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 
@@ -31,6 +32,7 @@ export interface GameWorldState {
   isPlayerOnAutopilot: boolean;
   masterVolume: number;
   isMuted: boolean;
+  uiButtons: ClickableUIButton[];
 }
 
 export type UpdateContext = {

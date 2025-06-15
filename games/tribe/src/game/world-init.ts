@@ -2,6 +2,7 @@ import { createEntities, createBerryBush, createHuman } from './entities/entitie
 import { GameWorldState } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
+import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -32,6 +33,25 @@ export function initWorld(): GameWorldState {
     false, // isPlayer = false
   );
 
+  const uiButtons: ClickableUIButton[] = [
+    {
+      id: 'autopilotButton',
+      action: UIButtonActionType.ToggleAutopilot,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: '',
+      backgroundColor: '',
+      textColor: '',
+    },
+    {
+      id: 'muteButton',
+      action: UIButtonActionType.ToggleMute,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: '',
+      backgroundColor: '',
+      textColor: '',
+    },
+  ];
+
   const initialWorldState: GameWorldState = {
     time: initialTime,
     entities: entities,
@@ -48,6 +68,7 @@ export function initWorld(): GameWorldState {
     isPlayerOnAutopilot: false,
     masterVolume: 0.5,
     isMuted: false,
+    uiButtons,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
