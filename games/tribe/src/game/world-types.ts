@@ -25,6 +25,8 @@ export interface GameWorldState {
   generationCount: number; // Number of generations that have passed
   gameOver: boolean; // Flag to indicate if the game is over
   causeOfGameOver?: string; // Optional cause of game over
+  isPaused: boolean;
+  isPlayerOnAutopilot: boolean;
 }
 
 export type UpdateContext = {

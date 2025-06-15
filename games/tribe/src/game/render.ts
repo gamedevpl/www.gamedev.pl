@@ -18,10 +18,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
 
   if (gameState.gameOver) {
     ctx.fillStyle = 'white';
-    ctx.font = '30px Press Start 2P, Arial';
+    ctx.font = '30px "Press Start 2P", Arial';
     ctx.textAlign = 'center';
     ctx.fillText('Game Over!', ctx.canvas.width / 2, ctx.canvas.height / 2 - 60);
-    ctx.font = '20px Press Start 2P, Arial';
+    ctx.font = '20px "Press Start 2P", Arial';
     ctx.fillText(
       `Lineage Extinct. Generations Survived: ${gameState.generationCount}`,
       ctx.canvas.width / 2,
@@ -61,7 +61,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
   });
 
   ctx.fillStyle = 'white';
-  ctx.font = '18px Press Start 2P, Arial';
+  ctx.font = '14px "Press Start 2P", Arial';
   ctx.textAlign = 'left';
   let uiLine = 1;
   const lineHeight = 22;
@@ -79,5 +79,18 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     ctx.fillText(`Hunger: ${Math.floor(player.hunger)}/100`, 20, lineHeight * uiLine++);
     ctx.fillText(`Berries: ${player.berries}/${player.maxBerries}`, 20, lineHeight * uiLine++);
     ctx.fillText(`Age: ${Math.floor(player.age)} years`, 20, lineHeight * uiLine++);
+  }
+
+  if (gameState.isPlayerOnAutopilot) {
+    ctx.fillText('AUTOPILOT', 20, lineHeight * uiLine++);
+  }
+
+  if (gameState.isPaused) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = 'white';
+    ctx.font = '33px "Press Start 2P", Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', ctx.canvas.width / 2, ctx.canvas.height / 2);
   }
 }

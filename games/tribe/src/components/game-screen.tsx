@@ -52,7 +52,9 @@ export const GameScreen: React.FC = () => {
     }
     const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
 
-    gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
+    if (!gameStateRef.current.isPaused) {
+      gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
+    }
     renderGame(ctxRef.current, gameStateRef.current, isDebugOn);
     lastUpdateTimeRef.current = time;
 
@@ -75,6 +77,22 @@ export const GameScreen: React.FC = () => {
       if (!isActive() || gameStateRef.current.gameOver) return;
 
       const key = event.key.toLowerCase();
+
+      if (key === ' ') {
+        event.preventDefault();
+        gameStateRef.current.isPaused = !gameStateRef.current.isPaused;
+        return;
+      }
+
+      if (key === 'o') {
+        gameStateRef.current.isPlayerOnAutopilot = !gameStateRef.current.isPlayerOnAutopilot;
+        return;
+      }
+
+      if (gameStateRef.current.isPlayerOnAutopilot) {
+        return;
+      }
+
       if (key === 'p') {
         setIsDebugOn((prev) => !prev);
         return;
@@ -153,8 +171,6 @@ export const GameScreen: React.FC = () => {
           playerEntity.attackTargetId = target.id;
           playSound(SoundType.Attack);
         }
-      } else if (key === ' ') {
-        playerEntity.activeAction = 'idle';
       } else {
         return;
       }
@@ -166,7 +182,7 @@ export const GameScreen: React.FC = () => {
       keysPressed.current.delete(key);
 
       const playerEntity = findPlayerEntity(gameStateRef.current);
-      if (!playerEntity) return;
+      if (!playerEntity || gameStateRef.current.isPlayerOnAutopilot) return;
 
       if (key === 'arrowup' || key === 'w') {
         playerEntity.direction.y = 0;

@@ -49,6 +49,8 @@ export function initWorld(): GameWorldState {
     gameOver: false,
     visualEffects: [],
     nextVisualEffectId: 0,
+    isPaused: false,
+    isPlayerOnAutopilot: false,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
