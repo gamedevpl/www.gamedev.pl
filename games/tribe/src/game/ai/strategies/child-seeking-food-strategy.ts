@@ -8,7 +8,7 @@ import {
   CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
 } from '../../world-consts';
 import { findClosestEntity, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
-import { calculateWrappedDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
+import { calculateWrappedDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
 
 export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | boolean> {
@@ -68,7 +68,12 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
       if (distance > PARENT_FEEDING_RANGE) {
         human.activeAction = 'moving';
         human.targetPosition = { ...parentWithFood.position };
-        const dirToTarget = vectorSubtract(parentWithFood.position, human.position);
+        const dirToTarget = getDirectionVectorOnTorus(
+          human.position,
+          parentWithFood.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
         human.direction = vectorNormalize(dirToTarget);
       } else {
         // Child is close enough, wait for feeding
@@ -92,7 +97,12 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
         if (distance > CHILD_MAX_WANDER_DISTANCE_FROM_PARENT) {
           human.activeAction = 'moving';
           human.targetPosition = { ...parentToFollow.position };
-          const dirToTarget = vectorSubtract(parentToFollow.position, human.position);
+          const dirToTarget = getDirectionVectorOnTorus(
+            human.position,
+            parentToFollow.position,
+            gameState.mapDimensions.width,
+            gameState.mapDimensions.height,
+          );
           human.direction = vectorNormalize(dirToTarget);
         } else {
           human.activeAction = 'seekingFood'; // Stay idle near parent
@@ -112,7 +122,12 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
             gameState.mapDimensions.width,
             gameState.mapDimensions.height,
           );
-          const dirToTarget = vectorSubtract(human.targetPosition, human.position);
+          const dirToTarget = getDirectionVectorOnTorus(
+            human.position,
+            human.targetPosition,
+            gameState.mapDimensions.width,
+            gameState.mapDimensions.height,
+          );
           human.direction = vectorNormalize(dirToTarget);
         } else {
           human.direction = { x: 0, y: 0 };

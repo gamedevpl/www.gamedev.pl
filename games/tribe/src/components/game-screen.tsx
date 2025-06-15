@@ -3,8 +3,6 @@ import { useRafLoop } from 'react-use';
 import { initGame } from '../game';
 import { updateWorld } from '../game/world-update';
 import { GameWorldState } from '../game/world-types';
-import { MAP_HEIGHT } from '../game/world-consts';
-import { MAP_WIDTH } from '../game/world-consts';
 import { useGameContext } from '../context/game-context';
 import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
@@ -36,7 +34,7 @@ export const GameScreen: React.FC = () => {
       if (canvas && ctxRef.current) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        gameStateRef.current.mapDimensions = { width: MAP_WIDTH, height: MAP_HEIGHT };
+        // gameStateRef.current.mapDimensions is already set in initGame
         renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current);
       }
     };
@@ -55,7 +53,12 @@ export const GameScreen: React.FC = () => {
     if (!gameStateRef.current.isPaused) {
       gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     }
-    renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current);
+    renderGame(
+      ctxRef.current,
+      gameStateRef.current,
+      isDebugOnRef.current,
+      findPlayerEntity(gameStateRef.current)?.position,
+    );
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {

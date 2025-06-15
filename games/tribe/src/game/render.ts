@@ -9,14 +9,50 @@ import { renderCharacter } from './render/render-character';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
+import { Vector2D } from './utils/math-types';
+import { VisualEffect } from './visual-effects/visual-effect-types';
 
-export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldState, isDebugOn: boolean): void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderWithWrapping(
+  ctx: CanvasRenderingContext2D,
+  worldWidth: number,
+  worldHeight: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  renderFn: (ctx: CanvasRenderingContext2D, ...args: any[]) => void,
+  entity: Entity | VisualEffect,
+  ...args: unknown[]
+): void {
+  const originalPosition = { ...entity.position };
+
+  for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
+    for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
+      entity.position.x = originalPosition.x + dx;
+      entity.position.y = originalPosition.y + dy;
+      renderFn(ctx, entity, ...args);
+    }
+  }
+
+  entity.position = originalPosition;
+}
+
+export function renderGame(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  isDebugOn: boolean,
+  viewportCenter?: Vector2D,
+): void {
+  ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   ctx.fillStyle = '#2c5234';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+  if (viewportCenter) {
+    ctx.translate(ctx.canvas.width / 2 - viewportCenter.x, ctx.canvas.height / 2 - viewportCenter.y);
+  }
+
   if (gameState.gameOver) {
+    ctx.restore(); // Restore before drawing UI
     ctx.fillStyle = 'white';
     ctx.font = '30px "Press Start 2P", Arial';
     ctx.textAlign = 'center';
@@ -39,9 +75,20 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
     return a.position.y - b.position.y || a.id - b.id;
   });
 
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
   sortedEntities.forEach((entity: Entity) => {
     if (entity.type === 'berryBush') {
-      renderBerryBush(ctx, entity as BerryBushEntity, gameState, player, gameState.time);
+      renderWithWrapping(
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderBerryBush,
+        entity as BerryBushEntity,
+        gameState,
+        player,
+        gameState.time,
+      );
     } else if (entity.type === 'human') {
       const human = entity as HumanEntity;
       const isPlayer = human.id === player?.id;
@@ -50,15 +97,29 @@ export function renderGame(ctx: CanvasRenderingContext2D, gameState: GameWorldSt
       const isPlayerParent = player && (human.id === player.motherId || human.id === player.fatherId);
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
-      renderCharacter(ctx, human, isPlayer, isPlayerParent, isPlayerChild, isPlayerPartner, isPlayerHeir, isDebugOn);
+      renderWithWrapping(
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderCharacter,
+        human,
+        isPlayer,
+        isPlayerParent,
+        isPlayerChild,
+        isPlayerPartner,
+        isPlayerHeir,
+        isDebugOn,
+      );
     } else if (entity.type === 'humanCorpse') {
-      renderHumanCorpse(ctx, entity as HumanCorpseEntity);
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);
     }
   });
 
   gameState.visualEffects.forEach((effect) => {
-    renderVisualEffect(ctx, effect, gameState.time);
+    renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
+
+  ctx.restore(); // Restore context to draw UI in fixed positions
 
   ctx.fillStyle = 'white';
   ctx.font = '14px "Press Start 2P", Arial';

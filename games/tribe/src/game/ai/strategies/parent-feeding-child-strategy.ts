@@ -8,7 +8,7 @@ import {
   CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
 } from '../../world-consts';
 import { findClosestEntity } from '../../utils/world-utils';
-import { calculateWrappedDistance, vectorSubtract, vectorNormalize } from '../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 
 export class ParentFeedingChildStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
@@ -50,7 +50,12 @@ export class ParentFeedingChildStrategy implements HumanAIStrategy<HumanEntity> 
     if (distance > PARENT_FEEDING_RANGE) {
       human.activeAction = 'moving';
       human.targetPosition = { ...hungryChild.position };
-      const dirToTarget = vectorSubtract(hungryChild.position, human.position);
+      const dirToTarget = getDirectionVectorOnTorus(
+        human.position,
+        hungryChild.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
       human.direction = vectorNormalize(dirToTarget);
     } else {
       // The interaction system will handle the actual feeding when the parent is idle and close.

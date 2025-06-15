@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
+import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
 import { findMalePartner, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
 import {
   CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
@@ -50,7 +50,12 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
           gameState.mapDimensions.width,
           gameState.mapDimensions.height,
         );
-        const dirToTarget = vectorSubtract(human.targetPosition, human.position);
+        const dirToTarget = getDirectionVectorOnTorus(
+          human.position,
+          human.targetPosition,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
         human.direction = vectorNormalize(dirToTarget);
       } else {
         // Stay idle

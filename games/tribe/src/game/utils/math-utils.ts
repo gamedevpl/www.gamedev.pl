@@ -35,14 +35,14 @@ export function vectorDistance(v1: Vector2D, v2: Vector2D): number {
   return vectorLength(vectorSubtract(v1, v2));
 }
 
-export function calculateWrappedVectorDifference(
-  v1: Vector2D,
-  v2: Vector2D,
+export function getDirectionVectorOnTorus(
+  from: Vector2D,
+  to: Vector2D,
   worldWidth: number,
   worldHeight: number,
 ): Vector2D {
-  let dx = v1.x - v2.x;
-  let dy = v1.y - v2.y;
+  let dx = to.x - from.x;
+  let dy = to.y - from.y;
 
   // Wrap around horizontally if shorter
   if (Math.abs(dx) > worldWidth / 2) {
@@ -58,7 +58,7 @@ export function calculateWrappedVectorDifference(
 }
 
 export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth: number, worldHeight: number): number {
-  const difference = calculateWrappedVectorDifference(v1, v2, worldWidth, worldHeight);
+  const difference = getDirectionVectorOnTorus(v1, v2, worldWidth, worldHeight);
   return vectorLength(difference);
 }
 

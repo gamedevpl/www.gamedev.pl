@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
-import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
+import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
 import { findClosestEntity } from '../../utils/world-utils';
 import { HUMAN_INTERACTION_RANGE, CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
@@ -73,7 +73,12 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<BerryB
     } else {
       human.activeAction = 'moving';
       human.targetPosition = { ...targetBush.position };
-      const dirToTarget = vectorSubtract(targetBush.position, human.position);
+      const dirToTarget = getDirectionVectorOnTorus(
+        human.position,
+        targetBush.position,
+        _.gameState.mapDimensions.width,
+        _.gameState.mapDimensions.height,
+      );
       human.direction = vectorNormalize(dirToTarget);
     }
   }

@@ -11,7 +11,7 @@ import { HumanAIStrategy } from './ai-strategy-types';
 import { addVisualEffect } from '../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
-import { vectorDistance, vectorNormalize, vectorSubtract } from '../../utils/math-utils';
+import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 
@@ -110,7 +110,12 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
     if (distance > HUMAN_ATTACK_RANGE) {
       human.activeAction = 'moving';
       human.targetPosition = { ...threat.position };
-      const dirToTarget = vectorSubtract(threat.position, human.position);
+      const dirToTarget = getDirectionVectorOnTorus(
+        human.position,
+        threat.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
       human.direction = vectorNormalize(dirToTarget);
     } else {
       human.activeAction = 'attacking';
