@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useRafLoop } from 'react-use';
 import { initGame } from '../game';
 import { updateWorld } from '../game/world-update';
@@ -23,7 +23,7 @@ export const GameScreen: React.FC = () => {
   const gameStateRef = useRef<GameWorldState>(INITIAL_STATE);
   const lastUpdateTimeRef = useRef<number>();
   const keysPressed = useRef<Set<string>>(new Set());
-  const [isDebugOn, setIsDebugOn] = useState(false);
+  const isDebugOnRef = useRef<boolean>(false);
 
   const { appState, setAppState } = useGameContext();
 
@@ -37,13 +37,13 @@ export const GameScreen: React.FC = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         gameStateRef.current.mapDimensions = { width: MAP_WIDTH, height: MAP_HEIGHT };
-        renderGame(ctxRef.current, gameStateRef.current, isDebugOn);
+        renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isDebugOn]);
+  }, []);
 
   const [stopLoop, startLoop, isActive] = useRafLoop((time) => {
     if (!ctxRef.current || !lastUpdateTimeRef.current) {
@@ -55,7 +55,7 @@ export const GameScreen: React.FC = () => {
     if (!gameStateRef.current.isPaused) {
       gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
     }
-    renderGame(ctxRef.current, gameStateRef.current, isDebugOn);
+    renderGame(ctxRef.current, gameStateRef.current, isDebugOnRef.current);
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {
@@ -94,7 +94,7 @@ export const GameScreen: React.FC = () => {
       }
 
       if (key === 'p') {
-        setIsDebugOn((prev) => !prev);
+        isDebugOnRef.current = !isDebugOnRef.current;
         return;
       }
 
@@ -226,7 +226,7 @@ export const GameScreen: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isActive, appState, setAppState, startLoop, stopLoop, setIsDebugOn]);
+  }, [isActive, appState, setAppState, startLoop, stopLoop]);
 
   return <canvas ref={canvasRef} style={{ display: 'block', background: '#2c5234' }} />;
 };
