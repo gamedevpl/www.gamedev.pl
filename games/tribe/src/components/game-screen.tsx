@@ -221,12 +221,12 @@ export const GameScreen: React.FC = () => {
         return;
       }
 
-      if (gameStateRef.current.isPlayerOnAutopilot) {
+      if (key === 'p') {
+        isDebugOnRef.current = !isDebugOnRef.current;
         return;
       }
 
-      if (key === 'p') {
-        isDebugOnRef.current = !isDebugOnRef.current;
+      if (gameStateRef.current.isPlayerOnAutopilot) {
         return;
       }
 
