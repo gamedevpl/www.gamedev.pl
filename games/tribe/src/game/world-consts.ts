@@ -9,8 +9,8 @@ export const DAYS_PER_MONTH = 30;
 export const HOURS_PER_GAME_MONTH: number = HOURS_PER_GAME_DAY * DAYS_PER_MONTH;
 export const HOURS_PER_GAME_YEAR: number = HOURS_PER_GAME_MONTH * MONTHS_PER_YEAR;
 
-export const MAP_WIDTH: number = 1600; // pixels
-export const MAP_HEIGHT: number = 1200; // pixels
+export const MAP_WIDTH: number = 3000; // pixels
+export const MAP_HEIGHT: number = 3000; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
 
 // Berry Bush Constants
@@ -20,7 +20,7 @@ export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 berry to
 export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 940;
 export const BERRY_BUSH_SPREAD_CHANCE: number = 0.43; // 40% chance per attempt
 export const BERRY_BUSH_SPREAD_RADIUS: number = 20; // pixels
-export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 60;
+export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 90;
 export const INITIAL_BERRY_BUSH_COUNT: number = 45;
 export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 24; // This constant represents the duration in game hours for which a human's claim on a berry bush remains active.
 
@@ -85,6 +85,7 @@ export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for 
 
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;
+export const CHARACTER_CHILD_RADIUS = CHARACTER_RADIUS * 0.6; // Smaller radius for child characters
 export const CHARACTER_CORPSE_RADIUS = 30;
 
 // Highlight Colors

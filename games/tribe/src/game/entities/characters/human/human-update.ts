@@ -14,6 +14,8 @@ import {
   HUMAN_YEAR_IN_REAL_SECONDS,
   HUNGER_EFFECT_THRESHOLD,
   EFFECT_DURATION_MEDIUM_HOURS,
+  CHARACTER_CHILD_RADIUS,
+  CHARACTER_RADIUS,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -96,6 +98,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       deltaTime *
       ((HUMAN_HUNGER_INCREASE_PER_HOUR * CHILD_HUNGER_INCREASE_RATE_MODIFIER - HUMAN_HUNGER_INCREASE_PER_HOUR) /
         (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+  } else if (entity.radius === CHARACTER_CHILD_RADIUS) {
+    entity.radius = CHARACTER_RADIUS;
   }
 
   if (entity.isAdult && entity.berries > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {

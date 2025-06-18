@@ -54,7 +54,7 @@ export class ProcreationStrategy implements HumanAIStrategy<HumanEntity> {
       human,
       gameState,
       'human' as EntityType,
-      HUMAN_AI_WANDER_RADIUS * 2,
+      HUMAN_AI_WANDER_RADIUS * 5,
       partnerFilter,
     );
   }

@@ -35,7 +35,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
  * @param human The human entity to render debug info for
  */
 function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): void {
-  const { position, activeAction = 'idle' } = human;
+  const { radius, position, activeAction = 'idle' } = human;
   const stateName = human.stateMachine?.[0] || 'N/A';
   const yOffset = human.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
 
@@ -46,6 +46,14 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.fillText(`Action: ${activeAction}`, position.x, position.y - yOffset);
   ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
   ctx.restore();
+
+  // render character radius
+  ctx.beginPath();
+  ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.closePath();
 }
 
 /**

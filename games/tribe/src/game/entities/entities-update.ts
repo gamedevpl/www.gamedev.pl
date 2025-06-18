@@ -18,6 +18,7 @@ import {
   CHILD_TO_ADULT_AGE,
   CHARACTER_RADIUS,
   CHARACTER_CORPSE_RADIUS,
+  CHARACTER_CHILD_RADIUS,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -100,7 +101,7 @@ export function createHuman(
 
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
-    radius: CHARACTER_RADIUS,
+    radius: isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS,
     hunger: initialHunger,
     age: initialAge,
     gender,
