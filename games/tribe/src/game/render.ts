@@ -326,13 +326,13 @@ export function renderGame(
 
     switch (button.action) {
       case UIButtonActionType.ToggleAutopilot:
-        button.text = `[AUTO]`;
+        button.text = `AUT[O]`;
         button.backgroundColor = gameState.isPlayerOnAutopilot
           ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
           : UI_BUTTON_BACKGROUND_COLOR;
         break;
       case UIButtonActionType.ToggleMute:
-        button.text = gameState.isMuted ? `[UNMUTE]` : `[MUTE]`;
+        button.text = gameState.isMuted ? `UN[M]UTE` : `[M]UTE`;
         button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
         break;
     }
