@@ -24,10 +24,11 @@ import {
   UI_BUTTON_BACKGROUND_COLOR,
   UI_BUTTON_TEXT_COLOR,
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
+  UI_FAMILY_MEMBER_ICON_SIZE,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
-import { Entity } from './entities/entities-types';
+import { Entity, EntityId } from './entities/entities-types';
 import { renderHumanCorpse } from './render/render-human-corpse';
 import { HumanCorpseEntity } from './entities/characters/human/human-corpse-types';
 import { renderCharacter } from './render/render-character';
@@ -43,6 +44,7 @@ import {
   renderMiniatureCharacter,
   renderPlayerActionHints,
   drawButton,
+  drawFamilyMemberBar,
 } from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +100,10 @@ export function renderGame(
   const player = findPlayerEntity(gameState);
   const playerChildren = player ? findChildren(gameState, player) : [];
   const playerHeir = findHeir(playerChildren);
+  const playerPartners =
+    player?.partnerIds
+      ?.map((id) => gameState.entities.entities.get(id) as HumanEntity | undefined)
+      .filter((p): p is HumanEntity => p !== undefined) || [];
 
   const sortedEntities = Array.from(gameState.entities.entities.values()).sort((a, b) => {
     return a.position.y - b.position.y || a.id - b.id;
@@ -187,7 +193,16 @@ export function renderGame(
     const miniaturePadding = 5;
 
     // Draw child miniature
-    renderMiniatureCharacter(ctx, { x: UI_PADDING * 2, y: miniatureY }, UI_MINIATURE_CHARACTER_SIZE, 5, player.gender);
+    renderMiniatureCharacter(
+      ctx,
+      { x: UI_PADDING * 2, y: miniatureY },
+      UI_MINIATURE_CHARACTER_SIZE,
+      5,
+      player.gender,
+      false,
+      false,
+      false,
+    );
 
     const ageBarX = UI_PADDING + UI_MINIATURE_CHARACTER_SIZE + miniaturePadding;
     const ageBarWidth = UI_BAR_WIDTH + iconTextPadding - (UI_MINIATURE_CHARACTER_SIZE + miniaturePadding) * 2;
@@ -210,6 +225,9 @@ export function renderGame(
       UI_MINIATURE_CHARACTER_SIZE,
       HUMAN_MAX_AGE_YEARS,
       player.gender,
+      false,
+      false,
+      false,
     );
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
 
@@ -230,19 +248,76 @@ export function renderGame(
 
     // Berries Bar
     const berriesEmoji = UI_STATUS_EMOJIS[UIStatusType.Berries];
+    ctx.fillText(berriesEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE);
     ctx.textBaseline = 'middle';
     drawDiscreteBar(
       ctx,
-      barX,
+      barX, // Use the same X as other bars for alignment
       uiLineY + UI_BERRY_ICON_SIZE / 2,
       berriesEmoji,
       player.maxBerries,
       player.berries,
-      UI_BERRY_ICON_SIZE,
+      UI_BERRY_ICON_SIZE / 2,
       UI_BAR_WIDTH,
     );
+    ctx.textBaseline = 'alphabetic';
+    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
+
+    // Family Bar
+    const familyMembersToDisplay: { member: HumanEntity; isPlayer: boolean; isHeir: boolean; isPartner: boolean }[] =
+      [];
+    const displayedIds = new Set<EntityId>();
+
+    // 1. Add Player
+    familyMembersToDisplay.push({ member: player, isPlayer: true, isHeir: false, isPartner: false });
+    displayedIds.add(player.id);
+
+    // 2. Add Heir
+    if (playerHeir && !displayedIds.has(playerHeir.id)) {
+      familyMembersToDisplay.push({ member: playerHeir, isPlayer: false, isHeir: true, isPartner: false });
+      displayedIds.add(playerHeir.id);
+    }
+
+    // 3. Add Partners
+    playerPartners.forEach((p) => {
+      if (!displayedIds.has(p.id)) {
+        familyMembersToDisplay.push({ member: p, isPlayer: false, isHeir: false, isPartner: true });
+        displayedIds.add(p.id);
+      }
+    });
+
+    // 4. Add other Children
+    playerChildren.forEach((c) => {
+      if (!displayedIds.has(c.id)) {
+        familyMembersToDisplay.push({ member: c, isPlayer: false, isHeir: false, isPartner: false });
+        displayedIds.add(c.id);
+      }
+    });
+
+    const familyEmoji = UI_STATUS_EMOJIS[UIStatusType.Family];
+    const iconPadding = 10;
+    const familyBarX = UI_PADDING + UI_FONT_SIZE + iconPadding;
+    const familyBarMaxWidth = UI_BAR_WIDTH + iconTextPadding - (UI_FONT_SIZE + iconPadding);
+
+    // Vertically center the large emoji with the row of miniatures
+    const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
+    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(familyEmoji, UI_PADDING, emojiY);
+
+    const familyBarY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2; // Center the single row
+
+    drawFamilyMemberBar(
+      ctx,
+      familyBarX,
+      familyBarY,
+      familyMembersToDisplay,
+      UI_FAMILY_MEMBER_ICON_SIZE,
+      familyBarMaxWidth,
+    );
+
+    uiLineY += UI_FAMILY_MEMBER_ICON_SIZE + UI_BAR_PADDING;
     ctx.textBaseline = 'alphabetic'; // Reset baseline
-    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING;
   }
 
   // --- Top-Right UI ---

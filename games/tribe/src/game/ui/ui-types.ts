@@ -27,6 +27,7 @@ export enum UIStatusType {
   // Age = 'Age',
   Autopilot = 'Autopilot',
   Muted = 'Muted',
+  Family = 'Family',
 }
 
 export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
@@ -35,6 +36,7 @@ export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
   [UIStatusType.Berries]: '🍓',
   [UIStatusType.Autopilot]: '🤖',
   [UIStatusType.Muted]: '🔇',
+  [UIStatusType.Family]: '👨‍👩‍👧‍👦',
 };
 
 export enum UIButtonActionType {

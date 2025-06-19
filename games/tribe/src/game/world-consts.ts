@@ -104,11 +104,11 @@ export const PLAYER_ACTION_OUTLINE_RADIUS_OFFSET: number = 5;
 export const PLAYER_ACTION_HINT_FONT_SIZE: number = 20;
 
 // Crown Sizes
-export const PLAYER_CROWN_SIZE: number = 12; // Size of the crown for player character
-export const PLAYER_HEIR_CROWN_SIZE: number = 8; // Size of the crown for player's heir
-export const PLAYER_CHILD_CROWN_SIZE: number = 6; // Size of the crown for player's children
-export const PLAYER_PARENT_CROWN_SIZE: number = 10; // Size of the crown for player's parents
-export const PLAYER_PARTNER_CROWN_SIZE: number = 10; // Size of the crown for player's partner
+export const PLAYER_CROWN_SIZE: number = 20; // Size of the crown for player character
+export const PLAYER_HEIR_CROWN_SIZE: number = 16; // Size of the crown for player's heir
+export const PLAYER_CHILD_CROWN_SIZE: number = 10; // Size of the crown for player's children
+export const PLAYER_PARENT_CROWN_SIZE: number = 16; // Size of the crown for player's parents
+export const PLAYER_PARTNER_CROWN_SIZE: number = 16; // Size of the crown for player's partner
 
 // UI Constants
 export const UI_TEXT_COLOR: string = '#FFFFFF';
@@ -127,8 +127,12 @@ export const UI_HUNGER_BAR_COLOR = '#f44336';
 export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
 export const UI_MASTER_VOLUME_BAR_COLOR = '#808080';
-export const UI_BERRY_ICON_SIZE = 20;
+export const UI_BERRY_ICON_SIZE = 16;
 export const UI_MINIATURE_CHARACTER_SIZE = 32;
+export const UI_FAMILY_MEMBER_ICON_SIZE = 28;
+export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;
+export const UI_MINIATURE_HEIR_CROWN_SIZE = 8;
+export const UI_MINIATURE_PARTNER_CROWN_SIZE = 8;
 
 // UI Button Constants
 export const UI_BUTTON_WIDTH: number = 120;
