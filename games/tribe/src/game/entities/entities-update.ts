@@ -142,9 +142,11 @@ export function createHumanCorpse(
     food: [
       ...Array.from(
         {
-          length:
+          length: Math.max(
             (HUMAN_CORPSE_INITIAL_FOOD * Math.max(HUMAN_HUNGER_THRESHOLD_CRITICAL - hunger, 0)) /
-            HUMAN_HUNGER_THRESHOLD_CRITICAL,
+              HUMAN_HUNGER_THRESHOLD_CRITICAL,
+            1,
+          ),
         },
         () => ({ type: FoodType.Meat }),
       ),
