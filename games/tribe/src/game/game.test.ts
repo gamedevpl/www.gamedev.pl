@@ -69,8 +69,10 @@ describe('Game Mechanics', () => {
                 .filter((p) => p?.type === 'human')[0];
             let parent = getParent(human);
             if (parent) {
-              while (getParent(parent!)) {
+              const visited = new Set<number>();
+              while (getParent(parent!) && !visited.has(getParent(parent!)?.id ?? 0)) {
                 parent = getParent(parent!);
+                visited.add(parent!.id);
               }
               lineages[parent!.id] = (lineages[parent!.id] || 0) + 1;
             } else {
