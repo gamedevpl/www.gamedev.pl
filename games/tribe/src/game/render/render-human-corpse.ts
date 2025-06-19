@@ -1,10 +1,7 @@
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
-import { HUMAN_CORPSE_INITIAL_FOOD } from '../world-consts';
-
-const CHARACTER_RADIUS = 30;
-const MEAT_ICON = '🥩';
-const MEAT_ICON_FONT_SIZE = 24;
+import { CHARACTER_RADIUS, CORPSE_MEAT_ICON_SIZE, HUMAN_MAX_FOOD } from '../world-consts';
+import { FOOD_TYPE_EMOJIS } from '../food/food-types';
 
 /**
  * Renders a human corpse on the canvas.
@@ -37,15 +34,24 @@ export function renderHumanCorpse(ctx: CanvasRenderingContext2D, corpse: HumanCo
 
   ctx.restore();
 
-  // Render the meat icon if there is any meat left
+  // Render the meat icons scattered around the corpse
   if (food.length > 0) {
     ctx.save();
-    // Opacity is proportional to the amount of meat left
-    ctx.globalAlpha = food.length / HUMAN_CORPSE_INITIAL_FOOD;
-    ctx.font = `${MEAT_ICON_FONT_SIZE}px Arial`;
+    ctx.font = `${CORPSE_MEAT_ICON_SIZE}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(MEAT_ICON, position.x, position.y - currentCharacterRadius - MEAT_ICON_FONT_SIZE / 2);
+
+    const scatterRadius = CHARACTER_RADIUS * 0.9; // Scatter icons just outside the corpse radius
+    const angleStep = (Math.PI / HUMAN_MAX_FOOD) * 3;
+
+    food.forEach((foodItem, i) => {
+      const angle = i * angleStep;
+      const x = position.x + scatterRadius * Math.cos(angle) * Math.atan2(i, i);
+      const y = position.y + scatterRadius * Math.sin(angle) * Math.atan2(i, i);
+      const emoji = FOOD_TYPE_EMOJIS[foodItem.type];
+      ctx.fillText(emoji, x, y);
+    });
+
     ctx.restore();
   }
 }

@@ -61,7 +61,7 @@ export const ADULT_CHILD_FEEDING_RANGE: number = 50; // Range in pixels for an a
 export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for an adult child after feeding a parent
 
 // Human Corpse Constants
-export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 24; // Corpses remain for 24 game hours
+export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 128;
 export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a fresh corpse
 
 // Human Attack Constants
@@ -130,6 +130,7 @@ export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
 export const UI_MASTER_VOLUME_BAR_COLOR = '#808080';
 export const UI_BERRY_ICON_SIZE = 16;
+export const CORPSE_MEAT_ICON_SIZE = 9;
 export const UI_MINIATURE_CHARACTER_SIZE = 32;
 export const UI_FAMILY_MEMBER_ICON_SIZE = 28;
 export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;

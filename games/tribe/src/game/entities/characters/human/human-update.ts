@@ -106,7 +106,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     entity.radius = CHARACTER_RADIUS;
   }
 
-  if (entity.isAdult && entity.food.length > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {
+  if (
+    entity.isAdult &&
+    entity.food.length > 0 &&
+    (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)
+  ) {
     const parentsToFeed = [];
     if (entity.motherId) {
       const mother = gameState.entities.entities.get(entity.motherId) as HumanEntity | undefined;
@@ -168,7 +172,16 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         gameState.causeOfGameOver = causeOfDeath;
       }
     }
-    createHumanCorpse(gameState.entities, entity.position, entity.gender, entity.age, entity.id, gameState.time);
+    createHumanCorpse(
+      gameState.entities,
+      entity.position,
+      entity.gender,
+      entity.age,
+      entity.id,
+      gameState.time,
+      entity.food,
+      entity.hunger,
+    );
     removeEntity(gameState.entities, entity.id);
     return;
   }

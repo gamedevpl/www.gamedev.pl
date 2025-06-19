@@ -47,12 +47,46 @@ describe('Game Mechanics', () => {
           Array.from(gameState.entities.entities.values())
             .filter((e) => e.type === 'human')
             .reduce((sum, e) => sum + (e as HumanEntity).hunger, 0) / humanCount || 0;
+        const corpsesCount = Array.from(gameState.entities.entities.values()).filter(
+          (e) => e.type === 'humanCorpse',
+        ).length;
+        const foodBerries = Array.from(gameState.entities.entities.values())
+          .filter((e) => e.type === 'human' && (e as HumanEntity).food.length > 0)
+          .reduce((sum, e) => sum + (e as HumanEntity).food.filter((f) => f.type === 'berry').length, 0);
+        const foodMeat = Array.from(gameState.entities.entities.values())
+          .filter((e) => e.type === 'human' && (e as HumanEntity).food.length > 0)
+          .reduce((sum, e) => sum + (e as HumanEntity).food.filter((f) => f.type === 'meat').length, 0);
+        // need to count lineages, so
+        const lineages: { [key: string]: number } = {};
+        for (const entity of gameState.entities.entities.values()) {
+          if (entity.type === 'human') {
+            const human = entity as HumanEntity;
+            const getParent = (human: HumanEntity): HumanEntity | undefined =>
+              [human.fatherId, human.motherId]
+                .map((id) => {
+                  return id ? (gameState.entities.entities.get(id) as HumanEntity) : undefined;
+                })
+                .filter((p) => p?.type === 'human')[0];
+            let parent = getParent(human);
+            if (parent) {
+              while (getParent(parent!)) {
+                parent = getParent(parent!);
+              }
+              lineages[parent!.id] = (lineages[parent!.id] || 0) + 1;
+            } else {
+              lineages[human.id] = 1;
+            }
+          }
+        }
+
         console.log(
-          `Year ${yearsSimulated}: Humans: ${humanCount}, Bushes: ${bushCount}, Avg Age: ${avgHumanAge.toFixed(
+          `Year ${yearsSimulated}: Humans: ${humanCount}, Lineages: ${
+            Object.keys(lineages).length
+          }, Bushes: ${bushCount}, Age(Avg:Max): ${avgHumanAge.toFixed(2)}:${maxHumanAge.toFixed(
             2,
-          )}, Max Age: ${maxHumanAge.toFixed(2)}, Children: ${childCount}, Gender Ratio (M:F): ${maleCount}:${
+          )}, Children: ${childCount}, Corpses: ${corpsesCount}, Gender Ratio (M:F): ${maleCount}:${
             humanCount - maleCount
-          }, Avg Hunger: ${averageHunger.toFixed(2)}`,
+          }, Avg Hunger: ${averageHunger.toFixed(2)}, Food (Berries:Meat): ${foodBerries}:${foodMeat}`,
         );
 
         if (humanCount <= 0) {

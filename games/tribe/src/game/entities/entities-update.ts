@@ -20,13 +20,14 @@ import {
   CHARACTER_CHILD_RADIUS,
   HUMAN_MAX_FOOD,
   HUMAN_CORPSE_INITIAL_FOOD,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { FoodType } from '../food/food-types';
+import { FoodItem, FoodType } from '../food/food-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -127,6 +128,8 @@ export function createHumanCorpse(
   age: number,
   originalHumanId: EntityId,
   currentTime: number,
+  carriedFood: FoodItem[],
+  hunger: number,
 ): HumanCorpseEntity {
   const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
     position,
@@ -136,7 +139,17 @@ export function createHumanCorpse(
     originalHumanId,
     timeOfDeath: currentTime,
     decayProgress: 0,
-    food: Array.from({ length: HUMAN_CORPSE_INITIAL_FOOD }, () => ({ type: FoodType.Meat })),
+    food: [
+      ...Array.from(
+        {
+          length:
+            (HUMAN_CORPSE_INITIAL_FOOD * Math.max(HUMAN_HUNGER_THRESHOLD_CRITICAL - hunger, 0)) /
+            HUMAN_HUNGER_THRESHOLD_CRITICAL,
+        },
+        () => ({ type: FoodType.Meat }),
+      ),
+      ...carriedFood,
+    ],
     // Corpses don't have these properties, so set to default/null values
     stateMachine: undefined,
   });

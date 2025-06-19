@@ -13,10 +13,11 @@ import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, VIEWPORT_FOLL
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
-import { vectorLerp } from '../game/utils/math-utils';
+import { vectorLerp, vectorDistance } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint, UIButtonActionType } from '../game/ui/ui-types';
 import { setMasterVolume } from '../game/sound/sound-loader';
+import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
 
 const INITIAL_STATE = initGame();
 
@@ -237,15 +238,34 @@ export const GameScreen: React.FC = () => {
       const updateContext = { gameState: gameStateRef.current, deltaTime: 0 };
 
       if (key === 'e') {
-        const nearbyBush = findClosestEntity<BerryBushEntity>(
+        const gatherBushTarget = findClosestEntity<BerryBushEntity>(
           playerEntity,
           gameStateRef.current,
           'berryBush',
           HUMAN_INTERACTION_RANGE,
-          (b) => (b as BerryBushEntity).food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
+          (b) => b.food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
         );
 
-        if (nearbyBush) {
+        const gatherCorpseTarget = findClosestEntity<HumanCorpseEntity>(
+          playerEntity,
+          gameStateRef.current,
+          'humanCorpse',
+          HUMAN_INTERACTION_RANGE,
+          (c) => c.food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
+        );
+
+        let target: BerryBushEntity | HumanCorpseEntity | null = null;
+        if (gatherBushTarget && gatherCorpseTarget) {
+          target =
+            vectorDistance(playerEntity.position, gatherBushTarget.position) <=
+            vectorDistance(playerEntity.position, gatherCorpseTarget.position)
+              ? gatherBushTarget
+              : gatherCorpseTarget;
+        } else {
+          target = gatherBushTarget || gatherCorpseTarget;
+        }
+
+        if (target) {
           playerEntity.activeAction = 'gathering';
           playSoundAt(updateContext, SoundType.Gather, playerEntity.position);
         }
