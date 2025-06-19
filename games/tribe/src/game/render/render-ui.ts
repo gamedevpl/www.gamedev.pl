@@ -14,6 +14,7 @@ import {
 import { Vector2D } from '../utils/math-types';
 import { PlayerActionHint, PLAYER_ACTION_EMOJIS, ClickableUIButton } from '../ui/ui-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
+import { FoodItem, FOOD_TYPE_EMOJIS } from '../food/food-types';
 
 const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;
@@ -154,47 +155,42 @@ export function drawProgressBar(
   ctx.restore();
 }
 
-export function drawDiscreteBar(
+export function drawFoodBar(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  emoji: string,
-  _maxItems: number,
-  currentItems: number,
+  foodItems: FoodItem[],
   iconSize: number,
   maxWidth: number,
 ): void {
   ctx.save();
 
-  if (currentItems <= 0) {
+  if (foodItems.length === 0) {
     ctx.restore();
     return;
   }
 
-  // Calculate the total width of all icons without padding
-  const totalIconWidth = currentItems * iconSize;
+  const totalIconWidth = foodItems.length * iconSize;
   let padding: number;
 
-  // If the total width exceeds maxWidth, squeeze the icons together
   if (totalIconWidth > maxWidth) {
-    padding = (maxWidth - totalIconWidth) / (currentItems - 1);
+    padding = (maxWidth - totalIconWidth) / (foodItems.length - 1);
   } else {
-    // Otherwise, use a default padding, ensuring it doesn't push the bar beyond maxWidth
-    const defaultPadding = 4; // A reasonable default padding
-    const totalWidthWithDefaultPadding = totalIconWidth + (currentItems - 1) * defaultPadding;
+    const defaultPadding = 4;
+    const totalWidthWithDefaultPadding = totalIconWidth + (foodItems.length - 1) * defaultPadding;
     if (totalWidthWithDefaultPadding > maxWidth) {
-      padding = (maxWidth - totalIconWidth) / (currentItems - 1);
+      padding = (maxWidth - totalIconWidth) / (foodItems.length - 1);
     } else {
       padding = defaultPadding;
     }
   }
 
-  // Ensure padding is not negative if there's only one item
-  if (currentItems === 1) {
+  if (foodItems.length === 1) {
     padding = 0;
   }
 
-  for (let i = 0; i < currentItems; i++) {
+  for (let i = 0; i < foodItems.length; i++) {
+    const emoji = FOOD_TYPE_EMOJIS[foodItems[i].type];
     ctx.fillText(emoji, x + i * (iconSize + padding), y);
   }
   ctx.restore();

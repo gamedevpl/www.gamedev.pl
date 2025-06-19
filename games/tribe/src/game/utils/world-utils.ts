@@ -1,6 +1,6 @@
 import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
-import { calculateWrappedDistance, vectorAdd } from './math-utils';
+import { calculateWrappedDistance, vectorAdd, vectorDistance } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -12,25 +12,48 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
 
   // Check for Eating
-  if (player.berries > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
+  if (player.food.length > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
     actions.push({ type: PlayerActionType.Eat, key: 'f' });
   }
 
-  // Check for Gathering
-  const gatherTarget = findClosestEntity<BerryBushEntity>(
-    player,
-    gameState,
-    'berryBush',
-    HUMAN_INTERACTION_RANGE,
-    (b) => (b as BerryBushEntity).currentBerries > 0,
-  );
-  if (gatherTarget && player.berries < player.maxBerries) {
-    actions.push({ type: PlayerActionType.Gather, key: 'e', targetEntity: gatherTarget });
+  // Check for Gathering Food
+  if (player.food.length < player.maxFood) {
+    const gatherBushTarget = findClosestEntity<BerryBushEntity>(
+      player,
+      gameState,
+      'berryBush',
+      HUMAN_INTERACTION_RANGE,
+      (b) => b.food.length > 0,
+    );
+
+    const gatherCorpseTarget = findClosestEntity<HumanCorpseEntity>(
+      player,
+      gameState,
+      'humanCorpse',
+      HUMAN_INTERACTION_RANGE,
+      (c) => c.food.length > 0,
+    );
+
+    let target: BerryBushEntity | HumanCorpseEntity | null = null;
+    if (gatherBushTarget && gatherCorpseTarget) {
+      target =
+        vectorDistance(player.position, gatherBushTarget.position) <=
+        vectorDistance(player.position, gatherCorpseTarget.position)
+          ? gatherBushTarget
+          : gatherCorpseTarget;
+    } else {
+      target = gatherBushTarget || gatherCorpseTarget;
+    }
+
+    if (target) {
+      actions.push({ type: PlayerActionType.GatherFood, key: 'e', targetEntity: target });
+    }
   }
 
   // Check for Procreation

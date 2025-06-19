@@ -3,7 +3,7 @@ import { UpdateContext } from '../../world-types';
 import { findAggressor, findClosestEntity, findProcreationThreat, areFamily } from '../../utils/world-utils';
 import {
   AI_ATTACK_HUNGER_THRESHOLD,
-  AI_ATTACK_TARGET_MIN_BERRY_COUNT,
+  AI_ATTACK_TARGET_MIN_FOOD_COUNT,
   AI_DEFEND_CLAIMED_BUSH_RANGE,
   HUMAN_ATTACK_RANGE,
 } from '../../world-consts';
@@ -85,7 +85,7 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
           if (areFamily(human, otherHuman, gameState)) {
             return false;
           }
-          return otherHuman.berries >= AI_ATTACK_TARGET_MIN_BERRY_COUNT;
+          return otherHuman.food.length >= AI_ATTACK_TARGET_MIN_FOOD_COUNT;
         },
       );
       if (target) {
@@ -101,7 +101,13 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       !human.lastTargetAcquiredEffectTime ||
       context.gameState.time - human.lastTargetAcquiredEffectTime > EFFECT_DURATION_SHORT_HOURS * 5
     ) {
-      addVisualEffect(context.gameState, VisualEffectType.TargetAcquired, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
+      addVisualEffect(
+        context.gameState,
+        VisualEffectType.TargetAcquired,
+        human.position,
+        EFFECT_DURATION_SHORT_HOURS,
+        human.id,
+      );
       human.lastTargetAcquiredEffectTime = context.gameState.time;
     }
 

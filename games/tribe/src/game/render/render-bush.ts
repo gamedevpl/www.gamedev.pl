@@ -15,7 +15,7 @@ export function renderBerryBush(
   player: HumanEntity | undefined,
   time: number,
 ): void {
-  const { position, currentBerries, maxBerries, ownerId, claimedUntil } = bush;
+  const { position, food, maxFood, ownerId, claimedUntil } = bush;
 
   // Draw the main bush circle
   ctx.beginPath();
@@ -51,9 +51,9 @@ export function renderBerryBush(
   }
 
   // Draw berries around the bush
-  if (currentBerries > 0) {
-    const angleStep = (Math.PI * 2) / Math.min(currentBerries, maxBerries); // Distribute berries evenly
-    for (let i = 0; i < currentBerries; i++) {
+  if (food.length > 0) {
+    const angleStep = (Math.PI * 2) / Math.min(food.length, maxFood); // Distribute berries evenly
+    for (let i = 0; i < food.length; i++) {
       const angle = i * angleStep;
       const berryX = position.x + BERRY_OFFSET_DISTANCE * Math.cos(angle);
       const berryY = position.y + BERRY_OFFSET_DISTANCE * Math.sin(angle);

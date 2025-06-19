@@ -1,5 +1,6 @@
 import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
+import { FoodItem } from '../../../food/food-types';
 import { VisualEffectId } from '../../../visual-effects/visual-effect-types';
 
 /**
@@ -22,11 +23,11 @@ export interface HumanEntity extends Entity {
   /** Whether this human is controlled by the player. */
   isPlayer?: boolean;
 
-  /** Number of berries the human is carrying. */
-  berries: number;
+  /** Number of food units the human is carrying. */
+  food: FoodItem[];
 
-  /** Maximum number of berries the human can carry. */
-  maxBerries: number;
+  /** Maximum number of food units the human can carry. */
+  maxFood: number;
 
   /** Whether the human is an adult (can procreate). */
   isAdult?: boolean;
@@ -57,6 +58,9 @@ export interface HumanEntity extends Entity {
 
   /** Current active action. Set by player input or AI decision. */
   activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'stunned';
+
+  /** Cooldown time before being able to gather again. */
+  gatheringCooldownTime?: number;
 
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;

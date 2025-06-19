@@ -6,7 +6,7 @@ import {
   CHILD_TO_ADULT_AGE,
   HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER,
   CHILD_HUNGER_INCREASE_RATE_MODIFIER,
-  HUMAN_BERRY_HUNGER_REDUCTION,
+  HUMAN_FOOD_HUNGER_REDUCTION,
   HUMAN_OLD_AGE_THRESHOLD,
   HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING,
   ADULT_CHILD_FEEDING_RANGE,
@@ -106,7 +106,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     entity.radius = CHARACTER_RADIUS;
   }
 
-  if (entity.isAdult && entity.berries > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {
+  if (entity.isAdult && entity.food.length > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {
     const parentsToFeed = [];
     if (entity.motherId) {
       const mother = gameState.entities.entities.get(entity.motherId) as HumanEntity | undefined;
@@ -129,8 +129,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
           gameState.mapDimensions.height,
         );
         if (distance <= ADULT_CHILD_FEEDING_RANGE) {
-          entity.berries--;
-          parentEntity.hunger = Math.max(0, parentEntity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
+          entity.food.pop();
+          parentEntity.hunger = Math.max(0, parentEntity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
           entity.feedParentCooldownTime = ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS;
           break;
         }
@@ -140,9 +140,9 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   let causeOfDeath: string | undefined = undefined;
   if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-    if (entity.berries > 0 && entity.isAdult) {
-      entity.berries--;
-      entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
+    if (entity.food.length > 0 && entity.isAdult) {
+      entity.food.pop();
+      entity.hunger = Math.max(0, entity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
       // entity.eatingCooldownTime = gameState.time + 1; // This property is not on human-types.ts
     } else {
       causeOfDeath = 'hunger';

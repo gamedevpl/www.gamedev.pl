@@ -1,14 +1,14 @@
 import { Entity } from '../entities/entities-types';
 
 export enum PlayerActionType {
-  Gather = 'Gather',
+  GatherFood = 'GatherFood',
   Eat = 'Eat',
   Procreate = 'Procreate',
   Attack = 'Attack',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
-  [PlayerActionType.Gather]: '✋',
+  [PlayerActionType.GatherFood]: '✋',
   [PlayerActionType.Eat]: '🍖',
   [PlayerActionType.Procreate]: '❤️',
   [PlayerActionType.Attack]: '⚔️',
@@ -23,7 +23,7 @@ export interface PlayerActionHint {
 export enum UIStatusType {
   Time = 'Time',
   Hunger = 'Hunger',
-  Berries = 'Berries',
+  Food = 'Food',
   // Age = 'Age',
   Autopilot = 'Autopilot',
   Muted = 'Muted',
@@ -33,7 +33,7 @@ export enum UIStatusType {
 export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
   [UIStatusType.Time]: '🗓️',
   [UIStatusType.Hunger]: '🍖',
-  [UIStatusType.Berries]: '🍓',
+  [UIStatusType.Food]: '🍖',
   [UIStatusType.Autopilot]: '🤖',
   [UIStatusType.Muted]: '🔇',
   [UIStatusType.Family]: '👨‍👩‍👧‍👦',

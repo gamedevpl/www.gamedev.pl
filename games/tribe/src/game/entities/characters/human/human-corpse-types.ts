@@ -1,3 +1,4 @@
+import { FoodItem } from '../../../food/food-types';
 import { Entity, EntityId } from '../../entities-types';
 
 /**
@@ -29,4 +30,9 @@ export interface HumanCorpseEntity extends Entity {
    * The progression of decay, from 0 (fresh) to 1 (fully decayed).
    */
   decayProgress: number;
+
+  /**
+   * The amount of meat available to be gathered from the corpse.
+   */
+  food: FoodItem[];
 }

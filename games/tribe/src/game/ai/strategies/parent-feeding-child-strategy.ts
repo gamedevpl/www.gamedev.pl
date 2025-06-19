@@ -12,7 +12,7 @@ import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } 
 
 export class ParentFeedingChildStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
-    if (!human.isAdult || human.berries <= 0 || (human.feedChildCooldownTime && human.feedChildCooldownTime > 0)) {
+    if (!human.isAdult || human.food.length <= 0 || (human.feedChildCooldownTime && human.feedChildCooldownTime > 0)) {
       return null;
     }
 

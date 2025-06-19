@@ -6,9 +6,8 @@ import { vectorAdd } from '../utils/math-utils';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
-  BERRY_BUSH_INITIAL_BERRIES,
-  BERRY_BUSH_MAX_BERRIES,
-  BERRY_BUSH_REGENERATION_HOURS,
+  BERRY_BUSH_INITIAL_FOOD,
+  BERRY_BUSH_MAX_FOOD,
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
   BERRY_BUSH_SPREAD_CHANCE,
   BERRY_BUSH_SPREAD_RADIUS,
@@ -19,12 +18,15 @@ import {
   CHARACTER_RADIUS,
   CHARACTER_CORPSE_RADIUS,
   CHARACTER_CHILD_RADIUS,
+  HUMAN_MAX_FOOD,
+  HUMAN_CORPSE_INITIAL_FOOD,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
+import { FoodType } from '../food/food-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -64,16 +66,11 @@ export function createEntity<T extends Entity>(
 }
 
 export function createBerryBush(state: Entities, initialPosition: Vector2D, currentTime: number): BerryBushEntity {
-  // Calculate regeneration rate in berries per hour
-  // If BERRY_BUSH_REGENERATION_HOURS is hours per berry, then rate is 1 / hours_per_berry
-  const regenerationRate = BERRY_BUSH_REGENERATION_HOURS > 0 ? 1 / BERRY_BUSH_REGENERATION_HOURS : 0;
-
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
     radius: BERRY_BUSH_SPREAD_RADIUS,
-    currentBerries: BERRY_BUSH_INITIAL_BERRIES,
-    maxBerries: BERRY_BUSH_MAX_BERRIES,
-    berryRegenerationRate: regenerationRate,
+    food: Array.from({ length: BERRY_BUSH_INITIAL_FOOD }, () => ({ type: FoodType.Berry })),
+    maxFood: BERRY_BUSH_MAX_FOOD,
     lifespan: BERRY_BUSH_LIFESPAN_GAME_HOURS,
     age: 0,
     spreadChance: BERRY_BUSH_SPREAD_CHANCE,
@@ -106,8 +103,8 @@ export function createHuman(
     age: initialAge,
     gender,
     isPlayer,
-    berries: 0,
-    maxBerries: 10, // Maximum berries a human can carry
+    food: [],
+    maxFood: HUMAN_MAX_FOOD,
     maxAge: HUMAN_MAX_AGE_YEARS,
     isAdult,
     isPregnant: false,
@@ -139,6 +136,7 @@ export function createHumanCorpse(
     originalHumanId,
     timeOfDeath: currentTime,
     decayProgress: 0,
+    food: Array.from({ length: HUMAN_CORPSE_INITIAL_FOOD }, () => ({ type: FoodType.Meat })),
     // Corpses don't have these properties, so set to default/null values
     stateMachine: undefined,
   });

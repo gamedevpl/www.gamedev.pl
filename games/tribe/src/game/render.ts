@@ -2,7 +2,6 @@ import { GameWorldState } from './world-types';
 import {
   UI_FONT_SIZE,
   UI_PADDING,
-  UI_TEXT_COLOR,
   UI_TEXT_SHADOW_BLUR,
   UI_TEXT_SHADOW_COLOR,
   UI_BAR_WIDTH,
@@ -37,14 +36,14 @@ import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect } from './visual-effects/visual-effect-types';
-import { PlayerActionHint, UIStatusType, UI_STATUS_EMOJIS, UIButtonActionType } from './ui/ui-types';
+import { PlayerActionHint, UIStatusType, UIButtonActionType, UI_STATUS_EMOJIS } from './ui/ui-types';
 import {
-  drawDiscreteBar,
   drawProgressBar,
   renderMiniatureCharacter,
   renderPlayerActionHints,
   drawButton,
   drawFamilyMemberBar,
+  drawFoodBar,
 } from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,14 +154,12 @@ export function renderGame(
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---
-  ctx.fillStyle = UI_TEXT_COLOR;
+  // --- UI Rendering ---\n  ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  // --- Top-Left UI ---
-  ctx.textAlign = 'left';
+  // --- Top-Left UI ---\n  ctx.textAlign = 'left';
   let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
   // Time Display
@@ -246,17 +243,15 @@ export function renderGame(
     );
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
 
-    // Berries Bar
-    const berriesEmoji = UI_STATUS_EMOJIS[UIStatusType.Berries];
-    ctx.fillText(berriesEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE);
+    // Food Bar
+    const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
+    ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE);
     ctx.textBaseline = 'middle';
-    drawDiscreteBar(
+    drawFoodBar(
       ctx,
       barX, // Use the same X as other bars for alignment
       uiLineY + UI_BERRY_ICON_SIZE / 2,
-      berriesEmoji,
-      player.maxBerries,
-      player.berries,
+      player.food,
       UI_BERRY_ICON_SIZE / 2,
       UI_BAR_WIDTH,
     );
@@ -320,8 +315,7 @@ export function renderGame(
     ctx.textBaseline = 'alphabetic'; // Reset baseline
   }
 
-  // --- Top-Right UI ---
-  ctx.textAlign = 'right';
+  // --- Top-Right UI ---\n  ctx.textAlign = 'right';
   let currentButtonX = ctx.canvas.width - UI_PADDING;
 
   gameState.uiButtons.forEach((button) => {

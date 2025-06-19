@@ -14,9 +14,9 @@ export const MAP_HEIGHT: number = 3000; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
 
 // Berry Bush Constants
-export const BERRY_BUSH_MAX_BERRIES: number = 5;
-export const BERRY_BUSH_INITIAL_BERRIES: number = 3;
-export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 berry to grow
+export const BERRY_BUSH_MAX_FOOD: number = 5;
+export const BERRY_BUSH_INITIAL_FOOD: number = 3;
+export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 food to grow
 export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 940;
 export const BERRY_BUSH_SPREAD_CHANCE: number = 0.43; // 40% chance per attempt
 export const BERRY_BUSH_SPREAD_RADIUS: number = 20; // pixels
@@ -31,7 +31,8 @@ export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
 export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = 95; // Hunger level that prevents procreation
 export const HUMAN_HUNGER_DEATH: number = 100; // Hunger level that causes death
-export const HUMAN_BERRY_HUNGER_REDUCTION: number = 25; // How much hunger is reduced by eating a berry
+export const HUMAN_FOOD_HUNGER_REDUCTION: number = 30; // How much hunger is reduced by eating food
+export const HUMAN_MAX_FOOD: number = 10; // Maximum food a human can carry
 export const HUMAN_BASE_SPEED: number = 10; // Base movement speed in pixels per second
 export const HUMAN_SLOW_SPEED_MODIFIER: number = 0.5; // Speed modifier when hunger > threshold
 export const HUMAN_INTERACTION_RANGE: number = 30; // Range in pixels for interactions
@@ -60,7 +61,8 @@ export const ADULT_CHILD_FEEDING_RANGE: number = 50; // Range in pixels for an a
 export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for an adult child after feeding a parent
 
 // Human Corpse Constants
-export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 4; // Corpses remain for 4 game hours
+export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 24; // Corpses remain for 24 game hours
+export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a fresh corpse
 
 // Human Attack Constants
 export const HUMAN_ATTACK_RANGE: number = 30; // Range in pixels for attack interaction
@@ -72,7 +74,7 @@ export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 50; // Force applied to targe
 export const HUMAN_STUN_DURATION_HOURS: number = 2; // Duration in game hours for a stun
 
 // Human AI Constants
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has berries
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
@@ -81,7 +83,7 @@ export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 300;
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 200; // Radius in pixels to search for food sources when considering procreation
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
-export const AI_ATTACK_TARGET_MIN_BERRY_COUNT: number = 5;
+export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 

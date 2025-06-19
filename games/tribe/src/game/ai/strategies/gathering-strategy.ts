@@ -2,103 +2,72 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
-import { findClosestEntity, areFamily } from '../../utils/world-utils';
+import { findClosestEntity } from '../../utils/world-utils';
 import {
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_INTERACTION_RANGE,
-  AI_GATHERING_TERRITORY_RADIUS,
 } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { IndexedWorldState } from '../../world-index/world-index-types';
+import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
 
-export class GatheringStrategy implements HumanAIStrategy<BerryBushEntity> {
-  check(human: HumanEntity, context: UpdateContext): BerryBushEntity | null {
-    if (!human.isAdult || human.berries >= human.maxBerries || human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING) {
+type FoodSource = BerryBushEntity | HumanCorpseEntity;
+
+export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
+  check(human: HumanEntity, context: UpdateContext): FoodSource | null {
+    const hasCapacity = human.food.length < human.maxFood;
+    if (!human.isAdult || !hasCapacity || human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING) {
       return null;
     }
 
     const { gameState } = context;
-    const indexedState = gameState as IndexedWorldState;
 
-    const myBushes = indexedState.search.berryBush.byProperty('ownerId', human.id).filter((b) => b.currentBerries > 0);
-    const unclaimedBushes = indexedState.search.berryBush
-      .byProperty('ownerId', undefined)
-      .filter((b) => b.currentBerries > 0);
-    const familyBushes = indexedState.search.berryBush.byProperty('ownerId', undefined).filter((b) => {
-      if (b.ownerId && b.currentBerries > 0) {
-        const owner = gameState.entities.entities.get(b.ownerId) as HumanEntity | undefined;
-        return owner && areFamily(human, owner, gameState);
-      }
-      return false;
-    });
+    const closestBush = findClosestEntity<BerryBushEntity>(
+      human,
+      gameState,
+      'berryBush' as EntityType,
+      undefined,
+      (b) => b.food.length > 0,
+    );
 
-    // Prioritize territorial gathering if the human owns any bushes
-    if (myBushes.length > 0) {
-      const preferredTargets = [...myBushes, ...unclaimedBushes, ...familyBushes];
-      let closestTerritorialBush: BerryBushEntity | null = null;
-      let minDistance = Infinity;
+    const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+      human,
+      gameState,
+      'humanCorpse' as EntityType,
+      undefined,
+      (c) => c.food.length > 0,
+    );
 
-      for (const ownedBush of myBushes) {
-        const candidates = indexedState.search.berryBush.byRadius(ownedBush.position, AI_GATHERING_TERRITORY_RADIUS);
-        for (const target of candidates) {
-          // Check if the candidate is in our preferred list and has berries
-          if (target.currentBerries > 0 && preferredTargets.some((p) => p.id === target.id)) {
-            const distanceToTarget = vectorDistance(human.position, target.position);
-            if (distanceToTarget < minDistance) {
-              minDistance = distanceToTarget;
-              closestTerritorialBush = target;
-            }
-          }
-        }
-      }
-      if (closestTerritorialBush) {
-        return closestTerritorialBush;
-      }
+    if (closestBush && closestCorpse) {
+      const distToBush = vectorDistance(human.position, closestBush.position);
+      const distToCorpse = vectorDistance(human.position, closestCorpse.position);
+      return distToBush <= distToCorpse ? closestBush : closestCorpse;
     }
 
-    // Fallback to simple closest search if territorial search yields nothing
-    const searchOrder = [myBushes, unclaimedBushes, familyBushes];
-    for (const bushList of searchOrder) {
-      if (bushList.length > 0) {
-        const targetBush = findClosestEntity<BerryBushEntity>(
-          human,
-          gameState,
-          'berryBush' as EntityType,
-          undefined,
-          (b) => b.currentBerries > 0 && bushList.some((bl) => bl.id === b.id),
-        );
-        if (targetBush) {
-          return targetBush;
-        }
-      }
-    }
-
-    return null;
+    return closestBush || closestCorpse;
   }
 
-  execute(human: HumanEntity, _: UpdateContext, targetBush: BerryBushEntity): void {
-    if (!targetBush) {
-      // Should not happen if check returns a valid bush, but as a safeguard
+  execute(human: HumanEntity, context: UpdateContext, target: FoodSource): void {
+    if (!target) {
       human.activeAction = 'idle';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
       return;
     }
 
-    const distance = vectorDistance(human.position, targetBush.position);
+    const distance = vectorDistance(human.position, target.position);
     if (distance < HUMAN_INTERACTION_RANGE) {
       human.activeAction = 'gathering';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
     } else {
       human.activeAction = 'moving';
-      human.targetPosition = { ...targetBush.position };
+      human.targetPosition = { ...target.position };
       const dirToTarget = getDirectionVectorOnTorus(
         human.position,
-        targetBush.position,
-        _.gameState.mapDimensions.width,
-        _.gameState.mapDimensions.height,
+        target.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
       );
       human.direction = vectorNormalize(dirToTarget);
     }

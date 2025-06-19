@@ -20,7 +20,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
     const { gameState } = context;
 
     const findParentWithFoodFn = (p: HumanEntity): boolean => {
-      return (p.id === human.motherId || p.id === human.fatherId) && p.berries > 0;
+      return (p.id === human.motherId || p.id === human.fatherId) && p.food.length > 0;
     };
 
     // 1. Local search for parent with food

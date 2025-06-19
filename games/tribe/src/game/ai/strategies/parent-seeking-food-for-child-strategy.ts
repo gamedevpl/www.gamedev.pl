@@ -10,7 +10,7 @@ import { IndexedWorldState } from '../../world-index/world-index-types';
 
 export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<BerryBushEntity> {
   check(human: HumanEntity, context: UpdateContext): BerryBushEntity | null {
-    if (!human.isAdult || human.berries > 0) {
+    if (!human.isAdult || human.food.length > 0) {
       return null;
     }
 
@@ -33,7 +33,7 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<BerryB
     // The logic is similar to GatheringStrategy's check, but without the hunger check for the parent.
     const unclaimedBushes = indexedState.search.berryBush
       .byProperty('ownerId', undefined)
-      .filter((b) => b.currentBerries > 0);
+      .filter((b) => b.food.length > 0);
 
     if (unclaimedBushes.length > 0) {
       return findClosestEntity<BerryBushEntity>(
@@ -41,7 +41,7 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<BerryB
         gameState,
         'berryBush' as EntityType,
         undefined,
-        (b) => b.currentBerries > 0 && b.ownerId === undefined,
+        (b) => b.food.length > 0 && b.ownerId === undefined,
       );
     }
 
@@ -51,7 +51,7 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<BerryB
       gameState,
       'berryBush' as EntityType,
       undefined,
-      (b) => b.currentBerries > 0,
+      (b) => b.food.length > 0,
     );
 
     return anyBush;

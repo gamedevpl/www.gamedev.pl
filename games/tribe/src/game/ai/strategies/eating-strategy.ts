@@ -1,5 +1,8 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
-import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING, HUMAN_BERRY_HUNGER_REDUCTION } from '../../world-consts';
+import {
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING,
+  HUMAN_FOOD_HUNGER_REDUCTION,
+} from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 
 export class EatingStrategy implements HumanAIStrategy<boolean> {
@@ -16,14 +19,17 @@ export class EatingStrategy implements HumanAIStrategy<boolean> {
 
     // Condition to STOP eating (applies to adults and children if they are already eating)
     if (human.activeAction === 'eating') {
-      if (human.berries <= 0 || human.hunger <= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING - HUMAN_BERRY_HUNGER_REDUCTION) {
-        return true; // Conditions met to stop eating (will execute to change action to idle)
+      const hungerThreshold = HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING;
+      const stopEatingThreshold = hungerThreshold - HUMAN_FOOD_HUNGER_REDUCTION;
+
+      if (human.food.length <= 0 || human.hunger <= stopEatingThreshold) {
+        return true; // Conditions met to stop eating
       }
-      return true; // Still actively eating and should continue (will execute to essentially no-op or confirm eating state)
+      return true; // Still actively eating
     }
 
     // Condition to START eating (only for adults)
-    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
+    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.food.length > 0) {
       return true;
     }
     return false;
@@ -32,18 +38,21 @@ export class EatingStrategy implements HumanAIStrategy<boolean> {
   execute(human: HumanEntity): void {
     // Logic for STOPPING eating
     if (human.activeAction === 'eating') {
-      if (human.berries <= 0 || human.hunger <= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING - HUMAN_BERRY_HUNGER_REDUCTION) {
+      const hungerThreshold = HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING;
+      const stopEatingThreshold = hungerThreshold - HUMAN_FOOD_HUNGER_REDUCTION;
+      
+      if (human.food.length <= 0 || human.hunger <= stopEatingThreshold) {
         human.activeAction = 'idle';
         human.direction = { x: 0, y: 0 };
         human.targetPosition = undefined;
         return;
       }
-      // If still eating, no change in action is needed here, the state machine handles hunger reduction.
+      // If still eating, no change in action is needed. The state machine handles hunger/resource reduction.
       return;
     }
 
-    // Logic for STARTING eating (now implicitly for adults due to the check method)
-    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.berries > 0) {
+    // Logic for STARTING eating
+    if (human.isAdult && human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.food.length > 0) {
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;
       human.activeAction = 'eating';

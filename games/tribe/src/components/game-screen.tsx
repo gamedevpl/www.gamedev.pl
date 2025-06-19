@@ -242,7 +242,7 @@ export const GameScreen: React.FC = () => {
           gameStateRef.current,
           'berryBush',
           HUMAN_INTERACTION_RANGE,
-          (b) => (b as BerryBushEntity).currentBerries > 0 && playerEntity.berries < playerEntity.maxBerries,
+          (b) => (b as BerryBushEntity).food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
         );
 
         if (nearbyBush) {
