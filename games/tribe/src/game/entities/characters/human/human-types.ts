@@ -1,5 +1,6 @@
 import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
+import { VisualEffectId } from '../../../visual-effects/visual-effect-types';
 
 /**
  * Represents a human entity in the game.
@@ -62,6 +63,7 @@ export interface HumanEntity extends Entity {
   isStunned?: boolean;
   isKilled?: boolean;
   stunnedUntil?: number;
+  stunVisualEffectId?: VisualEffectId;
   attackTargetId?: EntityId;
 
   /** Target position for 'moving' action. Set by player input or AI decision. */

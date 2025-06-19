@@ -66,6 +66,30 @@ function drawEmoji(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentT
   ctx.restore();
 }
 
+function drawSwirlingParticles(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number, color: string) {
+  const numParticles = 3;
+  const orbitRadius = 15;
+  const particleRadius = 3;
+  const verticalOffset = -40; // Position above the head
+
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+
+  for (let i = 0; i < numParticles; i++) {
+    // Each particle gets its own angle offset and speed
+    const angle = (currentTime * 4 + i * (Math.PI * 2 / numParticles)) % (Math.PI * 2);
+    const x = effect.position.x + Math.cos(angle) * orbitRadius;
+    const y = effect.position.y + verticalOffset + Math.sin(angle) * orbitRadius * 0.5; // Oval orbit
+
+    ctx.beginPath();
+    ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number): void {
   switch (effect.type) {
     case VisualEffectType.Hunger:
@@ -97,6 +121,15 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
       break;
     case VisualEffectType.ChildFed:
       drawEmoji(ctx, effect, currentTime, '🍼');
+      break;
+    case VisualEffectType.Stunned:
+      drawSwirlingParticles(ctx, effect, currentTime, 'rgba(255, 255, 0, 0.9)'); // Yellow for stun
+      break;
+    case VisualEffectType.AttackDeflected:
+      drawEmoji(ctx, effect, currentTime, '🛡️');
+      break;
+    case VisualEffectType.AttackResisted:
+      drawEmoji(ctx, effect, currentTime, '💪');
       break;
   }
 }

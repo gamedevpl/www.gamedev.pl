@@ -23,7 +23,7 @@ import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findChildren, findHeir } from '../../../utils/world-utils';
-import { addVisualEffect } from '../../../utils/visual-effects-utils';
+import { addVisualEffect, removeVisualEffectById } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
@@ -81,6 +81,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     entity.isStunned = false;
     entity.stunnedUntil = 0;
     entity.activeAction = 'idle';
+    if (entity.stunVisualEffectId) {
+      removeVisualEffectById(gameState, entity.stunVisualEffectId);
+      entity.stunVisualEffectId = undefined;
+    }
   }
 
   if (entity.feedParentCooldownTime) {
@@ -139,7 +143,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.berries > 0 && entity.isAdult) {
       entity.berries--;
       entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
-      entity.eatingCooldownTime = gameState.time + 1;
+      // entity.eatingCooldownTime = gameState.time + 1; // This property is not on human-types.ts
     } else {
       causeOfDeath = 'hunger';
     }
@@ -150,6 +154,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   if (causeOfDeath) {
+    if (entity.stunVisualEffectId) {
+      removeVisualEffectById(gameState, entity.stunVisualEffectId);
+      entity.stunVisualEffectId = undefined;
+    }
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));
       if (oldestOffspring) {

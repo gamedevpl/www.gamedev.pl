@@ -16,11 +16,16 @@ export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = 
     return {
       ...nextData,
       enteredAt: context.updateContext.gameState.time,
+      attackStartTime: context.updateContext.gameState.time,
     };
   },
-  update: (data) => {
-    // The 'attacking' action is instantaneous and handled by the interaction.
-    // This state immediately transitions to idle.
-    return { nextState: HUMAN_IDLE, data: { ...data } };
+  update: (data, context) => {
+    // The entity remains in the attacking state.
+    // The transition to idle is now handled by the human-attack-interaction
+    // after the attack is performed.
+    if (context.entity.activeAction !== 'attacking') {
+      return { nextState: HUMAN_IDLE, data: { ...data } };
+    }
+    return { nextState: HUMAN_ATTACKING, data };
   },
 };

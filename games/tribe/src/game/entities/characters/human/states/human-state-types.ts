@@ -39,6 +39,7 @@ export interface HumanSeekingFoodStateData extends StateData {
 
 export interface HumanAttackingStateData extends StateData {
   attackTargetId: EntityId;
+  attackStartTime: number;
 }
 
 export interface HumanStunnedStateData extends StateData {

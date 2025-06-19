@@ -71,10 +71,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   }
 
   // AI decision making for non-player humans
-  if (
-    entity.type === 'human' &&
-    (!(entity as HumanEntity).isPlayer || updateContext.gameState.isPlayerOnAutopilot)
-  ) {
+  if (entity.type === 'human' && (!(entity as HumanEntity).isPlayer || updateContext.gameState.isPlayerOnAutopilot)) {
     humanAIUpdate(entity as HumanEntity, updateContext);
   }
 

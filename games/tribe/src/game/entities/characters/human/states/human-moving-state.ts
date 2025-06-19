@@ -8,7 +8,14 @@ import {
   HUMAN_SLOW_SPEED_MODIFIER,
 } from '../../../../world-consts';
 import { HumanEntity } from '../human-types';
-import { HUMAN_MOVING, HumanMovingStateData, HUMAN_IDLE, HUMAN_ATTACKING, HUMAN_STUNNED } from './human-state-types';
+import {
+  HUMAN_MOVING,
+  HumanMovingStateData,
+  HUMAN_IDLE,
+  HUMAN_ATTACKING,
+  HUMAN_STUNNED,
+  HumanAttackingStateData,
+} from './human-state-types';
 
 const MOVEMENT_THRESHOLD = 5; // Distance to consider "close enough" to target
 
@@ -18,7 +25,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   update(movingData: HumanMovingStateData, context: StateContext<HumanEntity>) {
     const { entity, updateContext } = context;
 
-    if (entity.activeAction === 'attacking') {
+    if (entity.activeAction === 'attacking' && entity.attackTargetId) {
       return {
         nextState: HUMAN_ATTACKING,
         data: {
@@ -26,7 +33,8 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_MOVING,
           attackTargetId: entity.attackTargetId,
-        },
+          attackStartTime: updateContext.gameState.time,
+        } as HumanAttackingStateData,
       };
     } else if (entity.activeAction === 'stunned') {
       return {
