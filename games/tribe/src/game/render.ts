@@ -228,36 +228,6 @@ export function renderGame(
     );
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
 
-    // Hunger Bar
-    const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
-    ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
-    drawProgressBar(
-      ctx,
-      barX,
-      uiLineY,
-      UI_BAR_WIDTH,
-      UI_BAR_HEIGHT,
-      (100 - player.hunger) / 100,
-      UI_BAR_BACKGROUND_COLOR,
-      UI_HUNGER_BAR_COLOR,
-    );
-    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
-
-    // Food Bar
-    const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
-    ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE);
-    ctx.textBaseline = 'middle';
-    drawFoodBar(
-      ctx,
-      barX, // Use the same X as other bars for alignment
-      uiLineY + UI_BERRY_ICON_SIZE / 2,
-      player.food,
-      UI_BERRY_ICON_SIZE / 2,
-      UI_BAR_WIDTH,
-    );
-    ctx.textBaseline = 'alphabetic';
-    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
-
     // Family Bar
     const familyMembersToDisplay: { member: HumanEntity; isPlayer: boolean; isHeir: boolean; isPartner: boolean }[] =
       [];
@@ -313,6 +283,34 @@ export function renderGame(
 
     uiLineY += UI_FAMILY_MEMBER_ICON_SIZE + UI_BAR_PADDING;
     ctx.textBaseline = 'alphabetic'; // Reset baseline
+
+    // Hunger Bar
+    const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
+    ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+    drawProgressBar(
+      ctx,
+      barX,
+      uiLineY,
+      UI_BAR_WIDTH,
+      UI_BAR_HEIGHT,
+      (100 - player.hunger) / 100,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_HUNGER_BAR_COLOR,
+    );
+    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
+    // Food Bar
+    ctx.textBaseline = 'middle';
+    drawFoodBar(
+      ctx,
+      barX, // Use the same X as other bars for alignment
+      uiLineY + UI_BERRY_ICON_SIZE / 2,
+      player.food,
+      UI_BERRY_ICON_SIZE / 2,
+      UI_BAR_WIDTH,
+    );
+    ctx.textBaseline = 'alphabetic';
+    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
 
   // --- Top-Right UI ---\n  ctx.textAlign = 'right';
