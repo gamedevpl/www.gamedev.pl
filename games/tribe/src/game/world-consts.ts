@@ -44,6 +44,7 @@ export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for o
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
 export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
+export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 50; // Age at which male without heir urgently seeks procreation
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
 export const HUMAN_PROCREATION_COOLDOWN_HOURS: number = 24; // 1 game day
@@ -76,6 +77,7 @@ export const HUMAN_STUN_DURATION_HOURS: number = 2; // Duration in game hours fo
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
+export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 200;
@@ -86,6 +88,19 @@ export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
+export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
+export const AI_WANDERING_RESTRICTED_RADIUS_FEMALE: number = 150;
+
+// Karma Constants
+export const KARMA_ON_ATTACK = -25;
+export const KARMA_ON_INFIDELITY = -30;
+export const KARMA_ON_CLAIMED_BUSH_THEFT = -10;
+export const KARMA_PROPAGATION_FACTOR = 0.5;
+export const KARMA_INHERITANCE_FACTOR = 0.5;
+export const KARMA_DECAY_RATE_PER_HOUR = 0.1;
+export const KARMA_ENEMY_THRESHOLD = -50;
+export const KARMA_NEUTRAL_THRESHOLD = -5;
+export const KARMA_DEBUG_RENDER_COLOR = 'red';
 
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;

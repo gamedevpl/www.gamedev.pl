@@ -24,6 +24,7 @@ import {
   UI_BUTTON_TEXT_COLOR,
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_FAMILY_MEMBER_ICON_SIZE,
+  KARMA_DEBUG_RENDER_COLOR,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -67,6 +68,35 @@ function renderWithWrapping(
   }
 
   entity.position = originalPosition;
+}
+
+function renderKarmaDebug(ctx: CanvasRenderingContext2D, gameState: GameWorldState) {
+  const humans = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human') as HumanEntity[];
+  const renderedPairs = new Set<string>();
+
+  for (const human of humans) {
+    for (const targetIdStr in human.karma) {
+      const targetId = parseInt(targetIdStr, 10);
+      const karmaValue = human.karma[targetId];
+
+      const pairKey1 = `${human.id}-${targetId}`;
+      const pairKey2 = `${targetId}-${human.id}`;
+
+      if (karmaValue < 0 && !renderedPairs.has(pairKey1) && !renderedPairs.has(pairKey2)) {
+        const target = gameState.entities.entities.get(targetId) as HumanEntity | undefined;
+        if (target) {
+          ctx.beginPath();
+          ctx.moveTo(human.position.x, human.position.y);
+          ctx.lineTo(target.position.x, target.position.y);
+          ctx.strokeStyle = KARMA_DEBUG_RENDER_COLOR;
+          ctx.globalAlpha = Math.abs(karmaValue) / 100; // Assuming karma values are between -100 and 0
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          renderedPairs.add(pairKey1);
+        }
+      }
+    }
+  }
 }
 
 export function renderGame(
@@ -148,18 +178,22 @@ export function renderGame(
     }
   });
 
+  if (isDebugOn) {
+    renderKarmaDebug(ctx, gameState);
+  }
+
   gameState.visualEffects.forEach((effect) => {
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---\n  ctx.fillStyle = UI_TEXT_COLOR;
+  // --- UI Rendering ---\\n  ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  // --- Top-Left UI ---\n  ctx.textAlign = 'left';
+  // --- Top-Left UI ---\\n  ctx.textAlign = 'left';
   let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
   // Time Display
@@ -313,7 +347,7 @@ export function renderGame(
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
 
-  // --- Top-Right UI ---\n  ctx.textAlign = 'right';
+  // --- Top-Right UI ---\\n  ctx.textAlign = 'right';
   let currentButtonX = ctx.canvas.width - UI_PADDING;
 
   gameState.uiButtons.forEach((button) => {

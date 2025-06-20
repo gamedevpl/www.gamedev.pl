@@ -28,6 +28,7 @@ import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
+import { inheritKarma } from '../karma/karma-utils';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -116,6 +117,7 @@ export function createHuman(
     stunnedUntil: 0,
     motherId,
     fatherId,
+    karma: {},
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
   });
   return human;
@@ -181,6 +183,9 @@ export function giveBirth(
     mother.id, // Mother ID
     fatherId, // Father ID
   );
+
+  const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
+  inheritKarma(child, mother, father);
 
   // Play birth sound
   playSoundAt(updateContext, SoundType.Birth, mother.position);

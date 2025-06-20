@@ -6,6 +6,7 @@ import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  KARMA_ON_INFIDELITY,
 } from '../world-consts';
 import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
@@ -13,6 +14,7 @@ import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
+import { applyKarma } from '../karma/karma-utils';
 
 /**
  * Defines an interaction for human procreation.
@@ -76,6 +78,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     y: (source.position.y + target.position.y) / 2,
   };
 
+  // --- Karma Application for Infidelity --
+  const sourceOriginalPartners = [...(source.partnerIds || [])];
+  const targetOriginalPartners = [...(target.partnerIds || [])];
+
   // Both entities are initiators now, confirmed by the checker.
   // Set both entities to the procreating state
   source.stateMachine = [
@@ -107,6 +113,24 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
   }
   if (!target.partnerIds.includes(source.id)) {
     target.partnerIds.push(source.id);
+  }
+
+  // Apply karma penalty to slighted partners
+  for (const originalPartnerId of sourceOriginalPartners) {
+    if (originalPartnerId !== target.id) {
+      const originalPartner = gameState.entities.entities.get(originalPartnerId) as HumanEntity | undefined;
+      if (originalPartner) {
+        applyKarma(source, originalPartner, KARMA_ON_INFIDELITY, gameState);
+      }
+    }
+  }
+  for (const originalPartnerId of targetOriginalPartners) {
+    if (originalPartnerId !== source.id) {
+      const originalPartner = gameState.entities.entities.get(originalPartnerId) as HumanEntity | undefined;
+      if (originalPartner) {
+        applyKarma(target, originalPartner, KARMA_ON_INFIDELITY, gameState);
+      }
+    }
   }
 
   // Clear active actions - the state machine will handle the behavior

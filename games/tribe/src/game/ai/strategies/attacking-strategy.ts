@@ -6,6 +6,7 @@ import {
   AI_ATTACK_TARGET_MIN_FOOD_COUNT,
   AI_DEFEND_CLAIMED_BUSH_RANGE,
   HUMAN_ATTACK_RANGE,
+  KARMA_ENEMY_THRESHOLD,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { addVisualEffect } from '../../utils/visual-effects-utils';
@@ -18,6 +19,21 @@ import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-typ
 export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     const { gameState } = context;
+
+    // 0. Vengeance/Enemy Attack
+    const enemy = findClosestEntity<HumanEntity>(
+      human,
+      gameState,
+      'human' as EntityType,
+      undefined, // No max range
+      (entity) => {
+        const otherHuman = entity as HumanEntity;
+        return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
+      },
+    );
+    if (enemy) {
+      return enemy;
+    }
 
     // 1. Self-Defense
     const aggressor = findAggressor(human.id, gameState);

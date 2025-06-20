@@ -359,3 +359,28 @@ export function findMalePartner(human: HumanEntity, gameState: GameWorldState): 
   }
   return null;
 }
+
+export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
+  const family = new Set<HumanEntity>();
+
+  // Add parents
+  if (human.motherId) {
+    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
+    if (mother) family.add(mother);
+  }
+  if (human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    if (father) family.add(father);
+  }
+
+  // Add partners
+  human.partnerIds?.forEach((id) => {
+    const partner = gameState.entities.entities.get(id) as HumanEntity | undefined;
+    if (partner) family.add(partner);
+  });
+
+  // Add children
+  findChildren(gameState, human).forEach((child) => family.add(child));
+
+  return Array.from(family);
+}

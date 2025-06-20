@@ -3,7 +3,7 @@ import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
-import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS } from './world-consts';
+import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS, KARMA_ENEMY_THRESHOLD } from './world-consts';
 
 describe('Game Mechanics', () => {
   it('should be able to run for 100 years without a player and still have alive humans', () => {
@@ -26,7 +26,10 @@ describe('Game Mechanics', () => {
       gameState = updateWorld(gameState, timeStepSeconds);
       if (gameState.time >= (yearsSimulated + 1) * HUMAN_YEAR_IN_REAL_SECONDS) {
         yearsSimulated++;
-        const humanCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human').length;
+        const humans = Array.from(gameState.entities.entities.values()).filter(
+          (e) => e.type === 'human',
+        ) as HumanEntity[];
+        const humanCount = humans.length;
         const bushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
         const avgHumanAge =
           Array.from(gameState.entities.entities.values())
@@ -81,6 +84,25 @@ describe('Game Mechanics', () => {
           }
         }
 
+        let enemyPairs = 0;
+        const countedPairs = new Set<string>();
+        for (const human of humans) {
+          for (const targetIdStr in human.karma) {
+            const targetId = parseInt(targetIdStr, 10);
+            const pairKey1 = `${human.id}-${targetId}`;
+            const pairKey2 = `${targetId}-${human.id}`;
+
+            if (
+              (human.karma[targetId] || 0) < KARMA_ENEMY_THRESHOLD &&
+              !countedPairs.has(pairKey1) &&
+              !countedPairs.has(pairKey2)
+            ) {
+              enemyPairs++;
+              countedPairs.add(pairKey1);
+            }
+          }
+        }
+
         console.log(
           `Year ${yearsSimulated}: Humans: ${humanCount}, Lineages: ${
             Object.keys(lineages).length
@@ -88,7 +110,7 @@ describe('Game Mechanics', () => {
             2,
           )}, Children: ${childCount}, Corpses: ${corpsesCount}, Gender Ratio (M:F): ${maleCount}:${
             humanCount - maleCount
-          }, Avg Hunger: ${averageHunger.toFixed(2)}, Food (Berries:Meat): ${foodBerries}:${foodMeat}`,
+          }, Avg Hunger: ${averageHunger.toFixed(2)}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Enemies: ${enemyPairs}`,
         );
 
         if (humanCount <= 0) {

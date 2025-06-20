@@ -2,6 +2,7 @@ import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
 import { VisualEffectId } from '../../../visual-effects/visual-effect-types';
+import { Karma } from '../../../karma/karma-types';
 
 /**
  * Represents a human entity in the game.
@@ -86,4 +87,7 @@ export interface HumanEntity extends Entity {
   lastTargetAcquiredEffectTime?: number;
   lastEatingEffectTime?: number;
   lastChildFedEffectTime?: number;
+
+  /** Karma relationships with other humans. */
+  karma: Karma;
 }

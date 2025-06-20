@@ -9,6 +9,7 @@ import {
   HUMAN_ATTACK_BUILDUP_HOURS,
   HUMAN_ATTACK_PUSHBACK_FORCE,
   EFFECT_DURATION_SHORT_HOURS,
+  KARMA_ON_ATTACK,
 } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
@@ -16,6 +17,7 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { getDirectionVectorOnTorus, vectorScale } from '../utils/math-utils';
+import { applyKarma } from '../karma/karma-utils';
 
 export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
   id: 'human-attack',
@@ -39,6 +41,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   },
 
   perform: (source, target, context) => {
+    applyKarma(source, target, KARMA_ON_ATTACK, context.gameState);
     // If the target is already stunned, the attack could be fatal
     if (target.isStunned) {
       if (Math.random() < HUMAN_ATTACK_KILL_CHANCE) {
