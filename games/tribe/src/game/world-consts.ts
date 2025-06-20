@@ -66,13 +66,16 @@ export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 128;
 export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a fresh corpse
 
 // Human Attack Constants
+export const HUMAN_MAX_HITPOINTS = 100;
+export const HUMAN_ATTACK_DAMAGE = 25;
 export const HUMAN_ATTACK_RANGE: number = 30; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
 export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 0.5; // Cooldown in game hours for a human after attacking
-export const HUMAN_ATTACK_STUN_CHANCE: number = 0.5; // Chance (0-1) to stun a target on attack
-export const HUMAN_ATTACK_KILL_CHANCE: number = 0.5; // Chance (0-1) to kill a target on attack
 export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 50; // Force applied to target on successful attack
-export const HUMAN_STUN_DURATION_HOURS: number = 2; // Duration in game hours for a stun
+export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 2;
+export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
+export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
+export const HUMAN_PARRY_CHANCE = 0.25; // Chance (0-1) to parry if angle is correct
 
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
@@ -83,7 +86,7 @@ export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 200;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 300;
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
-export const PROCREATION_FOOD_SEARCH_RADIUS: number = 200; // Radius in pixels to search for food sources when considering procreation
+export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
@@ -141,6 +144,7 @@ export const UI_BAR_HEIGHT = 15;
 export const UI_BAR_PADDING = 10;
 export const UI_BAR_BACKGROUND_COLOR = '#555';
 export const UI_HUNGER_BAR_COLOR = '#f44336';
+export const UI_HITPOINTS_BAR_COLOR = '#4CAF50'; // Green for health
 export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
 export const UI_MASTER_VOLUME_BAR_COLOR = '#808080';

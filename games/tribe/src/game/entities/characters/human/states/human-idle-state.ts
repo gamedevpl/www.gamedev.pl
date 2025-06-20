@@ -8,7 +8,6 @@ import {
   HUMAN_GATHERING,
   HUMAN_EATING,
   HUMAN_ATTACKING,
-  HUMAN_STUNNED,
   HumanAttackingStateData,
 } from './human-state-types';
 
@@ -28,16 +27,6 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           attackTargetId: entity.attackTargetId,
           attackStartTime: updateContext.gameState.time,
         } as HumanAttackingStateData,
-      };
-    } else if (entity.activeAction === 'stunned') {
-      return {
-        nextState: HUMAN_STUNNED,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          stunnedUntil: entity.stunnedUntil,
-        },
       };
     }
 

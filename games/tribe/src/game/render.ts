@@ -25,6 +25,8 @@ import {
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_FAMILY_MEMBER_ICON_SIZE,
   KARMA_DEBUG_RENDER_COLOR,
+  UI_TEXT_COLOR,
+  UI_HITPOINTS_BAR_COLOR,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -160,6 +162,7 @@ export function renderGame(
       const isPlayerParent = player && (human.id === player.motherId || human.id === player.fatherId);
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
+      const isPlayerAttackTarget = player?.attackTargetId === human.id;
       renderWithWrapping(
         ctx,
         worldWidth,
@@ -171,6 +174,7 @@ export function renderGame(
         isPlayerChild,
         isPlayerPartner,
         isPlayerHeir,
+        isPlayerAttackTarget,
         isDebugOn,
       );
     } else if (entity.type === 'humanCorpse') {
@@ -188,12 +192,14 @@ export function renderGame(
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---\\n  ctx.fillStyle = UI_TEXT_COLOR;
+  // --- UI Rendering ---
+  ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  // --- Top-Left UI ---\\n  ctx.textAlign = 'left';
+  // --- Top-Left UI ---
+  ctx.textAlign = 'left';
   let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
   // Time Display
@@ -318,6 +324,21 @@ export function renderGame(
     uiLineY += UI_FAMILY_MEMBER_ICON_SIZE + UI_BAR_PADDING;
     ctx.textBaseline = 'alphabetic'; // Reset baseline
 
+    // Hitpoints Bar
+    const hpEmoji = UI_STATUS_EMOJIS[UIStatusType.Hitpoints];
+    ctx.fillText(hpEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+    drawProgressBar(
+      ctx,
+      barX,
+      uiLineY,
+      UI_BAR_WIDTH,
+      UI_BAR_HEIGHT,
+      player.hitpoints / player.maxHitpoints,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_HITPOINTS_BAR_COLOR,
+    );
+    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
     // Hunger Bar
     const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
     ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
@@ -335,19 +356,22 @@ export function renderGame(
 
     // Food Bar
     ctx.textBaseline = 'middle';
+    const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
+    ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE / 2);
     drawFoodBar(
       ctx,
       barX, // Use the same X as other bars for alignment
       uiLineY + UI_BERRY_ICON_SIZE / 2,
       player.food,
-      UI_BERRY_ICON_SIZE / 2,
+      UI_BERRY_ICON_SIZE,
       UI_BAR_WIDTH,
     );
     ctx.textBaseline = 'alphabetic';
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
 
-  // --- Top-Right UI ---\\n  ctx.textAlign = 'right';
+  // --- Top-Right UI ---
+  ctx.textAlign = 'right';
   let currentButtonX = ctx.canvas.width - UI_PADDING;
 
   gameState.uiButtons.forEach((button) => {

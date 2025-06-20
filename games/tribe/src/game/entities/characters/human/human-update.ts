@@ -16,6 +16,8 @@ import {
   EFFECT_DURATION_MEDIUM_HOURS,
   CHARACTER_CHILD_RADIUS,
   CHARACTER_RADIUS,
+  HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
+  HITPOINT_REGEN_HUNGER_MODIFIER,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -23,7 +25,7 @@ import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findChildren, findHeir } from '../../../utils/world-utils';
-import { addVisualEffect, removeVisualEffectById } from '../../../utils/visual-effects-utils';
+import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { decayKarma } from '../../../karma/karma-utils';
 
@@ -34,6 +36,13 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
 
   decayKarma(entity, gameHoursDelta);
+
+  // --- Hitpoint Regeneration ---
+  if (entity.hitpoints < entity.maxHitpoints) {
+    const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;
+    const regeneration = HUMAN_BASE_HITPOINT_REGEN_PER_HOUR * hungerFactor * gameHoursDelta;
+    entity.hitpoints = Math.min(entity.maxHitpoints, entity.hitpoints + regeneration);
+  }
 
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
 
@@ -79,16 +88,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   if (entity.attackCooldown) {
     entity.attackCooldown -= gameHoursDelta;
     if (entity.attackCooldown < 0) entity.attackCooldown = 0;
-  }
-
-  if (entity.isStunned && entity.stunnedUntil && entity.stunnedUntil <= gameState.time) {
-    entity.isStunned = false;
-    entity.stunnedUntil = 0;
-    entity.activeAction = 'idle';
-    if (entity.stunVisualEffectId) {
-      removeVisualEffectById(gameState, entity.stunVisualEffectId);
-      entity.stunVisualEffectId = undefined;
-    }
   }
 
   if (entity.feedParentCooldownTime) {
@@ -147,25 +146,20 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   let causeOfDeath: string | undefined = undefined;
-  if (entity.hunger >= HUMAN_HUNGER_DEATH) {
+  if (entity.hitpoints <= 0) {
+    causeOfDeath = 'killed';
+  } else if (entity.hunger >= HUMAN_HUNGER_DEATH) {
     if (entity.food.length > 0 && entity.isAdult) {
       entity.food.pop();
       entity.hunger = Math.max(0, entity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
-      // entity.eatingCooldownTime = gameState.time + 1; // This property is not on human-types.ts
     } else {
       causeOfDeath = 'hunger';
     }
   } else if (entity.age >= entity.maxAge) {
     causeOfDeath = 'oldAge';
-  } else if (entity.isKilled) {
-    causeOfDeath = 'killed';
   }
 
   if (causeOfDeath) {
-    if (entity.stunVisualEffectId) {
-      removeVisualEffectById(gameState, entity.stunVisualEffectId);
-      entity.stunVisualEffectId = undefined;
-    }
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));
       if (oldestOffspring) {

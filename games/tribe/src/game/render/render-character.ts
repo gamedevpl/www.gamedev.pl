@@ -11,11 +11,12 @@ import {
   PLAYER_PARTNER_CROWN_SIZE,
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
   CHARACTER_RADIUS,
+  NON_FAMILY_CLAIM_COLOR,
 } from '../world-consts';
 
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 
-type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'stunned';
+type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking';
 
 // Mapping from HumanEntity activeAction to render stance
 const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance> = {
@@ -26,7 +27,6 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   idle: 'idle',
   seekingFood: 'idle',
   attacking: 'attacking',
-  stunned: 'stunned',
 };
 
 /**
@@ -45,6 +45,7 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.textAlign = 'center';
   ctx.fillText(`Action: ${activeAction}`, position.x, position.y - yOffset);
   ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
+  ctx.fillText(`HP: ${human.hitpoints}`, position.x, position.y - yOffset + 20);
   ctx.restore();
 
   // render character radius
@@ -118,6 +119,7 @@ export function renderCharacter(
   isPlayerChild: boolean = false,
   isPlayerPartner: boolean = false,
   isPlayerHeir: boolean = false,
+  isPlayerAttackTarget: boolean = false,
   isDebugOn: boolean = false,
 ): void {
   const { position, activeAction = 'idle' } = human;
@@ -141,6 +143,17 @@ export function renderCharacter(
     human.isPregnant ?? false,
     human.hunger,
   );
+
+  // Draw attack target highlight
+  if (isPlayerAttackTarget) {
+    ctx.save();
+    ctx.strokeStyle = NON_FAMILY_CLAIM_COLOR;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, currentCharacterRadius + 3, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Draw crowns for highlighted characters
   let crownSize: number | undefined;

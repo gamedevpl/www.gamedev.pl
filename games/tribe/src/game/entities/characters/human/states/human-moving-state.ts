@@ -13,7 +13,6 @@ import {
   HumanMovingStateData,
   HUMAN_IDLE,
   HUMAN_ATTACKING,
-  HUMAN_STUNNED,
   HumanAttackingStateData,
 } from './human-state-types';
 
@@ -35,16 +34,6 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
           attackTargetId: entity.attackTargetId,
           attackStartTime: updateContext.gameState.time,
         } as HumanAttackingStateData,
-      };
-    } else if (entity.activeAction === 'stunned') {
-      return {
-        nextState: HUMAN_STUNNED,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_MOVING,
-          stunnedUntil: entity.stunnedUntil,
-        },
       };
     }
 

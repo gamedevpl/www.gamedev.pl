@@ -21,6 +21,7 @@ import {
   HUMAN_MAX_FOOD,
   HUMAN_CORPSE_INITIAL_FOOD,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_MAX_HITPOINTS,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -71,7 +72,10 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
     radius: BERRY_BUSH_SPREAD_RADIUS,
-    food: Array.from({ length: BERRY_BUSH_INITIAL_FOOD }, () => ({ type: FoodType.Berry })),
+    food: Array.from({ length: BERRY_BUSH_INITIAL_FOOD }, () => ({ type: FoodType.Berry })).map((f) => ({
+      ...f,
+      id: state.nextEntityId++,
+    })),
     maxFood: BERRY_BUSH_MAX_FOOD,
     lifespan: BERRY_BUSH_LIFESPAN_GAME_HOURS,
     age: 0,
@@ -102,6 +106,8 @@ export function createHuman(
     position: initialPosition,
     radius: isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS,
     hunger: initialHunger,
+    hitpoints: HUMAN_MAX_HITPOINTS,
+    maxHitpoints: HUMAN_MAX_HITPOINTS,
     age: initialAge,
     gender,
     isPlayer,
@@ -113,8 +119,6 @@ export function createHuman(
     gestationTime: 0,
     procreationCooldown: 0,
     attackCooldown: 0,
-    isStunned: false,
-    stunnedUntil: 0,
     motherId,
     fatherId,
     karma: {},
@@ -153,7 +157,7 @@ export function createHumanCorpse(
         () => ({ type: FoodType.Meat }),
       ),
       ...carriedFood,
-    ],
+    ].map((f) => ({ ...f, id: state.nextEntityId++ })),
     // Corpses don't have these properties, so set to default/null values
     stateMachine: undefined,
   });

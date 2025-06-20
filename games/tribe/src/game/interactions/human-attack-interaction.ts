@@ -3,20 +3,20 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   HUMAN_ATTACK_RANGE,
   HUMAN_ATTACK_COOLDOWN_HOURS,
-  HUMAN_ATTACK_STUN_CHANCE,
-  HUMAN_STUN_DURATION_HOURS,
-  HUMAN_ATTACK_KILL_CHANCE,
   HUMAN_ATTACK_BUILDUP_HOURS,
   HUMAN_ATTACK_PUSHBACK_FORCE,
   EFFECT_DURATION_SHORT_HOURS,
   KARMA_ON_ATTACK,
+  HUMAN_ATTACK_DAMAGE,
+  HUMAN_PARRY_ANGLE_DEGREES,
+  HUMAN_PARRY_CHANCE,
 } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
-import { getDirectionVectorOnTorus, vectorScale } from '../utils/math-utils';
+import { getDirectionVectorOnTorus, vectorScale, vectorAngleBetween, vectorNormalize } from '../utils/math-utils';
 import { applyKarma } from '../karma/karma-utils';
 
 export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
@@ -42,60 +42,55 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
 
   perform: (source, target, context) => {
     applyKarma(source, target, KARMA_ON_ATTACK, context.gameState);
-    // If the target is already stunned, the attack could be fatal
-    if (target.isStunned) {
-      if (Math.random() < HUMAN_ATTACK_KILL_CHANCE) {
-        target.isKilled = true;
-        playSoundAt(context, SoundType.HumanDeath, target.position);
-      } else {
-        // Attack Resisted (not killed)
-        addVisualEffect(
-          context.gameState,
-          VisualEffectType.AttackResisted,
-          target.position, // Effect on the target
-          EFFECT_DURATION_SHORT_HOURS,
-          target.id,
-        );
-        playSoundAt(context, SoundType.Attack, source.position); // Play attack sound as it wasn't fatal
-      }
-    } else {
-      // If the target is not stunned, there's a chance to stun them
-      if (Math.random() < HUMAN_ATTACK_STUN_CHANCE) {
-        target.isStunned = true;
-        target.stunnedUntil = context.gameState.time + HUMAN_STUN_DURATION_HOURS;
-        target.activeAction = 'stunned';
-        // Stun successful - create a continuous effect
-        const effectId = addVisualEffect(
-          context.gameState,
-          VisualEffectType.Stunned,
-          target.position, // Effect on the target
-          Infinity, // Continuous effect, will be removed manually
-          target.id,
-        );
-        target.stunVisualEffectId = effectId;
-      } else {
-        // Attack Deflected (not stunned)
-        addVisualEffect(
-          context.gameState,
-          VisualEffectType.AttackDeflected,
-          target.position, // Effect on the target
-          EFFECT_DURATION_SHORT_HOURS,
-          target.id,
-        );
-      }
-      // Play attack sound for any non-fatal attack on a non-stunned person
-      playSoundAt(context, SoundType.Attack, source.position);
-    }
 
-    // Apply push-back force
-    const pushDirection = getDirectionVectorOnTorus(
+    // --- Parry Check ---
+    const toTarget = getDirectionVectorOnTorus(
       source.position,
       target.position,
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
-    const pushForce = vectorScale(pushDirection, HUMAN_ATTACK_PUSHBACK_FORCE);
-    target.forces.push(pushForce);
+    const angle = vectorAngleBetween(vectorNormalize(toTarget), target.direction);
+    const isFacing = Math.abs(angle) < (HUMAN_PARRY_ANGLE_DEGREES * Math.PI) / 180;
+
+    if (isFacing && Math.random() < HUMAN_PARRY_CHANCE) {
+      // Attack Parried
+      addVisualEffect(
+        context.gameState,
+        VisualEffectType.AttackDeflected,
+        target.position,
+        EFFECT_DURATION_SHORT_HOURS,
+        target.id,
+      );
+    } else {
+      // Attack Hits
+      target.hitpoints -= HUMAN_ATTACK_DAMAGE;
+
+      addVisualEffect(
+        context.gameState,
+        VisualEffectType.Hit,
+        target.position,
+        EFFECT_DURATION_SHORT_HOURS,
+        target.id,
+      );
+
+      // Apply push-back force
+      const pushDirection = getDirectionVectorOnTorus(
+        source.position,
+        target.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      const pushForce = vectorScale(pushDirection, HUMAN_ATTACK_PUSHBACK_FORCE);
+      target.forces.push(pushForce);
+
+      if (target.hitpoints <= 0) {
+        // isKilled will be handled in human-update
+        playSoundAt(context, SoundType.HumanDeath, target.position);
+      } else {
+        playSoundAt(context, SoundType.Attack, source.position);
+      }
+    }
 
     // Set the attacker's cooldown
     source.attackCooldown = HUMAN_ATTACK_COOLDOWN_HOURS;

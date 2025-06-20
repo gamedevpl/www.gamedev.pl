@@ -23,6 +23,7 @@ export interface PlayerActionHint {
 export enum UIStatusType {
   Time = 'Time',
   Hunger = 'Hunger',
+  Hitpoints = 'Hitpoints',
   Food = 'Food',
   // Age = 'Age',
   Autopilot = 'Autopilot',
@@ -33,7 +34,8 @@ export enum UIStatusType {
 export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
   [UIStatusType.Time]: '🗓️',
   [UIStatusType.Hunger]: '🍖',
-  [UIStatusType.Food]: '🍖',
+  [UIStatusType.Hitpoints]: '❤️',
+  [UIStatusType.Food]: '🍓',
   [UIStatusType.Autopilot]: '🤖',
   [UIStatusType.Muted]: '🔇',
   [UIStatusType.Family]: '👨‍👩‍👧‍👦',

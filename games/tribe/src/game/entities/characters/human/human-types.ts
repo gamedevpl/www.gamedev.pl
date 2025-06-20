@@ -1,7 +1,6 @@
 import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
-import { VisualEffectId } from '../../../visual-effects/visual-effect-types';
 import { Karma } from '../../../karma/karma-types';
 
 /**
@@ -11,6 +10,12 @@ import { Karma } from '../../../karma/karma-types';
 export interface HumanEntity extends Entity {
   /** Current hunger level (0-100). Death occurs at 100. */
   hunger: number;
+
+  /** Current hitpoints (0-maxHitpoints). Death occurs at 0. */
+  hitpoints: number;
+
+  /** Maximum hitpoints. */
+  maxHitpoints: number;
 
   /** Current age in game years. */
   age: number;
@@ -58,17 +63,13 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'stunned';
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
 
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
-  isStunned?: boolean;
-  isKilled?: boolean;
-  stunnedUntil?: number;
-  stunVisualEffectId?: VisualEffectId;
   attackTargetId?: EntityId;
 
   /** Target position for 'moving' action. Set by player input or AI decision. */
