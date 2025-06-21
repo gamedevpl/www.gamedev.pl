@@ -10,6 +10,10 @@ import {
   HUMAN_ATTACK_DAMAGE,
   HUMAN_PARRY_ANGLE_DEGREES,
   HUMAN_PARRY_CHANCE,
+  HUMAN_OLD_AGE_THRESHOLD,
+  HUMAN_MALE_DAMAGE_MODIFIER,
+  HUMAN_CHILD_DAMAGE_MODIFIER,
+  HUMAN_VULNERABLE_DAMAGE_MODIFIER,
 } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
@@ -43,7 +47,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   perform: (source, target, context) => {
     applyKarma(source, target, KARMA_ON_ATTACK, context.gameState);
 
-    // --- Parry Check ---
+    // --- Parry Check --
     const toTarget = getDirectionVectorOnTorus(
       source.position,
       target.position,
@@ -63,16 +67,29 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
         target.id,
       );
     } else {
-      // Attack Hits
-      target.hitpoints -= HUMAN_ATTACK_DAMAGE;
+      // --- Damage Calculation ---
+      let damage = HUMAN_ATTACK_DAMAGE;
 
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Hit,
-        target.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        target.id,
-      );
+      // Male damage modifier
+      if (source.gender === 'male') {
+        damage *= HUMAN_MALE_DAMAGE_MODIFIER;
+      }
+
+      // Child damage modifier
+      if (!source.isAdult) {
+        damage *= HUMAN_CHILD_DAMAGE_MODIFIER;
+      }
+
+      // Vulnerability modifier (children and elders are more vulnerable to adults)
+      const isTargetVulnerable = !target.isAdult || target.age >= HUMAN_OLD_AGE_THRESHOLD;
+      if (isTargetVulnerable && source.isAdult) {
+        damage *= HUMAN_VULNERABLE_DAMAGE_MODIFIER;
+      }
+
+      // Attack Hits
+      target.hitpoints -= damage;
+
+      addVisualEffect(context.gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
 
       // Apply push-back force
       const pushDirection = getDirectionVectorOnTorus(
@@ -95,8 +112,8 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
     // Set the attacker's cooldown
     source.attackCooldown = HUMAN_ATTACK_COOLDOWN_HOURS;
     // Reset the attacker's action to idle after the attack
-    source.activeAction = 'idle';
-    source.attackTargetId = undefined;
+    const attackData = source.stateMachine![1] as HumanAttackingStateData;
+    attackData.attackStartTime = context.gameState.time;
 
     // Add visual effect for the attack itself (on the attacker)
     addVisualEffect(

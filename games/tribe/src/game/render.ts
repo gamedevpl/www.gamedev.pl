@@ -176,6 +176,7 @@ export function renderGame(
         isPlayerHeir,
         isPlayerAttackTarget,
         isDebugOn,
+        gameState.time,
       );
     } else if (entity.type === 'humanCorpse') {
       renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);

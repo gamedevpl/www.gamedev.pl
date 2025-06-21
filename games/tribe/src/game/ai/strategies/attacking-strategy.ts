@@ -1,42 +1,59 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { findAggressor, findClosestEntity, findProcreationThreat, areFamily } from '../../utils/world-utils';
-import {
-  AI_ATTACK_HUNGER_THRESHOLD,
-  AI_ATTACK_TARGET_MIN_FOOD_COUNT,
-  AI_DEFEND_CLAIMED_BUSH_RANGE,
-  HUMAN_ATTACK_RANGE,
-  KARMA_ENEMY_THRESHOLD,
-} from '../../world-consts';
+import { findClosestAggressor, findClosestEntity, areFamily } from '../../utils/world-utils';
+import { AI_ATTACK_ENEMY_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, KARMA_ENEMY_THRESHOLD } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { addVisualEffect } from '../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
-import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
 import { EntityType } from '../../entities/entities-types';
-import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 
 export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     const { gameState } = context;
 
-    // 0. Vengeance/Enemy Attack
-    const enemy = findClosestEntity<HumanEntity>(
-      human,
-      gameState,
-      'human' as EntityType,
-      undefined, // No max range
-      (entity) => {
-        const otherHuman = entity as HumanEntity;
-        return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
-      },
-    );
-    if (enemy) {
-      return enemy;
+    if (human.hunger > HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+      // If hunger is critical, do not engage in attacks
+      return null;
     }
 
+    if (human.attackTargetId) {
+      // If already attacking a target, return that target
+      const target = gameState.entities.entities.get(human.attackTargetId);
+      if (target && target.type === 'human') {
+        return target as HumanEntity;
+      }
+    }
+
+    // --- Child Attack Logic ---
+    if (!human.isAdult) {
+      // 1. Self-Defense
+      const aggressor = findClosestAggressor(human.id, gameState);
+      if (aggressor) {
+        return aggressor;
+      }
+
+      // 2. Family-Defense
+      for (const entity of gameState.entities.entities.values()) {
+        if (entity.type === 'human') {
+          const potentialFamilyMember = entity as HumanEntity;
+          if (areFamily(human, potentialFamilyMember, gameState) && potentialFamilyMember.id !== human.id) {
+            const familyAggressor = findClosestAggressor(potentialFamilyMember.id, gameState);
+            if (familyAggressor) {
+              return familyAggressor;
+            }
+          }
+        }
+      }
+
+      // Children do not engage in other types of attacks
+      return null;
+    }
+
+    // --- Adult Attack Logic ---
+
     // 1. Self-Defense
-    const aggressor = findAggressor(human.id, gameState);
+    const aggressor = findClosestAggressor(human.id, gameState);
     if (aggressor) {
       return aggressor;
     }
@@ -46,7 +63,7 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       if (entity.type === 'human') {
         const potentialChild = entity as HumanEntity;
         if (potentialChild.motherId === human.id || potentialChild.fatherId === human.id) {
-          const childAggressor = findAggressor(potentialChild.id, gameState);
+          const childAggressor = findClosestAggressor(potentialChild.id, gameState);
           if (childAggressor) {
             return childAggressor;
           }
@@ -54,59 +71,19 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       }
     }
 
-    // 3. Procreation-Defense
-    const procreationThreat = findProcreationThreat(human, gameState);
-    if (procreationThreat) {
-      return procreationThreat;
-    }
-
-    // 4. Resource-Defense
-    const intruder = findClosestEntity<HumanEntity>(
+    // 0. Vengeance/Enemy Attack
+    const enemy = findClosestEntity<HumanEntity>(
       human,
       gameState,
       'human' as EntityType,
-      AI_DEFEND_CLAIMED_BUSH_RANGE,
+      AI_ATTACK_ENEMY_RANGE,
       (entity) => {
         const otherHuman = entity as HumanEntity;
-        if (otherHuman.activeAction !== 'gathering') return false;
-
-        if (areFamily(human, otherHuman, gameState)) {
-          return false;
-        }
-
-        const targetBush = findClosestEntity<BerryBushEntity>(
-          otherHuman,
-          gameState,
-          'berryBush' as EntityType,
-          HUMAN_ATTACK_RANGE,
-        );
-
-        return !!targetBush && targetBush.ownerId === human.id;
+        return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
       },
     );
-
-    if (intruder) {
-      return intruder;
-    }
-
-    // 5. Hunger-Driven Attack
-    if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
-      const target = findClosestEntity<HumanEntity>(
-        human,
-        gameState,
-        'human' as EntityType,
-        undefined, // No max range
-        (entity) => {
-          const otherHuman = entity as HumanEntity;
-          if (areFamily(human, otherHuman, gameState)) {
-            return false;
-          }
-          return otherHuman.food.length >= AI_ATTACK_TARGET_MIN_FOOD_COUNT;
-        },
-      );
-      if (target) {
-        return target;
-      }
+    if (enemy) {
+      return enemy;
     }
 
     return null;
@@ -127,23 +104,8 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       human.lastTargetAcquiredEffectTime = context.gameState.time;
     }
 
-    const distance = vectorDistance(human.position, threat.position);
-
-    if (distance > HUMAN_ATTACK_RANGE) {
-      human.activeAction = 'moving';
-      human.targetPosition = { ...threat.position };
-      const dirToTarget = getDirectionVectorOnTorus(
-        human.position,
-        threat.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-      human.direction = vectorNormalize(dirToTarget);
-    } else {
-      human.activeAction = 'attacking';
-      human.attackTargetId = threat.id;
-      human.targetPosition = undefined;
-      human.direction = { x: 0, y: 0 };
-    }
+    human.activeAction = 'attacking';
+    human.attackTargetId = threat.id;
+    human.targetPosition = undefined;
   }
 }

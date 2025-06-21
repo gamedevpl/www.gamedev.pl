@@ -12,9 +12,18 @@ import {
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
   CHARACTER_RADIUS,
   NON_FAMILY_CLAIM_COLOR,
+  UI_ATTACK_PROGRESS_BAR_WIDTH,
+  UI_ATTACK_PROGRESS_BAR_HEIGHT,
+  UI_ATTACK_PROGRESS_BAR_Y_OFFSET,
+  UI_ATTACK_BUILDUP_BAR_COLOR,
+  UI_BAR_BACKGROUND_COLOR,
+  HUMAN_ATTACK_BUILDUP_HOURS,
+  UI_ATTACK_COOLDOWN_BAR_COLOR,
+  HUMAN_ATTACK_COOLDOWN_HOURS,
 } from '../world-consts';
-
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
+import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
+import { drawProgressBar } from './render-ui';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking';
 
@@ -46,6 +55,7 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.fillText(`Action: ${activeAction}`, position.x, position.y - yOffset);
   ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
   ctx.fillText(`HP: ${human.hitpoints}`, position.x, position.y - yOffset + 20);
+  ctx.fillText(`Cooldown: ${human.attackCooldown || 'N/A'}`, position.x, position.y - yOffset + 30);
   ctx.restore();
 
   // render character radius
@@ -106,6 +116,44 @@ function drawCrown(
   ctx.restore();
 }
 
+function renderAttackProgress(ctx: CanvasRenderingContext2D, human: HumanEntity, currentTime: number) {
+  const { position, radius } = human;
+  const barX = position.x - UI_ATTACK_PROGRESS_BAR_WIDTH / 2;
+  const barY = position.y - radius - UI_ATTACK_PROGRESS_BAR_Y_OFFSET;
+
+  // Render attack buildup
+  if (human.stateMachine?.[0] === HUMAN_ATTACKING) {
+    const attackData = human.stateMachine[1] as HumanAttackingStateData;
+    const timeSinceAttackStart = currentTime - attackData.attackStartTime;
+    const buildupProgress = Math.min(timeSinceAttackStart / HUMAN_ATTACK_BUILDUP_HOURS, 1);
+
+    drawProgressBar(
+      ctx,
+      barX,
+      barY,
+      UI_ATTACK_PROGRESS_BAR_WIDTH,
+      UI_ATTACK_PROGRESS_BAR_HEIGHT,
+      buildupProgress,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_ATTACK_BUILDUP_BAR_COLOR,
+    );
+  }
+  // Render attack cooldown
+  else if (human.attackCooldown && human.attackCooldown > 0) {
+    const cooldownProgress = 1 - human.attackCooldown / HUMAN_ATTACK_COOLDOWN_HOURS;
+    drawProgressBar(
+      ctx,
+      barX,
+      barY,
+      UI_ATTACK_PROGRESS_BAR_WIDTH,
+      UI_ATTACK_PROGRESS_BAR_HEIGHT,
+      cooldownProgress,
+      UI_BAR_BACKGROUND_COLOR,
+      UI_ATTACK_COOLDOWN_BAR_COLOR,
+    );
+  }
+}
+
 /**
  * Renders a human character on the canvas
  * @param ctx Canvas rendering context
@@ -121,6 +169,7 @@ export function renderCharacter(
   isPlayerHeir: boolean = false,
   isPlayerAttackTarget: boolean = false,
   isDebugOn: boolean = false,
+  currentTime: number,
 ): void {
   const { position, activeAction = 'idle' } = human;
 
@@ -179,6 +228,8 @@ export function renderCharacter(
   if (crownSize && highlightColor) {
     drawCrown(ctx, position, currentCharacterRadius, crownSize, highlightColor);
   }
+
+  renderAttackProgress(ctx, human, currentTime);
 
   if (isDebugOn) {
     renderDebugInfo(ctx, human);

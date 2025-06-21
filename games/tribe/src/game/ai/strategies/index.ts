@@ -1,12 +1,13 @@
-import { AttackingStrategy } from "./attacking-strategy";
-import { EatingStrategy } from "./eating-strategy";
-import { GatheringStrategy } from "./gathering-strategy";
-import { IdleWanderStrategy } from "./idle-wander-strategy";
-import { ProcreationStrategy } from "./procreation-strategy";
-import { ChildSeekingFoodStrategy } from "./child-seeking-food-strategy";
-import { ParentFeedingChildStrategy } from "./parent-feeding-child-strategy";
-import { ParentSeekingFoodForChildStrategy } from "./parent-seeking-food-for-child-strategy";
-import { HumanAIStrategy } from "./ai-strategy-types";
+import { AttackingStrategy } from './attacking-strategy';
+import { EatingStrategy } from './eating-strategy';
+import { GatheringStrategy } from './gathering-strategy';
+import { IdleWanderStrategy } from './idle-wander-strategy';
+import { ProcreationStrategy } from './procreation-strategy';
+import { ChildSeekingFoodStrategy } from './child-seeking-food-strategy';
+import { ParentFeedingChildStrategy } from './parent-feeding-child-strategy';
+import { ParentSeekingFoodForChildStrategy } from './parent-seeking-food-for-child-strategy';
+import { HumanAIStrategy } from './ai-strategy-types';
+import { FleeingStrategy } from './fleeing-strategy';
 
 /**
  * A list of all available human AI strategies, ordered by priority.
@@ -14,6 +15,7 @@ import { HumanAIStrategy } from "./ai-strategy-types";
  * whose conditions are met.
  */
 export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
+  new FleeingStrategy(),
   new AttackingStrategy(),
   new EatingStrategy(),
   new ChildSeekingFoodStrategy(),

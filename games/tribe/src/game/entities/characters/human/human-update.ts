@@ -175,6 +175,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       entity.position,
       entity.gender,
       entity.age,
+      entity.radius,
       entity.id,
       gameState.time,
       entity.food,

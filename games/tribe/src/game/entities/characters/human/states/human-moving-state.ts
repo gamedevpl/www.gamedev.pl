@@ -1,13 +1,7 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, vectorAdd } from '../../../../utils/math-utils';
-import {
-  HUMAN_BASE_SPEED,
-  HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD,
-  HUMAN_OLD_AGE_SPEED_MODIFIER,
-  HUMAN_HUNGER_THRESHOLD_SLOW,
-  HUMAN_SLOW_SPEED_MODIFIER,
-} from '../../../../world-consts';
 import { HumanEntity } from '../human-types';
+import { getEffectiveSpeed } from '../human-utils';
 import {
   HUMAN_MOVING,
   HumanMovingStateData,
@@ -58,21 +52,8 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       });
     }
 
-    // Calculate effective speed considering hunger and old age
-    let effectiveSpeed = HUMAN_BASE_SPEED;
-
-    // Apply hunger slowdown
-    if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      effectiveSpeed *= HUMAN_SLOW_SPEED_MODIFIER;
-    }
-
-    // Apply old age slowdown
-    if (entity.age >= HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD) {
-      effectiveSpeed *= HUMAN_OLD_AGE_SPEED_MODIFIER;
-    }
-
     // Set acceleration based on effective speed
-    entity.acceleration = effectiveSpeed;
+    entity.acceleration = getEffectiveSpeed(entity);
 
     // Check if we've reached the target
     const distance = calculateWrappedDistance(

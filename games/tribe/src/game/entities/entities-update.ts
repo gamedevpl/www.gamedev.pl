@@ -16,7 +16,6 @@ import {
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
   CHARACTER_RADIUS,
-  CHARACTER_CORPSE_RADIUS,
   CHARACTER_CHILD_RADIUS,
   HUMAN_MAX_FOOD,
   HUMAN_CORPSE_INITIAL_FOOD,
@@ -132,6 +131,7 @@ export function createHumanCorpse(
   position: Vector2D,
   gender: 'male' | 'female',
   age: number,
+  radius: number,
   originalHumanId: EntityId,
   currentTime: number,
   carriedFood: FoodItem[],
@@ -139,7 +139,7 @@ export function createHumanCorpse(
 ): HumanCorpseEntity {
   const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
     position,
-    radius: CHARACTER_CORPSE_RADIUS,
+    radius: radius,
     gender,
     age,
     originalHumanId,

@@ -9,20 +9,19 @@ import { FOOD_TYPE_EMOJIS } from '../food/food-types';
  * @param corpse The human corpse entity to render.
  */
 export function renderHumanCorpse(ctx: CanvasRenderingContext2D, corpse: HumanCorpseEntity): void {
-  const { position, gender, age, decayProgress, food } = corpse;
+  const { position, gender, age, decayProgress, food, radius } = corpse;
 
   // The corpse is rendered as an adult-sized character
-  const currentCharacterRadius = CHARACTER_RADIUS;
 
   ctx.save();
   ctx.globalAlpha = 1 - decayProgress;
 
   TribeHuman2D.render(
     ctx,
-    position.x - currentCharacterRadius,
-    position.y - currentCharacterRadius,
-    currentCharacterRadius * 2,
-    currentCharacterRadius * 2,
+    position.x - radius,
+    position.y - radius,
+    radius * 2,
+    radius * 2,
     decayProgress,
     'dead', // Stance
     gender,

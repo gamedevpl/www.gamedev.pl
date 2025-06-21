@@ -7,6 +7,7 @@ import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   HUMAN_HUNGER_THRESHOLD_SLOW,
+  HUMAN_ATTACK_RANGE,
 } from '../world-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
@@ -83,7 +84,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     player,
     gameState,
     'human',
-    HUMAN_INTERACTION_RANGE,
+    HUMAN_ATTACK_RANGE,
     (h) => (h as HumanEntity).id !== player.id,
   );
   if (attackTarget) {
@@ -263,39 +264,27 @@ export function findChildren(gameState: GameWorldState, parent: HumanEntity): Hu
   return [...childrenAsMother, ...childrenAsFather];
 }
 
-export function findAggressor(targetId: EntityId, gameState: GameWorldState): HumanEntity | null {
+export function findClosestAggressor(targetId: EntityId, gameState: GameWorldState): HumanEntity | null {
   const indexedState = gameState as IndexedWorldState;
   const potentialAggressors = indexedState.search.human.byProperty('activeAction', 'attacking');
+  let closestAggressor: HumanEntity | null = null;
+  let minDistance = Infinity;
   for (const human of potentialAggressors) {
-    if (human.attackTargetId === targetId) {
-      return human;
+    if (human.attackTargetId !== targetId) {
+      continue; // Only consider aggressors targeting the specified entity
+    }
+    const distance = calculateWrappedDistance(
+      human.position,
+      gameState.entities.entities.get(targetId)?.position || { x: 0, y: 0 },
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    if (distance < minDistance) {
+      closestAggressor = human as HumanEntity;
+      minDistance = distance;
     }
   }
-  return null;
-}
-
-export function findProcreationThreat(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
-  const indexedState = gameState as IndexedWorldState;
-  if (!human.partnerIds || human.partnerIds.length === 0) {
-    return null;
-  }
-
-  for (const partnerId of human.partnerIds) {
-    const partner = gameState.entities.entities.get(partnerId) as HumanEntity | undefined;
-    if (!partner || partner.activeAction !== 'procreating') {
-      continue;
-    }
-
-    const potentialThreats = indexedState.search.human.byRadius(partner.position, HUMAN_INTERACTION_RANGE * 1.5);
-
-    for (const otherHuman of potentialThreats) {
-      if (otherHuman.id !== human.id && otherHuman.id !== partner.id && otherHuman.activeAction === 'procreating') {
-        return otherHuman;
-      }
-    }
-  }
-
-  return null;
+  return closestAggressor;
 }
 
 export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: GameWorldState): boolean {

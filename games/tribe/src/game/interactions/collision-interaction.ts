@@ -15,7 +15,7 @@ export const humanCollisionInteraction: InteractionDefinition<HumanEntity, Human
       gameState.mapDimensions.width,
       gameState.mapDimensions.height,
     );
-    return distance < source.radius + target.radius;
+    return distance < (source.radius + target.radius) / 3;
   },
   perform: (source, target, { gameState }) => {
     const distance = calculateWrappedDistance(

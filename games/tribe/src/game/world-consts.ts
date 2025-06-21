@@ -67,15 +67,18 @@ export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a
 
 // Human Attack Constants
 export const HUMAN_MAX_HITPOINTS = 100;
-export const HUMAN_ATTACK_DAMAGE = 25;
-export const HUMAN_ATTACK_RANGE: number = 30; // Range in pixels for attack interaction
+export const HUMAN_ATTACK_DAMAGE = 20;
+export const HUMAN_ATTACK_RANGE: number = HUMAN_INTERACTION_RANGE; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
-export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 0.5; // Cooldown in game hours for a human after attacking
-export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 50; // Force applied to target on successful attack
-export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 2;
+export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 5; // Cooldown in game hours for a human after attacking
+export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 5; // Force applied to target on successful attack
+export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 0.1;
 export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
+export const HUMAN_MALE_DAMAGE_MODIFIER = 1.5;
+export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
+export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.0;
 export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
-export const HUMAN_PARRY_CHANCE = 0.25; // Chance (0-1) to parry if angle is correct
+export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
@@ -92,11 +95,17 @@ export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
+export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
+
+// Human AI Fleeing Constants
+export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
+export const AI_FLEE_DISTANCE = 200;
+
 export const AI_WANDERING_RESTRICTED_RADIUS_FEMALE: number = 150;
 
 // Karma Constants
 export const KARMA_ON_ATTACK = -25;
-export const KARMA_ON_INFIDELITY = -30;
+export const KARMA_ON_INFIDELITY = -10;
 export const KARMA_ON_CLAIMED_BUSH_THEFT = -10;
 export const KARMA_PROPAGATION_FACTOR = 0.5;
 export const KARMA_INHERITANCE_FACTOR = 0.5;
@@ -108,7 +117,6 @@ export const KARMA_DEBUG_RENDER_COLOR = 'red';
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;
 export const CHARACTER_CHILD_RADIUS = CHARACTER_RADIUS * 0.6; // Smaller radius for child characters
-export const CHARACTER_CORPSE_RADIUS = 30;
 
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green
@@ -155,6 +163,13 @@ export const UI_FAMILY_MEMBER_ICON_SIZE = 28;
 export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;
 export const UI_MINIATURE_HEIR_CROWN_SIZE = 8;
 export const UI_MINIATURE_PARTNER_CROWN_SIZE = 8;
+
+// UI Attack Progress Bar Constants
+export const UI_ATTACK_PROGRESS_BAR_WIDTH = 40;
+export const UI_ATTACK_PROGRESS_BAR_HEIGHT = 5;
+export const UI_ATTACK_PROGRESS_BAR_Y_OFFSET = 10;
+export const UI_ATTACK_BUILDUP_BAR_COLOR = '#FFA500'; // Orange
+export const UI_ATTACK_COOLDOWN_BAR_COLOR = '#808080'; // Gray
 
 // UI Button Constants
 export const UI_BUTTON_WIDTH: number = 120;

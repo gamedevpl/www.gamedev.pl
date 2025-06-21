@@ -9,7 +9,12 @@ import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
 import { findClosestEntity, findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
-import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
+import {
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  VIEWPORT_FOLLOW_SPEED,
+  HUMAN_ATTACK_RANGE,
+} from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
@@ -211,6 +216,11 @@ export const GameScreen: React.FC = () => {
         return;
       }
 
+      if (key === 't') {
+        gameStateRef.current = updateWorld(gameStateRef.current, 10);
+        return;
+      }
+
       if (key === ' ') {
         event.preventDefault();
         gameStateRef.current.isPaused = !gameStateRef.current.isPaused;
@@ -315,13 +325,12 @@ export const GameScreen: React.FC = () => {
           playerEntity,
           gameStateRef.current,
           'human',
-          HUMAN_INTERACTION_RANGE,
+          HUMAN_ATTACK_RANGE,
           (h) => (h as HumanEntity).id !== playerEntity.id,
         );
         if (target) {
           playerEntity.activeAction = 'attacking';
           playerEntity.attackTargetId = target.id;
-          playSoundAt(updateContext, SoundType.Attack, playerEntity.position);
         }
       } else {
         return;
