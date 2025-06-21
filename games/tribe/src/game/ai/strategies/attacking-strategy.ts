@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { findClosestAggressor, findClosestEntity, areFamily } from '../../utils/world-utils';
-import { AI_ATTACK_ENEMY_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL, KARMA_ENEMY_THRESHOLD } from '../../world-consts';
+import { AI_ATTACK_ENEMY_RANGE, AI_ATTACK_HUNGER_THRESHOLD, KARMA_ENEMY_THRESHOLD } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { addVisualEffect } from '../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../visual-effects/visual-effect-types';
@@ -12,7 +12,7 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     const { gameState } = context;
 
-    if (human.hunger > HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+    if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
       // If hunger is critical, do not engage in attacks
       return null;
     }

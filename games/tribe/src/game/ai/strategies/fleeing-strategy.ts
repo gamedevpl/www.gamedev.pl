@@ -2,12 +2,17 @@ import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { findClosestAggressor } from '../../utils/world-utils';
-import { AI_FLEE_HEALTH_THRESHOLD, AI_FLEE_DISTANCE } from '../../world-consts';
+import { AI_FLEE_HEALTH_THRESHOLD, AI_FLEE_DISTANCE, AI_ATTACK_HUNGER_THRESHOLD } from '../../world-consts';
 import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorSubtract } from '../../utils/math-utils';
 
 export class FleeingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     if (human.hitpoints > human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
+      return null;
+    }
+
+    if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
+      // If hunger is critical, do not engage in fleeing
       return null;
     }
 
