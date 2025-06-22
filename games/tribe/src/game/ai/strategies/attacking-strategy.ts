@@ -3,6 +3,7 @@ import { UpdateContext } from '../../world-types';
 import { findClosestAggressor, findBestAttackTarget } from '../../utils/world-utils';
 import {
   AI_ATTACK_ENEMY_RANGE,
+  AI_FLEE_HEALTH_THRESHOLD,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING,
   KARMA_ENEMY_THRESHOLD,
   MAX_ATTACKERS_PER_TARGET,
@@ -25,6 +26,11 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
 
     if (human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING) {
       // If hunger is critical, do not engage in attacks
+      return null;
+    }
+
+    if (human.hitpoints < human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
+      // If health is below the flee threshold, do not engage in attacks
       return null;
     }
 

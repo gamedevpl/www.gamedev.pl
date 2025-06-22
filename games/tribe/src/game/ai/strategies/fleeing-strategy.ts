@@ -7,11 +7,11 @@ import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorSubtract
 
 export class FleeingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
-    if (human.hitpoints > human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
+    if (human.isAdult && human.hitpoints > human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
       return null;
     }
 
-    if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
+    if (human.isAdult && human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
       // If hunger is critical, do not engage in fleeing
       return null;
     }
