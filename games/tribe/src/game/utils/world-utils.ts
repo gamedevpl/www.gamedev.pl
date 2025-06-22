@@ -389,3 +389,47 @@ export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState):
 
   return Array.from(family);
 }
+
+export function findBestAttackTarget(
+  sourceHuman: HumanEntity,
+  gameState: GameWorldState,
+  maxDistance: number,
+  filterFn?: (entity: HumanEntity) => boolean,
+): HumanEntity | null {
+  const indexedState = gameState as IndexedWorldState;
+  const potentialTargets = indexedState.search.human.byRadius(sourceHuman.position, maxDistance) as HumanEntity[];
+
+  let bestTarget: HumanEntity | null = null;
+  let minAttackers = Infinity;
+  let minDistance = Infinity;
+
+  for (const target of potentialTargets) {
+    if (target.id === sourceHuman.id || (filterFn && !filterFn(target))) {
+      continue;
+    }
+
+    // Count current attackers on this target
+    let currentAttackers = 0;
+    for (const entity of gameState.entities.entities.values()) {
+      if (entity.type === 'human' && (entity as HumanEntity).attackTargetId === target.id) {
+        currentAttackers++;
+      }
+    }
+
+    const distance = calculateWrappedDistance(
+      sourceHuman.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    // Prioritize targets with fewer attackers, then by distance
+    if (currentAttackers < minAttackers || (currentAttackers === minAttackers && distance < minDistance)) {
+      minAttackers = currentAttackers;
+      minDistance = distance;
+      bestTarget = target;
+    }
+  }
+
+  return bestTarget;
+}

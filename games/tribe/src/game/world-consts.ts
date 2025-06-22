@@ -80,6 +80,7 @@ export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
 export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.0;
 export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
+export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
 
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food

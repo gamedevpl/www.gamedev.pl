@@ -1,18 +1,29 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { findClosestAggressor, findClosestEntity, areFamily } from '../../utils/world-utils';
-import { AI_ATTACK_ENEMY_RANGE, AI_ATTACK_HUNGER_THRESHOLD, KARMA_ENEMY_THRESHOLD } from '../../world-consts';
+import { findClosestAggressor, findBestAttackTarget } from '../../utils/world-utils';
+import {
+  AI_ATTACK_ENEMY_RANGE,
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING,
+  KARMA_ENEMY_THRESHOLD,
+  MAX_ATTACKERS_PER_TARGET,
+} from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { addVisualEffect } from '../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
-import { EntityType } from '../../entities/entities-types';
+import { IndexedWorldState } from '../../world-index/world-index-types';
+import { calculateWrappedDistance } from '../../utils/math-utils';
 
 export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
     const { gameState } = context;
 
-    if (human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
+    if (!human.isAdult) {
+      // Children do not engage in attacks
+      return null;
+    }
+
+    if (human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING) {
       // If hunger is critical, do not engage in attacks
       return null;
     }
@@ -21,33 +32,16 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       // If already attacking a target, return that target
       const target = gameState.entities.entities.get(human.attackTargetId);
       if (target && target.type === 'human') {
-        return target as HumanEntity;
-      }
-    }
-
-    // --- Child Attack Logic ---
-    if (!human.isAdult) {
-      // 1. Self-Defense
-      const aggressor = findClosestAggressor(human.id, gameState);
-      if (aggressor) {
-        return aggressor;
-      }
-
-      // 2. Family-Defense
-      for (const entity of gameState.entities.entities.values()) {
-        if (entity.type === 'human') {
-          const potentialFamilyMember = entity as HumanEntity;
-          if (areFamily(human, potentialFamilyMember, gameState) && potentialFamilyMember.id !== human.id) {
-            const familyAggressor = findClosestAggressor(potentialFamilyMember.id, gameState);
-            if (familyAggressor) {
-              return familyAggressor;
-            }
-          }
+        const distance = calculateWrappedDistance(
+          human.position,
+          target?.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
+        if (distance < AI_ATTACK_ENEMY_RANGE) {
+          return target as HumanEntity;
         }
       }
-
-      // Children do not engage in other types of attacks
-      return null;
     }
 
     // --- Adult Attack Logic ---
@@ -71,19 +65,20 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       }
     }
 
-    // 0. Vengeance/Enemy Attack
-    const enemy = findClosestEntity<HumanEntity>(
-      human,
-      gameState,
-      'human' as EntityType,
-      AI_ATTACK_ENEMY_RANGE,
-      (entity) => {
-        const otherHuman = entity as HumanEntity;
-        return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
-      },
-    );
+    // 3. Vengeance/Enemy Attack
+    const enemy = findBestAttackTarget(human, gameState, AI_ATTACK_ENEMY_RANGE, (entity) => {
+      const otherHuman = entity as HumanEntity;
+      return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
+    });
+
     if (enemy) {
-      return enemy;
+      const indexedState = gameState as IndexedWorldState;
+      const attackers = indexedState.search.human.byProperty('attackTargetId', enemy.id);
+      const currentAttackers = attackers.length;
+
+      if (currentAttackers < MAX_ATTACKERS_PER_TARGET) {
+        return enemy;
+      }
     }
 
     return null;
