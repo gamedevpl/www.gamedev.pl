@@ -56,6 +56,9 @@ export interface HumanEntity extends Entity {
   /** IDs of the human's partners. */
   partnerIds?: EntityId[];
 
+  /** IDs of the human's ancestors. */
+  ancestorIds: EntityId[];
+
   /** Cooldown time for a parent to feed a child. */
   feedChildCooldownTime?: number;
 
@@ -63,14 +66,7 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?:
-    | 'gathering'
-    | 'eating'
-    | 'moving'
-    | 'idle'
-    | 'procreating'
-    | 'seekingFood'
-    | 'attacking';
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;

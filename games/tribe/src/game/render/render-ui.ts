@@ -6,8 +6,10 @@ import {
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
   PLAYER_HEIR_HIGHLIGHT_COLOR,
   PLAYER_HIGHLIGHT_COLOR,
+  PLAYER_PARENT_HIGHLIGHT_COLOR,
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
   UI_MINIATURE_HEIR_CROWN_SIZE,
+  UI_MINIATURE_PARENT_CROWN_SIZE,
   UI_MINIATURE_PARTNER_CROWN_SIZE,
   UI_MINIATURE_PLAYER_CROWN_SIZE,
 } from '../world-consts';
@@ -254,6 +256,7 @@ export function renderMiniatureCharacter(
   isPlayer: boolean = false,
   isHeir: boolean = false,
   isPartner: boolean = false,
+  isParent: boolean = false,
 ): void {
   // The TribeHuman2D.render function handles the visual representation of age and gender.
   // It will render characters with gray hair when they reach old age, and children smaller if size is adjusted.
@@ -285,6 +288,9 @@ export function renderMiniatureCharacter(
   } else if (isPartner) {
     crownSize = UI_MINIATURE_PARTNER_CROWN_SIZE;
     highlightColor = PLAYER_PARTNER_HIGHLIGHT_COLOR;
+  } else if (isParent) {
+    crownSize = UI_MINIATURE_PARENT_CROWN_SIZE;
+    highlightColor = PLAYER_PARENT_HIGHLIGHT_COLOR;
   }
 
   if (crownSize && highlightColor) {
@@ -297,7 +303,7 @@ export function drawFamilyMemberBar(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  members: { member: HumanEntity; isPlayer: boolean; isHeir: boolean; isPartner: boolean }[],
+  members: { member: HumanEntity; isPlayer: boolean; isHeir: boolean; isPartner: boolean; isParent: boolean }[],
   iconSize: number,
   maxWidth: number,
 ): void {
@@ -328,7 +334,7 @@ export function drawFamilyMemberBar(
   }
 
   for (let i = 0; i < members.length; i++) {
-    const { member, isPlayer, isHeir, isPartner } = members[i];
+    const { member, isPlayer, isHeir, isPartner, isParent } = members[i];
     const memberX = x + i * (iconSize + padding) + iconSize / 2;
     const memberY = y + iconSize / 4; // All members are in the same row
     renderMiniatureCharacter(
@@ -340,6 +346,7 @@ export function drawFamilyMemberBar(
       isPlayer,
       isHeir,
       isPartner,
+      isParent,
     );
   }
 

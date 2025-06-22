@@ -270,24 +270,35 @@ export function renderGame(
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
 
     // Family Bar
-    const familyMembersToDisplay: { member: HumanEntity; isPlayer: boolean; isHeir: boolean; isPartner: boolean }[] =
-      [];
+    const familyMembersToDisplay: {
+      member: HumanEntity;
+      isPlayer: boolean;
+      isHeir: boolean;
+      isPartner: boolean;
+      isParent: boolean;
+    }[] = [];
     const displayedIds = new Set<EntityId>();
 
     // 1. Add Player
-    familyMembersToDisplay.push({ member: player, isPlayer: true, isHeir: false, isPartner: false });
+    familyMembersToDisplay.push({ member: player, isPlayer: true, isHeir: false, isPartner: false, isParent: false });
     displayedIds.add(player.id);
 
     // 2. Add Heir
     if (playerHeir && !displayedIds.has(playerHeir.id)) {
-      familyMembersToDisplay.push({ member: playerHeir, isPlayer: false, isHeir: true, isPartner: false });
+      familyMembersToDisplay.push({
+        member: playerHeir,
+        isPlayer: false,
+        isHeir: true,
+        isPartner: false,
+        isParent: false,
+      });
       displayedIds.add(playerHeir.id);
     }
 
     // 3. Add Partners
     playerPartners.forEach((p) => {
       if (!displayedIds.has(p.id)) {
-        familyMembersToDisplay.push({ member: p, isPlayer: false, isHeir: false, isPartner: true });
+        familyMembersToDisplay.push({ member: p, isPlayer: false, isHeir: false, isPartner: true, isParent: false });
         displayedIds.add(p.id);
       }
     });
@@ -295,10 +306,38 @@ export function renderGame(
     // 4. Add other Children
     playerChildren.forEach((c) => {
       if (!displayedIds.has(c.id)) {
-        familyMembersToDisplay.push({ member: c, isPlayer: false, isHeir: false, isPartner: false });
+        familyMembersToDisplay.push({ member: c, isPlayer: false, isHeir: false, isPartner: false, isParent: false });
         displayedIds.add(c.id);
       }
     });
+
+    // 5. Add parents
+    if (player.motherId && !displayedIds.has(player.motherId)) {
+      const mother = gameState.entities.entities.get(player.motherId) as HumanEntity | undefined;
+      if (mother) {
+        familyMembersToDisplay.push({
+          member: mother,
+          isPlayer: false,
+          isHeir: false,
+          isPartner: false,
+          isParent: true,
+        });
+        displayedIds.add(mother.id);
+      }
+    }
+    if (player.fatherId && !displayedIds.has(player.fatherId)) {
+      const father = gameState.entities.entities.get(player.fatherId) as HumanEntity | undefined;
+      if (father) {
+        familyMembersToDisplay.push({
+          member: father,
+          isPlayer: false,
+          isHeir: false,
+          isPartner: false,
+          isParent: true,
+        });
+        displayedIds.add(father.id);
+      }
+    }
 
     const familyEmoji = UI_STATUS_EMOJIS[UIStatusType.Family];
     const iconPadding = 10;

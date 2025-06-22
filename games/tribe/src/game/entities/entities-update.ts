@@ -21,6 +21,7 @@ import {
   HUMAN_CORPSE_INITIAL_FOOD,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
+  MAX_ANCESTORS_TO_TRACK,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -98,6 +99,7 @@ export function createHuman(
   initialHunger: number = HUMAN_INITIAL_HUNGER,
   motherId?: EntityId,
   fatherId?: EntityId,
+  ancestorIds: EntityId[] = [],
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
@@ -120,6 +122,7 @@ export function createHuman(
     attackCooldown: 0,
     motherId,
     fatherId,
+    ancestorIds,
     karma: {},
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
   });
@@ -169,6 +172,17 @@ export function giveBirth(
   fatherId: EntityId | undefined,
   updateContext: UpdateContext,
 ): HumanEntity | undefined {
+  const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
+
+  // Combine ancestor lists from both parents
+  const motherAncestors = [...(mother.ancestorIds || []), mother.id];
+  const fatherAncestors = father ? [...(father.ancestorIds || []), father.id] : [];
+  const combinedAncestors = [...motherAncestors, ...fatherAncestors];
+
+  // Remove duplicates and limit the list to the most recent ancestors
+  const uniqueAncestors = [...new Set(combinedAncestors)];
+  const childAncestors = uniqueAncestors.slice(Math.max(uniqueAncestors.length - MAX_ANCESTORS_TO_TRACK, 0));
+
   // Generate random gender
   const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
 
@@ -186,9 +200,9 @@ export function giveBirth(
     HUMAN_INITIAL_HUNGER / 2, // Start with half hunger
     mother.id, // Mother ID
     fatherId, // Father ID
+    childAncestors,
   );
 
-  const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
   inheritKarma(child, mother, father);
 
   // Play birth sound

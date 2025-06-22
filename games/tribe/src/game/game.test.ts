@@ -4,6 +4,7 @@ import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS, KARMA_ENEMY_THRESHOLD } from './world-consts';
+import { isLineage } from './utils/world-utils';
 
 describe('Game Mechanics', () => {
   it('should be able to run for 100 years without a player and still have alive humans', () => {
@@ -31,56 +32,28 @@ describe('Game Mechanics', () => {
         ) as HumanEntity[];
         const humanCount = humans.length;
         const bushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
-        const avgHumanAge =
-          Array.from(gameState.entities.entities.values())
-            .filter((e) => e.type === 'human')
-            .reduce((sum, e) => sum + (e as HumanEntity).age, 0) / humanCount || 0;
-        const childCount = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'human' && (e as HumanEntity).age < 18,
-        ).length;
-        const maleCount = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'human' && (e as HumanEntity).gender === 'male',
-        ).length;
-        const maxHumanAge = Math.max(
-          ...Array.from(gameState.entities.entities.values())
-            .filter((e) => e.type === 'human')
-            .map((e) => (e as HumanEntity).age),
-        );
-        const averageHunger =
-          Array.from(gameState.entities.entities.values())
-            .filter((e) => e.type === 'human')
-            .reduce((sum, e) => sum + (e as HumanEntity).hunger, 0) / humanCount || 0;
+        const avgHumanAge = humans.reduce((sum, e) => sum + e.age, 0) / humanCount || 0;
+        const childCount = humans.filter((e) => e.age < 18).length;
+        const maleCount = humans.filter((e) => e.gender === 'male').length;
+        const maxHumanAge = Math.max(...humans.map((e) => e.age));
+        const averageHunger = humans.reduce((sum, e) => sum + e.hunger, 0) / humanCount || 0;
         const corpsesCount = Array.from(gameState.entities.entities.values()).filter(
           (e) => e.type === 'humanCorpse',
         ).length;
-        const foodBerries = Array.from(gameState.entities.entities.values())
-          .filter((e) => e.type === 'human' && (e as HumanEntity).food.length > 0)
-          .reduce((sum, e) => sum + (e as HumanEntity).food.filter((f) => f.type === 'berry').length, 0);
-        const foodMeat = Array.from(gameState.entities.entities.values())
-          .filter((e) => e.type === 'human' && (e as HumanEntity).food.length > 0)
+        const foodBerries = humans
+          .filter((e) => e.food.length > 0)
+          .reduce((sum, e) => sum + e.food.filter((f) => f.type === 'berry').length, 0);
+        const foodMeat = humans
+          .filter((e) => e.food.length > 0)
           .reduce((sum, e) => sum + (e as HumanEntity).food.filter((f) => f.type === 'meat').length, 0);
         // need to count lineages, so
-        const lineages: { [key: string]: number } = {};
-        for (const entity of gameState.entities.entities.values()) {
-          if (entity.type === 'human') {
-            const human = entity as HumanEntity;
-            const getParent = (human: HumanEntity): HumanEntity | undefined =>
-              [human.fatherId, human.motherId]
-                .map((id) => {
-                  return id ? (gameState.entities.entities.get(id) as HumanEntity) : undefined;
-                })
-                .filter((p) => p?.type === 'human')[0];
-            let parent = getParent(human);
-            if (parent) {
-              const visited = new Set<number>();
-              while (getParent(parent!) && !visited.has(getParent(parent!)?.id ?? 0)) {
-                parent = getParent(parent!);
-                visited.add(parent!.id);
-              }
-              lineages[parent!.id] = (lineages[parent!.id] || 0) + 1;
-            } else {
-              lineages[human.id] = 1;
-            }
+        const lineages: HumanEntity[][] = [];
+        for (const human of humans) {
+          const lineage = lineages.find((lineage) => lineage.some((h) => isLineage(h, human)));
+          if (lineage) {
+            lineage.push(human);
+          } else {
+            lineages.push([human]);
           }
         }
 
@@ -102,15 +75,18 @@ describe('Game Mechanics', () => {
             }
           }
         }
+        const maxAncestors = Math.max(...humans.map((h) => (h.ancestorIds ? h.ancestorIds.length : 0)), 0);
 
         console.log(
           `Year ${yearsSimulated}: Humans: ${humanCount}, Lineages: ${
-            Object.keys(lineages).length
+            lineages.length
           }, Bushes: ${bushCount}, Age(Avg:Max): ${avgHumanAge.toFixed(2)}:${maxHumanAge.toFixed(
             2,
           )}, Children: ${childCount}, Corpses: ${corpsesCount}, Gender Ratio (M:F): ${maleCount}:${
             humanCount - maleCount
-          }, Avg Hunger: ${averageHunger.toFixed(2)}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Enemies: ${enemyPairs}`,
+          }, Avg Hunger: ${averageHunger.toFixed(
+            2,
+          )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Enemies: ${enemyPairs}, Max Ancestors: ${maxAncestors}`,
         );
 
         if (humanCount <= 0) {

@@ -321,6 +321,22 @@ export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: G
   return false;
 }
 
+export function isLineage(human1: HumanEntity, human2: HumanEntity): boolean {
+  if (human1.id === human2.id) return true;
+
+  if (human1.motherId === human2.id || human1.fatherId === human2.id) return true;
+  if (human2.motherId === human1.id || human2.fatherId === human1.id) return true;
+
+  const isChildOfHuman1 = human1.motherId === human2.motherId || human1.fatherId === human2.fatherId;
+  const isChildOfHuman2 = human2.motherId === human1.motherId || human2.fatherId === human1.fatherId;
+
+  const isCommonAncestor =
+    human1.ancestorIds?.some((ancestorId) => human2.ancestorIds.includes(ancestorId)) ||
+    human2.ancestorIds?.some((ancestorId) => human1.ancestorIds.includes(ancestorId));
+
+  return isChildOfHuman1 || isChildOfHuman2 || isCommonAncestor;
+}
+
 export function findParents(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
   const parents: HumanEntity[] = [];
   if (human.motherId) {

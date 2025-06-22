@@ -27,6 +27,7 @@ export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant rep
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
 export const HUMAN_MAX_AGE_YEARS: number = 60; // Maximum lifespan in game years
+export const MAX_ANCESTORS_TO_TRACK: number = 5;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
 export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = 95; // Hunger level that prevents procreation
@@ -163,6 +164,7 @@ export const UI_FAMILY_MEMBER_ICON_SIZE = 28;
 export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;
 export const UI_MINIATURE_HEIR_CROWN_SIZE = 8;
 export const UI_MINIATURE_PARTNER_CROWN_SIZE = 8;
+export const UI_MINIATURE_PARENT_CROWN_SIZE = 8;
 
 // UI Attack Progress Bar Constants
 export const UI_ATTACK_PROGRESS_BAR_WIDTH = 40;
