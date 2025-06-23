@@ -100,6 +100,8 @@ export function createHuman(
   motherId?: EntityId,
   fatherId?: EntityId,
   ancestorIds: EntityId[] = [],
+  leaderId?: EntityId,
+  tribeBadge?: string,
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
@@ -125,7 +127,10 @@ export function createHuman(
     ancestorIds,
     karma: {},
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
+    leaderId,
+    tribeBadge,
   });
+
   return human;
 }
 
@@ -201,6 +206,8 @@ export function giveBirth(
     mother.id, // Mother ID
     fatherId, // Father ID
     childAncestors,
+    father?.leaderId,
+    father?.tribeBadge,
   );
 
   inheritKarma(child, mother, father);

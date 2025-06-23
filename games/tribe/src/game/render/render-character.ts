@@ -20,6 +20,7 @@ import {
   HUMAN_ATTACK_BUILDUP_HOURS,
   UI_ATTACK_COOLDOWN_BAR_COLOR,
   HUMAN_ATTACK_COOLDOWN_HOURS,
+  TRIBE_BADGE_SIZE,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
@@ -36,6 +37,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   idle: 'idle',
   seekingFood: 'idle',
   attacking: 'attacking',
+  seizing: 'idle',
 };
 
 /**
@@ -65,6 +67,15 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
+}
+
+function drawTribeBadge(ctx: CanvasRenderingContext2D, position: { x: number; y: number }, badge: string): void {
+  ctx.save();
+  ctx.font = `${TRIBE_BADGE_SIZE}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(badge, position.x, position.y - CHARACTER_RADIUS - TRIBE_BADGE_SIZE - 18);
+  ctx.restore();
 }
 
 /**
@@ -227,6 +238,10 @@ export function renderCharacter(
 
   if (crownSize && highlightColor) {
     drawCrown(ctx, position, currentCharacterRadius, crownSize, highlightColor);
+  }
+
+  if (human.tribeBadge) {
+    drawTribeBadge(ctx, position, human.tribeBadge);
   }
 
   renderAttackProgress(ctx, human, currentTime);

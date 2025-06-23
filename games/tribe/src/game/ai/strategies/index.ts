@@ -7,6 +7,7 @@ import { ChildSeekingFoodStrategy } from './child-seeking-food-strategy';
 import { ParentFeedingChildStrategy } from './parent-feeding-child-strategy';
 import { ParentSeekingFoodForChildStrategy } from './parent-seeking-food-for-child-strategy';
 import { HumanAIStrategy } from './ai-strategy-types';
+import { SeizingStrategy } from './seizing-strategy';
 import { FleeingStrategy } from './fleeing-strategy';
 
 /**
@@ -21,6 +22,7 @@ export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new ChildSeekingFoodStrategy(),
   new ParentSeekingFoodForChildStrategy(),
   new ParentFeedingChildStrategy(),
+  new SeizingStrategy(),
   new GatheringStrategy(),
   new ProcreationStrategy(),
   new IdleWanderStrategy(), // Fallback, should always be last

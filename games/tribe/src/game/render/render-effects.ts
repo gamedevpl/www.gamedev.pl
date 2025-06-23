@@ -107,5 +107,11 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
     case VisualEffectType.Hit:
       drawEmoji(ctx, effect, currentTime, '💥');
       break;
+    case VisualEffectType.SeizeBuildup:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 215, 0, 0.8)', 4); // Gold
+      break;
+    case VisualEffectType.Seize:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
+      break;
   }
 }

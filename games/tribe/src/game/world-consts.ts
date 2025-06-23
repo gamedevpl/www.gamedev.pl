@@ -27,7 +27,7 @@ export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant rep
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
 export const HUMAN_MAX_AGE_YEARS: number = 60; // Maximum lifespan in game years
-export const MAX_ANCESTORS_TO_TRACK: number = 5;
+export const MAX_ANCESTORS_TO_TRACK: number = 3;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
 export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = 95; // Hunger level that prevents procreation
@@ -82,6 +82,12 @@ export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successfu
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
 
+// Seize Action Constants
+export const SEIZE_PERIMETER_RADIUS: number = 200; // The radius around the leader where the seize action affects non-family members.
+export const KARMA_ON_SEIZE: number = -50; // The amount of karma to be reduced for non-family members within the seize perimeter.
+export const HUMAN_SEIZE_BUILDUP_HOURS: number = 2; // The time it takes for the seize action to complete after initiation.
+export const HUMAN_SEIZE_COOLDOWN_HOURS: number = 24 * 5; // The cooldown period for the seize action, in game hours.
+
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
@@ -90,6 +96,7 @@ export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wande
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 200;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 300;
+export const LEADER_FOLLOW_RADIUS = 400; // Radius within which followers will try to stay close to their leader
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
@@ -98,6 +105,7 @@ export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend clai
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
+export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;
 
 // Human AI Fleeing Constants
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
@@ -139,6 +147,8 @@ export const PLAYER_HEIR_CROWN_SIZE: number = 16; // Size of the crown for playe
 export const PLAYER_CHILD_CROWN_SIZE: number = 10; // Size of the crown for player's children
 export const PLAYER_PARENT_CROWN_SIZE: number = 16; // Size of the crown for player's parents
 export const PLAYER_PARTNER_CROWN_SIZE: number = 16; // Size of the crown for player's partner
+export const TRIBE_BADGE_EMOJIS = ['👑', '💀', '🔥', '💧', '☘️', '☀️', '🌙', '⭐', '⚡', '⚜️'];
+export const TRIBE_BADGE_SIZE: number = 8;
 
 // UI Constants
 export const UI_TEXT_COLOR: string = '#FFFFFF';

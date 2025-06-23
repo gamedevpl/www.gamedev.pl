@@ -9,11 +9,27 @@ import {
   HUMAN_HUNGER_THRESHOLD_SLOW,
   HUMAN_ATTACK_RANGE,
 } from '../world-consts';
+import { TRIBE_BADGE_EMOJIS } from '../world-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+
+export function isFamilyHeadWithoutLivingFather(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (human.gender !== 'male' || !human.isAdult) {
+    return false;
+  }
+
+  if (human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId);
+    if (father) {
+      return false; // Father is alive
+    }
+  }
+
+  return true; // Is an adult male with no living father
+}
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -89,6 +105,11 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   );
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, key: 'q', targetEntity: attackTarget });
+  }
+
+  // Check for Seize
+  if (isFamilyHeadWithoutLivingFather(player, gameState) && (player.seizeCooldown || 0) <= 0) {
+    actions.push({ type: PlayerActionType.Seize, key: 'x' });
   }
 
   return actions;
@@ -390,6 +411,40 @@ export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState):
   return Array.from(family);
 }
 
+export function getAdultFamilyMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
+  const family = new Set<HumanEntity>();
+
+  // Add self
+  if (human.isAdult) {
+    family.add(human);
+  }
+
+  // Add parents
+  if (human.motherId) {
+    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
+    if (mother?.isAdult) family.add(mother);
+  }
+  if (human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    if (father?.isAdult) family.add(father);
+  }
+
+  // Add partners
+  human.partnerIds?.forEach((id) => {
+    const partner = gameState.entities.entities.get(id) as HumanEntity | undefined;
+    if (partner?.isAdult) family.add(partner);
+  });
+
+  // Add adult children
+  findChildren(gameState, human).forEach((child) => {
+    if (child.isAdult) {
+      family.add(child);
+    }
+  });
+
+  return Array.from(family);
+}
+
 export function findBestAttackTarget(
   sourceHuman: HumanEntity,
   gameState: GameWorldState,
@@ -432,4 +487,39 @@ export function findBestAttackTarget(
   }
 
   return bestTarget;
+}
+
+let emojiIndex = 0;
+
+/**
+ * Generates a unique tribe badge emoji.
+ */
+export function generateTribeBadge(): string {
+  const badge = TRIBE_BADGE_EMOJIS[emojiIndex];
+  emojiIndex = (emojiIndex + 1) % TRIBE_BADGE_EMOJIS.length;
+  return badge;
+}
+
+export function propagateNewLeaderToDescendants(
+  newLeader: HumanEntity,
+  human: HumanEntity,
+  gameState: GameWorldState,
+): void {
+  human.leaderId = newLeader.id; // Set the new leader for this human
+  human.tribeBadge = newLeader.tribeBadge; // Update tribe badge to match new leader
+
+  // Recursively propagate to children
+  if (human.gender === 'male') {
+    findChildren(gameState, human).forEach((child) => {
+      propagateNewLeaderToDescendants(newLeader, child, gameState);
+      if (child.motherId && human.partnerIds?.includes(child.motherId)) {
+        // If the child is from the same family, propagate to the mother as long as she is currently partnered with the father
+        const mother = gameState.entities.entities.get(child.motherId) as HumanEntity | undefined;
+        if (mother) {
+          mother.leaderId = newLeader.id; // Set the new leader for the mother
+          mother.tribeBadge = newLeader.tribeBadge; // Update tribe badge to match new leader
+        }
+      }
+    });
+  }
 }

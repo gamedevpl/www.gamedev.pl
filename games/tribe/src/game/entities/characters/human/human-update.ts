@@ -18,13 +18,19 @@ import {
   CHARACTER_RADIUS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
+  KARMA_ENEMY_THRESHOLD,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { findChildren, findHeir } from '../../../utils/world-utils';
+import {
+  findChildren,
+  findHeir,
+  generateTribeBadge,
+  propagateNewLeaderToDescendants,
+} from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { decayKarma } from '../../../karma/karma-utils';
@@ -37,7 +43,18 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   decayKarma(entity, gameHoursDelta);
 
-  // --- Hitpoint Regeneration ---
+  // --- Tribe Leadership Checks ---
+  if (entity.leaderId && entity.leaderId !== entity.id && entity.isAdult && entity.gender === 'male') {
+    const leader = gameState.entities.entities.get(entity.leaderId) as HumanEntity | undefined;
+    // Check if leader is dead or if karma is too low
+    if (!leader || (entity.karma[entity.leaderId] ?? 0) <= KARMA_ENEMY_THRESHOLD) {
+      entity.leaderId = entity.id; // Become own leader
+      entity.tribeBadge = generateTribeBadge(); // Start a new tribe
+      propagateNewLeaderToDescendants(entity, entity, gameState);
+    }
+  }
+
+  // --- Hitpoint Regeneration -- -
   if (entity.hitpoints < entity.maxHitpoints) {
     const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;
     const regeneration = HUMAN_BASE_HITPOINT_REGEN_PER_HOUR * hungerFactor * gameHoursDelta;
@@ -88,6 +105,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   if (entity.attackCooldown) {
     entity.attackCooldown -= gameHoursDelta;
     if (entity.attackCooldown < 0) entity.attackCooldown = 0;
+  }
+
+  if (entity.seizeCooldown) {
+    entity.seizeCooldown -= gameHoursDelta;
+    if (entity.seizeCooldown < 0) entity.seizeCooldown = 0;
   }
 
   if (entity.feedParentCooldownTime) {
@@ -160,6 +182,40 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   if (causeOfDeath) {
+    // --- Leadership Succession on Death ---
+    if (entity.leaderId === entity.id) {
+      // The deceased was a leader
+      const heir = findHeir(findChildren(gameState, entity));
+      if (heir) {
+        // Transfer leadership to the heir
+        heir.leaderId = heir.id;
+        heir.tribeBadge = entity.tribeBadge;
+
+        // Update followers
+        gameState.entities.entities.forEach((e) => {
+          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
+            const follower = e as HumanEntity;
+            if ((follower.karma[heir.id] ?? 0) > KARMA_ENEMY_THRESHOLD) {
+              follower.leaderId = heir.id; // Follow the new leader
+            } else {
+              // Become their own leader due to bad karma with the heir
+              follower.leaderId = follower.id;
+              follower.tribeBadge = generateTribeBadge();
+            }
+          }
+        });
+      } else {
+        // No heir, tribe dissolves
+        gameState.entities.entities.forEach((e) => {
+          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
+            const follower = e as HumanEntity;
+            follower.leaderId = undefined;
+            follower.tribeBadge = undefined;
+          }
+        });
+      }
+    }
+
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));
       if (oldestOffspring) {

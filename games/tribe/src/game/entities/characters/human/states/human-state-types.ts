@@ -9,6 +9,7 @@ export const HUMAN_GATHERING = 'humanGathering'; // When gathering resources
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
 export const HUMAN_SEEKING_FOOD = 'humanSeekingFood';
 export const HUMAN_ATTACKING = 'humanAttacking';
+export const HUMAN_SEIZING = 'humanSeizing';
 
 export interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -41,6 +42,10 @@ export interface HumanAttackingStateData extends StateData {
   attackStartTime: number;
 }
 
+export interface HumanSeizingStateData extends StateData {
+  state: 'seizing';
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
@@ -48,4 +53,5 @@ export type HumanStateData =
   | HumanGatheringStateData
   | HumanProcreatingStateData
   | HumanSeekingFoodStateData
-  | HumanAttackingStateData;
+  | HumanAttackingStateData
+  | HumanSeizingStateData;

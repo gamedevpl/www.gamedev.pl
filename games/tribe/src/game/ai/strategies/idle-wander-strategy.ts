@@ -8,6 +8,7 @@ import {
   HUMAN_AI_IDLE_WANDER_CHANCE,
   HUMAN_AI_WANDER_RADIUS,
   HUMAN_INTERACTION_RANGE,
+  LEADER_FOLLOW_RADIUS,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 
@@ -28,7 +29,15 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
         let anchorPoint = human.position;
         let wanderRadius = HUMAN_AI_WANDER_RADIUS;
 
-        if (!human.isAdult) {
+        const leader =
+          human.leaderId && human.leaderId !== human.id
+            ? (gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined)
+            : undefined;
+
+        if (leader) {
+          anchorPoint = leader.position;
+          wanderRadius = LEADER_FOLLOW_RADIUS;
+        } else if (!human.isAdult) {
           const parents = findParents(human, gameState);
           if (parents.length > 0) {
             anchorPoint = parents[0].position; // Wander around the first available parent

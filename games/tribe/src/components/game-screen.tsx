@@ -8,7 +8,12 @@ import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BerryBushEntity } from '../game/entities/plants/berry-bush/berry-bush-types';
-import { findClosestEntity, findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
+import {
+  findClosestEntity,
+  findPlayerEntity,
+  getAvailablePlayerActions,
+  isFamilyHeadWithoutLivingFather,
+} from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -331,6 +336,14 @@ export const GameScreen: React.FC = () => {
         if (target) {
           playerEntity.activeAction = 'attacking';
           playerEntity.attackTargetId = target.id;
+        }
+      } else if (key === 'x') {
+        if (
+          isFamilyHeadWithoutLivingFather(playerEntity, gameStateRef.current) &&
+          (playerEntity.seizeCooldown || 0) <= 0
+        ) {
+          playerEntity.activeAction = 'seizing';
+          playSoundAt(updateContext, SoundType.Seize, playerEntity.position);
         }
       } else {
         return;

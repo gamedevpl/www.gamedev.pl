@@ -59,6 +59,12 @@ export interface HumanEntity extends Entity {
   /** IDs of the human's ancestors. */
   ancestorIds: EntityId[];
 
+  /** ID of the human's tribe leader. If it's the same as the human's ID, they are the leader. */
+  leaderId?: EntityId;
+
+  /** Visual representation of the tribe badge. */
+  tribeBadge?: string;
+
   /** Cooldown time for a parent to feed a child. */
   feedChildCooldownTime?: number;
 
@@ -66,7 +72,7 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking';
+  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'seizing';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
@@ -74,6 +80,9 @@ export interface HumanEntity extends Entity {
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
   attackTargetId?: EntityId;
+
+  /** Cooldown time before being able to seize again. */
+  seizeCooldown?: number;
 
   /** Target position for 'moving' action. Set by player input or AI decision. */
   targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.

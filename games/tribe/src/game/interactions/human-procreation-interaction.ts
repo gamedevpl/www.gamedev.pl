@@ -15,6 +15,7 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { applyKarma } from '../karma/karma-utils';
+import { generateTribeBadge, isLineage } from '../utils/world-utils';
 
 /**
  * Defines an interaction for human procreation.
@@ -82,6 +83,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
   const sourceOriginalPartners = [...(source.partnerIds || [])];
   const targetOriginalPartners = [...(target.partnerIds || [])];
 
+  const male = source.gender === 'male' ? source : target;
+  const female = source.gender === 'female' ? source : target;
+  const isFirstPartnershipForMale = (male.partnerIds || []).length === 0;
+
   // Both entities are initiators now, confirmed by the checker.
   // Set both entities to the procreating state
   source.stateMachine = [
@@ -130,6 +135,33 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       if (originalPartner) {
         applyKarma(target, originalPartner, KARMA_ON_INFIDELITY, gameState);
       }
+    }
+  }
+
+  // --- New Tribe Formation ---
+  if (isFirstPartnershipForMale && male.leaderId && male.leaderId !== male.id) {
+    const leader = gameState.entities.entities.get(male.leaderId) as HumanEntity | undefined;
+    if (leader) {
+      const maleHasCommonAncestors = isLineage(male, leader);
+      const femaleHasCommonAncestors = isLineage(female, leader);
+
+      if (!maleHasCommonAncestors && !femaleHasCommonAncestors) {
+        // Form a new tribe by splitting
+        const newTribeBadge = generateTribeBadge();
+        male.leaderId = male.id; // The male becomes the leader of a new tribe
+        male.tribeBadge = newTribeBadge;
+        female.leaderId = male.id; // The female joins the new tribe
+        female.tribeBadge = newTribeBadge;
+      }
+    }
+  } else if (!source.leaderId && !target.leaderId) {
+    // Existing logic for leaderless procreation
+    if (male && female) {
+      const newTribeBadge = generateTribeBadge();
+      male.leaderId = male.id; // The male becomes the leader
+      male.tribeBadge = newTribeBadge;
+      female.leaderId = male.id; // The female joins the new tribe
+      female.tribeBadge = newTribeBadge;
     }
   }
 

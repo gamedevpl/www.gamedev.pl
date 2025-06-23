@@ -5,6 +5,7 @@ export enum PlayerActionType {
   Eat = 'Eat',
   Procreate = 'Procreate',
   Attack = 'Attack',
+  Seize = 'Seize',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -12,6 +13,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Eat]: '🍖',
   [PlayerActionType.Procreate]: '❤️',
   [PlayerActionType.Attack]: '⚔️',
+  [PlayerActionType.Seize]: '👑',
 };
 
 export interface PlayerActionHint {

@@ -18,6 +18,7 @@ export enum SoundType {
   Birth,
   ChildFed,
   HumanDeath,
+  Seize,
 
   // UI/Game State
   GameOver,
@@ -34,6 +35,7 @@ export const SOUND_FILE_MAP = new Map<SoundType, string>([
   [SoundType.HumanDeath, humanDeathSound],
   [SoundType.GameOver, gameOverSound],
   [SoundType.ButtonClick, buttonClickSound],
+  [SoundType.Seize, attackSound],
 ]);
 
 export interface SoundOptions {
