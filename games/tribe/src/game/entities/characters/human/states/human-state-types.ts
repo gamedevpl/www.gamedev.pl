@@ -10,6 +10,7 @@ export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with an
 export const HUMAN_SEEKING_FOOD = 'humanSeekingFood';
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_SEIZING = 'humanSeizing';
+export const HUMAN_PLANTING = 'humanPlanting';
 
 export interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -46,6 +47,10 @@ export interface HumanSeizingStateData extends StateData {
   state: 'seizing';
 }
 
+export interface HumanPlantingStateData extends StateData {
+  plantingSpot: Vector2D;
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
@@ -54,4 +59,5 @@ export type HumanStateData =
   | HumanProcreatingStateData
   | HumanSeekingFoodStateData
   | HumanAttackingStateData
-  | HumanSeizingStateData;
+  | HumanSeizingStateData
+  | HumanPlantingStateData;

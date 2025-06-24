@@ -26,7 +26,7 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 
-type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking';
+type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
 // Mapping from HumanEntity activeAction to render stance
 const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance> = {
@@ -38,6 +38,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   seekingFood: 'idle',
   attacking: 'attacking',
   seizing: 'idle',
+  planting: 'gathering', // Use gathering stance for planting for now
 };
 
 /**

@@ -13,19 +13,21 @@ import {
   findPlayerEntity,
   getAvailablePlayerActions,
   isFamilyHeadWithoutLivingFather,
+  findValidPlantingSpot,
 } from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   VIEWPORT_FOLLOW_SPEED,
   HUMAN_ATTACK_RANGE,
+  BERRY_BUSH_SPREAD_RADIUS,
 } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
 import { vectorLerp, vectorDistance } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
-import { PlayerActionHint, UIButtonActionType } from '../game/ui/ui-types';
+import { PlayerActionHint, PlayerActionType, UIButtonActionType } from '../game/ui/ui-types';
 import { setMasterVolume } from '../game/sound/sound-loader';
 import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
 
@@ -344,6 +346,20 @@ export const GameScreen: React.FC = () => {
         ) {
           playerEntity.activeAction = 'seizing';
           playSoundAt(updateContext, SoundType.Seize, playerEntity.position);
+        }
+      } else if (key === 'b') {
+        const plantAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.PlantBush);
+        if (plantAction) {
+          const plantingSpot = findValidPlantingSpot(
+            playerEntity.position,
+            gameStateRef.current,
+            50,
+            BERRY_BUSH_SPREAD_RADIUS,
+          );
+          if (plantingSpot) {
+            playerEntity.activeAction = 'planting';
+            playerEntity.targetPosition = plantingSpot;
+          }
         }
       } else {
         return;

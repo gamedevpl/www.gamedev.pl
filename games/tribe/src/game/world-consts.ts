@@ -18,9 +18,9 @@ export const BERRY_BUSH_MAX_FOOD: number = 5;
 export const BERRY_BUSH_INITIAL_FOOD: number = 3;
 export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 food to grow
 export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 940;
-export const BERRY_BUSH_SPREAD_CHANCE: number = 0.43; // 40% chance per attempt
+export const BERRY_BUSH_SPREAD_CHANCE: number = 0.4;
 export const BERRY_BUSH_SPREAD_RADIUS: number = 20; // pixels
-export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 90;
+export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 160;
 export const INITIAL_BERRY_BUSH_COUNT: number = 45;
 export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant represents the duration in game hours for which a human's claim on a berry bush remains active.
 
@@ -45,7 +45,7 @@ export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for o
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
 export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
-export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 50; // Age at which male without heir urgently seeks procreation
+export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 35; // Age at which male without heir urgently seeks procreation
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
 export const HUMAN_PROCREATION_COOLDOWN_HOURS: number = 24; // 1 game day
@@ -87,6 +87,13 @@ export const SEIZE_PERIMETER_RADIUS: number = 200; // The radius around the lead
 export const KARMA_ON_SEIZE: number = -50; // The amount of karma to be reduced for non-family members within the seize perimeter.
 export const HUMAN_SEIZE_BUILDUP_HOURS: number = 2; // The time it takes for the seize action to complete after initiation.
 export const HUMAN_SEIZE_COOLDOWN_HOURS: number = 24 * 5; // The cooldown period for the seize action, in game hours.
+
+// Human Planting Constants
+export const BERRY_COST_FOR_PLANTING = 6;
+export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for planting action
+export const AI_PLANTING_BERRY_THRESHOLD = 9; // Min berries for AI to consider planting
+export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
+export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
 
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food

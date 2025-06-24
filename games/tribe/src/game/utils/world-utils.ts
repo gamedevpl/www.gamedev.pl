@@ -9,6 +9,8 @@ import {
   HUMAN_HUNGER_THRESHOLD_SLOW,
   HUMAN_ATTACK_RANGE,
 } from '../world-consts';
+import { BERRY_COST_FOR_PLANTING } from '../world-consts';
+import { FoodType } from '../food/food-types';
 import { TRIBE_BADGE_EMOJIS } from '../world-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
@@ -112,6 +114,11 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     actions.push({ type: PlayerActionType.Seize, key: 'x' });
   }
 
+  // Check for Planting
+  if (player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING) {
+    actions.push({ type: PlayerActionType.PlantBush, key: 'b' });
+  }
+
   return actions;
 }
 
@@ -161,6 +168,21 @@ export function isPositionOccupied(position: Vector2D, gameState: GameWorldState
     }
   }
   return false;
+}
+
+export function findValidPlantingSpot(
+  center: Vector2D,
+  gameState: GameWorldState,
+  searchRadius: number,
+  spotRadius: number,
+): Vector2D | null {
+  for (let i = 0; i < 10; i++) {
+    const spot = getRandomNearbyPosition(center, searchRadius, gameState.mapDimensions.width, gameState.mapDimensions.height);
+    if (!isPositionOccupied(spot, gameState, spotRadius)) {
+      return spot;
+    }
+  }
+  return null;
 }
 
 export function findClosestEntity<T extends Entity>(

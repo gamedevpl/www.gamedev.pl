@@ -3,10 +3,17 @@ import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
-import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS, KARMA_ENEMY_THRESHOLD } from './world-consts';
+import {
+  BERRY_COST_FOR_PLANTING,
+  GAME_DAY_IN_REAL_SECONDS,
+  HUMAN_PLANTING_DURATION_HOURS,
+  HUMAN_YEAR_IN_REAL_SECONDS,
+  KARMA_ENEMY_THRESHOLD,
+} from './world-consts';
 import { isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
+import { FoodType } from './food/food-types';
 
 // Helper to find a human by ID, with proper type assertion
 const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | undefined => {
@@ -211,4 +218,33 @@ describe('Tribe Formation via Splitting', () => {
     expect(finalMaleB?.tribeBadge).toBe(leaderA.tribeBadge);
     expect(finalFemaleC?.leaderId).toBeUndefined(); // Female C does not join the tribe automatically in this case
   });
+
+describe('Planting bushes', () => {
+  it('a human with 5 berries can plant a bush', () => {
+    let gameState = initGame();
+    const human = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'female', true, 25);
+    human.food = Array.from({ length: 10 }, () => ({ type: FoodType.Berry }));
+
+    const initialBushCount = Array.from(gameState.entities.entities.values()).filter(
+      (e) => e.type === 'berryBush',
+    ).length;
+
+    human.activeAction = 'planting';
+    human.targetPosition = { x: 150, y: 150 };
+
+    // a bit more than the planting duration
+    const timeStep = HUMAN_PLANTING_DURATION_HOURS + 0.1;
+    gameState = updateWorld(gameState, timeStep);
+
+    const finalBushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
+
+    const updatedHuman = findHumanById(gameState, human.id);
+
+    expect(finalBushCount).toBe(initialBushCount + 1);
+    expect(updatedHuman?.food.length).toBe(10 - BERRY_COST_FOR_PLANTING);
+  });
+});
+
+
+
 });

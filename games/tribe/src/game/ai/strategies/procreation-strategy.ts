@@ -91,7 +91,7 @@ export class ProcreationStrategy implements HumanAIStrategy<HumanEntity> {
       human,
       gameState,
       'human' as EntityType,
-      HUMAN_AI_WANDER_RADIUS * 5,
+      HUMAN_AI_WANDER_RADIUS * 10,
       (p) => {
         if (!partnerFilter(p) || !p.partnerIds || p.partnerIds.length === 0) {
           return false;

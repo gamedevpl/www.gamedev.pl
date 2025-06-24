@@ -14,12 +14,22 @@ import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 
-type FoodSource = BerryBushEntity | HumanCorpseEntity;
+export type FoodSource = BerryBushEntity | HumanCorpseEntity;
 
 export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
-  check(human: HumanEntity, context: UpdateContext): FoodSource | null {
+  check(
+    human: HumanEntity,
+    context: UpdateContext,
+    options: {
+      onlyBerries: boolean;
+      hungerThreshold: number;
+    } = {
+      onlyBerries: false,
+      hungerThreshold: HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
+    },
+  ): FoodSource | null {
     const hasCapacity = human.food.length < human.maxFood;
-    if (!human.isAdult || !hasCapacity || human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING) {
+    if (!human.isAdult || !hasCapacity || human.hunger < options.hungerThreshold) {
       return null;
     }
 
@@ -27,7 +37,9 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
     const indexedState = gameState as IndexedWorldState;
 
     const allBushes = indexedState.search.berryBush.byRadius(human.position, 1000).filter((b) => b.food.length > 0);
-    const allCorpses = indexedState.search.humanCorpse.byRadius(human.position, 1000).filter((c) => c.food.length > 0);
+    const allCorpses = !options.onlyBerries
+      ? indexedState.search.humanCorpse.byRadius(human.position, 1000).filter((c) => c.food.length > 0)
+      : [];
     const allFoodSources: FoodSource[] = [...allBushes, ...allCorpses];
 
     const findClosest = (sources: FoodSource[]): FoodSource | null => {

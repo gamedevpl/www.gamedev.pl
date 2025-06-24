@@ -72,7 +72,16 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'seizing';
+  activeAction?:
+    | 'gathering'
+    | 'eating'
+    | 'moving'
+    | 'idle'
+    | 'procreating'
+    | 'seekingFood'
+    | 'attacking'
+    | 'seizing'
+    | 'planting';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;

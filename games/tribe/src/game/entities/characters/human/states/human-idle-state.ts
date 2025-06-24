@@ -10,6 +10,8 @@ import {
   HUMAN_ATTACKING,
   HumanAttackingStateData,
   HUMAN_SEIZING,
+  HUMAN_PLANTING,
+  HumanPlantingStateData,
 } from './human-state-types';
 
 // Define the human idle state
@@ -87,6 +89,18 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
         },
+      };
+    }
+
+    if (entity.activeAction === 'planting' && entity.targetPosition) {
+      return {
+        nextState: HUMAN_PLANTING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          plantingSpot: entity.targetPosition,
+        } as HumanPlantingStateData,
       };
     }
 

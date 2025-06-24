@@ -9,6 +9,7 @@ import { ParentSeekingFoodForChildStrategy } from './parent-seeking-food-for-chi
 import { HumanAIStrategy } from './ai-strategy-types';
 import { SeizingStrategy } from './seizing-strategy';
 import { FleeingStrategy } from './fleeing-strategy';
+import { PlantingStrategy } from './planting-strategy';
 
 /**
  * A list of all available human AI strategies, ordered by priority.
@@ -25,5 +26,6 @@ export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new SeizingStrategy(),
   new GatheringStrategy(),
   new ProcreationStrategy(),
+  new PlantingStrategy(),
   new IdleWanderStrategy(), // Fallback, should always be last
 ];
