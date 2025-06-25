@@ -1,6 +1,6 @@
 import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
-import { calculateWrappedDistance, vectorAdd, vectorDistance } from './math-utils';
+import { calculateWrappedDistance, vectorAdd } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -11,7 +11,9 @@ import {
   FLAG_TERRITORY_RADIUS,
   AI_FLAG_PLANTING_EDGE_POINTS,
   FLAG_PLANTING_COST,
+  AI_PLANTING_GRID_OFFSETS,
   FLAG_RADIUS,
+  BERRY_BUSH_SPREAD_RADIUS,
 } from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
@@ -67,8 +69,18 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     let target: BerryBushEntity | HumanCorpseEntity | null = null;
     if (gatherBushTarget && gatherCorpseTarget) {
       target =
-        vectorDistance(player.position, gatherBushTarget.position) <=
-        vectorDistance(player.position, gatherCorpseTarget.position)
+        calculateWrappedDistance(
+          player.position,
+          gatherBushTarget.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        ) <=
+        calculateWrappedDistance(
+          player.position,
+          gatherCorpseTarget.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        )
           ? gatherBushTarget
           : gatherCorpseTarget;
     } else {
@@ -277,11 +289,19 @@ export function findOptimalFlagPlantingSpot(human: HumanEntity, gameState: GameW
       // Check if spot is inside another of our flags' territory
       const isInsideOtherFriendlyTerritory = tribeFlags.some(
         (otherFlag) =>
-          otherFlag.id !== flag.id && isPositionInTerritory(spot, otherFlag.position, otherFlag.territoryRadius),
+          otherFlag.id !== flag.id &&
+          isPositionInTerritory(spot, otherFlag.position, otherFlag.territoryRadius, gameState),
       );
 
       if (isInsideOtherFriendlyTerritory) {
         continue;
+      }
+
+      if (
+        calculateWrappedDistance(human.position, spot, gameState.mapDimensions.width, gameState.mapDimensions.height) >
+        FLAG_TERRITORY_RADIUS
+      ) {
+        continue; // Spot is too far from the human
       }
 
       // Check if the spot is occupied (using flag's physical radius) or in enemy territory
@@ -295,6 +315,39 @@ export function findOptimalFlagPlantingSpot(human: HumanEntity, gameState: GameW
   }
 
   // Fallback: No adjacent spot found.
+  return null;
+}
+
+export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
+  const indexedState = gameState as IndexedWorldState;
+  if (!human.leaderId) {
+    return null;
+  }
+
+  const tribeFlags = indexedState.search.flag.byProperty('leaderId', human.leaderId);
+  if (tribeFlags.length === 0) {
+    return null; // Can't plant without a territory
+  }
+
+  // Iterate through each flag of the tribe
+  for (const flag of tribeFlags) {
+    // Check predefined grid offsets around the flag
+    for (const offset of AI_PLANTING_GRID_OFFSETS) {
+      const spot = vectorAdd(flag.position, offset);
+
+      // Validate the spot
+      const territoryOwner = getTerritoryOwner(spot, gameState);
+      if (
+        territoryOwner &&
+        territoryOwner.id === human.leaderId && // Must be in our territory
+        !isPositionOccupied(spot, gameState, BERRY_BUSH_SPREAD_RADIUS) // Must not be occupied
+      ) {
+        return spot; // Found a valid, predictable spot
+      }
+    }
+  }
+
+  // No suitable spot found across all flags
   return null;
 }
 
@@ -659,15 +712,27 @@ export function propagateNewLeaderToDescendants(
   }
 }
 
-export function isPositionInTerritory(position: Vector2D, territoryCenter: Vector2D, territoryRadius: number): boolean {
-  return vectorDistance(position, territoryCenter) <= territoryRadius;
+export function isPositionInTerritory(
+  position: Vector2D,
+  territoryCenter: Vector2D,
+  territoryRadius: number,
+  gameState: GameWorldState,
+): boolean {
+  return (
+    calculateWrappedDistance(
+      position,
+      territoryCenter,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    ) <= territoryRadius
+  );
 }
 
 export function getTerritoryOwner(position: Vector2D, gameState: GameWorldState): HumanEntity | null {
   const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, 1) as FlagEntity[];
 
   for (const flag of flags) {
-    if (isPositionInTerritory(position, flag.position, flag.territoryRadius)) {
+    if (isPositionInTerritory(position, flag.position, flag.territoryRadius, gameState)) {
       return gameState.entities.entities.get(flag.leaderId) as HumanEntity | null;
     }
   }
@@ -683,7 +748,10 @@ export function isPositionInEnemyTerritory(
   const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, 1) as FlagEntity[];
 
   for (const flag of flags) {
-    if (isPositionInTerritory(position, flag.position, flag.territoryRadius) && flag.leaderId !== playerLeaderId) {
+    if (
+      isPositionInTerritory(position, flag.position, flag.territoryRadius, gameState) &&
+      flag.leaderId !== playerLeaderId
+    ) {
       return true; // Position is in enemy territory
     }
   }

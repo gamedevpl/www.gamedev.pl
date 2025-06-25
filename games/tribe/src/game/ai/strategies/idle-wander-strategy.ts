@@ -69,7 +69,9 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
           );
           if (closestOwnFlag) {
             // If outside our territory, have a high chance to wander back towards it
-            if (!isPositionInTerritory(human.position, closestOwnFlag.position, closestOwnFlag.territoryRadius)) {
+            if (
+              !isPositionInTerritory(human.position, closestOwnFlag.position, closestOwnFlag.territoryRadius, gameState)
+            ) {
               if (Math.random() < 0.8) {
                 anchorPoint = closestOwnFlag.position;
                 wanderRadius = closestOwnFlag.territoryRadius;

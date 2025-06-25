@@ -1,18 +1,16 @@
 import {
   AI_PLANTING_BERRY_THRESHOLD,
-  AI_PLANTING_MAX_NEARBY_BUSHES,
-  AI_PLANTING_SEARCH_RADIUS,
-  BERRY_BUSH_SPREAD_RADIUS,
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
 } from '../../world-consts';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { findChildren, findValidPlantingSpot, countEntitiesOfTypeInRadius } from '../../utils/world-utils';
+import { findChildren, findOptimalBushPlantingSpot } from '../../utils/world-utils';
 import { FoodType } from '../../food/food-types';
 import { Vector2D } from '../../utils/math-types';
 import { FoodSource, GatheringStrategy } from './gathering-strategy';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 
 export class PlantingStrategy implements HumanAIStrategy<Vector2D | FoodSource | null> {
   gatheringStrategy = new GatheringStrategy();
@@ -24,6 +22,12 @@ export class PlantingStrategy implements HumanAIStrategy<Vector2D | FoodSource |
     const isNotHungry = human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING;
     const children = findChildren(gameState, human);
     const hasHungryChildren = children.some((child) => child.hunger > CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD);
+    const tribeFlagCount = (gameState as IndexedWorldState).search.flag.byProperty('leaderId', human.leaderId).length;
+
+    if (tribeFlagCount === 0) {
+      // If no flags exist, planting is not needed
+      return null;
+    }
 
     if (human.isAdult && !hasEnoughBerries) {
       // If not enough berries, try to gather more
@@ -40,18 +44,8 @@ export class PlantingStrategy implements HumanAIStrategy<Vector2D | FoodSource |
       return null;
     }
 
-    const plantingSpot = findValidPlantingSpot(
-      human.position,
-      gameState,
-      AI_PLANTING_SEARCH_RADIUS,
-      BERRY_BUSH_SPREAD_RADIUS,
-    );
+    const plantingSpot = findOptimalBushPlantingSpot(human, gameState);
     if (!plantingSpot) {
-      return null;
-    }
-
-    const nearbyBushes = countEntitiesOfTypeInRadius(plantingSpot, gameState, 'berryBush', AI_PLANTING_SEARCH_RADIUS);
-    if (nearbyBushes >= AI_PLANTING_MAX_NEARBY_BUSHES) {
       return null;
     }
 

@@ -2,10 +2,11 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { FLAG_PLANTING_COST, HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING, HUMAN_INTERACTION_RANGE } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { findOptimalFlagPlantingSpot } from '../../utils/world-utils';
+import { findChildren, findOptimalFlagPlantingSpot } from '../../utils/world-utils';
 import { FoodType } from '../../food/food-types';
 import { Vector2D } from '../../utils/math-types';
-import { calculateWrappedDistance } from '../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 
 export class PlantingFlagStrategy implements HumanAIStrategy<Vector2D> {
   check(human: HumanEntity, context: UpdateContext): Vector2D | null {
@@ -26,6 +27,13 @@ export class PlantingFlagStrategy implements HumanAIStrategy<Vector2D> {
       return null;
     }
 
+    const adultChildCount = findChildren(gameState, human).filter((child) => child.isAdult);
+    const tribeFlagsCount = (gameState as IndexedWorldState).search.flag.byProperty('leaderId', human.id).length;
+    if (adultChildCount.length < 2 || tribeFlagsCount >= adultChildCount.length) {
+      // Not enough adults or already enough flags
+      return null;
+    }
+
     // Find the best spot to plant the next flag
     const plantingSpot = findOptimalFlagPlantingSpot(human, gameState);
 
@@ -43,6 +51,14 @@ export class PlantingFlagStrategy implements HumanAIStrategy<Vector2D> {
     if (distance > HUMAN_INTERACTION_RANGE) {
       human.activeAction = 'moving';
       human.targetPosition = plantingSpot;
+      human.direction = vectorNormalize(
+        getDirectionVectorOnTorus(
+          human.position,
+          plantingSpot,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        ),
+      );
     } else {
       human.activeAction = 'plantingFlag';
       human.targetPosition = undefined; // Clear target position as we are there

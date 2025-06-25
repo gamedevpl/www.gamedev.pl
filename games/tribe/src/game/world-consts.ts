@@ -101,6 +101,26 @@ export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for plan
 export const AI_PLANTING_BERRY_THRESHOLD = 9; // Min berries for AI to consider planting
 export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
+export const AI_PLANTING_GRID_OFFSETS = [
+  // First ring
+  { x: 40, y: 0 },
+  { x: -40, y: 0 },
+  { x: 0, y: 40 },
+  { x: 0, y: -40 },
+  { x: 40, y: 40 },
+  { x: -40, y: -40 },
+  { x: 40, y: -40 },
+  { x: -40, y: 40 },
+  // Second ring
+  { x: 80, y: 0 },
+  { x: -80, y: 0 },
+  { x: 0, y: 80 },
+  { x: 0, y: -80 },
+  { x: 80, y: 80 },
+  { x: -80, y: -80 },
+  { x: 80, y: -80 },
+  { x: -80, y: 80 },
+];
 
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
