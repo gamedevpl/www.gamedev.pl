@@ -7,9 +7,10 @@ import { ChildSeekingFoodStrategy } from './child-seeking-food-strategy';
 import { ParentFeedingChildStrategy } from './parent-feeding-child-strategy';
 import { ParentSeekingFoodForChildStrategy } from './parent-seeking-food-for-child-strategy';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { SeizingStrategy } from './seizing-strategy';
+import { PlantingFlagStrategy } from './planting-flag-strategy';
 import { FleeingStrategy } from './fleeing-strategy';
 import { PlantingStrategy } from './planting-strategy';
+import { ReclaimingStrategy } from './reclaiming-strategy';
 
 /**
  * A list of all available human AI strategies, ordered by priority.
@@ -23,7 +24,8 @@ export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new ChildSeekingFoodStrategy(),
   new ParentSeekingFoodForChildStrategy(),
   new ParentFeedingChildStrategy(),
-  new SeizingStrategy(),
+  new ReclaimingStrategy(),
+  new PlantingFlagStrategy(),
   new GatheringStrategy(),
   new ProcreationStrategy(),
   new PlantingStrategy(),

@@ -1,7 +1,13 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
-import { findMalePartner, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
+import { vectorNormalize, getDirectionVectorOnTorus, calculateWrappedDistance } from '../../utils/math-utils';
+import {
+  findMalePartner,
+  findParents,
+  getRandomNearbyPosition,
+  findClosestEntity,
+  isPositionInTerritory,
+} from '../../utils/world-utils';
 import {
   CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
   FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER,
@@ -11,6 +17,7 @@ import {
   LEADER_FOLLOW_RADIUS,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
+import { FlagEntity } from '../../entities/flag/flag-types';
 
 export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
   check(): boolean {
@@ -51,6 +58,30 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
           }
         }
 
+        // If part of a tribe, prefer to wander within own territory
+        if (human.leaderId) {
+          const closestOwnFlag = findClosestEntity<FlagEntity>(
+            human,
+            gameState,
+            'flag',
+            undefined,
+            (f) => f.leaderId === human.leaderId,
+          );
+          if (closestOwnFlag) {
+            // If outside our territory, have a high chance to wander back towards it
+            if (!isPositionInTerritory(human.position, closestOwnFlag.position, closestOwnFlag.territoryRadius)) {
+              if (Math.random() < 0.8) {
+                anchorPoint = closestOwnFlag.position;
+                wanderRadius = closestOwnFlag.territoryRadius;
+              }
+            } else {
+              // If already inside, wander around the flag
+              anchorPoint = closestOwnFlag.position;
+              wanderRadius = closestOwnFlag.territoryRadius;
+            }
+          }
+        }
+
         // Start wandering
         human.activeAction = 'moving';
         human.targetPosition = getRandomNearbyPosition(
@@ -76,7 +107,12 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
 
     // If wandering (moving without a specific gathering/eating purpose)
     if (human.activeAction === 'moving' && human.targetPosition) {
-      const distanceToTarget = vectorDistance(human.position, human.targetPosition);
+      const distanceToTarget = calculateWrappedDistance(
+        human.position,
+        human.targetPosition,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
 
       // Arrived at wander destination
       if (distanceToTarget < HUMAN_INTERACTION_RANGE) {

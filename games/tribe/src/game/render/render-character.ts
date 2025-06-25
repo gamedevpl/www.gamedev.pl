@@ -37,7 +37,9 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   idle: 'idle',
   seekingFood: 'idle',
   attacking: 'attacking',
-  seizing: 'idle',
+  reclaiming: 'gathering', // Use gathering stance for reclaiming for now
+  attackingFlag: 'attacking',
+  plantingFlag: 'gathering', // Use gathering stance for planting flags for now
   planting: 'gathering', // Use gathering stance for planting for now
 };
 

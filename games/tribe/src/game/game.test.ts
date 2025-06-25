@@ -5,15 +5,18 @@ import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
 import {
   BERRY_COST_FOR_PLANTING,
+  FLAG_PLANTING_COST,
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_PLANTING_DURATION_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
   KARMA_ENEMY_THRESHOLD,
+  KARMA_FOR_ENTERING_ENEMY_TERRITORY,
 } from './world-consts';
 import { isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
 import { FoodType } from './food/food-types';
+import { FlagEntity } from './entities/flag/flag-types';
 
 // Helper to find a human by ID, with proper type assertion
 const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | undefined => {
@@ -218,12 +221,13 @@ describe('Tribe Formation via Splitting', () => {
     expect(finalMaleB?.tribeBadge).toBe(leaderA.tribeBadge);
     expect(finalFemaleC?.leaderId).toBeUndefined(); // Female C does not join the tribe automatically in this case
   });
+});
 
 describe('Planting bushes', () => {
   it('a human with 5 berries can plant a bush', () => {
     let gameState = initGame();
     const human = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'female', true, 25);
-    human.food = Array.from({ length: 10 }, () => ({ type: FoodType.Berry }));
+    human.food = Array.from({ length: 10 }, () => ({ type: FoodType.Berry, id: Math.random() }));
 
     const initialBushCount = Array.from(gameState.entities.entities.values()).filter(
       (e) => e.type === 'berryBush',
@@ -236,7 +240,9 @@ describe('Planting bushes', () => {
     const timeStep = HUMAN_PLANTING_DURATION_HOURS + 0.1;
     gameState = updateWorld(gameState, timeStep);
 
-    const finalBushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
+    const finalBushCount = Array.from(gameState.entities.entities.values()).filter(
+      (e) => e.type === 'berryBush',
+    ).length;
 
     const updatedHuman = findHumanById(gameState, human.id);
 
@@ -245,6 +251,87 @@ describe('Planting bushes', () => {
   });
 });
 
+describe('Territory and Flags', () => {
+  it('a leader can plant a flag, creating a territory', () => {
+    let gameState = initGame();
+    const leader = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', true, 25);
+    leader.leaderId = leader.id;
+    leader.tribeBadge = '🚩';
+    leader.food = Array.from({ length: FLAG_PLANTING_COST }, () => ({ type: FoodType.Berry, id: Math.random() }));
 
+    leader.activeAction = 'plantingFlag';
+    gameState = updateWorld(gameState, 3); // More than planting duration
 
+    const flags = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'flag') as FlagEntity[];
+    expect(flags.length).toBe(1);
+    expect(flags[0].leaderId).toBe(leader.id);
+    expect(flags[0].tribeBadge).toBe(leader.tribeBadge);
+
+    const updatedLeader = findHumanById(gameState, leader.id);
+    expect(updatedLeader?.food.length).toBe(0);
+  });
+
+  it('entering an enemy territory applies negative karma', () => {
+    let gameState = initGame();
+    const leaderA = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', true, 25);
+    leaderA.leaderId = leaderA.id;
+    leaderA.tribeBadge = 'A';
+
+    const leaderB = createHuman(gameState.entities, { x: 500, y: 500 }, 0, 'male', false, 25);
+    leaderB.leaderId = leaderB.id;
+    leaderB.tribeBadge = 'B';
+
+    // Leader A plants a flag
+    leaderA.food = Array.from({ length: FLAG_PLANTING_COST }, () => ({ type: FoodType.Berry, id: Math.random() }));
+    leaderA.activeAction = 'plantingFlag';
+    gameState = updateWorld(gameState, 3);
+
+    // Move Leader B into Leader A's territory
+    const flagOfA = (Array.from(gameState.entities.entities.values()).find((e) => e.type === 'flag') as FlagEntity)!;
+    leaderB.position = { ...flagOfA.position };
+
+    const initialKarma = leaderB.karma[leaderA.id] || 0;
+    expect(initialKarma).toBe(0);
+
+    gameState = updateWorld(gameState, 2);
+
+    const finalKarma = findHumanById(gameState, leaderB.id)!.karma[leaderA.id] || 0;
+    expect(finalKarma).toBeLessThan(initialKarma);
+    expect(finalKarma).toBeCloseTo(KARMA_FOR_ENTERING_ENEMY_TERRITORY * 2);
+  });
+
+  it('a human can attack and destroy an enemy flag', () => {
+    let gameState = initGame();
+    const attacker = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', true, 25);
+    attacker.leaderId = attacker.id;
+
+    const defender = createHuman(gameState.entities, { x: 200, y: 200 }, 0, 'male', false, 25);
+    defender.leaderId = defender.id;
+
+    // Defender plants a flag
+    defender.food = Array.from({ length: FLAG_PLANTING_COST }, () => ({ type: FoodType.Berry, id: Math.random() }));
+    defender.activeAction = 'plantingFlag';
+    gameState = updateWorld(gameState, 3);
+    const flag = Array.from(gameState.entities.entities.values()).find((e) => e.type === 'flag') as FlagEntity;
+    expect(flag).toBeDefined();
+
+    // Attacker moves to the flag and attacks it
+    attacker.position = { ...flag.position };
+    attacker.activeAction = 'attackingFlag';
+    attacker.attackTargetId = flag.id;
+
+    let flagHP = flag.hitpoints;
+    while (flagHP > 0) {
+      gameState = updateWorld(gameState, 1);
+      const updatedFlag = gameState.entities.entities.get(flag.id) as FlagEntity | undefined;
+      flagHP = updatedFlag?.hitpoints || 0;
+      // Re-engage attack after cooldown
+      const updatedAttacker = findHumanById(gameState, attacker.id)!;
+      updatedAttacker.activeAction = 'attackingFlag';
+      updatedAttacker.attackTargetId = flag.id;
+    }
+
+    const finalFlag = gameState.entities.entities.get(flag.id);
+    expect(finalFlag).toBeUndefined();
+  });
 });

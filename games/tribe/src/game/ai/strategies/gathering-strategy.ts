@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
-import { getDirectionVectorOnTorus, vectorDistance, vectorNormalize } from '../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 import { areFamily, findClosestEntity } from '../../utils/world-utils';
 import {
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
@@ -46,7 +46,12 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
       let closest: FoodSource | null = null;
       let minDistance = Infinity;
       for (const source of sources) {
-        const distance = vectorDistance(human.position, source.position);
+        const distance = calculateWrappedDistance(
+          human.position,
+          source.position,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
         if (distance < minDistance) {
           minDistance = distance;
           closest = source;
@@ -117,8 +122,18 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
     );
 
     if (closestBush && closestCorpse) {
-      const distToBush = vectorDistance(human.position, closestBush.position);
-      const distToCorpse = vectorDistance(human.position, closestCorpse.position);
+      const distToBush = calculateWrappedDistance(
+        human.position,
+        closestBush.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      const distToCorpse = calculateWrappedDistance(
+        human.position,
+        closestCorpse.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
       return distToBush <= distToCorpse ? closestBush : closestCorpse;
     }
 
@@ -133,7 +148,12 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
       return;
     }
 
-    const distance = vectorDistance(human.position, target.position);
+    const distance = calculateWrappedDistance(
+      human.position,
+      target.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
     if (distance < HUMAN_INTERACTION_RANGE) {
       human.activeAction = 'gathering';
       human.direction = { x: 0, y: 0 };

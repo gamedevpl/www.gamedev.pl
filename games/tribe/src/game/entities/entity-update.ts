@@ -7,6 +7,8 @@ import { humanCorpseUpdate } from './characters/human/human-corpse-update';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
+import { flagUpdate } from './flag/flag-update';
+import { FlagEntity } from './flag/flag-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -68,6 +70,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'humanCorpse') {
     humanCorpseUpdate(entity as HumanCorpseEntity, updateContext);
+  } else if (entity.type === 'flag') {
+    flagUpdate(entity as FlagEntity, updateContext);
   }
 
   // AI decision making for non-player humans

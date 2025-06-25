@@ -80,8 +80,10 @@ export interface HumanEntity extends Entity {
     | 'procreating'
     | 'seekingFood'
     | 'attacking'
-    | 'seizing'
-    | 'planting';
+    | 'plantingFlag'
+    | 'planting'
+    | 'attackingFlag'
+    | 'reclaiming';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
@@ -89,9 +91,6 @@ export interface HumanEntity extends Entity {
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
   attackTargetId?: EntityId;
-
-  /** Cooldown time before being able to seize again. */
-  seizeCooldown?: number;
 
   /** Target position for 'moving' action. Set by player input or AI decision. */
   targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.

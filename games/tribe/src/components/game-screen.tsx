@@ -12,7 +12,6 @@ import {
   findClosestEntity,
   findPlayerEntity,
   getAvailablePlayerActions,
-  isFamilyHeadWithoutLivingFather,
   findValidPlantingSpot,
 } from '../game/utils/world-utils';
 import {
@@ -25,11 +24,12 @@ import {
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
 import { SoundType } from '../game/sound/sound-types';
-import { vectorLerp, vectorDistance } from '../game/utils/math-utils';
+import { vectorLerp, calculateWrappedDistance } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint, PlayerActionType, UIButtonActionType } from '../game/ui/ui-types';
 import { setMasterVolume } from '../game/sound/sound-loader';
 import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
+import { FlagEntity } from '../game/entities/flag/flag-types';
 
 const INITIAL_STATE = initGame();
 
@@ -274,8 +274,18 @@ export const GameScreen: React.FC = () => {
         let target: BerryBushEntity | HumanCorpseEntity | null = null;
         if (gatherBushTarget && gatherCorpseTarget) {
           target =
-            vectorDistance(playerEntity.position, gatherBushTarget.position) <=
-            vectorDistance(playerEntity.position, gatherCorpseTarget.position)
+            calculateWrappedDistance(
+              playerEntity.position,
+              gatherBushTarget.position,
+              gameStateRef.current.mapDimensions.width,
+              gameStateRef.current.mapDimensions.height,
+            ) <=
+            calculateWrappedDistance(
+              playerEntity.position,
+              gatherCorpseTarget.position,
+              gameStateRef.current.mapDimensions.width,
+              gameStateRef.current.mapDimensions.height,
+            )
               ? gatherBushTarget
               : gatherCorpseTarget;
         } else {
@@ -328,24 +338,37 @@ export const GameScreen: React.FC = () => {
         playerEntity.direction.x = 1;
         playerEntity.activeAction = 'moving';
       } else if (key === 'q') {
-        const target = findClosestEntity<HumanEntity>(
+        const humanTarget = findClosestEntity<HumanEntity>(
           playerEntity,
           gameStateRef.current,
           'human',
           HUMAN_ATTACK_RANGE,
           (h) => (h as HumanEntity).id !== playerEntity.id,
         );
-        if (target) {
+        const flagTarget = findClosestEntity<FlagEntity>(
+          playerEntity,
+          gameStateRef.current,
+          'flag',
+          HUMAN_ATTACK_RANGE,
+          (f) => f.leaderId !== playerEntity.leaderId,
+        );
+
+        if (humanTarget) {
           playerEntity.activeAction = 'attacking';
-          playerEntity.attackTargetId = target.id;
+          playerEntity.attackTargetId = humanTarget.id;
+        } else if (flagTarget) {
+          playerEntity.activeAction = 'attackingFlag';
+          playerEntity.attackTargetId = flagTarget.id;
         }
       } else if (key === 'x') {
-        if (
-          isFamilyHeadWithoutLivingFather(playerEntity, gameStateRef.current) &&
-          (playerEntity.seizeCooldown || 0) <= 0
-        ) {
-          playerEntity.activeAction = 'seizing';
-          playSoundAt(updateContext, SoundType.Seize, playerEntity.position);
+        const plantAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.PlantFlag);
+        if (plantAction) {
+          playerEntity.activeAction = 'plantingFlag';
+        }
+      } else if (key === 'c') {
+        const reclaimAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.ReclaimFlag);
+        if (reclaimAction) {
+          playerEntity.activeAction = 'reclaiming';
         }
       } else if (key === 'b') {
         const plantAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.PlantBush);

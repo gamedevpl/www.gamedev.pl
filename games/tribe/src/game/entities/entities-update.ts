@@ -22,6 +22,10 @@ import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
   MAX_ANCESTORS_TO_TRACK,
+  FLAG_RADIUS,
+  FLAG_MAX_HP,
+  FLAG_TERRITORY_RADIUS,
+  FLAG_DECAY_TIME_HOURS,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -30,6 +34,7 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
 import { inheritKarma } from '../karma/karma-utils';
+import { FlagEntity } from './flag/flag-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -170,6 +175,27 @@ export function createHumanCorpse(
     stateMachine: undefined,
   });
   return corpse;
+}
+
+export function createFlag(
+  state: Entities,
+  position: Vector2D,
+  currentTime: number,
+  leaderId: EntityId,
+  tribeBadge: string,
+): FlagEntity {
+  const flag = createEntity<FlagEntity>(state, 'flag', {
+    position,
+    radius: FLAG_RADIUS,
+    hitpoints: FLAG_MAX_HP,
+    maxHitpoints: FLAG_MAX_HP,
+    leaderId,
+    tribeBadge,
+    territoryRadius: FLAG_TERRITORY_RADIUS,
+    plantedAt: currentTime,
+    lifespan: FLAG_DECAY_TIME_HOURS,
+  });
+  return flag;
 }
 
 export function giveBirth(

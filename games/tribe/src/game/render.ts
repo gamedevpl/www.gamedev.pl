@@ -27,6 +27,7 @@ import {
   KARMA_DEBUG_RENDER_COLOR,
   UI_TEXT_COLOR,
   UI_HITPOINTS_BAR_COLOR,
+  KARMA_ENEMY_THRESHOLD,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -48,6 +49,8 @@ import {
   drawFamilyMemberBar,
   drawFoodBar,
 } from './render/render-ui';
+import { renderFlag } from './render/render-flag';
+import { FlagEntity } from './entities/flag/flag-types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
@@ -101,6 +104,23 @@ function renderKarmaDebug(ctx: CanvasRenderingContext2D, gameState: GameWorldSta
   }
 }
 
+function getTerritoryColor(flag: FlagEntity, player: HumanEntity | undefined, gameState: GameWorldState): string {
+  if (!player) {
+    return 'rgba(255, 255, 255, 0.1)'; // Neutral color if no player
+  }
+
+  if (flag.leaderId === player.leaderId) {
+    return 'rgba(0, 255, 0, 0.1)'; // Green for own tribe's territory
+  }
+
+  const flagOwner = gameState.entities.entities.get(flag.leaderId) as HumanEntity | undefined;
+  if (flagOwner && (player.karma[flagOwner.id] ?? 0) < KARMA_ENEMY_THRESHOLD) {
+    return 'rgba(255, 0, 0, 0.1)'; // Red for enemy territory
+  }
+
+  return 'rgba(255, 255, 255, 0.1)'; // Neutral for other tribes
+}
+
 export function renderGame(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
@@ -136,11 +156,46 @@ export function renderGame(
       ?.map((id) => gameState.entities.entities.get(id) as HumanEntity | undefined)
       .filter((p): p is HumanEntity => p !== undefined) || [];
 
-  const sortedEntities = Array.from(gameState.entities.entities.values()).sort((a, b) => {
-    return a.position.y - b.position.y || a.id - b.id;
-  });
-
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // --- Territory Rendering ---
+  const flags = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'flag') as FlagEntity[];
+  const territoriesByTribe = flags.reduce((acc, flag) => {
+    const leaderId = flag.leaderId;
+    if (!acc[leaderId]) {
+      acc[leaderId] = [];
+    }
+    acc[leaderId].push(flag);
+    return acc;
+  }, {} as Record<EntityId, FlagEntity[]>);
+
+  ctx.save();
+  for (const leaderId in territoriesByTribe) {
+    const tribeFlags = territoriesByTribe[leaderId];
+    if (tribeFlags.length === 0) continue;
+
+    const territoryColor = getTerritoryColor(tribeFlags[0], player, gameState);
+    ctx.fillStyle = territoryColor;
+
+    const path = new Path2D();
+    for (const flag of tribeFlags) {
+      const { position, territoryRadius } = flag;
+      // Draw wrapped circles to handle map edges
+      for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
+        for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
+          path.moveTo(position.x + dx + territoryRadius, position.y + dy);
+          path.arc(position.x + dx, position.y + dy, territoryRadius, 0, Math.PI * 2);
+        }
+      }
+    }
+    ctx.fill(path);
+  }
+  ctx.restore();
+  // --- End Territory Rendering ---
+
+  const sortedEntities = Array.from(gameState.entities.entities.values()).sort(
+    (a, b) => a.position.y - b.position.y || a.id - b.id,
+  );
 
   sortedEntities.forEach((entity: Entity) => {
     if (entity.type === 'berryBush') {
@@ -180,6 +235,8 @@ export function renderGame(
       );
     } else if (entity.type === 'humanCorpse') {
       renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);
+    } else if (entity.type === 'flag') {
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderFlag, entity as FlagEntity, gameState);
     }
   });
 

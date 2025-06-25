@@ -3,7 +3,7 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { Entity, EntityType } from '../../entities/entities-types';
 import { findClosestEntity, countEntitiesOfTypeInRadius, countLivingOffspring } from '../../utils/world-utils';
-import { vectorDistance, vectorNormalize, getDirectionVectorOnTorus } from '../../utils/math-utils';
+import { vectorNormalize, getDirectionVectorOnTorus, calculateWrappedDistance } from '../../utils/math-utils';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_RANGE,
@@ -113,7 +113,12 @@ export class ProcreationStrategy implements HumanAIStrategy<HumanEntity> {
       return;
     }
 
-    const distance = vectorDistance(human.position, partner.position);
+    const distance = calculateWrappedDistance(
+      human.position,
+      partner.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
     if (distance < HUMAN_INTERACTION_RANGE / 1.5) {
       human.activeAction = 'procreating';
       human.targetPosition = partner.position;

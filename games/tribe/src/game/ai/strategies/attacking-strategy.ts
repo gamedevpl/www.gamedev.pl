@@ -1,6 +1,11 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { findClosestAggressor, findBestAttackTarget } from '../../utils/world-utils';
+import {
+  findClosestAggressor,
+  findBestAttackTarget,
+  isPositionInEnemyTerritory,
+  findClosestEntity,
+} from '../../utils/world-utils';
 import {
   AI_ATTACK_ENEMY_RANGE,
   AI_FLEE_HEALTH_THRESHOLD,
@@ -14,51 +19,60 @@ import { VisualEffectType } from '../../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { calculateWrappedDistance } from '../../utils/math-utils';
+import { Entity } from '../../entities/entities-types';
+import { FlagEntity } from '../../entities/flag/flag-types';
 
-export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
-  check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
+export class AttackingStrategy implements HumanAIStrategy<Entity> {
+  check(human: HumanEntity, context: UpdateContext): Entity | null {
     const { gameState } = context;
 
     if (!human.isAdult) {
-      // Children do not engage in attacks
       return null;
     }
 
     if (human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING) {
-      // If hunger is critical, do not engage in attacks
       return null;
     }
 
     if (human.hitpoints < human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
-      // If health is below the flee threshold, do not engage in attacks
       return null;
     }
 
     if (human.attackTargetId) {
-      // If already attacking a target, return that target
       const target = gameState.entities.entities.get(human.attackTargetId);
-      if (target && target.type === 'human') {
+      if (target) {
         const distance = calculateWrappedDistance(
           human.position,
-          target?.position,
+          target.position,
           gameState.mapDimensions.width,
           gameState.mapDimensions.height,
         );
         if (distance < AI_ATTACK_ENEMY_RANGE) {
-          return target as HumanEntity;
+          return target;
         }
       }
     }
 
-    // --- Adult Attack Logic ---
+    // 1. Defend territory: Attack intruders
+    const intruders = (gameState as IndexedWorldState).search.human
+      .byRadius(human.position, AI_ATTACK_ENEMY_RANGE)
+      .filter(
+        (otherHuman) =>
+          otherHuman.leaderId !== human.leaderId &&
+          isPositionInEnemyTerritory(otherHuman.position, human.leaderId, gameState),
+      );
 
-    // 1. Self-Defense
+    if (intruders.length > 0) {
+      return findBestAttackTarget(human, gameState, AI_ATTACK_ENEMY_RANGE, (h) => intruders.includes(h));
+    }
+
+    // 2. Self-Defense
     const aggressor = findClosestAggressor(human.id, gameState);
     if (aggressor) {
       return aggressor;
     }
 
-    // 2. Family-Defense
+    // 3. Family-Defense
     for (const entity of gameState.entities.entities.values()) {
       if (entity.type === 'human') {
         const potentialChild = entity as HumanEntity;
@@ -71,7 +85,7 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       }
     }
 
-    // 3. Vengeance/Enemy Attack
+    // 4. Vengeance/Enemy Attack
     const enemy = findBestAttackTarget(human, gameState, AI_ATTACK_ENEMY_RANGE, (entity) => {
       const otherHuman = entity as HumanEntity;
       return (human.karma[otherHuman.id] || 0) < KARMA_ENEMY_THRESHOLD;
@@ -87,10 +101,23 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       }
     }
 
+    // 5. Attack enemy flags
+    const enemyFlag = findClosestEntity<FlagEntity>(
+      human,
+      gameState,
+      'flag',
+      AI_ATTACK_ENEMY_RANGE,
+      (flag) => flag.leaderId !== human.leaderId,
+    );
+
+    if (enemyFlag) {
+      return enemyFlag;
+    }
+
     return null;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, threat: HumanEntity): void {
+  execute(human: HumanEntity, context: UpdateContext, threat: Entity): void {
     if (
       !human.lastTargetAcquiredEffectTime ||
       context.gameState.time - human.lastTargetAcquiredEffectTime > EFFECT_DURATION_SHORT_HOURS * 5
@@ -105,7 +132,12 @@ export class AttackingStrategy implements HumanAIStrategy<HumanEntity> {
       human.lastTargetAcquiredEffectTime = context.gameState.time;
     }
 
-    human.activeAction = 'attacking';
+    if (threat.type === 'human') {
+      human.activeAction = 'attacking';
+    } else if (threat.type === 'flag') {
+      human.activeAction = 'attackingFlag';
+    }
+
     human.attackTargetId = threat.id;
     human.targetPosition = undefined;
   }

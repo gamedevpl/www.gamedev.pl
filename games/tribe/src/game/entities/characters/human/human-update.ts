@@ -19,6 +19,7 @@ import {
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
   KARMA_ENEMY_THRESHOLD,
+  KARMA_FOR_ENTERING_ENEMY_TERRITORY,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -29,11 +30,12 @@ import {
   findChildren,
   findHeir,
   generateTribeBadge,
+  getTerritoryOwner,
   propagateNewLeaderToDescendants,
 } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
-import { decayKarma } from '../../../karma/karma-utils';
+import { applyKarma, decayKarma } from '../../../karma/karma-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -42,6 +44,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
 
   decayKarma(entity, gameHoursDelta);
+
+  // --- Territory Karma ---
+  const territoryOwner = getTerritoryOwner(entity.position, gameState);
+  if (territoryOwner && territoryOwner.id !== entity.leaderId) {
+    applyKarma(entity, territoryOwner, KARMA_FOR_ENTERING_ENEMY_TERRITORY * gameHoursDelta, gameState);
+  }
 
   // --- Tribe Leadership Checks ---
   if (entity.leaderId && entity.leaderId !== entity.id && entity.isAdult && entity.gender === 'male') {
@@ -105,11 +113,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   if (entity.attackCooldown) {
     entity.attackCooldown -= gameHoursDelta;
     if (entity.attackCooldown < 0) entity.attackCooldown = 0;
-  }
-
-  if (entity.seizeCooldown) {
-    entity.seizeCooldown -= gameHoursDelta;
-    if (entity.seizeCooldown < 0) entity.seizeCooldown = 0;
   }
 
   if (entity.feedParentCooldownTime) {

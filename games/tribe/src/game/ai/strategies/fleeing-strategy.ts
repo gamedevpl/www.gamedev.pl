@@ -1,9 +1,10 @@
 import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { findClosestAggressor } from '../../utils/world-utils';
+import { findClosestAggressor, findClosestEntity } from '../../utils/world-utils';
 import { AI_FLEE_HEALTH_THRESHOLD, AI_FLEE_DISTANCE, AI_ATTACK_HUNGER_THRESHOLD } from '../../world-consts';
-import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorSubtract } from '../../utils/math-utils';
+import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorAdd } from '../../utils/math-utils';
+import { FlagEntity } from '../../entities/flag/flag-types';
 
 export class FleeingStrategy implements HumanAIStrategy<HumanEntity> {
   check(human: HumanEntity, context: UpdateContext): HumanEntity | null {
@@ -27,18 +28,43 @@ export class FleeingStrategy implements HumanAIStrategy<HumanEntity> {
   execute(human: HumanEntity, context: UpdateContext, threat: HumanEntity): void {
     human.activeAction = 'moving';
 
-    // Calculate the direction vector away from the threat
-    const fleeVector = getDirectionVectorOnTorus(
+    // Flee away from the threat
+    const fleeFromThreatVector = getDirectionVectorOnTorus(
       threat.position,
       human.position,
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
 
-    const fleeDirection = vectorNormalize(fleeVector);
+    let finalFleeVector = vectorNormalize(fleeFromThreatVector);
+
+    // Find the closest own flag to flee towards
+    const ownFlag = findClosestEntity<FlagEntity>(
+      human,
+      context.gameState,
+      'flag',
+      undefined,
+      (f) => f.leaderId === human.leaderId,
+    );
+
+    if (ownFlag) {
+      const fleeToSafetyVector = getDirectionVectorOnTorus(
+        human.position,
+        ownFlag.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      // Combine vectors: 70% away from threat, 30% towards safety
+      finalFleeVector = vectorAdd(
+        vectorScale(finalFleeVector, 0.7),
+        vectorScale(vectorNormalize(fleeToSafetyVector), 0.3),
+      );
+    }
+
+    const fleeDirection = vectorNormalize(finalFleeVector);
 
     // Calculate a target position far away in the flee direction
-    const targetPosition = vectorSubtract(human.position, vectorScale(fleeDirection, AI_FLEE_DISTANCE));
+    const targetPosition = vectorAdd(human.position, vectorScale(fleeDirection, AI_FLEE_DISTANCE));
 
     human.targetPosition = {
       x:
