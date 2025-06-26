@@ -27,7 +27,7 @@ export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new ReclaimingStrategy(),
   new PlantingFlagStrategy(),
   new GatheringStrategy(),
-  new ProcreationStrategy(),
   new PlantingStrategy(),
+  new ProcreationStrategy(),
   new IdleWanderStrategy(), // Fallback, should always be last
 ];

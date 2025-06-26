@@ -85,7 +85,7 @@ export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that shou
 // Flag & Territory Constants
 export const FLAG_TERRITORY_RADIUS: number = 250;
 export const FLAG_MAX_HP: number = 100;
-export const FLAG_PLANTING_COST: number = 5; // Berries
+export const FLAG_PLANTING_COST: number = 3; // Berries
 export const FLAG_PLANTING_DURATION_HOURS: number = 2;
 export const FLAG_RECLAIM_DURATION_HOURS: number = 4;
 export const FLAG_DECAY_TIME_HOURS: number = 24 * 30; // 30 game days
@@ -94,11 +94,10 @@ export const AI_PLANTING_FLAG_MIN_DISTANCE_FROM_OWN_FLAG: number = 400;
 export const AI_RECLAIM_FLAG_RANGE: number = 500;
 export const AI_FLAG_PLANTING_EDGE_POINTS = 12;
 
-
 // Human Planting Constants
 export const BERRY_COST_FOR_PLANTING = 6;
 export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for planting action
-export const AI_PLANTING_BERRY_THRESHOLD = 9; // Min berries for AI to consider planting
+export const AI_PLANTING_BERRY_THRESHOLD = 7; // Min berries for AI to consider planting
 export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
 export const AI_PLANTING_GRID_OFFSETS = [

@@ -398,6 +398,30 @@ export function countEntitiesOfTypeInRadius(
   return indexedState.search[targetType].byRadius(sourcePosition, radius).length;
 }
 
+export function countBushesInTribeTerritory(gameState: GameWorldState, leaderId: EntityId): number {
+  const indexedState = gameState as IndexedWorldState;
+  const tribeFlags = indexedState.search.flag.byProperty('leaderId', leaderId);
+  if (tribeFlags.length === 0) {
+    return 0;
+  }
+
+  let bushCount = 0;
+  const allBushes = Array.from(gameState.entities.entities.values()).filter(
+    (e) => e.type === 'berryBush',
+  ) as BerryBushEntity[];
+
+  for (const bush of allBushes) {
+    for (const flag of tribeFlags) {
+      if (isPositionInTerritory(bush.position, flag.position, flag.territoryRadius, gameState)) {
+        bushCount++;
+        break; // Count each bush only once
+      }
+    }
+  }
+
+  return bushCount;
+}
+
 export function countLivingOffspring(humanId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
   const childrenAsMother = indexedState.search.human.byProperty('motherId', humanId);
