@@ -26,7 +26,7 @@ export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant rep
 
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
-export const HUMAN_MAX_AGE_YEARS: number = 60; // Maximum lifespan in game years
+export const HUMAN_MAX_AGE_YEARS: number = 80; // Maximum lifespan in game years
 export const MAX_ANCESTORS_TO_TRACK: number = 3;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
@@ -55,10 +55,10 @@ export const CHILD_HUNGER_INCREASE_RATE_MODIFIER: number = 1.5; // Hunger increa
 export const CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = 60; // Hunger level for child to request food from parent
 export const PARENT_FEEDING_RANGE: number = 50; // Range in pixels for parent to feed child
 export const PARENT_FEED_CHILD_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for a parent after feeding a child
-export const CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 250; // Radius in pixels for a hungry child to search for a parent with food
+export const CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 350; // Radius in pixels for a hungry child to search for a parent with food
 
 // Constants for Adult Children Feeding Old Parents
-export const HUMAN_OLD_AGE_THRESHOLD: number = HUMAN_MAX_AGE_YEARS * 0.75; // Age at which a human is considered 'old' for receiving care
+export const HUMAN_OLD_AGE_THRESHOLD: number = HUMAN_MAX_AGE_YEARS * 0.65; // Age at which a human is considered 'old' for receiving care
 export const HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING: number = 80; // Hunger level for an old parent to be fed by an adult child
 export const ADULT_CHILD_FEEDING_RANGE: number = 50; // Range in pixels for an adult child to feed an old parent
 export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for an adult child after feeding a parent
@@ -107,8 +107,8 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 80; // AI decides
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
-export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 150;
-export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 150;
+export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
+export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
 export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
@@ -126,6 +126,10 @@ export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage
 export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
 
 // Human AI Fleeing Constants
+
+// Player Action Constants
+export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
+export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
 export const AI_FLEE_DISTANCE = 200;
 

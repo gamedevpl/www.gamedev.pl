@@ -11,6 +11,7 @@ import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   AI_PLANTING_SEARCH_RADIUS,
   AI_DEFEND_CLAIMED_BUSH_RANGE,
+  PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
@@ -38,6 +39,7 @@ export function isFamilyHeadWithoutLivingFather(human: HumanEntity, gameState: G
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
+  const indexedState = gameState as IndexedWorldState;
 
   // Check for Eating
   if (player.food.length > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
@@ -125,6 +127,19 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   // Check for Planting
   if (player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING) {
     actions.push({ type: PlayerActionType.PlantBush, key: 'b' });
+  }
+
+  // Check for Call to Attack
+  if (player.leaderId === player.id && !player.isCallingToAttack) {
+    const nearbyEnemies = findNearbyEnemiesOfTribe(
+      player.position,
+      player.id,
+      indexedState,
+      PLAYER_CALL_TO_ATTACK_RADIUS,
+    );
+    if (nearbyEnemies.length > 0) {
+      actions.push({ type: PlayerActionType.CallToAttack, key: 'v' });
+    }
   }
 
   return actions;

@@ -54,6 +54,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     }
   }
 
+  // --- Call to Attack Cooldown ---
+  if (entity.isCallingToAttack && entity.callToAttackEndTime && gameState.time > entity.callToAttackEndTime) {
+    entity.isCallingToAttack = false;
+    entity.callToAttackEndTime = undefined;
+  }
+
   // --- Hitpoint Regeneration -- -
   if (entity.hitpoints < entity.maxHitpoints) {
     const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;

@@ -19,6 +19,7 @@ export enum VisualEffectType {
   Hit,
   SeizeBuildup,
   Seize,
+  CallToAttack,
 }
 
 export interface VisualEffect {

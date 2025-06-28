@@ -82,6 +82,11 @@ export interface HumanEntity extends Entity {
     | 'attacking'
     | 'planting';
 
+  /** Flag indicating if the human is currently issuing a call to attack. */
+  isCallingToAttack?: boolean;
+  /** Game time when the call to attack command ends. */
+  callToAttackEndTime?: number;
+
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
 

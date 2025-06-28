@@ -29,16 +29,16 @@ export class TribeBattleStrategy implements HumanAIStrategy<HumanEntity> {
       return null;
     }
 
-    // 2. Get the leader and check their status.
+    // 2. Get the leader and check if they are calling to attack.
     const leader = gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined;
-    if (!leader || leader.activeAction !== 'attacking' || !leader.attackTargetId) {
-      // Leader is not in combat, so no battle to join.
+    if (!leader || !leader.isCallingToAttack) {
+      // Leader is not calling for an attack.
       return null;
     }
 
     // 3. Find enemies near the leader.
     const enemies = findNearbyEnemiesOfTribe(
-      leader.position,
+      leader.position, // Use leader's position as the center
       leader.id,
       gameState as IndexedWorldState,
       AI_TRIBE_BATTLE_RADIUS,

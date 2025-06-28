@@ -20,6 +20,7 @@ import {
   VIEWPORT_FOLLOW_SPEED,
   HUMAN_ATTACK_RANGE,
   BERRY_BUSH_SPREAD_RADIUS,
+  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
 } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
@@ -29,6 +30,8 @@ import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint, PlayerActionType, UIButtonActionType } from '../game/ui/ui-types';
 import { setMasterVolume } from '../game/sound/sound-loader';
 import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
+import { addVisualEffect } from '../game/utils/visual-effects-utils';
+import { VisualEffectType } from '../game/visual-effects/visual-effect-types';
 
 const INITIAL_STATE = initGame();
 
@@ -362,6 +365,19 @@ export const GameScreen: React.FC = () => {
             playerEntity.activeAction = 'planting';
             playerEntity.targetPosition = plantingSpot;
           }
+        }
+      } else if (key === 'v') {
+        const callToAttackAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.CallToAttack);
+        if (callToAttackAction) {
+          playerEntity.isCallingToAttack = true;
+          playerEntity.callToAttackEndTime = gameStateRef.current.time + PLAYER_CALL_TO_ATTACK_DURATION_HOURS;
+          addVisualEffect(
+            gameStateRef.current,
+            VisualEffectType.CallToAttack,
+            playerEntity.position,
+            PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
+          );
+          playSoundAt(updateContext, SoundType.CallToAttack, playerEntity.position);
         }
       } else {
         return;
