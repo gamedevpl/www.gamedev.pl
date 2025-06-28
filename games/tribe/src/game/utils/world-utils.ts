@@ -9,6 +9,8 @@ import {
   HUMAN_HUNGER_THRESHOLD_SLOW,
   HUMAN_ATTACK_RANGE,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  AI_PLANTING_SEARCH_RADIUS,
+  AI_DEFEND_CLAIMED_BUSH_RANGE,
 } from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
@@ -182,28 +184,62 @@ export function findValidPlantingSpot(
   searchRadius: number,
   spotRadius: number,
 ): Vector2D | null {
-  for (let i = 0; i < 10; i++) {
-    const spot = getRandomNearbyPosition(
-      center,
-      searchRadius,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-    if (!isPositionOccupied(spot, gameState, spotRadius)) {
-      return spot;
+  const worldWidth = gameState.mapDimensions.width;
+  const worldHeight = gameState.mapDimensions.height;
+
+  // First, check the center spot itself.
+  if (!isPositionOccupied(center, gameState, spotRadius)) {
+    return center;
+  }
+
+  // Then, check in expanding concentric circles (approximated by polygons)
+  const step = spotRadius; // The distance between each check point circle.
+  for (let r = step; r <= searchRadius; r += step) {
+    const pointsOnCircle = Math.ceil((2 * Math.PI * r) / step); // Number of points to check on the circle
+    for (let i = 0; i < pointsOnCircle; i++) {
+      const angle = (i / pointsOnCircle) * 2 * Math.PI;
+      const offset = {
+        x: Math.cos(angle) * r,
+        y: Math.sin(angle) * r,
+      };
+      const spot = vectorAdd(center, offset);
+      const wrappedSpot = {
+        x: ((spot.x % worldWidth) + worldWidth) % worldWidth,
+        y: ((spot.y % worldHeight) + worldHeight) % worldHeight,
+      };
+
+      if (!isPositionOccupied(wrappedSpot, gameState, spotRadius)) {
+        return wrappedSpot;
+      }
     }
   }
+
   return null;
 }
 
 export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
-  if (!human.leaderId) {
+  // Find the closest bush owned by this human
+  const closestOwnedBush = findClosestEntity<BerryBushEntity>(
+    human,
+    gameState,
+    'berryBush',
+    undefined, // Search the whole map
+    (bush) => bush.ownerId === human.id,
+  );
+
+  if (!closestOwnedBush) {
+    // If the human doesn't own any bushes, they can't plant a new one based on proximity to an existing one.
+    // They must first claim a wild bush by gathering from it.
     return null;
   }
 
-  // For simplicity, we'll just find a nearby valid spot for now.
-  // A more complex implementation could try to plant near other owned bushes.
-  const spot = findValidPlantingSpot(human.position, gameState, 100, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS);
+  // Find a valid spot near the owned bush.
+  const spot = findValidPlantingSpot(
+    closestOwnedBush.position,
+    gameState,
+    AI_PLANTING_SEARCH_RADIUS,
+    BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  );
   return spot;
 }
 
@@ -566,4 +602,36 @@ export function propagateNewLeaderToDescendants(
       }
     });
   }
+}
+
+export function findIntruderNearOwnedBushes(
+  owner: HumanEntity,
+  gameState: GameWorldState,
+): HumanEntity | null {
+  const indexedState = gameState as IndexedWorldState;
+  const ownedBushes = indexedState.search.berryBush.byProperty('ownerId', owner.id);
+
+  if (ownedBushes.length === 0) {
+    return null;
+  }
+
+  for (const bush of ownedBushes) {
+    // Find nearby humans who could be intruders.
+    const nearbyHumans = indexedState.search.human.byRadius(
+      bush.position,
+      AI_DEFEND_CLAIMED_BUSH_RANGE,
+    );
+
+    for (const potentialIntruder of nearbyHumans) {
+      if (
+        potentialIntruder.id !== owner.id && // Not the owner
+        !areFamily(owner, potentialIntruder, gameState) // Not family
+      ) {
+        // Found an intruder!
+        return potentialIntruder;
+      }
+    }
+  }
+
+  return null;
 }

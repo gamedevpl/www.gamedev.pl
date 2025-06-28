@@ -3,7 +3,7 @@ import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 import { findClosestEntity } from '../../utils/world-utils';
-import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_RANGE } from '../../world-consts';
+import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_PROXIMITY } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
@@ -86,7 +86,7 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<FoodSo
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
-    if (distance < HUMAN_INTERACTION_RANGE) {
+    if (distance < HUMAN_INTERACTION_PROXIMITY) {
       human.activeAction = 'gathering';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;

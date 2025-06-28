@@ -6,7 +6,7 @@ import { areFamily, findClosestEntity } from '../../utils/world-utils';
 import {
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_CRITICAL_HUNGER_FOR_STEALING,
-  HUMAN_INTERACTION_RANGE,
+  HUMAN_INTERACTION_PROXIMITY,
   KARMA_ENEMY_THRESHOLD,
 } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
@@ -169,7 +169,7 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
-    if (distance < HUMAN_INTERACTION_RANGE) {
+    if (distance < HUMAN_INTERACTION_PROXIMITY) {
       human.activeAction = 'gathering';
       human.direction = { x: 0, y: 0 };
       human.targetPosition = undefined;

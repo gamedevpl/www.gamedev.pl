@@ -37,6 +37,7 @@ export const HUMAN_MAX_FOOD: number = 10; // Maximum food a human can carry
 export const HUMAN_BASE_SPEED: number = 10; // Base movement speed in pixels per second
 export const HUMAN_SLOW_SPEED_MODIFIER: number = 0.5; // Speed modifier when hunger > threshold
 export const HUMAN_INTERACTION_RANGE: number = 30; // Range in pixels for interactions
+export const HUMAN_INTERACTION_PROXIMITY = HUMAN_INTERACTION_RANGE * 0.75; // Proximity for interactions (75% of interaction range)
 export const HUMAN_INITIAL_HUNGER: number = 50; // Initial hunger level for new humans
 export const HUMAN_INITIAL_AGE: number = 20; // Initial age in years for new humans
 export const HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD: number = HUMAN_MAX_AGE_YEARS * 0.8; // Age at which humans start moving slower (80% of max age)
@@ -54,7 +55,7 @@ export const CHILD_HUNGER_INCREASE_RATE_MODIFIER: number = 1.5; // Hunger increa
 export const CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = 60; // Hunger level for child to request food from parent
 export const PARENT_FEEDING_RANGE: number = 50; // Range in pixels for parent to feed child
 export const PARENT_FEED_CHILD_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for a parent after feeding a child
-export const CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 150; // Radius in pixels for a hungry child to search for a parent with food
+export const CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 250; // Radius in pixels for a hungry child to search for a parent with food
 
 // Constants for Adult Children Feeding Old Parents
 export const HUMAN_OLD_AGE_THRESHOLD: number = HUMAN_MAX_AGE_YEARS * 0.75; // Age at which a human is considered 'old' for receiving care
@@ -102,22 +103,25 @@ export const AI_PLANTING_GRID_OFFSETS = [
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 70;
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 80; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
-export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
-export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 200;
-export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 300;
-export const LEADER_FOLLOW_RADIUS = 400; // Radius within which followers will try to stay close to their leader
+export const HUMAN_AI_WANDER_RADIUS: number = 200; // Max radius for wandering
+export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 150;
+export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 150;
+export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
+export const AI_DEFEND_BUSH_KARMA_THRESHOLD = -5; // Karma threshold to defend a bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 export const AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER: number = 1.2;
-export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
+export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 150;
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
 export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;
+export const AI_DEFEND_BUSH_RANGE = 80; // Range in pixels for AI to defend a claimed bush
 
 // Human AI Fleeing Constants
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health

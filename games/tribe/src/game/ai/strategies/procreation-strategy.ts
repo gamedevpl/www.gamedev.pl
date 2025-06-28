@@ -6,7 +6,6 @@ import { findClosestEntity, countEntitiesOfTypeInRadius, countLivingOffspring } 
 import { vectorNormalize, getDirectionVectorOnTorus, calculateWrappedDistance } from '../../utils/math-utils';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
-  HUMAN_INTERACTION_RANGE,
   HUMAN_AI_WANDER_RADIUS,
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
   PROCREATION_FOOD_SEARCH_RADIUS,
@@ -14,6 +13,7 @@ import {
   KARMA_ENEMY_THRESHOLD,
   KARMA_NEUTRAL_THRESHOLD,
   HUMAN_MALE_URGENT_PROCREATION_AGE,
+  HUMAN_INTERACTION_PROXIMITY,
 } from '../../world-consts';
 
 export class ProcreationStrategy implements HumanAIStrategy<HumanEntity> {
@@ -119,7 +119,7 @@ export class ProcreationStrategy implements HumanAIStrategy<HumanEntity> {
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
-    if (distance < HUMAN_INTERACTION_RANGE / 1.5) {
+    if (distance < HUMAN_INTERACTION_PROXIMITY) {
       human.activeAction = 'procreating';
       human.targetPosition = partner.position;
     } else {

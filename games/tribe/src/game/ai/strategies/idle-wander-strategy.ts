@@ -1,17 +1,13 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { vectorNormalize, getDirectionVectorOnTorus, calculateWrappedDistance } from '../../utils/math-utils';
-import {
-  findMalePartner,
-  findParents,
-  getRandomNearbyPosition,
-} from '../../utils/world-utils';
+import { findMalePartner, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
 import {
   CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
   FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER,
   HUMAN_AI_IDLE_WANDER_CHANCE,
   HUMAN_AI_WANDER_RADIUS,
-  HUMAN_INTERACTION_RANGE,
+  HUMAN_INTERACTION_PROXIMITY,
   LEADER_FOLLOW_RADIUS,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
@@ -88,7 +84,7 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
       );
 
       // Arrived at wander destination
-      if (distanceToTarget < HUMAN_INTERACTION_RANGE) {
+      if (distanceToTarget < HUMAN_INTERACTION_PROXIMITY) {
         human.activeAction = 'idle';
         human.targetPosition = undefined;
         human.direction = { x: 0, y: 0 };
