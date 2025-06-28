@@ -740,7 +740,7 @@ export function isPositionInTerritory(
 }
 
 export function getTerritoryOwner(position: Vector2D, gameState: GameWorldState): HumanEntity | null {
-  const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, 1) as FlagEntity[];
+  const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, FLAG_TERRITORY_RADIUS) as FlagEntity[];
 
   for (const flag of flags) {
     if (isPositionInTerritory(position, flag.position, flag.territoryRadius, gameState)) {
@@ -756,7 +756,7 @@ export function isPositionInEnemyTerritory(
   playerLeaderId: EntityId | undefined,
   gameState: GameWorldState,
 ): boolean {
-  const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, 1) as FlagEntity[];
+  const flags = (gameState as IndexedWorldState).search.flag.byRadius(position, FLAG_TERRITORY_RADIUS) as FlagEntity[];
 
   for (const flag of flags) {
     if (

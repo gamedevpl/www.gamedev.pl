@@ -103,25 +103,12 @@ export const AI_PLANTING_BERRY_THRESHOLD = 6; // Min berries for AI to consider 
 export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
 export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
+export const AI_PLANTING_GRID_STEP = 40;
 export const AI_PLANTING_GRID_OFFSETS = [
-  // First ring
-  { x: 40, y: 0 },
-  { x: -40, y: 0 },
-  { x: 0, y: 40 },
-  { x: 0, y: -40 },
-  { x: 40, y: 40 },
-  { x: -40, y: -40 },
-  { x: 40, y: -40 },
-  { x: -40, y: 40 },
-  // Second ring
-  { x: 80, y: 0 },
-  { x: -80, y: 0 },
-  { x: 0, y: 80 },
-  { x: 0, y: -80 },
-  { x: 80, y: 80 },
-  { x: -80, y: -80 },
-  { x: 80, y: -80 },
-  { x: -80, y: 80 },
+  { x: -20, y: -20 },
+  { x: 20, y: -20 },
+  { x: -20, y: 20 },
+  { x: 20, y: 20 },
 ];
 
 // Human AI Constants
