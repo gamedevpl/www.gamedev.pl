@@ -1,6 +1,11 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { FLAG_PLANTING_COST, HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING, HUMAN_INTERACTION_RANGE } from '../../world-consts';
+import {
+  AI_FLAG_PLANTING_TRIBE_MEMBER_THRESHOLD,
+  FLAG_PLANTING_COST,
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING,
+  HUMAN_INTERACTION_RANGE,
+} from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { findOptimalFlagPlantingSpot, getAdultFamilyMembers } from '../../utils/world-utils';
 import { FoodType } from '../../food/food-types';
@@ -30,8 +35,8 @@ export class PlantingFlagStrategy implements HumanAIStrategy<Vector2D> {
     const tribeFlagsCount = (gameState as IndexedWorldState).search.flag.byProperty('leaderId', human.id).length;
     const adultTribeMembersCount = getAdultFamilyMembers(human, gameState).length;
 
-    // Allow planting the first flag without children, then require 2 adults per flag
-    if (tribeFlagsCount > 0 && adultTribeMembersCount < tribeFlagsCount) {
+    // Allow planting the first flag, then require a certain number of adults per flag to expand
+    if (tribeFlagsCount > 0 && adultTribeMembersCount < tribeFlagsCount * AI_FLAG_PLANTING_TRIBE_MEMBER_THRESHOLD) {
       return null;
     }
 

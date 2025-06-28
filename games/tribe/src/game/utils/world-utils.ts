@@ -13,7 +13,7 @@ import {
   FLAG_PLANTING_COST,
   AI_PLANTING_GRID_OFFSETS,
   FLAG_RADIUS,
-  BERRY_BUSH_SPREAD_RADIUS,
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
 } from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
@@ -245,33 +245,27 @@ export function findOptimalFlagPlantingSpot(human: HumanEntity, gameState: GameW
 
   // If no flags exist, find a spot nearby deterministically.
   if (tribeFlags.length === 0) {
-    const offsets = [
-      { x: 0, y: 0 }, // Check current position first
-      // Cardinal directions
-      { x: 0, y: -HUMAN_INTERACTION_RANGE },
-      { x: HUMAN_INTERACTION_RANGE, y: 0 },
-      { x: 0, y: HUMAN_INTERACTION_RANGE },
-      { x: -50, y: 0 },
-      // Diagonal directions
-      { x: -HUMAN_INTERACTION_RANGE / 2, y: -HUMAN_INTERACTION_RANGE / 2 },
-      { x: HUMAN_INTERACTION_RANGE / 2, y: -HUMAN_INTERACTION_RANGE / 2 },
-      { x: HUMAN_INTERACTION_RANGE / 2, y: HUMAN_INTERACTION_RANGE / 2 },
-      { x: -HUMAN_INTERACTION_RANGE / 2, y: HUMAN_INTERACTION_RANGE / 2 },
-    ];
+    // Search in expanding rings for a valid spot
+    for (let radius = HUMAN_INTERACTION_RANGE; radius <= FLAG_TERRITORY_RADIUS; radius += HUMAN_INTERACTION_RANGE) {
+      for (let i = 0; i < AI_FLAG_PLANTING_EDGE_POINTS; i++) {
+        const angle = (i / AI_FLAG_PLANTING_EDGE_POINTS) * 2 * Math.PI;
+        const spot = {
+          x: human.position.x + Math.cos(angle) * radius,
+          y: human.position.y + Math.sin(angle) * radius,
+        };
 
-    for (const offset of offsets) {
-      const spot = vectorAdd(human.position, offset);
-      // Ensure spot is within world bounds
-      spot.x =
-        ((spot.x % gameState.mapDimensions.width) + gameState.mapDimensions.width) % gameState.mapDimensions.width;
-      spot.y =
-        ((spot.y % gameState.mapDimensions.height) + gameState.mapDimensions.height) % gameState.mapDimensions.height;
+        // Ensure spot is within world bounds
+        spot.x =
+          ((spot.x % gameState.mapDimensions.width) + gameState.mapDimensions.width) % gameState.mapDimensions.width;
+        spot.y =
+          ((spot.y % gameState.mapDimensions.height) + gameState.mapDimensions.height) % gameState.mapDimensions.height;
 
-      if (
-        !isPositionOccupied(spot, gameState, FLAG_RADIUS) &&
-        !isPositionInEnemyTerritory(spot, human.leaderId, gameState)
-      ) {
-        return spot; // Found a valid spot
+        if (
+          !isPositionOccupied(spot, gameState, FLAG_RADIUS) &&
+          !isPositionInEnemyTerritory(spot, human.leaderId, gameState)
+        ) {
+          return spot; // Found a valid spot
+        }
       }
     }
     return null; // No suitable spot found nearby
@@ -295,13 +289,6 @@ export function findOptimalFlagPlantingSpot(human: HumanEntity, gameState: GameW
 
       if (isInsideOtherFriendlyTerritory) {
         continue;
-      }
-
-      if (
-        calculateWrappedDistance(human.position, spot, gameState.mapDimensions.width, gameState.mapDimensions.height) >
-        FLAG_TERRITORY_RADIUS
-      ) {
-        continue; // Spot is too far from the human
       }
 
       // Check if the spot is occupied (using flag's physical radius) or in enemy territory
@@ -340,7 +327,7 @@ export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameW
       if (
         territoryOwner &&
         territoryOwner.id === human.leaderId && // Must be in our territory
-        !isPositionOccupied(spot, gameState, BERRY_BUSH_SPREAD_RADIUS) // Must not be occupied
+        !isPositionOccupied(spot, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS) // Must not be occupied
       ) {
         return spot; // Found a valid, predictable spot
       }

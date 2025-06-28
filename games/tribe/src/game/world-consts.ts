@@ -93,13 +93,16 @@ export const KARMA_FOR_ENTERING_ENEMY_TERRITORY: number = -1;
 export const AI_PLANTING_FLAG_MIN_DISTANCE_FROM_OWN_FLAG: number = 400;
 export const AI_RECLAIM_FLAG_RANGE: number = 500;
 export const AI_FLAG_PLANTING_EDGE_POINTS = 12;
+export const AI_FLAG_PLANTING_TRIBE_MEMBER_THRESHOLD = 2; // Required adults per flag to expand
 
 // Human Planting Constants
-export const BERRY_COST_FOR_PLANTING = 6;
+export const MAX_BUSHES_PER_TRIBE_TERRITORY = 10;
+export const BERRY_COST_FOR_PLANTING = 5;
 export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for planting action
-export const AI_PLANTING_BERRY_THRESHOLD = 7; // Min berries for AI to consider planting
+export const AI_PLANTING_BERRY_THRESHOLD = 6; // Min berries for AI to consider planting
 export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
+export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
 export const AI_PLANTING_GRID_OFFSETS = [
   // First ring
   { x: 40, y: 0 },
@@ -124,6 +127,7 @@ export const AI_PLANTING_GRID_OFFSETS = [
 // Human AI Constants
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 70;
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
@@ -136,6 +140,7 @@ export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
 export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
+export const AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER: number = 1.2;
 export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
 export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;

@@ -3,11 +3,17 @@ import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 import { findClosestEntity } from '../../utils/world-utils';
-import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_RANGE } from '../../world-consts';
+import {
+  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
+  HUMAN_INTERACTION_RANGE,
+  FLAG_TERRITORY_RADIUS,
+  AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER,
+} from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
+import { FlagEntity } from '../../entities/flag/flag-types';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
 
@@ -32,41 +38,63 @@ export class ParentSeekingFoodForChildStrategy implements HumanAIStrategy<FoodSo
       return null;
     }
 
-    // This parent has hungry children and no food. It should go find some.
-    // The logic is similar to GatheringStrategy's check, but without the hunger check for the parent.
-    const closestBush = findClosestEntity<BerryBushEntity>(
-      human,
-      gameState,
-      'berryBush' as EntityType,
-      undefined,
-      (b) => b.food.length > 0,
-    );
-
-    const closestCorpse = findClosestEntity<HumanCorpseEntity>(
-      human,
-      gameState,
-      'humanCorpse' as EntityType,
-      undefined,
-      (c) => c.food.length > 0,
-    );
-
-    if (closestBush && closestCorpse) {
-      const distToBush = calculateWrappedDistance(
-        human.position,
-        closestBush.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
+    const findBestFoodSource = (searchCenter: { x: number; y: number }, searchRadius: number): FoodSource | null => {
+      const closestBush = findClosestEntity<BerryBushEntity>(
+        { ...human, position: searchCenter },
+        gameState,
+        'berryBush' as EntityType,
+        searchRadius,
+        (b) => b.food.length > 0,
       );
-      const distToCorpse = calculateWrappedDistance(
-        human.position,
-        closestCorpse.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
+
+      const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+        { ...human, position: searchCenter },
+        gameState,
+        'humanCorpse' as EntityType,
+        searchRadius,
+        (c) => c.food.length > 0,
       );
-      return distToBush <= distToCorpse ? closestBush : closestCorpse;
+
+      if (closestBush && closestCorpse) {
+        const distToBush = calculateWrappedDistance(
+          searchCenter,
+          closestBush.position,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
+        const distToCorpse = calculateWrappedDistance(
+          searchCenter,
+          closestCorpse.position,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
+        return distToBush <= distToCorpse ? closestBush : closestCorpse;
+      }
+      return closestBush || closestCorpse;
+    };
+
+    // 1. Prioritize gathering within own territory if part of a tribe
+    if (human.leaderId) {
+      const closestFlag = findClosestEntity<FlagEntity>(
+        human,
+        gameState,
+        'flag',
+        undefined,
+        (f) => f.leaderId === human.leaderId,
+      );
+
+      if (closestFlag) {
+        const territorySearchRadius = FLAG_TERRITORY_RADIUS * AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER;
+        const foodInTerritory = findBestFoodSource(closestFlag.position, territorySearchRadius);
+        if (foodInTerritory) {
+          return foodInTerritory;
+        }
+      }
     }
 
-    return closestBush || closestCorpse;
+    // 2. Fallback to global search
+    const globalSearchRadius = Math.max(gameState.mapDimensions.width, gameState.mapDimensions.height);
+    return findBestFoodSource(human.position, globalSearchRadius);
   }
 
   execute(human: HumanEntity, context: UpdateContext, target: FoodSource): void {

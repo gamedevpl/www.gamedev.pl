@@ -8,11 +8,14 @@ import {
   HUMAN_CRITICAL_HUNGER_FOR_STEALING,
   HUMAN_INTERACTION_RANGE,
   KARMA_ENEMY_THRESHOLD,
+  FLAG_TERRITORY_RADIUS,
+  AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER,
 } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
+import { FlagEntity } from '../../entities/flag/flag-types';
 
 export type FoodSource = BerryBushEntity | HumanCorpseEntity;
 
@@ -36,18 +39,12 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
     const { gameState } = context;
     const indexedState = gameState as IndexedWorldState;
 
-    const allBushes = indexedState.search.berryBush.byRadius(human.position, 1000).filter((b) => b.food.length > 0);
-    const allCorpses = !options.onlyBerries
-      ? indexedState.search.humanCorpse.byRadius(human.position, 1000).filter((c) => c.food.length > 0)
-      : [];
-    const allFoodSources: FoodSource[] = [...allBushes, ...allCorpses];
-
-    const findClosest = (sources: FoodSource[]): FoodSource | null => {
+    const findClosest = (sources: FoodSource[], position: { x: number; y: number }): FoodSource | null => {
       let closest: FoodSource | null = null;
       let minDistance = Infinity;
       for (const source of sources) {
         const distance = calculateWrappedDistance(
-          human.position,
+          position,
           source.position,
           context.gameState.mapDimensions.width,
           context.gameState.mapDimensions.height,
@@ -60,51 +57,94 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
       return closest;
     };
 
-    // Tier 1: Unclaimed sources
-    const unclaimedSources = allFoodSources.filter((s) => !('ownerId' in s && s.ownerId));
-    if (unclaimedSources.length > 0) {
-      return findClosest(unclaimedSources);
-    }
+    const findBestFoodSource = (
+      searchRadius: number,
+      searchCenter: { x: number; y: number },
+    ): FoodSource | null => {
+      const allBushes = indexedState.search.berryBush
+        .byRadius(searchCenter, searchRadius)
+        .filter((b) => b.food.length > 0);
+      const allCorpses = !options.onlyBerries
+        ? indexedState.search.humanCorpse.byRadius(searchCenter, searchRadius).filter((c) => c.food.length > 0)
+        : [];
+      const allFoodSources: FoodSource[] = [...allBushes, ...allCorpses];
 
-    // Tier 2: Family-owned sources
-    const familySources = allFoodSources.filter((s) => {
-      if ('ownerId' in s && s.ownerId) {
-        const owner = gameState.entities.entities.get(s.ownerId) as HumanEntity | undefined;
-        return owner && areFamily(human, owner, gameState);
+      // Tier 1: Unclaimed sources
+      const unclaimedSources = allFoodSources.filter((s) => !('ownerId' in s && s.ownerId));
+      if (unclaimedSources.length > 0) {
+        return findClosest(unclaimedSources, human.position);
       }
-      return false;
-    });
-    if (familySources.length > 0) {
-      return findClosest(familySources);
-    }
 
-    // Tier 3: Critically hungry - steal from non-enemies
-    if (human.hunger >= HUMAN_CRITICAL_HUNGER_FOR_STEALING) {
-      const nonEnemySources = allFoodSources.filter((s) => {
+      // Tier 2: Family-owned sources
+      const familySources = allFoodSources.filter((s) => {
         if ('ownerId' in s && s.ownerId) {
           const owner = gameState.entities.entities.get(s.ownerId) as HumanEntity | undefined;
-          return owner && (owner.karma[human.id] || 0) > KARMA_ENEMY_THRESHOLD;
+          return owner && areFamily(human, owner, gameState);
         }
         return false;
       });
-      if (nonEnemySources.length > 0) {
-        return findClosest(nonEnemySources);
+      if (familySources.length > 0) {
+        return findClosest(familySources, human.position);
+      }
+
+      // Tier 3: Critically hungry - steal from non-enemies
+      if (human.hunger >= HUMAN_CRITICAL_HUNGER_FOR_STEALING) {
+        const nonEnemySources = allFoodSources.filter((s) => {
+          if ('ownerId' in s && s.ownerId) {
+            const owner = gameState.entities.entities.get(s.ownerId) as HumanEntity | undefined;
+            return owner && (owner.karma[human.id] || 0) > KARMA_ENEMY_THRESHOLD;
+          }
+          return false;
+        });
+        if (nonEnemySources.length > 0) {
+          return findClosest(nonEnemySources, human.position);
+        }
+      }
+
+      // Tier 4: Last resort - steal from enemies
+      const enemySources = allFoodSources.filter((s) => {
+        if ('ownerId' in s && s.ownerId) {
+          const owner = gameState.entities.entities.get(s.ownerId) as HumanEntity | undefined;
+          return owner && (owner.karma[human.id] || 0) <= KARMA_ENEMY_THRESHOLD;
+        }
+        return false;
+      });
+      if (enemySources.length > 0) {
+        return findClosest(enemySources, human.position);
+      }
+
+      return null;
+    };
+
+    // --- Main Logic ---
+
+    // 1. Prioritize gathering within own territory if part of a tribe
+    if (human.leaderId) {
+      const closestFlag = findClosestEntity<FlagEntity>(
+        human,
+        gameState,
+        'flag',
+        undefined,
+        (f) => f.leaderId === human.leaderId,
+      );
+
+      if (closestFlag) {
+        const territorySearchRadius = FLAG_TERRITORY_RADIUS * AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER;
+        const foodInTerritory = findBestFoodSource(territorySearchRadius, closestFlag.position);
+        if (foodInTerritory) {
+          return foodInTerritory;
+        }
       }
     }
 
-    // Tier 4: Last resort - steal from enemies
-    const enemySources = allFoodSources.filter((s) => {
-      if ('ownerId' in s && s.ownerId) {
-        const owner = gameState.entities.entities.get(s.ownerId) as HumanEntity | undefined;
-        return owner && (owner.karma[human.id] || 0) <= KARMA_ENEMY_THRESHOLD;
-      }
-      return false;
-    });
-    if (enemySources.length > 0) {
-      return findClosest(enemySources);
+    // 2. Fallback to global search if no food in territory or not in a tribe
+    const globalSearchRadius = Math.max(gameState.mapDimensions.width, gameState.mapDimensions.height);
+    const globalFoodSource = findBestFoodSource(globalSearchRadius, human.position);
+    if (globalFoodSource) {
+      return globalFoodSource;
     }
 
-    // Fallback to original logic if no specific tier matches, though unlikely
+    // 3. Original fallback (should be redundant now but kept as a safeguard)
     const closestBush = findClosestEntity<BerryBushEntity>(
       human,
       gameState,
