@@ -635,3 +635,33 @@ export function findIntruderNearOwnedBushes(
 
   return null;
 }
+
+export function findTribeMembers(leaderId: EntityId, gameState: GameWorldState): HumanEntity[] {
+  const indexedState = gameState as IndexedWorldState;
+  return indexedState.search.human.byProperty('leaderId', leaderId);
+}
+
+export function findNearbyEnemiesOfTribe(
+  center: Vector2D,
+  leaderId: EntityId,
+  gameState: IndexedWorldState,
+  radius: number,
+): HumanEntity[] {
+  const nearbyHumans = gameState.search.human.byRadius(center, radius);
+  return nearbyHumans.filter((human) => human.leaderId !== leaderId && human.id !== leaderId);
+}
+
+export function countTribeAttackersOnTarget(
+  tribeLeaderId: EntityId,
+  targetId: EntityId,
+  gameState: IndexedWorldState,
+): number {
+  const tribeMembers = gameState.search.human.byProperty('leaderId', tribeLeaderId);
+  let count = 0;
+  for (const member of tribeMembers) {
+    if (member.attackTargetId === targetId) {
+      count++;
+    }
+  }
+  return count;
+}

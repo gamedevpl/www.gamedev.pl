@@ -1,5 +1,6 @@
 import { AttackingStrategy } from './attacking-strategy';
 import { DefendingClaimedBushStrategy } from './defending-claimed-bush-strategy';
+import { TribeBattleStrategy } from './tribe-battle-strategy';
 import { EatingStrategy } from './eating-strategy';
 import { FleeingStrategy } from './fleeing-strategy';
 import { GatheringStrategy } from './gathering-strategy';
@@ -19,6 +20,7 @@ import { HumanAIStrategy } from './ai-strategy-types';
 export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new FleeingStrategy(),
   new AttackingStrategy(),
+  new TribeBattleStrategy(),
   new DefendingClaimedBushStrategy(),
   new EatingStrategy(),
   new ChildSeekingFoodStrategy(),

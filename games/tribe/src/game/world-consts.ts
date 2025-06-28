@@ -106,7 +106,7 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 70;
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 80; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
-export const HUMAN_AI_WANDER_RADIUS: number = 200; // Max radius for wandering
+export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 150;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 150;
 export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
@@ -118,10 +118,12 @@ export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend clai
 export const AI_DEFEND_BUSH_KARMA_THRESHOLD = -5; // Karma threshold to defend a bush
 export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
 export const AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER: number = 1.2;
-export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 150;
+export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
 export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;
 export const AI_DEFEND_BUSH_RANGE = 80; // Range in pixels for AI to defend a claimed bush
+export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage in battle around their leader
+export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
 
 // Human AI Fleeing Constants
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health

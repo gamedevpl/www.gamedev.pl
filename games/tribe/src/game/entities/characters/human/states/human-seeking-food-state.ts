@@ -6,7 +6,7 @@ class HumanSeekingFoodState implements State<HumanEntity, HumanSeekingFoodStateD
   id = HUMAN_SEEKING_FOOD;
 
   update(data: HumanSeekingFoodStateData, context: StateContext<HumanEntity>) {
-    if (context.entity.activeAction !== 'seekingFood') {
+    if (context.entity.activeAction !== 'seekingFood' || !context.entity.isAdult) {
       // If the human is no longer seeking food, return to idle state
       return {
         nextState: HUMAN_IDLE,

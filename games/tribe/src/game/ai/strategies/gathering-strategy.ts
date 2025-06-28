@@ -2,7 +2,7 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
-import { areFamily, findClosestEntity } from '../../utils/world-utils';
+import { areFamily, findChildren, findClosestEntity } from '../../utils/world-utils';
 import {
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_CRITICAL_HUNGER_FOR_STEALING,
@@ -29,7 +29,9 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
     },
   ): FoodSource | null {
     const hasCapacity = human.food.length < human.maxFood;
-    if (!human.isAdult || !hasCapacity || human.hunger < options.hungerThreshold) {
+    const childrenCount = findChildren(context.gameState, human).length;
+    const threshold = childrenCount > 0 ? options.hungerThreshold * 0.5 : options.hungerThreshold;
+    if (!human.isAdult || !hasCapacity || human.hunger < threshold) {
       return null;
     }
 
