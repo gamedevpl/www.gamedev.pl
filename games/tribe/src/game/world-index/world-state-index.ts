@@ -4,7 +4,6 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { indexItems } from './world-index-utils';
 import { IndexedWorldState } from './world-index-types';
-import { FlagEntity } from '../entities/flag/flag-types';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -17,7 +16,6 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   const humans = allEntities.filter((e) => e.type === 'human') as HumanEntity[];
   const berryBushes = allEntities.filter((e) => e.type === 'berryBush') as BerryBushEntity[];
   const humanCorpses = allEntities.filter((e) => e.type === 'humanCorpse') as HumanCorpseEntity[];
-  const flags = allEntities.filter((e) => e.type === 'flag') as FlagEntity[];
 
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
@@ -25,7 +23,6 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       human: indexItems(humans),
       berryBush: indexItems(berryBushes),
       humanCorpse: indexItems(humanCorpses),
-      flag: indexItems(flags),
     },
   };
 

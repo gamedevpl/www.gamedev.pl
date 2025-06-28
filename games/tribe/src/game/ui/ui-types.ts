@@ -5,10 +5,7 @@ export enum PlayerActionType {
   Eat = 'Eat',
   Procreate = 'Procreate',
   Attack = 'Attack',
-  PlantFlag = 'PlantFlag',
   PlantBush = 'PlantBush',
-  AttackFlag = 'AttackFlag',
-  ReclaimFlag = 'ReclaimFlag',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -16,10 +13,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Eat]: '🍖',
   [PlayerActionType.Procreate]: '❤️',
   [PlayerActionType.Attack]: '⚔️',
-  [PlayerActionType.PlantFlag]: '🚩',
   [PlayerActionType.PlantBush]: '🌱',
-  [PlayerActionType.AttackFlag]: '⚔️',
-  [PlayerActionType.ReclaimFlag]: '🔄',
 };
 
 export interface PlayerActionHint {

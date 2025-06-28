@@ -4,8 +4,6 @@ import { humanChildFeedingInteraction } from './human-child-feeding-interaction'
 import { humanAttackInteraction } from './human-attack-interaction';
 import { humanCollisionInteraction } from './collision-interaction';
 import { humanGatherFoodInteractions } from './human-gather-food-interaction';
-import { humanAttackFlagInteraction } from './human-attack-flag-interaction';
-import { flagReclaimInteraction } from './flag-reclaim-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -13,7 +11,5 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
   humanAttackInteraction,
-  humanAttackFlagInteraction,
-  flagReclaimInteraction,
   // TODO: Add other interaction definitions here (imported from dedicated files)
 ] as InteractionDefinition[];

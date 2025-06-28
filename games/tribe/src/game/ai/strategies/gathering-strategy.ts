@@ -8,14 +8,11 @@ import {
   HUMAN_CRITICAL_HUNGER_FOR_STEALING,
   HUMAN_INTERACTION_RANGE,
   KARMA_ENEMY_THRESHOLD,
-  FLAG_TERRITORY_RADIUS,
-  AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER,
 } from '../../world-consts';
 import { EntityType } from '../../entities/entities-types';
 import { HumanAIStrategy } from './ai-strategy-types';
 import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
-import { FlagEntity } from '../../entities/flag/flag-types';
 
 export type FoodSource = BerryBushEntity | HumanCorpseEntity;
 
@@ -57,10 +54,7 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
       return closest;
     };
 
-    const findBestFoodSource = (
-      searchRadius: number,
-      searchCenter: { x: number; y: number },
-    ): FoodSource | null => {
+    const findBestFoodSource = (searchRadius: number, searchCenter: { x: number; y: number }): FoodSource | null => {
       const allBushes = indexedState.search.berryBush
         .byRadius(searchCenter, searchRadius)
         .filter((b) => b.food.length > 0);
@@ -117,25 +111,6 @@ export class GatheringStrategy implements HumanAIStrategy<FoodSource> {
     };
 
     // --- Main Logic ---
-
-    // 1. Prioritize gathering within own territory if part of a tribe
-    if (human.leaderId) {
-      const closestFlag = findClosestEntity<FlagEntity>(
-        human,
-        gameState,
-        'flag',
-        undefined,
-        (f) => f.leaderId === human.leaderId,
-      );
-
-      if (closestFlag) {
-        const territorySearchRadius = FLAG_TERRITORY_RADIUS * AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER;
-        const foodInTerritory = findBestFoodSource(territorySearchRadius, closestFlag.position);
-        if (foodInTerritory) {
-          return foodInTerritory;
-        }
-      }
-    }
 
     // 2. Fallback to global search if no food in territory or not in a tribe
     const globalSearchRadius = Math.max(gameState.mapDimensions.width, gameState.mapDimensions.height);

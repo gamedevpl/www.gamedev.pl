@@ -1,36 +1,22 @@
-import {
-  AI_PLANTING_BERRY_THRESHOLD,
-  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
-  MAX_BUSHES_PER_TRIBE_TERRITORY,
-} from '../../world-consts';
+import { AI_PLANTING_BERRY_THRESHOLD, HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING } from '../../world-consts';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { countBushesInTribeTerritory, findOptimalBushPlantingSpot } from '../../utils/world-utils';
+import { findOptimalBushPlantingSpot } from '../../utils/world-utils';
 import { FoodType } from '../../food/food-types';
 import { Vector2D } from '../../utils/math-types';
 import { FoodSource, GatheringStrategy } from './gathering-strategy';
-import { IndexedWorldState } from '../../world-index/world-index-types';
 
 export class PlantingStrategy implements HumanAIStrategy<Vector2D | FoodSource | null> {
   gatheringStrategy = new GatheringStrategy();
 
   check(human: HumanEntity, context: UpdateContext): Vector2D | FoodSource | null {
     const { gameState } = context;
-    const indexedState = gameState as IndexedWorldState;
 
     const hasEnoughBerries = human.food.filter((f) => f.type === FoodType.Berry).length >= AI_PLANTING_BERRY_THRESHOLD;
     const isNotTooHungry = human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING;
-    const tribeFlagCount = indexedState.search.flag.byProperty('leaderId', human.leaderId).length;
 
-    if (tribeFlagCount === 0 || !human.isAdult || !isNotTooHungry) {
-      return null;
-    }
-
-    // Check bush density
-    const tribeBushCount = human.leaderId ? countBushesInTribeTerritory(gameState, human.leaderId) : 0;
-
-    if (tribeBushCount >= tribeFlagCount * MAX_BUSHES_PER_TRIBE_TERRITORY) {
+    if (!human.isAdult || !isNotTooHungry) {
       return null;
     }
 

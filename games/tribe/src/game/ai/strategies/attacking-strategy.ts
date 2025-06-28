@@ -1,11 +1,6 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import {
-  findClosestAggressor,
-  findBestAttackTarget,
-  isPositionInEnemyTerritory,
-  findClosestEntity,
-} from '../../utils/world-utils';
+import { findClosestAggressor, findBestAttackTarget } from '../../utils/world-utils';
 import {
   AI_ATTACK_ENEMY_RANGE,
   AI_FLEE_HEALTH_THRESHOLD,
@@ -20,7 +15,6 @@ import { EFFECT_DURATION_SHORT_HOURS } from '../../world-consts';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { calculateWrappedDistance } from '../../utils/math-utils';
 import { Entity } from '../../entities/entities-types';
-import { FlagEntity } from '../../entities/flag/flag-types';
 
 export class AttackingStrategy implements HumanAIStrategy<Entity> {
   check(human: HumanEntity, context: UpdateContext): Entity | null {
@@ -51,19 +45,6 @@ export class AttackingStrategy implements HumanAIStrategy<Entity> {
           return target;
         }
       }
-    }
-
-    // 1. Defend territory: Attack intruders
-    const intruders = (gameState as IndexedWorldState).search.human
-      .byRadius(human.position, AI_ATTACK_ENEMY_RANGE)
-      .filter(
-        (otherHuman) =>
-          otherHuman.leaderId !== human.leaderId &&
-          isPositionInEnemyTerritory(otherHuman.position, human.leaderId, gameState),
-      );
-
-    if (intruders.length > 0) {
-      return findBestAttackTarget(human, gameState, AI_ATTACK_ENEMY_RANGE, (h) => intruders.includes(h));
     }
 
     // 2. Self-Defense
@@ -101,19 +82,6 @@ export class AttackingStrategy implements HumanAIStrategy<Entity> {
       }
     }
 
-    // 5. Attack enemy flags
-    const enemyFlag = findClosestEntity<FlagEntity>(
-      human,
-      gameState,
-      'flag',
-      AI_ATTACK_ENEMY_RANGE,
-      (flag) => flag.leaderId !== human.leaderId,
-    );
-
-    if (enemyFlag) {
-      return enemyFlag;
-    }
-
     return null;
   }
 
@@ -132,12 +100,7 @@ export class AttackingStrategy implements HumanAIStrategy<Entity> {
       human.lastTargetAcquiredEffectTime = context.gameState.time;
     }
 
-    if (threat.type === 'human') {
-      human.activeAction = 'attacking';
-    } else if (threat.type === 'flag') {
-      human.activeAction = 'attackingFlag';
-    }
-
+    human.activeAction = 'attacking';
     human.attackTargetId = threat.id;
     human.targetPosition = undefined;
   }

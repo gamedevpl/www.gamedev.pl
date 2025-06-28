@@ -29,7 +29,6 @@ import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint, PlayerActionType, UIButtonActionType } from '../game/ui/ui-types';
 import { setMasterVolume } from '../game/sound/sound-loader';
 import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
-import { FlagEntity } from '../game/entities/flag/flag-types';
 
 const INITIAL_STATE = initGame();
 
@@ -345,30 +344,10 @@ export const GameScreen: React.FC = () => {
           HUMAN_ATTACK_RANGE,
           (h) => (h as HumanEntity).id !== playerEntity.id,
         );
-        const flagTarget = findClosestEntity<FlagEntity>(
-          playerEntity,
-          gameStateRef.current,
-          'flag',
-          HUMAN_ATTACK_RANGE,
-          (f) => f.leaderId !== playerEntity.leaderId,
-        );
 
         if (humanTarget) {
           playerEntity.activeAction = 'attacking';
           playerEntity.attackTargetId = humanTarget.id;
-        } else if (flagTarget) {
-          playerEntity.activeAction = 'attackingFlag';
-          playerEntity.attackTargetId = flagTarget.id;
-        }
-      } else if (key === 'x') {
-        const plantAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.PlantFlag);
-        if (plantAction) {
-          playerEntity.activeAction = 'plantingFlag';
-        }
-      } else if (key === 'c') {
-        const reclaimAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.ReclaimFlag);
-        if (reclaimAction) {
-          playerEntity.activeAction = 'reclaiming';
         }
       } else if (key === 'b') {
         const plantAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.PlantBush);

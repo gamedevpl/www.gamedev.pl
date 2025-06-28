@@ -11,9 +11,6 @@ import {
   HumanAttackingStateData,
   HUMAN_PLANTING,
   HumanPlantingStateData,
-  HUMAN_PLANTING_FLAG,
-  HUMAN_ATTACKING_FLAG,
-  HUMAN_RECLAIMING,
 } from './human-state-types';
 
 // Define the human idle state
@@ -92,39 +89,6 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           previousState: HUMAN_IDLE,
           plantingSpot: entity.targetPosition,
         } as HumanPlantingStateData,
-      };
-    }
-
-    if (entity.activeAction === 'plantingFlag') {
-      return {
-        nextState: HUMAN_PLANTING_FLAG,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-        },
-      };
-    }
-    if (entity.activeAction === 'attackingFlag' && entity.attackTargetId) {
-      return {
-        nextState: HUMAN_ATTACKING_FLAG,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          flagId: entity.attackTargetId,
-        },
-      };
-    }
-    if (entity.activeAction === 'reclaiming' && entity.attackTargetId) {
-      return {
-        nextState: HUMAN_RECLAIMING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          flagId: entity.attackTargetId,
-        },
       };
     }
 

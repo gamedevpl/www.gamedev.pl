@@ -82,19 +82,6 @@ export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successfu
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
 
-// Flag & Territory Constants
-export const FLAG_TERRITORY_RADIUS: number = 250;
-export const FLAG_MAX_HP: number = 100;
-export const FLAG_PLANTING_COST: number = 3; // Berries
-export const FLAG_PLANTING_DURATION_HOURS: number = 2;
-export const FLAG_RECLAIM_DURATION_HOURS: number = 4;
-export const FLAG_DECAY_TIME_HOURS: number = 24 * 30; // 30 game days
-export const KARMA_FOR_ENTERING_ENEMY_TERRITORY: number = -1;
-export const AI_PLANTING_FLAG_MIN_DISTANCE_FROM_OWN_FLAG: number = 400;
-export const AI_RECLAIM_FLAG_RANGE: number = 500;
-export const AI_FLAG_PLANTING_EDGE_POINTS = 12;
-export const AI_FLAG_PLANTING_TRIBE_MEMBER_THRESHOLD = 2; // Required adults per flag to expand
-
 // Human Planting Constants
 export const MAX_BUSHES_PER_TRIBE_TERRITORY = 10;
 export const BERRY_COST_FOR_PLANTING = 5;
@@ -152,7 +139,6 @@ export const KARMA_DEBUG_RENDER_COLOR = 'red';
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;
 export const CHARACTER_CHILD_RADIUS = CHARACTER_RADIUS * 0.6; // Smaller radius for child characters
-export const FLAG_RADIUS = 15;
 
 // Highlight Colors
 export const PLAYER_HIGHLIGHT_COLOR: string = '#4CAF50'; // Green

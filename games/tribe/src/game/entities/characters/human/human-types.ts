@@ -80,10 +80,7 @@ export interface HumanEntity extends Entity {
     | 'procreating'
     | 'seekingFood'
     | 'attacking'
-    | 'plantingFlag'
-    | 'planting'
-    | 'attackingFlag'
-    | 'reclaiming';
+    | 'planting';
 
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;

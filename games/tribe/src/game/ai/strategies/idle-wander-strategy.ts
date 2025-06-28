@@ -5,8 +5,6 @@ import {
   findMalePartner,
   findParents,
   getRandomNearbyPosition,
-  findClosestEntity,
-  isPositionInTerritory,
 } from '../../utils/world-utils';
 import {
   CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
@@ -17,7 +15,6 @@ import {
   LEADER_FOLLOW_RADIUS,
 } from '../../world-consts';
 import { HumanAIStrategy } from './ai-strategy-types';
-import { FlagEntity } from '../../entities/flag/flag-types';
 
 export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
   check(): boolean {
@@ -55,32 +52,6 @@ export class IdleWanderStrategy implements HumanAIStrategy<boolean> {
           if (malePartner) {
             anchorPoint = malePartner.position;
             wanderRadius = FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER;
-          }
-        }
-
-        // If part of a tribe, prefer to wander within own territory
-        if (human.leaderId) {
-          const closestOwnFlag = findClosestEntity<FlagEntity>(
-            human,
-            gameState,
-            'flag',
-            undefined,
-            (f) => f.leaderId === human.leaderId,
-          );
-          if (closestOwnFlag) {
-            // If outside our territory, have a high chance to wander back towards it
-            if (
-              !isPositionInTerritory(human.position, closestOwnFlag.position, closestOwnFlag.territoryRadius, gameState)
-            ) {
-              if (Math.random() < 0.8) {
-                anchorPoint = closestOwnFlag.position;
-                wanderRadius = closestOwnFlag.territoryRadius;
-              }
-            } else {
-              // If already inside, wander around the flag
-              anchorPoint = closestOwnFlag.position;
-              wanderRadius = closestOwnFlag.territoryRadius;
-            }
           }
         }
 
