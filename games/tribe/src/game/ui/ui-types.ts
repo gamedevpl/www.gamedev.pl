@@ -1,4 +1,4 @@
-import { Entity } from '../entities/entities-types';
+import { Entity, EntityId } from '../entities/entities-types';
 
 export enum PlayerActionType {
   GatherFood = 'GatherFood',
@@ -24,6 +24,15 @@ export interface PlayerActionHint {
   targetEntity?: Entity;
 }
 
+export interface TribeInfo {
+  leaderId: EntityId;
+  tribeBadge: string;
+  memberCount: number;
+  isPlayerTribe: boolean;
+  leaderAge: number;
+  leaderGender: 'male' | 'female';
+}
+
 export enum UIStatusType {
   Time = 'Time',
   Hunger = 'Hunger',
@@ -33,6 +42,7 @@ export enum UIStatusType {
   Autopilot = 'Autopilot',
   Muted = 'Muted',
   Family = 'Family',
+  Tribes = 'Tribes',
 }
 
 export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
@@ -43,6 +53,7 @@ export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
   [UIStatusType.Autopilot]: '🤖',
   [UIStatusType.Muted]: '🔇',
   [UIStatusType.Family]: '👨‍👩‍👧‍👦',
+  [UIStatusType.Tribes]: '🛖',
 };
 
 export enum UIButtonActionType {

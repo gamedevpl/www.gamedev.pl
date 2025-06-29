@@ -29,9 +29,9 @@ export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
 export const HUMAN_MAX_AGE_YEARS: number = 80; // Maximum lifespan in game years
 export const MAX_ANCESTORS_TO_TRACK: number = 3;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
-export const HUMAN_HUNGER_THRESHOLD_SLOW: number = 80; // Hunger level that triggers speed reduction
-export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = 95; // Hunger level that prevents procreation
-export const HUMAN_HUNGER_DEATH: number = 100; // Hunger level that causes death
+export const HUMAN_HUNGER_DEATH: number = 150; // Hunger level that causes death
+export const HUMAN_HUNGER_THRESHOLD_SLOW: number = HUMAN_HUNGER_DEATH * 0.8; // Hunger level that triggers speed reduction
+export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = HUMAN_HUNGER_DEATH * 0.95; // Hunger level that prevents procreation
 export const HUMAN_FOOD_HUNGER_REDUCTION: number = 30; // How much hunger is reduced by eating food
 export const HUMAN_MAX_FOOD: number = 10; // Maximum food a human can carry
 export const HUMAN_BASE_SPEED: number = 10; // Base movement speed in pixels per second
@@ -52,7 +52,7 @@ export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
 export const HUMAN_PROCREATION_COOLDOWN_HOURS: number = 24; // 1 game day
 export const HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER: number = 1.25; // Hunger increases 25% faster during pregnancy
 export const CHILD_HUNGER_INCREASE_RATE_MODIFIER: number = 1.5; // Hunger increases 50% faster for children
-export const CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = 60; // Hunger level for child to request food from parent
+export const CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = HUMAN_HUNGER_DEATH * 0.6; // Hunger level for child to request food from parent
 export const PARENT_FEEDING_RANGE: number = 50; // Range in pixels for parent to feed child
 export const PARENT_FEED_CHILD_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for a parent after feeding a child
 export const CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 350; // Radius in pixels for a hungry child to search for a parent with food
@@ -100,10 +100,10 @@ export const AI_PLANTING_GRID_OFFSETS = [
 ];
 
 // Human AI Constants
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 60; // AI decides to eat if hunger >= this and has food
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 50; // AI decides to gather if hunger >= this
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 70;
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 80; // AI decides to attack if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to eat if hunger >= this and has food
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.5; // AI decides to gather if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
@@ -112,7 +112,7 @@ export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
 export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
-export const AI_ATTACK_HUNGER_THRESHOLD: number = 85;
+export const AI_ATTACK_HUNGER_THRESHOLD: number = HUMAN_HUNGER_DEATH * 0.85;
 export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_DEFEND_BUSH_KARMA_THRESHOLD = -5; // Karma threshold to defend a bush
@@ -124,6 +124,15 @@ export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;
 export const AI_DEFEND_BUSH_RANGE = 80; // Range in pixels for AI to defend a claimed bush
 export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage in battle around their leader
 export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
+
+// Leader Meta AI Strategy Constants
+export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
+export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid
+export const LEADER_WORLD_ANALYSIS_GRID_STEP = 400; // The distance between the centers of each cell
+export const LEADER_HABITAT_SCORE_BUSH_WEIGHT = 10; // Points for each bush in a region
+export const LEADER_HABITAT_SCORE_DANGER_WEIGHT = -5; // Points against for each enemy/dangerous entity in a region
+export const LEADER_MIGRATION_SUPERIORITY_THRESHOLD = 1.5; // How much better a new habitat must be to consider moving
+export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat
 
 // Human AI Fleeing Constants
 
@@ -198,6 +207,14 @@ export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;
 export const UI_MINIATURE_HEIR_CROWN_SIZE = 8;
 export const UI_MINIATURE_PARTNER_CROWN_SIZE = 8;
 export const UI_MINIATURE_PARENT_CROWN_SIZE = 8;
+
+// UI Tribe List Constants
+export const UI_TRIBE_LIST_BADGE_SIZE = 24;
+export const UI_TRIBE_LIST_ITEM_HEIGHT = 40;
+export const UI_TRIBE_LIST_HIGHLIGHT_COLOR = 'rgba(255, 215, 0, 0.2)'; // Gold with alpha
+export const UI_TRIBE_LIST_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.3)';
+export const UI_TRIBE_LIST_PADDING = 10;
+export const UI_TRIBE_LIST_SPACING = 8;
 
 // UI Attack Progress Bar Constants
 export const UI_ATTACK_PROGRESS_BAR_WIDTH = 40;

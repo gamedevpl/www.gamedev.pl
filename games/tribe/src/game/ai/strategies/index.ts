@@ -10,6 +10,7 @@ import { ProcreationStrategy } from './procreation-strategy';
 import { ChildSeekingFoodStrategy } from './child-seeking-food-strategy';
 import { ParentFeedingChildStrategy } from './parent-feeding-child-strategy';
 import { ParentSeekingFoodForChildStrategy } from './parent-seeking-food-for-child-strategy';
+import { LeaderMetaStrategy } from './leader-meta-strategy';
 import { HumanAIStrategy } from './ai-strategy-types';
 
 /**
@@ -19,6 +20,7 @@ import { HumanAIStrategy } from './ai-strategy-types';
  */
 export const humanAIStrategies: HumanAIStrategy<unknown>[] = [
   new FleeingStrategy(),
+  new LeaderMetaStrategy(),
   new AttackingStrategy(),
   new TribeBattleStrategy(),
   new DefendingClaimedBushStrategy(),

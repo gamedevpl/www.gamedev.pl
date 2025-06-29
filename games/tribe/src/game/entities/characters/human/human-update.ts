@@ -123,6 +123,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.feedChildCooldownTime < 0) entity.feedChildCooldownTime = 0;
   }
 
+  if (entity.leaderMetaStrategyCooldown) {
+    entity.leaderMetaStrategyCooldown -= gameHoursDelta;
+    if (entity.leaderMetaStrategyCooldown < 0) entity.leaderMetaStrategyCooldown = 0;
+  }
+
   if (!entity.isAdult) {
     entity.hunger +=
       deltaTime *

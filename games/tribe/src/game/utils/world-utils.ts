@@ -13,12 +13,17 @@ import {
   AI_DEFEND_CLAIMED_BUSH_RANGE,
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
+import {
+ LEADER_HABITAT_SCORE_BUSH_WEIGHT,
+ LEADER_HABITAT_SCORE_DANGER_WEIGHT,
+ LEADER_WORLD_ANALYSIS_GRID_SIZE,
+} from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
 import { TRIBE_BADGE_EMOJIS } from '../world-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
+import { PlayerActionHint, PlayerActionType, TribeInfo } from '../ui/ui-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 
@@ -679,4 +684,139 @@ export function countTribeAttackersOnTarget(
     }
   }
   return count;
+}
+
+export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
+  const tribes: Map<EntityId, { leaderId: EntityId; tribeBadge: string; members: HumanEntity[] }> = new Map();
+
+  const humans = Array.from(gameState.entities.entities.values()).filter(
+    (e) => e.type === 'human',
+  ) as HumanEntity[];
+
+  for (const human of humans) {
+    if (human.leaderId) {
+      if (!tribes.has(human.leaderId)) {
+        tribes.set(human.leaderId, {
+          leaderId: human.leaderId,
+          tribeBadge: human.tribeBadge || '?',
+          members: [],
+        });
+      }
+      tribes.get(human.leaderId)?.members.push(human);
+    }
+  }
+
+  const tribeInfoList: TribeInfo[] = Array.from(tribes.values()).map((tribe) => {
+    const leader = gameState.entities.entities.get(tribe.leaderId) as HumanEntity | undefined;
+
+    return {
+      leaderId: tribe.leaderId,
+      tribeBadge: tribe.tribeBadge,
+      memberCount: tribe.members.length,
+      isPlayerTribe: tribe.leaderId === playerLeaderId,
+      leaderAge: leader?.age ?? 0,
+      leaderGender: leader?.gender ?? 'male',
+    };
+  });
+
+  // Sort the list: player's tribe first, then by member count descending
+  tribeInfoList.sort((a, b) => (a.isPlayerTribe ? -1 : b.isPlayerTribe ? 1 : b.memberCount - a.memberCount));
+
+  return tribeInfoList;
+}
+
+export function getTribeForLeader(leaderId: EntityId, gameState: IndexedWorldState): HumanEntity[] {
+  const tribeMembers = gameState.search.human.byProperty('leaderId', leaderId);
+  const leader = gameState.entities.entities.get(leaderId) as HumanEntity | undefined;
+  if (leader) {
+    // Ensure the leader is included if they are managing their own tribe
+    if (!tribeMembers.some((m) => m.id === leaderId)) {
+      tribeMembers.push(leader);
+    }
+  }
+  return tribeMembers;
+}
+
+export function calculateHabitabilityScore(
+  position: Vector2D,
+  radius: number,
+  gameState: IndexedWorldState,
+  evaluatingTribeId: EntityId,
+): { score: number; occupyingTribeId?: EntityId } {
+  const bushes = gameState.search.berryBush.byRadius(position, radius);
+  const enemies = gameState.search.human.byRadius(position, radius).filter((h) => h.leaderId !== evaluatingTribeId);
+
+  let score = bushes.length * LEADER_HABITAT_SCORE_BUSH_WEIGHT;
+  score += enemies.length * LEADER_HABITAT_SCORE_DANGER_WEIGHT;
+
+  let occupyingTribeId: EntityId | undefined;
+  if (enemies.length > 0) {
+    const enemyTribeCounts: Record<EntityId, number> = {};
+    for (const enemy of enemies) {
+      if (enemy.leaderId) {
+        enemyTribeCounts[enemy.leaderId] = (enemyTribeCounts[enemy.leaderId] || 0) + 1;
+      }
+    }
+    let maxCount = 0;
+    for (const tribeId in enemyTribeCounts) {
+      if (enemyTribeCounts[tribeId] > maxCount) {
+        maxCount = enemyTribeCounts[tribeId];
+        occupyingTribeId = parseInt(tribeId, 10);
+      }
+    }
+  }
+
+  return { score, occupyingTribeId };
+}
+
+export function findBestHabitat(
+  gameState: IndexedWorldState,
+  evaluatingTribeId: EntityId,
+  gridStep: number,
+): { position: Vector2D; score: number; occupyingTribeId?: EntityId } | null {
+  let bestScore = -Infinity;
+  let bestHabitat: { position: Vector2D; score: number; occupyingTribeId?: EntityId } | null = null;
+
+  for (let x = 0; x < gameState.mapDimensions.width; x += gridStep) {
+    for (let y = 0; y < gameState.mapDimensions.height; y += gridStep) {
+      const position = { x, y };
+      const { score, occupyingTribeId } = calculateHabitabilityScore(
+        position,
+        LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
+        gameState,
+        evaluatingTribeId,
+      );
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestHabitat = { position, score, occupyingTribeId };
+      }
+    }
+  }
+
+  return bestHabitat;
+}
+
+export function calculateTribeStrength(tribeMembers: HumanEntity[]): number {
+  if (tribeMembers.length === 0) {
+    return 0;
+  }
+  return tribeMembers.reduce((total, member) => {
+    let strength = member.hitpoints;
+    strength += (member.maxAge - member.age) * 0.5; // Younger members are slightly stronger
+    strength += member.food.length * 2; // Well-fed members are stronger
+    return total + strength;
+  }, 0);
+}
+
+export function isTribeUnderAttack(tribeMembers: HumanEntity[], gameState: IndexedWorldState): boolean {
+  for (const member of tribeMembers) {
+    const aggressors = gameState.search.human
+      .byProperty('attackTargetId', member.id)
+      .filter((attacker) => attacker.leaderId !== member.leaderId);
+    if (aggressors.length > 0) {
+      return true;
+    }
+  }
+  return false;
 }

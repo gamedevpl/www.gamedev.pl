@@ -25,8 +25,8 @@ import {
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_FAMILY_MEMBER_ICON_SIZE,
   KARMA_DEBUG_RENDER_COLOR,
-  UI_TEXT_COLOR,
   UI_HITPOINTS_BAR_COLOR,
+  HUMAN_HUNGER_DEATH,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -35,7 +35,7 @@ import { renderHumanCorpse } from './render/render-human-corpse';
 import { HumanCorpseEntity } from './entities/characters/human/human-corpse-types';
 import { renderCharacter } from './render/render-character';
 import { HumanEntity } from './entities/characters/human/human-types';
-import { findChildren, findHeir, findPlayerEntity } from './utils/world-utils';
+import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils/world-utils';
 import { renderVisualEffect } from './render/render-effects';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect } from './visual-effects/visual-effect-types';
@@ -47,6 +47,7 @@ import {
   drawButton,
   drawFamilyMemberBar,
   drawFoodBar,
+  renderTribeList,
 } from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,14 +194,12 @@ export function renderGame(
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---
-  ctx.fillStyle = UI_TEXT_COLOR;
+  // --- UI Rendering ---\n  ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  // --- Top-Left UI ---
-  ctx.textAlign = 'left';
+  // --- Top-Left UI ---\n  ctx.textAlign = 'left';
   let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
   // Time Display
@@ -388,7 +387,7 @@ export function renderGame(
       uiLineY,
       UI_BAR_WIDTH,
       UI_BAR_HEIGHT,
-      (100 - player.hunger) / 100,
+      (HUMAN_HUNGER_DEATH - player.hunger) / HUMAN_HUNGER_DEATH,
       UI_BAR_BACKGROUND_COLOR,
       UI_HUNGER_BAR_COLOR,
     );
@@ -410,8 +409,7 @@ export function renderGame(
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
 
-  // --- Top-Right UI ---
-  ctx.textAlign = 'right';
+  // --- Top-Right UI ---\n  ctx.textAlign = 'right';
   let currentButtonX = ctx.canvas.width - UI_PADDING;
 
   gameState.uiButtons.forEach((button) => {
@@ -438,6 +436,10 @@ export function renderGame(
     drawButton(ctx, button);
     currentButtonX -= UI_BUTTON_WIDTH + UI_BUTTON_SPACING;
   });
+
+  // --- Bottom-Left UI (Tribe List) ---
+  const tribesInfo = getTribesInfo(gameState, player?.leaderId);
+  renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
 
   // Reset shadow for other UI elements if needed
   ctx.shadowColor = 'transparent';

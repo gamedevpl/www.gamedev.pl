@@ -8,13 +8,21 @@ import {
   PLAYER_HIGHLIGHT_COLOR,
   PLAYER_PARENT_HIGHLIGHT_COLOR,
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
+  UI_FONT_SIZE,
+  UI_MINIATURE_CHARACTER_SIZE,
   UI_MINIATURE_HEIR_CROWN_SIZE,
   UI_MINIATURE_PARENT_CROWN_SIZE,
   UI_MINIATURE_PARTNER_CROWN_SIZE,
   UI_MINIATURE_PLAYER_CROWN_SIZE,
+  UI_TRIBE_LIST_BACKGROUND_COLOR,
+  UI_TRIBE_LIST_BADGE_SIZE,
+  UI_TRIBE_LIST_HIGHLIGHT_COLOR,
+  UI_TRIBE_LIST_ITEM_HEIGHT,
+  UI_TRIBE_LIST_PADDING,
+  UI_TRIBE_LIST_SPACING,
 } from '../world-consts';
 import { Vector2D } from '../utils/math-types';
-import { PlayerActionHint, PLAYER_ACTION_EMOJIS, ClickableUIButton } from '../ui/ui-types';
+import { PlayerActionHint, PLAYER_ACTION_EMOJIS, ClickableUIButton, TribeInfo } from '../ui/ui-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { FoodItem, FOOD_TYPE_EMOJIS } from '../food/food-types';
 
@@ -348,6 +356,68 @@ export function drawFamilyMemberBar(
       isPartner,
       isParent,
     );
+  }
+
+  ctx.restore();
+}
+
+export function renderTribeList(
+  ctx: CanvasRenderingContext2D,
+  tribes: TribeInfo[],
+  _canvasWidth: number,
+  canvasHeight: number,
+): void {
+  if (tribes.length === 0) {
+    return;
+  }
+
+  ctx.save();
+
+  const startX = UI_TRIBE_LIST_PADDING;
+  const panelWidth =
+    UI_TRIBE_LIST_BADGE_SIZE + UI_MINIATURE_CHARACTER_SIZE + ctx.measureText(' x 00').width + UI_TRIBE_LIST_PADDING * 4;
+
+  const totalPanelHeight = tribes.length * UI_TRIBE_LIST_ITEM_HEIGHT + (tribes.length - 1) * UI_TRIBE_LIST_SPACING;
+
+  const panelY = canvasHeight - totalPanelHeight - UI_TRIBE_LIST_PADDING;
+
+  // Draw background for the entire list
+  ctx.fillStyle = UI_TRIBE_LIST_BACKGROUND_COLOR;
+  ctx.fillRect(startX, panelY, panelWidth, totalPanelHeight);
+
+  // Draw each tribe entry from top to bottom
+  for (let i = 0; i < tribes.length; i++) {
+    const tribe = tribes[i];
+    const entryY = panelY + i * (UI_TRIBE_LIST_ITEM_HEIGHT + UI_TRIBE_LIST_SPACING);
+
+    // Highlight player's tribe
+    if (tribe.isPlayerTribe) {
+      ctx.fillStyle = UI_TRIBE_LIST_HIGHLIGHT_COLOR;
+      ctx.fillRect(startX, entryY, panelWidth, UI_TRIBE_LIST_ITEM_HEIGHT);
+    }
+
+    // --- Badge ---
+    const badgeX = startX + UI_TRIBE_LIST_PADDING;
+    const badgeY = entryY + UI_TRIBE_LIST_ITEM_HEIGHT / 2;
+    ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE}px "Press Start 2P", Arial`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(tribe.tribeBadge, badgeX, badgeY);
+
+    // --- Miniature Character ---
+    const miniatureSize = UI_MINIATURE_CHARACTER_SIZE * 0.9;
+    const miniatureX = badgeX + UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING * 1.5;
+    const miniatureY = entryY + (UI_TRIBE_LIST_ITEM_HEIGHT / 5) * 3;
+    renderMiniatureCharacter(ctx, { x: miniatureX, y: miniatureY }, miniatureSize, tribe.leaderAge, tribe.leaderGender);
+
+    // --- Member Count ---
+    const textX = miniatureX + miniatureSize / 2 + UI_TRIBE_LIST_PADDING;
+    const textY = entryY + UI_TRIBE_LIST_ITEM_HEIGHT / 2;
+    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+    ctx.fillStyle = 'white';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillText(`x ${tribe.memberCount}`, textX, textY);
   }
 
   ctx.restore();
