@@ -1,5 +1,6 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import {
+  CHILD_TO_ADULT_AGE,
   PLAYER_ACTION_HINT_FONT_SIZE,
   PLAYER_ACTION_OUTLINE_COLOR,
   PLAYER_ACTION_OUTLINE_DASH_PATTERN,
@@ -266,6 +267,9 @@ export function renderMiniatureCharacter(
   isPartner: boolean = false,
   isParent: boolean = false,
 ): void {
+  if (age < CHILD_TO_ADULT_AGE) {
+    size = size * 0.75; // Scale down children to 75% of the size
+  }
   // The TribeHuman2D.render function handles the visual representation of age and gender.
   // It will render characters with gray hair when they reach old age, and children smaller if size is adjusted.
   TribeHuman2D.render(
