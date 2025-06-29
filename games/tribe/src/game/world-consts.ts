@@ -209,12 +209,14 @@ export const UI_MINIATURE_PARTNER_CROWN_SIZE = 8;
 export const UI_MINIATURE_PARENT_CROWN_SIZE = 8;
 
 // UI Tribe List Constants
-export const UI_TRIBE_LIST_BADGE_SIZE = 24;
+export const UI_TRIBE_LIST_BADGE_SIZE = 28;
 export const UI_TRIBE_LIST_ITEM_HEIGHT = 40;
 export const UI_TRIBE_LIST_HIGHLIGHT_COLOR = 'rgba(255, 215, 0, 0.2)'; // Gold with alpha
 export const UI_TRIBE_LIST_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.3)';
 export const UI_TRIBE_LIST_PADDING = 10;
 export const UI_TRIBE_LIST_SPACING = 8;
+export const UI_TRIBE_LIST_COUNT_FONT_SIZE = 11;
+export const UI_TRIBE_LIST_MINIATURE_SIZE = 20;
 
 // UI Attack Progress Bar Constants
 export const UI_ATTACK_PROGRESS_BAR_WIDTH = 40;

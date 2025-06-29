@@ -8,16 +8,16 @@ import {
   PLAYER_HIGHLIGHT_COLOR,
   PLAYER_PARENT_HIGHLIGHT_COLOR,
   PLAYER_PARTNER_HIGHLIGHT_COLOR,
-  UI_FONT_SIZE,
-  UI_MINIATURE_CHARACTER_SIZE,
   UI_MINIATURE_HEIR_CROWN_SIZE,
   UI_MINIATURE_PARENT_CROWN_SIZE,
   UI_MINIATURE_PARTNER_CROWN_SIZE,
   UI_MINIATURE_PLAYER_CROWN_SIZE,
   UI_TRIBE_LIST_BACKGROUND_COLOR,
   UI_TRIBE_LIST_BADGE_SIZE,
+  UI_TRIBE_LIST_COUNT_FONT_SIZE,
   UI_TRIBE_LIST_HIGHLIGHT_COLOR,
   UI_TRIBE_LIST_ITEM_HEIGHT,
+  UI_TRIBE_LIST_MINIATURE_SIZE,
   UI_TRIBE_LIST_PADDING,
   UI_TRIBE_LIST_SPACING,
 } from '../world-consts';
@@ -374,11 +374,24 @@ export function renderTribeList(
   ctx.save();
 
   const startX = UI_TRIBE_LIST_PADDING;
+  // Calculate panel width dynamically based on content
+  const adultText = ` ${'00'}`;
+  const childText = ` ${'00'}`;
+  ctx.font = `${UI_TRIBE_LIST_COUNT_FONT_SIZE}px "Press Start 2P", Arial`;
+  const adultTextWidth = ctx.measureText(adultText).width;
+  const childTextWidth = ctx.measureText(childText).width;
+
   const panelWidth =
-    UI_TRIBE_LIST_BADGE_SIZE + UI_MINIATURE_CHARACTER_SIZE + ctx.measureText(' x 00').width + UI_TRIBE_LIST_PADDING * 4;
+    UI_TRIBE_LIST_PADDING + // left padding
+    UI_TRIBE_LIST_BADGE_SIZE + // badge size
+    UI_TRIBE_LIST_PADDING + // padding between badge and counts
+    UI_TRIBE_LIST_MINIATURE_SIZE + // adult icon
+    adultTextWidth + // adult count text
+    UI_TRIBE_LIST_PADDING / 2 + // padding between counts
+    UI_TRIBE_LIST_MINIATURE_SIZE + // child icon
+    childTextWidth; // child count text;
 
   const totalPanelHeight = tribes.length * UI_TRIBE_LIST_ITEM_HEIGHT + (tribes.length - 1) * UI_TRIBE_LIST_SPACING;
-
   const panelY = canvasHeight - totalPanelHeight - UI_TRIBE_LIST_PADDING;
 
   // Draw background for the entire list
@@ -389,6 +402,7 @@ export function renderTribeList(
   for (let i = 0; i < tribes.length; i++) {
     const tribe = tribes[i];
     const entryY = panelY + i * (UI_TRIBE_LIST_ITEM_HEIGHT + UI_TRIBE_LIST_SPACING);
+    const centerY = entryY + UI_TRIBE_LIST_ITEM_HEIGHT / 2;
 
     // Highlight player's tribe
     if (tribe.isPlayerTribe) {
@@ -396,28 +410,55 @@ export function renderTribeList(
       ctx.fillRect(startX, entryY, panelWidth, UI_TRIBE_LIST_ITEM_HEIGHT);
     }
 
+    let currentX = startX + UI_TRIBE_LIST_PADDING;
+
     // --- Badge ---
-    const badgeX = startX + UI_TRIBE_LIST_PADDING;
-    const badgeY = entryY + UI_TRIBE_LIST_ITEM_HEIGHT / 2;
     ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE}px "Press Start 2P", Arial`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillText(tribe.tribeBadge, badgeX, badgeY);
+    ctx.fillText(tribe.tribeBadge, currentX, centerY - UI_TRIBE_LIST_BADGE_SIZE / 4);
+    currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING * 1.1;
 
-    // --- Miniature Character ---
-    const miniatureSize = UI_MINIATURE_CHARACTER_SIZE * 0.9;
-    const miniatureX = badgeX + UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING * 1.5;
-    const miniatureY = entryY + (UI_TRIBE_LIST_ITEM_HEIGHT / 5) * 3;
-    renderMiniatureCharacter(ctx, { x: miniatureX, y: miniatureY }, miniatureSize, tribe.leaderAge, tribe.leaderGender);
+    // --- Adult Count ---
+    if (tribe.adultCount > 0) {
+      // Render adult miniature
+      renderMiniatureCharacter(
+        ctx,
+        { x: currentX + UI_TRIBE_LIST_MINIATURE_SIZE / 2, y: centerY },
+        UI_TRIBE_LIST_MINIATURE_SIZE,
+        25, // Representative adult age
+        'male', // Gender doesn't matter for the icon here
+      );
+      currentX += UI_TRIBE_LIST_MINIATURE_SIZE / 2;
 
-    // --- Member Count ---
-    const textX = miniatureX + miniatureSize / 2 + UI_TRIBE_LIST_PADDING;
-    const textY = entryY + UI_TRIBE_LIST_ITEM_HEIGHT / 2;
-    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
-    ctx.fillStyle = 'white';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillText(`x ${tribe.memberCount}`, textX, textY);
+      // Render adult count text
+      ctx.font = `${UI_TRIBE_LIST_COUNT_FONT_SIZE}px "Press Start 2P", Arial`;
+      ctx.fillStyle = 'white';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(` ${tribe.adultCount}`, currentX, centerY);
+      currentX += ctx.measureText(` ${tribe.adultCount}`).width + UI_TRIBE_LIST_PADDING / 2;
+    }
+
+    // --- Child Count ---
+    if (tribe.childCount > 0) {
+      // Render child miniature
+      renderMiniatureCharacter(
+        ctx,
+        { x: currentX + UI_TRIBE_LIST_MINIATURE_SIZE / 2, y: centerY },
+        UI_TRIBE_LIST_MINIATURE_SIZE,
+        1, // Representative child age
+        'female', // Gender doesn't matter for the icon here
+      );
+      currentX += UI_TRIBE_LIST_MINIATURE_SIZE / 2;
+
+      // Render child count text
+      ctx.font = `${UI_TRIBE_LIST_COUNT_FONT_SIZE}px "Press Start 2P", Arial`;
+      ctx.fillStyle = 'white';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(` ${tribe.childCount}`, currentX, centerY);
+    }
   }
 
   ctx.restore();

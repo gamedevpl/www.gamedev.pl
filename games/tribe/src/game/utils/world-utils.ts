@@ -14,9 +14,9 @@ import {
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
 import {
- LEADER_HABITAT_SCORE_BUSH_WEIGHT,
- LEADER_HABITAT_SCORE_DANGER_WEIGHT,
- LEADER_WORLD_ANALYSIS_GRID_SIZE,
+  LEADER_HABITAT_SCORE_BUSH_WEIGHT,
+  LEADER_HABITAT_SCORE_DANGER_WEIGHT,
+  LEADER_WORLD_ANALYSIS_GRID_SIZE,
 } from '../world-consts';
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
@@ -708,19 +708,26 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
 
   const tribeInfoList: TribeInfo[] = Array.from(tribes.values()).map((tribe) => {
     const leader = gameState.entities.entities.get(tribe.leaderId) as HumanEntity | undefined;
+    const adultCount = tribe.members.filter((m) => m.isAdult).length;
+    const childCount = tribe.members.length - adultCount;
 
     return {
       leaderId: tribe.leaderId,
       tribeBadge: tribe.tribeBadge,
-      memberCount: tribe.members.length,
+      adultCount,
+      childCount,
       isPlayerTribe: tribe.leaderId === playerLeaderId,
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
     };
   });
 
-  // Sort the list: player's tribe first, then by member count descending
-  tribeInfoList.sort((a, b) => (a.isPlayerTribe ? -1 : b.isPlayerTribe ? 1 : b.memberCount - a.memberCount));
+  // Sort the list: player's tribe first, then by total member count descending
+  tribeInfoList.sort((a, b) => {
+    if (a.isPlayerTribe) return -1;
+    if (b.isPlayerTribe) return 1;
+    return b.adultCount + b.childCount - (a.adultCount + a.childCount);
+  });
 
   return tribeInfoList;
 }

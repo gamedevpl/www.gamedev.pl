@@ -27,7 +27,8 @@ export interface PlayerActionHint {
 export interface TribeInfo {
   leaderId: EntityId;
   tribeBadge: string;
-  memberCount: number;
+  adultCount: number;
+  childCount: number;
   isPlayerTribe: boolean;
   leaderAge: number;
   leaderGender: 'male' | 'female';
