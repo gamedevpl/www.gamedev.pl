@@ -211,7 +211,7 @@ export const UI_MINIATURE_PARENT_CROWN_SIZE = 8;
 // UI Tribe List Constants
 export const UI_TRIBE_LIST_BADGE_SIZE = 28;
 export const UI_TRIBE_LIST_ITEM_HEIGHT = 40;
-export const UI_TRIBE_LIST_HIGHLIGHT_COLOR = 'rgba(255, 215, 0, 0.2)'; // Gold with alpha
+export const UI_TRIBE_LIST_HIGHLIGHT_COLOR = 'rgba(255, 215, 0, 0.7)'; // Gold with alpha
 export const UI_TRIBE_LIST_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.3)';
 export const UI_TRIBE_LIST_PADDING = 10;
 export const UI_TRIBE_LIST_SPACING = 8;
