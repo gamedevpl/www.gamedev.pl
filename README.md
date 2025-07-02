@@ -11,6 +11,7 @@ On Gamedev.pl, we create indie games which are open source.
 - [monster-steps](./games/monster-steps): Monster Steps is a strategic puzzle game created for the js13k 2024 competition. Players navigate through a grid-based world, avoiding monsters that appear every 13 steps while trying to reach their goal.
 - [nukes](./games/nukes): A thermonuclear simulation game.
 - [xmas](./games/xmas): Being Santa Claus is serious business! A fast-paced arcade game combining strategic gift delivery with Dragon Ball-inspired combat mechanics.
+- [tribe](./games/tribe): You start as Adam and Eve!
 
 ## Website
 

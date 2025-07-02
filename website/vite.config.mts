@@ -45,6 +45,11 @@ export default defineConfig({
           dest: 'games/',
           rename: 'hungry-lion',
         },
+        {
+          src: '../games/tribe/dist',
+          dest: 'games/',
+          rename: 'tribe',
+        },
       ],
     }),
   ],
