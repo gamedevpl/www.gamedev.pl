@@ -21,7 +21,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^2.0.4",
     "eslint": "^8.54.0",
-    "genaicode": "^0.10.3",
+    "genaicode": "^0.10.4",
     "jsdom": "^24.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.4",
