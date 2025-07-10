@@ -1,0 +1,242 @@
+import { GameWorldState } from '../world-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
+import { Tutorial, TutorialState, TutorialStep, TutorialStepKey, TransitionState } from './tutorial-types';
+import {
+  HUMAN_HUNGER_THRESHOLD_TUTORIAL,
+  HUMAN_INTERACTION_RANGE,
+  UI_TUTORIAL_TRANSITION_DURATION_SECONDS,
+  AI_ATTACK_ENEMY_RANGE,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+} from '../world-consts';
+import { findClosestEntity, findPlayerEntity, findTribeMembers, areFamily, findChildren } from '../utils/world-utils';
+import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+
+const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    key: TutorialStepKey.MOVE,
+    title: 'Movement',
+    text: 'Use WASD or Arrow Keys to move your character around the world.',
+    condition: (world: GameWorldState) => world.hasPlayerMovedEver,
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.HUNGER,
+    title: 'Hunger',
+    text: 'Your character gets hungry over time. Watch the hunger bar!',
+    condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > HUMAN_HUNGER_THRESHOLD_TUTORIAL,
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.FIND_BUSH,
+    title: 'Find Food',
+    text: 'Look for berry bushes. They are your primary source of food.',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      const closestBush = findClosestEntity<BerryBushEntity>(
+        player,
+        world,
+        'berryBush',
+        HUMAN_INTERACTION_RANGE * 5,
+        (b) => b.food.length > 0,
+      );
+      return !!closestBush;
+    },
+    getTarget: (world: GameWorldState, player: HumanEntity) => {
+      const closestBush = findClosestEntity<BerryBushEntity>(
+        player,
+        world,
+        'berryBush',
+        HUMAN_INTERACTION_RANGE * 5,
+        (b) => b.food.length > 0,
+      );
+      return closestBush ? closestBush.id : null;
+    },
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.GATHER,
+    title: 'Gather Berries',
+    text: "Get close to a bush and press 'E' to gather berries.",
+    condition: (_world: GameWorldState, player: HumanEntity) => player.food.length > 0,
+    getTarget: (world: GameWorldState, player: HumanEntity) => {
+      const closestBush = findClosestEntity<BerryBushEntity>(
+        player,
+        world,
+        'berryBush',
+        HUMAN_INTERACTION_RANGE,
+        (b) => b.food.length > 0,
+      );
+      return closestBush ? closestBush.id : null;
+    },
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.EAT,
+    title: 'Eat',
+    text: "When you are hungry and have food, press 'F' to eat.",
+    condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'eating',
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.PROCREATE,
+    title: 'Procreate',
+    text: "Find a mate and press 'R' to start a family. This is how you continue your lineage.",
+    condition: (world: GameWorldState, player: HumanEntity) => findChildren(world, player).length > 0,
+    getTarget: (world: GameWorldState, player: HumanEntity) => {
+      const potentialPartner = findClosestEntity<HumanEntity>(player, world, 'human', HUMAN_INTERACTION_RANGE, (h) => {
+        const human = h as HumanEntity;
+        return (
+          (human.id !== player.id &&
+            human.gender !== player.gender &&
+            human.isAdult &&
+            player.isAdult &&
+            human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+            player.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+            (human.procreationCooldown || 0) <= 0 &&
+            (player.procreationCooldown || 0) <= 0 &&
+            (human.gender === 'female'
+              ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
+              : !player.isPregnant)) ??
+          false
+        );
+      });
+      return potentialPartner ? potentialPartner.id : null;
+    },
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.BECOME_LEADER,
+    title: 'Become a Leader',
+    text: 'As a male, procreating for the first time makes you a tribe leader. Your partner will join your new tribe.',
+    condition: (_world: GameWorldState, player: HumanEntity) => !!player.leaderId && player.leaderId === player.id,
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.FORM_TRIBE,
+    title: 'Grow your Tribe',
+    text: 'Your children will be born into your tribe. When they grow up, they will follow and help you.',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      if (player.leaderId !== player.id) return false;
+      // Condition is met when the leader has at least one other ADULT member in their tribe.
+      const members = findTribeMembers(player.id, world);
+      return members.some((m) => m.id !== player.id && m.isAdult);
+    },
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.ATTACK,
+    title: 'Combat',
+    text: "Seek out members of other tribes. You can attack them by pressing 'Q' when you are near.",
+    condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'attacking',
+    getTarget: (world: GameWorldState, player: HumanEntity) => {
+      const closestEnemy = findClosestEntity<HumanEntity>(
+        player,
+        world,
+        'human',
+        AI_ATTACK_ENEMY_RANGE,
+        (h) => h.id !== player.id && !areFamily(player, h, world) && h.leaderId !== player.leaderId,
+      );
+      return closestEnemy ? closestEnemy.id : null;
+    },
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.CALL_TO_ATTACK,
+    title: 'Call to Attack',
+    text: "As a leader, you can command your tribe to attack. Press 'V' near enemies.",
+    condition: (_world: GameWorldState, player: HumanEntity) => player.isCallingToAttack || false,
+    isCompleted: false,
+  },
+  {
+    key: TutorialStepKey.PLANT_BUSH,
+    title: 'Farming',
+    text: "You can plant new berry bushes. Carry some berries and press 'B' to plant.",
+    condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'planting',
+    isCompleted: false,
+  },
+];
+
+export function createTutorial(): Tutorial {
+  return {
+    steps: TUTORIAL_STEPS.map((step) => ({ ...step, isCompleted: false })),
+  };
+}
+
+export function createTutorialState(): TutorialState {
+  return {
+    currentStepIndex: 0,
+    completedSteps: new Set(),
+    isActive: true,
+    transitionState: TransitionState.FADING_IN,
+    transitionAlpha: 0,
+    highlightedEntityId: null,
+  };
+}
+
+export function updateTutorial(world: GameWorldState, deltaTime: number): void {
+  const state = world.tutorialState;
+
+  if (!state.isActive) {
+    state.transitionState = TransitionState.INACTIVE;
+    state.highlightedEntityId = null;
+    return;
+  }
+
+  const player = findPlayerEntity(world);
+  if (!player) {
+    state.isActive = false;
+    state.transitionState = TransitionState.INACTIVE;
+    return;
+  }
+
+  const currentStep = world.tutorial.steps[state.currentStepIndex];
+  if (!currentStep) {
+    state.isActive = false;
+    state.transitionState = TransitionState.INACTIVE;
+    return;
+  }
+
+  const transitionSpeed = 1 / UI_TUTORIAL_TRANSITION_DURATION_SECONDS;
+
+  switch (state.transitionState) {
+    case TransitionState.FADING_IN:
+      state.transitionAlpha += transitionSpeed * deltaTime;
+      if (state.transitionAlpha >= 1) {
+        state.transitionAlpha = 1;
+        state.transitionState = TransitionState.ACTIVE;
+      }
+      break;
+
+    case TransitionState.ACTIVE:
+      if (currentStep.condition(world, player)) {
+        currentStep.isCompleted = true;
+        state.completedSteps.add(currentStep.key);
+        state.transitionState = TransitionState.FADING_OUT;
+      }
+      break;
+
+    case TransitionState.FADING_OUT:
+      state.transitionAlpha -= transitionSpeed * deltaTime;
+      if (state.transitionAlpha <= 0) {
+        state.transitionAlpha = 0;
+        if (state.currentStepIndex < world.tutorial.steps.length - 1) {
+          state.currentStepIndex++;
+          state.transitionState = TransitionState.FADING_IN;
+        } else {
+          state.isActive = false;
+          state.transitionState = TransitionState.INACTIVE;
+        }
+      }
+      break;
+  }
+
+  if (state.transitionState !== TransitionState.FADING_OUT && state.transitionState !== TransitionState.INACTIVE) {
+    if (currentStep.getTarget) {
+      state.highlightedEntityId = currentStep.getTarget(world, player);
+    } else {
+      state.highlightedEntityId = null;
+    }
+  } else {
+    state.highlightedEntityId = null;
+  }
+}

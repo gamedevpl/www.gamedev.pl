@@ -72,15 +72,7 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?:
-    | 'gathering'
-    | 'eating'
-    | 'moving'
-    | 'idle'
-    | 'procreating'
-    | 'seekingFood'
-    | 'attacking'
-    | 'planting';
+  activeAction?: HumanAction;
 
   /** Flag indicating if the human is currently issuing a call to attack. */
   isCallingToAttack?: boolean;
@@ -93,7 +85,7 @@ export interface HumanEntity extends Entity {
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
   attackTargetId?: EntityId;
- 
+
   /** Cooldown for the leader's high-level strategic decision-making. */
   leaderMetaStrategyCooldown?: number;
 
@@ -117,3 +109,14 @@ export interface HumanEntity extends Entity {
   /** Karma relationships with other humans. */
   karma: Karma;
 }
+
+export type HumanAction =
+  | 'gathering'
+  | 'eating'
+  | 'moving'
+  | 'idle'
+  | 'procreating'
+  | 'seekingFood'
+  | 'attacking'
+  | 'planting'
+  | 'callingToAttack';

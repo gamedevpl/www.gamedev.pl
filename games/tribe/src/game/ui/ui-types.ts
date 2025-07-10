@@ -1,3 +1,4 @@
+import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
 
 export enum PlayerActionType {
@@ -20,6 +21,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
 
 export interface PlayerActionHint {
   type: PlayerActionType;
+  action: HumanAction;
   key: string;
   targetEntity?: Entity;
 }

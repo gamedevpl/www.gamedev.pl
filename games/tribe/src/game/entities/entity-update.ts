@@ -40,7 +40,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply accumulated forces to velocity
   entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
 
-  // Zero velocity if it"s too small to prevent drifting
+  // Zero velocity if it's too small to prevent drifting
   if (vectorLength(entity.velocity) < 0.001) {
     entity.velocity = { x: 0, y: 0 };
   }

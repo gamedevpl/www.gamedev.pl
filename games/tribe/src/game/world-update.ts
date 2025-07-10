@@ -6,6 +6,7 @@ import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
 import { indexWorldState } from './world-index/world-state-index';
 import { findPlayerEntity } from './utils/world-utils';
 import { vectorLerp } from './utils/math-utils';
+import { updateTutorial } from './tutorial/tutorial-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -42,6 +43,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Process visual effects
     visualEffectsUpdate(indexedState);
+
+    // Update tutorial state
+    updateTutorial(indexedState, deltaTime);
 
     currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;

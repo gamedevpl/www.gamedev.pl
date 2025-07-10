@@ -31,6 +31,7 @@ export const MAX_ANCESTORS_TO_TRACK: number = 3;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_DEATH: number = 150; // Hunger level that causes death
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = HUMAN_HUNGER_DEATH * 0.8; // Hunger level that triggers speed reduction
+export const HUMAN_HUNGER_THRESHOLD_TUTORIAL: number = HUMAN_HUNGER_DEATH * 0.2; // Hunger level that triggers the tutorial
 export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = HUMAN_HUNGER_DEATH * 0.95; // Hunger level that prevents procreation
 export const HUMAN_FOOD_HUNGER_REDUCTION: number = 30; // How much hunger is reduced by eating food
 export const HUMAN_MAX_FOOD: number = 10; // Maximum food a human can carry
@@ -232,6 +233,18 @@ export const UI_BUTTON_SPACING: number = 20;
 export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
+
+// UI Tutorial Constants
+export const UI_TUTORIAL_PANEL_WIDTH: number = 400;
+export const UI_TUTORIAL_PANEL_PADDING: number = 20;
+export const UI_TUTORIAL_PANEL_BORDER_RADIUS: number = 10;
+export const UI_TUTORIAL_PANEL_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.7)';
+export const UI_TUTORIAL_PANEL_TEXT_COLOR: string = '#FFFFFF';
+export const UI_TUTORIAL_TITLE_FONT_SIZE: number = 20;
+export const UI_TUTORIAL_TEXT_FONT_SIZE: number = 16;
+export const UI_TUTORIAL_TRANSITION_DURATION_SECONDS: number = 0.5; // seconds for fade in/out
+export const UI_TUTORIAL_HIGHLIGHT_COLOR: string = '#FFD700'; // Gold
+export const UI_TUTORIAL_HIGHLIGHT_RADIUS: number = 40;
 
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;

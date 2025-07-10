@@ -5,6 +5,7 @@
 
 import { Entities } from './entities/entities-types';
 import { ClickableUIButton } from './ui/ui-types';
+import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 
@@ -30,9 +31,13 @@ export interface GameWorldState {
   viewportCenter: Vector2D;
   isPaused: boolean;
   isPlayerOnAutopilot: boolean;
+  hasPlayerMovedEver: boolean;
+  llmAutopilot?: Promise<void>;
   masterVolume: number; // Global volume level (0.0 to 1.0)
   isMuted: boolean; // Global mute state
   uiButtons: ClickableUIButton[];
+  tutorial: Tutorial;
+  tutorialState: TutorialState;
 }
 
 export type UpdateContext = {

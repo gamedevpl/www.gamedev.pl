@@ -27,6 +27,9 @@ import {
   KARMA_DEBUG_RENDER_COLOR,
   UI_HITPOINTS_BAR_COLOR,
   HUMAN_HUNGER_DEATH,
+  UI_TUTORIAL_HIGHLIGHT_COLOR,
+  UI_TUTORIAL_HIGHLIGHT_RADIUS,
+  UI_TEXT_COLOR,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -48,6 +51,8 @@ import {
   drawFamilyMemberBar,
   drawFoodBar,
   renderTribeList,
+  renderTutorialPanel,
+  renderTutorialHighlight,
 } from './render/render-ui';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -192,14 +197,33 @@ export function renderGame(
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
 
+  // Render tutorial highlight if active
+  if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityId) {
+    const highlightedEntity = gameState.entities.entities.get(gameState.tutorialState.highlightedEntityId);
+    if (highlightedEntity) {
+      renderWithWrapping(
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderTutorialHighlight,
+        highlightedEntity,
+        UI_TUTORIAL_HIGHLIGHT_RADIUS,
+        UI_TUTORIAL_HIGHLIGHT_COLOR,
+        gameState.time,
+      );
+    }
+  }
+
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---\n  ctx.fillStyle = UI_TEXT_COLOR;
+  // --- UI Rendering ---
+  ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-  // --- Top-Left UI ---\n  ctx.textAlign = 'left';
+  // --- Top-Left UI ---
+  ctx.textAlign = 'left';
   let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
   // Time Display
@@ -409,7 +433,8 @@ export function renderGame(
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
 
-  // --- Top-Right UI ---\n  ctx.textAlign = 'right';
+  // --- Top-Right UI ---
+  ctx.textAlign = 'right';
   let currentButtonX = ctx.canvas.width - UI_PADDING;
 
   gameState.uiButtons.forEach((button) => {
@@ -447,6 +472,11 @@ export function renderGame(
 
   if (player && playerActionHints.length > 0) {
     renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+  }
+
+  // Render tutorial panel if active
+  if (gameState.tutorialState.isActive) {
+    renderTutorialPanel(ctx, gameState.tutorialState, gameState.tutorial, ctx.canvas.width, ctx.canvas.height);
   }
 
   if (gameState.isPaused) {

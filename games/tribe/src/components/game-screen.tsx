@@ -330,15 +330,19 @@ export const GameScreen: React.FC = () => {
       } else if (key === 'arrowup' || key === 'w') {
         playerEntity.direction.y = -1;
         playerEntity.activeAction = 'moving';
+        gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowdown' || key === 's') {
         playerEntity.direction.y = 1;
         playerEntity.activeAction = 'moving';
+        gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowleft' || key === 'a') {
         playerEntity.direction.x = -1;
         playerEntity.activeAction = 'moving';
+        gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowright' || key === 'd') {
         playerEntity.direction.x = 1;
         playerEntity.activeAction = 'moving';
+        gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'q') {
         const humanTarget = findClosestEntity<HumanEntity>(
           playerEntity,

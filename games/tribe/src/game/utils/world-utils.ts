@@ -48,7 +48,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
 
   // Check for Eating
   if (player.food.length > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
-    actions.push({ type: PlayerActionType.Eat, key: 'f' });
+    actions.push({ type: PlayerActionType.Eat, action: 'eating', key: 'f' });
   }
 
   // Check for Gathering Food
@@ -91,7 +91,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     }
 
     if (target) {
-      actions.push({ type: PlayerActionType.GatherFood, key: 'e', targetEntity: target });
+      actions.push({ type: PlayerActionType.GatherFood, action: 'gathering', key: 'e', targetEntity: target });
     }
   }
 
@@ -114,7 +114,12 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     );
   });
   if (procreationTarget) {
-    actions.push({ type: PlayerActionType.Procreate, key: 'r', targetEntity: procreationTarget });
+    actions.push({
+      type: PlayerActionType.Procreate,
+      action: 'procreating',
+      key: 'r',
+      targetEntity: procreationTarget,
+    });
   }
 
   // Check for Attacking
@@ -126,12 +131,12 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     (h) => (h as HumanEntity).id !== player.id,
   );
   if (attackTarget) {
-    actions.push({ type: PlayerActionType.Attack, key: 'q', targetEntity: attackTarget });
+    actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
   }
 
   // Check for Planting
   if (player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING) {
-    actions.push({ type: PlayerActionType.PlantBush, key: 'b' });
+    actions.push({ type: PlayerActionType.PlantBush, action: 'planting', key: 'b' });
   }
 
   // Check for Call to Attack
@@ -143,7 +148,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
       PLAYER_CALL_TO_ATTACK_RADIUS,
     );
     if (nearbyEnemies.length > 0) {
-      actions.push({ type: PlayerActionType.CallToAttack, key: 'v' });
+      actions.push({ type: PlayerActionType.CallToAttack, action: 'callingToAttack', key: 'v' });
     }
   }
 
@@ -624,10 +629,7 @@ export function propagateNewLeaderToDescendants(
   }
 }
 
-export function findIntruderNearOwnedBushes(
-  owner: HumanEntity,
-  gameState: GameWorldState,
-): HumanEntity | null {
+export function findIntruderNearOwnedBushes(owner: HumanEntity, gameState: GameWorldState): HumanEntity | null {
   const indexedState = gameState as IndexedWorldState;
   const ownedBushes = indexedState.search.berryBush.byProperty('ownerId', owner.id);
 
@@ -637,10 +639,7 @@ export function findIntruderNearOwnedBushes(
 
   for (const bush of ownedBushes) {
     // Find nearby humans who could be intruders.
-    const nearbyHumans = indexedState.search.human.byRadius(
-      bush.position,
-      AI_DEFEND_CLAIMED_BUSH_RANGE,
-    );
+    const nearbyHumans = indexedState.search.human.byRadius(bush.position, AI_DEFEND_CLAIMED_BUSH_RANGE);
 
     for (const potentialIntruder of nearbyHumans) {
       if (
@@ -689,9 +688,7 @@ export function countTribeAttackersOnTarget(
 export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
   const tribes: Map<EntityId, { leaderId: EntityId; tribeBadge: string; members: HumanEntity[] }> = new Map();
 
-  const humans = Array.from(gameState.entities.entities.values()).filter(
-    (e) => e.type === 'human',
-  ) as HumanEntity[];
+  const humans = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human') as HumanEntity[];
 
   for (const human of humans) {
     if (human.leaderId) {
