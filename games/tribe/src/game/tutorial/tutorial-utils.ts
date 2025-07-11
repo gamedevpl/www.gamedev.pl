@@ -8,9 +8,18 @@ import {
   AI_ATTACK_ENEMY_RANGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
 } from '../world-consts';
-import { findClosestEntity, findPlayerEntity, findTribeMembers, areFamily, findChildren } from '../utils/world-utils';
+import {
+  findClosestEntity,
+  findPlayerEntity,
+  findTribeMembers,
+  areFamily,
+  findChildren,
+  getAvailablePlayerActions,
+} from '../utils/world-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+import { PlayerActionType } from '../ui/ui-types';
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -26,6 +35,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: 'Your character gets hungry over time. Watch the hunger bar!',
     condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > HUMAN_HUNGER_THRESHOLD_TUTORIAL,
     isCompleted: false,
+    minDisplayTime: UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
   },
   {
     key: TutorialStepKey.FIND_BUSH,
@@ -110,6 +120,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: 'As a male, procreating for the first time makes you a tribe leader. Your partner will join your new tribe.',
     condition: (_world: GameWorldState, player: HumanEntity) => !!player.leaderId && player.leaderId === player.id,
     isCompleted: false,
+    dependsOn: TutorialStepKey.PROCREATE,
   },
   {
     key: TutorialStepKey.FORM_TRIBE,
@@ -122,12 +133,16 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       return members.some((m) => m.id !== player.id && m.isAdult);
     },
     isCompleted: false,
+    dependsOn: TutorialStepKey.BECOME_LEADER,
   },
   {
     key: TutorialStepKey.ATTACK,
     title: 'Combat',
     text: "Seek out members of other tribes. You can attack them by pressing 'Q' when you are near.",
-    condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'attacking',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      const actions = getAvailablePlayerActions(world, player);
+      return actions.some((a) => a.type === PlayerActionType.Attack);
+    },
     getTarget: (world: GameWorldState, player: HumanEntity) => {
       const closestEnemy = findClosestEntity<HumanEntity>(
         player,
@@ -144,14 +159,20 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     key: TutorialStepKey.CALL_TO_ATTACK,
     title: 'Call to Attack',
     text: "As a leader, you can command your tribe to attack. Press 'V' near enemies.",
-    condition: (_world: GameWorldState, player: HumanEntity) => player.isCallingToAttack || false,
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      const actions = getAvailablePlayerActions(world, player);
+      return actions.some((a) => a.type === PlayerActionType.CallToAttack);
+    },
     isCompleted: false,
   },
   {
     key: TutorialStepKey.PLANT_BUSH,
     title: 'Farming',
     text: "You can plant new berry bushes. Carry some berries and press 'B' to plant.",
-    condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'planting',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      const actions = getAvailablePlayerActions(world, player);
+      return actions.some((a) => a.type === PlayerActionType.PlantBush);
+    },
     isCompleted: false,
   },
 ];
@@ -170,7 +191,24 @@ export function createTutorialState(): TutorialState {
     transitionState: TransitionState.FADING_IN,
     transitionAlpha: 0,
     highlightedEntityId: null,
+    stepStartTime: null,
   };
+}
+
+function findNextTutorialStep(world: GameWorldState): number | null {
+  for (let i = 0; i < world.tutorial.steps.length; i++) {
+    const step = world.tutorial.steps[i];
+    if (!step.isCompleted) {
+      if (step.dependsOn) {
+        if (world.tutorialState.completedSteps.has(step.dependsOn)) {
+          return i;
+        }
+      } else {
+        return i;
+      }
+    }
+  }
+  return null;
 }
 
 export function updateTutorial(world: GameWorldState, deltaTime: number): void {
@@ -200,6 +238,9 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
 
   switch (state.transitionState) {
     case TransitionState.FADING_IN:
+      if (state.stepStartTime === null) {
+        state.stepStartTime = world.time;
+      }
       state.transitionAlpha += transitionSpeed * deltaTime;
       if (state.transitionAlpha >= 1) {
         state.transitionAlpha = 1;
@@ -207,20 +248,28 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
       }
       break;
 
-    case TransitionState.ACTIVE:
-      if (currentStep.condition(world, player)) {
+    case TransitionState.ACTIVE: {
+      const timeElapsed = world.time - (state.stepStartTime || world.time);
+      const minTimePassed = timeElapsed >= (currentStep.minDisplayTime || 0);
+
+      if (minTimePassed && currentStep.condition(world, player)) {
         currentStep.isCompleted = true;
         state.completedSteps.add(currentStep.key);
         state.transitionState = TransitionState.FADING_OUT;
       }
       break;
+    }
 
     case TransitionState.FADING_OUT:
       state.transitionAlpha -= transitionSpeed * deltaTime;
       if (state.transitionAlpha <= 0) {
         state.transitionAlpha = 0;
-        if (state.currentStepIndex < world.tutorial.steps.length - 1) {
-          state.currentStepIndex++;
+        state.stepStartTime = null; // Reset for the next step
+
+        const nextStepIndex = findNextTutorialStep(world);
+
+        if (nextStepIndex !== null) {
+          state.currentStepIndex = nextStepIndex;
           state.transitionState = TransitionState.FADING_IN;
         } else {
           state.isActive = false;

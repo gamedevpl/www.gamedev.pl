@@ -30,6 +30,8 @@ export interface TutorialStep {
     condition: (world: GameWorldState, player: HumanEntity) => boolean;
     isCompleted: boolean;
     getTarget?: (world: GameWorldState, player: HumanEntity) => EntityId | null;
+    minDisplayTime?: number;
+    dependsOn?: TutorialStepKey;
 }
 
 export interface Tutorial {
@@ -43,4 +45,5 @@ export interface TutorialState {
     transitionState: TransitionState;
     transitionAlpha: number; // 0 (transparent) to 1 (opaque)
     highlightedEntityId: EntityId | null;
+    stepStartTime: number | null;
 }
