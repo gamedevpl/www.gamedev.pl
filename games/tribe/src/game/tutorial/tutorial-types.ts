@@ -9,10 +9,6 @@ export enum TutorialStepKey {
     FIND_BUSH = "FIND_BUSH",
     GATHER = "GATHER",
     PROCREATE = "PROCREATE",
-    BECOME_LEADER = "BECOME_LEADER",
-    FORM_TRIBE = "FORM_TRIBE",
-    ATTACK = "ATTACK",
-    CALL_TO_ATTACK = "CALL_TO_ATTACK",
     PLANT_BUSH = "PLANT_BUSH",
 }
 

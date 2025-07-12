@@ -12,19 +12,11 @@ import {
   HUMAN_HUNGER_THRESHOLD_TUTORIAL,
   HUMAN_INTERACTION_RANGE,
   UI_TUTORIAL_TRANSITION_DURATION_SECONDS,
-  AI_ATTACK_ENEMY_RANGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
 } from '../world-consts';
-import {
-  findClosestEntity,
-  findPlayerEntity,
-  findTribeMembers,
-  areFamily,
-  findChildren,
-  getAvailablePlayerActions,
-} from '../utils/world-utils';
+import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions } from '../utils/world-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
@@ -128,57 +120,6 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         );
       });
       return potentialPartner ? [potentialPartner.id] : [];
-    },
-    isCompleted: false,
-  },
-  {
-    key: TutorialStepKey.BECOME_LEADER,
-    title: 'Become a Leader',
-    text: 'As a male, procreating for the first time makes you a tribe leader. Your partner will join your new tribe.',
-    condition: (_world: GameWorldState, player: HumanEntity) => !!player.leaderId && player.leaderId === player.id,
-    isCompleted: false,
-    dependsOn: TutorialStepKey.PROCREATE,
-  },
-  {
-    key: TutorialStepKey.FORM_TRIBE,
-    title: 'Grow your Tribe',
-    text: 'Your children will be born into your tribe. When they grow up, they will follow and help you.',
-    condition: (world: GameWorldState, player: HumanEntity) => {
-      if (player.leaderId !== player.id) return false;
-      // Condition is met when the leader has at least one other ADULT member in their tribe.
-      const members = findTribeMembers(player.id, world);
-      return members.some((m) => m.id !== player.id && m.isAdult);
-    },
-    isCompleted: false,
-    dependsOn: TutorialStepKey.BECOME_LEADER,
-  },
-  {
-    key: TutorialStepKey.ATTACK,
-    title: 'Combat',
-    text: "Seek out members of other tribes. You can attack them by pressing 'Q' when you are near.",
-    condition: (world: GameWorldState, player: HumanEntity) => {
-      const actions = getAvailablePlayerActions(world, player);
-      return actions.some((a) => a.type === PlayerActionType.Attack);
-    },
-    getTargets: (world: GameWorldState, player: HumanEntity) => {
-      const closestEnemy = findClosestEntity<HumanEntity>(
-        player,
-        world,
-        'human',
-        AI_ATTACK_ENEMY_RANGE,
-        (h) => h.id !== player.id && !areFamily(player, h, world) && h.leaderId !== player.leaderId,
-      );
-      return closestEnemy ? [closestEnemy.id] : [];
-    },
-    isCompleted: false,
-  },
-  {
-    key: TutorialStepKey.CALL_TO_ATTACK,
-    title: 'Call to Attack',
-    text: "As a leader, you can command your tribe to attack. Press 'V' near enemies.",
-    condition: (world: GameWorldState, player: HumanEntity) => {
-      const actions = getAvailablePlayerActions(world, player);
-      return actions.some((a) => a.type === PlayerActionType.CallToAttack);
     },
     isCompleted: false,
   },
