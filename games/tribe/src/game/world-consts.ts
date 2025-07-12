@@ -243,9 +243,12 @@ export const UI_TUTORIAL_PANEL_TEXT_COLOR: string = '#FFFFFF';
 export const UI_TUTORIAL_TITLE_FONT_SIZE: number = 20;
 export const UI_TUTORIAL_TEXT_FONT_SIZE: number = 16;
 export const UI_TUTORIAL_TRANSITION_DURATION_SECONDS: number = 0.5; // seconds for fade in/out
-export const UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS: number = 3; // seconds for minimum display time
+export const UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS: number = 10; // seconds for minimum display time
 export const UI_TUTORIAL_HIGHLIGHT_COLOR: string = '#FFD700'; // Gold
 export const UI_TUTORIAL_HIGHLIGHT_RADIUS: number = 40;
+export const UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED: number = 4;
+export const UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH: number = 3;
+export const UI_TUTORIAL_HIGHLIGHT_PADDING: number = 5;
 
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;

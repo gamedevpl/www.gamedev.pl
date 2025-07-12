@@ -1,5 +1,4 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { Tutorial, TutorialState, TransitionState } from '../tutorial/tutorial-types';
 import {
   CHILD_TO_ADULT_AGE,
   PLAYER_ACTION_HINT_FONT_SIZE,
@@ -23,6 +22,10 @@ import {
   UI_TRIBE_LIST_PADDING,
   UI_TRIBE_LIST_SPACING,
   UI_TUTORIAL_PANEL_BACKGROUND_COLOR,
+  UI_TUTORIAL_HIGHLIGHT_COLOR,
+  UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
+  UI_TUTORIAL_HIGHLIGHT_PADDING,
+  UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
   UI_TUTORIAL_PANEL_BORDER_RADIUS,
   UI_TUTORIAL_PANEL_PADDING,
   UI_TUTORIAL_PANEL_TEXT_COLOR,
@@ -35,6 +38,7 @@ import { PlayerActionHint, PLAYER_ACTION_EMOJIS, ClickableUIButton, TribeInfo } 
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { FoodItem, FOOD_TYPE_EMOJIS } from '../food/food-types';
 import { Entity } from '../entities/entities-types';
+import { TransitionState, Tutorial, TutorialState } from '../tutorial/tutorial-types.js';
 
 const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;
@@ -558,7 +562,12 @@ export function renderTutorialPanel(
   ctx.lineTo(panelX + panelWidth - borderRadius, panelY);
   ctx.quadraticCurveTo(panelX + panelWidth, panelY, panelX + panelWidth, panelY + borderRadius);
   ctx.lineTo(panelX + panelWidth, panelY + panelHeight - borderRadius);
-  ctx.quadraticCurveTo(panelX + panelWidth, panelY + panelHeight, panelX + panelWidth - borderRadius, panelY + panelHeight);
+  ctx.quadraticCurveTo(
+    panelX + panelWidth,
+    panelY + panelHeight,
+    panelX + panelWidth - borderRadius,
+    panelY + panelHeight,
+  );
   ctx.lineTo(panelX + borderRadius, panelY + panelHeight);
   ctx.quadraticCurveTo(panelX, panelY + panelHeight, panelX, panelY + panelHeight - borderRadius);
   ctx.lineTo(panelX, panelY + borderRadius);
@@ -583,5 +592,28 @@ export function renderTutorialPanel(
     textY += lineHeight;
   }
 
+  ctx.restore();
+}
+
+export function renderUIElementHighlight(
+  ctx: CanvasRenderingContext2D,
+  rect: { x: number; y: number; width: number; height: number },
+  time: number,
+): void {
+  ctx.save();
+
+  const padding = UI_TUTORIAL_HIGHLIGHT_PADDING;
+  const highlightRect = {
+    x: rect.x - padding,
+    y: rect.y - padding,
+    width: rect.width + padding * 2,
+    height: rect.height + padding * 2,
+  };
+
+  ctx.strokeStyle = UI_TUTORIAL_HIGHLIGHT_COLOR;
+  // Pulsing effect for line width
+  ctx.lineWidth = UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH + Math.sin(time * UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED) * 1.5;
+  ctx.setLineDash([8, 8]);
+  ctx.strokeRect(highlightRect.x, highlightRect.y, highlightRect.width, highlightRect.height);
   ctx.restore();
 }

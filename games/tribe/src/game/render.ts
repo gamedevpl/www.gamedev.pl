@@ -53,7 +53,9 @@ import {
   renderTribeList,
   renderTutorialPanel,
   renderTutorialHighlight,
+  renderUIElementHighlight,
 } from './render/render-ui';
+import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
@@ -217,6 +219,10 @@ export function renderGame(
   ctx.restore(); // Restore context to draw UI in fixed positions
 
   // --- UI Rendering ---
+  // Define rects for potential highlighting
+  let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
+  let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
+
   ctx.fillStyle = UI_TEXT_COLOR;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
@@ -415,6 +421,7 @@ export function renderGame(
       UI_BAR_BACKGROUND_COLOR,
       UI_HUNGER_BAR_COLOR,
     );
+    hungerBarRect = { x: barX, y: uiLineY, width: UI_BAR_WIDTH, height: UI_BAR_HEIGHT };
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
 
     // Food Bar
@@ -429,6 +436,7 @@ export function renderGame(
       UI_BERRY_ICON_SIZE,
       UI_BAR_WIDTH,
     );
+    foodBarRect = { x: barX, y: uiLineY, width: UI_BAR_WIDTH, height: UI_BERRY_ICON_SIZE };
     ctx.textBaseline = 'alphabetic';
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }
@@ -472,6 +480,19 @@ export function renderGame(
 
   if (player && playerActionHints.length > 0) {
     renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+  }
+
+  // --- UI Highlights ---
+  if (gameState.tutorialState.activeUIHighlights.size > 0) {
+    const { activeUIHighlights } = gameState.tutorialState;
+
+    if (activeUIHighlights.has(TutorialUIHighlightKey.HUNGER_BAR) && hungerBarRect) {
+      renderUIElementHighlight(ctx, hungerBarRect, gameState.time);
+    }
+
+    if (activeUIHighlights.has(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
+      renderUIElementHighlight(ctx, foodBarRect, gameState.time);
+    }
   }
 
   // Render tutorial panel if active

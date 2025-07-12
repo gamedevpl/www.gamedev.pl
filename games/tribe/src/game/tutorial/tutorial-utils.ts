@@ -1,6 +1,13 @@
 import { GameWorldState } from '../world-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { Tutorial, TutorialState, TutorialStep, TutorialStepKey, TransitionState } from './tutorial-types';
+import {
+  Tutorial,
+  TutorialState,
+  TutorialStep,
+  TutorialStepKey,
+  TransitionState,
+  TutorialUIHighlightKey,
+} from './tutorial-types';
 import {
   HUMAN_HUNGER_THRESHOLD_TUTORIAL,
   HUMAN_INTERACTION_RANGE,
@@ -36,6 +43,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > HUMAN_HUNGER_THRESHOLD_TUTORIAL,
     isCompleted: false,
     minDisplayTime: UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
+    highlightedUIElements: [TutorialUIHighlightKey.HUNGER_BAR, TutorialUIHighlightKey.FOOD_BAR],
   },
   {
     key: TutorialStepKey.FIND_BUSH,
@@ -192,6 +200,7 @@ export function createTutorialState(): TutorialState {
     transitionAlpha: 0,
     highlightedEntityId: null,
     stepStartTime: null,
+    activeUIHighlights: new Set(),
   };
 }
 
@@ -217,6 +226,7 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!state.isActive) {
     state.transitionState = TransitionState.INACTIVE;
     state.highlightedEntityId = null;
+    state.activeUIHighlights.clear();
     return;
   }
 
@@ -224,6 +234,8 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!player) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
+    state.highlightedEntityId = null;
+    state.activeUIHighlights.clear();
     return;
   }
 
@@ -231,6 +243,8 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!currentStep) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
+    state.highlightedEntityId = null;
+    state.activeUIHighlights.clear();
     return;
   }
 
@@ -279,13 +293,29 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
       break;
   }
 
-  if (state.transitionState !== TransitionState.FADING_OUT && state.transitionState !== TransitionState.INACTIVE) {
+  // Manage highlights based on the current step and state
+  const shouldHighlightsBeActive =
+    state.transitionState !== TransitionState.FADING_OUT && state.transitionState !== TransitionState.INACTIVE;
+
+  if (shouldHighlightsBeActive) {
+    // Handle entity highlighting
     if (currentStep.getTarget) {
       state.highlightedEntityId = currentStep.getTarget(world, player);
+      state.activeUIHighlights.clear(); // Ensure mutual exclusion
     } else {
       state.highlightedEntityId = null;
     }
+
+    // Handle UI element highlighting
+    if (currentStep.highlightedUIElements) {
+      state.activeUIHighlights = new Set(currentStep.highlightedUIElements);
+      state.highlightedEntityId = null; // Ensure mutual exclusion
+    } else {
+      state.activeUIHighlights.clear();
+    }
   } else {
+    // Clear all highlights when fading out or inactive
     state.highlightedEntityId = null;
+    state.activeUIHighlights.clear();
   }
 }

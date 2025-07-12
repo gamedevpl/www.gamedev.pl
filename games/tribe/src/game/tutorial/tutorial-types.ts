@@ -16,6 +16,11 @@ export enum TutorialStepKey {
     PLANT_BUSH = "PLANT_BUSH",
 }
 
+export enum TutorialUIHighlightKey {
+    HUNGER_BAR = "HUNGER_BAR",
+    FOOD_BAR = "FOOD_BAR",
+}
+
 export enum TransitionState {
     FADING_IN,
     ACTIVE,
@@ -32,6 +37,7 @@ export interface TutorialStep {
     getTarget?: (world: GameWorldState, player: HumanEntity) => EntityId | null;
     minDisplayTime?: number;
     dependsOn?: TutorialStepKey;
+    highlightedUIElements?: TutorialUIHighlightKey[];
 }
 
 export interface Tutorial {
@@ -46,4 +52,5 @@ export interface TutorialState {
     transitionAlpha: number; // 0 (transparent) to 1 (opaque)
     highlightedEntityId: EntityId | null;
     stepStartTime: number | null;
+    activeUIHighlights: Set<TutorialUIHighlightKey>;
 }
