@@ -1,6 +1,12 @@
 import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
 import { GameWorldState } from './world-types';
-import { MAP_WIDTH, MAP_HEIGHT, INITIAL_BERRY_BUSH_COUNT, INITIAL_MASTER_VOLUME } from './world-consts';
+import {
+  MAP_WIDTH,
+  MAP_HEIGHT,
+  INITIAL_BERRY_BUSH_COUNT,
+  INITIAL_MASTER_VOLUME,
+  UI_BUTTON_WIDTH,
+} from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
@@ -38,6 +44,7 @@ export function initWorld(): GameWorldState {
     {
       id: 'autopilotButton',
       action: UIButtonActionType.ToggleAutopilot,
+      currentWidth: UI_BUTTON_WIDTH,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       text: '',
       backgroundColor: '',
@@ -46,6 +53,16 @@ export function initWorld(): GameWorldState {
     {
       id: 'muteButton',
       action: UIButtonActionType.ToggleMute,
+      currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: '',
+      backgroundColor: '',
+      textColor: '',
+    },
+    {
+      id: 'pauseButton',
+      action: UIButtonActionType.TogglePause,
+      currentWidth: UI_BUTTON_WIDTH,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       text: '',
       backgroundColor: '',

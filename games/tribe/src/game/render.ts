@@ -17,7 +17,6 @@ import {
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_YEAR_IN_REAL_SECONDS,
   UI_MINIATURE_CHARACTER_SIZE,
-  UI_BUTTON_WIDTH,
   UI_BUTTON_HEIGHT,
   UI_BUTTON_SPACING,
   UI_BUTTON_BACKGROUND_COLOR,
@@ -30,6 +29,7 @@ import {
   UI_TUTORIAL_HIGHLIGHT_COLOR,
   UI_TUTORIAL_HIGHLIGHT_RADIUS,
   UI_TEXT_COLOR,
+  UI_BUTTON_WIDTH,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -54,6 +54,7 @@ import {
   renderTutorialPanel,
   renderTutorialHighlight,
   renderUIElementHighlight,
+  renderPauseOverlay,
 } from './render/render-ui';
 import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
 
@@ -449,10 +450,10 @@ export function renderGame(
 
   gameState.uiButtons.forEach((button) => {
     const buttonY = UI_PADDING;
-    const buttonX = currentButtonX - UI_BUTTON_WIDTH;
+    const buttonX = currentButtonX - button.currentWidth;
 
     // Update button state before drawing
-    button.rect = { x: buttonX, y: buttonY, width: UI_BUTTON_WIDTH, height: UI_BUTTON_HEIGHT };
+    button.rect = { x: buttonX, y: buttonY, width: button.currentWidth, height: UI_BUTTON_HEIGHT };
     button.textColor = UI_BUTTON_TEXT_COLOR;
 
     switch (button.action) {
@@ -466,10 +467,19 @@ export function renderGame(
         button.text = gameState.isMuted ? `UN[M]UTE` : `[M]UTE`;
         button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
         break;
+      case UIButtonActionType.TogglePause:
+        button.text = gameState.isPaused ? `UN[P]AUSE` : `[P]AUSE`;
+        button.backgroundColor = gameState.isPaused ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+        if (gameState.isPaused) {
+          button.currentWidth = UI_BUTTON_WIDTH * 1.4;
+        } else {
+          button.currentWidth = UI_BUTTON_WIDTH * 1.1;
+        }
+        break;
     }
 
     drawButton(ctx, button);
-    currentButtonX -= UI_BUTTON_WIDTH + UI_BUTTON_SPACING;
+    currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
   });
 
   // --- Bottom-Left UI (Tribe List) ---
@@ -503,11 +513,6 @@ export function renderGame(
   }
 
   if (gameState.isPaused) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = 'white';
-    ctx.font = '33px "Press Start 2P", Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    renderPauseOverlay(ctx);
   }
 }

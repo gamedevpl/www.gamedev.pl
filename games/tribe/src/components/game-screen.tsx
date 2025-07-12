@@ -78,9 +78,7 @@ export const GameScreen: React.FC = () => {
     }
     const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
 
-    if (!gameStateRef.current.isPaused) {
-      gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
-    }
+    gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
 
     const player = findPlayerEntity(gameStateRef.current);
 
@@ -188,6 +186,9 @@ export const GameScreen: React.FC = () => {
             case UIButtonActionType.ToggleMute:
               gameStateRef.current.isMuted = !gameStateRef.current.isMuted;
               break;
+            case UIButtonActionType.TogglePause:
+              gameStateRef.current.isPaused = !gameStateRef.current.isPaused;
+              break;
           }
         }
       });
@@ -230,7 +231,7 @@ export const GameScreen: React.FC = () => {
         return;
       }
 
-      if (key === ' ') {
+      if (key === ' ' || key === 'p') {
         event.preventDefault();
         gameStateRef.current.isPaused = !gameStateRef.current.isPaused;
         return;
@@ -241,7 +242,7 @@ export const GameScreen: React.FC = () => {
         return;
       }
 
-      if (key === 'p') {
+      if (key === '§' || key === '`') {
         isDebugOnRef.current = !isDebugOnRef.current;
         return;
       }

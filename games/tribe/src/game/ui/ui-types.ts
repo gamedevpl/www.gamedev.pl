@@ -62,11 +62,13 @@ export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
 export enum UIButtonActionType {
   ToggleAutopilot = 'ToggleAutopilot',
   ToggleMute = 'ToggleMute',
+  TogglePause = 'TogglePause',
 }
 
 export interface ClickableUIButton {
   id: string;
   action: UIButtonActionType;
+  currentWidth: number;
   rect: { x: number; y: number; width: number; height: number };
   text: string;
   backgroundColor: string;

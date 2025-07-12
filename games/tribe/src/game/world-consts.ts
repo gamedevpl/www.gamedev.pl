@@ -234,6 +234,11 @@ export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
 
+// Pause UI Constants
+export const UI_PAUSE_OVERLAY_COLOR: string = 'rgba(0, 0, 0, 0.5)';
+export const UI_PAUSE_TEXT_COLOR: string = '#FFFFFF';
+export const UI_PAUSE_FONT_SIZE: number = 33;
+
 // UI Tutorial Constants
 export const UI_TUTORIAL_PANEL_WIDTH: number = 400;
 export const UI_TUTORIAL_PANEL_PADDING: number = 20;

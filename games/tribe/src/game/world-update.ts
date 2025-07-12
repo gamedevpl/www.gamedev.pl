@@ -18,6 +18,10 @@ function updateViewport(state: GameWorldState, deltaTime: number): void {
 }
 
 export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: number): GameWorldState {
+  if (currentState.isPaused) {
+    return currentState;
+  }
+
   while (realDeltaTimeSeconds > 0) {
     const indexedState = indexWorldState(currentState);
     const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
