@@ -27,6 +27,7 @@ import {
 } from '../utils/world-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';
+import { calculateWrappedDistance } from '../utils/math-utils';
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -59,15 +60,23 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       );
       return !!closestBush;
     },
-    getTarget: (world: GameWorldState, player: HumanEntity) => {
-      const closestBush = findClosestEntity<BerryBushEntity>(
-        player,
-        world,
-        'berryBush',
-        HUMAN_INTERACTION_RANGE * 5,
-        (b) => b.food.length > 0,
-      );
-      return closestBush ? closestBush.id : null;
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
+      const visibleBushes: BerryBushEntity[] = [];
+      for (const entity of world.entities.entities.values()) {
+        if (
+          entity.type === 'berryBush' &&
+          (entity as BerryBushEntity).food.length > 0 &&
+          calculateWrappedDistance(
+            player.position,
+            entity.position,
+            world.mapDimensions.width,
+            world.mapDimensions.height,
+          ) < 500 // Approx viewport
+        ) {
+          visibleBushes.push(entity as BerryBushEntity);
+        }
+      }
+      return visibleBushes.map((b) => b.id);
     },
     isCompleted: false,
   },
@@ -76,7 +85,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: 'Gather Berries',
     text: "Get close to a bush and press 'E' to gather berries.",
     condition: (_world: GameWorldState, player: HumanEntity) => player.food.length > 0,
-    getTarget: (world: GameWorldState, player: HumanEntity) => {
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
       const closestBush = findClosestEntity<BerryBushEntity>(
         player,
         world,
@@ -84,7 +93,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         HUMAN_INTERACTION_RANGE,
         (b) => b.food.length > 0,
       );
-      return closestBush ? closestBush.id : null;
+      return closestBush ? [closestBush.id] : [];
     },
     isCompleted: false,
   },
@@ -100,7 +109,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: 'Procreate',
     text: "Find a mate and press 'R' to start a family. This is how you continue your lineage.",
     condition: (world: GameWorldState, player: HumanEntity) => findChildren(world, player).length > 0,
-    getTarget: (world: GameWorldState, player: HumanEntity) => {
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
       const potentialPartner = findClosestEntity<HumanEntity>(player, world, 'human', HUMAN_INTERACTION_RANGE, (h) => {
         const human = h as HumanEntity;
         return (
@@ -118,7 +127,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
           false
         );
       });
-      return potentialPartner ? potentialPartner.id : null;
+      return potentialPartner ? [potentialPartner.id] : [];
     },
     isCompleted: false,
   },
@@ -151,7 +160,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       const actions = getAvailablePlayerActions(world, player);
       return actions.some((a) => a.type === PlayerActionType.Attack);
     },
-    getTarget: (world: GameWorldState, player: HumanEntity) => {
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
       const closestEnemy = findClosestEntity<HumanEntity>(
         player,
         world,
@@ -159,7 +168,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         AI_ATTACK_ENEMY_RANGE,
         (h) => h.id !== player.id && !areFamily(player, h, world) && h.leaderId !== player.leaderId,
       );
-      return closestEnemy ? closestEnemy.id : null;
+      return closestEnemy ? [closestEnemy.id] : [];
     },
     isCompleted: false,
   },
@@ -198,7 +207,7 @@ export function createTutorialState(): TutorialState {
     isActive: true,
     transitionState: TransitionState.FADING_IN,
     transitionAlpha: 0,
-    highlightedEntityId: null,
+    highlightedEntityIds: new Set(),
     stepStartTime: null,
     activeUIHighlights: new Set(),
   };
@@ -225,7 +234,7 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
 
   if (!state.isActive) {
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityId = null;
+    state.highlightedEntityIds.clear();
     state.activeUIHighlights.clear();
     return;
   }
@@ -234,7 +243,7 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!player) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityId = null;
+    state.highlightedEntityIds.clear();
     state.activeUIHighlights.clear();
     return;
   }
@@ -243,7 +252,7 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!currentStep) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityId = null;
+    state.highlightedEntityIds.clear();
     state.activeUIHighlights.clear();
     return;
   }
@@ -299,23 +308,23 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
 
   if (shouldHighlightsBeActive) {
     // Handle entity highlighting
-    if (currentStep.getTarget) {
-      state.highlightedEntityId = currentStep.getTarget(world, player);
+    if (currentStep.getTargets) {
+      state.highlightedEntityIds = new Set(currentStep.getTargets(world, player));
       state.activeUIHighlights.clear(); // Ensure mutual exclusion
     } else {
-      state.highlightedEntityId = null;
+      state.highlightedEntityIds.clear();
     }
 
     // Handle UI element highlighting
     if (currentStep.highlightedUIElements) {
       state.activeUIHighlights = new Set(currentStep.highlightedUIElements);
-      state.highlightedEntityId = null; // Ensure mutual exclusion
+      state.highlightedEntityIds.clear(); // Ensure mutual exclusion
     } else {
       state.activeUIHighlights.clear();
     }
   } else {
     // Clear all highlights when fading out or inactive
-    state.highlightedEntityId = null;
+    state.highlightedEntityIds.clear();
     state.activeUIHighlights.clear();
   }
 }

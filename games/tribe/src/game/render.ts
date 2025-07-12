@@ -199,20 +199,22 @@ export function renderGame(
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
 
-  // Render tutorial highlight if active
-  if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityId) {
-    const highlightedEntity = gameState.entities.entities.get(gameState.tutorialState.highlightedEntityId);
-    if (highlightedEntity) {
-      renderWithWrapping(
-        ctx,
-        worldWidth,
-        worldHeight,
-        renderTutorialHighlight,
-        highlightedEntity,
-        UI_TUTORIAL_HIGHLIGHT_RADIUS,
-        UI_TUTORIAL_HIGHLIGHT_COLOR,
-        gameState.time,
-      );
+  // Render tutorial highlights if active
+  if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityIds.size > 0) {
+    for (const highlightedEntityId of gameState.tutorialState.highlightedEntityIds) {
+      const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
+      if (highlightedEntity) {
+        renderWithWrapping(
+          ctx,
+          worldWidth,
+          worldHeight,
+          renderTutorialHighlight,
+          highlightedEntity,
+          UI_TUTORIAL_HIGHLIGHT_RADIUS,
+          UI_TUTORIAL_HIGHLIGHT_COLOR,
+          gameState.time,
+        );
+      }
     }
   }
 

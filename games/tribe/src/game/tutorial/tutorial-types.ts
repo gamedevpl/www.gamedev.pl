@@ -34,7 +34,7 @@ export interface TutorialStep {
     text: string;
     condition: (world: GameWorldState, player: HumanEntity) => boolean;
     isCompleted: boolean;
-    getTarget?: (world: GameWorldState, player: HumanEntity) => EntityId | null;
+    getTargets?: (world: GameWorldState, player: HumanEntity) => EntityId[];
     minDisplayTime?: number;
     dependsOn?: TutorialStepKey;
     highlightedUIElements?: TutorialUIHighlightKey[];
@@ -50,7 +50,7 @@ export interface TutorialState {
     isActive: boolean;
     transitionState: TransitionState;
     transitionAlpha: number; // 0 (transparent) to 1 (opaque)
-    highlightedEntityId: EntityId | null;
+    highlightedEntityIds: Set<EntityId>;
     stepStartTime: number | null;
     activeUIHighlights: Set<TutorialUIHighlightKey>;
 }
