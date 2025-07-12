@@ -424,7 +424,12 @@ export function renderGame(
       UI_BAR_BACKGROUND_COLOR,
       UI_HUNGER_BAR_COLOR,
     );
-    hungerBarRect = { x: barX, y: uiLineY, width: UI_BAR_WIDTH, height: UI_BAR_HEIGHT };
+    hungerBarRect = {
+      x: UI_PADDING,
+      y: uiLineY - UI_BAR_PADDING / 2,
+      width: UI_BAR_WIDTH + iconTextPadding,
+      height: UI_BAR_HEIGHT + UI_BAR_PADDING,
+    };
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
 
     // Food Bar
@@ -439,7 +444,12 @@ export function renderGame(
       UI_BERRY_ICON_SIZE,
       UI_BAR_WIDTH,
     );
-    foodBarRect = { x: barX, y: uiLineY, width: UI_BAR_WIDTH, height: UI_BERRY_ICON_SIZE };
+    foodBarRect = {
+      x: UI_PADDING,
+      y: uiLineY - UI_BAR_PADDING / 5,
+      width: UI_BAR_WIDTH + iconTextPadding,
+      height: UI_BERRY_ICON_SIZE + UI_BAR_PADDING,
+    };
     ctx.textBaseline = 'alphabetic';
     uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
   }

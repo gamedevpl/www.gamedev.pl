@@ -36,7 +36,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > HUMAN_HUNGER_THRESHOLD_TUTORIAL,
     isCompleted: false,
     minDisplayTime: UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
-    highlightedUIElements: [TutorialUIHighlightKey.HUNGER_BAR, TutorialUIHighlightKey.FOOD_BAR],
+    highlightedUIElements: [TutorialUIHighlightKey.HUNGER_BAR],
   },
   {
     key: TutorialStepKey.FIND_BUSH,
@@ -71,6 +71,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       return visibleBushes.map((b) => b.id);
     },
     isCompleted: false,
+    minDisplayTime: UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
   },
   {
     key: TutorialStepKey.GATHER,
@@ -95,6 +96,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: "When you are hungry and have food, press 'F' to eat.",
     condition: (_world: GameWorldState, player: HumanEntity) => player.activeAction === 'eating',
     isCompleted: false,
+    highlightedUIElements: [TutorialUIHighlightKey.FOOD_BAR],
   },
   {
     key: TutorialStepKey.PROCREATE,
@@ -129,7 +131,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: "You can plant new berry bushes. Carry some berries and press 'B' to plant.",
     condition: (world: GameWorldState, player: HumanEntity) => {
       const actions = getAvailablePlayerActions(world, player);
-      return actions.some((a) => a.type === PlayerActionType.PlantBush);
+      return actions.some((a) => a.type === PlayerActionType.PlantBush) && world.hasPlayerPlantedBush === true;
     },
     isCompleted: false,
   },
@@ -251,7 +253,6 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
     // Handle entity highlighting
     if (currentStep.getTargets) {
       state.highlightedEntityIds = new Set(currentStep.getTargets(world, player));
-      state.activeUIHighlights.clear(); // Ensure mutual exclusion
     } else {
       state.highlightedEntityIds.clear();
     }
@@ -259,7 +260,6 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
     // Handle UI element highlighting
     if (currentStep.highlightedUIElements) {
       state.activeUIHighlights = new Set(currentStep.highlightedUIElements);
-      state.highlightedEntityIds.clear(); // Ensure mutual exclusion
     } else {
       state.activeUIHighlights.clear();
     }

@@ -369,6 +369,7 @@ export const GameScreen: React.FC = () => {
           if (plantingSpot) {
             playerEntity.activeAction = 'planting';
             playerEntity.targetPosition = plantingSpot;
+            gameStateRef.current.hasPlayerPlantedBush = true;
           }
         }
       } else if (key === 'v') {
