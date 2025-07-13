@@ -74,7 +74,7 @@ export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode
             context.gameState.mapDimensions.height,
           );
 
-          human.activeAction = 'seekingFood';
+          human.activeAction = 'idle';
 
           // If close enough to the parent, the behavior is successful.
           if (distance <= PARENT_FEEDING_RANGE) {

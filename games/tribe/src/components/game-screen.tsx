@@ -265,7 +265,7 @@ export const GameScreen: React.FC = () => {
         ) as HumanEntity[];
 
         if (humans.length > 0) {
-          const sortedHumans = humans.sort((a, b) => a.id - b.id);
+          const sortedHumans = humans.sort((a, b) => (a.isPlayer ? -1 : a.id - b.id));
           const currentDebugId = gameStateRef.current.debugCharacterId;
           const currentIndex = currentDebugId ? sortedHumans.findIndex((h) => h.id === currentDebugId) : -1;
 

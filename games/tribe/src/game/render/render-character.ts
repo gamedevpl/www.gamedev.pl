@@ -53,7 +53,6 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   eating: 'eat',
   procreating: 'procreate',
   idle: 'idle',
-  seekingFood: 'idle',
   attacking: 'attacking',
   planting: 'gathering', // Use gathering stance for planting for now
   callingToAttack: 'idle',
@@ -110,7 +109,8 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
     // Only render if the node has a name and has been executed at least once
     if (node.name && nodeExecutionInfo) {
       const { lastExecuted, status, depth } = nodeExecutionInfo;
-      const decayTimeInGameHours = (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+      const decayTimeInGameHours =
+        (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
       const timeSinceExecuted = currentTime - lastExecuted;
       const heat = Math.max(0, 1 - timeSinceExecuted / decayTimeInGameHours);
       const textColor = lerpColor(UI_BT_DEBUG_HEATMAP_COLD_COLOR, UI_BT_DEBUG_HEATMAP_HOT_COLOR, heat);

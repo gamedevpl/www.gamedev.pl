@@ -65,7 +65,7 @@ export const seekFoodFromParentAction: Action = {
         human.direction = vectorNormalize(dirToTarget);
       } else {
         // Close enough, wait for feeding
-        human.activeAction = 'seekingFood';
+        human.activeAction = 'idle';
         human.direction = { x: 0, y: 0 };
         human.targetPosition = undefined;
       }

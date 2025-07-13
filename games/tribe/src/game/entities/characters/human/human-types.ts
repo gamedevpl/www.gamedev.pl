@@ -128,7 +128,6 @@ export type HumanAction =
   | 'moving'
   | 'idle'
   | 'procreating'
-  | 'seekingFood'
   | 'attacking'
   | 'planting'
   | 'callingToAttack';

@@ -7,7 +7,6 @@ export const HUMAN_MOVING = 'humanMoving';
 export const HUMAN_EATING = 'humanEating';
 export const HUMAN_GATHERING = 'humanGathering'; // When gathering resources
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
-export const HUMAN_SEEKING_FOOD = 'humanSeekingFood';
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_PLANTING = 'humanPlanting';
 
@@ -33,10 +32,6 @@ export interface HumanProcreatingStateData extends StateData {
   procreationEndTime?: number; // When the procreation process ends
 }
 
-export interface HumanSeekingFoodStateData extends StateData {
-  state: 'seekingFood';
-}
-
 export interface HumanAttackingStateData extends StateData {
   attackTargetId: EntityId;
   attackStartTime: number;
@@ -52,6 +47,5 @@ export type HumanStateData =
   | HumanEatingStateData
   | HumanGatheringStateData
   | HumanProcreatingStateData
-  | HumanSeekingFoodStateData
   | HumanAttackingStateData
   | HumanPlantingStateData;

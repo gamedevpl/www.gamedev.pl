@@ -77,7 +77,7 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
         human.direction = vectorNormalize(dirToTarget);
       } else {
         // Child is close enough, wait for feeding
-        human.activeAction = 'seekingFood';
+        human.activeAction = 'idle';
         human.direction = { x: 0, y: 0 };
         human.targetPosition = undefined;
       }
@@ -105,13 +105,13 @@ export class ChildSeekingFoodStrategy implements HumanAIStrategy<HumanEntity | b
           );
           human.direction = vectorNormalize(dirToTarget);
         } else {
-          human.activeAction = 'seekingFood'; // Stay idle near parent
+          human.activeAction = 'idle'; // Stay idle near parent
           human.direction = { x: 0, y: 0 };
           human.targetPosition = undefined;
         }
       } else {
         // 5. No parents found at all, stay idle with a small chance to move to avoid getting stuck
-        human.activeAction = 'seekingFood';
+        human.activeAction = 'idle';
         human.targetPosition = undefined;
 
         if (Math.random() < 0.05) {

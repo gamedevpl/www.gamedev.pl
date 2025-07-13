@@ -8,7 +8,7 @@ import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
 
 const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-  const children = findChildren(context.gameState, human);
+  const children = findChildren(context.gameState, human).filter((h) => !h.isAdult);
   if (children.length === 0) {
     return NodeStatus.FAILURE;
   }
