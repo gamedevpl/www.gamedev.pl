@@ -1,13 +1,10 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import {
-  BERRY_COST_FOR_PLANTING,
-  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
-} from '../../world-consts';
-import { findOptimalBushPlantingSpot } from '../../utils/world-utils';
-import { FoodType } from '../../food/food-types';
+import { BERRY_COST_FOR_PLANTING, HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING } from '../../../world-consts';
+import { findOptimalBushPlantingSpot } from '../../../utils/world-utils';
+import { FoodType } from '../../../food/food-types';
 
 export const plantBushAction: Action = {
   type: ActionType.PLANT_BUSH,
@@ -36,8 +33,8 @@ export const plantBushAction: Action = {
   execute(human: HumanEntity, context: UpdateContext): void {
     const plantingSpot = findOptimalBushPlantingSpot(human, context.gameState);
     if (plantingSpot) {
-        human.activeAction = 'planting';
-        human.targetPosition = plantingSpot;
+      human.activeAction = 'planting';
+      human.targetPosition = plantingSpot;
     }
   },
 };

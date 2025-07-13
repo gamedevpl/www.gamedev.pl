@@ -1,8 +1,8 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_HUNGER_DEATH } from '../../world-consts';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_HUNGER_DEATH } from '../../../world-consts';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
-import { findChildren } from '../../utils/world-utils';
+import { findChildren } from '../../../utils/world-utils';
 
 /**
  * Represents the goal for a parent to feed their hungry children.

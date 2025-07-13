@@ -1,51 +1,50 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { findClosestEntity } from '../../utils/world-utils';
-import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../../entities/characters/human/human-corpse-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
-import { HUMAN_INTERACTION_PROXIMITY } from '../../world-consts';
+import { findClosestEntity } from '../../../utils/world-utils';
+import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
+import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { HUMAN_INTERACTION_PROXIMITY } from '../../../world-consts';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
 
 function findBestFoodSource(human: HumanEntity, context: UpdateContext): FoodSource | null {
-    const closestBush = findClosestEntity<BerryBushEntity>(
-        human,
-        context.gameState,
-        'berryBush',
-        undefined,
-        (b) => b.food.length > 0
+  const closestBush = findClosestEntity<BerryBushEntity>(
+    human,
+    context.gameState,
+    'berryBush',
+    undefined,
+    (b) => b.food.length > 0,
+  );
+
+  const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+    human,
+    context.gameState,
+    'humanCorpse',
+    undefined,
+    (c) => c.food.length > 0,
+  );
+
+  if (closestBush && closestCorpse) {
+    const distToBush = calculateWrappedDistance(
+      human.position,
+      closestBush.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
     );
-
-    const closestCorpse = findClosestEntity<HumanCorpseEntity>(
-        human,
-        context.gameState,
-        'humanCorpse',
-        undefined,
-        (c) => c.food.length > 0
+    const distToCorpse = calculateWrappedDistance(
+      human.position,
+      closestCorpse.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
     );
+    return distToBush <= distToCorpse ? closestBush : closestCorpse;
+  }
 
-    if (closestBush && closestCorpse) {
-        const distToBush = calculateWrappedDistance(
-            human.position,
-            closestBush.position,
-            context.gameState.mapDimensions.width,
-            context.gameState.mapDimensions.height,
-        );
-        const distToCorpse = calculateWrappedDistance(
-            human.position,
-            closestCorpse.position,
-            context.gameState.mapDimensions.width,
-            context.gameState.mapDimensions.height,
-        );
-        return distToBush <= distToCorpse ? closestBush : closestCorpse;
-    }
-
-    return closestBush || closestCorpse;
+  return closestBush || closestCorpse;
 }
-
 
 export const gatherFoodAction: Action = {
   type: ActionType.GATHER_FOOD,

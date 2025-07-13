@@ -1,8 +1,8 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../world-consts';
+import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../world-consts';
 
 export const eatAction: Action = {
   type: ActionType.EAT,

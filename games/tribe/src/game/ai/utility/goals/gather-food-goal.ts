@@ -1,7 +1,7 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { HUMAN_HUNGER_DEATH } from '../../world-consts';
-import { UpdateContext } from '../../world-types';
-import { findChildren } from '../../utils/world-utils';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { HUMAN_HUNGER_DEATH } from '../../../world-consts';
+import { UpdateContext } from '../../../world-types';
+import { findChildren } from '../../../utils/world-utils';
 import { Goal, GoalType } from './goal-types';
 
 /**

@@ -1,5 +1,4 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Goal, GoalType } from './goal-types';
 
 /**
@@ -17,9 +16,9 @@ export const maintainHealthGoal: Goal = {
    * @param _context The current game update context.
    * @returns A score from 0 to 1 representing the urgency of healing or avoiding damage.
    */
-  getScore(human: HumanEntity, _context: UpdateContext): number {
+  getScore(human: HumanEntity): number {
     const healthPercentage = human.hitpoints / human.maxHitpoints;
     const score = 1 - healthPercentage;
     return Math.max(0, Math.min(score, 1)); // Clamp between 0 and 1
-  }
+  },
 };

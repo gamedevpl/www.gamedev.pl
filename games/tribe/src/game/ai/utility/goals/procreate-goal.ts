@@ -1,4 +1,4 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -6,11 +6,11 @@ import {
   HUMAN_MIN_PROCREATION_AGE,
   PROCREATION_FOOD_SEARCH_RADIUS,
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
-} from '../../world-consts';
-import { UpdateContext } from '../../world-types';
+} from '../../../world-consts';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
-import { countEntitiesOfTypeInRadius, countLivingOffspring } from '../../utils/world-utils';
-import { EntityType } from '../../entities/entities-types';
+import { countEntitiesOfTypeInRadius, countLivingOffspring } from '../../../utils/world-utils';
+import { EntityType } from '../../../entities/entities-types';
 
 export class ProcreateGoal implements Goal {
   public type = GoalType.PROCREATE;
@@ -53,7 +53,8 @@ export class ProcreateGoal implements Goal {
     let ageScore = 0;
     if (human.gender === 'female') {
       // Score increases as female approaches max procreation age
-      ageScore = (human.age - HUMAN_MIN_PROCREATION_AGE) / (HUMAN_FEMALE_MAX_PROCREATION_AGE - HUMAN_MIN_PROCREATION_AGE);
+      ageScore =
+        (human.age - HUMAN_MIN_PROCREATION_AGE) / (HUMAN_FEMALE_MAX_PROCREATION_AGE - HUMAN_MIN_PROCREATION_AGE);
     } else {
       // Male desire increases steadily with age
       ageScore = (human.age - HUMAN_MIN_PROCREATION_AGE) / (human.maxAge - HUMAN_MIN_PROCREATION_AGE);

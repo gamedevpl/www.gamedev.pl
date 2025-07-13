@@ -1,15 +1,15 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   BERRY_COST_FOR_PLANTING,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
   MAX_BUSHES_PER_TRIBE_TERRITORY,
-} from '../../world-consts';
-import { UpdateContext } from '../../world-types';
+} from '../../../world-consts';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
-import { FoodType } from '../../food/food-types';
-import { findTribeMembers } from '../../utils/world-utils';
-import { BerryBushEntity } from '../../entities/plants/berry-bush/berry-bush-types';
-import { IndexedWorldState } from '../../world-index/world-index-types';
+import { FoodType } from '../../../food/food-types';
+import { findTribeMembers } from '../../../utils/world-utils';
+import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 /**
  * Represents the goal to plant new berry bushes to expand the tribe's food source.
@@ -39,12 +39,14 @@ export const plantBushesGoal: Goal = {
     }
 
     const tribeMembers = findTribeMembers(human.leaderId, context.gameState);
-    const tribeMemberIds = new Set(tribeMembers.map(m => m.id));
+    const tribeMemberIds = new Set(tribeMembers.map((m) => m.id));
 
     const indexedState = context.gameState as IndexedWorldState;
-    const allBushes = Array.from(indexedState.entities.entities.values()).filter(e => e.type === 'berryBush') as BerryBushEntity[];
-    
-    const tribeBushCount = allBushes.filter(b => b.ownerId && tribeMemberIds.has(b.ownerId)).length;
+    const allBushes = Array.from(indexedState.entities.entities.values()).filter(
+      (e) => e.type === 'berryBush',
+    ) as BerryBushEntity[];
+
+    const tribeBushCount = allBushes.filter((b) => b.ownerId && tribeMemberIds.has(b.ownerId)).length;
 
     if (tribeBushCount >= MAX_BUSHES_PER_TRIBE_TERRITORY) {
       return 0;

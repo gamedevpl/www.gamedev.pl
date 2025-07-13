@@ -3,7 +3,7 @@ import { UpdateContext } from '../world-types';
 import { AIType } from './ai-types';
 import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 import { humanAIStrategies } from './strategies';
-import { updateUtilityAI } from './utility-ai';
+import { updateUtilityAI } from './utility/utility-ai';
 
 /**
  * Updates the AI decision-making for a human entity.

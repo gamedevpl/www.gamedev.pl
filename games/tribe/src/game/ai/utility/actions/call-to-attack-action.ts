@@ -1,14 +1,14 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { isTribeUnderAttack, getTribeForLeader, findNearbyEnemiesOfTribe } from '../../utils/world-utils';
-import { PLAYER_CALL_TO_ATTACK_DURATION_HOURS, PLAYER_CALL_TO_ATTACK_RADIUS } from '../../world-consts';
-import { addVisualEffect } from '../../utils/visual-effects-utils';
-import { VisualEffectType } from '../../visual-effects/visual-effect-types';
-import { playSoundAt } from '../../sound/sound-manager';
-import { SoundType } from '../../sound/sound-types';
-import { IndexedWorldState } from '../../world-index/world-index-types';
+import { isTribeUnderAttack, getTribeForLeader, findNearbyEnemiesOfTribe } from '../../../utils/world-utils';
+import { PLAYER_CALL_TO_ATTACK_DURATION_HOURS, PLAYER_CALL_TO_ATTACK_RADIUS } from '../../../world-consts';
+import { addVisualEffect } from '../../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
+import { playSoundAt } from '../../../sound/sound-manager';
+import { SoundType } from '../../../sound/sound-types';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 export const callToAttackAction: Action = {
   type: ActionType.CALL_TO_ATTACK,

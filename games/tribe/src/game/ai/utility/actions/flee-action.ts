@@ -1,10 +1,10 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { findClosestAggressor } from '../../utils/world-utils';
-import { AI_FLEE_HEALTH_THRESHOLD, AI_FLEE_DISTANCE } from '../../world-consts';
-import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorAdd } from '../../utils/math-utils';
+import { findClosestAggressor } from '../../../utils/world-utils';
+import { AI_FLEE_HEALTH_THRESHOLD, AI_FLEE_DISTANCE } from '../../../world-consts';
+import { getDirectionVectorOnTorus, vectorNormalize, vectorScale, vectorAdd } from '../../../utils/math-utils';
 
 export const fleeAction: Action = {
   type: ActionType.FLEE,

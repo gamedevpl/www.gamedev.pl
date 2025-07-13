@@ -1,9 +1,9 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
-import { findNearbyEnemiesOfTribe } from '../../utils/world-utils';
-import { AI_ATTACK_ENEMY_RANGE } from '../../world-consts';
-import { IndexedWorldState } from '../../world-index/world-index-types';
+import { findNearbyEnemiesOfTribe } from '../../../utils/world-utils';
+import { AI_ATTACK_ENEMY_RANGE } from '../../../world-consts';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 /**
  * Represents the goal to eliminate threats.
@@ -22,7 +22,7 @@ export class EliminateThreatsGoal implements Goal {
       human.position,
       human.leaderId,
       context.gameState as IndexedWorldState,
-      AI_ATTACK_ENEMY_RANGE
+      AI_ATTACK_ENEMY_RANGE,
     );
 
     return enemies.length > 0 ? 1 : 0;

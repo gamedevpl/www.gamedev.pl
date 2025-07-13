@@ -1,15 +1,15 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
 import {
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
   PARENT_FEEDING_RANGE,
-} from '../../world-consts';
-import { findClosestEntity } from '../../utils/world-utils';
-import { EntityType } from '../../entities/entities-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
+} from '../../../world-consts';
+import { findClosestEntity } from '../../../utils/world-utils';
+import { EntityType } from '../../../entities/entities-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 
 export const seekFoodFromParentAction: Action = {
   type: ActionType.SEEK_FOOD_FROM_PARENT,

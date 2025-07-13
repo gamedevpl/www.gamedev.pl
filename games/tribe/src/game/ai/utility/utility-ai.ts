@@ -1,5 +1,5 @@
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { UpdateContext } from '../world-types';
+import { HumanEntity } from '../../entities/characters/human/human-types';
+import { UpdateContext } from '../../world-types';
 import { Action } from './actions/action-types';
 import { attackHumanAction } from './actions/attack-human-action';
 import { callToAttackAction } from './actions/call-to-attack-action';

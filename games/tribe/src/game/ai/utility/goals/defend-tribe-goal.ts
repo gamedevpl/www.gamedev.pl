@@ -1,7 +1,7 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { getTribeForLeader, isTribeUnderAttack } from '../../utils/world-utils';
-import { IndexedWorldState } from '../../world-index/world-index-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { getTribeForLeader, isTribeUnderAttack } from '../../../utils/world-utils';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
 
 export class DefendTribeGoal implements Goal {

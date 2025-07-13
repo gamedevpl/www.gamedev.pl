@@ -1,10 +1,14 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { findBestHabitat, calculateHabitabilityScore } from '../../utils/world-utils';
-import { LEADER_MIGRATION_SUPERIORITY_THRESHOLD, LEADER_WORLD_ANALYSIS_GRID_SIZE, LEADER_WORLD_ANALYSIS_GRID_STEP } from '../../world-consts';
-import { IndexedWorldState } from '../../world-index/world-index-types';
+import { findBestHabitat, calculateHabitabilityScore } from '../../../utils/world-utils';
+import {
+  LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
+  LEADER_WORLD_ANALYSIS_GRID_SIZE,
+  LEADER_WORLD_ANALYSIS_GRID_STEP,
+} from '../../../world-consts';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 export const migrateAction: Action = {
   type: ActionType.MIGRATE,
@@ -38,8 +42,8 @@ export const migrateAction: Action = {
     const bestHabitat = findBestHabitat(indexedState, human.id, LEADER_WORLD_ANALYSIS_GRID_STEP);
 
     if (bestHabitat) {
-        human.activeAction = 'moving';
-        human.targetPosition = bestHabitat.position;
+      human.activeAction = 'moving';
+      human.targetPosition = bestHabitat.position;
     }
   },
 };

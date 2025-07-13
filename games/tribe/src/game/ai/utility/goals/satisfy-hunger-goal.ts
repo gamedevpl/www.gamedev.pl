@@ -1,5 +1,5 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { HUMAN_HUNGER_DEATH } from '../../world-consts';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { HUMAN_HUNGER_DEATH } from '../../../world-consts';
 import { Goal, GoalType } from './goal-types';
 
 /**

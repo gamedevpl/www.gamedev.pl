@@ -5,13 +5,13 @@ import {
   HUMAN_AI_WANDER_RADIUS,
   HUMAN_INTERACTION_PROXIMITY,
   LEADER_FOLLOW_RADIUS,
-} from '../../world-consts';
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext } from '../../world-types';
+} from '../../../world-consts';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from '../goals/goal-types';
 import { Action, ActionType } from './action-types';
-import { findMalePartner, findParents, getRandomNearbyPosition } from '../../utils/world-utils';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
+import { findMalePartner, findParents, getRandomNearbyPosition } from '../../../utils/world-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 
 export const idleWanderAction: Action = {
   type: ActionType.IDLE_WANDER,
