@@ -92,6 +92,9 @@ export interface HumanEntity extends Entity {
   /** Cooldown for the leader's high-level strategic decision-making. */
   leaderMetaStrategyCooldown?: number;
 
+  /** Cooldown for the leader's call to attack (BT). */
+  leaderCallToAttackCooldown?: number;
+
   /** Target position for 'moving' action. Set by player input or AI decision. */
   targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.
 

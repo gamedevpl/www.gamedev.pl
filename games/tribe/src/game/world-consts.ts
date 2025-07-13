@@ -139,6 +139,7 @@ export const LEADER_HABITAT_SCORE_DANGER_WEIGHT = -5; // Points against for each
 export const LEADER_MIGRATION_SUPERIORITY_THRESHOLD = 1.5; // How much better a new habitat must be to consider moving
 export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat
 
+export const LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS = 10;
 // Human AI Fleeing Constants
 
 // Player Action Constants
@@ -158,7 +159,6 @@ export const KARMA_INHERITANCE_FACTOR = 0.5;
 export const KARMA_DECAY_RATE_PER_HOUR = 0.1;
 export const KARMA_ENEMY_THRESHOLD = -50;
 export const KARMA_NEUTRAL_THRESHOLD = -5;
-export const KARMA_DEBUG_RENDER_COLOR = 'red';
 
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;

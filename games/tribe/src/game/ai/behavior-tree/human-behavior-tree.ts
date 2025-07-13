@@ -7,9 +7,11 @@ import {
   createFleeingBehavior,
   createGatheringBehavior,
   createIdleWanderBehavior,
+  createLeaderCallToAttackBehavior,
   createPlantingBehavior,
   createProcreationBehavior,
   createSeekingFoodFromParentBehavior,
+  createTribeMemberCombatBehavior,
 } from "./behaviors";
 
 /**
@@ -24,6 +26,12 @@ export function buildHumanBehaviorTree(): BehaviorNode {
     [
       // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
       createFleeingBehavior(1),
+
+      // --- TRIBE COMBAT (LEADER) ---
+      createLeaderCallToAttackBehavior(1),
+
+      // --- TRIBE COMBAT (MEMBER) ---
+      createTribeMemberCombatBehavior(1),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
       createAttackingBehavior(1),
@@ -49,8 +57,8 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
       createIdleWanderBehavior(1),
     ],
-    'Human Behavior',
-    0,
+    "Human Behavior",
+    0
   );
 
   return root;
