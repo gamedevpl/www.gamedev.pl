@@ -1,5 +1,5 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
-import { calculateWrappedDistance, vectorAdd } from '../../../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import {
@@ -46,11 +46,23 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     // Calculate direction to target
     let targetPosition = movingData.targetPosition;
     if (!targetPosition) {
-      targetPosition = vectorAdd(entity.position, {
-        x: entity.direction.x * MOVEMENT_THRESHOLD,
-        y: entity.direction.y * MOVEMENT_THRESHOLD,
-      });
+      return {
+        nextState: HUMAN_IDLE,
+        data: {
+          ...movingData,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_MOVING,
+        },
+      };
     }
+
+    const dirToTarget = getDirectionVectorOnTorus(
+      entity.position,
+      targetPosition,
+      context.updateContext.gameState.mapDimensions.width,
+      context.updateContext.gameState.mapDimensions.height,
+    );
+    entity.direction = vectorNormalize(dirToTarget);
 
     // Set acceleration based on effective speed
     entity.acceleration = getEffectiveSpeed(entity);

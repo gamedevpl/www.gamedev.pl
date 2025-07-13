@@ -1,13 +1,10 @@
 import {
+  CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
   HUMAN_AI_IDLE_WANDER_CHANCE,
   HUMAN_AI_WANDER_RADIUS,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
-import {
-  calculateWrappedDistance,
-  getDirectionVectorOnTorus,
-  vectorNormalize,
-} from '../../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { getRandomNearbyPosition } from '../../../utils/world-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
@@ -27,7 +24,7 @@ export function createIdleWanderBehavior(): BehaviorNode {
         human.activeAction = 'moving';
         human.targetPosition = getRandomNearbyPosition(
           human.position,
-          HUMAN_AI_WANDER_RADIUS,
+          human.isAdult ? HUMAN_AI_WANDER_RADIUS : CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
           context.gameState.mapDimensions.width,
           context.gameState.mapDimensions.height,
         );
