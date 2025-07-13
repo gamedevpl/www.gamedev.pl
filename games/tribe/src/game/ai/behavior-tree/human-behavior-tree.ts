@@ -1,10 +1,16 @@
-import { BehaviorNode, NodeStatus } from './behavior-tree-types';
-import { ActionNode, ConditionNode, Selector, Sequence } from './nodes';
-import { createEatingBehavior } from './behaviors/eating-behavior';
-import { createFleeingBehavior } from './behaviors/fleeing-behavior';
-import { createGatheringBehavior } from './behaviors/gathering-behavior';
-import { createIdleWanderBehavior } from './behaviors/idle-wander-behavior';
-import { createProcreationBehavior } from './behaviors/procreation-behavior';
+import { BehaviorNode } from "./behavior-tree-types";
+import { Selector } from "./nodes";
+import {
+  createAttackingBehavior,
+  createEatingBehavior,
+  createFeedingChildBehavior,
+  createFleeingBehavior,
+  createGatheringBehavior,
+  createIdleWanderBehavior,
+  createPlantingBehavior,
+  createProcreationBehavior,
+  createSeekingFoodFromParentBehavior,
+} from "./behaviors";
 
 /**
  * Builds the complete behavior tree for a human entity.
@@ -18,22 +24,23 @@ export function buildHumanBehaviorTree(): BehaviorNode {
     // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
     createFleeingBehavior(),
 
-    // --- COMBAT BEHAVIORS ---
-    // (Placeholders for future implementation)
-    new Sequence([
-      new ConditionNode(() => {
-        return false;
-      }),
-      new ActionNode(() => {
-        return NodeStatus.RUNNING;
-      }),
-    ]),
+    // --- COMBAT BEHAVIORS (ATTACK) ---
+    createAttackingBehavior(),
+
+    // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
+    createFeedingChildBehavior(),
+
+    // --- CHILD NEEDS (SEEK FOOD) ---
+    createSeekingFoodFromParentBehavior(),
 
     // --- PERSONAL NEEDS (EAT) ---
     createEatingBehavior(),
 
     // --- RESOURCE MANAGEMENT (GATHER) ---
     createGatheringBehavior(),
+
+    // --- RESOURCE MANAGEMENT (PLANT) ---
+    createPlantingBehavior(),
 
     // --- SOCIAL & REPRODUCTION (PROCREATE) ---
     createProcreationBehavior(),
