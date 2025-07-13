@@ -1,5 +1,10 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
+import {
+  calculateWrappedDistance,
+  getDirectionVectorOnTorus,
+  vectorAdd,
+  vectorNormalize,
+} from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import {
@@ -45,7 +50,12 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
     // Calculate direction to target
     let targetPosition = movingData.targetPosition;
-    if (!targetPosition) {
+    if (!targetPosition && entity.direction) {
+      targetPosition = vectorAdd(entity.position, {
+        x: entity.direction.x * MOVEMENT_THRESHOLD,
+        y: entity.direction.y * MOVEMENT_THRESHOLD,
+      });
+    } else if (!targetPosition) {
       return {
         nextState: HUMAN_IDLE,
         data: {
