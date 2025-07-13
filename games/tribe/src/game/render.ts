@@ -23,7 +23,6 @@ import {
   UI_BUTTON_TEXT_COLOR,
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_FAMILY_MEMBER_ICON_SIZE,
-  KARMA_DEBUG_RENDER_COLOR,
   UI_HITPOINTS_BAR_COLOR,
   HUMAN_HUNGER_DEATH,
   UI_TUTORIAL_HIGHLIGHT_COLOR,
@@ -81,35 +80,6 @@ function renderWithWrapping(
   entity.position = originalPosition;
 }
 
-function renderKarmaDebug(ctx: CanvasRenderingContext2D, gameState: GameWorldState) {
-  const humans = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human') as HumanEntity[];
-  const renderedPairs = new Set<string>();
-
-  for (const human of humans) {
-    for (const targetIdStr in human.karma) {
-      const targetId = parseInt(targetIdStr, 10);
-      const karmaValue = human.karma[targetId];
-
-      const pairKey1 = `${human.id}-${targetId}`;
-      const pairKey2 = `${targetId}-${human.id}`;
-
-      if (karmaValue < 0 && !renderedPairs.has(pairKey1) && !renderedPairs.has(pairKey2)) {
-        const target = gameState.entities.entities.get(targetId) as HumanEntity | undefined;
-        if (target) {
-          ctx.beginPath();
-          ctx.moveTo(human.position.x, human.position.y);
-          ctx.lineTo(target.position.x, target.position.y);
-          ctx.strokeStyle = KARMA_DEBUG_RENDER_COLOR;
-          ctx.globalAlpha = Math.abs(karmaValue) / 100; // Assuming karma values are between -100 and 0
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          renderedPairs.add(pairKey1);
-        }
-      }
-    }
-  }
-}
-
 export function renderGame(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
@@ -128,10 +98,10 @@ export function renderGame(
   if (gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
     ctx.fillStyle = 'white';
-    ctx.font = '30px \"Press Start 2P\", Arial';
+    ctx.font = '30px "Press Start 2P", Arial';
     ctx.textAlign = 'center';
     ctx.fillText('Game Over!', ctx.canvas.width / 2, ctx.canvas.height / 2 - 60);
-    ctx.font = '20px \"Press Start 2P\", Arial';
+    ctx.font = '20px "Press Start 2P", Arial';
     ctx.fillText(`Lineage Extinct.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
     ctx.fillText(`Cause: ${gameState.causeOfGameOver || 'Unknown'}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     return;
@@ -193,10 +163,6 @@ export function renderGame(
     }
   });
 
-  if (isDebugOn) {
-    renderKarmaDebug(ctx, gameState);
-  }
-
   gameState.visualEffects.forEach((effect) => {
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
@@ -228,7 +194,7 @@ export function renderGame(
   let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
 
   ctx.fillStyle = UI_TEXT_COLOR;
-  ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
+  ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
@@ -379,7 +345,7 @@ export function renderGame(
 
     // Vertically center the large emoji with the row of miniatures
     const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
-    ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
+    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
     ctx.textBaseline = 'middle';
     ctx.fillText(familyEmoji, UI_PADDING, emojiY);
 
