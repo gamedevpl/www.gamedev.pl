@@ -2,6 +2,9 @@ import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
 import { Karma } from '../../../karma/karma-types';
+import { AIType } from '../../../ai/ai-types';
+import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
+import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
 
 /**
  * Represents a human entity in the game.
@@ -106,8 +109,17 @@ export interface HumanEntity extends Entity {
   lastEatingEffectTime?: number;
   lastChildFedEffectTime?: number;
 
+  /** The type of AI used by this human. */
+  aiType?: AIType;
+
   /** Karma relationships with other humans. */
   karma: Karma;
+
+  /** The root node of the behavior tree for this AI. */
+  aiBehaviorTree?: BehaviorNode;
+
+  /** The blackboard for the behavior tree AI. */
+  aiBlackboard?: Blackboard;
 }
 
 export type HumanAction =

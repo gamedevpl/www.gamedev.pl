@@ -101,6 +101,8 @@ export const AI_PLANTING_GRID_OFFSETS = [
 ];
 
 // Human AI Constants
+export const UTILITY_AI_ROLLOUT_CHANCE = 0.33;
+export const BEHAVIOR_TREE_AI_ROLLOUT_CHANCE = 0.33; // Will be used in conjunction with UTILITY_AI_ROLLOUT_CHANCE
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.5; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
