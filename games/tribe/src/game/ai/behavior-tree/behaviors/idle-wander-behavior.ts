@@ -15,7 +15,7 @@ import { ActionNode } from '../nodes';
  * If already wandering, it checks if it has arrived.
  * @returns A behavior node representing the idle/wander behavior.
  */
-export function createIdleWanderBehavior(): BehaviorNode {
+export function createIdleWanderBehavior(depth: number): BehaviorNode {
   return new ActionNode((human, context) => {
     // If idle, maybe start wandering
     if (human.activeAction === 'idle' || !human.activeAction) {
@@ -60,6 +60,6 @@ export function createIdleWanderBehavior(): BehaviorNode {
       }
     }
 
-    return NodeStatus.SUCCESS; // This is a fallback, it always \"handles\" the state.
-  });
+    return NodeStatus.SUCCESS; // This is a fallback, it always \\\"handles\\\" the state.
+  }, 'Idle/Wander', depth);
 }

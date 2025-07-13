@@ -9,14 +9,33 @@ import { BehaviorNode, NodeStatus } from "../behavior-tree-types";
  * If a child is running, the sequence is also running.
  */
 export class Sequence implements BehaviorNode {
-  constructor(private children: BehaviorNode[]) {}
+  public name?: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+
+  constructor(public children: BehaviorNode[], name?: string, depth: number = 0) {
+    this.name = name;
+    this.depth = depth;
+    this.children.forEach((child) => {
+      child.depth = (this.depth ?? 0) + 1;
+    });
+  }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     for (const child of this.children) {
       const status = child.execute(human, context, blackboard);
       if (status !== NodeStatus.SUCCESS) {
+        this.lastStatus = status;
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+        }
         return status; // Return FAILURE or RUNNING immediately
       }
+    }
+
+    this.lastStatus = NodeStatus.SUCCESS;
+    if (this.name) {
+      blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth);
     }
     return NodeStatus.SUCCESS; // All children succeeded
   }
@@ -28,14 +47,33 @@ export class Sequence implements BehaviorNode {
  * If a child is running, the selector is also running.
  */
 export class Selector implements BehaviorNode {
-  constructor(private children: BehaviorNode[]) {}
+  public name?: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+
+  constructor(public children: BehaviorNode[], name?: string, depth: number = 0) {
+    this.name = name;
+    this.depth = depth;
+    this.children.forEach((child) => {
+      child.depth = (this.depth ?? 0) + 1;
+    });
+  }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     for (const child of this.children) {
       const status = child.execute(human, context, blackboard);
       if (status !== NodeStatus.FAILURE) {
+        this.lastStatus = status;
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+        }
         return status; // Return SUCCESS or RUNNING immediately
       }
+    }
+
+    this.lastStatus = NodeStatus.FAILURE;
+    if (this.name) {
+      blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth);
     }
     return NodeStatus.FAILURE; // All children failed
   }
@@ -46,7 +84,13 @@ export class Selector implements BehaviorNode {
  * The exact success/failure condition can vary (e.g., succeed when one succeeds, or when all succeed).
  */
 export class Parallel implements BehaviorNode {
-  constructor(private children: BehaviorNode[]) {}
+  public depth: number;
+  constructor(public children: BehaviorNode[], depth: number = 0) {
+    this.depth = depth;
+    this.children.forEach((child) => {
+      child.depth = (this.depth ?? 0) + 1;
+    });
+  }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     // TODO: Implement parallel execution logic.

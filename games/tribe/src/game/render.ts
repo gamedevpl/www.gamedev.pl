@@ -128,10 +128,10 @@ export function renderGame(
   if (gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
     ctx.fillStyle = 'white';
-    ctx.font = '30px "Press Start 2P", Arial';
+    ctx.font = '30px \"Press Start 2P\", Arial';
     ctx.textAlign = 'center';
     ctx.fillText('Game Over!', ctx.canvas.width / 2, ctx.canvas.height / 2 - 60);
-    ctx.font = '20px "Press Start 2P", Arial';
+    ctx.font = '20px \"Press Start 2P\", Arial';
     ctx.fillText(`Lineage Extinct.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
     ctx.fillText(`Cause: ${gameState.causeOfGameOver || 'Unknown'}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     return;
@@ -186,6 +186,7 @@ export function renderGame(
         isPlayerAttackTarget,
         isDebugOn,
         gameState.time,
+        gameState.debugCharacterId,
       );
     } else if (entity.type === 'humanCorpse') {
       renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);
@@ -227,7 +228,7 @@ export function renderGame(
   let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
 
   ctx.fillStyle = UI_TEXT_COLOR;
-  ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+  ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
   ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
   ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
@@ -378,7 +379,7 @@ export function renderGame(
 
     // Vertically center the large emoji with the row of miniatures
     const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
-    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+    ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
     ctx.textBaseline = 'middle';
     ctx.fillText(familyEmoji, UI_PADDING, emojiY);
 

@@ -101,8 +101,8 @@ export const AI_PLANTING_GRID_OFFSETS = [
 ];
 
 // Human AI Constants
-export const UTILITY_AI_ROLLOUT_CHANCE = 0.33;
-export const BEHAVIOR_TREE_AI_ROLLOUT_CHANCE = 0.33; // Will be used in conjunction with UTILITY_AI_ROLLOUT_CHANCE
+export const UTILITY_AI_ROLLOUT_CHANCE = 0;
+export const BEHAVIOR_TREE_AI_ROLLOUT_CHANCE = 1; // Will be used in conjunction with UTILITY_AI_ROLLOUT_CHANCE
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.5; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
@@ -235,6 +235,20 @@ export const UI_BUTTON_SPACING: number = 20;
 export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
+
+// Behavior Tree Debug UI Constants
+export const UI_BT_DEBUG_X_OFFSET = 60;
+export const UI_BT_DEBUG_Y_OFFSET = -50;
+export const UI_BT_DEBUG_FONT_SIZE = 10;
+export const UI_BT_DEBUG_LINE_HEIGHT = 12;
+export const UI_BT_DEBUG_INDENT_SIZE = 10;
+export const UI_BT_DEBUG_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.5)';
+export const UI_BT_DEBUG_STATUS_SUCCESS_COLOR = '#4CAF50';
+export const UI_BT_DEBUG_STATUS_FAILURE_COLOR = '#F44336';
+export const UI_BT_DEBUG_STATUS_RUNNING_COLOR = '#FFC107';
+export const UI_BT_DEBUG_HEATMAP_COLD_COLOR = '#FFFFFF';
+export const UI_BT_DEBUG_HEATMAP_HOT_COLOR = '#FF6B6B';
+export const UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS = 5;
 
 // Pause UI Constants
 export const UI_PAUSE_OVERLAY_COLOR: string = 'rgba(0, 0, 0, 0.5)';

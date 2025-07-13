@@ -69,19 +69,25 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
  *
  * @returns A `BehaviorNode` that encapsulates the feeding child logic.
  */
-export function createFeedingChildBehavior(): BehaviorNode {
-  return new Sequence([
-    // Condition: Is the parent capable of feeding?
-    new ConditionNode(
-      (human) =>
-        (human.isAdult &&
-          human.food.length > 0 &&
-          (!human.feedChildCooldownTime || human.feedChildCooldownTime <= 0)) ??
-        false,
-    ),
-    // Action: Find the hungriest child and set it as the target.
-    new ActionNode(findHungriestChild),
-    // Action: Move to the child and wait until in range.
-    new ActionNode(moveToChildAndFeed),
-  ]);
+export function createFeedingChildBehavior(depth: number): BehaviorNode {
+  return new Sequence(
+    [
+      // Condition: Is the parent capable of feeding?
+      new ConditionNode(
+        (human) =>
+          (human.isAdult &&
+            human.food.length > 0 &&
+            (!human.feedChildCooldownTime || human.feedChildCooldownTime <= 0)) ??
+          false,
+        'Can Feed Child',
+        depth + 1,
+      ),
+      // Action: Find the hungriest child and set it as the target.
+      new ActionNode(findHungriestChild, 'Find Hungriest Child', depth + 1),
+      // Action: Move to the child and wait until in range.
+      new ActionNode(moveToChildAndFeed, 'Move To Child and Feed', depth + 1),
+    ],
+    'Feed Child',
+    depth,
+  );
 }

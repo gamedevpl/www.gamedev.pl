@@ -3,7 +3,7 @@
  * characters, and interactive elements like berry bushes.
  */
 
-import { Entities } from './entities/entities-types';
+import { EntityId, Entities } from './entities/entities-types';
 import { ClickableUIButton } from './ui/ui-types';
 import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
@@ -39,6 +39,7 @@ export interface GameWorldState {
   uiButtons: ClickableUIButton[];
   tutorial: Tutorial;
   tutorialState: TutorialState;
+  debugCharacterId?: EntityId;
 }
 
 export type UpdateContext = {
@@ -48,7 +49,6 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.
-   */
+   * Time since the last update in milliseconds.\n   */
   deltaTime: number;
 };

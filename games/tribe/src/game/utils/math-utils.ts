@@ -91,3 +91,30 @@ export function vectorRotate(v: Vector2D, angle: number): Vector2D {
     y: v.x * sin + v.y * cos,
   };
 }
+
+export function lerpColor(color1: string, color2: string, t: number): string {
+  // Clamp t to be between 0 and 1
+  const factor = Math.max(0, Math.min(1, t));
+
+  // Remove '#' and parse hex to R, G, B integers
+  const c1 = {
+    r: parseInt(color1.substring(1, 3), 16),
+    g: parseInt(color1.substring(3, 5), 16),
+    b: parseInt(color1.substring(5, 7), 16),
+  };
+  const c2 = {
+    r: parseInt(color2.substring(1, 3), 16),
+    g: parseInt(color2.substring(3, 5), 16),
+    b: parseInt(color2.substring(5, 7), 16),
+  };
+
+  // Interpolate each component
+  const r = Math.round(c1.r + (c2.r - c1.r) * factor);
+  const g = Math.round(c1.g + (c2.g - c1.g) * factor);
+  const b = Math.round(c1.b + (c2.b - c1.b) * factor);
+
+  // Convert back to hex and pad with '0' if needed
+  const toHex = (c: number) => ('00' + c.toString(16)).slice(-2);
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}

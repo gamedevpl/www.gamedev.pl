@@ -20,34 +20,38 @@ import {
 export function buildHumanBehaviorTree(): BehaviorNode {
   // The root of the tree is a Selector, which acts like an "OR" gate.
   // It will try each child branch in order until one succeeds or is running.
-  const root = new Selector([
-    // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
-    createFleeingBehavior(),
+  const root = new Selector(
+    [
+      // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
+      createFleeingBehavior(1),
 
-    // --- COMBAT BEHAVIORS (ATTACK) ---
-    createAttackingBehavior(),
+      // --- COMBAT BEHAVIORS (ATTACK) ---
+      createAttackingBehavior(1),
 
-    // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
-    createFeedingChildBehavior(),
+      // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
+      createFeedingChildBehavior(1),
 
-    // --- CHILD NEEDS (SEEK FOOD) ---
-    createSeekingFoodFromParentBehavior(),
+      // --- CHILD NEEDS (SEEK FOOD) ---
+      createSeekingFoodFromParentBehavior(1),
 
-    // --- PERSONAL NEEDS (EAT) ---
-    createEatingBehavior(),
+      // --- PERSONAL NEEDS (EAT) ---
+      createEatingBehavior(1),
 
-    // --- RESOURCE MANAGEMENT (GATHER) ---
-    createGatheringBehavior(),
+      // --- RESOURCE MANAGEMENT (GATHER) ---
+      createGatheringBehavior(1),
 
-    // --- RESOURCE MANAGEMENT (PLANT) ---
-    createPlantingBehavior(),
+      // --- RESOURCE MANAGEMENT (PLANT) ---
+      createPlantingBehavior(1),
 
-    // --- SOCIAL & REPRODUCTION (PROCREATE) ---
-    createProcreationBehavior(),
+      // --- SOCIAL & REPRODUCTION (PROCREATE) ---
+      createProcreationBehavior(1),
 
-    // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
-    createIdleWanderBehavior(),
-  ]);
+      // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
+      createIdleWanderBehavior(1),
+    ],
+    'Human Behavior',
+    0,
+  );
 
   return root;
 }

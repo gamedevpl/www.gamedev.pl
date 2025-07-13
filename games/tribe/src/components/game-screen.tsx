@@ -97,6 +97,12 @@ export const GameScreen: React.FC = () => {
       // Create a target position for the lerp that may be outside the world bounds
       // to ensure the lerp takes the shortest path.
       let targetPosition = { ...player.position };
+      if (gameStateRef.current.debugCharacterId) {
+        const debugEntity = gameStateRef.current.entities.entities.get(gameStateRef.current.debugCharacterId);
+        if (debugEntity) {
+          targetPosition = { ...debugEntity.position };
+        }
+      }
 
       const dx = targetPosition.x - viewportCenterRef.current.x;
       if (Math.abs(dx) > width / 2) {
@@ -244,6 +250,30 @@ export const GameScreen: React.FC = () => {
 
       if (key === '§' || key === '`') {
         isDebugOnRef.current = !isDebugOnRef.current;
+        if (!isDebugOnRef.current) {
+          gameStateRef.current.debugCharacterId = undefined;
+        }
+        return;
+      }
+
+      if (key === 'tab') {
+        event.preventDefault();
+        isDebugOnRef.current = true; // Always turn on debug if cycling
+
+        const humans = Array.from(gameStateRef.current.entities.entities.values()).filter(
+          (e) => e.type === 'human',
+        ) as HumanEntity[];
+
+        if (humans.length > 0) {
+          const sortedHumans = humans.sort((a, b) => a.id - b.id);
+          const currentDebugId = gameStateRef.current.debugCharacterId;
+          const currentIndex = currentDebugId ? sortedHumans.findIndex((h) => h.id === currentDebugId) : -1;
+
+          const nextIndex = (currentIndex + 1) % sortedHumans.length;
+          gameStateRef.current.debugCharacterId = sortedHumans[nextIndex].id;
+        } else {
+          gameStateRef.current.debugCharacterId = undefined;
+        }
         return;
       }
 

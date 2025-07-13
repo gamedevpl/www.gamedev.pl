@@ -1,4 +1,5 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
 import {
   PLAYER_CHILD_HIGHLIGHT_COLOR,
   PLAYER_HEIR_HIGHLIGHT_COLOR,
@@ -21,11 +22,27 @@ import {
   UI_ATTACK_COOLDOWN_BAR_COLOR,
   HUMAN_ATTACK_COOLDOWN_HOURS,
   TRIBE_BADGE_SIZE,
+  UI_BT_DEBUG_X_OFFSET,
+  UI_BT_DEBUG_Y_OFFSET,
+  UI_BT_DEBUG_FONT_SIZE,
+  UI_BT_DEBUG_LINE_HEIGHT,
+  UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
+  UI_BT_DEBUG_STATUS_FAILURE_COLOR,
+  UI_BT_DEBUG_STATUS_RUNNING_COLOR,
+  UI_BT_DEBUG_HEATMAP_COLD_COLOR,
+  UI_BT_DEBUG_HEATMAP_HOT_COLOR,
+  UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS,
+  GAME_DAY_IN_REAL_SECONDS,
+  HOURS_PER_GAME_DAY,
+  UI_BT_DEBUG_BACKGROUND_COLOR,
+  UI_BT_DEBUG_INDENT_SIZE,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { AIType } from '../ai/ai-types.ts';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
+import { lerpColor } from '../utils/math-utils';
+import { EntityId } from '../entities/entities-types';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -69,6 +86,116 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
+}
+
+function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEntity, currentTime: number): void {
+  if (!human.aiBehaviorTree || !human.aiBlackboard) {
+    return;
+  }
+  const executionData = human.aiBlackboard.getNodeExecutionData();
+  if (executionData.size === 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.font = `${UI_BT_DEBUG_FONT_SIZE}px Arial`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  // Helper function to recursively render the tree
+  const renderNode = (node: BehaviorNode, yPos: number, panelX: number): number => {
+    let currentY = yPos;
+    const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
+
+    // Only render if the node has a name and has been executed at least once
+    if (node.name && nodeExecutionInfo) {
+      const { lastExecuted, status, depth } = nodeExecutionInfo;
+      const decayTimeInGameHours = (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+      const timeSinceExecuted = currentTime - lastExecuted;
+      const heat = Math.max(0, 1 - timeSinceExecuted / decayTimeInGameHours);
+      const textColor = lerpColor(UI_BT_DEBUG_HEATMAP_COLD_COLOR, UI_BT_DEBUG_HEATMAP_HOT_COLOR, heat);
+
+      let statusColor: string;
+      switch (status) {
+        case NodeStatus.SUCCESS:
+          statusColor = UI_BT_DEBUG_STATUS_SUCCESS_COLOR;
+          break;
+        case NodeStatus.FAILURE:
+          statusColor = UI_BT_DEBUG_STATUS_FAILURE_COLOR;
+          break;
+        case NodeStatus.RUNNING:
+          statusColor = UI_BT_DEBUG_STATUS_RUNNING_COLOR;
+          break;
+        default:
+          statusColor = 'grey';
+      }
+
+      const xPos = panelX + 2 + (depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
+
+      // Draw status indicator
+      ctx.fillStyle = statusColor;
+      ctx.fillText('●', xPos, currentY);
+
+      // Draw node name
+      ctx.fillStyle = textColor;
+      ctx.fillText(` ${node.name}`, xPos + 8, currentY);
+
+      currentY += UI_BT_DEBUG_LINE_HEIGHT;
+    }
+
+    // Recursively render children
+    if (node.children) {
+      for (const child of node.children) {
+        currentY = renderNode(child, currentY, panelX);
+      }
+    } else if (node.child) {
+      currentY = renderNode(node.child, currentY, panelX);
+    }
+
+    return currentY;
+  };
+
+  // Helper function to calculate panel dimensions by traversing the tree
+  const calculateDimensions = (node: BehaviorNode): { width: number; height: number } => {
+    let maxWidth = 0;
+    let height = 0;
+
+    const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
+    if (node.name && nodeExecutionInfo) {
+      const indentedWidth =
+        (nodeExecutionInfo.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE + ctx.measureText(node.name).width + 20; // Add padding
+      maxWidth = Math.max(maxWidth, indentedWidth);
+      height += UI_BT_DEBUG_LINE_HEIGHT;
+    }
+
+    if (node.children) {
+      for (const child of node.children) {
+        const childDimensions = calculateDimensions(child);
+        maxWidth = Math.max(maxWidth, childDimensions.width);
+        height += childDimensions.height;
+      }
+    } else if (node.child) {
+      const childDimensions = calculateDimensions(node.child);
+      maxWidth = Math.max(maxWidth, childDimensions.width);
+      height += childDimensions.height;
+    }
+
+    return { width: maxWidth, height };
+  };
+
+  // --- Main execution ---
+  const { width: panelWidth, height: panelHeight } = calculateDimensions(human.aiBehaviorTree);
+  const panelX = human.position.x + UI_BT_DEBUG_X_OFFSET;
+  const panelY = human.position.y + UI_BT_DEBUG_Y_OFFSET;
+
+  // Draw background panel
+  ctx.fillStyle = UI_BT_DEBUG_BACKGROUND_COLOR;
+  ctx.fillRect(panelX, panelY, panelWidth, panelHeight + 4);
+
+  // Start rendering from the root node
+  renderNode(human.aiBehaviorTree, panelY + 2, panelX);
+
+  ctx.restore();
 }
 
 function drawTribeBadge(ctx: CanvasRenderingContext2D, position: { x: number; y: number }, badge: string): void {
@@ -183,6 +310,7 @@ export function renderCharacter(
   isPlayerAttackTarget: boolean = false,
   isDebugOn: boolean = false,
   currentTime: number,
+  debugCharacterId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = human;
 
@@ -271,9 +399,15 @@ export function renderCharacter(
     ctx.restore();
   }
 
+  const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
+
+  if (showDebug && human.aiBlackboard) {
+    renderBehaviorTreeDebug(ctx, human, currentTime);
+  }
+
   renderAttackProgress(ctx, human, currentTime);
 
-  if (isDebugOn) {
+  if (showDebug) {
     renderDebugInfo(ctx, human);
   }
 }

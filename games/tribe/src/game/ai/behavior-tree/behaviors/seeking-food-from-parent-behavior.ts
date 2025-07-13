@@ -17,65 +17,81 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
  *
  * @returns A behavior node representing the entire "seeking food from parent" logic.
  */
-export function createSeekingFoodFromParentBehavior(): BehaviorNode {
-  return new Sequence([
-    // 1. Condition: Am I a hungry child?
-    new ConditionNode((human: HumanEntity) => {
-      return !human.isAdult && human.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD;
-    }),
-
-    // 2. Action: Find a suitable parent with food nearby.
-    new ActionNode((human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-      const parents = findParents(human, context.gameState);
-      if (parents.length === 0) {
-        return NodeStatus.FAILURE;
-      }
-
-      const parentWithFood = findClosestEntity<HumanEntity>(
-        human,
-        context.gameState,
-        'human',
-        CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
-        (p) => {
-          // Check if the entity is a parent and has food
-          return parents.some((pp) => pp.id === p.id) && p.food.length > 0;
+export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode {
+  return new Sequence(
+    [
+      // 1. Condition: Am I a hungry child?
+      new ConditionNode(
+        (human: HumanEntity) => {
+          return !human.isAdult && human.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD;
         },
-      );
+        'Is Hungry Child',
+        depth + 1,
+      ),
 
-      if (parentWithFood) {
-        blackboard.set('targetParent', parentWithFood);
-        return NodeStatus.SUCCESS;
-      }
+      // 2. Action: Find a suitable parent with food nearby.
+      new ActionNode(
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const parents = findParents(human, context.gameState);
+          if (parents.length === 0) {
+            return NodeStatus.FAILURE;
+          }
 
-      return NodeStatus.FAILURE;
-    }),
+          const parentWithFood = findClosestEntity<HumanEntity>(
+            human,
+            context.gameState,
+            'human',
+            CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
+            (p) => {
+              // Check if the entity is a parent and has food
+              return parents.some((pp) => pp.id === p.id) && p.food.length > 0;
+            },
+          );
 
-    // 3. Action: Move towards the found parent.
-    new ActionNode((human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-      const parent = blackboard.get<HumanEntity>('targetParent');
-      if (!parent) {
-        return NodeStatus.FAILURE;
-      }
+          if (parentWithFood) {
+            blackboard.set('targetParent', parentWithFood);
+            return NodeStatus.SUCCESS;
+          }
 
-      const distance = calculateWrappedDistance(
-        human.position,
-        parent.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
+          return NodeStatus.FAILURE;
+        },
+        'Find Parent With Food',
+        depth + 1,
+      ),
 
-      human.activeAction = 'seekingFood';
+      // 3. Action: Move towards the found parent.
+      new ActionNode(
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const parent = blackboard.get<HumanEntity>('targetParent');
+          if (!parent) {
+            return NodeStatus.FAILURE;
+          }
 
-      // If close enough to the parent, the behavior is successful.
-      if (distance <= PARENT_FEEDING_RANGE) {
-        human.targetPosition = undefined; // Stop moving
-        return NodeStatus.SUCCESS;
-      }
+          const distance = calculateWrappedDistance(
+            human.position,
+            parent.position,
+            context.gameState.mapDimensions.width,
+            context.gameState.mapDimensions.height,
+          );
 
-      // Otherwise, keep moving towards the parent.
-      human.targetPosition = parent.position;
-      human.activeAction = 'moving';
-      return NodeStatus.RUNNING;
-    }),
-  ]);
+          human.activeAction = 'seekingFood';
+
+          // If close enough to the parent, the behavior is successful.
+          if (distance <= PARENT_FEEDING_RANGE) {
+            human.targetPosition = undefined; // Stop moving
+            return NodeStatus.SUCCESS;
+          }
+
+          // Otherwise, keep moving towards the parent.
+          human.targetPosition = parent.position;
+          human.activeAction = 'moving';
+          return NodeStatus.RUNNING;
+        },
+        'Move To Parent',
+        depth + 1,
+      ),
+    ],
+    'Seek Food From Parent',
+    depth,
+  );
 }
