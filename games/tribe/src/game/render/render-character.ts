@@ -138,7 +138,11 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
 
       // Draw node name
       ctx.fillStyle = textColor;
-      ctx.fillText(` ${node.name}`, xPos + 8, currentY);
+      ctx.fillText(
+        ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : ''),
+        xPos + 8,
+        currentY,
+      );
 
       currentY += UI_BT_DEBUG_LINE_HEIGHT;
     }

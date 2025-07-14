@@ -6,7 +6,7 @@ import { NodeStatus } from '../behavior-tree-types';
 import { findClosestEntity } from '../../../utils/world-utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
@@ -87,13 +87,7 @@ export function createGatheringBehavior(depth: number): Sequence {
           } else {
             human.activeAction = 'moving';
             human.targetPosition = { ...target.position };
-            const dirToTarget = getDirectionVectorOnTorus(
-              human.position,
-              target.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-            human.direction = vectorNormalize(dirToTarget);
+            human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
             return NodeStatus.RUNNING; // Moving towards the target
           }
         },

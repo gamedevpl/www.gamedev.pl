@@ -64,6 +64,15 @@ export function getDirectionVectorOnTorus(
   return { x: dx, y: dy };
 }
 
+export function dirToTarget(
+  position: Vector2D,
+  targetPosition: Vector2D,
+  mapDimensions: { width: number; height: number },
+) {
+  const dirToTarget = getDirectionVectorOnTorus(position, targetPosition, mapDimensions.width, mapDimensions.height);
+  return vectorNormalize(dirToTarget);
+}
+
 export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth: number, worldHeight: number): number {
   const difference = getDirectionVectorOnTorus(v1, v2, worldWidth, worldHeight);
   return vectorLength(difference);

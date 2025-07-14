@@ -1,7 +1,8 @@
-import { HumanEntity } from "../../../entities/characters/human/human-types";
-import { UpdateContext } from "../../../world-types";
-import { Blackboard } from "../behavior-tree-blackboard";
-import { BehaviorNode, NodeStatus } from "../behavior-tree-types";
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
+import { Blackboard } from '../behavior-tree-blackboard';
+import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { unpackStatus } from './utils';
 
 /**
  * A composite node that executes its children in order.
@@ -23,11 +24,11 @@ export class Sequence implements BehaviorNode {
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     for (const child of this.children) {
-      const status = child.execute(human, context, blackboard);
+      const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
       if (status !== NodeStatus.SUCCESS) {
         this.lastStatus = status;
         if (this.name) {
-          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
         }
         return status; // Return FAILURE or RUNNING immediately
       }
@@ -35,7 +36,7 @@ export class Sequence implements BehaviorNode {
 
     this.lastStatus = NodeStatus.SUCCESS;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, '');
     }
     return NodeStatus.SUCCESS; // All children succeeded
   }
@@ -61,11 +62,11 @@ export class Selector implements BehaviorNode {
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     for (const child of this.children) {
-      const status = child.execute(human, context, blackboard);
+      const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
       if (status !== NodeStatus.FAILURE) {
         this.lastStatus = status;
         if (this.name) {
-          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
         }
         return status; // Return SUCCESS or RUNNING immediately
       }
@@ -73,7 +74,7 @@ export class Selector implements BehaviorNode {
 
     this.lastStatus = NodeStatus.FAILURE;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth, '');
     }
     return NodeStatus.FAILURE; // All children failed
   }

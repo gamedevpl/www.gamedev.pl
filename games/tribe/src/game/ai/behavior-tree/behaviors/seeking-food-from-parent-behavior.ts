@@ -9,7 +9,7 @@ import { findClosestEntity, findParents } from '../../../utils/world-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 
 /**
  * Creates a behavior tree branch that makes a child seek food from a parent.
@@ -84,6 +84,7 @@ export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode
 
           // Otherwise, keep moving towards the parent.
           human.targetPosition = parent.position;
+          human.direction = dirToTarget(human.position, parent.position, context.gameState.mapDimensions);
           human.activeAction = 'moving';
           return NodeStatus.RUNNING;
         },

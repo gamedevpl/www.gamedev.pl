@@ -2,7 +2,7 @@ import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, PARENT_FEEDING_RANGE } from
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findChildren } from '../../../utils/world-utils';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -47,6 +47,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
   if (distance > PARENT_FEEDING_RANGE) {
     human.activeAction = 'moving';
     human.targetPosition = child.position;
+    human.direction = dirToTarget(human.position, child.position, context.gameState.mapDimensions);
     return NodeStatus.RUNNING;
   }
 

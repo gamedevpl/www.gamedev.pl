@@ -2,6 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { unpackStatus } from './utils';
 
 /**
  * A decorator node that inverts the result of its child.
@@ -20,7 +21,7 @@ export class Inverter implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const childStatus = this.child.execute(human, context, blackboard);
+    const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
     let finalStatus: NodeStatus;
 
     switch (childStatus) {
@@ -38,7 +39,7 @@ export class Inverter implements BehaviorNode {
 
     this.lastStatus = finalStatus;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
     }
     return finalStatus;
   }
@@ -59,12 +60,12 @@ export class Succeeder implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    this.child.execute(human, context, blackboard);
+    const [, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
     const finalStatus = NodeStatus.SUCCESS;
 
     this.lastStatus = finalStatus;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
     }
     return finalStatus;
   }
@@ -86,11 +87,11 @@ export class Repeater implements BehaviorNode {
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     // TODO: Implement decorator logic
-    const status = this.child.execute(human, context, blackboard);
+    const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
 
     this.lastStatus = status;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
     }
     return status;
   }
@@ -112,11 +113,11 @@ export class Timeout implements BehaviorNode {
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     // TODO: Implement decorator logic
-    const status = this.child.execute(human, context, blackboard);
+    const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
 
     this.lastStatus = status;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth);
+      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
     }
     return status;
   }

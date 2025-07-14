@@ -1,6 +1,6 @@
 import { FoodType } from '../../../food/food-types';
 import { Vector2D } from '../../../utils/math-types';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { countEntitiesOfTypeInRadius, findChildren, findOptimalBushPlantingSpot } from '../../../utils/world-utils';
 import {
   AI_PLANTING_CHECK_RADIUS,
@@ -93,6 +93,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
           if (distance > HUMAN_INTERACTION_PROXIMITY) {
             human.activeAction = 'moving';
             human.targetPosition = plantingSpot;
+            human.direction = dirToTarget(human.position, plantingSpot, context.gameState.mapDimensions);
             return NodeStatus.RUNNING; // Still moving towards the spot
           }
 

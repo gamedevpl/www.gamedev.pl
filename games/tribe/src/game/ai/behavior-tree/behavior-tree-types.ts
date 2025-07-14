@@ -27,5 +27,5 @@ export interface BehaviorNode {
    * @param blackboard The blackboard for sharing data between nodes.
    * @returns The status of the node after execution.
    */
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus;
+  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): [NodeStatus, string] | NodeStatus;
 }

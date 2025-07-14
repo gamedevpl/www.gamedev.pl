@@ -1,4 +1,4 @@
-import { NodeStatus } from "./behavior-tree-types";
+import { NodeStatus } from './behavior-tree-types';
 
 /**
  * A generic key-value store for AI behavior trees.
@@ -6,7 +6,10 @@ import { NodeStatus } from "./behavior-tree-types";
  */
 export class Blackboard {
   private data = new Map<string, unknown>();
-  private nodeExecutionData = new Map<string, { lastExecuted: number; status: NodeStatus; depth: number }>();
+  private nodeExecutionData = new Map<
+    string,
+    { lastExecuted: number; status: NodeStatus; depth: number; debugInfo: string }
+  >();
 
   /**
    * Stores a value in the blackboard.
@@ -33,15 +36,15 @@ export class Blackboard {
    * @param time The game time of the execution.
    * @param depth The depth of the node in the tree.
    */
-  recordNodeExecution(name: string, status: NodeStatus, time: number, depth: number): void {
-    this.nodeExecutionData.set(name, { lastExecuted: time, status, depth });
+  recordNodeExecution(name: string, status: NodeStatus, time: number, depth: number, debugInfo: string): void {
+    this.nodeExecutionData.set(name, { lastExecuted: time, status, depth, debugInfo });
   }
 
   /**
    * Retrieves the execution data for all nodes.
    * @returns A map of node names to their execution data.
    */
-  getNodeExecutionData(): Map<string, { lastExecuted: number; status: NodeStatus; depth: number }> {
+  getNodeExecutionData(): Map<string, { lastExecuted: number; status: NodeStatus; depth: number; debugInfo: string }> {
     return this.nodeExecutionData;
   }
 }
