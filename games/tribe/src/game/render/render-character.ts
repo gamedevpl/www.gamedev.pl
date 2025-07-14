@@ -186,7 +186,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   // --- Main execution ---
   const { width: panelWidth, height: panelHeight } = calculateDimensions(human.aiBehaviorTree);
   const panelX = human.position.x + UI_BT_DEBUG_X_OFFSET;
-  const panelY = human.position.y + UI_BT_DEBUG_Y_OFFSET;
+  const panelY = human.position.y + UI_BT_DEBUG_Y_OFFSET - panelHeight / 2;
 
   // Draw background panel
   ctx.fillStyle = UI_BT_DEBUG_BACKGROUND_COLOR;
