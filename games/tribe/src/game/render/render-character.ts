@@ -36,6 +36,10 @@ import {
   HOURS_PER_GAME_DAY,
   UI_BT_DEBUG_BACKGROUND_COLOR,
   UI_BT_DEBUG_INDENT_SIZE,
+  UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH,
+  UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT,
+  UI_BT_DEBUG_HISTOGRAM_X_OFFSET,
+  UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { AIType } from '../ai/ai-types.ts';
@@ -108,7 +112,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
 
     // Only render if the node has a name and has been executed at least once
     if (node.name && nodeExecutionInfo) {
-      const { lastExecuted, status, depth } = nodeExecutionInfo;
+      const { lastExecuted, status, depth, executionHistory } = nodeExecutionInfo;
       const decayTimeInGameHours =
         (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
       const timeSinceExecuted = currentTime - lastExecuted;
@@ -138,12 +142,72 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
 
       // Draw node name
       ctx.fillStyle = textColor;
-      ctx.fillText(
-        ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : ''),
-        xPos + 8,
-        currentY,
-      );
+      const nodeText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
+      ctx.fillText(nodeText, xPos + 8, currentY);
 
+      // --- Render Time-Series Histogram ---
+      if (executionHistory && executionHistory.length > 0) {
+        const historyWindowInGameHours =
+          (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+        const historyEndTime = currentTime;
+        const historyStartTime = historyEndTime - historyWindowInGameHours;
+
+        const textWidth = ctx.measureText(nodeText).width;
+        let currentX = xPos + 8 + textWidth + UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
+        const startX = currentX;
+
+        // Find the status right at the beginning of the window for continuity
+        const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
+        let lastStatus: NodeStatus | null =
+          recordsBeforeWindow.length > 0 ? recordsBeforeWindow[recordsBeforeWindow.length - 1].status : null;
+        let lastTime = historyStartTime;
+
+        const recordsInWindow = executionHistory.filter((r) => r.time >= historyStartTime && r.time <= historyEndTime);
+
+        const getColorForStatus = (status: NodeStatus | null): string => {
+          if (status === null) return 'rgba(255, 255, 255, 0.1)'; // Default for no data
+          switch (status) {
+            case NodeStatus.SUCCESS:
+              return UI_BT_DEBUG_STATUS_SUCCESS_COLOR;
+            case NodeStatus.FAILURE:
+              return UI_BT_DEBUG_STATUS_FAILURE_COLOR;
+            case NodeStatus.RUNNING:
+              return UI_BT_DEBUG_STATUS_RUNNING_COLOR;
+            default:
+              return 'rgba(255, 255, 255, 0.1)';
+          }
+        };
+
+        const pixelsPerGameHour = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH / historyWindowInGameHours;
+
+        // Draw a background for the histogram area
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(currentX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+
+        for (const record of recordsInWindow) {
+          const segmentDuration = record.time - lastTime;
+          const segmentWidth = segmentDuration * pixelsPerGameHour;
+
+          if (segmentWidth > 0) {
+            ctx.fillStyle = getColorForStatus(lastStatus);
+            ctx.fillRect(currentX, barY, segmentWidth, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+            currentX += segmentWidth;
+          }
+
+          lastStatus = record.status;
+          lastTime = record.time;
+        }
+
+        // Draw the final segment from the last record to the end of the window
+        const finalSegmentDuration = historyEndTime - lastTime;
+        const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
+        if (finalSegmentWidth > 0) {
+          ctx.fillStyle = getColorForStatus(lastStatus);
+          const remainingWidth = startX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
+          ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+        }
+      }
       currentY += UI_BT_DEBUG_LINE_HEIGHT;
     }
 
@@ -166,8 +230,15 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
 
     const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
     if (node.name && nodeExecutionInfo) {
+      const debugText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
+      const textWidth = ctx.measureText(debugText).width;
       const indentedWidth =
-        (nodeExecutionInfo.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE + ctx.measureText(node.name).width + 20; // Add padding
+        (nodeExecutionInfo.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE +
+        8 + // Status circle
+        textWidth +
+        UI_BT_DEBUG_HISTOGRAM_X_OFFSET +
+        UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH +
+        20; // Padding
       maxWidth = Math.max(maxWidth, indentedWidth);
       height += UI_BT_DEBUG_LINE_HEIGHT;
     }

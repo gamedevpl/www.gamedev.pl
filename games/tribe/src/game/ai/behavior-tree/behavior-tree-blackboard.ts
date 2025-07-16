@@ -1,4 +1,17 @@
-import { NodeStatus } from './behavior-tree-types';
+import { NodeStatus } from "./behavior-tree-types";
+import {
+  GAME_DAY_IN_REAL_SECONDS,
+  HOURS_PER_GAME_DAY,
+  UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
+} from "../../world-consts";
+
+type NodeExecutionEntry = {
+  lastExecuted: number;
+  status: NodeStatus;
+  depth: number;
+  debugInfo: string;
+  executionHistory: { time: number; status: NodeStatus }[];
+};
 
 /**
  * A generic key-value store for AI behavior trees.
@@ -6,10 +19,7 @@ import { NodeStatus } from './behavior-tree-types';
  */
 export class Blackboard {
   private data = new Map<string, unknown>();
-  private nodeExecutionData = new Map<
-    string,
-    { lastExecuted: number; status: NodeStatus; depth: number; debugInfo: string }
-  >();
+  private nodeExecutionData = new Map<string, NodeExecutionEntry>();
 
   /**
    * Stores a value in the blackboard.
@@ -35,16 +45,46 @@ export class Blackboard {
    * @param status The execution status of the node.
    * @param time The game time of the execution.
    * @param depth The depth of the node in the tree.
+   * @param debugInfo Additional debug info string for the node.
    */
   recordNodeExecution(name: string, status: NodeStatus, time: number, depth: number, debugInfo: string): void {
-    this.nodeExecutionData.set(name, { lastExecuted: time, status, depth, debugInfo });
+    const existingEntry = this.nodeExecutionData.get(name) || {
+      lastExecuted: 0,
+      status: NodeStatus.FAILURE, // Default
+      depth: 0,
+      debugInfo: "",
+      executionHistory: [],
+    };
+
+    // Add current execution to history
+    existingEntry.executionHistory.push({ time, status });
+
+    // Prune history to the last 30 seconds
+    const historyWindowInGameHours =
+      (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+    const historyStartTime = time - historyWindowInGameHours;
+
+    existingEntry.executionHistory = existingEntry.executionHistory.filter(
+      (record) => record.time >= historyStartTime
+    );
+
+    // Update the main entry
+    const updatedEntry: NodeExecutionEntry = {
+      ...existingEntry,
+      lastExecuted: time,
+      status,
+      depth,
+      debugInfo,
+    };
+
+    this.nodeExecutionData.set(name, updatedEntry);
   }
 
   /**
    * Retrieves the execution data for all nodes.
    * @returns A map of node names to their execution data.
    */
-  getNodeExecutionData(): Map<string, { lastExecuted: number; status: NodeStatus; depth: number; debugInfo: string }> {
+  getNodeExecutionData(): Map<string, NodeExecutionEntry> {
     return this.nodeExecutionData;
   }
 }
