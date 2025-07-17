@@ -22,10 +22,3 @@ export function addVisualEffect(
   gameState.nextVisualEffectId++;
   return newEffect.id;
 }
-
-export function removeVisualEffectById(gameState: GameWorldState, effectId: VisualEffectId): void {
-  const index = gameState.visualEffects.findIndex((effect) => effect.id === effectId);
-  if (index > -1) {
-    gameState.visualEffects.splice(index, 1);
-  }
-}

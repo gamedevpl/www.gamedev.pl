@@ -4,11 +4,6 @@ export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Constants
 
 // Time Constants
-export const MONTHS_PER_YEAR = 12;
-export const DAYS_PER_MONTH = 30;
-export const HOURS_PER_GAME_MONTH: number = HOURS_PER_GAME_DAY * DAYS_PER_MONTH;
-export const HOURS_PER_GAME_YEAR: number = HOURS_PER_GAME_MONTH * MONTHS_PER_YEAR;
-
 export const MAP_WIDTH: number = 3000; // pixels
 export const MAP_HEIGHT: number = 3000; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
@@ -89,17 +84,9 @@ export const MAX_BUSHES_PER_TRIBE_TERRITORY = 10;
 export const BERRY_COST_FOR_PLANTING = 5;
 export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for planting action
 export const AI_PLANTING_BERRY_THRESHOLD = 6; // Min berries for AI to consider planting
-export const AI_PLANTING_MAX_NEARBY_BUSHES = 2; // Max bushes in radius for AI to plant
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
 export const AI_PLANTING_CHECK_RADIUS = 300; // Radius for AI to check if bushes are already planted
 export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
-export const AI_PLANTING_GRID_STEP = 40;
-export const AI_PLANTING_GRID_OFFSETS = [
-  { x: -20, y: -20 },
-  { x: 20, y: -20 },
-  { x: -20, y: 20 },
-  { x: 20, y: 20 },
-];
 
 // Human AI Constants
 export const UTILITY_AI_ROLLOUT_CHANCE = 0;
@@ -119,14 +106,8 @@ export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number 
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
 export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 1000;
 export const AI_ATTACK_HUNGER_THRESHOLD: number = HUMAN_HUNGER_DEATH * 0.85;
-export const AI_ATTACK_TARGET_MIN_FOOD_COUNT = 5;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
-export const AI_DEFEND_BUSH_KARMA_THRESHOLD = -5; // Karma threshold to defend a bush
-export const AI_GATHERING_TERRITORY_RADIUS: number = 150; // Radius to look for other bushes near a claimed one
-export const AI_GATHERING_TERRITORY_RADIUS_MULTIPLIER: number = 1.2;
-export const AI_WANDERING_RESTRICTED_RADIUS_CHILD: number = 100;
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
-export const AI_SEIZE_MIN_NON_FAMILY_TARGETS: number = 2;
 export const AI_DEFEND_BUSH_RANGE = 80; // Range in pixels for AI to defend a claimed bush
 export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage in battle around their leader
 export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
@@ -148,8 +129,6 @@ export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
 export const AI_FLEE_DISTANCE = 200;
-
-export const AI_WANDERING_RESTRICTED_RADIUS_FEMALE: number = 150;
 
 // Karma Constants
 export const KARMA_ON_ATTACK = -25;
@@ -190,7 +169,6 @@ export const TRIBE_BADGE_SIZE: number = 8;
 // UI Constants
 export const UI_TEXT_COLOR: string = '#FFFFFF';
 export const UI_FONT_SIZE: number = 18;
-export const UI_LINE_HEIGHT: number = 24;
 export const UI_PADDING: number = 15;
 export const UI_TEXT_SHADOW_COLOR: string = 'rgba(0, 0, 0, 0.7)';
 export const UI_TEXT_SHADOW_BLUR: number = 4;
@@ -204,7 +182,6 @@ export const UI_HUNGER_BAR_COLOR = '#f44336';
 export const UI_HITPOINTS_BAR_COLOR = '#4CAF50'; // Green for health
 export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
-export const UI_MASTER_VOLUME_BAR_COLOR = '#808080';
 export const UI_BERRY_ICON_SIZE = 16;
 export const CORPSE_MEAT_ICON_SIZE = 9;
 export const UI_MINIATURE_CHARACTER_SIZE = 32;
@@ -256,8 +233,6 @@ export const UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS = 30;
 export const UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH = 50;
 export const UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT = 8;
 export const UI_BT_DEBUG_HISTOGRAM_X_OFFSET = 10;
-export const UI_BT_DEBUG_HISTOGRAM_BAR_SPACING = 1;
-export const UI_BT_DEBUG_HISTOGRAM_BAR_WIDTH = 2;
 
 // Pause UI Constants
 export const UI_PAUSE_OVERLAY_COLOR: string = 'rgba(0, 0, 0, 0.5)';
@@ -283,11 +258,9 @@ export const UI_TUTORIAL_HIGHLIGHT_PADDING: number = 5;
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;
 export const EFFECT_DURATION_MEDIUM_HOURS: number = 3;
-export const EFFECT_DURATION_LONG_HOURS: number = 6;
 export const HUNGER_EFFECT_THRESHOLD: number = 70;
 
 // Sound Constants
 export const SOUND_MAX_DISTANCE = 600;
 export const SOUND_FALLOFF = 1.5;
 export const INITIAL_MASTER_VOLUME = 0.1;
-export const MASTER_VOLUME_CHANGE_STEP = 0.1;

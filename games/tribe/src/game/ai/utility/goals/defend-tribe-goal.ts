@@ -4,7 +4,7 @@ import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { UpdateContext } from '../../../world-types';
 import { Goal, GoalType } from './goal-types';
 
-export class DefendTribeGoal implements Goal {
+class DefendTribeGoal implements Goal {
   public type = GoalType.DEFEND_TRIBE;
 
   public getScore(human: HumanEntity, context: UpdateContext): number {

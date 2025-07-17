@@ -9,12 +9,6 @@ import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 
-// Basic Types
-export type Position = {
-  x: number;
-  y: number;
-};
-
 // Game State Interface
 export interface GameWorldState {
   time: number; // Total game hours passed since the start of the game, float

@@ -8,7 +8,7 @@ import { findChildren } from '../../../utils/world-utils';
  * Represents the goal for a parent to feed their hungry children.
  * The score is determined by the hunger level of the hungriest child.
  */
-export class FeedChildrenGoal implements Goal {
+class FeedChildrenGoal implements Goal {
   public type = GoalType.FEED_CHILDREN;
 
   public getScore(human: HumanEntity, context: UpdateContext): number {

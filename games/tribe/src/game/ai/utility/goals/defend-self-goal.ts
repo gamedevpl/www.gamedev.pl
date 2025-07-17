@@ -7,7 +7,7 @@ import { Goal, GoalType } from './goal-types';
  * Represents the goal to defend oneself from an immediate threat.
  * The score is based on being attacked and the human's current health.
  */
-export class DefendSelfGoal implements Goal {
+class DefendSelfGoal implements Goal {
   public type = GoalType.DEFEND_SELF;
 
   public getScore(human: HumanEntity, context: UpdateContext): number {

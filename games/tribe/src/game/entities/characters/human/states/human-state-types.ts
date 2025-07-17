@@ -10,7 +10,7 @@ export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with an
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_PLANTING = 'humanPlanting';
 
-export interface HumanIdleStateData extends StateData {
+interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
 }
 
@@ -18,7 +18,7 @@ export interface HumanMovingStateData extends StateData {
   targetPosition?: Vector2D; // Where the human is moving to
 }
 
-export interface HumanEatingStateData extends StateData {
+interface HumanEatingStateData extends StateData {
   berryBushId: EntityId; // The ID of the berry bush being eaten from
 }
 

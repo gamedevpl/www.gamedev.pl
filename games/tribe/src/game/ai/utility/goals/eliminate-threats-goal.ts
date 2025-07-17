@@ -9,7 +9,7 @@ import { IndexedWorldState } from '../../../world-index/world-index-types';
  * Represents the goal to eliminate threats.
  * The score is high if there are enemies nearby.
  */
-export class EliminateThreatsGoal implements Goal {
+class EliminateThreatsGoal implements Goal {
   public type = GoalType.ELIMINATE_THREATS;
 
   public getScore(human: HumanEntity, context: UpdateContext): number {

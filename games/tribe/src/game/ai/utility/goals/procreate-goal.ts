@@ -12,7 +12,7 @@ import { Goal, GoalType } from './goal-types';
 import { countEntitiesOfTypeInRadius, countLivingOffspring } from '../../../utils/world-utils';
 import { EntityType } from '../../../entities/entities-types';
 
-export class ProcreateGoal implements Goal {
+class ProcreateGoal implements Goal {
   public type = GoalType.PROCREATE;
 
   public getScore(human: HumanEntity, context: UpdateContext): number {

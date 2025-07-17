@@ -6,7 +6,7 @@ import { Goal, GoalType } from './goal-types';
  * Represents the goal to satisfy hunger.
  * The score of this goal is directly proportional to the human's hunger level.
  */
-export class SatisfyHungerGoal implements Goal {
+class SatisfyHungerGoal implements Goal {
   public type = GoalType.SATISFY_HUNGER;
 
   /**

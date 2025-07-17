@@ -10,7 +10,6 @@ import {
   HUMAN_ATTACK_RANGE,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   AI_PLANTING_SEARCH_RADIUS,
-  AI_DEFEND_CLAIMED_BUSH_RANGE,
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
 import {
@@ -26,21 +25,6 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { PlayerActionHint, PlayerActionType, TribeInfo } from '../ui/ui-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
-
-export function isFamilyHeadWithoutLivingFather(human: HumanEntity, gameState: GameWorldState): boolean {
-  if (human.gender !== 'male' || !human.isAdult) {
-    return false;
-  }
-
-  if (human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId);
-    if (father) {
-      return false; // Father is alive
-    }
-  }
-
-  return true; // Is an adult male with no living father
-}
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -516,40 +500,6 @@ export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState):
   return Array.from(family);
 }
 
-export function getAdultFamilyMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
-  const family = new Set<HumanEntity>();
-
-  // Add self
-  if (human.isAdult) {
-    family.add(human);
-  }
-
-  // Add parents
-  if (human.motherId) {
-    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
-    if (mother?.isAdult) family.add(mother);
-  }
-  if (human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
-    if (father?.isAdult) family.add(father);
-  }
-
-  // Add partners
-  human.partnerIds?.forEach((id) => {
-    const partner = gameState.entities.entities.get(id) as HumanEntity | undefined;
-    if (partner?.isAdult) family.add(partner);
-  });
-
-  // Add adult children
-  findChildren(gameState, human).forEach((child) => {
-    if (child.isAdult) {
-      family.add(child);
-    }
-  });
-
-  return Array.from(family);
-}
-
 export function findBestAttackTarget(
   sourceHuman: HumanEntity,
   gameState: GameWorldState,
@@ -627,32 +577,6 @@ export function propagateNewLeaderToDescendants(
       }
     });
   }
-}
-
-export function findIntruderNearOwnedBushes(owner: HumanEntity, gameState: GameWorldState): HumanEntity | null {
-  const indexedState = gameState as IndexedWorldState;
-  const ownedBushes = indexedState.search.berryBush.byProperty('ownerId', owner.id);
-
-  if (ownedBushes.length === 0) {
-    return null;
-  }
-
-  for (const bush of ownedBushes) {
-    // Find nearby humans who could be intruders.
-    const nearbyHumans = indexedState.search.human.byRadius(bush.position, AI_DEFEND_CLAIMED_BUSH_RANGE);
-
-    for (const potentialIntruder of nearbyHumans) {
-      if (
-        potentialIntruder.id !== owner.id && // Not the owner
-        !areFamily(owner, potentialIntruder, gameState) // Not family
-      ) {
-        // Found an intruder!
-        return potentialIntruder;
-      }
-    }
-  }
-
-  return null;
 }
 
 export function findTribeMembers(leaderId: EntityId, gameState: GameWorldState): HumanEntity[] {

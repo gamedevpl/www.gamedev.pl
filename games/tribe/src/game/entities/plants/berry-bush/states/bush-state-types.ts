@@ -17,5 +17,3 @@ export interface BushSpreadingStateData extends StateData {
 export interface BushDyingStateData extends StateData {
   state: 'dying';
 }
-
-export type BerryBushStateData = StateData;

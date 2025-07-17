@@ -25,7 +25,7 @@ export interface Entity {
 /**
  * Represents an active debuff effect on an entity
  */
-export interface ActiveDebuff {
+interface ActiveDebuff {
   /** Debuff type */
   type: 'slow';
   /** Time when the debuff was applied */

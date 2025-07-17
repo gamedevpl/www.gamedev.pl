@@ -44,30 +44,6 @@ export function findStateHandler<T extends Entity>(
 }
 
 /**
- * Updates entity state using provided state handler
- * @param state Current state handler
- * @param data Current state data
- * @param context State update context
- * @returns Updated state data
- */
-export function updateEntityState<T extends Entity>(
-  state: State<T, StateData>,
-  data: StateData,
-  context: StateContext<T>,
-): StateData {
-  return state.update(data, context).data;
-}
-
-/**
- * Creates initial state data
- * @param time Current game time
- * @returns Initial state data
- */
-export function createInitialStateData(time: number): StateData {
-  return { enteredAt: time };
-}
-
-/**
  * Checks if state transition is needed
  * @param currentStateType Current state type
  * @param nextStateType Next state type
