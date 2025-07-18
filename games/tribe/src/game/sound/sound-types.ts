@@ -8,6 +8,7 @@ import childFedSound from './sound-effects/child-fed.mp3';
 import humanDeathSound from './sound-effects/human-death.mp3';
 import gameOverSound from './sound-effects/game-over.mp3';
 import buttonClickSound from './sound-effects/button-click.mp3';
+import soundTrack1 from './music/soundtrack-1.mp3';
 
 export enum SoundType {
   // Player/Human Actions
@@ -24,6 +25,9 @@ export enum SoundType {
   // UI/Game State
   GameOver,
   ButtonClick,
+
+  // Music
+  SoundTrack1,
 }
 
 export const SOUND_FILE_MAP = new Map<SoundType, string>([
@@ -38,6 +42,7 @@ export const SOUND_FILE_MAP = new Map<SoundType, string>([
   [SoundType.ButtonClick, buttonClickSound],
   [SoundType.Seize, attackSound],
   [SoundType.CallToAttack, attackSound],
+  [SoundType.SoundTrack1, soundTrack1],
 ]);
 
 export interface SoundOptions {
@@ -49,4 +54,6 @@ export interface SoundOptions {
   };
   masterVolume?: number;
   isMuted?: boolean;
+  loop?: boolean;
+  trackId?: string; // To identify a sound source for stopping it later
 }

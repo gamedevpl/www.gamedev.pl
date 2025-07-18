@@ -11,6 +11,8 @@ import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
 import { INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
 import { EntityId } from '../game/entities/entities-types';
+import { playSound, stopSound } from '../game/sound/sound-utils';
+import { SoundType } from '../game/sound/sound-types';
 
 const IntroContainer = styled.div`
   position: relative;
@@ -69,6 +71,8 @@ const StartButton = styled.button`
   }
 `;
 
+const INTRO_SOUNDTRACK_ID = 'intro-soundtrack';
+
 export const IntroScreen: React.FC = () => {
   const { setAppState } = useGameContext();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,6 +81,14 @@ export const IntroScreen: React.FC = () => {
   const lastUpdateTimeRef = useRef<number>();
   const viewportCenterRef = useRef<Vector2D>(gameStateRef.current.viewportCenter);
   const focusedHumanIdRef = useRef<EntityId | undefined>();
+
+  useEffect(() => {
+    playSound(SoundType.SoundTrack1, { loop: true, trackId: INTRO_SOUNDTRACK_ID });
+
+    return () => {
+      stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds on component unmount
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -184,12 +196,17 @@ export const IntroScreen: React.FC = () => {
     return stopLoop;
   }, [startLoop, stopLoop]);
 
+  const handleStartGame = () => {
+    stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds
+    setAppState('game');
+  };
+
   return (
     <IntroContainer>
       <StyledCanvas ref={canvasRef} />
       <Overlay>
         <Title>Tribe</Title>
-        <StartButton onClick={() => setAppState('game')}>Start Game</StartButton>
+        <StartButton onClick={handleStartGame}>Start Game</StartButton>
       </Overlay>
     </IntroContainer>
   );
