@@ -124,7 +124,7 @@ export const IntroScreen: React.FC = () => {
       lastUpdateTimeRef.current = time;
       return;
     }
-    const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
+    const deltaTime = Math.min((time - lastUpdateTimeRef.current) / 1000, 1); // Seconds (clamped to 1 second max)
 
     // Update game state
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
