@@ -105,7 +105,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   ctx.textBaseline = 'top';
 
   // Helper function to recursively render the tree
-  const renderNode = (node: BehaviorNode, yPos: number, panelX: number): number => {
+  const renderNode = (node: BehaviorNode, yPos: number, panelX: number, panelWidth: number): number => {
     let currentY = yPos;
     const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
 
@@ -151,10 +151,10 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
         const historyEndTime = currentTime;
         const historyStartTime = historyEndTime - historyWindowInGameHours;
 
-        const textWidth = ctx.measureText(nodeText).width;
-        let currentX = xPos + 8 + textWidth + UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        const histogramStartX =
+          panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        let currentX = histogramStartX;
         const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
-        const startX = currentX;
 
         // Find the status right at the beginning of the window for continuity
         const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
@@ -182,7 +182,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
 
         // Draw a background for the histogram area
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fillRect(currentX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+        ctx.fillRect(histogramStartX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
 
         for (const record of recordsInWindow) {
           const segmentDuration = record.time - lastTime;
@@ -203,7 +203,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
         const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
         if (finalSegmentWidth > 0) {
           ctx.fillStyle = getColorForStatus(lastStatus);
-          const remainingWidth = startX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
+          const remainingWidth = histogramStartX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
           ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
         }
       }
@@ -213,10 +213,10 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
     // Recursively render children
     if (node.children) {
       for (const child of node.children) {
-        currentY = renderNode(child, currentY, panelX);
+        currentY = renderNode(child, currentY, panelX, panelWidth);
       }
     } else if (node.child) {
-      currentY = renderNode(node.child, currentY, panelX);
+      currentY = renderNode(node.child, currentY, panelX, panelWidth);
     }
 
     return currentY;
@@ -267,7 +267,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight + 4);
 
   // Start rendering from the root node
-  renderNode(human.aiBehaviorTree, panelY + 2, panelX);
+  renderNode(human.aiBehaviorTree, panelY + 2, panelX, panelWidth);
 
   ctx.restore();
 }
