@@ -86,6 +86,7 @@ export function renderGame(
   isDebugOn: boolean,
   viewportCenter: Vector2D,
   playerActionHints: PlayerActionHint[],
+  isIntro: boolean = false,
 ): void {
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -95,7 +96,7 @@ export function renderGame(
 
   ctx.translate(ctx.canvas.width / 2 - viewportCenter.x, ctx.canvas.height / 2 - viewportCenter.y);
 
-  if (gameState.gameOver) {
+  if (!isIntro && gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
     ctx.fillStyle = 'white';
     ctx.font = '30px "Press Start 2P", Arial';
@@ -188,308 +189,308 @@ export function renderGame(
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 
-  // --- UI Rendering ---
-  // Define rects for potential highlighting
-  let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
-  let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
+  if (!isIntro) {
+    // --- UI Rendering ---
+    // Define rects for potential highlighting
+    let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
+    let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
 
-  ctx.fillStyle = UI_TEXT_COLOR;
-  ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
-  ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
-  ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
-
-  // --- Top-Left UI ---
-  ctx.textAlign = 'left';
-  let uiLineY = UI_PADDING + UI_FONT_SIZE;
-
-  // Time Display
-  const year = gameState.time / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS) / HUMAN_YEAR_IN_REAL_SECONDS;
-  const yearProgress = year % 1; // Fractional part for progress bar
-  const timeEmoji = UI_STATUS_EMOJIS[UIStatusType.Time];
-  const iconTextPadding = 25;
-  const barX = UI_PADDING + iconTextPadding;
-
-  ctx.fillText(timeEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
-  drawProgressBar(
-    ctx,
-    barX,
-    uiLineY,
-    UI_BAR_WIDTH,
-    UI_BAR_HEIGHT,
-    yearProgress,
-    UI_BAR_BACKGROUND_COLOR,
-    UI_TIME_BAR_COLOR,
-  );
-
-  uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
-
-  if (player) {
-    // Age Bar
-    const miniatureY = uiLineY + UI_MINIATURE_CHARACTER_SIZE / 2;
-    const ageBarY = uiLineY + (UI_MINIATURE_CHARACTER_SIZE - UI_BAR_HEIGHT) / 2;
-    const miniaturePadding = 5;
-
-    // Draw child miniature
-    renderMiniatureCharacter(
-      ctx,
-      { x: UI_PADDING * 2, y: miniatureY },
-      UI_MINIATURE_CHARACTER_SIZE,
-      5,
-      player.gender,
-      false,
-      false,
-      false,
-    );
-
-    const ageBarX = UI_PADDING + UI_MINIATURE_CHARACTER_SIZE + miniaturePadding;
-    const ageBarWidth = UI_BAR_WIDTH + iconTextPadding - (UI_MINIATURE_CHARACTER_SIZE + miniaturePadding) * 2;
-
-    drawProgressBar(
-      ctx,
-      ageBarX,
-      ageBarY,
-      ageBarWidth,
-      UI_BAR_HEIGHT,
-      Math.floor(player.age) / HUMAN_MAX_AGE_YEARS,
-      UI_BAR_BACKGROUND_COLOR,
-      UI_AGE_BAR_COLOR,
-    );
-
-    // Draw elder miniature
-    renderMiniatureCharacter(
-      ctx,
-      { x: ageBarX + ageBarWidth + miniaturePadding + UI_MINIATURE_CHARACTER_SIZE / 2, y: miniatureY },
-      UI_MINIATURE_CHARACTER_SIZE,
-      HUMAN_MAX_AGE_YEARS,
-      player.gender,
-      false,
-      false,
-      false,
-    );
-    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
-
-    // Family Bar
-    const familyMembersToDisplay: {
-      member: HumanEntity;
-      isPlayer: boolean;
-      isHeir: boolean;
-      isPartner: boolean;
-      isParent: boolean;
-    }[] = [];
-    const displayedIds = new Set<EntityId>();
-
-    // 1. Add Player
-    familyMembersToDisplay.push({ member: player, isPlayer: true, isHeir: false, isPartner: false, isParent: false });
-    displayedIds.add(player.id);
-
-    // 2. Add Heir
-    if (playerHeir && !displayedIds.has(playerHeir.id)) {
-      familyMembersToDisplay.push({
-        member: playerHeir,
-        isPlayer: false,
-        isHeir: true,
-        isPartner: false,
-        isParent: false,
-      });
-      displayedIds.add(playerHeir.id);
-    }
-
-    // 3. Add Partners
-    playerPartners.forEach((p) => {
-      if (!displayedIds.has(p.id)) {
-        familyMembersToDisplay.push({ member: p, isPlayer: false, isHeir: false, isPartner: true, isParent: false });
-        displayedIds.add(p.id);
-      }
-    });
-
-    // 4. Add other Children
-    playerChildren.forEach((c) => {
-      if (!displayedIds.has(c.id)) {
-        familyMembersToDisplay.push({ member: c, isPlayer: false, isHeir: false, isPartner: false, isParent: false });
-        displayedIds.add(c.id);
-      }
-    });
-
-    // 5. Add parents
-    if (player.motherId && !displayedIds.has(player.motherId)) {
-      const mother = gameState.entities.entities.get(player.motherId) as HumanEntity | undefined;
-      if (mother) {
-        familyMembersToDisplay.push({
-          member: mother,
-          isPlayer: false,
-          isHeir: false,
-          isPartner: false,
-          isParent: true,
-        });
-        displayedIds.add(mother.id);
-      }
-    }
-    if (player.fatherId && !displayedIds.has(player.fatherId)) {
-      const father = gameState.entities.entities.get(player.fatherId) as HumanEntity | undefined;
-      if (father) {
-        familyMembersToDisplay.push({
-          member: father,
-          isPlayer: false,
-          isHeir: false,
-          isPartner: false,
-          isParent: true,
-        });
-        displayedIds.add(father.id);
-      }
-    }
-
-    const familyEmoji = UI_STATUS_EMOJIS[UIStatusType.Family];
-    const iconPadding = 10;
-    const familyBarX = UI_PADDING + UI_FONT_SIZE + iconPadding;
-    const familyBarMaxWidth = UI_BAR_WIDTH + iconTextPadding - (UI_FONT_SIZE + iconPadding);
-
-    // Vertically center the large emoji with the row of miniatures
-    const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
+    ctx.fillStyle = UI_TEXT_COLOR;
     ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(familyEmoji, UI_PADDING, emojiY);
+    ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
+    ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-    const familyBarY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2; // Center the single row
+    // --- Top-Left UI ---\n    ctx.textAlign = 'left';
+    let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
-    drawFamilyMemberBar(
-      ctx,
-      familyBarX,
-      familyBarY,
-      familyMembersToDisplay,
-      UI_FAMILY_MEMBER_ICON_SIZE,
-      familyBarMaxWidth,
-    );
+    // Time Display
+    const year = gameState.time / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS) / HUMAN_YEAR_IN_REAL_SECONDS;
+    const yearProgress = year % 1; // Fractional part for progress bar
+    const timeEmoji = UI_STATUS_EMOJIS[UIStatusType.Time];
+    const iconTextPadding = 25;
+    const barX = UI_PADDING + iconTextPadding;
 
-    uiLineY += UI_FAMILY_MEMBER_ICON_SIZE + UI_BAR_PADDING;
-    ctx.textBaseline = 'alphabetic'; // Reset baseline
-
-    // Hitpoints Bar
-    const hpEmoji = UI_STATUS_EMOJIS[UIStatusType.Hitpoints];
-    ctx.fillText(hpEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+    ctx.fillText(timeEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
     drawProgressBar(
       ctx,
       barX,
       uiLineY,
       UI_BAR_WIDTH,
       UI_BAR_HEIGHT,
-      player.hitpoints / player.maxHitpoints,
+      yearProgress,
       UI_BAR_BACKGROUND_COLOR,
-      UI_HITPOINTS_BAR_COLOR,
+      UI_TIME_BAR_COLOR,
     );
+
     uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
 
-    // Hunger Bar
-    const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
-    ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
-    drawProgressBar(
-      ctx,
-      barX,
-      uiLineY,
-      UI_BAR_WIDTH,
-      UI_BAR_HEIGHT,
-      (HUMAN_HUNGER_DEATH - player.hunger) / HUMAN_HUNGER_DEATH,
-      UI_BAR_BACKGROUND_COLOR,
-      UI_HUNGER_BAR_COLOR,
-    );
-    hungerBarRect = {
-      x: UI_PADDING,
-      y: uiLineY - UI_BAR_PADDING / 2,
-      width: UI_BAR_WIDTH + iconTextPadding,
-      height: UI_BAR_HEIGHT + UI_BAR_PADDING,
-    };
-    uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+    if (player) {
+      // Age Bar
+      const miniatureY = uiLineY + UI_MINIATURE_CHARACTER_SIZE / 2;
+      const ageBarY = uiLineY + (UI_MINIATURE_CHARACTER_SIZE - UI_BAR_HEIGHT) / 2;
+      const miniaturePadding = 5;
 
-    // Food Bar
-    ctx.textBaseline = 'middle';
-    const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
-    ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE / 2);
-    drawFoodBar(
-      ctx,
-      barX, // Use the same X as other bars for alignment
-      uiLineY + UI_BERRY_ICON_SIZE / 2,
-      player.food,
-      UI_BERRY_ICON_SIZE,
-      UI_BAR_WIDTH,
-    );
-    foodBarRect = {
-      x: UI_PADDING,
-      y: uiLineY - UI_BAR_PADDING / 5,
-      width: UI_BAR_WIDTH + iconTextPadding,
-      height: UI_BERRY_ICON_SIZE + UI_BAR_PADDING,
-    };
-    ctx.textBaseline = 'alphabetic';
-    uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
-  }
+      // Draw child miniature
+      renderMiniatureCharacter(
+        ctx,
+        { x: UI_PADDING * 2, y: miniatureY },
+        UI_MINIATURE_CHARACTER_SIZE,
+        5,
+        player.gender,
+        false,
+        false,
+        false,
+      );
 
-  // --- Top-Right UI ---
-  ctx.textAlign = 'right';
-  let currentButtonX = ctx.canvas.width - UI_PADDING;
+      const ageBarX = UI_PADDING + UI_MINIATURE_CHARACTER_SIZE + miniaturePadding;
+      const ageBarWidth = UI_BAR_WIDTH + iconTextPadding - (UI_MINIATURE_CHARACTER_SIZE + miniaturePadding) * 2;
 
-  gameState.uiButtons.forEach((button) => {
-    const buttonY = UI_PADDING;
-    const buttonX = currentButtonX - button.currentWidth;
+      drawProgressBar(
+        ctx,
+        ageBarX,
+        ageBarY,
+        ageBarWidth,
+        UI_BAR_HEIGHT,
+        Math.floor(player.age) / HUMAN_MAX_AGE_YEARS,
+        UI_BAR_BACKGROUND_COLOR,
+        UI_AGE_BAR_COLOR,
+      );
 
-    // Update button state before drawing
-    button.rect = { x: buttonX, y: buttonY, width: button.currentWidth, height: UI_BUTTON_HEIGHT };
-    button.textColor = UI_BUTTON_TEXT_COLOR;
+      // Draw elder miniature
+      renderMiniatureCharacter(
+        ctx,
+        { x: ageBarX + ageBarWidth + miniaturePadding + UI_MINIATURE_CHARACTER_SIZE / 2, y: miniatureY },
+        UI_MINIATURE_CHARACTER_SIZE,
+        HUMAN_MAX_AGE_YEARS,
+        player.gender,
+        false,
+        false,
+        false,
+      );
+      uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING * 2;
 
-    switch (button.action) {
-      case UIButtonActionType.ToggleAutopilot:
-        button.text = `AUT[O]`;
-        button.backgroundColor = gameState.isPlayerOnAutopilot
-          ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
-          : UI_BUTTON_BACKGROUND_COLOR;
-        break;
-      case UIButtonActionType.ToggleMute:
-        button.text = gameState.isMuted ? `UN[M]UTE` : `[M]UTE`;
-        button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-        break;
-      case UIButtonActionType.TogglePause:
-        button.text = gameState.isPaused ? `UN[P]AUSE` : `[P]AUSE`;
-        button.backgroundColor = gameState.isPaused ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-        if (gameState.isPaused) {
-          button.currentWidth = UI_BUTTON_WIDTH * 1.4;
-        } else {
-          button.currentWidth = UI_BUTTON_WIDTH * 1.1;
+      // Family Bar
+      const familyMembersToDisplay: {
+        member: HumanEntity;
+        isPlayer: boolean;
+        isHeir: boolean;
+        isPartner: boolean;
+        isParent: boolean;
+      }[] = [];
+      const displayedIds = new Set<EntityId>();
+
+      // 1. Add Player
+      familyMembersToDisplay.push({ member: player, isPlayer: true, isHeir: false, isPartner: false, isParent: false });
+      displayedIds.add(player.id);
+
+      // 2. Add Heir
+      if (playerHeir && !displayedIds.has(playerHeir.id)) {
+        familyMembersToDisplay.push({
+          member: playerHeir,
+          isPlayer: false,
+          isHeir: true,
+          isPartner: false,
+          isParent: false,
+        });
+        displayedIds.add(playerHeir.id);
+      }
+
+      // 3. Add Partners
+      playerPartners.forEach((p) => {
+        if (!displayedIds.has(p.id)) {
+          familyMembersToDisplay.push({ member: p, isPlayer: false, isHeir: false, isPartner: true, isParent: false });
+          displayedIds.add(p.id);
         }
-        break;
+      });
+
+      // 4. Add other Children
+      playerChildren.forEach((c) => {
+        if (!displayedIds.has(c.id)) {
+          familyMembersToDisplay.push({ member: c, isPlayer: false, isHeir: false, isPartner: false, isParent: false });
+          displayedIds.add(c.id);
+        }
+      });
+
+      // 5. Add parents
+      if (player.motherId && !displayedIds.has(player.motherId)) {
+        const mother = gameState.entities.entities.get(player.motherId) as HumanEntity | undefined;
+        if (mother) {
+          familyMembersToDisplay.push({
+            member: mother,
+            isPlayer: false,
+            isHeir: false,
+            isPartner: false,
+            isParent: true,
+          });
+          displayedIds.add(mother.id);
+        }
+      }
+      if (player.fatherId && !displayedIds.has(player.fatherId)) {
+        const father = gameState.entities.entities.get(player.fatherId) as HumanEntity | undefined;
+        if (father) {
+          familyMembersToDisplay.push({
+            member: father,
+            isPlayer: false,
+            isHeir: false,
+            isPartner: false,
+            isParent: true,
+          });
+          displayedIds.add(father.id);
+        }
+      }
+
+      const familyEmoji = UI_STATUS_EMOJIS[UIStatusType.Family];
+      const iconPadding = 10;
+      const familyBarX = UI_PADDING + UI_FONT_SIZE + iconPadding;
+      const familyBarMaxWidth = UI_BAR_WIDTH + iconTextPadding - (UI_FONT_SIZE + iconPadding);
+
+      // Vertically center the large emoji with the row of miniatures
+      const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
+      ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(familyEmoji, UI_PADDING, emojiY);
+
+      const familyBarY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2; // Center the single row
+
+      drawFamilyMemberBar(
+        ctx,
+        familyBarX,
+        familyBarY,
+        familyMembersToDisplay,
+        UI_FAMILY_MEMBER_ICON_SIZE,
+        familyBarMaxWidth,
+      );
+
+      uiLineY += UI_FAMILY_MEMBER_ICON_SIZE + UI_BAR_PADDING;
+      ctx.textBaseline = 'alphabetic'; // Reset baseline
+
+      // Hitpoints Bar
+      const hpEmoji = UI_STATUS_EMOJIS[UIStatusType.Hitpoints];
+      ctx.fillText(hpEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+      drawProgressBar(
+        ctx,
+        barX,
+        uiLineY,
+        UI_BAR_WIDTH,
+        UI_BAR_HEIGHT,
+        player.hitpoints / player.maxHitpoints,
+        UI_BAR_BACKGROUND_COLOR,
+        UI_HITPOINTS_BAR_COLOR,
+      );
+      uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
+      // Hunger Bar
+      const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
+      ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+      drawProgressBar(
+        ctx,
+        barX,
+        uiLineY,
+        UI_BAR_WIDTH,
+        UI_BAR_HEIGHT,
+        (HUMAN_HUNGER_DEATH - player.hunger) / HUMAN_HUNGER_DEATH,
+        UI_BAR_BACKGROUND_COLOR,
+        UI_HUNGER_BAR_COLOR,
+      );
+      hungerBarRect = {
+        x: UI_PADDING,
+        y: uiLineY - UI_BAR_PADDING / 2,
+        width: UI_BAR_WIDTH + iconTextPadding,
+        height: UI_BAR_HEIGHT + UI_BAR_PADDING,
+      };
+      uiLineY += UI_BAR_HEIGHT + UI_BAR_PADDING;
+
+      // Food Bar
+      ctx.textBaseline = 'middle';
+      const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
+      ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE / 2);
+      drawFoodBar(
+        ctx,
+        barX, // Use the same X as other bars for alignment
+        uiLineY + UI_BERRY_ICON_SIZE / 2,
+        player.food,
+        UI_BERRY_ICON_SIZE,
+        UI_BAR_WIDTH,
+      );
+      foodBarRect = {
+        x: UI_PADDING,
+        y: uiLineY - UI_BAR_PADDING / 5,
+        width: UI_BAR_WIDTH + iconTextPadding,
+        height: UI_BERRY_ICON_SIZE + UI_BAR_PADDING,
+      };
+      ctx.textBaseline = 'alphabetic';
+      uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
     }
 
-    drawButton(ctx, button);
-    currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
-  });
+    // --- Top-Right UI ---\n    ctx.textAlign = 'right';
+    let currentButtonX = ctx.canvas.width - UI_PADDING;
 
-  // --- Bottom-Left UI (Tribe List) ---
-  const tribesInfo = getTribesInfo(gameState, player?.leaderId);
-  renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+    gameState.uiButtons.forEach((button) => {
+      const buttonY = UI_PADDING;
+      const buttonX = currentButtonX - button.currentWidth;
 
-  // Reset shadow for other UI elements if needed
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
+      // Update button state before drawing
+      button.rect = { x: buttonX, y: buttonY, width: button.currentWidth, height: UI_BUTTON_HEIGHT };
+      button.textColor = UI_BUTTON_TEXT_COLOR;
 
-  if (player && playerActionHints.length > 0) {
-    renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
-  }
+      switch (button.action) {
+        case UIButtonActionType.ToggleAutopilot:
+          button.text = `AUT[O]`;
+          button.backgroundColor = gameState.isPlayerOnAutopilot
+            ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
+            : UI_BUTTON_BACKGROUND_COLOR;
+          break;
+        case UIButtonActionType.ToggleMute:
+          button.text = gameState.isMuted ? `UN[M]UTE` : `[M]UTE`;
+          button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+          break;
+        case UIButtonActionType.TogglePause:
+          button.text = gameState.isPaused ? `UN[P]AUSE` : `[P]AUSE`;
+          button.backgroundColor = gameState.isPaused ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+          if (gameState.isPaused) {
+            button.currentWidth = UI_BUTTON_WIDTH * 1.4;
+          } else {
+            button.currentWidth = UI_BUTTON_WIDTH * 1.1;
+          }
+          break;
+      }
 
-  // --- UI Highlights ---
-  if (gameState.tutorialState.activeUIHighlights.size > 0) {
-    const { activeUIHighlights } = gameState.tutorialState;
+      drawButton(ctx, button);
+      currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
+    });
 
-    if (activeUIHighlights.has(TutorialUIHighlightKey.HUNGER_BAR) && hungerBarRect) {
-      renderUIElementHighlight(ctx, hungerBarRect, gameState.time);
+    // --- Bottom-Left UI (Tribe List) ---
+    const tribesInfo = getTribesInfo(gameState, player?.leaderId);
+    renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+
+    // Reset shadow for other UI elements if needed
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    if (player && playerActionHints.length > 0) {
+      renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
     }
 
-    if (activeUIHighlights.has(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
-      renderUIElementHighlight(ctx, foodBarRect, gameState.time);
+    // --- UI Highlights ---
+    if (gameState.tutorialState.activeUIHighlights.size > 0) {
+      const { activeUIHighlights } = gameState.tutorialState;
+
+      if (activeUIHighlights.has(TutorialUIHighlightKey.HUNGER_BAR) && hungerBarRect) {
+        renderUIElementHighlight(ctx, hungerBarRect, gameState.time);
+      }
+
+      if (activeUIHighlights.has(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
+        renderUIElementHighlight(ctx, foodBarRect, gameState.time);
+      }
     }
-  }
 
-  // Render tutorial panel if active
-  if (gameState.tutorialState.isActive) {
-    renderTutorialPanel(ctx, gameState.tutorialState, gameState.tutorial, ctx.canvas.width, ctx.canvas.height);
-  }
+    // Render tutorial panel if active
+    if (gameState.tutorialState.isActive) {
+      renderTutorialPanel(ctx, gameState.tutorialState, gameState.tutorial, ctx.canvas.width, ctx.canvas.height);
+    }
 
-  if (gameState.isPaused) {
-    renderPauseOverlay(ctx);
+    if (gameState.isPaused) {
+      renderPauseOverlay(ctx);
+    }
   }
 }

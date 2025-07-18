@@ -264,3 +264,7 @@ export const HUNGER_EFFECT_THRESHOLD: number = 70;
 export const SOUND_MAX_DISTANCE = 600;
 export const SOUND_FALLOFF = 1.5;
 export const INITIAL_MASTER_VOLUME = 0.1;
+
+// Intro Screen Constants
+export const INTRO_SCREEN_INITIAL_HUMANS: number = 15;
+export const INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS: number = 5000;

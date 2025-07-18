@@ -63,6 +63,7 @@ export const GameScreen: React.FC = () => {
           isDebugOnRef.current,
           viewportCenterRef.current,
           playerActionHintsRef.current,
+          false, // isIntro
         );
       }
     };
@@ -143,6 +144,7 @@ export const GameScreen: React.FC = () => {
       isDebugOnRef.current,
       viewportCenterRef.current,
       playerActionHintsRef.current,
+      false, // isIntro
     );
     lastUpdateTimeRef.current = time;
 

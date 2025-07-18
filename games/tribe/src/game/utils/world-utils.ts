@@ -748,3 +748,9 @@ export function isTribeUnderAttack(tribeMembers: HumanEntity[], gameState: Index
   }
   return false;
 }
+
+export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
+  return Array.from(gameState.entities.entities.values()).filter(
+    (entity) => entity.type === 'human',
+  ) as HumanEntity[];
+}

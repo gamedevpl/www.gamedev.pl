@@ -6,6 +6,7 @@ import {
   INITIAL_BERRY_BUSH_COUNT,
   INITIAL_MASTER_VOLUME,
   UI_BUTTON_WIDTH,
+  INTRO_SCREEN_INITIAL_HUMANS,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -100,4 +101,55 @@ export function initWorld(): GameWorldState {
   console.log('Game world initialized:', indexedWorldState);
 
   return indexedWorldState;
+}
+
+export function initIntroWorld(): GameWorldState {
+  const entities = createEntities();
+  const initialTime = 0;
+
+  // Spawn initial berry bushes
+  for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    createBerryBush(entities, randomPosition, initialTime);
+  }
+
+  // Spawn initial AI humans
+  for (let i = 0; i < INTRO_SCREEN_INITIAL_HUMANS; i++) {
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    const gender = Math.random() < 0.5 ? 'male' : 'female';
+    createHuman(entities, randomPosition, initialTime, gender, false);
+  }
+
+  const tutorial = createTutorial();
+  const tutorialState = createTutorialState();
+
+  const initialWorldState: GameWorldState = {
+    time: initialTime,
+    entities: entities,
+    mapDimensions: {
+      width: MAP_WIDTH,
+      height: MAP_HEIGHT,
+    },
+    generationCount: 0,
+    gameOver: false,
+    visualEffects: [],
+    nextVisualEffectId: 0,
+    viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+    isPaused: false,
+    isPlayerOnAutopilot: false,
+    hasPlayerMovedEver: false,
+    masterVolume: INITIAL_MASTER_VOLUME,
+    isMuted: true, // Muted by default for the intro
+    uiButtons: [], // No UI buttons in the intro
+    tutorial,
+    tutorialState,
+  };
+
+  return indexWorldState(initialWorldState);
 }
