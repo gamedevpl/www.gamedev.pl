@@ -22,8 +22,6 @@ import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
   MAX_ANCESTORS_TO_TRACK,
-  UTILITY_AI_ROLLOUT_CHANCE,
-  BEHAVIOR_TREE_AI_ROLLOUT_CHANCE,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -110,15 +108,6 @@ export function createHuman(
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
-  let aiType: AIType;
-  // A simple rollout mechanism to A/B/C test the different AI systems.
-  if (Math.random() < BEHAVIOR_TREE_AI_ROLLOUT_CHANCE) {
-    aiType = AIType.BehaviorTreeBased;
-  } else {
-    // The remaining chance is split between Utility and Strategy based AI
-    aiType = Math.random() < UTILITY_AI_ROLLOUT_CHANCE ? AIType.UtilityBased : AIType.StrategyBased;
-  }
-
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
     radius: isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS,
@@ -143,9 +132,9 @@ export function createHuman(
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
     leaderId,
     tribeBadge,
-    aiType,
-    aiBehaviorTree: aiType === AIType.BehaviorTreeBased ? buildHumanBehaviorTree() : undefined,
-    aiBlackboard: aiType === AIType.BehaviorTreeBased ? new Blackboard() : undefined,
+    aiType: AIType.BehaviorTreeBased,
+    aiBehaviorTree: buildHumanBehaviorTree(),
+    aiBlackboard: new Blackboard(),
   });
 
   return human;

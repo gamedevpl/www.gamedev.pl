@@ -42,7 +42,6 @@ import {
   UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
-import { AIType } from '../ai/ai-types.ts';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 import { lerpColor } from '../utils/math-utils';
@@ -447,31 +446,6 @@ export function renderCharacter(
 
   if (human.tribeBadge) {
     drawTribeBadge(ctx, position, human.tribeBadge);
-  }
-
-  // Render AI Type indicator for A/B/C testing
-  if (human.aiType !== undefined) {
-    ctx.save();
-    const indicatorRadius = 3;
-    const indicatorYOffset = currentCharacterRadius + 5;
-    let indicatorColor: string;
-    switch (human.aiType) {
-      case AIType.UtilityBased:
-        indicatorColor = 'blue';
-        break;
-      case AIType.BehaviorTreeBased:
-        indicatorColor = 'purple';
-        break;
-      case AIType.StrategyBased:
-      default:
-        indicatorColor = 'red';
-        break;
-    }
-    ctx.fillStyle = indicatorColor;
-    ctx.beginPath();
-    ctx.arc(position.x, position.y - indicatorYOffset, indicatorRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   }
 
   const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
