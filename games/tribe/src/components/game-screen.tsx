@@ -77,7 +77,7 @@ export const GameScreen: React.FC = () => {
       lastUpdateTimeRef.current = time;
       return;
     }
-    const deltaTime = (time - lastUpdateTimeRef.current) / 1000; // Seconds
+    const deltaTime = Math.min(time - lastUpdateTimeRef.current, 1000) / 1000; // Seconds (clamped to 1 second max)
 
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
 
