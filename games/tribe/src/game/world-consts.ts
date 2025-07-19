@@ -136,16 +136,6 @@ export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
 export const AI_FLEE_DISTANCE = 200;
 
-// Karma Constants
-export const KARMA_ON_ATTACK = -25;
-export const KARMA_ON_INFIDELITY = -10;
-export const KARMA_ON_CLAIMED_BUSH_THEFT = -10;
-export const KARMA_PROPAGATION_FACTOR = 0.5;
-export const KARMA_INHERITANCE_FACTOR = 0.5;
-export const KARMA_DECAY_RATE_PER_HOUR = 0.1;
-export const KARMA_ENEMY_THRESHOLD = -50;
-export const KARMA_NEUTRAL_THRESHOLD = -5;
-
 // Rendering Constants
 export const CHARACTER_RADIUS = 30;
 export const CHARACTER_CHILD_RADIUS = CHARACTER_RADIUS * 0.6; // Smaller radius for child characters

@@ -29,7 +29,6 @@ import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
-import { inheritKarma } from '../karma/karma-utils';
 import { AIType } from '../ai/ai-types';
 import { buildHumanBehaviorTree } from '../ai/behavior-tree/human-behavior-tree';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
@@ -127,7 +126,6 @@ export function createHuman(
     motherId,
     fatherId,
     ancestorIds,
-    karma: {},
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
     leaderId,
     tribeBadge,
@@ -214,8 +212,6 @@ export function giveBirth(
     father?.leaderId,
     father?.tribeBadge,
   );
-
-  inheritKarma(child, mother, father);
 
   // Play birth sound
   playSoundAt(updateContext, SoundType.Birth, mother.position);

@@ -8,7 +8,6 @@ import {
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_PLANTING_DURATION_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
-  KARMA_ENEMY_THRESHOLD,
 } from './world-consts';
 import { isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
@@ -73,23 +72,6 @@ describe('Game Mechanics', () => {
         const leaderCount = [...new Set(humans.map((h) => h.leaderId).filter((id) => id !== undefined))].length;
 
         let enemyPairs = 0;
-        const countedPairs = new Set<string>();
-        for (const human of humans) {
-          for (const targetIdStr in human.karma) {
-            const targetId = parseInt(targetIdStr, 10);
-            const pairKey1 = `${human.id}-${targetId}`;
-            const pairKey2 = `${targetId}-${human.id}`;
-
-            if (
-              (human.karma[targetId] || 0) < KARMA_ENEMY_THRESHOLD &&
-              !countedPairs.has(pairKey1) &&
-              !countedPairs.has(pairKey2)
-            ) {
-              enemyPairs++;
-              countedPairs.add(pairKey1);
-            }
-          }
-        }
         const maxAncestors = Math.max(...humans.map((h) => (h.ancestorIds ? h.ancestorIds.length : 0)), 0);
 
         console.log(

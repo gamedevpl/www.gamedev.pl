@@ -18,41 +18,21 @@ import {
   CHARACTER_RADIUS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
-  KARMA_ENEMY_THRESHOLD,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import {
-  findChildren,
-  findHeir,
-  generateTribeBadge,
-  propagateNewLeaderToDescendants,
-} from '../../../utils/world-utils';
+import { findChildren, findHeir } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
-import { decayKarma } from '../../../karma/karma-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
   const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
-
-  decayKarma(entity, gameHoursDelta);
-
-  // --- Tribe Leadership Checks ---
-  if (entity.leaderId && entity.leaderId !== entity.id && entity.isAdult && entity.gender === 'male') {
-    const leader = gameState.entities.entities.get(entity.leaderId) as HumanEntity | undefined;
-    // Check if leader is dead or if karma is too low
-    if (!leader || (entity.karma[entity.leaderId] ?? 0) <= KARMA_ENEMY_THRESHOLD) {
-      entity.leaderId = entity.id; // Become own leader
-      entity.tribeBadge = generateTribeBadge(); // Start a new tribe
-      propagateNewLeaderToDescendants(entity, entity, gameState);
-    }
-  }
 
   // --- Call to Attack Cooldown ---
   if (entity.isCallingToAttack && entity.callToAttackEndTime && gameState.time > entity.callToAttackEndTime) {
@@ -206,13 +186,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         gameState.entities.entities.forEach((e) => {
           if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
             const follower = e as HumanEntity;
-            if ((follower.karma[heir.id] ?? 0) > KARMA_ENEMY_THRESHOLD) {
-              follower.leaderId = heir.id; // Follow the new leader
-            } else {
-              // Become their own leader due to bad karma with the heir
-              follower.leaderId = follower.id;
-              follower.tribeBadge = generateTribeBadge();
-            }
+            follower.leaderId = heir.id; // Follow the new leader
           }
         });
       } else {

@@ -6,7 +6,6 @@ import {
   HUMAN_ATTACK_BUILDUP_HOURS,
   HUMAN_ATTACK_PUSHBACK_FORCE,
   EFFECT_DURATION_SHORT_HOURS,
-  KARMA_ON_ATTACK,
   HUMAN_ATTACK_DAMAGE,
   HUMAN_PARRY_ANGLE_DEGREES,
   HUMAN_PARRY_CHANCE,
@@ -21,7 +20,6 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { getDirectionVectorOnTorus, vectorScale, vectorAngleBetween, vectorNormalize } from '../utils/math-utils';
-import { applyKarma } from '../karma/karma-utils';
 
 export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
   id: 'human-attack',
@@ -45,8 +43,6 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   },
 
   perform: (source, target, context) => {
-    applyKarma(source, target, KARMA_ON_ATTACK, context.gameState);
-
     // --- Parry Check --
     const toTarget = getDirectionVectorOnTorus(
       source.position,
