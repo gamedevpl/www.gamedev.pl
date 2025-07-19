@@ -1,6 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useRafLoop } from 'react-use';
-import { initGame } from '../game';
 import { updateWorld } from '../game/world-update';
 import { GameWorldState } from '../game/world-types';
 import { useGameContext } from '../context/game-context';
@@ -32,17 +31,22 @@ import { setMasterVolume } from '../game/sound/sound-loader';
 import { HumanCorpseEntity } from '../game/entities/characters/human/human-corpse-types';
 import { addVisualEffect } from '../game/utils/visual-effects-utils';
 import { VisualEffectType } from '../game/visual-effects/visual-effect-types';
-
-const INITIAL_STATE = initGame();
+import { initGame } from '../game';
 
 export const GameScreen: React.FC = () => {
+  const [initialState] = useState(() => initGame());
+
+  return <GameScreenInitialised initialState={initialState} />;
+};
+
+const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ initialState }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const gameStateRef = useRef<GameWorldState>(INITIAL_STATE);
+  const gameStateRef = useRef<GameWorldState>(initialState);
   const lastUpdateTimeRef = useRef<number>();
   const keysPressed = useRef<Set<string>>(new Set());
   const isDebugOnRef = useRef<boolean>(false);
-  const viewportCenterRef = useRef<Vector2D>(INITIAL_STATE.viewportCenter);
+  const viewportCenterRef = useRef<Vector2D>(initialState.viewportCenter);
   const playerActionHintsRef = useRef<PlayerActionHint[]>([]);
 
   const { appState, setAppState } = useGameContext();
