@@ -8,6 +8,11 @@ import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
  * It acts as a router, delegating to the behavior tree system based on the human's aiType.
  */
 export function humanAIUpdate(human: HumanEntity, context: UpdateContext): void {
+  // Cleanup old blackboard entries to prevent memory leaks
+  if (human.aiBlackboard) {
+    human.aiBlackboard.cleanupOldEntries(context.gameState.time);
+  }
+
   switch (human.aiType) {
     case AIType.BehaviorTreeBased:
     default:

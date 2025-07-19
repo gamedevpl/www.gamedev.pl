@@ -25,6 +25,8 @@ export function vectorLength(v: Vector2D): number {
   return Math.sqrt(v.x * v.x + v.y * v.y);
 }
 
+export const vectorMagnitude = vectorLength;
+
 export function vectorNormalize(v: Vector2D): Vector2D {
   const length = vectorLength(v);
   if (length === 0) return { x: 0, y: 0 };
@@ -39,6 +41,19 @@ export function vectorLerp(v1: Vector2D, v2: Vector2D, t: number): Vector2D {
   return {
     x: v1.x + (v2.x - v1.x) * t,
     y: v1.y + (v2.y - v1.y) * t,
+  };
+}
+
+export function getAveragePosition(positions: Vector2D[]): Vector2D {
+  if (positions.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const sum = positions.reduce((acc, pos) => ({ x: acc.x + pos.x, y: acc.y + pos.y }), { x: 0, y: 0 });
+
+  return {
+    x: sum.x / positions.length,
+    y: sum.y / positions.length,
   };
 }
 

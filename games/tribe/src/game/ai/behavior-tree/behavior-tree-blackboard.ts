@@ -1,6 +1,7 @@
 import { NodeStatus } from './behavior-tree-types';
 import {
   AI_UPDATE_INTERVAL,
+  BLACKBOARD_ENTRY_MAX_AGE_HOURS,
   GAME_DAY_IN_REAL_SECONDS,
   HOURS_PER_GAME_DAY,
   UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
@@ -94,5 +95,23 @@ export class Blackboard {
    */
   getNodeExecutionData(): Map<string, NodeExecutionEntry> {
     return this.nodeExecutionData;
+  }
+
+  /**
+   * Cleans up old entries from the node execution data to prevent memory leaks.
+   * This is called periodically from the main AI update loop.
+   * @param currentTime The current game time in hours.
+   */
+  cleanupOldEntries(currentTime: number): void {
+    const maxAge = BLACKBOARD_ENTRY_MAX_AGE_HOURS;
+    const entriesToDelete: string[] = [];
+    for (const [key, entry] of this.nodeExecutionData.entries()) {
+      if (currentTime - entry.lastExecuted > maxAge) {
+        entriesToDelete.push(key);
+      }
+    }
+    for (const key of entriesToDelete) {
+      this.nodeExecutionData.delete(key);
+    }
   }
 }

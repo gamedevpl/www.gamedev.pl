@@ -111,6 +111,12 @@ export const AI_DEFEND_BUSH_RANGE = 80; // Range in pixels for AI to defend a cl
 export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage in battle around their leader
 export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
 
+export const BLACKBOARD_ENTRY_MAX_AGE_HOURS = 24; // Time in game hours to keep BT node history
+export const ADULT_MALE_FAMILY_DISTANCE_RADIUS = 300; // Min distance an adult male with family tries to keep from his parents
+export const TRIBE_CENTER_MAX_WANDER_DISTANCE = 500; // Max distance a tribe member will wander from the tribe's center
+export const FAMILY_CENTER_MAX_WANDER_DISTANCE = 250; // Max distance a family member will wander from the family's center
+export const ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER = 600; // Max distance a human will chase an enemy from their home center
+
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
 export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid

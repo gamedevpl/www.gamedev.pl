@@ -1,6 +1,6 @@
 import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
-import { calculateWrappedDistance, vectorAdd } from './math-utils';
+import { calculateWrappedDistance, vectorAdd, getAveragePosition } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -753,4 +753,20 @@ export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
   return Array.from(gameState.entities.entities.values()).filter(
     (entity) => entity.type === 'human',
   ) as HumanEntity[];
+}
+
+export function getTribeCenter(leaderId: EntityId, gameState: GameWorldState): Vector2D {
+  const tribeMembers = findTribeMembers(leaderId, gameState);
+  if (tribeMembers.length === 0) {
+    const leader = gameState.entities.entities.get(leaderId);
+    return leader ? leader.position : { x: 0, y: 0 };
+  }
+  const positions = tribeMembers.map((member) => member.position);
+  return getAveragePosition(positions);
+}
+
+export function getFamilyCenter(human: HumanEntity, gameState: GameWorldState): Vector2D {
+  const familyMembers = getFamilyMembers(human, gameState);
+  const positions = [...familyMembers, human].map((member) => member.position);
+  return getAveragePosition(positions);
 }

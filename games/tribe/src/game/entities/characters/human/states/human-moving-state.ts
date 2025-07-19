@@ -11,7 +11,7 @@ import {
   HumanAttackingStateData,
 } from './human-state-types';
 
-const MOVEMENT_THRESHOLD = 10; // Distance to consider "close enough" to target
+const MOVEMENT_THRESHOLD = 7.5; // Distance to consider "close enough" to target
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;

@@ -1,8 +1,9 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { findNearbyEnemiesOfTribe, countTribeAttackersOnTarget } from '../../../utils/world-utils';
+import { findNearbyEnemiesOfTribe, countTribeAttackersOnTarget, getTribeCenter } from '../../../utils/world-utils';
 import {
   AI_FLEE_HEALTH_THRESHOLD,
   AI_TRIBE_BATTLE_RADIUS,
+  ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER,
   EFFECT_DURATION_SHORT_HOURS,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING,
   MAX_TRIBE_ATTACKERS_PER_TARGET,
@@ -13,11 +14,14 @@ import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
+import { Vector2D } from '../../../utils/math-types';
 
 const COMBAT_TARGET_KEY = 'combatTarget';
+const HOME_CENTER_KEY = 'homeCenter';
 
 /**
- * Creates a behavior for a tribe member to join a battle when the leader calls.
+ * Creates a behavior for a tribe member to join a battle when the leader calls,
+ * but without chasing enemies too far from the tribe's center.
  */
 export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
   const isTribeFollower = new ConditionNode(
@@ -82,6 +86,8 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
         const attackersCount = countTribeAttackersOnTarget(leader.id, enemy.id, gameState as IndexedWorldState);
         if (attackersCount < MAX_TRIBE_ATTACKERS_PER_TARGET) {
           blackboard.set(COMBAT_TARGET_KEY, enemy);
+          const homeCenter = getTribeCenter(leader.id, gameState);
+          blackboard.set(HOME_CENTER_KEY, homeCenter);
           return NodeStatus.SUCCESS;
         }
       }
@@ -95,7 +101,28 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
   const attackTarget = new ActionNode(
     (human, context, blackboard) => {
       const target = blackboard.get(COMBAT_TARGET_KEY) as HumanEntity | undefined;
-      if (!target) {
+      const homeCenter = blackboard.get(HOME_CENTER_KEY) as Vector2D | undefined;
+
+      if (!target || !homeCenter) {
+        return NodeStatus.FAILURE;
+      }
+
+      const { gameState } = context;
+      const distanceFromHome = calculateWrappedDistance(
+        human.position,
+        homeCenter,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      );
+
+      if (distanceFromHome > ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER) {
+        // Give up the chase
+        if (human.activeAction === 'attacking' && human.attackTargetId === target.id) {
+          human.activeAction = 'idle';
+          human.attackTargetId = undefined;
+        }
+        blackboard.set(COMBAT_TARGET_KEY, undefined);
+        blackboard.set(HOME_CENTER_KEY, undefined);
         return NodeStatus.FAILURE;
       }
 
@@ -117,7 +144,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
       human.attackTargetId = target.id;
       human.target = undefined;
 
-      return NodeStatus.SUCCESS;
+      return NodeStatus.RUNNING;
     },
     'Attack Target',
     depth + 1,
