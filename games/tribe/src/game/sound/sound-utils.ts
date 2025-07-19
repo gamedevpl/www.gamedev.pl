@@ -74,7 +74,7 @@ export function playSound(soundType: SoundType, options?: SoundOptions): void {
     lastNode = pannerNode;
   } else {
     // Non-positional sound (like UI clicks or soundtrack)
-    const defaultVolume = soundType === SoundType.GameOver ? 0.4 : soundType === SoundType.SoundTrack1 ? 0.3 : 0.2;
+    const defaultVolume = soundType === SoundType.GameOver ? 0.4 : soundType === SoundType.SoundTrack1 ? 1 : 0.2;
     individualGainNode.gain.value = defaultVolume;
   }
 
