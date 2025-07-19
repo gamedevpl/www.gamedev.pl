@@ -43,6 +43,6 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.\n   */
+   * Time since the last update in milliseconds.\\n   */
   deltaTime: number;
 };

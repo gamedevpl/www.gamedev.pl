@@ -9,6 +9,7 @@ export enum NodeStatus {
   SUCCESS,
   FAILURE,
   RUNNING,
+  NOT_EVALUATED,
 }
 
 /**

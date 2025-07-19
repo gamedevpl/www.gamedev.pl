@@ -46,7 +46,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
 
   if (distance > PARENT_FEEDING_RANGE) {
     human.activeAction = 'moving';
-    human.targetPosition = child.position;
+    human.target = child.id;
     human.direction = dirToTarget(human.position, child.position, context.gameState.mapDimensions);
     return NodeStatus.RUNNING;
   }
@@ -54,7 +54,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
   // Parent is in range, interaction system will handle the feeding.
   // We can clear the target and succeed.
   human.activeAction = 'idle';
-  human.targetPosition = undefined;
+  human.target = undefined;
   blackboard.set('targetChild', undefined);
   return NodeStatus.SUCCESS;
 };

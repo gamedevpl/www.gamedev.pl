@@ -231,7 +231,7 @@ describe('Planting bushes', () => {
     ).length;
 
     human.activeAction = 'planting';
-    human.targetPosition = { x: 150, y: 150 };
+    human.target = { x: 150, y: 150 };
 
     // a bit more than the planting duration
     const timeStep = HUMAN_PLANTING_DURATION_HOURS + 0.1;

@@ -1,8 +1,4 @@
-import {
-  AI_ATTACK_HUNGER_THRESHOLD,
-  AI_FLEE_DISTANCE,
-  AI_FLEE_HEALTH_THRESHOLD,
-} from '../../../world-consts';
+import { AI_ATTACK_HUNGER_THRESHOLD, AI_FLEE_DISTANCE, AI_FLEE_HEALTH_THRESHOLD } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { findClosestAggressor } from '../../../utils/world-utils';
 import { getDirectionVectorOnTorus, vectorAdd, vectorNormalize, vectorScale } from '../../../utils/math-utils';
@@ -64,13 +60,12 @@ export function createFleeingBehavior(depth: number): BehaviorNode {
           const targetPosition = vectorAdd(human.position, vectorScale(fleeDirection, AI_FLEE_DISTANCE));
 
           // Set the target position, wrapped around the world
-          human.targetPosition = {
+          human.target = {
             x:
               ((targetPosition.x % context.gameState.mapDimensions.width) + context.gameState.mapDimensions.width) %
               context.gameState.mapDimensions.width,
             y:
-              ((targetPosition.y % context.gameState.mapDimensions.height) +
-                context.gameState.mapDimensions.height) %
+              ((targetPosition.y % context.gameState.mapDimensions.height) + context.gameState.mapDimensions.height) %
               context.gameState.mapDimensions.height,
           };
 

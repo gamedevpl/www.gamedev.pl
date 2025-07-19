@@ -29,6 +29,7 @@ import {
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
   UI_BT_DEBUG_STATUS_FAILURE_COLOR,
   UI_BT_DEBUG_STATUS_RUNNING_COLOR,
+  UI_BT_DEBUG_STATUS_NOT_EVALUATED_COLOR,
   UI_BT_DEBUG_HEATMAP_COLD_COLOR,
   UI_BT_DEBUG_HEATMAP_HOT_COLOR,
   UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS,
@@ -41,6 +42,7 @@ import {
   UI_BT_DEBUG_HISTOGRAM_X_OFFSET,
   UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
   CHARACTER_CHILD_RADIUS,
+  AI_UPDATE_INTERVAL,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
@@ -91,148 +93,53 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.closePath();
 }
 
+/**
+ * Renders a debug visualization of the human's behavior tree.
+ * This function iterates through the entire static tree structure and displays the
+ * real-time status of each node. Nodes that were not evaluated in the last
+ * tick are shown as 'NOT_EVALUATED'.
+ *
+ * @param ctx The canvas rendering context.
+ * @param human The human entity whose AI tree is to be rendered.
+ * @param currentTime The current game time, used for heatmap calculations.
+ */
 function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEntity, currentTime: number): void {
   if (!human.aiBehaviorTree || !human.aiBlackboard) {
     return;
   }
   const executionData = human.aiBlackboard.getNodeExecutionData();
-  if (executionData.size === 0) {
-    return;
-  }
 
   ctx.save();
   ctx.font = `${UI_BT_DEBUG_FONT_SIZE}px Arial`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 
-  // Helper function to recursively render the tree
-  const renderNode = (node: BehaviorNode, yPos: number, panelX: number, panelWidth: number): number => {
-    let currentY = yPos;
-    const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
-
-    // Only render if the node has a name and has been executed at least once
-    if (node.name && nodeExecutionInfo) {
-      const { lastExecuted, status, depth, executionHistory } = nodeExecutionInfo;
-      const decayTimeInGameHours =
-        (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
-      const timeSinceExecuted = currentTime - lastExecuted;
-      const heat = Math.max(0, 1 - timeSinceExecuted / decayTimeInGameHours);
-      const textColor = lerpColor(UI_BT_DEBUG_HEATMAP_COLD_COLOR, UI_BT_DEBUG_HEATMAP_HOT_COLOR, heat);
-
-      let statusColor: string;
-      switch (status) {
-        case NodeStatus.SUCCESS:
-          statusColor = UI_BT_DEBUG_STATUS_SUCCESS_COLOR;
-          break;
-        case NodeStatus.FAILURE:
-          statusColor = UI_BT_DEBUG_STATUS_FAILURE_COLOR;
-          break;
-        case NodeStatus.RUNNING:
-          statusColor = UI_BT_DEBUG_STATUS_RUNNING_COLOR;
-          break;
-        default:
-          statusColor = 'grey';
-      }
-
-      const xPos = panelX + 2 + (depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
-
-      // Draw status indicator
-      ctx.fillStyle = statusColor;
-      ctx.fillText('●', xPos, currentY);
-
-      // Draw node name
-      ctx.fillStyle = textColor;
-      const nodeText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
-      ctx.fillText(nodeText, xPos + 8, currentY);
-
-      // --- Render Time-Series Histogram ---
-      if (executionHistory && executionHistory.length > 0) {
-        const historyWindowInGameHours =
-          (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
-        const historyEndTime = currentTime;
-        const historyStartTime = historyEndTime - historyWindowInGameHours;
-
-        const histogramStartX = panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
-        let currentX = histogramStartX;
-        const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
-
-        // Find the status right at the beginning of the window for continuity
-        const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
-        let lastStatus: NodeStatus | null =
-          recordsBeforeWindow.length > 0 ? recordsBeforeWindow[recordsBeforeWindow.length - 1].status : null;
-        let lastTime = historyStartTime;
-
-        const recordsInWindow = executionHistory.filter((r) => r.time >= historyStartTime && r.time <= historyEndTime);
-
-        const getColorForStatus = (status: NodeStatus | null): string => {
-          if (status === null) return 'rgba(255, 255, 255, 0.1)'; // Default for no data
-          switch (status) {
-            case NodeStatus.SUCCESS:
-              return UI_BT_DEBUG_STATUS_SUCCESS_COLOR;
-            case NodeStatus.FAILURE:
-              return UI_BT_DEBUG_STATUS_FAILURE_COLOR;
-            case NodeStatus.RUNNING:
-              return UI_BT_DEBUG_STATUS_RUNNING_COLOR;
-            default:
-              return 'rgba(255, 255, 255, 0.1)';
-          }
-        };
-
-        const pixelsPerGameHour = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH / historyWindowInGameHours;
-
-        // Draw a background for the histogram area
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fillRect(histogramStartX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
-
-        for (const record of recordsInWindow) {
-          const segmentDuration = record.time - lastTime;
-          const segmentWidth = segmentDuration * pixelsPerGameHour;
-
-          if (segmentWidth > 0) {
-            ctx.fillStyle = getColorForStatus(lastStatus);
-            ctx.fillRect(currentX, barY, segmentWidth, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
-            currentX += segmentWidth;
-          }
-
-          lastStatus = record.status;
-          lastTime = record.time;
-        }
-
-        // Draw the final segment from the last record to the end of the window
-        const finalSegmentDuration = historyEndTime - lastTime;
-        const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
-        if (finalSegmentWidth > 0) {
-          ctx.fillStyle = getColorForStatus(lastStatus);
-          const remainingWidth = histogramStartX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
-          ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
-        }
-      }
-      currentY += UI_BT_DEBUG_LINE_HEIGHT;
+  const getColorForStatus = (status: NodeStatus | null): string => {
+    switch (status) {
+      case NodeStatus.SUCCESS:
+        return UI_BT_DEBUG_STATUS_SUCCESS_COLOR;
+      case NodeStatus.FAILURE:
+        return UI_BT_DEBUG_STATUS_FAILURE_COLOR;
+      case NodeStatus.RUNNING:
+        return UI_BT_DEBUG_STATUS_RUNNING_COLOR;
+      case NodeStatus.NOT_EVALUATED:
+      case null:
+      default:
+        return UI_BT_DEBUG_STATUS_NOT_EVALUATED_COLOR;
     }
-
-    // Recursively render children
-    if (node.children) {
-      for (const child of node.children) {
-        currentY = renderNode(child, currentY, panelX, panelWidth);
-      }
-    } else if (node.child) {
-      currentY = renderNode(node.child, currentY, panelX, panelWidth);
-    }
-
-    return currentY;
   };
 
-  // Helper function to calculate panel dimensions by traversing the tree
+  // Helper to calculate the required panel dimensions by traversing the static tree
   const calculateDimensions = (node: BehaviorNode): { width: number; height: number } => {
     let maxWidth = 0;
     let height = 0;
 
-    const nodeExecutionInfo = node.name ? executionData.get(node.name) : undefined;
-    if (node.name && nodeExecutionInfo) {
+    if (node.name) {
+      const nodeExecutionInfo = executionData.get(node.name);
       const debugText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
       const textWidth = ctx.measureText(debugText).width;
       const indentedWidth =
-        (nodeExecutionInfo.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE +
+        (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE +
         8 + // Status circle
         textWidth +
         UI_BT_DEBUG_HISTOGRAM_X_OFFSET +
@@ -257,8 +164,110 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
     return { width: maxWidth, height };
   };
 
+  // Helper to recursively render each node of the tree
+  const renderNode = (node: BehaviorNode, yPos: number, panelX: number, panelWidth: number): number => {
+    let currentY = yPos;
+
+    if (node.name) {
+      const nodeExecutionInfo = executionData.get(node.name);
+      const xPos = panelX + 2 + (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
+
+      let status = NodeStatus.NOT_EVALUATED;
+      let textColor = UI_BT_DEBUG_HEATMAP_COLD_COLOR;
+      let debugInfo = '';
+
+      if (nodeExecutionInfo) {
+        status = nodeExecutionInfo.status;
+        debugInfo = nodeExecutionInfo.debugInfo;
+        const decayTimeInGameHours =
+          (UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+        const timeSinceExecuted = currentTime - nodeExecutionInfo.lastExecuted;
+        const heat = Math.max(0, 1 - timeSinceExecuted / decayTimeInGameHours);
+        textColor = lerpColor(UI_BT_DEBUG_HEATMAP_COLD_COLOR, UI_BT_DEBUG_HEATMAP_HOT_COLOR, heat);
+        if (timeSinceExecuted > AI_UPDATE_INTERVAL) {
+          status = NodeStatus.NOT_EVALUATED; // If too long since last execution, mark as NOT_EVALUATED
+        }
+      }
+
+      const statusColor = getColorForStatus(status);
+
+      // Draw status indicator
+      ctx.fillStyle = statusColor;
+      ctx.fillText('●', xPos, currentY);
+
+      // Draw node name and debug info
+      ctx.fillStyle = textColor;
+      const nodeText = ` ${node.name}` + (debugInfo ? `: ${debugInfo}` : '');
+      ctx.fillText(nodeText, xPos + 8, currentY);
+
+      // Render histogram if execution data is available
+      if (nodeExecutionInfo && nodeExecutionInfo.executionHistory.length > 0) {
+        const { executionHistory } = nodeExecutionInfo;
+        const historyWindowInGameHours =
+          (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+        const historyEndTime = currentTime;
+        const historyStartTime = historyEndTime - historyWindowInGameHours;
+
+        const histogramStartX = panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        let currentX = histogramStartX;
+        const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
+
+        const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
+        let lastStatus: NodeStatus | null =
+          recordsBeforeWindow.length > 0 ? recordsBeforeWindow[recordsBeforeWindow.length - 1].status : null;
+        let lastTime = historyStartTime;
+
+        const recordsInWindow = executionHistory.filter((r) => r.time >= historyStartTime && r.time <= historyEndTime);
+        const pixelsPerGameHour = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH / historyWindowInGameHours;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(histogramStartX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+
+        for (const record of recordsInWindow) {
+          const segmentDuration = record.time - lastTime;
+          const segmentWidth = segmentDuration * pixelsPerGameHour;
+
+          if (segmentWidth > 0) {
+            ctx.fillStyle = getColorForStatus(lastStatus);
+            ctx.fillRect(currentX, barY, segmentWidth, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+            currentX += segmentWidth;
+          }
+
+          lastStatus = record.status;
+          lastTime = record.time;
+        }
+
+        if (currentTime - lastTime > AI_UPDATE_INTERVAL) {
+          lastStatus = NodeStatus.NOT_EVALUATED; // If no new data, mark as NOT_EVALUATED
+        }
+
+        const finalSegmentDuration = historyEndTime - lastTime;
+        const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
+        ctx.fillStyle = getColorForStatus(lastStatus);
+        const remainingWidth = histogramStartX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
+        ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+      }
+      currentY += UI_BT_DEBUG_LINE_HEIGHT;
+    }
+
+    // Recursively render children
+    if (node.children) {
+      for (const child of node.children) {
+        currentY = renderNode(child, currentY, panelX, panelWidth);
+      }
+    } else if (node.child) {
+      currentY = renderNode(node.child, currentY, panelX, panelWidth);
+    }
+
+    return currentY;
+  };
+
   // --- Main execution ---
   const { width: panelWidth, height: panelHeight } = calculateDimensions(human.aiBehaviorTree);
+  if (panelHeight === 0) {
+    ctx.restore();
+    return; // Don't render anything if the tree is empty or has no named nodes
+  }
   const panelX = human.position.x + UI_BT_DEBUG_X_OFFSET;
   const panelY = human.position.y + UI_BT_DEBUG_Y_OFFSET - panelHeight / 2;
 

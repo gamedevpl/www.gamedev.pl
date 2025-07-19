@@ -6,7 +6,7 @@ import { NodeStatus } from '../behavior-tree-types';
 import { findClosestEntity } from '../../../utils/world-utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
-import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
@@ -82,12 +82,11 @@ export function createGatheringBehavior(depth: number): Sequence {
           if (distance < HUMAN_INTERACTION_PROXIMITY) {
             human.activeAction = 'gathering';
             human.direction = { x: 0, y: 0 };
-            human.targetPosition = undefined;
+            human.target = undefined;
             return NodeStatus.SUCCESS; // Successfully started gathering
           } else {
             human.activeAction = 'moving';
-            human.targetPosition = { ...target.position };
-            human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
+            human.target = target.id;
             return NodeStatus.RUNNING; // Moving towards the target
           }
         },

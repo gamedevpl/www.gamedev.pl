@@ -15,7 +15,7 @@ interface HumanIdleStateData extends StateData {
 }
 
 export interface HumanMovingStateData extends StateData {
-  targetPosition?: Vector2D; // Where the human is moving to
+  target?: Vector2D | EntityId; // Where the human is moving to
 }
 
 interface HumanEatingStateData extends StateData {

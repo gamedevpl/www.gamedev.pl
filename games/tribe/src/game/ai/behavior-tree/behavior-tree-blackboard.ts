@@ -1,9 +1,10 @@
-import { NodeStatus } from "./behavior-tree-types";
+import { NodeStatus } from './behavior-tree-types';
 import {
+  AI_UPDATE_INTERVAL,
   GAME_DAY_IN_REAL_SECONDS,
   HOURS_PER_GAME_DAY,
   UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
-} from "../../world-consts";
+} from '../../world-consts';
 
 type NodeExecutionEntry = {
   lastExecuted: number;
@@ -52,9 +53,18 @@ export class Blackboard {
       lastExecuted: 0,
       status: NodeStatus.FAILURE, // Default
       depth: 0,
-      debugInfo: "",
+      debugInfo: '',
       executionHistory: [],
     };
+
+    // Get last execution item
+    const lastExecution = existingEntry.executionHistory[existingEntry.executionHistory.length - 1];
+    if (lastExecution && time - lastExecution?.time > AI_UPDATE_INTERVAL) {
+      existingEntry.executionHistory.push({
+        time: lastExecution.time + AI_UPDATE_INTERVAL,
+        status: NodeStatus.NOT_EVALUATED,
+      });
+    }
 
     // Add current execution to history
     existingEntry.executionHistory.push({ time, status });
@@ -64,9 +74,7 @@ export class Blackboard {
       (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
     const historyStartTime = time - historyWindowInGameHours;
 
-    existingEntry.executionHistory = existingEntry.executionHistory.filter(
-      (record) => record.time >= historyStartTime
-    );
+    existingEntry.executionHistory = existingEntry.executionHistory.filter((record) => record.time >= historyStartTime);
 
     // Update the main entry
     const updatedEntry: NodeExecutionEntry = {

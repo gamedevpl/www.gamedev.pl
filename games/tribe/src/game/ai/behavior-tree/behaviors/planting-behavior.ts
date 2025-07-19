@@ -64,7 +64,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
           if (
             plantingSpot &&
             human.activeAction !== 'planting' &&
-            (human.activeAction !== 'moving' || human.targetPosition !== plantingSpot)
+            (human.activeAction !== 'moving' || human.target !== plantingSpot)
           ) {
             blackboard.set(BLACKBOARD_KEY, undefined);
             return NodeStatus.FAILURE;
@@ -92,14 +92,14 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
           // Move to the spot if not close enough
           if (distance > HUMAN_INTERACTION_PROXIMITY) {
             human.activeAction = 'moving';
-            human.targetPosition = plantingSpot;
+            human.target = plantingSpot;
             human.direction = dirToTarget(human.position, plantingSpot, context.gameState.mapDimensions);
             return NodeStatus.RUNNING; // Still moving towards the spot
           }
 
           // Arrived at the spot, start planting
           human.activeAction = 'planting';
-          human.targetPosition = plantingSpot;
+          human.target = plantingSpot;
           // Once the state machine finishes, the activeAction will change,
           // causing the cleanup logic at the start of this node to run.
           return NodeStatus.RUNNING;

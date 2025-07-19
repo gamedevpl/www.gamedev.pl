@@ -69,7 +69,7 @@ export function createLeaderCallToAttackBehavior(depth: number): BehaviorNode {
 
       // Leader stops to issue the call
       human.activeAction = 'idle';
-      human.targetPosition = undefined;
+      human.target = undefined;
 
       return NodeStatus.SUCCESS;
     },

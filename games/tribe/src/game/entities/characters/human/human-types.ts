@@ -95,8 +95,8 @@ export interface HumanEntity extends Entity {
   /** Cooldown for the leader's call to attack (BT). */
   leaderCallToAttackCooldown?: number;
 
-  /** Target position for 'moving' action. Set by player input or AI decision. */
-  targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.
+  /** Target for 'moving' action, either a position or entity. */
+  target?: { x: number; y: number } | EntityId; // Target for 'moving' action. Set by player input or AI decision.
 
   /** The current progress of the entity's animation (0-1). */
   animationProgress?: number;

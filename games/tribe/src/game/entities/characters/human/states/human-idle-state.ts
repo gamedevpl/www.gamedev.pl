@@ -52,7 +52,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          targetPosition: entity.targetPosition,
+          target: entity.target,
         },
       };
     }
@@ -64,7 +64,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          targetPosition: entity.targetPosition, // Target position might be relevant for gathering
+          target: entity.target, // Target position might be relevant for gathering
         },
       };
     }
@@ -80,14 +80,14 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
       };
     }
 
-    if (entity.activeAction === 'planting' && entity.targetPosition) {
+    if (entity.activeAction === 'planting' && entity.target) {
       return {
         nextState: HUMAN_PLANTING,
         data: {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          plantingSpot: entity.targetPosition,
+          plantingSpot: entity.target,
         } as HumanPlantingStateData,
       };
     }

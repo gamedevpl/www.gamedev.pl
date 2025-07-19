@@ -1,4 +1,5 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
+import { Vector2D } from '../../../../utils/math-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
@@ -10,7 +11,7 @@ import {
   HumanAttackingStateData,
 } from './human-state-types';
 
-const MOVEMENT_THRESHOLD = 5; // Distance to consider "close enough" to target
+const MOVEMENT_THRESHOLD = 10; // Distance to consider "close enough" to target
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;
@@ -44,7 +45,13 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     }
 
     // Calculate direction to target
-    let targetPosition = movingData.targetPosition;
+    let targetPosition: Vector2D | undefined;
+    if (typeof entity.target === 'object') {
+      targetPosition = entity.target;
+    } else if (typeof entity.target === 'number') {
+      targetPosition = context.updateContext.gameState.entities.entities.get(entity.target)?.position;
+    }
+
     if (!targetPosition && (entity.direction.x !== 0 || entity.direction.y !== 0)) {
       targetPosition = {
         x: entity.position.x + entity.direction.x * MOVEMENT_THRESHOLD * 2,
@@ -101,7 +108,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
     // Reset  acceleration when exiting moving state
     entity.acceleration = 0;
-    entity.targetPosition = undefined;
+    entity.target = undefined;
   }
 }
 

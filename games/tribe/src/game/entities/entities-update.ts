@@ -38,7 +38,6 @@ export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
   // First handle prey-to-carrion conversion
   state.entities.forEach((entity) => {
-    // generic entity update
     entityUpdate(entity, updateContext);
   });
 }

@@ -32,7 +32,7 @@ export function createEatingBehavior(depth: number): BehaviorNode {
         (human) => {
           // Set action and state for eating.
           human.direction = { x: 0, y: 0 };
-          human.targetPosition = undefined;
+          human.target = undefined;
           human.activeAction = 'eating';
           // Return RUNNING to indicate the action is ongoing.
           // This prevents lower-priority behaviors from interrupting.

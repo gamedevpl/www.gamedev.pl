@@ -27,7 +27,7 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode {
           // Start wandering
           human.activeAction = 'moving';
           const parent = findParents(human, context.gameState)[0];
-          human.targetPosition = getRandomNearbyPosition(
+          human.target = getRandomNearbyPosition(
             !human.isAdult && parent ? parent.position : human.position,
             human.isAdult ? HUMAN_AI_WANDER_RADIUS : CHILD_MAX_WANDER_DISTANCE_FROM_PARENT,
             context.gameState.mapDimensions.width,
@@ -35,33 +35,33 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode {
           );
           const dirToTarget = getDirectionVectorOnTorus(
             human.position,
-            human.targetPosition,
+            human.target,
             context.gameState.mapDimensions.width,
             context.gameState.mapDimensions.height,
           );
           human.direction = vectorNormalize(dirToTarget);
-          blackboard.set('wanderTarget', human.targetPosition);
+          blackboard.set('wanderTarget', human.target);
           blackboard.set('lastWanderTime', context.gameState.time);
           return NodeStatus.SUCCESS;
         } else {
           // Stay idle
           human.direction = { x: 0, y: 0 };
-          human.targetPosition = undefined;
+          human.target = undefined;
           return [NodeStatus.FAILURE, String((HUMAN_AI_IDLE_WANDER_COOLDOWN - timeSinceLastWander) << 0)];
         }
       }
 
-      if (blackboard.get('wanderTarget') !== human.targetPosition) {
+      if (blackboard.get('wanderTarget') !== human.target) {
         blackboard.set('wanderTarget', undefined);
-        human.targetPosition = undefined;
+        human.target = undefined;
         human.activeAction = 'idle';
       }
 
       // If wandering, check for arrival
-      if (human.activeAction === 'moving' && human.targetPosition) {
+      if (human.activeAction === 'moving' && typeof human.target === 'object') {
         const distanceToTarget = calculateWrappedDistance(
           human.position,
-          human.targetPosition,
+          human.target,
           context.gameState.mapDimensions.width,
           context.gameState.mapDimensions.height,
         );
@@ -69,7 +69,7 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode {
         // Arrived at wander destination
         if (distanceToTarget < HUMAN_INTERACTION_PROXIMITY) {
           human.activeAction = 'idle';
-          human.targetPosition = undefined;
+          human.target = undefined;
           human.direction = { x: 0, y: 0 };
           blackboard.set('wanderTarget', undefined);
           return NodeStatus.SUCCESS;

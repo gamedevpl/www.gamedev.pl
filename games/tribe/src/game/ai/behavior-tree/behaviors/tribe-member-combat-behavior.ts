@@ -115,7 +115,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
 
       human.activeAction = 'attacking';
       human.attackTargetId = target.id;
-      human.targetPosition = undefined;
+      human.target = undefined;
 
       return NodeStatus.SUCCESS;
     },

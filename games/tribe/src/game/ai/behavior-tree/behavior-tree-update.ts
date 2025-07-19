@@ -1,4 +1,5 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
+import { AI_UPDATE_INTERVAL } from '../../world-consts';
 import { UpdateContext } from '../../world-types';
 
 /**
@@ -10,7 +11,11 @@ import { UpdateContext } from '../../world-types';
  */
 export function updateBehaviorTreeAI(human: HumanEntity, context: UpdateContext): void {
   if (human.aiBehaviorTree && human.aiBlackboard) {
-    human.aiBehaviorTree.execute(human, context, human.aiBlackboard);
+    const lastAiUpdateTime: number = human.aiBlackboard.get('lastAiUpdateTime') ?? 0;
+    if (context.gameState.time - lastAiUpdateTime >= AI_UPDATE_INTERVAL) {
+      human.aiBehaviorTree.execute(human, context, human.aiBlackboard);
+      human.aiBlackboard.set('lastAiUpdateTime', context.gameState.time);
+    }
   } else {
     // Fallback or error logging if the tree is missing
     console.warn(`Behavior Tree AI ticked for human ${human.id}, but the tree or blackboard was missing.`);
