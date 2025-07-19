@@ -40,6 +40,7 @@ import {
   UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT,
   UI_BT_DEBUG_HISTOGRAM_X_OFFSET,
   UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS,
+  CHARACTER_CHILD_RADIUS,
 } from '../world-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
@@ -151,8 +152,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
         const historyEndTime = currentTime;
         const historyStartTime = historyEndTime - historyWindowInGameHours;
 
-        const histogramStartX =
-          panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        const histogramStartX = panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
         let currentX = histogramStartX;
         const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
 
@@ -272,12 +272,22 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   ctx.restore();
 }
 
-function drawTribeBadge(ctx: CanvasRenderingContext2D, position: { x: number; y: number }, badge: string): void {
+function drawTribeBadge(
+  ctx: CanvasRenderingContext2D,
+  position: { x: number; y: number },
+  badge: string,
+  isAdult: boolean,
+  crownSize: number,
+): void {
   ctx.save();
   ctx.font = `${TRIBE_BADGE_SIZE}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(badge, position.x, position.y - CHARACTER_RADIUS - TRIBE_BADGE_SIZE - 18);
+  ctx.fillText(
+    badge,
+    position.x,
+    position.y - (isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS) - TRIBE_BADGE_SIZE - crownSize,
+  );
   ctx.restore();
 }
 
@@ -445,7 +455,7 @@ export function renderCharacter(
   }
 
   if (human.tribeBadge) {
-    drawTribeBadge(ctx, position, human.tribeBadge);
+    drawTribeBadge(ctx, position, human.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
   }
 
   const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
