@@ -125,6 +125,7 @@ export const LEADER_HABITAT_SCORE_BUSH_WEIGHT = 10; // Points for each bush in a
 export const LEADER_HABITAT_SCORE_DANGER_WEIGHT = -5; // Points against for each enemy/dangerous entity in a region
 export const LEADER_MIGRATION_SUPERIORITY_THRESHOLD = 1.5; // How much better a new habitat must be to consider moving
 export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat
+export const LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD = 1.2;
 
 export const LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS = 10;
 // Human AI Fleeing Constants

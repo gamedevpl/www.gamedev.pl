@@ -7,6 +7,6 @@ export * from "./attacking-behavior";
 export * from "./feeding-child-behavior";
 export * from "./seeking-food-from-parent-behavior";
 export * from "./planting-behavior";
-export * from "./leader-call-to-attack-behavior";
+export * from './leader-call-to-attack-behavior';
 export * from "./tribe-member-combat-behavior";
 export * from "./establish-family-territory-behavior";

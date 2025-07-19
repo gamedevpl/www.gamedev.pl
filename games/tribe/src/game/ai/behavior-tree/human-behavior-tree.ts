@@ -1,5 +1,5 @@
-import { BehaviorNode } from "./behavior-tree-types";
-import { Selector } from "./nodes";
+import { BehaviorNode } from './behavior-tree-types';
+import { Selector } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -7,13 +7,13 @@ import {
   createFleeingBehavior,
   createGatheringBehavior,
   createIdleWanderBehavior,
-  createLeaderCallToAttackBehavior,
+  createLeaderCombatStrategyBehavior,
   createPlantingBehavior,
   createProcreationBehavior,
   createSeekingFoodFromParentBehavior,
   createTribeMemberCombatBehavior,
   createEstablishFamilyTerritoryBehavior,
-} from "./behaviors";
+} from './behaviors';
 
 /**
  * Builds the complete behavior tree for a human entity.
@@ -28,8 +28,8 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
       createFleeingBehavior(1),
 
-      // --- TRIBE COMBAT (LEADER) ---
-      createLeaderCallToAttackBehavior(1),
+      // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
+      createLeaderCombatStrategyBehavior(1),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(1),
@@ -37,17 +37,17 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- COMBAT BEHAVIORS (ATTACK) ---
       createAttackingBehavior(1),
 
-      // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
-      createFeedingChildBehavior(1),
-
-      // --- CHILD NEEDS (SEEK FOOD) ---
-      createSeekingFoodFromParentBehavior(1),
-
       // --- PERSONAL NEEDS (EAT) ---
       createEatingBehavior(1),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       createGatheringBehavior(1),
+
+      // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
+      createFeedingChildBehavior(1),
+
+      // --- CHILD NEEDS (SEEK FOOD) ---
+      createSeekingFoodFromParentBehavior(1),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
       createPlantingBehavior(1),
@@ -61,8 +61,8 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
       createIdleWanderBehavior(1),
     ],
-    "Human Behavior",
-    0
+    'Human Behavior',
+    0,
   );
 
   return root;

@@ -726,15 +726,14 @@ export function findBestHabitat(
 }
 
 export function calculateTribeStrength(tribeMembers: HumanEntity[]): number {
-  if (tribeMembers.length === 0) {
-    return 0;
-  }
-  return tribeMembers.reduce((total, member) => {
-    let strength = member.hitpoints;
-    strength += (member.maxAge - member.age) * 0.5; // Younger members are slightly stronger
-    strength += member.food.length * 2; // Well-fed members are stronger
-    return total + strength;
-  }, 0);
+  return tribeMembers
+    .filter((m) => m.isAdult)
+    .reduce((total, member) => {
+      let strength = member.hitpoints;
+      strength += (member.maxAge - member.age) * 0.5; // Younger members are slightly stronger
+      strength += member.food.length * 2; // Well-fed members are stronger
+      return total + strength;
+    }, 0);
 }
 
 export function isTribeUnderAttack(tribeMembers: HumanEntity[], gameState: IndexedWorldState): boolean {
