@@ -12,6 +12,7 @@ import {
   findPlayerEntity,
   getAvailablePlayerActions,
   findValidPlantingSpot,
+  performTribeSplit,
 } from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
@@ -420,6 +421,11 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
             PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
           );
           playSoundAt(updateContext, SoundType.CallToAttack, playerEntity.position);
+        }
+      } else if (key === 'k') {
+        const tribeSplitAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.TribeSplit);
+        if (tribeSplitAction) {
+          performTribeSplit(playerEntity, gameStateRef.current);
         }
       } else {
         return;

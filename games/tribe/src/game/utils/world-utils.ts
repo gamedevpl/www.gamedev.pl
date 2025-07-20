@@ -11,6 +11,8 @@ import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   AI_PLANTING_SEARCH_RADIUS,
   PLAYER_CALL_TO_ATTACK_RADIUS,
+  TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
+  TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -20,11 +22,13 @@ import {
 import { BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { FoodType } from '../food/food-types';
 import { TRIBE_BADGE_EMOJIS } from '../world-consts';
-import { GameWorldState } from '../world-types';
+import { GameWorldState, UpdateContext } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { PlayerActionHint, PlayerActionType, TribeInfo } from '../ui/ui-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { playSoundAt } from '../sound/sound-manager';
+import { SoundType } from '../sound/sound-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -134,6 +138,11 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     if (nearbyEnemies.length > 0) {
       actions.push({ type: PlayerActionType.CallToAttack, action: 'callingToAttack', key: 'v' });
     }
+  }
+
+  // Check for Tribe Split
+  if (canSplitTribe(player, gameState).canSplit) {
+    actions.push({ type: PlayerActionType.TribeSplit, action: 'tribeSplitting', key: 'k' });
   }
 
   return actions;
@@ -571,6 +580,78 @@ export function generateTribeBadge(): string {
   const badge = TRIBE_BADGE_EMOJIS[emojiIndex];
   emojiIndex = (emojiIndex + 1) % TRIBE_BADGE_EMOJIS.length;
   return badge;
+}
+
+export function findDescendants(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
+  const descendants = new Map<EntityId, HumanEntity>();
+
+  function find(currentHuman: HumanEntity) {
+    const children = findChildren(gameState, currentHuman);
+    for (const child of children) {
+      if (!descendants.has(child.id)) {
+        descendants.set(child.id, child);
+        find(child); // Recurse
+      }
+    }
+  }
+
+  find(human);
+  return Array.from(descendants.values());
+}
+
+export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { canSplit: boolean; progress?: number } {
+  if (!human.isAdult || human.gender !== 'male' || human.leaderId === human.id || !human.leaderId) {
+    return { canSplit: false };
+  }
+
+  if (!human.leaderId) {
+    return { canSplit: false }; // Not in a tribe, can't split
+  }
+
+  const leader = gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined;
+  if (!leader || leader.type !== 'human') {
+    return { canSplit: false }; // Leader is not a human or doesn't exist
+  }
+
+  const heir = findHeir(findChildren(gameState, leader));
+  if (heir && heir.id === human.id) {
+    return { canSplit: false }; // The human is already the heir, no need to split
+  }
+
+  const currentTribeMembers = findTribeMembers(human.leaderId, gameState);
+  if (currentTribeMembers.length < TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
+    return { canSplit: false };
+  }
+
+  const descendants = findDescendants(human, gameState);
+  const familySize = descendants.length + 1; // +1 for the leader himself
+
+  const requiredSize = currentTribeMembers.length * TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE;
+
+  return { canSplit: familySize >= requiredSize, progress: familySize / requiredSize };
+}
+
+export function performTribeSplit(human: HumanEntity, gameState: GameWorldState): void {
+  if (!canSplitTribe(human, gameState).canSplit) {
+    return;
+  }
+
+  const newTribeBadge = generateTribeBadge();
+  const descendants = findDescendants(human, gameState);
+
+  // The founder becomes the new leader
+  human.leaderId = human.id;
+  human.tribeBadge = newTribeBadge;
+
+  // Update all descendants
+  for (const descendant of descendants) {
+    descendant.leaderId = human.id;
+    descendant.tribeBadge = newTribeBadge;
+  }
+
+  // Play sound
+  const updateContext: UpdateContext = { gameState, deltaTime: 0 };
+  playSoundAt(updateContext, SoundType.TribeSplit, human.position);
 }
 
 export function propagateNewLeaderToDescendants(

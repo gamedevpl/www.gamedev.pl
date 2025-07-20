@@ -129,4 +129,5 @@ export type HumanAction =
   | 'procreating'
   | 'attacking'
   | 'planting'
-  | 'callingToAttack';
+  | 'callingToAttack'
+  | 'tribeSplitting';

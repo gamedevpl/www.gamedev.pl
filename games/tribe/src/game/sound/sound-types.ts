@@ -21,6 +21,7 @@ export enum SoundType {
   HumanDeath,
   Seize,
   CallToAttack,
+  TribeSplit,
 
   // UI/Game State
   GameOver,
@@ -42,6 +43,7 @@ export const SOUND_FILE_MAP = new Map<SoundType, string>([
   [SoundType.ButtonClick, buttonClickSound],
   [SoundType.Seize, attackSound],
   [SoundType.CallToAttack, attackSound],
+  [SoundType.TribeSplit, procreateSound],
   [SoundType.SoundTrack1, soundTrack1],
 ]);
 

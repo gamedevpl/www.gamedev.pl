@@ -120,6 +120,11 @@ export const TRIBE_CENTER_MAX_WANDER_DISTANCE = 500; // Max distance a tribe mem
 export const FAMILY_CENTER_MAX_WANDER_DISTANCE = 250; // Max distance a family member will wander from the family's center
 export const ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER = 600; // Max distance a human will chase an enemy from their home center
 
+// Tribe Split Constants
+export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
+export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.35;
+export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
+
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
 export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid
@@ -136,6 +141,7 @@ export const LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS = 10;
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
+export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
 export const AI_FLEE_DISTANCE = 200;
 

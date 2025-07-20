@@ -14,6 +14,7 @@ import {
   createTribeMemberCombatBehavior,
   createEstablishFamilyTerritoryBehavior,
   createFollowPatriarchBehavior,
+  createTribeSplitBehavior,
 } from './behaviors';
 
 /**
@@ -55,6 +56,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- SOCIAL & REPRODUCTION (PROCREATE) ---
       createProcreationBehavior(1),
+
+      // --- TRIBE MANAGEMENT (SPLIT) ---
+      createTribeSplitBehavior(1),
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       createEstablishFamilyTerritoryBehavior(1),

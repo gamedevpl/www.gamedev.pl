@@ -8,6 +8,7 @@ export enum PlayerActionType {
   Attack = 'Attack',
   PlantBush = 'PlantBush',
   CallToAttack = 'CallToAttack',
+  TribeSplit = 'TribeSplit',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -17,6 +18,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Attack]: '⚔️',
   [PlayerActionType.PlantBush]: '🌱',
   [PlayerActionType.CallToAttack]: '📢',
+  [PlayerActionType.TribeSplit]: '🔱',
 };
 
 export interface PlayerActionHint {
