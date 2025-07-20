@@ -475,6 +475,24 @@ export function findMalePartner(human: HumanEntity, gameState: GameWorldState): 
   return null;
 }
 
+export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
+  // Children follow their father
+  if (!human.isAdult && human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    if (father && father.type === 'human') {
+      return father;
+    }
+  }
+
+  // Adult females follow their male partner
+  if (human.isAdult && human.gender === 'female' && human.partnerIds && human.partnerIds.length > 0) {
+    // This reuses the existing logic to find the first male partner
+    return findMalePartner(human, gameState);
+  }
+
+  return null;
+}
+
 export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
   const family = new Set<HumanEntity>();
 
@@ -749,9 +767,7 @@ export function isTribeUnderAttack(tribeMembers: HumanEntity[], gameState: Index
 }
 
 export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
-  return Array.from(gameState.entities.entities.values()).filter(
-    (entity) => entity.type === 'human',
-  ) as HumanEntity[];
+  return Array.from(gameState.entities.entities.values()).filter((entity) => entity.type === 'human') as HumanEntity[];
 }
 
 export function getTribeCenter(leaderId: EntityId, gameState: GameWorldState): Vector2D {

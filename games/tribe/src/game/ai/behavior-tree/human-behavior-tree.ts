@@ -13,6 +13,7 @@ import {
   createSeekingFoodFromParentBehavior,
   createTribeMemberCombatBehavior,
   createEstablishFamilyTerritoryBehavior,
+  createFollowPatriarchBehavior,
 } from './behaviors';
 
 /**
@@ -57,6 +58,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       createEstablishFamilyTerritoryBehavior(1),
+
+      // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW PATRIARCH) ---
+      createFollowPatriarchBehavior(1),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
       createIdleWanderBehavior(1),

@@ -69,7 +69,7 @@ function drawEmoji(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentT
 export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number): void {
   switch (effect.type) {
     case VisualEffectType.Hunger:
-      drawPulsatingCircle(ctx, effect, currentTime, 'rgba(255, 165, 0, 0.7)'); // Orange
+      drawPulsatingCircle(ctx, effect, currentTime, 'rgba(255, 165, 0, 0.7)', 1); // Orange
       break;
     case VisualEffectType.Procreation:
       drawEmoji(ctx, effect, currentTime, '❤️');

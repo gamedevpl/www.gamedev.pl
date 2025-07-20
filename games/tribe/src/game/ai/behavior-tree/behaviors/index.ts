@@ -10,3 +10,4 @@ export * from "./planting-behavior";
 export * from './leader-call-to-attack-behavior';
 export * from "./tribe-member-combat-behavior";
 export * from "./establish-family-territory-behavior";
+export * from "./follow-patriarch-behavior";
