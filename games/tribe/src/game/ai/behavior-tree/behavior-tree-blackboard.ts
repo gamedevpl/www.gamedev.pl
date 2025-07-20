@@ -42,6 +42,23 @@ export class Blackboard {
   }
 
   /**
+   * Deletes a value from the blackboard.
+   * @param key The key to delete.
+   */
+  delete(key: string): void {
+    this.data.delete(key);
+  }
+
+  /**
+   * Checks if a key exists in the blackboard.
+   * @param key The key to check.
+   * @returns True if the key exists, false otherwise.
+   */
+  has(key: string): boolean {
+    return this.data.has(key);
+  }
+
+  /**
    * Records the execution details of a behavior tree node.
    * @param name The name of the node.
    * @param status The execution status of the node.
