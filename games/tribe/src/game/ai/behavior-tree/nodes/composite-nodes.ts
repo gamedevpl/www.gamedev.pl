@@ -45,12 +45,13 @@ export class Sequence implements BehaviorNode {
 /**
  * A composite node that executes its children in order.
  * It succeeds as soon as one child succeeds. It fails if all children fail.
- * If a child is running, the selector is also running.
+ * If a child is running, the selector is also running and will resume from that child on the next tick.
  */
 export class Selector implements BehaviorNode {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
+  public runningChildIndex?: number;
 
   constructor(public children: BehaviorNode[], name?: string, depth: number = 0) {
     this.name = name;
@@ -61,17 +62,36 @@ export class Selector implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    for (const child of this.children) {
+    const startIndex = this.runningChildIndex ?? 0;
+
+    for (let i = startIndex; i < this.children.length; i++) {
+      const child = this.children[i];
       const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
-      if (status !== NodeStatus.FAILURE) {
-        this.lastStatus = status;
+
+      if (status === NodeStatus.FAILURE) {
+        continue; // Try the next child
+      }
+
+      if (status === NodeStatus.SUCCESS) {
+        delete this.runningChildIndex;
+        this.lastStatus = NodeStatus.SUCCESS;
         if (this.name) {
-          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+          blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, debugInfo);
         }
-        return status; // Return SUCCESS or RUNNING immediately
+        return NodeStatus.SUCCESS;
+      }
+
+      if (status === NodeStatus.RUNNING) {
+        this.runningChildIndex = i;
+        this.lastStatus = NodeStatus.RUNNING;
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, NodeStatus.RUNNING, context.gameState.time, this.depth, debugInfo);
+        }
+        return NodeStatus.RUNNING;
       }
     }
 
+    delete this.runningChildIndex;
     this.lastStatus = NodeStatus.FAILURE;
     if (this.name) {
       blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth, '');

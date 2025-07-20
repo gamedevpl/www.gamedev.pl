@@ -10,7 +10,7 @@ import {
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { countEntitiesOfTypeInRadius, findPotentialNewPartners } from '../../../utils/world-utils';
-import { getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Selector, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -80,6 +80,15 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
       const partner = blackboard.get<HumanEntity>('procreationPartner');
       if (!partner) {
         return NodeStatus.FAILURE;
+      }
+      const distance = calculateWrappedDistance(
+        human.position,
+        partner.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      if (distance < HUMAN_INTERACTION_PROXIMITY) {
+        return NodeStatus.SUCCESS;
       }
       human.activeAction = 'moving';
       human.target = partner.id;

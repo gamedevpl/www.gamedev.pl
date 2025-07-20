@@ -21,6 +21,7 @@ export interface BehaviorNode {
   depth?: number;
   children?: BehaviorNode[];
   child?: BehaviorNode;
+  runningChildIndex?: number;
   /**
    * Executes the node's logic.
    * @param human The human entity executing the behavior.
