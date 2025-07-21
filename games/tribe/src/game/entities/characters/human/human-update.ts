@@ -6,7 +6,7 @@ import {
   CHILD_TO_ADULT_AGE,
   HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER,
   CHILD_HUNGER_INCREASE_RATE_MODIFIER,
-  HUMAN_BERRY_HUNGER_REDUCTION,
+  HUMAN_FOOD_HUNGER_REDUCTION,
   HUMAN_OLD_AGE_THRESHOLD,
   HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING,
   ADULT_CHILD_FEEDING_RANGE,
@@ -14,6 +14,10 @@ import {
   HUMAN_YEAR_IN_REAL_SECONDS,
   HUNGER_EFFECT_THRESHOLD,
   EFFECT_DURATION_MEDIUM_HOURS,
+  CHARACTER_CHILD_RADIUS,
+  CHARACTER_RADIUS,
+  HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
+  HITPOINT_REGEN_HUNGER_MODIFIER,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -29,6 +33,20 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
+
+  // --- Call to Attack Cooldown ---
+  if (entity.isCallingToAttack && entity.callToAttackEndTime && gameState.time > entity.callToAttackEndTime) {
+    entity.isCallingToAttack = false;
+    entity.callToAttackEndTime = undefined;
+  }
+
+  // --- Hitpoint Regeneration -- -
+  if (entity.hitpoints < entity.maxHitpoints) {
+    const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;
+    const regeneration = HUMAN_BASE_HITPOINT_REGEN_PER_HOUR * hungerFactor * gameHoursDelta;
+    entity.hitpoints = Math.min(entity.maxHitpoints, entity.hitpoints + regeneration);
+  }
+
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
 
   if (
@@ -75,12 +93,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.attackCooldown < 0) entity.attackCooldown = 0;
   }
 
-  if (entity.isStunned && entity.stunnedUntil && entity.stunnedUntil <= gameState.time) {
-    entity.isStunned = false;
-    entity.stunnedUntil = 0;
-    entity.activeAction = 'idle';
-  }
-
   if (entity.feedParentCooldownTime) {
     entity.feedParentCooldownTime -= gameHoursDelta;
     if (entity.feedParentCooldownTime < 0) entity.feedParentCooldownTime = 0;
@@ -91,14 +103,25 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.feedChildCooldownTime < 0) entity.feedChildCooldownTime = 0;
   }
 
+  if (entity.leaderMetaStrategyCooldown) {
+    entity.leaderMetaStrategyCooldown -= gameHoursDelta;
+    if (entity.leaderMetaStrategyCooldown < 0) entity.leaderMetaStrategyCooldown = 0;
+  }
+
   if (!entity.isAdult) {
     entity.hunger +=
       deltaTime *
       ((HUMAN_HUNGER_INCREASE_PER_HOUR * CHILD_HUNGER_INCREASE_RATE_MODIFIER - HUMAN_HUNGER_INCREASE_PER_HOUR) /
         (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+  } else if (entity.radius === CHARACTER_CHILD_RADIUS) {
+    entity.radius = CHARACTER_RADIUS;
   }
 
-  if (entity.isAdult && entity.berries > 0 && (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)) {
+  if (
+    entity.isAdult &&
+    entity.food.length > 0 &&
+    (!entity.feedParentCooldownTime || entity.feedParentCooldownTime <= 0)
+  ) {
     const parentsToFeed = [];
     if (entity.motherId) {
       const mother = gameState.entities.entities.get(entity.motherId) as HumanEntity | undefined;
@@ -121,8 +144,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
           gameState.mapDimensions.height,
         );
         if (distance <= ADULT_CHILD_FEEDING_RANGE) {
-          entity.berries--;
-          parentEntity.hunger = Math.max(0, parentEntity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
+          entity.food.pop();
+          parentEntity.hunger = Math.max(0, parentEntity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
           entity.feedParentCooldownTime = ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS;
           break;
         }
@@ -131,11 +154,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   let causeOfDeath: string | undefined = undefined;
-  if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-    if (entity.berries > 0 && entity.isAdult) {
-      entity.berries--;
-      entity.hunger = Math.max(0, entity.hunger - HUMAN_BERRY_HUNGER_REDUCTION);
-      entity.eatingCooldownTime = gameState.time + 1;
+  if (entity.hitpoints <= 0) {
+    causeOfDeath = 'killed';
+  } else if (entity.hunger >= HUMAN_HUNGER_DEATH) {
+    if (entity.food.length > 0 && entity.isAdult) {
+      entity.food.pop();
+      entity.hunger = Math.max(0, entity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
     } else {
       causeOfDeath = 'hunger';
     }
@@ -144,6 +168,34 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   if (causeOfDeath) {
+    // --- Leadership Succession on Death ---
+    if (entity.leaderId === entity.id) {
+      // The deceased was a leader
+      const heir = findHeir(findChildren(gameState, entity));
+      if (heir) {
+        // Transfer leadership to the heir
+        heir.leaderId = heir.id;
+        heir.tribeBadge = entity.tribeBadge;
+
+        // Update followers
+        gameState.entities.entities.forEach((e) => {
+          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
+            const follower = e as HumanEntity;
+            follower.leaderId = heir.id; // Follow the new leader
+          }
+        });
+      } else {
+        // No heir, tribe dissolves
+        gameState.entities.entities.forEach((e) => {
+          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
+            const follower = e as HumanEntity;
+            follower.leaderId = undefined;
+            follower.tribeBadge = undefined;
+          }
+        });
+      }
+    }
+
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));
       if (oldestOffspring) {
@@ -154,7 +206,17 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         gameState.causeOfGameOver = causeOfDeath;
       }
     }
-    createHumanCorpse(gameState.entities, entity.position, entity.gender, entity.age, entity.id, gameState.time);
+    createHumanCorpse(
+      gameState.entities,
+      entity.position,
+      entity.gender,
+      entity.age,
+      entity.radius,
+      entity.id,
+      gameState.time,
+      entity.food,
+      entity.hunger,
+    );
     removeEntity(gameState.entities, entity.id);
     return;
   }

@@ -3,14 +3,11 @@
  * characters, and interactive elements like berry bushes.
  */
 
-import { Entities } from './entities/entities-types';
+import { EntityId, Entities } from './entities/entities-types';
+import { ClickableUIButton } from './ui/ui-types';
+import { Tutorial, TutorialState } from './tutorial';
+import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
-
-// Basic Types
-export type Position = {
-  x: number;
-  y: number;
-};
 
 // Game State Interface
 export interface GameWorldState {
@@ -25,6 +22,18 @@ export interface GameWorldState {
   generationCount: number; // Number of generations that have passed
   gameOver: boolean; // Flag to indicate if the game is over
   causeOfGameOver?: string; // Optional cause of game over
+  viewportCenter: Vector2D;
+  isPaused: boolean;
+  isPlayerOnAutopilot: boolean;
+  hasPlayerMovedEver: boolean;
+  hasPlayerPlantedBush?: boolean;
+  llmAutopilot?: Promise<void>;
+  masterVolume: number; // Global volume level (0.0 to 1.0)
+  isMuted: boolean; // Global mute state
+  uiButtons: ClickableUIButton[];
+  tutorial: Tutorial;
+  tutorialState: TutorialState;
+  debugCharacterId?: EntityId;
 }
 
 export type UpdateContext = {
@@ -34,7 +43,6 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.
-   */
+   * Time since the last update in milliseconds.\\n   */
   deltaTime: number;
 };

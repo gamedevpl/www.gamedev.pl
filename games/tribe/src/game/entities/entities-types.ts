@@ -11,6 +11,7 @@ export interface Entity {
   isPlayer?: boolean;
   type: EntityType;
   position: Vector2D;
+  radius: number;
   direction: Vector2D;
   acceleration: number;
   forces: Vector2D[];
@@ -24,7 +25,7 @@ export interface Entity {
 /**
  * Represents an active debuff effect on an entity
  */
-export interface ActiveDebuff {
+interface ActiveDebuff {
   /** Debuff type */
   type: 'slow';
   /** Time when the debuff was applied */

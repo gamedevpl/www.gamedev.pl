@@ -1,16 +1,17 @@
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
-import { calculateWrappedDistance, vectorAdd } from '../../../../utils/math-utils';
-import {
-  HUMAN_BASE_SPEED,
-  HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD,
-  HUMAN_OLD_AGE_SPEED_MODIFIER,
-  HUMAN_HUNGER_THRESHOLD_SLOW,
-  HUMAN_SLOW_SPEED_MODIFIER,
-} from '../../../../world-consts';
+import { Vector2D } from '../../../../utils/math-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
-import { HUMAN_MOVING, HumanMovingStateData, HUMAN_IDLE, HUMAN_ATTACKING, HUMAN_STUNNED } from './human-state-types';
+import { getEffectiveSpeed } from '../human-utils';
+import {
+  HUMAN_MOVING,
+  HumanMovingStateData,
+  HUMAN_IDLE,
+  HUMAN_ATTACKING,
+  HumanAttackingStateData,
+} from './human-state-types';
 
-const MOVEMENT_THRESHOLD = 5; // Distance to consider "close enough" to target
+const MOVEMENT_THRESHOLD = 7.5; // Distance to consider "close enough" to target
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;
@@ -18,7 +19,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   update(movingData: HumanMovingStateData, context: StateContext<HumanEntity>) {
     const { entity, updateContext } = context;
 
-    if (entity.activeAction === 'attacking') {
+    if (entity.activeAction === 'attacking' && entity.attackTargetId) {
       return {
         nextState: HUMAN_ATTACKING,
         data: {
@@ -26,17 +27,8 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_MOVING,
           attackTargetId: entity.attackTargetId,
-        },
-      };
-    } else if (entity.activeAction === 'stunned') {
-      return {
-        nextState: HUMAN_STUNNED,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_MOVING,
-          stunnedUntil: entity.stunnedUntil,
-        },
+          attackStartTime: updateContext.gameState.time,
+        } as HumanAttackingStateData,
       };
     }
 
@@ -53,29 +45,40 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     }
 
     // Calculate direction to target
-    let targetPosition = movingData.targetPosition;
+    let targetPosition: Vector2D | undefined;
+    if (typeof entity.target === 'object') {
+      targetPosition = entity.target;
+    } else if (typeof entity.target === 'number') {
+      targetPosition = context.updateContext.gameState.entities.entities.get(entity.target)?.position;
+    }
+
+    if (!targetPosition && (entity.direction.x !== 0 || entity.direction.y !== 0)) {
+      targetPosition = {
+        x: entity.position.x + entity.direction.x * MOVEMENT_THRESHOLD * 2,
+        y: entity.position.y + entity.direction.y * MOVEMENT_THRESHOLD * 2,
+      };
+    }
     if (!targetPosition) {
-      targetPosition = vectorAdd(entity.position, {
-        x: entity.direction.x * MOVEMENT_THRESHOLD,
-        y: entity.direction.y * MOVEMENT_THRESHOLD,
-      });
+      return {
+        nextState: HUMAN_IDLE,
+        data: {
+          ...movingData,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_MOVING,
+        },
+      };
     }
 
-    // Calculate effective speed considering hunger and old age
-    let effectiveSpeed = HUMAN_BASE_SPEED;
-
-    // Apply hunger slowdown
-    if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      effectiveSpeed *= HUMAN_SLOW_SPEED_MODIFIER;
-    }
-
-    // Apply old age slowdown
-    if (entity.age >= HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD) {
-      effectiveSpeed *= HUMAN_OLD_AGE_SPEED_MODIFIER;
-    }
+    const dirToTarget = getDirectionVectorOnTorus(
+      entity.position,
+      targetPosition,
+      context.updateContext.gameState.mapDimensions.width,
+      context.updateContext.gameState.mapDimensions.height,
+    );
+    entity.direction = vectorNormalize(dirToTarget);
 
     // Set acceleration based on effective speed
-    entity.acceleration = effectiveSpeed;
+    entity.acceleration = getEffectiveSpeed(entity);
 
     // Check if we've reached the target
     const distance = calculateWrappedDistance(
@@ -105,6 +108,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
     // Reset  acceleration when exiting moving state
     entity.acceleration = 0;
+    entity.target = undefined;
   }
 }
 

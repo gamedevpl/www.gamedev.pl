@@ -7,7 +7,7 @@ import {
   HUMAN_PROCREATION_COOLDOWN_HOURS,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
 } from '../../../../world-consts';
-import { playSound } from '../../../../sound/sound-utils';
+import { playSoundAt } from '../../../../sound/sound-manager';
 import { SoundType } from '../../../../sound/sound-types';
 
 /**
@@ -53,7 +53,7 @@ const update = (data: HumanProcreatingStateData, context: StateContext<HumanEnti
       entity.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
       partner.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
 
-      playSound(SoundType.Procreate);
+      playSoundAt(updateContext, SoundType.Procreate, female.position);
     }
   }
 

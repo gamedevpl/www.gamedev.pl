@@ -6,9 +6,8 @@ import { vectorAdd } from '../utils/math-utils';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
-  BERRY_BUSH_INITIAL_BERRIES,
-  BERRY_BUSH_MAX_BERRIES,
-  BERRY_BUSH_REGENERATION_HOURS,
+  BERRY_BUSH_INITIAL_FOOD,
+  BERRY_BUSH_MAX_FOOD,
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
   BERRY_BUSH_SPREAD_CHANCE,
   BERRY_BUSH_SPREAD_RADIUS,
@@ -16,18 +15,28 @@ import {
   HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
+  CHARACTER_RADIUS,
+  CHARACTER_CHILD_RADIUS,
+  HUMAN_MAX_FOOD,
+  HUMAN_CORPSE_INITIAL_FOOD,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_MAX_HITPOINTS,
+  MAX_ANCESTORS_TO_TRACK,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
-import { playSound } from '../sound/sound-utils';
+import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
+import { FoodItem, FoodType } from '../food/food-types';
+import { AIType } from '../ai/ai-types';
+import { buildHumanBehaviorTree } from '../ai/behavior-tree/human-behavior-tree';
+import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
   // First handle prey-to-carrion conversion
   state.entities.forEach((entity) => {
-    // generic entity update
     entityUpdate(entity, updateContext);
   });
 }
@@ -40,7 +49,7 @@ export function createEntities(): Entities {
   return state;
 }
 
-export function createEntity<T extends Entity>(
+function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
   initialState: Partial<Entity> &
@@ -61,15 +70,14 @@ export function createEntity<T extends Entity>(
 }
 
 export function createBerryBush(state: Entities, initialPosition: Vector2D, currentTime: number): BerryBushEntity {
-  // Calculate regeneration rate in berries per hour
-  // If BERRY_BUSH_REGENERATION_HOURS is hours per berry, then rate is 1 / hours_per_berry
-  const regenerationRate = BERRY_BUSH_REGENERATION_HOURS > 0 ? 1 / BERRY_BUSH_REGENERATION_HOURS : 0;
-
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
-    currentBerries: BERRY_BUSH_INITIAL_BERRIES,
-    maxBerries: BERRY_BUSH_MAX_BERRIES,
-    berryRegenerationRate: regenerationRate,
+    radius: BERRY_BUSH_SPREAD_RADIUS,
+    food: Array.from({ length: BERRY_BUSH_INITIAL_FOOD }, () => ({ type: FoodType.Berry })).map((f) => ({
+      ...f,
+      id: state.nextEntityId++,
+    })),
+    maxFood: BERRY_BUSH_MAX_FOOD,
     lifespan: BERRY_BUSH_LIFESPAN_GAME_HOURS,
     age: 0,
     spreadChance: BERRY_BUSH_SPREAD_CHANCE,
@@ -92,29 +100,40 @@ export function createHuman(
   initialHunger: number = HUMAN_INITIAL_HUNGER,
   motherId?: EntityId,
   fatherId?: EntityId,
+  ancestorIds: EntityId[] = [],
+  leaderId?: EntityId,
+  tribeBadge?: string,
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
   const human = createEntity<HumanEntity>(state, 'human', {
     position: initialPosition,
+    radius: isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS,
     hunger: initialHunger,
+    hitpoints: HUMAN_MAX_HITPOINTS,
+    maxHitpoints: HUMAN_MAX_HITPOINTS,
     age: initialAge,
     gender,
     isPlayer,
-    berries: 0,
-    maxBerries: 10, // Maximum berries a human can carry
+    food: [],
+    maxFood: HUMAN_MAX_FOOD,
     maxAge: HUMAN_MAX_AGE_YEARS,
     isAdult,
     isPregnant: false,
     gestationTime: 0,
     procreationCooldown: 0,
     attackCooldown: 0,
-    isStunned: false,
-    stunnedUntil: 0,
     motherId,
     fatherId,
+    ancestorIds,
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
+    leaderId,
+    tribeBadge,
+    aiType: AIType.BehaviorTreeBased,
+    aiBehaviorTree: buildHumanBehaviorTree(),
+    aiBlackboard: new Blackboard(),
   });
+
   return human;
 }
 
@@ -123,16 +142,33 @@ export function createHumanCorpse(
   position: Vector2D,
   gender: 'male' | 'female',
   age: number,
+  radius: number,
   originalHumanId: EntityId,
   currentTime: number,
+  carriedFood: FoodItem[],
+  hunger: number,
 ): HumanCorpseEntity {
   const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
     position,
+    radius: radius,
     gender,
     age,
     originalHumanId,
     timeOfDeath: currentTime,
     decayProgress: 0,
+    food: [
+      ...Array.from(
+        {
+          length: Math.max(
+            (HUMAN_CORPSE_INITIAL_FOOD * Math.max(HUMAN_HUNGER_THRESHOLD_CRITICAL - hunger, 0)) /
+              HUMAN_HUNGER_THRESHOLD_CRITICAL,
+            1,
+          ),
+        },
+        () => ({ type: FoodType.Meat }),
+      ),
+      ...carriedFood,
+    ].map((f) => ({ ...f, id: state.nextEntityId++ })),
     // Corpses don't have these properties, so set to default/null values
     stateMachine: undefined,
   });
@@ -144,6 +180,17 @@ export function giveBirth(
   fatherId: EntityId | undefined,
   updateContext: UpdateContext,
 ): HumanEntity | undefined {
+  const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
+
+  // Combine ancestor lists from both parents
+  const motherAncestors = [...(mother.ancestorIds || []), mother.id];
+  const fatherAncestors = father ? [...(father.ancestorIds || []), father.id] : [];
+  const combinedAncestors = [...motherAncestors, ...fatherAncestors];
+
+  // Remove duplicates and limit the list to the most recent ancestors
+  const uniqueAncestors = [...new Set(combinedAncestors)];
+  const childAncestors = uniqueAncestors.slice(Math.max(uniqueAncestors.length - MAX_ANCESTORS_TO_TRACK, 0));
+
   // Generate random gender
   const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
 
@@ -161,32 +208,19 @@ export function giveBirth(
     HUMAN_INITIAL_HUNGER / 2, // Start with half hunger
     mother.id, // Mother ID
     fatherId, // Father ID
+    childAncestors,
+    father?.leaderId,
+    father?.tribeBadge,
   );
 
   // Play birth sound
-  playSound(SoundType.Birth);
+  playSoundAt(updateContext, SoundType.Birth, mother.position);
 
   return child;
-}
-
-export function updateEntity(state: Entities, entityId: EntityId, updates: Partial<Entity>): Entity | null {
-  const entity = state.entities.get(entityId);
-  if (!entity) return null;
-
-  const updatedEntity = {
-    ...entity,
-    ...updates,
-  };
-  state.entities.set(entityId, updatedEntity);
-  return updatedEntity;
 }
 
 export function removeEntity(state: Entities, entityId: EntityId): boolean {
   if (!state.entities.get(entityId)) return false;
   state.entities.delete(entityId);
   return true;
-}
-
-export function getEntity(state: Entities, entityId: EntityId): Entity | null {
-  return state.entities.get(entityId) || null;
 }

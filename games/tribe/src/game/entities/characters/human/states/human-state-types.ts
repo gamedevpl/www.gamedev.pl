@@ -7,19 +7,18 @@ export const HUMAN_MOVING = 'humanMoving';
 export const HUMAN_EATING = 'humanEating';
 export const HUMAN_GATHERING = 'humanGathering'; // When gathering resources
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
-export const HUMAN_SEEKING_FOOD = 'humanSeekingFood';
 export const HUMAN_ATTACKING = 'humanAttacking';
-export const HUMAN_STUNNED = 'humanStunned';
+export const HUMAN_PLANTING = 'humanPlanting';
 
-export interface HumanIdleStateData extends StateData {
+interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
 }
 
 export interface HumanMovingStateData extends StateData {
-  targetPosition?: Vector2D; // Where the human is moving to
+  target?: Vector2D | EntityId; // Where the human is moving to
 }
 
-export interface HumanEatingStateData extends StateData {
+interface HumanEatingStateData extends StateData {
   berryBushId: EntityId; // The ID of the berry bush being eaten from
 }
 
@@ -33,16 +32,13 @@ export interface HumanProcreatingStateData extends StateData {
   procreationEndTime?: number; // When the procreation process ends
 }
 
-export interface HumanSeekingFoodStateData extends StateData {
-  state: 'seekingFood';
-}
-
 export interface HumanAttackingStateData extends StateData {
   attackTargetId: EntityId;
+  attackStartTime: number;
 }
 
-export interface HumanStunnedStateData extends StateData {
-  stunnedUntil: number;
+export interface HumanPlantingStateData extends StateData {
+  plantingSpot: Vector2D;
 }
 
 export type HumanStateData =
@@ -51,6 +47,5 @@ export type HumanStateData =
   | HumanEatingStateData
   | HumanGatheringStateData
   | HumanProcreatingStateData
-  | HumanSeekingFoodStateData
   | HumanAttackingStateData
-  | HumanStunnedStateData;
+  | HumanPlantingStateData;

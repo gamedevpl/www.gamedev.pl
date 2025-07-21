@@ -1,16 +1,15 @@
-import { EntityId } from "../../entities-types";
-import { PlantEntity } from "../plant-types";
+import { EntityId } from '../../entities-types';
+import { FoodItem } from '../../../food/food-types';
+import { PlantEntity } from '../plant-types';
 
 /**
  * Represents a berry bush entity in the game.
  */
 export interface BerryBushEntity extends PlantEntity {
   /** The current number of berries on the bush. */
-  currentBerries: number;
+  food: FoodItem[];
   /** The maximum number of berries the bush can hold. */
-  maxBerries: number;
-  /** The rate at which berries regenerate, in berries per game hour. */
-  berryRegenerationRate: number;
+  maxFood: number;
   /** Game hours passed since the last berry was regenerated. */
   timeSinceLastBerryRegen: number;
   /** The chance (0.0 to 1.0) that the bush will attempt to spread in a given opportunity. */

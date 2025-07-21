@@ -69,7 +69,7 @@ function drawEmoji(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentT
 export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number): void {
   switch (effect.type) {
     case VisualEffectType.Hunger:
-      drawPulsatingCircle(ctx, effect, currentTime, 'rgba(255, 165, 0, 0.7)'); // Orange
+      drawPulsatingCircle(ctx, effect, currentTime, 'rgba(255, 165, 0, 0.7)', 1); // Orange
       break;
     case VisualEffectType.Procreation:
       drawEmoji(ctx, effect, currentTime, '❤️');
@@ -97,6 +97,24 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
       break;
     case VisualEffectType.ChildFed:
       drawEmoji(ctx, effect, currentTime, '🍼');
+      break;
+    case VisualEffectType.AttackDeflected:
+      drawEmoji(ctx, effect, currentTime, '🛡️');
+      break;
+    case VisualEffectType.AttackResisted:
+      drawEmoji(ctx, effect, currentTime, '💪');
+      break;
+    case VisualEffectType.Hit:
+      drawEmoji(ctx, effect, currentTime, '💥');
+      break;
+    case VisualEffectType.SeizeBuildup:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 215, 0, 0.8)', 4); // Gold
+      break;
+    case VisualEffectType.Seize:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
+      break;
+    case VisualEffectType.CallToAttack:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 255, 0, 0.8)', 4); // Yellow
       break;
   }
 }

@@ -8,7 +8,9 @@ import {
   HUMAN_GATHERING,
   HUMAN_EATING,
   HUMAN_ATTACKING,
-  HUMAN_STUNNED,
+  HumanAttackingStateData,
+  HUMAN_PLANTING,
+  HumanPlantingStateData,
 } from './human-state-types';
 
 // Define the human idle state
@@ -17,7 +19,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    if (entity.activeAction === 'attacking') {
+    if (entity.activeAction === 'attacking' && entity.attackTargetId) {
       return {
         nextState: HUMAN_ATTACKING,
         data: {
@@ -25,17 +27,8 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
           attackTargetId: entity.attackTargetId,
-        },
-      };
-    } else if (entity.activeAction === 'stunned') {
-      return {
-        nextState: HUMAN_STUNNED,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: HUMAN_IDLE,
-          stunnedUntil: entity.stunnedUntil,
-        },
+          attackStartTime: updateContext.gameState.time,
+        } as HumanAttackingStateData,
       };
     }
 
@@ -59,7 +52,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          targetPosition: entity.targetPosition,
+          target: entity.target,
         },
       };
     }
@@ -71,7 +64,7 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
-          targetPosition: entity.targetPosition, // Target position might be relevant for gathering
+          target: entity.target, // Target position might be relevant for gathering
         },
       };
     }
@@ -84,6 +77,18 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_IDLE,
         },
+      };
+    }
+
+    if (entity.activeAction === 'planting' && entity.target) {
+      return {
+        nextState: HUMAN_PLANTING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          plantingSpot: entity.target,
+        } as HumanPlantingStateData,
       };
     }
 

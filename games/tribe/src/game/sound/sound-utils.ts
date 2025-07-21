@@ -1,127 +1,113 @@
-import { SoundType } from './sound-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../utils/math-utils';
+import { SOUND_FALLOFF, SOUND_MAX_DISTANCE } from '../world-consts';
+import { SoundOptions, SoundType } from './sound-types';
+import { getAudioContext, soundBuffers, getMasterGainNode } from './sound-loader';
 
-// Create a single AudioContext to be reused
-let audioContext: AudioContext;
+// Map to keep track of active sound sources that might need to be stopped.
+const activeSoundSources = new Map<string, { sourceNode: AudioBufferSourceNode; gainNode: GainNode }>();
 
-function getAudioContext(): AudioContext | undefined {
-  if (typeof window === 'undefined') {
-    return undefined;
-  }
-  if (!audioContext && typeof window.AudioContext === 'function') {
-    audioContext = new window.AudioContext();
-  }
-  return audioContext;
-}
-
-export function playSound(soundType: SoundType): void {
+export function playSound(soundType: SoundType, options?: SoundOptions): void {
   const context = getAudioContext();
-  if (!context) {
-    // console.warn("Web Audio API is not supported in this browser or context.");
+  const masterGainNode = getMasterGainNode();
+
+  if (!context || !masterGainNode) {
     return;
   }
 
-  // Resume context if it's in a suspended state (required by modern browsers)
+  // Do not play sounds if master volume is muted, except for the soundtrack itself which might be starting.
+  if (masterGainNode.gain.value === 0 && options?.trackId === undefined) {
+    return;
+  }
+
   if (context.state === 'suspended') {
     context.resume();
   }
 
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.connect(gain);
-  gain.connect(context.destination);
+  const audioBuffer = soundBuffers.get(soundType);
+  if (!audioBuffer) {
+    console.warn(`Sound buffer not found for type: ${SoundType[soundType]}`);
+    return;
+  }
 
-  const now = context.currentTime;
+  // If a trackId is provided and it's already playing, don't start it again.
+  if (options?.trackId && activeSoundSources.has(options.trackId)) {
+    return;
+  }
 
-  switch (soundType) {
-    case SoundType.Attack:
-      oscillator.type = 'sawtooth';
-      oscillator.frequency.setValueAtTime(200, now);
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      oscillator.start(now);
-      oscillator.stop(now + 0.2);
-      break;
+  const sourceNode = context.createBufferSource();
+  sourceNode.buffer = audioBuffer;
+  sourceNode.loop = options?.loop ?? false;
 
-    case SoundType.Gather:
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(440, now);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      oscillator.start(now);
-      oscillator.stop(now + 0.1);
-      break;
+  // This gain node is for spatial audio falloff or individual track control, not master volume.
+  const individualGainNode = context.createGain();
+  const pannerNode = context.createStereoPanner();
 
-    case SoundType.Eat:
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      oscillator.start(now);
-      oscillator.stop(now + 0.15);
-      break;
+  let lastNode: AudioNode = individualGainNode;
 
-    case SoundType.Procreate:
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(523.25, now); // C5
-      gain.gain.setValueAtTime(0.3, now);
-      gain.gain.linearRampToValueAtTime(0.5, now + 0.3);
-      oscillator.frequency.linearRampToValueAtTime(659.25, now + 0.3); // E5
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      oscillator.start(now);
-      oscillator.stop(now + 0.5);
-      break;
+  if (options?.position && options?.listenerPosition && options?.worldDimensions) {
+    const directionVector = getDirectionVectorOnTorus(
+      options.listenerPosition,
+      options.position,
+      options.worldDimensions.width,
+      options.worldDimensions.height,
+    );
+    const distance = calculateWrappedDistance(
+      options.listenerPosition,
+      options.position,
+      options.worldDimensions.width,
+      options.worldDimensions.height,
+    );
 
-    case SoundType.Birth:
-      gain.gain.setValueAtTime(0.3, now);
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(523.25, now); // C5
-      oscillator.frequency.setValueAtTime(659.25, now + 0.1); // E5
-      oscillator.frequency.setValueAtTime(783.99, now + 0.2); // G5
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      oscillator.start(now);
-      oscillator.stop(now + 0.4);
-      break;
+    if (distance > SOUND_MAX_DISTANCE) {
+      return; // Sound is too far to be heard
+    }
 
-    case SoundType.ChildFed:
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, now);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      oscillator.start(now);
-      oscillator.stop(now + 0.15);
-      break;
+    // Volume falloff is calculated independently of master volume.
+    const spatialVolume = 1 - Math.pow(distance / SOUND_MAX_DISTANCE, SOUND_FALLOFF);
+    individualGainNode.gain.value = Math.max(0, spatialVolume);
 
-    case SoundType.HumanDeath:
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(200, now);
-      gain.gain.setValueAtTime(0.4, now);
-      oscillator.frequency.exponentialRampToValueAtTime(50, now + 1.0);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-      oscillator.start(now);
-      oscillator.stop(now + 1.0);
-      break;
+    // Panning
+    const pan = Math.sin((directionVector.x / distance) * (Math.PI / 2));
+    pannerNode.pan.value = isNaN(pan) ? 0 : pan;
 
-    case SoundType.GameOver:
-      gain.gain.setValueAtTime(0.4, now);
-      oscillator.type = 'sawtooth';
-      oscillator.frequency.setValueAtTime(440, now); // A4
-      oscillator.frequency.linearRampToValueAtTime(349.23, now + 0.3); // F4
-      oscillator.frequency.linearRampToValueAtTime(261.63, now + 0.6); // C4
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-      oscillator.start(now);
-      oscillator.stop(now + 1.5);
-      break;
+    individualGainNode.connect(pannerNode);
+    lastNode = pannerNode;
+  } else {
+    // Non-positional sound (like UI clicks or soundtrack)
+    const defaultVolume = soundType === SoundType.GameOver ? 0.4 : soundType === SoundType.SoundTrack1 ? 1 : 0.2;
+    individualGainNode.gain.value = defaultVolume;
+  }
 
-    case SoundType.ButtonClick:
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(1000, now);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      oscillator.start(now);
-      oscillator.stop(now + 0.05);
-      break;
+  // Connect the sound's node chain to the single master gain node.
+  sourceNode.connect(lastNode);
+  lastNode.connect(masterGainNode);
+  sourceNode.start(0);
 
-    default:
-      break;
+  // If a trackId is provided, store the source and its gain node for later control.
+  if (options?.trackId) {
+    activeSoundSources.set(options.trackId, { sourceNode, gainNode: individualGainNode });
+    sourceNode.onended = () => {
+      // Clean up the map when the sound finishes playing on its own
+      activeSoundSources.delete(options.trackId!);
+    };
+  }
+}
+
+export function stopSound(trackId: string, fadeOutDurationSeconds = 1): void {
+  const sound = activeSoundSources.get(trackId);
+  const context = getAudioContext();
+
+  if (sound && context) {
+    const { sourceNode, gainNode } = sound;
+    const currentTime = context.currentTime;
+
+    // Fade out the sound
+    gainNode.gain.setValueAtTime(gainNode.gain.value, currentTime);
+    gainNode.gain.linearRampToValueAtTime(0, currentTime + fadeOutDurationSeconds);
+
+    // Stop the source after the fade out and remove from active sources
+    sourceNode.stop(currentTime + fadeOutDurationSeconds);
+    sourceNode.onended = null;
+    activeSoundSources.delete(trackId);
   }
 }

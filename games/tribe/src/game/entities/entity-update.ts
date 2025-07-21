@@ -40,7 +40,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply accumulated forces to velocity
   entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
 
-  // Zero velocity if it"s too small to prevent drifting
+  // Zero velocity if it's too small to prevent drifting
   if (vectorLength(entity.velocity) < 0.001) {
     entity.velocity = { x: 0, y: 0 };
   }
@@ -71,7 +71,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   }
 
   // AI decision making for non-player humans
-  if (entity.type === 'human' && !(entity as HumanEntity).isPlayer) {
+  if (entity.type === 'human' && (!(entity as HumanEntity).isPlayer || updateContext.gameState.isPlayerOnAutopilot)) {
     humanAIUpdate(entity as HumanEntity, updateContext);
   }
 

@@ -1,5 +1,9 @@
 import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
+import { FoodItem } from '../../../food/food-types';
+import { AIType } from '../../../ai/ai-types';
+import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
+import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
 
 /**
  * Represents a human entity in the game.
@@ -8,6 +12,12 @@ import { EntityId } from '../../entities-types';
 export interface HumanEntity extends Entity {
   /** Current hunger level (0-100). Death occurs at 100. */
   hunger: number;
+
+  /** Current hitpoints (0-maxHitpoints). Death occurs at 0. */
+  hitpoints: number;
+
+  /** Maximum hitpoints. */
+  maxHitpoints: number;
 
   /** Current age in game years. */
   age: number;
@@ -21,11 +31,11 @@ export interface HumanEntity extends Entity {
   /** Whether this human is controlled by the player. */
   isPlayer?: boolean;
 
-  /** Number of berries the human is carrying. */
-  berries: number;
+  /** Number of food units the human is carrying. */
+  food: FoodItem[];
 
-  /** Maximum number of berries the human can carry. */
-  maxBerries: number;
+  /** Maximum number of food units the human can carry. */
+  maxFood: number;
 
   /** Whether the human is an adult (can procreate). */
   isAdult?: boolean;
@@ -48,6 +58,15 @@ export interface HumanEntity extends Entity {
   /** IDs of the human's partners. */
   partnerIds?: EntityId[];
 
+  /** IDs of the human's ancestors. */
+  ancestorIds: EntityId[];
+
+  /** ID of the human's tribe leader. If it's the same as the human's ID, they are the leader. */
+  leaderId?: EntityId;
+
+  /** Visual representation of the tribe badge. */
+  tribeBadge?: string;
+
   /** Cooldown time for a parent to feed a child. */
   feedChildCooldownTime?: number;
 
@@ -55,16 +74,25 @@ export interface HumanEntity extends Entity {
   feedParentCooldownTime?: number;
 
   /** Current active action. Set by player input or AI decision. */
-  activeAction?: 'gathering' | 'eating' | 'moving' | 'idle' | 'procreating' | 'seekingFood' | 'attacking' | 'stunned';
+  activeAction?: HumanAction;
+
+  /** Flag indicating if the human is currently issuing a call to attack. */
+  isCallingToAttack?: boolean;
+  /** Game time when the call to attack command ends. */
+  callToAttackEndTime?: number;
+
+  /** Cooldown time before being able to gather again. */
+  gatheringCooldownTime?: number;
 
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
-  isStunned?: boolean;
-  stunnedUntil?: number;
   attackTargetId?: EntityId;
 
-  /** Target position for 'moving' action. Set by player input or AI decision. */
-  targetPosition?: { x: number; y: number }; // Target position for 'moving' action. Set by player input or AI decision.
+  /** Cooldown for the leader's high-level strategic decision-making. */
+  leaderMetaStrategyCooldown?: number;
+
+  /** Target for 'moving' action, either a position or entity. */
+  target?: { x: number; y: number } | EntityId; // Target for 'moving' action. Set by player input or AI decision.
 
   /** The current progress of the entity's animation (0-1). */
   animationProgress?: number;
@@ -79,4 +107,24 @@ export interface HumanEntity extends Entity {
   lastTargetAcquiredEffectTime?: number;
   lastEatingEffectTime?: number;
   lastChildFedEffectTime?: number;
+
+  /** The type of AI used by this human. */
+  aiType?: AIType;
+
+  /** The root node of the behavior tree for this AI. */
+  aiBehaviorTree?: BehaviorNode;
+
+  /** The blackboard for the behavior tree AI. */
+  aiBlackboard?: Blackboard;
 }
+
+export type HumanAction =
+  | 'gathering'
+  | 'eating'
+  | 'moving'
+  | 'idle'
+  | 'procreating'
+  | 'attacking'
+  | 'planting'
+  | 'callingToAttack'
+  | 'tribeSplitting';

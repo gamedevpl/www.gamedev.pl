@@ -14,6 +14,12 @@ export enum VisualEffectType {
   BushClaimLost,
   Eating,
   ChildFed,
+  AttackDeflected,
+  AttackResisted,
+  Hit,
+  SeizeBuildup,
+  Seize,
+  CallToAttack,
 }
 
 export interface VisualEffect {

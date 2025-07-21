@@ -36,7 +36,7 @@ export interface StateTransition<D extends StateData = StateData> {
 /**
  * State update function type
  */
-export type StateUpdate<T extends Entity = Entity, D extends StateData = StateData> = (
+type StateUpdate<T extends Entity = Entity, D extends StateData = StateData> = (
   data: D,
   context: StateContext<T>,
 ) => StateTransition;

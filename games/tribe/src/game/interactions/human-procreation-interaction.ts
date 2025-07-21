@@ -2,13 +2,18 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
-import { HUMAN_INTERACTION_RANGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import {
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+} from '../world-consts';
 import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
-import { playSound } from '../sound/sound-utils';
 import { SoundType } from '../sound/sound-types';
+import { playSoundAt } from '../sound/sound-manager';
+import { generateTribeBadge, isLineage } from '../utils/world-utils';
 
 /**
  * Defines an interaction for human procreation.
@@ -37,7 +42,7 @@ const checker = (source: HumanEntity, target: HumanEntity): boolean => {
 
     if (isEntityFemale) {
       // Specific checks if the entity being checked is female
-      return !entity.isPregnant;
+      return !entity.isPregnant && entity.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE;
     }
     return true; // No further specific checks if the entity being checked is male
   };
@@ -72,6 +77,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     y: (source.position.y + target.position.y) / 2,
   };
 
+  const male = source.gender === 'male' ? source : target;
+  const female = source.gender === 'female' ? source : target;
+  const isFirstPartnershipForMale = (male.partnerIds || []).length === 0;
+
   // Both entities are initiators now, confirmed by the checker.
   // Set both entities to the procreating state
   source.stateMachine = [
@@ -105,6 +114,33 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     target.partnerIds.push(source.id);
   }
 
+  // --- New Tribe Formation ---
+  if (isFirstPartnershipForMale && male.leaderId && male.leaderId !== male.id) {
+    const leader = gameState.entities.entities.get(male.leaderId) as HumanEntity | undefined;
+    if (leader) {
+      const maleHasCommonAncestors = isLineage(male, leader);
+      const femaleHasCommonAncestors = isLineage(female, leader);
+
+      if (!maleHasCommonAncestors && !femaleHasCommonAncestors) {
+        // Form a new tribe by splitting
+        const newTribeBadge = generateTribeBadge();
+        male.leaderId = male.id; // The male becomes the leader of a new tribe
+        male.tribeBadge = newTribeBadge;
+        female.leaderId = male.id; // The female joins the new tribe
+        female.tribeBadge = newTribeBadge;
+      }
+    }
+  } else if (!source.leaderId && !target.leaderId) {
+    // Existing logic for leaderless procreation
+    if (male && female) {
+      const newTribeBadge = generateTribeBadge();
+      male.leaderId = male.id; // The male becomes the leader
+      male.tribeBadge = newTribeBadge;
+      female.leaderId = male.id; // The female joins the new tribe
+      female.tribeBadge = newTribeBadge;
+    }
+  }
+
   // Clear active actions - the state machine will handle the behavior
   source.activeAction = undefined;
 
@@ -117,7 +153,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
   target.activeAction = undefined;
 
   // Play procreation sound
-  playSound(SoundType.Procreate);
+  playSoundAt(context, SoundType.Procreate, procreationPosition);
 };
 
 export const humanProcreationInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {

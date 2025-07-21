@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 export type AppState = 'intro' | 'game' | 'gameOver';
 
-export interface GameOverDetails {
+interface GameOverDetails {
   generations: number;
   cause: string;
 }
