@@ -612,12 +612,7 @@ export function findSafeTribeSplitLocation(
       const spot = getRandomNearbyPosition(originalTribeCenter, r, worldWidth, worldHeight);
 
       // Check if the spot is far enough from the center
-      const distanceFromCenter = calculateWrappedDistance(
-        originalTribeCenter,
-        spot,
-        worldWidth,
-        worldHeight,
-      );
+      const distanceFromCenter = calculateWrappedDistance(originalTribeCenter, spot, worldWidth, worldHeight);
 
       if (distanceFromCenter < TRIBE_SPLIT_MOVE_AWAY_DISTANCE) {
         continue; // Not far enough, try another spot
@@ -676,7 +671,10 @@ export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { 
   const descendants = findDescendants(human, gameState);
   const familySize = descendants.length + 1; // +1 for the leader himself
 
-  const requiredSize = currentTribeMembers.length * TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE;
+  const requiredSize = Math.min(
+    currentTribeMembers.length * TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
+    TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
+  );
 
   return { canSplit: familySize >= requiredSize, progress: familySize / requiredSize };
 }
