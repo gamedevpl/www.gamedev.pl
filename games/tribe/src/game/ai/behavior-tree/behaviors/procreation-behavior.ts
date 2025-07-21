@@ -1,4 +1,5 @@
 import {
+  BT_PROCREATION_SEARCH_COOLDOWN_HOURS,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_PROXIMITY,
@@ -12,7 +13,7 @@ import { UpdateContext } from '../../../world-types';
 import { countEntitiesOfTypeInRadius, findPotentialNewPartners } from '../../../utils/world-utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Selector, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
 
 // Helper function to find a valid partner from a list of potentials
@@ -37,7 +38,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
       return false;
     },
     'Find Immediate Partner',
-    depth + 2,
   );
 
   const startProcreating = new ActionNode(
@@ -54,7 +54,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
       return NodeStatus.SUCCESS;
     },
     'Start Procreating',
-    depth + 2,
   );
 
   const locateDistantPartner = new ConditionNode(
@@ -72,7 +71,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
       return false;
     },
     'Locate Distant Partner',
-    depth + 2,
   );
 
   const moveTowardsPartner = new ActionNode(
@@ -102,7 +100,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
       return NodeStatus.RUNNING;
     },
     'Move Towards Partner',
-    depth + 2,
   );
 
   return new Sequence(
@@ -154,7 +151,12 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
           // Branch 1: Try to procreate with a partner that is already close
           new Sequence([findImmediatePartner, startProcreating], 'Procreate With Immediate Partner', depth + 2),
           // Branch 2: If no immediate partner, find a distant one and move towards them
-          new Sequence([locateDistantPartner, moveTowardsPartner], 'Seek Distant Partner', depth + 2),
+          new CooldownNode(
+            BT_PROCREATION_SEARCH_COOLDOWN_HOURS,
+            new Sequence([locateDistantPartner, moveTowardsPartner], 'Seek Distant Partner Action', depth + 3),
+            'Seek Distant Partner Cooldown',
+            depth + 2,
+          ),
         ],
         'Find Partner And Procreate',
         depth + 1,

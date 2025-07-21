@@ -108,11 +108,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.leaderMetaStrategyCooldown < 0) entity.leaderMetaStrategyCooldown = 0;
   }
 
-  if (entity.leaderCallToAttackCooldown) {
-    entity.leaderCallToAttackCooldown -= gameHoursDelta;
-    if (entity.leaderCallToAttackCooldown < 0) entity.leaderCallToAttackCooldown = 0;
-  }
-
   if (!entity.isAdult) {
     entity.hunger +=
       deltaTime *

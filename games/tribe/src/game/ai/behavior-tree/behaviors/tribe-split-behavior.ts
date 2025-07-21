@@ -2,54 +2,52 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { canSplitTribe, performTribeSplit } from '../../../utils/world-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../world-consts';
 
 /**
  * Creates a behavior that allows a potential family leader to split from their current tribe and form a new one.
  *
+ * This is a high-cost check, so it's wrapped in a CooldownNode to prevent it
+ * from being evaluated on every AI tick.
+ *
  * @param depth The depth of the node in the behavior tree.
  * @returns A behavior node.
  */
 export function createTribeSplitBehavior(depth: number): BehaviorNode {
-  return new Sequence(
+  // This sequence contains the actual logic for checking and performing the split.
+  const tribeSplitAction = new Sequence(
     [
-      // 1. Check if the cooldown for this specific check is ready.
-      new ConditionNode(
-        (_human, context, blackboard) => {
-          const lastCheckTime = blackboard.get<number>('lastTribeSplitCheckTime') || 0;
-          const currentTime = context.gameState.time;
-          if (currentTime - lastCheckTime >= TRIBE_SPLIT_CHECK_INTERVAL_HOURS) {
-            blackboard.set('lastTribeSplitCheckTime', currentTime);
-            return true;
-          }
-          return false;
-        },
-        'Is Cooldown Ready?',
-        depth + 1,
-      ),
-
-      // 2. Perform the more expensive check to see if all conditions are met.
+      // 1. Perform the expensive check to see if all conditions are met.
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const { canSplit, progress } = canSplitTribe(human, context.gameState);
-          return progress ? [canSplit, `Progress: ${progress ?? 'N/A'}`] : false;
+          // Return the detailed progress string for debugging purposes
+          return canSplit ? [true, `Progress: ${(progress ?? 0) * 100}%`] : [false, 'Cannot split'];
         },
         'Can Split Tribe?',
-        depth + 1,
+        depth + 2, // Child of Sequence, which is child of CooldownNode
       ),
 
-      // 3. If all conditions pass, perform the split.
+      // 2. If the above condition passes, perform the split.
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
           performTribeSplit(human, context.gameState);
           return NodeStatus.SUCCESS;
         },
         'Perform Tribe Split',
-        depth + 1,
+        depth + 2,
       ),
     ],
-    'Tribe Split',
+    'Tribe Split Action',
+    depth + 1, // Child of CooldownNode
+  );
+
+  // Wrap the entire action in a CooldownNode to rate-limit this behavior.
+  return new CooldownNode(
+    TRIBE_SPLIT_CHECK_INTERVAL_HOURS,
+    tribeSplitAction,
+    'Tribe Split Cooldown', // Name for the CooldownNode itself
     depth,
   );
 }

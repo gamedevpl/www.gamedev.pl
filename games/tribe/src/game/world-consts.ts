@@ -120,6 +120,12 @@ export const TRIBE_CENTER_MAX_WANDER_DISTANCE = 500; // Max distance a tribe mem
 export const FAMILY_CENTER_MAX_WANDER_DISTANCE = 250; // Max distance a family member will wander from the family's center
 export const ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER = 600; // Max distance a human will chase an enemy from their home center
 
+// Behavior Tree Cooldowns
+export const BT_PROCREATION_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a procreation partner
+export const BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS = 24; // Cooldown for attempting to establish a new territory
+export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
+export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
+
 // Tribe Split Constants
 export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
 export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.35;

@@ -167,7 +167,12 @@ export function getRandomNearbyPosition(
   };
 }
 
-export function isPositionOccupied(position: Vector2D, gameState: GameWorldState, checkRadius: number): boolean {
+export function isPositionOccupied(
+  position: Vector2D,
+  gameState: GameWorldState,
+  checkRadius: number,
+  ignoreEntityId?: EntityId, // New optional parameter
+): boolean {
   const indexedState = gameState as IndexedWorldState;
   const searchRect = {
     left: position.x - checkRadius,
@@ -183,6 +188,11 @@ export function isPositionOccupied(position: Vector2D, gameState: GameWorldState
   ];
 
   for (const entity of potentialOccupants) {
+    // Ignore the specified entity if provided
+    if (ignoreEntityId !== undefined && entity.id === ignoreEntityId) {
+      continue;
+    }
+
     const distance = calculateWrappedDistance(
       position,
       entity.position,
@@ -201,12 +211,13 @@ export function findValidPlantingSpot(
   gameState: GameWorldState,
   searchRadius: number,
   spotRadius: number,
+  ignoreEntityId?: EntityId, // New optional parameter
 ): Vector2D | null {
   const worldWidth = gameState.mapDimensions.width;
   const worldHeight = gameState.mapDimensions.height;
 
-  // First, check the center spot itself.
-  if (!isPositionOccupied(center, gameState, spotRadius)) {
+  // First, check the center spot itself, ignoring the specified entity.
+  if (!isPositionOccupied(center, gameState, spotRadius, ignoreEntityId)) {
     return center;
   }
 
@@ -226,7 +237,8 @@ export function findValidPlantingSpot(
         y: ((spot.y % worldHeight) + worldHeight) % worldHeight,
       };
 
-      if (!isPositionOccupied(wrappedSpot, gameState, spotRadius)) {
+      // Pass the ignoreEntityId to the occupancy check
+      if (!isPositionOccupied(wrappedSpot, gameState, spotRadius, ignoreEntityId)) {
         return wrappedSpot;
       }
     }
@@ -251,12 +263,13 @@ export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameW
     return null;
   }
 
-  // Find a valid spot near the owned bush.
+  // Find a valid spot near the owned bush, ignoring the owned bush itself.
   const spot = findValidPlantingSpot(
     closestOwnedBush.position,
     gameState,
     AI_PLANTING_SEARCH_RADIUS,
     BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+    closestOwnedBush.id, // Pass the ID of the owned bush to ignore
   );
   return spot;
 }

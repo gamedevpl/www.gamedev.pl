@@ -1,15 +1,15 @@
 import {
   LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS,
-  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   PLAYER_CALL_TO_ATTACK_RADIUS,
   AI_FLEE_DISTANCE,
+  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD,
 } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findNearbyEnemiesOfTribe, calculateTribeStrength, findTribeMembers } from '../../../utils/world-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Sequence, Selector } from '../nodes';
+import { ActionNode, ConditionNode, Sequence, Selector, CooldownNode } from '../nodes';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
@@ -28,6 +28,7 @@ const ENEMIES_NEARBY_KEY = 'enemiesNearby';
 /**
  * Creates a behavior that allows a tribe leader to make a strategic decision:
  * either issue a "call to attack" if the tribe is strong enough, or retreat if not.
+ * The entire decision-making process is placed on a cooldown to prevent it from running too frequently.
  */
 export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode {
   // Basic conditions to check before any combat decision is made.
@@ -35,11 +36,6 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
   const isNotAlreadyCalling = new ConditionNode(
     (human) => !human.isCallingToAttack,
     'Is Not Already Calling?',
-    depth + 1,
-  );
-  const isCooldownReady = new ConditionNode(
-    (human) => (human.leaderCallToAttackCooldown ?? 0) <= 0,
-    'Is Cooldown Ready?',
     depth + 1,
   );
 
@@ -82,13 +78,13 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
               return tribeStrength > enemyStrength * LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD;
             },
             'Is Strong Enough?',
-            depth + 2,
+            depth + 3,
           ),
           new ActionNode(
             (human: HumanEntity, context: UpdateContext) => {
               human.isCallingToAttack = true;
               human.callToAttackEndTime = context.gameState.time + PLAYER_CALL_TO_ATTACK_DURATION_HOURS;
-              human.leaderCallToAttackCooldown = LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS;
+              // Cooldown is now handled by the CooldownNode wrapper
 
               addVisualEffect(
                 context.gameState,
@@ -103,11 +99,11 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
               return NodeStatus.SUCCESS;
             },
             'Issue Call to Attack',
-            depth + 2,
+            depth + 3,
           ),
         ],
         'Attack',
-        depth + 1,
+        depth + 2,
       ),
       // Branch 2: Retreat, if not strong enough. This is the fallback.
       new ActionNode(
@@ -135,7 +131,8 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
               ((targetPosition.x % context.gameState.mapDimensions.width) + context.gameState.mapDimensions.width) %
               context.gameState.mapDimensions.width,
             y:
-              ((targetPosition.y % context.gameState.mapDimensions.height) + context.gameState.mapDimensions.height) %
+              ((targetPosition.y % context.gameState.mapDimensions.height) +
+                context.gameState.mapDimensions.height) %
               context.gameState.mapDimensions.height,
           };
           human.direction = fleeDirection;
@@ -143,16 +140,27 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
           return NodeStatus.SUCCESS;
         },
         'Retreat',
-        depth + 1,
+        depth + 2,
       ),
     ],
     'Attack or Retreat',
-    depth + 1,
+    depth + 2,
   );
 
-  // The final behavior is a sequence of all the prerequisite checks followed by the decision logic.
+  // The final behavior is a sequence of all the prerequisite checks followed by the decision logic,
+  // which is wrapped in a CooldownNode.
   return new Sequence(
-    [isLeader, isNotAlreadyCalling, isCooldownReady, findEnemies, attackOrRetreat],
+    [
+      isLeader,
+      isNotAlreadyCalling,
+      findEnemies,
+      new CooldownNode(
+        LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS,
+        attackOrRetreat,
+        'Leader Combat Cooldown',
+        depth + 1,
+      ),
+    ],
     'Leader Combat Strategy',
     depth,
   );

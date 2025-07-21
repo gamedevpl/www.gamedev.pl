@@ -1,14 +1,15 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Sequence, Selector } from '../nodes';
+import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import {
   ADULT_MALE_FAMILY_DISTANCE_RADIUS,
+  BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
   ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
 import { findChildren, findParents, getRandomNearbyPosition } from '../../../utils/world-utils';
-import { getDirectionVectorOnTorus, vectorNormalize, calculateWrappedDistance } from '../../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';
 
@@ -55,9 +56,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
     depth + 1,
   );
 
-  // --- Decomposed Nodes ---
-
-  // Node to check if a move is already in progress
+  // --- Decomposed Nodes ---\n\n  // Node to check if a move is already in progress
   const isMovingToTerritory = new ConditionNode(
     (_human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
       return blackboard.get('territoryMoveTarget') !== undefined;
@@ -129,7 +128,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       return blackboard.get('territoryMoveTarget') === undefined;
     },
     'Should Start New Move?',
-    depth + 3,
+    depth + 4,
   );
 
   // Node to start a new move
@@ -159,19 +158,27 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       return [NodeStatus.RUNNING, 'Started moving to new territory'];
     },
     'Start New Territory Move',
-    depth + 3,
+    depth + 4,
   );
 
   // Sequence to wrap the start move logic
   const startNewTerritoryMoveSequence = new Sequence(
     [shouldStartNewMove, startNewTerritoryMove],
-    'Start New Territory Move Sequence',
-    depth + 2,
+    'Start New Territory Move Action',
+    depth + 3,
   );
 
   // Selector to either handle the in-progress move or start a new one
   const establishOrContinueMove = new Selector(
-    [handleInProgressMove, startNewTerritoryMoveSequence],
+    [
+      handleInProgressMove,
+      new CooldownNode(
+        BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
+        startNewTerritoryMoveSequence,
+        'Establish Territory Cooldown',
+        depth + 2,
+      ),
+    ],
     'Establish or Continue Move',
     depth + 1,
   );
