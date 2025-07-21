@@ -13,6 +13,7 @@ import {
   getAvailablePlayerActions,
   findValidPlantingSpot,
   performTribeSplit,
+  findAllHumans,
 } from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
@@ -259,6 +260,9 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         isDebugOnRef.current = !isDebugOnRef.current;
         if (!isDebugOnRef.current) {
           gameStateRef.current.debugCharacterId = undefined;
+        } else {
+          gameStateRef.current.debugCharacterId =
+            findPlayerEntity(gameStateRef.current)?.id ?? findAllHumans(gameStateRef.current)?.[0]?.id;
         }
         return;
       }
