@@ -391,7 +391,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           gameStateRef.current,
           'human',
           HUMAN_ATTACK_RANGE,
-          (h) => (h as HumanEntity).id !== playerEntity.id,
+          (h) => (h as HumanEntity).id !== playerEntity.id && (h as HumanEntity).leaderId !== playerEntity.leaderId,
         );
 
         if (humanTarget) {

@@ -117,7 +117,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     gameState,
     'human',
     HUMAN_ATTACK_RANGE,
-    (h) => (h as HumanEntity).id !== player.id,
+    (h) => (h as HumanEntity).id !== player.id && (h as HumanEntity).leaderId !== player.leaderId,
   );
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
