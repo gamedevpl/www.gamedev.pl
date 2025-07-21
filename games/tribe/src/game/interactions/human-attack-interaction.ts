@@ -5,6 +5,8 @@ import {
   HUMAN_ATTACK_COOLDOWN_HOURS,
   HUMAN_ATTACK_BUILDUP_HOURS,
   HUMAN_ATTACK_PUSHBACK_FORCE,
+  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
+  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
   EFFECT_DURATION_SHORT_HOURS,
   HUMAN_ATTACK_DAMAGE,
   HUMAN_PARRY_ANGLE_DEGREES,
@@ -84,6 +86,12 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
 
       // Attack Hits
       target.hitpoints -= damage;
+
+      // Apply movement slowdown
+      target.movementSlowdown = {
+        modifier: HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
+        endTime: context.gameState.time + HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
+      };
 
       addVisualEffect(context.gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
 

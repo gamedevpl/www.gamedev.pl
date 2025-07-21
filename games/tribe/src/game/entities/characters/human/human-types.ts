@@ -108,6 +108,9 @@ export interface HumanEntity extends Entity {
   lastEatingEffectTime?: number;
   lastChildFedEffectTime?: number;
 
+  /** A temporary slowdown effect, usually after being hit. */
+  movementSlowdown?: { modifier: number; endTime: number };
+
   /** The type of AI used by this human. */
   aiType?: AIType;
 

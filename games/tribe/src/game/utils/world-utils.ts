@@ -13,6 +13,7 @@ import {
   PLAYER_CALL_TO_ATTACK_RADIUS,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
+  TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -593,6 +594,42 @@ export function generateTribeBadge(): string {
   const badge = TRIBE_BADGE_EMOJIS[emojiIndex];
   emojiIndex = (emojiIndex + 1) % TRIBE_BADGE_EMOJIS.length;
   return badge;
+}
+
+export function findSafeTribeSplitLocation(
+  originalTribeCenter: Vector2D,
+  human: HumanEntity,
+  gameState: GameWorldState,
+): Vector2D | null {
+  const worldWidth = gameState.mapDimensions.width;
+  const worldHeight = gameState.mapDimensions.height;
+  const checkRadius = human.radius * 2; // Clearance needed for the spot
+
+  // Start searching from the minimum distance and expand outwards
+  for (let r = TRIBE_SPLIT_MOVE_AWAY_DISTANCE; r < worldWidth / 2; r += 50) {
+    // Try a few random positions at this radius
+    for (let i = 0; i < 10; i++) {
+      const spot = getRandomNearbyPosition(originalTribeCenter, r, worldWidth, worldHeight);
+
+      // Check if the spot is far enough from the center
+      const distanceFromCenter = calculateWrappedDistance(
+        originalTribeCenter,
+        spot,
+        worldWidth,
+        worldHeight,
+      );
+
+      if (distanceFromCenter < TRIBE_SPLIT_MOVE_AWAY_DISTANCE) {
+        continue; // Not far enough, try another spot
+      }
+
+      if (!isPositionOccupied(spot, gameState, checkRadius, human.id)) {
+        return spot; // Found a safe and unoccupied spot
+      }
+    }
+  }
+
+  return null; // No suitable location found
 }
 
 export function findDescendants(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {

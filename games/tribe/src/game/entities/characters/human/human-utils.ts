@@ -8,7 +8,7 @@ import {
 import { HumanEntity } from './human-types';
 
 export function getEffectiveSpeed(human: HumanEntity): number {
-  // Calculate effective speed considering hunger and old age
+  // Calculate effective speed considering hunger, old age, and attack slowdowns
   let effectiveSpeed = HUMAN_BASE_SPEED;
 
   // Apply hunger slowdown
@@ -19,6 +19,11 @@ export function getEffectiveSpeed(human: HumanEntity): number {
   // Apply old age slowdown
   if (human.age >= HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD) {
     effectiveSpeed *= HUMAN_OLD_AGE_SPEED_MODIFIER;
+  }
+
+  // Apply movement slowdown from being hit
+  if (human.movementSlowdown) {
+    effectiveSpeed *= human.movementSlowdown.modifier;
   }
 
   return effectiveSpeed;

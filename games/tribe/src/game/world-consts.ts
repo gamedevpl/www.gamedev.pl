@@ -65,16 +65,18 @@ export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a
 
 // Human Attack Constants
 export const HUMAN_MAX_HITPOINTS = 100;
-export const HUMAN_ATTACK_DAMAGE = 20;
+export const HUMAN_ATTACK_DAMAGE = 35;
 export const HUMAN_ATTACK_RANGE: number = HUMAN_INTERACTION_RANGE; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
-export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 5; // Cooldown in game hours for a human after attacking
+export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
 export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 5; // Force applied to target on successful attack
+export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER = 0.5; // 50% speed reduction
+export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS = 1.5; // in game hours
 export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 0.1;
 export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
 export const HUMAN_MALE_DAMAGE_MODIFIER = 1.5;
 export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
-export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.0;
+export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
 export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
@@ -130,6 +132,7 @@ export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching
 export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
 export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.35;
 export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
+export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 500;
 
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
@@ -148,7 +151,7 @@ export const LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS = 10;
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
-export const AI_FLEE_HEALTH_THRESHOLD = 0.3; // representing 30% of max health
+export const AI_FLEE_HEALTH_THRESHOLD = 0.15; // representing 15% of max health
 export const AI_FLEE_DISTANCE = 200;
 
 // Rendering Constants

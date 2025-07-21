@@ -40,6 +40,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     entity.callToAttackEndTime = undefined;
   }
 
+  // --- Movement Slowdown Cooldown ---
+  if (entity.movementSlowdown && gameState.time > entity.movementSlowdown.endTime) {
+    entity.movementSlowdown = undefined;
+  }
+
   // --- Hitpoint Regeneration -- -
   if (entity.hitpoints < entity.maxHitpoints) {
     const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;
