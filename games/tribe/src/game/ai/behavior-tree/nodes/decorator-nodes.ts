@@ -1,5 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { UpdateContext } from '../../../world-types';
+import { AutopilotControls, UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { unpackStatus } from './utils';
@@ -187,6 +187,60 @@ export class CooldownNode implements BehaviorNode {
     this.lastStatus = childStatus;
     if (this.name) {
       blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+    }
+
+    return this.lastStatus;
+  }
+}
+
+/**
+ * A decorator node that only executes its child if the corresponding
+ * autopilot behavior is enabled for the player character. For non-player
+ * characters, it always executes the child.
+ */
+export class AutopilotControlled implements BehaviorNode {
+  public name?: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+
+  constructor(
+    public child: BehaviorNode,
+    private readonly behaviorKey: keyof AutopilotControls['behaviors'],
+    name?: string,
+    depth: number = 0,
+  ) {
+    this.name = name;
+    this.depth = depth;
+    // Recursively update depth of all children for correct debug rendering
+    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+      node.depth = newDepth;
+      if (node.children) {
+        node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
+      } else if (node.child) {
+        updateDepth(node.child, newDepth + 1);
+      }
+    };
+    updateDepth(this.child, (this.depth ?? 0) + 1);
+  }
+
+  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+    const isPlayerAndBehaviorDisabled =
+      human.isPlayer && context.gameState.autopilotControls.isActive && !context.gameState.autopilotControls.behaviors[this.behaviorKey];
+
+    if (isPlayerAndBehaviorDisabled) {
+      const debugInfo = `Player autopilot for '${this.behaviorKey}' is disabled.`;
+      this.lastStatus = NodeStatus.FAILURE;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+      }
+      return this.lastStatus;
+    }
+
+    // For NPCs or for players with the behavior enabled, execute the child
+    const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+    this.lastStatus = childStatus;
+    if (this.name) {
+      blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
     }
 
     return this.lastStatus;

@@ -1,5 +1,5 @@
 import { BehaviorNode } from './behavior-tree-types';
-import { Selector } from './nodes';
+import { AutopilotControlled, Selector } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -31,31 +31,31 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createFleeingBehavior(1),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
-      createLeaderCombatStrategyBehavior(1),
+      new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(1),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
-      createAttackingBehavior(1),
+      new AutopilotControlled(createAttackingBehavior(2), 'attack', 'Gated Attacking', 1),
 
       // --- PERSONAL NEEDS (EAT) ---
       createEatingBehavior(1),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
-      createGatheringBehavior(1),
+      new AutopilotControlled(createGatheringBehavior(2), 'gathering', 'Gated Gathering', 1),
 
       // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
-      createFeedingChildBehavior(1),
+      new AutopilotControlled(createFeedingChildBehavior(2), 'feedChildren', 'Gated Feed Child', 1),
 
       // --- CHILD NEEDS (SEEK FOOD) ---
       createSeekingFoodFromParentBehavior(1),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
-      createPlantingBehavior(1),
+      new AutopilotControlled(createPlantingBehavior(2), 'planting', 'Gated Planting', 1),
 
       // --- SOCIAL & REPRODUCTION (PROCREATE) ---
-      createProcreationBehavior(1),
+      new AutopilotControlled(createProcreationBehavior(2), 'procreation', 'Gated Procreation', 1),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
       createTribeSplitBehavior(1),

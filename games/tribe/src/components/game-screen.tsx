@@ -214,6 +214,22 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
               gameStateRef.current.autopilotControls.behaviors.planting =
                 !gameStateRef.current.autopilotControls.behaviors.planting;
               break;
+            case UIButtonActionType.ToggleGatheringBehavior:
+              gameStateRef.current.autopilotControls.behaviors.gathering =
+                !gameStateRef.current.autopilotControls.behaviors.gathering;
+              break;
+            case UIButtonActionType.ToggleAttackBehavior:
+              gameStateRef.current.autopilotControls.behaviors.attack =
+                !gameStateRef.current.autopilotControls.behaviors.attack;
+              break;
+            case UIButtonActionType.ToggleCallToAttackBehavior:
+              gameStateRef.current.autopilotControls.behaviors.callToAttack =
+                !gameStateRef.current.autopilotControls.behaviors.callToAttack;
+              break;
+            case UIButtonActionType.ToggleFeedChildrenBehavior:
+              gameStateRef.current.autopilotControls.behaviors.feedChildren =
+                !gameStateRef.current.autopilotControls.behaviors.feedChildren;
+              break;
           }
         }
       });
@@ -344,6 +360,22 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         } else if (key === 'b') {
           gameStateRef.current.autopilotControls.behaviors.planting =
             !gameStateRef.current.autopilotControls.behaviors.planting;
+          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+        } else if (key === 'g') {
+          gameStateRef.current.autopilotControls.behaviors.gathering =
+            !gameStateRef.current.autopilotControls.behaviors.gathering;
+          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+        } else if (key === 'q') {
+          gameStateRef.current.autopilotControls.behaviors.attack =
+            !gameStateRef.current.autopilotControls.behaviors.attack;
+          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+        } else if (key === 'v') {
+          gameStateRef.current.autopilotControls.behaviors.callToAttack =
+            !gameStateRef.current.autopilotControls.behaviors.callToAttack;
+          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+        } else if (key === 'h') {
+          gameStateRef.current.autopilotControls.behaviors.feedChildren =
+            !gameStateRef.current.autopilotControls.behaviors.feedChildren;
           playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
         }
         return;

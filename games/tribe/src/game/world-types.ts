@@ -53,5 +53,9 @@ export type AutopilotControls = {
   behaviors: {
     procreation: boolean;
     planting: boolean;
+    gathering: boolean;
+    attack: boolean;
+    callToAttack: boolean;
+    feedChildren: boolean;
   };
 };

@@ -92,7 +92,11 @@ export function initWorld(): GameWorldState {
       isActive: false,
       behaviors: {
         procreation: true,
-        planting: true,
+        planting: false,
+        gathering: true,
+        attack: false,
+        callToAttack: false,
+        feedChildren: true,
       },
     },
     hasPlayerMovedEver: false,
@@ -156,6 +160,10 @@ export function initIntroWorld(): GameWorldState {
       behaviors: {
         procreation: true,
         planting: true,
+        gathering: true,
+        attack: false,
+        callToAttack: true,
+        feedChildren: true,
       },
     },
     hasPlayerMovedEver: false,

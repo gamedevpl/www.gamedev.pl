@@ -105,58 +105,103 @@ function renderTooltip(ctx: CanvasRenderingContext2D, rect: Rect2D, text: string
 }
 
 function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, canvasHeight: number): void {
-  // Remove old behavior buttons before adding new ones
+  // Remove all old behavior buttons before adding new ones
   gameState.uiButtons = gameState.uiButtons.filter(
     (btn) =>
-      btn.action !== UIButtonActionType.ToggleProcreationBehavior &&
-      btn.action !== UIButtonActionType.TogglePlantingBehavior,
+      ![
+        UIButtonActionType.ToggleProcreationBehavior,
+        UIButtonActionType.TogglePlantingBehavior,
+        UIButtonActionType.ToggleGatheringBehavior,
+        UIButtonActionType.ToggleAttackBehavior,
+        UIButtonActionType.ToggleCallToAttackBehavior,
+        UIButtonActionType.ToggleFeedChildrenBehavior,
+      ].includes(btn.action),
   );
 
   if (gameState.autopilotControls.isActive) {
-    const totalWidth = UI_AUTOPILOT_BUTTON_SIZE * 2 + UI_AUTOPILOT_BUTTON_SPACING;
+    const behaviors: {
+      key: keyof typeof gameState.autopilotControls.behaviors;
+      action: UIButtonActionType;
+      emoji: PlayerActionType;
+      shortcut: string;
+      name: string;
+    }[] = [
+      {
+        key: 'gathering',
+        action: UIButtonActionType.ToggleGatheringBehavior,
+        emoji: PlayerActionType.GatherFood,
+        shortcut: 'G',
+        name: 'Gathering',
+      },
+      {
+        key: 'attack',
+        action: UIButtonActionType.ToggleAttackBehavior,
+        emoji: PlayerActionType.Attack,
+        shortcut: 'Q',
+        name: 'Attack',
+      },
+      {
+        key: 'callToAttack',
+        action: UIButtonActionType.ToggleCallToAttackBehavior,
+        emoji: PlayerActionType.CallToAttack,
+        shortcut: 'V',
+        name: 'Call to Attack',
+      },
+      {
+        key: 'procreation',
+        action: UIButtonActionType.ToggleProcreationBehavior,
+        emoji: PlayerActionType.Procreate,
+        shortcut: 'R',
+        name: 'Procreation',
+      },
+      {
+        key: 'planting',
+        action: UIButtonActionType.TogglePlantingBehavior,
+        emoji: PlayerActionType.PlantBush,
+        shortcut: 'B',
+        name: 'Planting',
+      },
+      {
+        key: 'feedChildren',
+        action: UIButtonActionType.ToggleFeedChildrenBehavior,
+        emoji: PlayerActionType.FeedChildren,
+        shortcut: 'H',
+        name: 'Feed Children',
+      },
+    ];
+
+    const cols = 3;
+    const rows = 2;
+    const totalWidth = cols * UI_AUTOPILOT_BUTTON_SIZE + (cols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
+    const totalHeight = rows * UI_AUTOPILOT_BUTTON_SIZE + (rows - 1) * UI_AUTOPILOT_BUTTON_SPACING;
     const startX = (canvasWidth - totalWidth) / 2;
-    const buttonY = canvasHeight - UI_AUTOPILOT_BUTTON_SIZE - 20;
+    const startY = canvasHeight - totalHeight - 20;
 
-    // 1. Procreation Button
-    const procreationBehavior = gameState.autopilotControls.behaviors.procreation;
-    const procreationButton: ClickableUIButton = {
-      id: 'toggleProcreationButton',
-      action: UIButtonActionType.ToggleProcreationBehavior,
-      rect: {
-        x: startX,
-        y: buttonY,
-        width: UI_AUTOPILOT_BUTTON_SIZE,
-        height: UI_AUTOPILOT_BUTTON_SIZE,
-      },
-      icon: PLAYER_ACTION_EMOJIS[PlayerActionType.Procreate],
-      text: 'R',
-      backgroundColor: procreationBehavior ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
-      textColor: UI_BUTTON_TEXT_COLOR,
-      currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
-      tooltip: `Procreation: ${procreationBehavior ? 'ON' : 'OFF'}`,
-    };
-    gameState.uiButtons.push(procreationButton);
+    behaviors.forEach((behavior, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const buttonX = startX + col * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
+      const buttonY = startY + row * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
 
-    // 2. Planting Button
-    const plantingButtonX = startX + UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING;
-    const plantingBehavior = gameState.autopilotControls.behaviors.planting;
-    const plantingButton: ClickableUIButton = {
-      id: 'togglePlantingButton',
-      action: UIButtonActionType.TogglePlantingBehavior,
-      rect: {
-        x: plantingButtonX,
-        y: buttonY,
-        width: UI_AUTOPILOT_BUTTON_SIZE,
-        height: UI_AUTOPILOT_BUTTON_SIZE,
-      },
-      icon: PLAYER_ACTION_EMOJIS[PlayerActionType.PlantBush],
-      text: 'B',
-      backgroundColor: plantingBehavior ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
-      textColor: UI_BUTTON_TEXT_COLOR,
-      currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
-      tooltip: `Planting: ${plantingBehavior ? 'ON' : 'OFF'}`,
-    };
-    gameState.uiButtons.push(plantingButton);
+      const isBehaviorActive = gameState.autopilotControls.behaviors[behavior.key];
+      const button: ClickableUIButton = {
+        id: `toggle${behavior.name}Button`,
+        action: behavior.action,
+        rect: {
+          x: buttonX,
+          y: buttonY,
+          width: UI_AUTOPILOT_BUTTON_SIZE,
+          height: UI_AUTOPILOT_BUTTON_SIZE,
+        },
+        icon: PLAYER_ACTION_EMOJIS[behavior.emoji],
+        text: behavior.shortcut,
+        backgroundColor: isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
+        textColor: UI_BUTTON_TEXT_COLOR,
+        currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
+        tooltip: `${behavior.name}: ${isBehaviorActive ? 'ON' : 'OFF'}`,
+      };
+      gameState.uiButtons.push(button);
+    });
   }
 }
 
@@ -219,10 +264,15 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
 
   // Draw Autopilot Behavior Buttons
   gameState.uiButtons
-    .filter(
-      (b) =>
-        b.action === UIButtonActionType.ToggleProcreationBehavior ||
-        b.action === UIButtonActionType.TogglePlantingBehavior,
+    .filter((b) =>
+      [
+        UIButtonActionType.ToggleProcreationBehavior,
+        UIButtonActionType.TogglePlantingBehavior,
+        UIButtonActionType.ToggleGatheringBehavior,
+        UIButtonActionType.ToggleAttackBehavior,
+        UIButtonActionType.ToggleCallToAttackBehavior,
+        UIButtonActionType.ToggleFeedChildrenBehavior,
+      ].includes(b.action),
     )
     .forEach((button) => {
       // The rect is already set in renderAutopilotPanel

@@ -98,9 +98,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
 
   return new Sequence(
     [
-      new ConditionNode((human, context) => {
-        return !human.isPlayer || context.gameState.autopilotControls.behaviors.procreation;
-      }),
       // Basic conditions to even consider procreating
       new ConditionNode(
         (human: HumanEntity) => {

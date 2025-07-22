@@ -9,6 +9,7 @@ export enum PlayerActionType {
   PlantBush = 'PlantBush',
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
+  FeedChildren = 'FeedChildren',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -19,6 +20,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.PlantBush]: '🌱',
   [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
+  [PlayerActionType.FeedChildren]: '👨‍👧',
 };
 
 export interface PlayerActionHint {
@@ -67,6 +69,10 @@ export enum UIButtonActionType {
   TogglePause = 'TogglePause',
   ToggleProcreationBehavior = 'ToggleProcreationBehavior',
   TogglePlantingBehavior = 'TogglePlantingBehavior',
+  ToggleGatheringBehavior = 'ToggleGatheringBehavior',
+  ToggleAttackBehavior = 'ToggleAttackBehavior',
+  ToggleCallToAttackBehavior = 'ToggleCallToAttackBehavior',
+  ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
 }
 
 export interface ClickableUIButton {

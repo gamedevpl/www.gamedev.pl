@@ -90,10 +90,6 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
 
   return new Sequence(
     [
-      new ConditionNode((human, context) => {
-        return !human.isPlayer || context.gameState.autopilotControls.behaviors.planting;
-      }),
-
       // 1. Basic conditions: Check if the AI is in a state to plant.
       new ConditionNode(
         (human) => {
