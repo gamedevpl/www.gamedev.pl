@@ -75,6 +75,7 @@ export interface ClickableUIButton {
   currentWidth: number;
   rect: { x: number; y: number; width: number; height: number };
   text: string;
+  icon?: string;
   backgroundColor: string;
   textColor: string;
   tooltip?: string;

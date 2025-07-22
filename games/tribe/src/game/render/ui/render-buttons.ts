@@ -43,11 +43,30 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
   ctx.closePath();
   ctx.fill();
 
-  // Draw button text
+  // --- Generic rendering logic for icon and text ---
   ctx.fillStyle = button.textColor;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(button.text, x + width / 2, y + height / 2);
+
+  if (button.icon) {
+    // Render large icon in the center
+    ctx.font = `${height * 0.55}px "Press Start 2P", Arial`; // Icon size relative to button height
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(button.icon, x + width / 2, y + height / 2);
+
+    // Render small text in the bottom right corner
+    if (button.text) {
+      ctx.font = `${height * 0.18}px "Press Start 2P", Arial`; // Smaller font for the key hint
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      // Adjust padding for corner text
+      ctx.fillText(button.text, x + width - 4, y + height - 2);
+    }
+  } else {
+    // Original behavior for text-only buttons
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(button.text, x + width / 2, y + height / 2);
+  }
 
   ctx.restore();
 }
@@ -100,7 +119,6 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
 
     // 1. Procreation Button
     const procreationBehavior = gameState.autopilotControls.behaviors.procreation;
-    const procreationText = `${PLAYER_ACTION_EMOJIS[PlayerActionType.Procreate]} (R)`;
     const procreationButton: ClickableUIButton = {
       id: 'toggleProcreationButton',
       action: UIButtonActionType.ToggleProcreationBehavior,
@@ -110,7 +128,8 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
         width: UI_AUTOPILOT_BUTTON_SIZE,
         height: UI_AUTOPILOT_BUTTON_SIZE,
       },
-      text: procreationText,
+      icon: PLAYER_ACTION_EMOJIS[PlayerActionType.Procreate],
+      text: 'R',
       backgroundColor: procreationBehavior ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
       textColor: UI_BUTTON_TEXT_COLOR,
       currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
@@ -121,7 +140,6 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
     // 2. Planting Button
     const plantingButtonX = startX + UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING;
     const plantingBehavior = gameState.autopilotControls.behaviors.planting;
-    const plantingText = `${PLAYER_ACTION_EMOJIS[PlayerActionType.PlantBush]} (B)`;
     const plantingButton: ClickableUIButton = {
       id: 'togglePlantingButton',
       action: UIButtonActionType.TogglePlantingBehavior,
@@ -131,7 +149,8 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
         width: UI_AUTOPILOT_BUTTON_SIZE,
         height: UI_AUTOPILOT_BUTTON_SIZE,
       },
-      text: plantingText,
+      icon: PLAYER_ACTION_EMOJIS[PlayerActionType.PlantBush],
+      text: 'B',
       backgroundColor: plantingBehavior ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
       textColor: UI_BUTTON_TEXT_COLOR,
       currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
