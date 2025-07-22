@@ -7,6 +7,7 @@ import {
   INITIAL_MASTER_VOLUME,
   UI_BUTTON_WIDTH,
   INTRO_SCREEN_INITIAL_HUMANS,
+  UI_BUTTON_TEXT_COLOR,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -49,7 +50,7 @@ export function initWorld(): GameWorldState {
       rect: { x: 0, y: 0, width: 0, height: 0 },
       text: '',
       backgroundColor: '',
-      textColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
     },
     {
       id: 'muteButton',
@@ -58,7 +59,7 @@ export function initWorld(): GameWorldState {
       rect: { x: 0, y: 0, width: 0, height: 0 },
       text: '',
       backgroundColor: '',
-      textColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
     },
     {
       id: 'pauseButton',
@@ -67,7 +68,7 @@ export function initWorld(): GameWorldState {
       rect: { x: 0, y: 0, width: 0, height: 0 },
       text: '',
       backgroundColor: '',
-      textColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
     },
   ];
 
