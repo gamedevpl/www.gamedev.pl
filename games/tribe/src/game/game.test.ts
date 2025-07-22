@@ -71,7 +71,6 @@ describe('Game Mechanics', () => {
         }
         const leaderCount = [...new Set(humans.map((h) => h.leaderId).filter((id) => id !== undefined))].length;
 
-        let enemyPairs = 0;
         const maxAncestors = Math.max(...humans.map((h) => (h.ancestorIds ? h.ancestorIds.length : 0)), 0);
 
         console.log(
@@ -85,7 +84,7 @@ describe('Game Mechanics', () => {
             humanCount - maleCount
           }, Avg Hunger: ${averageHunger.toFixed(
             2,
-          )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Enemies: ${enemyPairs}, Max Ancestors: ${maxAncestors}`,
+          )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Max Ancestors: ${maxAncestors}`,
         );
 
         if (humanCount <= 0) {

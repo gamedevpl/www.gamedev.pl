@@ -7,6 +7,7 @@ import {
   PROCREATION_FOOD_SEARCH_RADIUS,
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
   PROCREATION_PARTNER_SEARCH_RADIUS_LONG,
+  AI_PROCREATION_AVOID_PARTNER_PROXIMITY,
 } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
@@ -136,6 +137,38 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
           return nearbyBushes >= PROCREATION_MIN_NEARBY_BERRY_BUSHES;
         },
         'Is Environment Viable (food)',
+        depth + 1,
+      ),
+
+      // New condition: Avoid procreating if the potential partner's primary partner is nearby
+      new ConditionNode(
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const potentialPartner = blackboard.get<HumanEntity>('procreationPartner');
+          if (
+            potentialPartner &&
+            potentialPartner.partnerIds?.length &&
+            !potentialPartner.partnerIds.includes(human.id)
+          ) {
+            if (
+              potentialPartner.partnerIds
+                .map((pid) => context.gameState.entities.entities.get(pid))
+                .filter((p) => !!p)
+                .some(
+                  (p) =>
+                    calculateWrappedDistance(
+                      human.position,
+                      p.position,
+                      context.gameState.mapDimensions.width,
+                      context.gameState.mapDimensions.height,
+                    ) < AI_PROCREATION_AVOID_PARTNER_PROXIMITY,
+                )
+            ) {
+              return [false, "Partner's primary partner is too close"];
+            }
+          }
+          return true;
+        },
+        "Is Partner's Primary Partner Nearby",
         depth + 1,
       ),
 

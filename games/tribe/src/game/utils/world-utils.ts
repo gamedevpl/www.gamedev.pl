@@ -14,6 +14,8 @@ import {
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
+  AI_DESPERATE_ATTACK_SEARCH_RADIUS,
+  AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -147,6 +149,140 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   return actions;
+}
+
+/**
+ * Checks if a human's primary partner is procreating with another human nearby.
+ * @returns The stranger the partner is procreating with, otherwise undefined.
+ */
+export function findPartnerProcreatingWithStranger(
+  human: HumanEntity,
+  gameState: IndexedWorldState,
+  radius: number,
+): HumanEntity | undefined {
+  const potentialTargets = gameState.search.human.byRadius(human.position, radius).filter((target) => {
+    return (
+      target.activeAction === 'procreating' &&
+      target.gender === human.gender &&
+      typeof target.target === 'number' &&
+      human.partnerIds?.includes(target.target)
+    );
+  });
+
+  return potentialTargets[0];
+}
+
+/**
+ * Finds a human from another tribe gathering from a bush claimed by the given human's tribe.
+ * @returns The intruder entity, otherwise undefined.
+ */
+export function findIntruderOnClaimedBush(
+  human: HumanEntity,
+  gameState: GameWorldState,
+  radius: number,
+): HumanEntity | undefined {
+  if (!human.leaderId) {
+    return undefined; // Not in a tribe, cannot have claimed bushes
+  }
+
+  const indexedState = gameState as IndexedWorldState;
+  const nearbyBushes = indexedState.search.berryBush
+    .byRadius(human.position, radius)
+    .filter((bush) => bush.ownerId === human.id);
+
+  for (const bush of nearbyBushes) {
+    // Check if the bush is owned by the human's tribe
+    if (bush.claimedUntil && gameState.time < bush.claimedUntil) {
+      // This is a tribe-claimed bush. Now check for intruders.
+      const potentialIntruders = indexedState.search.human.byRadius(bush.position, HUMAN_INTERACTION_RANGE);
+
+      for (const potentialIntruder of potentialIntruders) {
+        if (
+          !isLineage(potentialIntruder, human) && // Not from the same tribe
+          potentialIntruder.activeAction === 'gathering' &&
+          potentialIntruder.target === bush.id
+        ) {
+          return potentialIntruder; // Found an intruder!
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Finds a close family member (parent, partner, child) who is under attack by an outsider.
+ * @returns An object containing the family member and the aggressor, otherwise undefined.
+ */
+export function findFamilyMemberUnderAttack(
+  human: HumanEntity,
+  gameState: GameWorldState,
+  radius: number,
+): { familyMember: HumanEntity; aggressor: HumanEntity } | undefined {
+  const family = getFamilyMembers(human, gameState);
+  const indexedState = gameState as IndexedWorldState;
+
+  for (const familyMember of family) {
+    const distanceToFamilyMember = calculateWrappedDistance(
+      human.position,
+      familyMember.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distanceToFamilyMember > radius) {
+      continue;
+    }
+
+    // Find anyone attacking this family member
+    const potentialAggressors = indexedState.search.human.byProperty('attackTargetId', familyMember.id);
+    for (const aggressor of potentialAggressors) {
+      // An aggressor is from a different tribe (or has no tribe if defender has one)
+      if (aggressor.leaderId !== human.leaderId) {
+        return { familyMember, aggressor };
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Finds the closest, weakest, non-family human to attack out of desperation.
+ * @returns The target entity, otherwise undefined.
+ */
+export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWorldState): HumanEntity | undefined {
+  const indexedState = gameState as IndexedWorldState;
+  const nearbyHumans = indexedState.search.human.byRadius(human.position, AI_DESPERATE_ATTACK_SEARCH_RADIUS);
+
+  let bestTarget: HumanEntity | undefined = undefined;
+  let minDistance = Infinity;
+
+  for (const target of nearbyHumans) {
+    if (
+      target.id === human.id ||
+      target.hitpoints <= 0 ||
+      target.hitpoints / target.maxHitpoints > AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT ||
+      areFamily(human, target, gameState)
+    ) {
+      continue;
+    }
+
+    const distance = calculateWrappedDistance(
+      human.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      bestTarget = target;
+    }
+  }
+
+  return bestTarget;
 }
 
 export function getRandomNearbyPosition(
@@ -420,19 +556,27 @@ export function findClosestAggressor(targetId: EntityId, gameState: GameWorldSta
   return closestAggressor;
 }
 
+/**
+ * Checks if two humans are closely related (parent, child, sibling, partner, or grandparent/grandchild).
+ * Used to prevent incestuous procreation and cannibalism of family members.
+ */
 export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: GameWorldState): boolean {
   if (human1.id === human2.id) return true;
 
+  // Check for parent/child relationship
   if (human1.motherId === human2.id || human1.fatherId === human2.id) return true;
   if (human2.motherId === human1.id || human2.fatherId === human1.id) return true;
 
+  // Check for siblings (sharing at least one parent)
   const areSiblings =
     (human1.motherId && human1.motherId === human2.motherId) ||
     (human1.fatherId && human1.fatherId === human2.fatherId);
   if (areSiblings) return true;
 
+  // Check for partnership
   if (human1.partnerIds?.includes(human2.id)) return true;
 
+  // Check for grandparent/grandchild relationship (one is the parent of the other's parent)
   if (human1.motherId) {
     const mother = gameState.entities.entities.get(human1.motherId) as HumanEntity | undefined;
     if (mother && (mother.motherId === human2.id || mother.fatherId === human2.id)) return true;
@@ -441,7 +585,6 @@ export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: G
     const father = gameState.entities.entities.get(human1.fatherId) as HumanEntity | undefined;
     if (father && (father.motherId === human2.id || father.fatherId === human2.id)) return true;
   }
-
   if (human2.motherId) {
     const mother = gameState.entities.entities.get(human2.motherId) as HumanEntity | undefined;
     if (mother && (mother.motherId === human1.id || mother.fatherId === human1.id)) return true;
@@ -913,4 +1056,34 @@ export function getFamilyCenter(human: HumanEntity, gameState: GameWorldState): 
   const familyMembers = getFamilyMembers(human, gameState);
   const positions = [...familyMembers, human].map((member) => member.position);
   return getAveragePosition(positions);
+}
+
+export function getClosestEntity<T extends Entity>(position: Vector2D, entities: T[], gameState: GameWorldState) {
+  if (entities.length === 0) {
+    return undefined;
+  }
+
+  let closestEntity = entities[0];
+  let closestDistance = calculateWrappedDistance(
+    position,
+    closestEntity.position,
+    gameState.mapDimensions.width,
+    gameState.mapDimensions.height,
+  );
+
+  for (const entity of entities.slice(1)) {
+    const distance = calculateWrappedDistance(
+      position,
+      entity.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestEntity = entity;
+    }
+  }
+
+  return closestEntity;
 }

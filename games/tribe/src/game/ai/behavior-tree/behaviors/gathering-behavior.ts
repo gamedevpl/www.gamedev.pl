@@ -3,6 +3,7 @@ import {
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_INTERACTION_PROXIMITY,
+  AI_GATHERING_AVOID_OWNER_PROXIMITY,
 } from '../../../world-consts';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -10,6 +11,7 @@ import { findChildren, findClosestEntity } from '../../../utils/world-utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -31,7 +33,38 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
         context.gameState,
         'berryBush',
         undefined,
-        (b) => b.food.length > 0,
+        (bush) => {
+          if (bush.food.length === 0) {
+            return false;
+          }
+
+          // If bush is not claimed or claim has expired, it's fair game.
+          if (!bush.ownerId || !bush.claimedUntil || context.gameState.time >= bush.claimedUntil) {
+            return true;
+          }
+
+          // Bush is claimed. Get the owner.
+          const owner = context.gameState.entities.entities.get(bush.ownerId) as HumanEntity | undefined;
+          if (!owner) {
+            return true; // Owner doesn't exist, so it's fair game.
+          }
+
+          // If owner is from the same tribe (or is the human itself), it's okay to gather.
+          if (owner.leaderId === human.leaderId) {
+            return true;
+          }
+
+          // Owner is from a different tribe. Check proximity.
+          const distanceToOwner = calculateWrappedDistance(
+            human.position,
+            owner.position,
+            context.gameState.mapDimensions.width,
+            context.gameState.mapDimensions.height,
+          );
+
+          // It's a valid target only if the owner is far away.
+          return distanceToOwner > AI_GATHERING_AVOID_OWNER_PROXIMITY;
+        },
       );
 
       const closestCorpse = findClosestEntity<HumanCorpseEntity>(

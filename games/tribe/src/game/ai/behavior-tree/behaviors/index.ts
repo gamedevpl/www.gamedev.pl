@@ -12,3 +12,7 @@ export * from "./tribe-member-combat-behavior";
 export * from "./establish-family-territory-behavior";
 export * from "./follow-patriarch-behavior";
 export * from "./tribe-split-behavior";
+export * from './jealousy-attack-behavior';
+export * from './defend-family-behavior';
+export * from './defend-claimed-bush-behavior';
+export * from './desperate-attack-behavior';

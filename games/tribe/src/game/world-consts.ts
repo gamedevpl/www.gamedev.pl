@@ -147,6 +147,16 @@ export const LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD = 1.2;
 export const LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS = 10;
 // Human AI Fleeing Constants
 
+// Social AI Constants
+export const AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS = 150; // Radius to detect partner procreating with another
+export const AI_DEFEND_FAMILY_TRIGGER_RADIUS = 200; // Radius for a human to detect a family member being attacked
+export const AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS = 100; // Radius for a human to notice an intruder on a claimed bush
+export const AI_DESPERATE_ATTACK_HUNGER_THRESHOLD = 100; // Hunger level (out of 150) to trigger a desperate attack
+export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a potential target to be considered weak enough for a desperate attack
+export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
+export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
+export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a claimed bush is within this radius, avoid gathering
+
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;

@@ -15,6 +15,10 @@ import {
   createEstablishFamilyTerritoryBehavior,
   createFollowPatriarchBehavior,
   createTribeSplitBehavior,
+  createJealousyAttackBehavior,
+  createDefendFamilyBehavior,
+  createDefendClaimedBushBehavior,
+  createDesperateAttackBehavior,
 } from './behaviors';
 
 /**
@@ -27,8 +31,12 @@ export function buildHumanBehaviorTree(): BehaviorNode {
   // It will try each child branch in order until one succeeds or is running.
   const root = new Selector(
     [
-      // --- HIGHEST PRIORITY: SURVIVAL (FLEE) ---
+      // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(1),
+      createDefendFamilyBehavior(1),
+      createJealousyAttackBehavior(1),
+      createDefendClaimedBushBehavior(1),
+      createDesperateAttackBehavior(1),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),

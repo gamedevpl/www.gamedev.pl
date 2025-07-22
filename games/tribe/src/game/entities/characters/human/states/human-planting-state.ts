@@ -1,7 +1,11 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { HumanEntity } from '../human-types';
 import { HumanPlantingStateData, HUMAN_IDLE, HUMAN_PLANTING } from './human-state-types';
-import { BERRY_COST_FOR_PLANTING, HUMAN_PLANTING_DURATION_HOURS } from '../../../../world-consts';
+import {
+  BERRY_BUSH_CLAIM_DURATION_HOURS,
+  BERRY_COST_FOR_PLANTING,
+  HUMAN_PLANTING_DURATION_HOURS,
+} from '../../../../world-consts';
 import { createBerryBush } from '../../../entities-update';
 import { FoodType } from '../../../../food/food-types';
 
@@ -24,7 +28,9 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
           }
         }
         // Create a new bush
-        createBerryBush(gameState.entities, data.plantingSpot, gameState.time);
+        const bush = createBerryBush(gameState.entities, data.plantingSpot, gameState.time);
+        bush.ownerId = entity.id; // Claim the bush
+        bush.claimedUntil = gameState.time + BERRY_BUSH_CLAIM_DURATION_HOURS;
       }
       // Transition back to idle
       return {
