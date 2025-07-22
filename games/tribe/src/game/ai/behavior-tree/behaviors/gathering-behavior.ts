@@ -1,12 +1,12 @@
 import {
   BT_GATHERING_SEARCH_COOLDOWN_HOURS,
+  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
-import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { findClosestEntity } from '../../../utils/world-utils';
+import { findChildren, findClosestEntity } from '../../../utils/world-utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
@@ -116,10 +116,16 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
     [
       // 1. Initial condition checks.
       new ConditionNode(
-        (human: HumanEntity) => {
+        (human, context) => {
           const hasCapacity = human.food.length < human.maxFood;
           const isHungryEnough = human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING;
-          return (human.isAdult && hasCapacity && isHungryEnough) ?? false;
+          const hungryChildren = findChildren(context.gameState, human).filter(
+            (child) => child.hunger > CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
+          );
+          return [
+            (human.isAdult && hasCapacity && (isHungryEnough || hungryChildren.length > 0)) ?? false,
+            `${isHungryEnough ? 'H' : ''}, ${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}`,
+          ];
         },
         'Should Gather Food',
         depth + 1,

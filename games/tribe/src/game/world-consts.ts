@@ -93,7 +93,7 @@ export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
 // Human AI Constants
 export const AI_UPDATE_INTERVAL = 0.5; // In game time
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH * 0.6; // AI decides to eat if hunger >= this and has food
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.5; // AI decides to gather if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.25; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
@@ -229,6 +229,13 @@ export const UI_BUTTON_SPACING: number = 20;
 export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
+export const UI_BUTTON_BORDER_RADIUS = 5;
+export const UI_BUTTON_HOVER_BACKGROUND_COLOR: string = '#3a4458';
+export const UI_TOOLTIP_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
+export const UI_TOOLTIP_TEXT_COLOR: string = '#FFFFFF';
+export const UI_TOOLTIP_FONT_SIZE: number = 14;
+export const UI_TOOLTIP_PADDING: number = 8;
+export const UI_TOOLTIP_OFFSET_Y: number = -15;
 
 // Behavior Tree Debug UI Constants
 export const UI_BT_DEBUG_X_OFFSET = 60;
@@ -283,3 +290,11 @@ export const INITIAL_MASTER_VOLUME = 0.1;
 // Intro Screen Constants
 export const INTRO_SCREEN_INITIAL_HUMANS: number = 15;
 export const INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS: number = 5000;
+
+// LLM Autopilot
+export const LLM_AUTOPILOT_COOLDOWN_HOURS = 1; // Cooldown in game hours for LLM Autopilot decisions
+
+// LLM Autopilot UI Constants
+export const UI_AUTOPILOT_BUTTON_SIZE = 80;
+export const UI_AUTOPILOT_BUTTON_SPACING = 10;
+export const UI_AUTOPILOT_BUTTON_FONT_SIZE = 14;

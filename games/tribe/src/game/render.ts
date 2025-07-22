@@ -17,18 +17,12 @@ import {
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_YEAR_IN_REAL_SECONDS,
   UI_MINIATURE_CHARACTER_SIZE,
-  UI_BUTTON_HEIGHT,
-  UI_BUTTON_SPACING,
-  UI_BUTTON_BACKGROUND_COLOR,
-  UI_BUTTON_TEXT_COLOR,
-  UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_FAMILY_MEMBER_ICON_SIZE,
   UI_HITPOINTS_BAR_COLOR,
   HUMAN_HUNGER_DEATH,
   UI_TUTORIAL_HIGHLIGHT_COLOR,
   UI_TUTORIAL_HIGHLIGHT_RADIUS,
   UI_TEXT_COLOR,
-  UI_BUTTON_WIDTH,
 } from './world-consts';
 import { renderBerryBush } from './render/render-bush';
 import { BerryBushEntity } from './entities/plants/berry-bush/berry-bush-types';
@@ -41,12 +35,11 @@ import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils
 import { renderVisualEffect } from './render/render-effects';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect } from './visual-effects/visual-effect-types';
-import { PlayerActionHint, UIStatusType, UIButtonActionType, UI_STATUS_EMOJIS } from './ui/ui-types';
+import { PlayerActionHint, UIStatusType, UI_STATUS_EMOJIS } from './ui/ui-types';
 import {
   drawProgressBar,
   renderMiniatureCharacter,
   renderPlayerActionHints,
-  drawButton,
   drawFamilyMemberBar,
   drawFoodBar,
   renderTribeList,
@@ -54,6 +47,7 @@ import {
   renderTutorialHighlight,
   renderUIElementHighlight,
   renderPauseOverlay,
+  renderUIButtons,
 } from './render/render-ui';
 import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
 
@@ -99,10 +93,10 @@ export function renderGame(
   if (!isIntro && gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
     ctx.fillStyle = 'white';
-    ctx.font = '30px "Press Start 2P", Arial';
+    ctx.font = '30px \"Press Start 2P\", Arial';
     ctx.textAlign = 'center';
     ctx.fillText('Game Over!', ctx.canvas.width / 2, ctx.canvas.height / 2 - 60);
-    ctx.font = '20px "Press Start 2P", Arial';
+    ctx.font = '20px \"Press Start 2P\", Arial';
     ctx.fillText(`Lineage Extinct.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
     ctx.fillText(`Cause: ${gameState.causeOfGameOver || 'Unknown'}`, ctx.canvas.width / 2, ctx.canvas.height / 2 + 20);
     return;
@@ -190,17 +184,18 @@ export function renderGame(
   ctx.restore(); // Restore context to draw UI in fixed positions
 
   if (!isIntro) {
-    // --- UI Rendering ---
+    // --- UI Rendering ---\
     // Define rects for potential highlighting
     let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
     let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
 
     ctx.fillStyle = UI_TEXT_COLOR;
-    ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+    ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
     ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
     ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
-    // --- Top-Left UI ---\n    ctx.textAlign = 'left';
+    // --- Top-Left UI ---\\\
+    ctx.textAlign = 'left';
     let uiLineY = UI_PADDING + UI_FONT_SIZE;
 
     // Time Display
@@ -346,7 +341,7 @@ export function renderGame(
 
       // Vertically center the large emoji with the row of miniatures
       const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
-      ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
+      ctx.font = `${UI_FONT_SIZE}px \"Press Start 2P\", Arial`;
       ctx.textBaseline = 'middle';
       ctx.fillText(familyEmoji, UI_PADDING, emojiY);
 
@@ -422,46 +417,12 @@ export function renderGame(
       uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING * 2; // Add extra padding
     }
 
-    // --- Top-Right UI ---\n    ctx.textAlign = 'right';
-    let currentButtonX = ctx.canvas.width - UI_PADDING;
-
-    gameState.uiButtons.forEach((button) => {
-      const buttonY = UI_PADDING;
-      const buttonX = currentButtonX - button.currentWidth;
-
-      // Update button state before drawing
-      button.rect = { x: buttonX, y: buttonY, width: button.currentWidth, height: UI_BUTTON_HEIGHT };
-      button.textColor = UI_BUTTON_TEXT_COLOR;
-
-      switch (button.action) {
-        case UIButtonActionType.ToggleAutopilot:
-          button.text = `AUT[O]`;
-          button.backgroundColor = gameState.isPlayerOnAutopilot
-            ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
-            : UI_BUTTON_BACKGROUND_COLOR;
-          break;
-        case UIButtonActionType.ToggleMute:
-          button.text = gameState.isMuted ? `UN[M]UTE` : `[M]UTE`;
-          button.backgroundColor = gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-          break;
-        case UIButtonActionType.TogglePause:
-          button.text = gameState.isPaused ? `UN[P]AUSE` : `[P]AUSE`;
-          button.backgroundColor = gameState.isPaused ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-          if (gameState.isPaused) {
-            button.currentWidth = UI_BUTTON_WIDTH * 1.4;
-          } else {
-            button.currentWidth = UI_BUTTON_WIDTH * 1.1;
-          }
-          break;
-      }
-
-      drawButton(ctx, button);
-      currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
-    });
-
-    // --- Bottom-Left UI (Tribe List) ---
+    // --- Bottom-Left UI (Tribe List) ---\
     const tribesInfo = getTribesInfo(gameState, player?.leaderId);
     renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+
+    // --- Buttons & Tooltips ---
+    renderUIButtons(ctx, gameState, ctx.canvas.width);
 
     // Reset shadow for other UI elements if needed
     ctx.shadowColor = 'transparent';
@@ -471,7 +432,7 @@ export function renderGame(
       renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
     }
 
-    // --- UI Highlights ---
+    // --- UI Highlights ---\
     if (gameState.tutorialState.activeUIHighlights.size > 0) {
       const { activeUIHighlights } = gameState.tutorialState;
 

@@ -24,16 +24,17 @@ export interface GameWorldState {
   causeOfGameOver?: string; // Optional cause of game over
   viewportCenter: Vector2D;
   isPaused: boolean;
-  isPlayerOnAutopilot: boolean;
+  autopilotControls: AutopilotControls;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush?: boolean;
-  llmAutopilot?: Promise<void>;
   masterVolume: number; // Global volume level (0.0 to 1.0)
   isMuted: boolean; // Global mute state
   uiButtons: ClickableUIButton[];
   tutorial: Tutorial;
   tutorialState: TutorialState;
   debugCharacterId?: EntityId;
+  hoveredButtonId?: string;
+  mousePosition?: Vector2D;
 }
 
 export type UpdateContext = {
@@ -45,4 +46,12 @@ export type UpdateContext = {
   /**
    * Time since the last update in milliseconds.\\n   */
   deltaTime: number;
+};
+
+export type AutopilotControls = {
+  isActive: boolean;
+  behaviors: {
+    procreation: boolean;
+    planting: boolean;
+  };
 };

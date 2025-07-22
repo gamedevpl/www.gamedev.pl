@@ -90,6 +90,10 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
 
   return new Sequence(
     [
+      new ConditionNode((human, context) => {
+        return !human.isPlayer || context.gameState.autopilotControls.behaviors.planting;
+      }),
+
       // 1. Basic conditions: Check if the AI is in a state to plant.
       new ConditionNode(
         (human) => {
@@ -133,12 +137,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
             depth + 2,
           ),
           // Branch B: No spot chosen. Find one (with cooldown).
-          new CooldownNode(
-            BT_PLANTING_SEARCH_COOLDOWN_HOURS,
-            findSpotAction,
-            'Find Planting Spot Cooldown',
-            depth + 2,
-          ),
+          new CooldownNode(BT_PLANTING_SEARCH_COOLDOWN_HOURS, findSpotAction, 'Find Planting Spot Cooldown', depth + 2),
         ],
         'Perform or Start Planting',
         depth + 1,

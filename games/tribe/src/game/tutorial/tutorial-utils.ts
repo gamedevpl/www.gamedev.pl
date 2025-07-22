@@ -218,7 +218,7 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
       const timeElapsed = world.time - (state.stepStartTime || world.time);
       const minTimePassed = timeElapsed >= (currentStep.minDisplayTime || 0);
 
-      if ((minTimePassed && currentStep.condition(world, player)) || world.isPlayerOnAutopilot) {
+      if ((minTimePassed && currentStep.condition(world, player)) || world.autopilotControls.isActive) {
         currentStep.isCompleted = true;
         state.completedSteps.add(currentStep.key);
         state.transitionState = TransitionState.FADING_OUT;

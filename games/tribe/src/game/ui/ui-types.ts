@@ -65,6 +65,8 @@ export enum UIButtonActionType {
   ToggleAutopilot = 'ToggleAutopilot',
   ToggleMute = 'ToggleMute',
   TogglePause = 'TogglePause',
+  ToggleProcreationBehavior = 'ToggleProcreationBehavior',
+  TogglePlantingBehavior = 'TogglePlantingBehavior',
 }
 
 export interface ClickableUIButton {
@@ -75,4 +77,5 @@ export interface ClickableUIButton {
   text: string;
   backgroundColor: string;
   textColor: string;
+  tooltip?: string;
 }

@@ -40,21 +40,18 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
     'Find Immediate Partner',
   );
 
-  const startProcreating = new ActionNode(
-    (human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-      const partner = blackboard.get<HumanEntity>('procreationPartner');
-      if (!partner) {
-        return NodeStatus.FAILURE;
-      }
-      human.activeAction = 'procreating';
-      human.target = undefined;
-      if (!human.partnerIds?.includes(partner.id)) {
-        human.partnerIds = human.partnerIds ? [...human.partnerIds, partner.id] : [partner.id];
-      }
-      return NodeStatus.SUCCESS;
-    },
-    'Start Procreating',
-  );
+  const startProcreating = new ActionNode((human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
+    const partner = blackboard.get<HumanEntity>('procreationPartner');
+    if (!partner) {
+      return NodeStatus.FAILURE;
+    }
+    human.activeAction = 'procreating';
+    human.target = undefined;
+    if (!human.partnerIds?.includes(partner.id)) {
+      human.partnerIds = human.partnerIds ? [...human.partnerIds, partner.id] : [partner.id];
+    }
+    return NodeStatus.SUCCESS;
+  }, 'Start Procreating');
 
   const locateDistantPartner = new ConditionNode(
     (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
@@ -73,37 +70,37 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
     'Locate Distant Partner',
   );
 
-  const moveTowardsPartner = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-      const partner = blackboard.get<HumanEntity>('procreationPartner');
-      if (!partner) {
-        return NodeStatus.FAILURE;
-      }
-      const distance = calculateWrappedDistance(
-        human.position,
-        partner.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-      if (distance < HUMAN_INTERACTION_PROXIMITY) {
-        return NodeStatus.SUCCESS;
-      }
-      human.activeAction = 'moving';
-      human.target = partner.id;
-      const dirToTarget = getDirectionVectorOnTorus(
-        human.position,
-        partner.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-      human.direction = vectorNormalize(dirToTarget);
-      return NodeStatus.RUNNING;
-    },
-    'Move Towards Partner',
-  );
+  const moveTowardsPartner = new ActionNode((human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+    const partner = blackboard.get<HumanEntity>('procreationPartner');
+    if (!partner) {
+      return NodeStatus.FAILURE;
+    }
+    const distance = calculateWrappedDistance(
+      human.position,
+      partner.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+    if (distance < HUMAN_INTERACTION_PROXIMITY) {
+      return NodeStatus.SUCCESS;
+    }
+    human.activeAction = 'moving';
+    human.target = partner.id;
+    const dirToTarget = getDirectionVectorOnTorus(
+      human.position,
+      partner.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+    human.direction = vectorNormalize(dirToTarget);
+    return NodeStatus.RUNNING;
+  }, 'Move Towards Partner');
 
   return new Sequence(
     [
+      new ConditionNode((human, context) => {
+        return !human.isPlayer || context.gameState.autopilotControls.behaviors.procreation;
+      }),
       // Basic conditions to even consider procreating
       new ConditionNode(
         (human: HumanEntity) => {

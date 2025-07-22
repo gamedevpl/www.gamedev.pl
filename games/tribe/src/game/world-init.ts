@@ -87,13 +87,21 @@ export function initWorld(): GameWorldState {
     nextVisualEffectId: 0,
     viewportCenter: { ...player.position },
     isPaused: false,
-    isPlayerOnAutopilot: false,
+    autopilotControls: {
+      isActive: false,
+      behaviors: {
+        procreation: true,
+        planting: true,
+      },
+    },
     hasPlayerMovedEver: false,
     masterVolume: INITIAL_MASTER_VOLUME,
     isMuted: false,
     uiButtons,
     tutorial,
     tutorialState,
+    hoveredButtonId: undefined,
+    mousePosition: { x: 0, y: 0 },
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -142,13 +150,21 @@ export function initIntroWorld(): GameWorldState {
     nextVisualEffectId: 0,
     viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
     isPaused: false,
-    isPlayerOnAutopilot: false,
+    autopilotControls: {
+      isActive: false,
+      behaviors: {
+        procreation: true,
+        planting: true,
+      },
+    },
     hasPlayerMovedEver: false,
     masterVolume: INITIAL_MASTER_VOLUME,
     isMuted: true, // Muted by default for the intro
     uiButtons: [], // No UI buttons in the intro
     tutorial,
     tutorialState,
+    hoveredButtonId: undefined,
+    mousePosition: { x: 0, y: 0 },
   };
 
   return indexWorldState(initialWorldState);
