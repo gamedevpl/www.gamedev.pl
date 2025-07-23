@@ -43,6 +43,7 @@ export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for o
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
 export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
 export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 35; // Age at which male without heir urgently seeks procreation
+export const PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS: number = 24; // 1 game day
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
 export const HUMAN_PROCREATION_COOLDOWN_HOURS: number = 24; // 1 game day

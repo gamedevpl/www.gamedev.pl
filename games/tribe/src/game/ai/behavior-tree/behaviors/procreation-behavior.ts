@@ -8,14 +8,22 @@ import {
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
   PROCREATION_PARTNER_SEARCH_RADIUS_LONG,
   AI_PROCREATION_AVOID_PARTNER_PROXIMITY,
+  PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS,
 } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { countEntitiesOfTypeInRadius, findPotentialNewPartners } from '../../../utils/world-utils';
+import {
+  countEntitiesOfTypeInRadius,
+  findPotentialNewPartners,
+  findChildren,
+  findHeir,
+} from '../../../utils/world-utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
+
+const PROCREATION_WANDER_START_TIME_KEY = 'procreationWanderStartTime';
 
 // Helper function to find a valid partner from a list of potentials
 const findValidPartner = (potentials: HumanEntity[]): HumanEntity | undefined => {
@@ -48,7 +56,10 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
     }
     human.activeAction = 'procreating';
     human.target = undefined;
+    // Cleanup blackboard state
     blackboard.delete('procreationPartner');
+    blackboard.delete(PROCREATION_WANDER_START_TIME_KEY);
+
     if (!human.partnerIds?.includes(partner.id)) {
       human.partnerIds = human.partnerIds ? [...human.partnerIds, partner.id] : [partner.id];
     }
@@ -127,17 +138,74 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
         depth + 1,
       ),
 
-      new ConditionNode(
-        (human: HumanEntity, context: UpdateContext) => {
-          const nearbyBushes = countEntitiesOfTypeInRadius(
-            human.position,
-            context.gameState,
-            'berryBush',
-            PROCREATION_FOOD_SEARCH_RADIUS,
-          );
-          return nearbyBushes >= PROCREATION_MIN_NEARBY_BERRY_BUSHES;
-        },
-        'Is Environment Viable (food)',
+      // New Selector: Either the environment is viable, OR the male is desperate to have an heir.
+      new Selector(
+        [
+          // Branch 1: Standard food check
+          new Sequence(
+            [
+              new ConditionNode(
+                (human: HumanEntity, context: UpdateContext) => {
+                  const nearbyBushes = countEntitiesOfTypeInRadius(
+                    human.position,
+                    context.gameState,
+                    'berryBush',
+                    PROCREATION_FOOD_SEARCH_RADIUS,
+                  );
+                  return nearbyBushes >= PROCREATION_MIN_NEARBY_BERRY_BUSHES;
+                },
+                'Is Environment Viable (food)',
+                depth + 3,
+              ),
+              new ActionNode(
+                (_human, _context, blackboard) => {
+                  blackboard.delete(PROCREATION_WANDER_START_TIME_KEY);
+                  return NodeStatus.SUCCESS;
+                },
+                'Clear Wander Timer',
+                depth + 3,
+              ),
+            ],
+            'Sufficient Food Path',
+            depth + 2,
+          ),
+          // Branch 2: Heirless male desperation check
+          new Sequence(
+            [
+              new ConditionNode(
+                (human: HumanEntity, context: UpdateContext) => {
+                  if (human.gender === 'male') {
+                    const children = findChildren(context.gameState, human);
+                    const heir = findHeir(children);
+                    return !heir;
+                  }
+                  return false;
+                },
+                'Is Male Without Heir',
+                depth + 3,
+              ),
+              new ActionNode(
+                (_human, context, blackboard) => {
+                  const wanderStartTime = blackboard.get<number>(PROCREATION_WANDER_START_TIME_KEY);
+                  if (wanderStartTime === undefined) {
+                    blackboard.set(PROCREATION_WANDER_START_TIME_KEY, context.gameState.time);
+                    return [NodeStatus.FAILURE, 'Starting heirless wander timer'];
+                  }
+                  const elapsed = context.gameState.time - wanderStartTime;
+                  if (elapsed >= PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS) {
+                    return [NodeStatus.SUCCESS, `Wandered for ${elapsed.toFixed(1)}h, proceeding without food`];
+                  }
+                  return [NodeStatus.FAILURE, `Wandering for heir, ${elapsed.toFixed(1)}h elapsed`];
+                },
+                'Check Wander Timer',
+                depth + 3,
+              ),
+            ],
+            'Heirless Desperation Path',
+            depth + 2,
+          ),
+        ],
+        'Check Environment Or Desperation',
         depth + 1,
       ),
 
@@ -173,7 +241,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
         depth + 1,
       ),
 
-      // --- New Selector logic ---
+      // --- Find Partner and Procreate logic ---
       new Selector(
         [
           // Branch 1: Try to procreate with a partner that is already close

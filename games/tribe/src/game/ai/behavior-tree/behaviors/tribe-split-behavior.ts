@@ -57,8 +57,6 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode {
 
             if (newLocation) {
               aiBlackboard.set(MIGRATION_TARGET_KEY, newLocation);
-              human.activeAction = 'moving';
-              human.target = newLocation;
               migrationTarget = newLocation;
             } else {
               // Cannot find a safe location, fail for now
@@ -81,6 +79,9 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode {
             human.target = undefined;
             return NodeStatus.SUCCESS;
           }
+
+          human.activeAction = 'moving';
+          human.target = migrationTarget;
 
           // Still moving
           return NodeStatus.RUNNING;
