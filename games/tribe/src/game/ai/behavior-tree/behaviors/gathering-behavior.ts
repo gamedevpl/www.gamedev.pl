@@ -4,14 +4,16 @@ import {
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
   HUMAN_INTERACTION_PROXIMITY,
   AI_GATHERING_AVOID_OWNER_PROXIMITY,
+  AI_GATHERING_SEARCH_RADIUS,
 } from '../../../world-consts';
-import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils/world-utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { EntityId } from '../../../entities/entities-types';
 
 type FoodSource = BerryBushEntity | HumanCorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -21,18 +23,19 @@ const BLACKBOARD_KEY = 'foodSource';
  *
  * This behavior is stateful and optimized. It uses a selector to either continue
  * moving towards an existing target or to find a new one. The search for a new
- * food source is computationally more expensive, so it's wrapped in a CooldownNode
+ * food source is computationally more expensive, so it's wrapped in a CachingNode
  * to prevent it from running on every single AI tick, improving performance.
  */
 export function createGatheringBehavior(depth: number): BehaviorNode {
   // Action to find the closest food source and store it in the blackboard.
   const findFoodSourceAction = new ActionNode(
     (human, context, blackboard) => {
+      const distanceToOwnerCache = new Map<EntityId, number>();
       const closestBush = findClosestEntity<BerryBushEntity>(
         human,
         context.gameState,
         'berryBush',
-        undefined,
+        AI_GATHERING_SEARCH_RADIUS,
         (bush) => {
           if (bush.food.length === 0) {
             return false;
@@ -55,12 +58,15 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
           }
 
           // Owner is from a different tribe. Check proximity.
-          const distanceToOwner = calculateWrappedDistance(
-            human.position,
-            owner.position,
-            context.gameState.mapDimensions.width,
-            context.gameState.mapDimensions.height,
-          );
+          const distanceToOwner =
+            distanceToOwnerCache.get(owner.id) ??
+            calculateWrappedDistance(
+              human.position,
+              owner.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+          distanceToOwnerCache.set(owner.id, distanceToOwner);
 
           // It's a valid target only if the owner is far away.
           return distanceToOwner > AI_GATHERING_AVOID_OWNER_PROXIMITY;
@@ -71,7 +77,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
         human,
         context.gameState,
         'humanCorpse',
-        undefined,
+        AI_GATHERING_SEARCH_RADIUS,
         (c) => c.food.length > 0,
       );
 
@@ -174,13 +180,13 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
             'Continue Gathering Action',
             depth + 2,
           ),
-          // Branch B: Find a new food source (with a cooldown).
+          // Branch B: Find a new food source (with a cache).
           new Sequence(
             [
-              new CooldownNode(
-                BT_GATHERING_SEARCH_COOLDOWN_HOURS,
+              new CachingNode(
                 findFoodSourceAction,
-                'Find Food Source Cooldown',
+                BT_GATHERING_SEARCH_COOLDOWN_HOURS,
+                'Cache Food Source Search',
                 depth + 3,
               ),
               moveAndGatherAction, // Once found, move and gather.

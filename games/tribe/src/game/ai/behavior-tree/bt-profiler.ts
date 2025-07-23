@@ -12,6 +12,14 @@ interface ProfiledNode {
   maxTime: number;
 }
 
+// --- Constants for Reporting ---
+const ROOT_NODE_NAME = 'Human Behavior';
+const PROBLEM_TIME_THRESHOLD_PERCENT = 1; // Nodes consuming >1% of root time are problems.
+
+interface ReportOptions {
+  showAll?: boolean;
+}
+
 class BTProfiler {
   // Stores data for each profiled node, keyed by its full path
   private nodeData = new Map<string, ProfiledNode>();
@@ -63,21 +71,51 @@ class BTProfiler {
 
   /**
    * Prints a formatted report of the profiling data to the console.
+   * By default, it shows a "Problem Report" containing only nodes that
+   * consume a significant percentage of the root node's time.
+   * @param options Configuration for the report. `showAll: true` to see all nodes.
    */
-  public report(): void {
-    const sortedData = Array.from(this.nodeData.values()).sort((a, b) => b.totalTime - a.totalTime);
+  public report(options: ReportOptions = {}): void {
+    const { showAll = false } = options;
+    const allData = Array.from(this.nodeData.values());
 
-    console.log('--- Behavior Tree Profiler Report ---');
-    console.table(
-      sortedData.map((data) => ({
-        'Path': data.path,
-        'Total Time (ms)': data.totalTime.toFixed(3),
-        'Calls': data.callCount,
-        'Avg Time (ms)': (data.totalTime / data.callCount).toFixed(3),
-        'Min Time (ms)': data.minTime.toFixed(3),
-        'Max Time (ms)': data.maxTime.toFixed(3),
-      })),
-    );
+    if (allData.length === 0) {
+      console.log('--- Behavior Tree Profiler: No data collected. ---');
+      return;
+    }
+
+    let dataToReport = allData;
+    let reportTitle = '--- Behavior Tree Full Report ---';
+
+    if (!showAll) {
+      const rootNodeData = this.nodeData.get(ROOT_NODE_NAME);
+      if (rootNodeData) {
+        const threshold = (rootNodeData.totalTime * PROBLEM_TIME_THRESHOLD_PERCENT) / 100;
+        dataToReport = allData.filter((data) => data.totalTime > threshold && data.path !== ROOT_NODE_NAME);
+        reportTitle = '--- Behavior Tree Problem Report ---';
+      } else {
+        console.log('BTProfiler: Root node "Human Behavior" not found. Showing full report.');
+        reportTitle = '--- Behavior Tree Full Report (Root Not Found) ---';
+      }
+    }
+
+    const sortedData = dataToReport.sort((a, b) => b.totalTime - a.totalTime);
+
+    console.log(reportTitle);
+    if (sortedData.length > 0) {
+      console.table(
+        sortedData.map((data) => ({
+          'Path': data.path,
+          'Total Time (ms)': data.totalTime.toFixed(3),
+          'Calls': data.callCount,
+          'Avg Time (ms)': (data.totalTime / data.callCount).toFixed(3),
+          'Min Time (ms)': data.minTime.toFixed(3),
+          'Max Time (ms)': data.maxTime.toFixed(3),
+        })),
+      );
+    } else {
+      console.log('No significant performance problems detected.');
+    }
     console.log('------------------------------------');
   }
 

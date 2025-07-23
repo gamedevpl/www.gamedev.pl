@@ -88,7 +88,10 @@ describe('Game Mechanics', () => {
           )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Max Ancestors: ${maxAncestors}`,
         );
 
-        // btProfiler.report();
+        if (yearsSimulated % 50 === 0) {
+          btProfiler.report();
+          btProfiler.reset();
+        }
 
         if (humanCount <= 0) {
           console.log(`Game ended prematurely at time ${time} due to extinction of humans.`);
@@ -233,7 +236,7 @@ describe('Planting bushes', () => {
 });
 
 describe('BT Profiler', () => {
-  it('should record and report performance data after a simulation run', () => {
+  it('should show problem report by default', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     let gameState: GameWorldState = initGame();
@@ -248,7 +251,29 @@ describe('BT Profiler', () => {
 
     btProfiler.report();
 
-    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Profiler Report ---');
+    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Problem Report ---');
+
+    // Reset for other tests
+    btProfiler.reset();
+    consoleSpy.mockRestore();
+  });
+
+  it('should show full report when requested', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    let gameState: GameWorldState = initGame();
+    // Run for a short time to gather some data
+    const simulationSeconds = 1;
+    const timeStepSeconds = 1 / 60;
+
+    for (let time = 0; time < simulationSeconds; time += timeStepSeconds) {
+      gameState = updateWorld(gameState, timeStepSeconds);
+      if (gameState.gameOver) break;
+    }
+
+    btProfiler.report({ showAll: true });
+
+    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Full Report ---');
 
     // Reset for other tests
     btProfiler.reset();

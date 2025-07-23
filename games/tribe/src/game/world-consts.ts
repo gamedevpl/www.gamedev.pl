@@ -92,7 +92,7 @@ export const AI_PLANTING_CHECK_RADIUS = 300; // Radius for AI to check if bushes
 export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
 
 // Human AI Constants
-export const AI_UPDATE_INTERVAL = 0.5; // In game time
+export const AI_UPDATE_INTERVAL = 1; // In game time
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH * 0.6; // AI decides to eat if hunger >= this and has food
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.25; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
@@ -161,6 +161,7 @@ export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a p
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
 export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
 export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a claimed bush is within this radius, avoid gathering
+export const AI_GATHERING_SEARCH_RADIUS = 300; // Radius for AI to search for food sources
 
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;

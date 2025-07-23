@@ -390,7 +390,7 @@ export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameW
     human,
     gameState,
     'berryBush',
-    undefined, // Search the whole map
+    AI_PLANTING_SEARCH_RADIUS,
     (bush) => bush.ownerId === human.id,
   );
 
@@ -415,12 +415,11 @@ export function findClosestEntity<T extends Entity>(
   sourceEntity: Entity,
   gameState: GameWorldState,
   targetType: EntityType,
-  maxDistance?: number,
+  maxDistance: number,
   filterFn?: (entity: T) => boolean,
 ): T | null {
   const indexedState = gameState as IndexedWorldState;
-  const searchRadius =
-    maxDistance !== undefined ? maxDistance : Math.max(gameState.mapDimensions.width, gameState.mapDimensions.height);
+  const searchRadius = maxDistance;
 
   const candidates = indexedState.search[targetType].byRadius(sourceEntity.position, searchRadius) as unknown as T[];
 
