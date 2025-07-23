@@ -27,7 +27,7 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
   const r = UI_BUTTON_BORDER_RADIUS;
 
   // Determine background color based on hover state
-  ctx.fillStyle = isHovered ? UI_BUTTON_HOVER_BACKGROUND_COLOR : button.backgroundColor;
+  ctx.fillStyle = button.backgroundColor;
 
   // Draw rounded rectangle path
   ctx.beginPath();
@@ -42,6 +42,13 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
   ctx.fill();
+
+  if (isHovered) {
+    ctx.fillStyle = UI_BUTTON_HOVER_BACKGROUND_COLOR;
+    ctx.globalAlpha = 0.5; // Slightly transparent hover effect
+    ctx.fill();
+    ctx.globalAlpha = 1; // Reset alpha for text/icon rendering
+  }
 
   // --- Generic rendering logic for icon and text ---
   ctx.fillStyle = button.textColor;

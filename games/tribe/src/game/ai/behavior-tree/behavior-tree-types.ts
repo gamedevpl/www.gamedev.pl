@@ -14,6 +14,13 @@ export enum NodeStatus {
 
 /**
  * Base interface for all nodes in the behavior tree.
+ *
+ * --- Blackboard Keys Used by Decorator Nodes ---
+ * - CachingNode:
+ *   - `caching_{nodeName}_status`: Stores the cached NodeStatus.
+ *   - `caching_{nodeName}_timestamp`: Stores the time the result was cached.
+ * - TimeoutNode:
+ *   - `timeout_{nodeName}_startTime`: Stores the time the child started running.
  */
 export interface BehaviorNode {
   name?: string;

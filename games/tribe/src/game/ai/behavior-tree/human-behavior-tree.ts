@@ -1,5 +1,9 @@
+import {
+  BT_ACTION_TIMEOUT_HOURS,
+  BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+} from '../../world-consts';
 import { BehaviorNode } from './behavior-tree-types';
-import { AutopilotControlled, Selector } from './nodes';
+import { AutopilotControlled, CachingNode, Selector, TimeoutNode } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -51,7 +55,12 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createEatingBehavior(1),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
-      new AutopilotControlled(createGatheringBehavior(2), 'gathering', 'Gated Gathering', 1),
+      new AutopilotControlled(
+        new TimeoutNode(createGatheringBehavior(3), BT_ACTION_TIMEOUT_HOURS, 'Timeout Gathering', 2),
+        'gathering',
+        'Gated Gathering',
+        1,
+      ),
 
       // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
       new AutopilotControlled(createFeedingChildBehavior(2), 'feedChildren', 'Gated Feed Child', 1),
@@ -60,16 +69,31 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createSeekingFoodFromParentBehavior(1),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
-      new AutopilotControlled(createPlantingBehavior(2), 'planting', 'Gated Planting', 1),
+      new AutopilotControlled(
+        new TimeoutNode(createPlantingBehavior(3), BT_ACTION_TIMEOUT_HOURS, 'Timeout Planting', 2),
+        'planting',
+        'Gated Planting',
+        1,
+      ),
 
       // --- SOCIAL & REPRODUCTION (PROCREATE) ---
       new AutopilotControlled(createProcreationBehavior(2), 'procreation', 'Gated Procreation', 1),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
-      createTribeSplitBehavior(1),
+      new CachingNode(
+        createTribeSplitBehavior(2),
+        BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+        'Cache Tribe Split',
+        1,
+      ),
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
-      createEstablishFamilyTerritoryBehavior(1),
+      new CachingNode(
+        createEstablishFamilyTerritoryBehavior(2),
+        BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+        'Cache Establish Territory',
+        1,
+      ),
 
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW PATRIARCH) ---
       createFollowPatriarchBehavior(1),

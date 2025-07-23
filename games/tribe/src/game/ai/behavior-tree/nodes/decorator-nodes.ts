@@ -99,27 +99,132 @@ export class Repeater implements BehaviorNode {
 
 /**
  * A decorator node that fails if its child takes too long to execute.
+ * It stores the start time on the blackboard when the child first returns RUNNING.
+ * If the child is still RUNNING after the timeout duration, it returns FAILURE.
  */
-export class Timeout implements BehaviorNode {
-  public name?: string;
+export class TimeoutNode implements BehaviorNode {
+  public name: string;
   public lastStatus?: NodeStatus;
   public depth: number;
+  private readonly startTimeKey: string;
 
-  constructor(public readonly child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(
+    public readonly child: BehaviorNode,
+    private readonly timeoutDurationHours: number,
+    name: string,
+    depth: number = 0,
+  ) {
     this.name = name;
     this.depth = depth;
     this.child.depth = (this.depth ?? 0) + 1;
+    this.startTimeKey = `timeout_${this.name}_startTime`;
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    // TODO: Implement decorator logic
-    const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+    const currentTime = context.gameState.time;
+    let startTime = blackboard.get<number>(this.startTimeKey);
 
-    this.lastStatus = status;
-    if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+    const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+
+    if (childStatus === NodeStatus.RUNNING) {
+      if (startTime === undefined) {
+        // First time this node is running, so store the start time.
+        blackboard.set(this.startTimeKey, currentTime);
+        startTime = currentTime;
+      }
+
+      const elapsedTime = currentTime - startTime;
+      if (elapsedTime > this.timeoutDurationHours) {
+        // Timeout exceeded.
+        blackboard.delete(this.startTimeKey); // Clean up blackboard.
+        this.lastStatus = NodeStatus.FAILURE;
+        const debugInfo = `Timed out after ${elapsedTime.toFixed(2)}h.`;
+        blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+        return this.lastStatus;
+      }
+
+      // Still running, within the time limit.
+      this.lastStatus = NodeStatus.RUNNING;
+      const debugInfo = `Running for ${elapsedTime.toFixed(2)}h. ${childDebugInfo}`;
+      blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+      return this.lastStatus;
     }
-    return status;
+
+    // Child succeeded or failed, so clear any existing start time.
+    if (startTime !== undefined) {
+      blackboard.delete(this.startTimeKey);
+    }
+
+    this.lastStatus = childStatus;
+    blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, childDebugInfo);
+    return this.lastStatus;
+  }
+}
+
+/**
+ * A decorator node that caches the result of its child for a specified duration.
+ * This is useful for wrapping expensive conditions or queries that don't need to be re-evaluated on every tick.
+ * It does not cache a RUNNING status.
+ * It requires a unique name to function correctly.
+ */
+export class CachingNode implements BehaviorNode {
+  public name: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+  private readonly statusKey: string;
+  private readonly timestampKey: string;
+
+  constructor(
+    public readonly child: BehaviorNode,
+    private readonly cacheDurationHours: number,
+    name: string, // Name is mandatory for CachingNode
+    depth: number = 0,
+    private readonly validityCheck?: (
+      human: HumanEntity,
+      context: UpdateContext,
+      blackboard: Blackboard,
+    ) => boolean,
+  ) {
+    this.name = name;
+    this.depth = depth;
+    this.child.depth = (this.depth ?? 0) + 1;
+    this.statusKey = `caching_${this.name}_status`;
+    this.timestampKey = `caching_${this.name}_timestamp`;
+  }
+
+  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+    const currentTime = context.gameState.time;
+
+    // --- Check Cache ---
+    const cachedStatus = blackboard.get<NodeStatus>(this.statusKey);
+    const cachedTimestamp = blackboard.get<number>(this.timestampKey);
+
+    if (cachedStatus !== undefined && cachedTimestamp !== undefined) {
+      const isExpired = currentTime - cachedTimestamp > this.cacheDurationHours;
+      const isStillValid = this.validityCheck ? this.validityCheck(human, context, blackboard) : true;
+
+      if (!isExpired && isStillValid) {
+        const remaining = (cachedTimestamp + this.cacheDurationHours - currentTime).toFixed(2);
+        const debugInfo = `Cache hit. Status: ${NodeStatus[cachedStatus]}. ${remaining}h left.`;
+        this.lastStatus = cachedStatus;
+        blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+        return this.lastStatus;
+      }
+    }
+
+    // --- Cache Miss or Invalidated ---
+    const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+
+    // Only cache SUCCESS or FAILURE, not RUNNING.
+    if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.FAILURE) {
+      blackboard.set(this.statusKey, childStatus);
+      blackboard.set(this.timestampKey, currentTime);
+    }
+
+    this.lastStatus = childStatus;
+    const debugInfo = `Cache miss. Child returned ${NodeStatus[childStatus]}. ${childDebugInfo}`;
+    blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+    return this.lastStatus;
   }
 }
 
@@ -130,7 +235,7 @@ export class Timeout implements BehaviorNode {
  * If the child is already RUNNING, it will be allowed to continue, bypassing the cooldown.
  */
 export class CooldownNode implements BehaviorNode {
-  public name?: string;
+  public name: string;
   public lastStatus?: NodeStatus;
   public depth: number;
   private readonly cooldownKey: string;

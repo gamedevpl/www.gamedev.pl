@@ -128,6 +128,10 @@ export const BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS = 24; // Cooldown for attempt
 export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
 export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
 
+// Behavior Tree Decorator Node Constants
+export const BT_ACTION_TIMEOUT_HOURS = 24; // Timeout for actions to prevent getting stuck
+export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expensive checks
+
 // Tribe Split Constants
 export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
 export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.35;
@@ -240,7 +244,7 @@ export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
 export const UI_BUTTON_BORDER_RADIUS = 5;
-export const UI_BUTTON_HOVER_BACKGROUND_COLOR: string = '#3a4458';
+export const UI_BUTTON_HOVER_BACKGROUND_COLOR: string = '#3a445892';
 export const UI_TOOLTIP_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
 export const UI_TOOLTIP_TEXT_COLOR: string = '#FFFFFF';
 export const UI_TOOLTIP_FONT_SIZE: number = 14;

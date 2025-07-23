@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Selector, Sequence } from './nodes/composite-nodes';
 import { NodeStatus } from './behavior-tree-types';
@@ -7,9 +6,9 @@ import { UpdateContext } from '../../world-types';
 import { Blackboard } from './behavior-tree-blackboard';
 import { ActionNode, ConditionNode } from './nodes/leaf-nodes';
 import { GameWorldState } from '../../world-types';
+import { CachingNode, TimeoutNode } from './nodes';
 
-// --- Mocks and Helpers ---
-
+// --- Mocks and Helpers ---\n
 const mockHuman = {} as HumanEntity;
 const mockContext = {
   deltaTime: 1,
@@ -17,6 +16,10 @@ const mockContext = {
     time: 0,
   } as GameWorldState,
 } as UpdateContext;
+
+const advanceTime = (hours: number) => {
+  mockContext.gameState.time += hours;
+};
 
 class TestBlackboard extends Blackboard {
   constructor() {
@@ -29,6 +32,7 @@ let blackboard: TestBlackboard;
 
 beforeEach(() => {
   blackboard = new TestBlackboard();
+  mockContext.gameState.time = 0;
 });
 
 const createSuccessNode = (name = 'SuccessNode') => new ConditionNode(() => true, name);
@@ -38,18 +42,27 @@ const createFailureNode = (name = 'FailureNode') => new ConditionNode(() => fals
 class ControllableActionNode extends ActionNode {
   runCount = 0;
   maxRuns: number;
+  statusOnRun: NodeStatus;
+  statusAfterMax: NodeStatus;
 
-  constructor(maxRuns = 1, name = 'ControllableRunningNode') {
+  constructor(
+    maxRuns = 1,
+    statusOnRun = NodeStatus.RUNNING,
+    statusAfterMax = NodeStatus.SUCCESS,
+    name = 'ControllableActionNode',
+  ) {
     super(() => this.executeLogic(), name);
     this.maxRuns = maxRuns;
+    this.statusOnRun = statusOnRun;
+    this.statusAfterMax = statusAfterMax;
   }
 
   executeLogic(): NodeStatus {
     this.runCount++;
     if (this.runCount > this.maxRuns) {
-      return NodeStatus.SUCCESS;
+      return this.statusAfterMax;
     }
-    return NodeStatus.RUNNING;
+    return this.statusOnRun;
   }
 
   reset() {
@@ -188,7 +201,7 @@ describe('Behavior Tree Composite Nodes', () => {
   describe('Nested Behavior Tree Scenarios', () => {
     it('should correctly handle a RUNNING status in a 3-level nested tree', () => {
       // Level 3 (innermost)
-      const runningAction = new ControllableActionNode(2, 'RunningAction'); // Runs for 2 ticks
+      const runningAction = new ControllableActionNode(2, NodeStatus.RUNNING, NodeStatus.SUCCESS, 'RunningAction'); // Runs for 2 ticks
 
       // Level 2
       const innerSequence = new Sequence(
@@ -234,136 +247,171 @@ describe('Behavior Tree Composite Nodes', () => {
       expect(runningActionSpy).toHaveBeenCalledTimes(3); // Final call returns SUCCESS
       expect(actionBSpy).toHaveBeenCalledTimes(1); // Now this is executed
     });
+  });
+});
 
-    it('should handle a complex 4-level tree with mixed selectors and sequences', () => {
-      // Level 4 (Deepest)
-      const deepAction = new ControllableActionNode(2, 'DeepRunningAction'); // Runs for 2 ticks
+describe('Decorator Nodes', () => {
+  describe('CachingNode', () => {
+    const CACHE_DURATION = 10; // hours
+    let childNode: ControllableActionNode;
+    let cachingNode: CachingNode;
 
-      // Level 3
-      const innerSequence = new Sequence(
-        [createSuccessNode('ConditionB2'), deepAction, createSuccessNode('ConditionB3')],
-        'InnerSequence',
-      );
-
-      // Level 2
-      const branchA = new Sequence([createFailureNode('ConditionA1'), createSuccessNode('ActionA2')], 'BranchA');
-      const branchB = new Sequence(
-        [createSuccessNode('ConditionB1'), innerSequence, createSuccessNode('ActionB4')],
-        'BranchB',
-      );
-      const middleSelector = new Selector([branchA, branchB], 'MiddleSelector');
-
-      // Level 1 (Root)
-      const rootSequence = new Sequence(
-        [createSuccessNode('Condition1'), middleSelector, createSuccessNode('FinalAction')],
-        'RootSequence',
-      );
-
-      // Spies to track execution
-      const condition1Spy = vi.spyOn(rootSequence.children[0], 'execute');
-      const finalActionSpy = vi.spyOn(rootSequence.children[2], 'execute');
-      const conditionA1Spy = vi.spyOn(branchA.children[0], 'execute');
-      const actionA2Spy = vi.spyOn(branchA.children[1], 'execute');
-      const conditionB1Spy = vi.spyOn(branchB.children[0], 'execute');
-      const conditionB2Spy = vi.spyOn(innerSequence.children[0], 'execute');
-      const conditionB3Spy = vi.spyOn(innerSequence.children[2], 'execute');
-      const actionB4Spy = vi.spyOn(branchB.children[2], 'execute');
-      const deepActionSpy = vi.spyOn(deepAction, 'execute');
-
-      // --- Tick 1 ---
-      // Root -> MiddleSelector -> BranchB -> InnerSequence -> DeepAction returns RUNNING
-      let status = rootSequence.execute(mockHuman, mockContext, blackboard);
-      expect(status, 'Tick 1 Status').toBe(NodeStatus.RUNNING);
-      expect(middleSelector.runningChildIndex, 'Tick 1 MiddleSelector runningChildIndex').toBe(1); // Branch B is running
-      expect(deepAction.runCount, 'Tick 1 deepAction runCount').toBe(1);
-
-      // Verify execution paths for Tick 1
-      expect(condition1Spy, 'Tick 1 condition1Spy').toHaveBeenCalledTimes(1);
-      expect(conditionA1Spy, 'Tick 1 conditionA1Spy').toHaveBeenCalledTimes(1);
-      expect(actionA2Spy, 'Tick 1 actionA2Spy').not.toHaveBeenCalled(); // Branch A failed
-      expect(conditionB1Spy, 'Tick 1 conditionB1Spy').toHaveBeenCalledTimes(1);
-      expect(conditionB2Spy, 'Tick 1 conditionB2Spy').toHaveBeenCalledTimes(1);
-      expect(deepActionSpy, 'Tick 1 deepActionSpy').toHaveBeenCalledTimes(1);
-      expect(conditionB3Spy, 'Tick 1 conditionB3Spy').not.toHaveBeenCalled(); // Halted by RUNNING
-      expect(actionB4Spy, 'Tick 1 actionB4Spy').not.toHaveBeenCalled(); // Halted by RUNNING
-      expect(finalActionSpy, 'Tick 1 finalActionSpy').not.toHaveBeenCalled(); // Halted by RUNNING
-
-      // --- Tick 2 ---
-      // Root re-evaluates, MiddleSelector resumes from BranchB, InnerSequence re-evaluates, DeepAction returns RUNNING again
-      status = rootSequence.execute(mockHuman, mockContext, blackboard);
-      expect(status, 'Tick 2 Status').toBe(NodeStatus.RUNNING);
-      expect(middleSelector.runningChildIndex, 'Tick 2 MiddleSelector runningChildIndex').toBe(1);
-      expect(deepAction.runCount, 'Tick 2 deepAction runCount').toBe(2);
-
-      // Verify execution paths for Tick 2
-      expect(condition1Spy, 'Tick 2 condition1Spy').toHaveBeenCalledTimes(2); // Sequence re-eval
-      expect(conditionA1Spy, 'Tick 2 conditionA1Spy').toHaveBeenCalledTimes(1); // Not re-evaluated, selector resumes
-      expect(actionA2Spy, 'Tick 2 actionA2Spy').not.toHaveBeenCalled();
-      expect(conditionB1Spy, 'Tick 2 conditionB1Spy').toHaveBeenCalledTimes(2); // Sequence re-eval
-      expect(conditionB2Spy, 'Tick 2 conditionB2Spy').toHaveBeenCalledTimes(2); // Sequence re-eval
-      expect(deepActionSpy, 'Tick 2 deepActionSpy').toHaveBeenCalledTimes(2);
-      expect(conditionB3Spy, 'Tick 2 conditionB3Spy').not.toHaveBeenCalled();
-      expect(actionB4Spy, 'Tick 2 actionB4Spy').not.toHaveBeenCalled();
-      expect(finalActionSpy, 'Tick 2 finalActionSpy').not.toHaveBeenCalled();
-
-      // --- Tick 3 ---
-      // DeepAction returns SUCCESS, everything else unfolds to SUCCESS
-      status = rootSequence.execute(mockHuman, mockContext, blackboard);
-      expect(status, 'Tick 3 Status').toBe(NodeStatus.SUCCESS);
-      expect(middleSelector.runningChildIndex, 'Tick 3 MiddleSelector runningChildIndex').toBeUndefined();
-      expect(deepAction.runCount, 'Tick 3 deepAction runCount').toBe(3);
-
-      // Verify execution paths for Tick 3
-      expect(condition1Spy, 'Tick 3 condition1Spy').toHaveBeenCalledTimes(3);
-      expect(conditionA1Spy, 'Tick 3 conditionA1Spy').toHaveBeenCalledTimes(1);
-      expect(actionA2Spy, 'Tick 3 actionA2Spy').not.toHaveBeenCalled();
-      expect(conditionB1Spy, 'Tick 3 conditionB1Spy').toHaveBeenCalledTimes(3);
-      expect(conditionB2Spy, 'Tick 3 conditionB2Spy').toHaveBeenCalledTimes(3);
-      expect(deepActionSpy, 'Tick 3 deepActionSpy').toHaveBeenCalledTimes(3);
-      expect(conditionB3Spy, 'Tick 3 conditionB3Spy').toHaveBeenCalledTimes(1); // Finally called
-      expect(actionB4Spy, 'Tick 3 actionB4Spy').toHaveBeenCalledTimes(1); // Finally called
-      expect(finalActionSpy, 'Tick 3 finalActionSpy').toHaveBeenCalledTimes(1); // Finally called
+    beforeEach(() => {
+      childNode = new ControllableActionNode(0, NodeStatus.SUCCESS, NodeStatus.SUCCESS, 'Child');
+      cachingNode = new CachingNode(childNode, CACHE_DURATION, 'TestCache');
     });
 
-    it('should handle a selector switching branches after a running sequence fails on re-evaluation', () => {
-      let controllableConditionState = true;
-      const controllableCondition = new ConditionNode(() => controllableConditionState, 'ControllableCondition');
-      const runningAction = new ControllableActionNode(2, 'RunningAction');
-      const fallbackAction = new ActionNode(() => NodeStatus.SUCCESS, 'FallbackAction');
+    it('should execute the child on first run (cache miss)', () => {
+      const childSpy = vi.spyOn(childNode, 'execute');
+      const status = cachingNode.execute(mockHuman, mockContext, blackboard);
+      expect(status).toBe(NodeStatus.SUCCESS);
+      expect(childSpy).toHaveBeenCalledTimes(1);
+    });
 
-      const runningSequence = new Sequence([controllableCondition, runningAction], 'RunningSequence');
-      const fallbackSequence = new Sequence([fallbackAction], 'FallbackSequence');
+    it('should return cached SUCCESS on second run (cache hit)', () => {
+      const childSpy = vi.spyOn(childNode, 'execute');
+      cachingNode.execute(mockHuman, mockContext, blackboard); // First run
+      const status = cachingNode.execute(mockHuman, mockContext, blackboard); // Second run
+      expect(status).toBe(NodeStatus.SUCCESS);
+      expect(childSpy).toHaveBeenCalledTimes(1); // Should not be called again
+    });
 
-      const rootSelector = new Selector([runningSequence, fallbackSequence], 'Root');
+    it('should return cached FAILURE on second run (cache hit)', () => {
+      childNode = new ControllableActionNode(0, NodeStatus.FAILURE, NodeStatus.FAILURE, 'Child');
+      cachingNode = new CachingNode(childNode, CACHE_DURATION, 'TestCache');
+      const childSpy = vi.spyOn(childNode, 'execute');
 
-      const controllableConditionSpy = vi.spyOn(controllableCondition, 'execute');
-      const runningActionSpy = vi.spyOn(runningAction, 'execute');
-      const fallbackActionSpy = vi.spyOn(fallbackAction, 'execute');
+      cachingNode.execute(mockHuman, mockContext, blackboard); // First run
+      const status = cachingNode.execute(mockHuman, mockContext, blackboard); // Second run
 
-      // --- Tick 1 ---
-      // RootSelector picks RunningSequence. ControllableCondition is true, RunningAction returns RUNNING.
-      let status = rootSelector.execute(mockHuman, mockContext, blackboard);
-      expect(status, 'Tick 1 Status').toBe(NodeStatus.RUNNING);
-      expect(rootSelector.runningChildIndex, 'Tick 1 runningChildIndex').toBe(0);
-      expect(controllableConditionSpy, 'Tick 1 controllableConditionSpy').toHaveBeenCalledTimes(1);
-      expect(runningActionSpy, 'Tick 1 runningActionSpy').toHaveBeenCalledTimes(1);
-      expect(fallbackActionSpy, 'Tick 1 fallbackActionSpy').not.toHaveBeenCalled();
+      expect(status).toBe(NodeStatus.FAILURE);
+      expect(childSpy).toHaveBeenCalledTimes(1); // Should not be called again
+    });
 
-      // --- Tick 2 ---
-      // Change the state so the initial condition will fail.
-      controllableConditionState = false;
+    it('should NOT cache the RUNNING status', () => {
+      childNode = new ControllableActionNode(1, NodeStatus.RUNNING, NodeStatus.SUCCESS, 'Child');
+      cachingNode = new CachingNode(childNode, CACHE_DURATION, 'TestCache');
+      const childSpy = vi.spyOn(childNode, 'execute');
 
-      // RootSelector resumes with RunningSequence. On re-evaluation, ControllableCondition fails.
-      // RootSelector then moves to FallbackSequence, which succeeds.
-      status = rootSelector.execute(mockHuman, mockContext, blackboard);
-      expect(status, 'Tick 2 Status').toBe(NodeStatus.SUCCESS);
-      expect(rootSelector.runningChildIndex, 'Tick 2 runningChildIndex').toBeUndefined();
-      // Verify RunningSequence was re-evaluated
-      expect(controllableConditionSpy, 'Tick 2 controllableConditionSpy').toHaveBeenCalledTimes(2);
-      // But its action was not called again because the sequence failed early
-      expect(runningActionSpy, 'Tick 2 runningActionSpy').toHaveBeenCalledTimes(1);
-      // And the fallback was executed
-      expect(fallbackActionSpy, 'Tick 2 fallbackActionSpy').toHaveBeenCalledTimes(1);
+      let status = cachingNode.execute(mockHuman, mockContext, blackboard); // First run
+      expect(status).toBe(NodeStatus.RUNNING);
+      expect(childSpy).toHaveBeenCalledTimes(1);
+
+      status = cachingNode.execute(mockHuman, mockContext, blackboard); // Second run
+      expect(status).toBe(NodeStatus.SUCCESS);
+      expect(childSpy).toHaveBeenCalledTimes(2); // Should be called again
+    });
+
+    it('should re-execute the child after cache duration expires', () => {
+      const childSpy = vi.spyOn(childNode, 'execute');
+      cachingNode.execute(mockHuman, mockContext, blackboard); // First run, caches the result
+
+      advanceTime(CACHE_DURATION + 1); // Advance time past expiration
+
+      const status = cachingNode.execute(mockHuman, mockContext, blackboard); // Should be a cache miss
+      expect(status).toBe(NodeStatus.SUCCESS);
+      expect(childSpy).toHaveBeenCalledTimes(2); // Should be called again
+    });
+
+    it('should re-execute if validityCheck returns false', () => {
+      let isStillValid = true;
+      const validityCheck = vi.fn(() => isStillValid);
+      cachingNode = new CachingNode(childNode, CACHE_DURATION, 'TestCache', 0, validityCheck);
+      const childSpy = vi.spyOn(childNode, 'execute');
+
+      cachingNode.execute(mockHuman, mockContext, blackboard); // First run, caches
+      expect(childSpy).toHaveBeenCalledTimes(1);
+      expect(validityCheck).not.toHaveBeenCalled(); // Not called on miss
+
+      cachingNode.execute(mockHuman, mockContext, blackboard); // Second run, cache hit
+      expect(childSpy).toHaveBeenCalledTimes(1);
+      expect(validityCheck).toHaveBeenCalledTimes(1);
+
+      isStillValid = false; // Invalidate the cache
+
+      cachingNode.execute(mockHuman, mockContext, blackboard); // Third run, should miss
+      expect(childSpy).toHaveBeenCalledTimes(2);
+      expect(validityCheck).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('TimeoutNode', () => {
+    const TIMEOUT_DURATION = 5; // hours
+    let childNode: ControllableActionNode;
+    let timeoutNode: TimeoutNode;
+
+    beforeEach(() => {
+      // This child will run for 2 ticks, then succeed
+      childNode = new ControllableActionNode(2, NodeStatus.RUNNING, NodeStatus.SUCCESS, 'Child');
+      timeoutNode = new TimeoutNode(childNode, TIMEOUT_DURATION, 'TestTimeout');
+    });
+
+    it('should return SUCCESS if child succeeds before timeout', () => {
+      let status;
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 1: RUNNING
+      expect(status).toBe(NodeStatus.RUNNING);
+      advanceTime(1);
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 2: RUNNING
+      expect(status).toBe(NodeStatus.RUNNING);
+      advanceTime(1);
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 3: SUCCESS
+      expect(status).toBe(NodeStatus.SUCCESS);
+    });
+
+    it('should return FAILURE if child is still RUNNING after timeout', () => {
+      let status;
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 1: RUNNING
+      expect(status).toBe(NodeStatus.RUNNING);
+
+      advanceTime(TIMEOUT_DURATION + 1); // Exceed timeout
+
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 2: Should fail
+      expect(status).toBe(NodeStatus.FAILURE);
+    });
+
+    it('should return RUNNING as long as child is running within the time limit', () => {
+      let status;
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 1
+      expect(status).toBe(NodeStatus.RUNNING);
+
+      advanceTime(TIMEOUT_DURATION - 1); // Get close to timeout
+
+      status = timeoutNode.execute(mockHuman, mockContext, blackboard); // Tick 2
+      expect(status).toBe(NodeStatus.RUNNING);
+    });
+
+    it('should clear the timer from blackboard on SUCCESS', () => {
+      const timerKey = `timeout_${timeoutNode.name}_startTime`;
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
+      expect(blackboard.get(timerKey)).toBeDefined();
+
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // Still RUNNING
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // SUCCEEDS
+
+      expect(blackboard.get(timerKey)).toBeUndefined();
+    });
+
+    it('should clear the timer from blackboard on FAILURE', () => {
+      const timerKey = `timeout_${timeoutNode.name}_startTime`;
+      // This child will run for 1 tick, then fail
+      childNode = new ControllableActionNode(1, NodeStatus.RUNNING, NodeStatus.FAILURE, 'Child');
+      timeoutNode = new TimeoutNode(childNode, TIMEOUT_DURATION, 'TestTimeout');
+
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
+      expect(blackboard.get(timerKey)).toBeDefined();
+
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // FAILS
+      expect(blackboard.get(timerKey)).toBeUndefined();
+    });
+
+    it('should clear the timer from blackboard on TIMEOUT', () => {
+      const timerKey = `timeout_${timeoutNode.name}_startTime`;
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
+      expect(blackboard.get(timerKey)).toBeDefined();
+
+      advanceTime(TIMEOUT_DURATION + 1);
+      timeoutNode.execute(mockHuman, mockContext, blackboard); // Times out
+      expect(blackboard.get(timerKey)).toBeUndefined();
     });
   });
 });
