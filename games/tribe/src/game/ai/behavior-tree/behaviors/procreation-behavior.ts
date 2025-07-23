@@ -48,6 +48,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
     }
     human.activeAction = 'procreating';
     human.target = undefined;
+    blackboard.delete('procreationPartner');
     if (!human.partnerIds?.includes(partner.id)) {
       human.partnerIds = human.partnerIds ? [...human.partnerIds, partner.id] : [partner.id];
     }

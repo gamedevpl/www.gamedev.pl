@@ -10,6 +10,7 @@ export enum PlayerActionType {
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
   FeedChildren = 'FeedChildren',
+  AutopilotMove = 'AutopilotMove',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -21,6 +22,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
   [PlayerActionType.FeedChildren]: '👨‍👧',
+  [PlayerActionType.AutopilotMove]: '🎯',
 };
 
 export interface PlayerActionHint {

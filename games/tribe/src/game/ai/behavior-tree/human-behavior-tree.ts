@@ -1,7 +1,4 @@
-import {
-  BT_ACTION_TIMEOUT_HOURS,
-  BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-} from '../../world-consts';
+import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../world-consts';
 import { BehaviorNode } from './behavior-tree-types';
 import { AutopilotControlled, CachingNode, Selector, TimeoutNode } from './nodes';
 import {
@@ -23,6 +20,7 @@ import {
   createDefendFamilyBehavior,
   createDefendClaimedBushBehavior,
   createDesperateAttackBehavior,
+  createAutopilotMovingBehavior,
 } from './behaviors';
 
 /**
@@ -41,6 +39,11 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createJealousyAttackBehavior(1),
       createDefendClaimedBushBehavior(1),
       createDesperateAttackBehavior(1),
+
+      // --- PLAYER AUTOPILOT COMMANDS ---
+      // This sequence handles direct player commands like click-to-move.
+      // It checks if it's the player and if autopilot is on, then executes the move.
+      createAutopilotMovingBehavior(1),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),
@@ -80,12 +83,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       new AutopilotControlled(createProcreationBehavior(2), 'procreation', 'Gated Procreation', 1),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
-      new CachingNode(
-        createTribeSplitBehavior(2),
-        BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-        'Cache Tribe Split',
-        1,
-      ),
+      new CachingNode(createTribeSplitBehavior(2), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 1),
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       new CachingNode(

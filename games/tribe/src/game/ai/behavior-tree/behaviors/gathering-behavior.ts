@@ -130,8 +130,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
         human.activeAction = 'gathering';
         human.direction = { x: 0, y: 0 };
         human.target = target.id; // Set target for interaction system
-        // We don't clear the blackboard key here. The gathering state itself will consume the food.
-        // If the human is interrupted, this behavior can resume.
+        blackboard.delete(BLACKBOARD_KEY);
         return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
       } else {
         // Not close enough, so move towards the target.

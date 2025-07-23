@@ -1087,3 +1087,24 @@ export function getClosestEntity<T extends Entity>(position: Vector2D, entities:
 
   return closestEntity;
 }
+
+export function screenToWorldCoords(
+  screenPos: Vector2D,
+  viewportCenter: Vector2D,
+  canvasDimensions: { width: number; height: number },
+  mapDimensions: { width: number; height: number },
+): Vector2D {
+  // Calculate the top-left corner of the viewport in world coordinates
+  const worldX = viewportCenter.x - canvasDimensions.width / 2;
+  const worldY = viewportCenter.y - canvasDimensions.height / 2;
+
+  // Add the screen position to the viewport's top-left corner
+  const absoluteWorldX = worldX + screenPos.x;
+  const absoluteWorldY = worldY + screenPos.y;
+
+  // Wrap the coordinates around the map dimensions
+  const wrappedX = ((absoluteWorldX % mapDimensions.width) + mapDimensions.width) % mapDimensions.width;
+  const wrappedY = ((absoluteWorldY % mapDimensions.height) + mapDimensions.height) % mapDimensions.height;
+
+  return { x: wrappedX, y: wrappedY };
+}

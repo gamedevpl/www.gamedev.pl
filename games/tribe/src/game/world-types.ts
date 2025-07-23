@@ -58,4 +58,5 @@ export type AutopilotControls = {
     callToAttack: boolean;
     feedChildren: boolean;
   };
+  autopilotMoveTarget?: Vector2D;
 };

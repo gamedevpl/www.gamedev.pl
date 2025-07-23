@@ -8,7 +8,7 @@ import {
   ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
-import { findChildren, findParents, getRandomNearbyPosition } from '../../../utils/world-utils';
+import { findChildren, findHeir, getRandomNearbyPosition } from '../../../utils/world-utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';
@@ -33,26 +33,32 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   const isTooCloseToParents = new ConditionNode(
     (human: HumanEntity, context: UpdateContext) => {
-      const parents = findParents(human, context.gameState);
-      if (parents.length === 0) {
+      if (!human.fatherId) {
+        return false;
+      }
+
+      const father = context.gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+      if (!father) {
         return false; // No parents to be close to.
       }
 
-      for (const parent of parents) {
-        const distance = calculateWrappedDistance(
-          human.position,
-          parent.position,
-          context.gameState.mapDimensions.width,
-          context.gameState.mapDimensions.height,
-        );
-        if (distance < ADULT_MALE_FAMILY_DISTANCE_RADIUS) {
-          return true; // Too close to at least one parent.
-        }
+      if (findHeir(findChildren(context.gameState, father))?.id === human.id) {
+        return false;
+      }
+
+      const distance = calculateWrappedDistance(
+        human.position,
+        father.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      if (distance < ADULT_MALE_FAMILY_DISTANCE_RADIUS) {
+        return true; // Too close to at least one parent.
       }
 
       return false; // Not too close to any parent.
     },
-    'Is Too Close To Parents?',
+    'Is Too Close To Father?',
     depth + 1,
   );
 

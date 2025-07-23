@@ -14,6 +14,7 @@ import {
   findValidPlantingSpot,
   performTribeSplit,
   findAllHumans,
+  screenToWorldCoords,
 } from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
@@ -174,12 +175,14 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
       if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
+      if (!event.target || event.target !== canvasRef.current) return;
 
       const rect = canvasRef.current.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
       const updateContext = { gameState: gameStateRef.current, deltaTime: 0 };
+      let buttonClicked = false;
 
       gameStateRef.current.uiButtons.forEach((button) => {
         if (
@@ -188,6 +191,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           mouseY >= button.rect.y &&
           mouseY <= button.rect.y + button.rect.height
         ) {
+          buttonClicked = true;
           const player = findPlayerEntity(gameStateRef.current);
           if (player) {
             playSoundAt(updateContext, SoundType.ButtonClick, player.position);
@@ -233,6 +237,24 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           }
         }
       });
+
+      if (buttonClicked) {
+        return;
+      }
+
+      // Handle click-to-move for autopilot
+      if (gameStateRef.current.autopilotControls.isActive && !gameStateRef.current.isPaused) {
+        const player = findPlayerEntity(gameStateRef.current);
+        if (player) {
+          const worldPos = screenToWorldCoords(
+            { x: mouseX, y: mouseY },
+            viewportCenterRef.current,
+            { width: canvasRef.current.width, height: canvasRef.current.height },
+            gameStateRef.current.mapDimensions,
+          );
+          gameStateRef.current.autopilotControls.autopilotMoveTarget = worldPos;
+        }
+      }
     };
 
     window.addEventListener('mousedown', handleMouseDown);
@@ -279,6 +301,11 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       if (!isActive() || gameStateRef.current.gameOver) return;
 
       const key = event.key.toLowerCase();
+      if (key === 'escape') {
+        // Cancel autopilot move target
+        gameStateRef.current.autopilotControls.autopilotMoveTarget = undefined;
+        return;
+      }
 
       if (key === 'm') {
         gameStateRef.current.isMuted = !gameStateRef.current.isMuted;

@@ -16,3 +16,4 @@ export * from './jealousy-attack-behavior';
 export * from './defend-family-behavior';
 export * from './defend-claimed-bush-behavior';
 export * from './desperate-attack-behavior';
+export * from './autopilot-moving-behavior';
