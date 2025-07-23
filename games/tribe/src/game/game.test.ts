@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
@@ -13,6 +13,7 @@ import { isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
 import { FoodType } from './food/food-types';
+import { btProfiler } from './ai/behavior-tree/bt-profiler';
 
 // Helper to find a human by ID, with proper type assertion
 const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | undefined => {
@@ -86,6 +87,8 @@ describe('Game Mechanics', () => {
             2,
           )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Max Ancestors: ${maxAncestors}`,
         );
+
+        // btProfiler.report();
 
         if (humanCount <= 0) {
           console.log(`Game ended prematurely at time ${time} due to extinction of humans.`);
@@ -226,5 +229,29 @@ describe('Planting bushes', () => {
 
     expect(finalBushCount).toBe(initialBushCount + 1);
     expect(updatedHuman?.food.length).toBe(10 - BERRY_COST_FOR_PLANTING);
+  });
+});
+
+describe('BT Profiler', () => {
+  it('should record and report performance data after a simulation run', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    let gameState: GameWorldState = initGame();
+    // Run for a short time to gather some data
+    const simulationSeconds = 1;
+    const timeStepSeconds = 1 / 60;
+
+    for (let time = 0; time < simulationSeconds; time += timeStepSeconds) {
+      gameState = updateWorld(gameState, timeStepSeconds);
+      if (gameState.gameOver) break;
+    }
+
+    btProfiler.report();
+
+    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Profiler Report ---');
+
+    // Reset for other tests
+    btProfiler.reset();
+    consoleSpy.mockRestore();
   });
 });

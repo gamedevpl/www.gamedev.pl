@@ -2,6 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 
 /**
@@ -31,12 +32,21 @@ export class ActionNode implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const [status, debugInfo] = unpackStatus(this.action(human, context, blackboard));
-    this.lastStatus = status;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      btProfiler.nodeStart(this.name);
     }
-    return status;
+    try {
+      const [status, debugInfo] = unpackStatus(this.action(human, context, blackboard));
+      this.lastStatus = status;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      }
+      return status;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
 
@@ -68,12 +78,21 @@ export class ConditionNode implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    let [result, debugInfo] = unpackStatus(this.condition(human, context, blackboard));
-    const status = result ? NodeStatus.SUCCESS : NodeStatus.FAILURE;
-    this.lastStatus = status;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      btProfiler.nodeStart(this.name);
     }
-    return status;
+    try {
+      const [result, debugInfo] = unpackStatus(this.condition(human, context, blackboard));
+      const status = result ? NodeStatus.SUCCESS : NodeStatus.FAILURE;
+      this.lastStatus = status;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      }
+      return status;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { AutopilotControls, UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 
 /**
@@ -21,27 +22,36 @@ export class Inverter implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-    let finalStatus: NodeStatus;
-
-    switch (childStatus) {
-      case NodeStatus.SUCCESS:
-        finalStatus = NodeStatus.FAILURE;
-        break;
-      case NodeStatus.FAILURE:
-        finalStatus = NodeStatus.SUCCESS;
-        break;
-      case NodeStatus.RUNNING:
-      default:
-        finalStatus = childStatus;
-        break;
-    }
-
-    this.lastStatus = finalStatus;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
+      btProfiler.nodeStart(this.name);
     }
-    return finalStatus;
+    try {
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      let finalStatus: NodeStatus;
+
+      switch (childStatus) {
+        case NodeStatus.SUCCESS:
+          finalStatus = NodeStatus.FAILURE;
+          break;
+        case NodeStatus.FAILURE:
+          finalStatus = NodeStatus.SUCCESS;
+          break;
+        case NodeStatus.RUNNING:
+        default:
+          finalStatus = childStatus;
+          break;
+      }
+
+      this.lastStatus = finalStatus;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
+      }
+      return finalStatus;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
 
@@ -60,14 +70,23 @@ export class Succeeder implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const [, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-    const finalStatus = NodeStatus.SUCCESS;
-
-    this.lastStatus = finalStatus;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
+      btProfiler.nodeStart(this.name);
     }
-    return finalStatus;
+    try {
+      const [, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const finalStatus = NodeStatus.SUCCESS;
+
+      this.lastStatus = finalStatus;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, finalStatus, context.gameState.time, this.depth, debugInfo);
+      }
+      return finalStatus;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
 
@@ -86,14 +105,23 @@ export class Repeater implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    // TODO: Implement decorator logic
-    const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-
-    this.lastStatus = status;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      btProfiler.nodeStart(this.name);
     }
-    return status;
+    try {
+      // TODO: Implement decorator logic
+      const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+
+      this.lastStatus = status;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+      }
+      return status;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
 
@@ -121,43 +149,48 @@ export class TimeoutNode implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const currentTime = context.gameState.time;
-    let startTime = blackboard.get<number>(this.startTimeKey);
+    btProfiler.nodeStart(this.name);
+    try {
+      const currentTime = context.gameState.time;
+      let startTime = blackboard.get<number>(this.startTimeKey);
 
-    const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
 
-    if (childStatus === NodeStatus.RUNNING) {
-      if (startTime === undefined) {
-        // First time this node is running, so store the start time.
-        blackboard.set(this.startTimeKey, currentTime);
-        startTime = currentTime;
-      }
+      if (childStatus === NodeStatus.RUNNING) {
+        if (startTime === undefined) {
+          // First time this node is running, so store the start time.
+          blackboard.set(this.startTimeKey, currentTime);
+          startTime = currentTime;
+        }
 
-      const elapsedTime = currentTime - startTime;
-      if (elapsedTime > this.timeoutDurationHours) {
-        // Timeout exceeded.
-        blackboard.delete(this.startTimeKey); // Clean up blackboard.
-        this.lastStatus = NodeStatus.FAILURE;
-        const debugInfo = `Timed out after ${elapsedTime.toFixed(2)}h.`;
+        const elapsedTime = currentTime - startTime;
+        if (elapsedTime > this.timeoutDurationHours) {
+          // Timeout exceeded.
+          blackboard.delete(this.startTimeKey); // Clean up blackboard.
+          this.lastStatus = NodeStatus.FAILURE;
+          const debugInfo = `Timed out after ${elapsedTime.toFixed(2)}h.`;
+          blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+          return this.lastStatus;
+        }
+
+        // Still running, within the time limit.
+        this.lastStatus = NodeStatus.RUNNING;
+        const debugInfo = `Running for ${elapsedTime.toFixed(2)}h. ${childDebugInfo}`;
         blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
         return this.lastStatus;
       }
 
-      // Still running, within the time limit.
-      this.lastStatus = NodeStatus.RUNNING;
-      const debugInfo = `Running for ${elapsedTime.toFixed(2)}h. ${childDebugInfo}`;
-      blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+      // Child succeeded or failed, so clear any existing start time.
+      if (startTime !== undefined) {
+        blackboard.delete(this.startTimeKey);
+      }
+
+      this.lastStatus = childStatus;
+      blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, childDebugInfo);
       return this.lastStatus;
+    } finally {
+      btProfiler.nodeEnd();
     }
-
-    // Child succeeded or failed, so clear any existing start time.
-    if (startTime !== undefined) {
-      blackboard.delete(this.startTimeKey);
-    }
-
-    this.lastStatus = childStatus;
-    blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, childDebugInfo);
-    return this.lastStatus;
   }
 }
 
@@ -193,38 +226,43 @@ export class CachingNode implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const currentTime = context.gameState.time;
+    btProfiler.nodeStart(this.name);
+    try {
+      const currentTime = context.gameState.time;
 
-    // --- Check Cache ---
-    const cachedStatus = blackboard.get<NodeStatus>(this.statusKey);
-    const cachedTimestamp = blackboard.get<number>(this.timestampKey);
+      // --- Check Cache ---
+      const cachedStatus = blackboard.get<NodeStatus>(this.statusKey);
+      const cachedTimestamp = blackboard.get<number>(this.timestampKey);
 
-    if (cachedStatus !== undefined && cachedTimestamp !== undefined) {
-      const isExpired = currentTime - cachedTimestamp > this.cacheDurationHours;
-      const isStillValid = this.validityCheck ? this.validityCheck(human, context, blackboard) : true;
+      if (cachedStatus !== undefined && cachedTimestamp !== undefined) {
+        const isExpired = currentTime - cachedTimestamp > this.cacheDurationHours;
+        const isStillValid = this.validityCheck ? this.validityCheck(human, context, blackboard) : true;
 
-      if (!isExpired && isStillValid) {
-        const remaining = (cachedTimestamp + this.cacheDurationHours - currentTime).toFixed(2);
-        const debugInfo = `Cache hit. Status: ${NodeStatus[cachedStatus]}. ${remaining}h left.`;
-        this.lastStatus = cachedStatus;
-        blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
-        return this.lastStatus;
+        if (!isExpired && isStillValid) {
+          const remaining = (cachedTimestamp + this.cacheDurationHours - currentTime).toFixed(2);
+          const debugInfo = `Cache hit. Status: ${NodeStatus[cachedStatus]}. ${remaining}h left.`;
+          this.lastStatus = cachedStatus;
+          blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+          return this.lastStatus;
+        }
       }
+
+      // --- Cache Miss or Invalidated ---
+      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+
+      // Only cache SUCCESS or FAILURE, not RUNNING.
+      if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.FAILURE) {
+        blackboard.set(this.statusKey, childStatus);
+        blackboard.set(this.timestampKey, currentTime);
+      }
+
+      this.lastStatus = childStatus;
+      const debugInfo = `Cache miss. Child returned ${NodeStatus[childStatus]}. ${childDebugInfo}`;
+      blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+      return this.lastStatus;
+    } finally {
+      btProfiler.nodeEnd();
     }
-
-    // --- Cache Miss or Invalidated ---
-    const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-
-    // Only cache SUCCESS or FAILURE, not RUNNING.
-    if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.FAILURE) {
-      blackboard.set(this.statusKey, childStatus);
-      blackboard.set(this.timestampKey, currentTime);
-    }
-
-    this.lastStatus = childStatus;
-    const debugInfo = `Cache miss. Child returned ${NodeStatus[childStatus]}. ${childDebugInfo}`;
-    blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
-    return this.lastStatus;
   }
 }
 
@@ -254,47 +292,52 @@ export class CooldownNode implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const currentTime = context.gameState.time;
-    const cooldownEndTime = blackboard.get<number>(this.cooldownKey);
+    btProfiler.nodeStart(this.name);
+    try {
+      const currentTime = context.gameState.time;
+      const cooldownEndTime = blackboard.get<number>(this.cooldownKey);
 
-    // If the child was already running, let it continue execution, bypassing the cooldown check.
-    // The cooldown should only prevent *starting* an action, not interrupt one in progress.
-    if (this.child.lastStatus === NodeStatus.RUNNING) {
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-      this.lastStatus = childStatus;
-      if (this.name) {
-        const runningDebugInfo = `Continuing running child. ${debugInfo}`;
-        blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, runningDebugInfo);
+      // If the child was already running, let it continue execution, bypassing the cooldown check.
+      // The cooldown should only prevent *starting* an action, not interrupt one in progress.
+      if (this.child.lastStatus === NodeStatus.RUNNING) {
+        const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+        this.lastStatus = childStatus;
+        if (this.name) {
+          const runningDebugInfo = `Continuing running child. ${debugInfo}`;
+          blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, runningDebugInfo);
+        }
+        // Do NOT set the cooldown again; the action is merely continuing.
+        return this.lastStatus;
       }
-      // Do NOT set the cooldown again; the action is merely continuing.
-      return this.lastStatus;
-    }
 
-    // --- Child was not running, so check cooldown before allowing a new execution ---
-    if (cooldownEndTime !== undefined && currentTime < cooldownEndTime) {
-      const remaining = (cooldownEndTime - currentTime).toFixed(2);
-      const debugInfo = `Cooldown active, ${remaining}h left`;
-      this.lastStatus = NodeStatus.FAILURE;
+      // --- Child was not running, so check cooldown before allowing a new execution ---
+      if (cooldownEndTime !== undefined && currentTime < cooldownEndTime) {
+        const remaining = (cooldownEndTime - currentTime).toFixed(2);
+        const debugInfo = `Cooldown active, ${remaining}h left`;
+        this.lastStatus = NodeStatus.FAILURE;
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
+        }
+        return this.lastStatus;
+      }
+
+      // Cooldown is not active. Execute the child.
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+
+      // If the child succeeds or *starts* running for the first time, set the cooldown.
+      if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.RUNNING) {
+        blackboard.set(this.cooldownKey, currentTime + this.cooldownDurationHours);
+      }
+
+      this.lastStatus = childStatus;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
       }
+
       return this.lastStatus;
+    } finally {
+      btProfiler.nodeEnd();
     }
-
-    // Cooldown is not active. Execute the child.
-    const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-
-    // If the child succeeds or *starts* running for the first time, set the cooldown.
-    if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.RUNNING) {
-      blackboard.set(this.cooldownKey, currentTime + this.cooldownDurationHours);
-    }
-
-    this.lastStatus = childStatus;
-    if (this.name) {
-      blackboard.recordNodeExecution(this.name, this.lastStatus, currentTime, this.depth, debugInfo);
-    }
-
-    return this.lastStatus;
   }
 }
 
@@ -329,25 +372,36 @@ export class AutopilotControlled implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const isPlayerAndBehaviorDisabled =
-      human.isPlayer && context.gameState.autopilotControls.isActive && !context.gameState.autopilotControls.behaviors[this.behaviorKey];
+    if (this.name) {
+      btProfiler.nodeStart(this.name);
+    }
+    try {
+      const isPlayerAndBehaviorDisabled =
+        human.isPlayer &&
+        context.gameState.autopilotControls.isActive &&
+        !context.gameState.autopilotControls.behaviors[this.behaviorKey];
 
-    if (isPlayerAndBehaviorDisabled) {
-      const debugInfo = `Player autopilot for '${this.behaviorKey}' is disabled.`;
-      this.lastStatus = NodeStatus.FAILURE;
+      if (isPlayerAndBehaviorDisabled) {
+        const debugInfo = `Player autopilot for '${this.behaviorKey}' is disabled.`;
+        this.lastStatus = NodeStatus.FAILURE;
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+        }
+        return this.lastStatus;
+      }
+
+      // For NPCs or for players with the behavior enabled, execute the child
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      this.lastStatus = childStatus;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
       }
+
       return this.lastStatus;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
     }
-
-    // For NPCs or for players with the behavior enabled, execute the child
-    const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
-    this.lastStatus = childStatus;
-    if (this.name) {
-      blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
-    }
-
-    return this.lastStatus;
   }
 }

@@ -2,6 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 
 /**
@@ -23,22 +24,31 @@ export class Sequence implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    for (const child of this.children) {
-      const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
-      if (status !== NodeStatus.SUCCESS) {
-        this.lastStatus = status;
-        if (this.name) {
-          blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+    if (this.name) {
+      btProfiler.nodeStart(this.name);
+    }
+    try {
+      for (const child of this.children) {
+        const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
+        if (status !== NodeStatus.SUCCESS) {
+          this.lastStatus = status;
+          if (this.name) {
+            blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
+          }
+          return status; // Return FAILURE or RUNNING immediately
         }
-        return status; // Return FAILURE or RUNNING immediately
+      }
+
+      this.lastStatus = NodeStatus.SUCCESS;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, '');
+      }
+      return NodeStatus.SUCCESS; // All children succeeded
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
       }
     }
-
-    this.lastStatus = NodeStatus.SUCCESS;
-    if (this.name) {
-      blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, '');
-    }
-    return NodeStatus.SUCCESS; // All children succeeded
   }
 }
 
@@ -62,41 +72,50 @@ export class Selector implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    const startIndex = this.runningChildIndex ?? 0;
-
-    for (let i = startIndex; i < this.children.length; i++) {
-      const child = this.children[i];
-      const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
-
-      if (status === NodeStatus.FAILURE) {
-        continue; // Try the next child
-      }
-
-      if (status === NodeStatus.SUCCESS) {
-        delete this.runningChildIndex;
-        this.lastStatus = NodeStatus.SUCCESS;
-        if (this.name) {
-          blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, debugInfo);
-        }
-        return NodeStatus.SUCCESS;
-      }
-
-      if (status === NodeStatus.RUNNING) {
-        this.runningChildIndex = i;
-        this.lastStatus = NodeStatus.RUNNING;
-        if (this.name) {
-          blackboard.recordNodeExecution(this.name, NodeStatus.RUNNING, context.gameState.time, this.depth, debugInfo);
-        }
-        return NodeStatus.RUNNING;
-      }
-    }
-
-    delete this.runningChildIndex;
-    this.lastStatus = NodeStatus.FAILURE;
     if (this.name) {
-      blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth, '');
+      btProfiler.nodeStart(this.name);
     }
-    return NodeStatus.FAILURE; // All children failed
+    try {
+      const startIndex = this.runningChildIndex ?? 0;
+
+      for (let i = startIndex; i < this.children.length; i++) {
+        const child = this.children[i];
+        const [status, debugInfo] = unpackStatus(child.execute(human, context, blackboard));
+
+        if (status === NodeStatus.FAILURE) {
+          continue; // Try the next child
+        }
+
+        if (status === NodeStatus.SUCCESS) {
+          delete this.runningChildIndex;
+          this.lastStatus = NodeStatus.SUCCESS;
+          if (this.name) {
+            blackboard.recordNodeExecution(this.name, NodeStatus.SUCCESS, context.gameState.time, this.depth, debugInfo);
+          }
+          return NodeStatus.SUCCESS;
+        }
+
+        if (status === NodeStatus.RUNNING) {
+          this.runningChildIndex = i;
+          this.lastStatus = NodeStatus.RUNNING;
+          if (this.name) {
+            blackboard.recordNodeExecution(this.name, NodeStatus.RUNNING, context.gameState.time, this.depth, debugInfo);
+          }
+          return NodeStatus.RUNNING;
+        }
+      }
+
+      delete this.runningChildIndex;
+      this.lastStatus = NodeStatus.FAILURE;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, NodeStatus.FAILURE, context.gameState.time, this.depth, '');
+      }
+      return NodeStatus.FAILURE; // All children failed
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
 
@@ -105,8 +124,10 @@ export class Selector implements BehaviorNode {
  * The exact success/failure condition can vary (e.g., succeed when one succeeds, or when all succeed).
  */
 export class Parallel implements BehaviorNode {
+  public name?: string;
   public depth: number;
-  constructor(public children: BehaviorNode[], depth: number = 0) {
+  constructor(public children: BehaviorNode[], name?: string, depth: number = 0) {
+    this.name = name;
     this.depth = depth;
     this.children.forEach((child) => {
       child.depth = (this.depth ?? 0) + 1;
@@ -114,10 +135,19 @@ export class Parallel implements BehaviorNode {
   }
 
   execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
-    // TODO: Implement parallel execution logic.
-    // This is more complex as it might involve managing running state for multiple children simultaneously.
-    // For now, we can just execute them in sequence as a placeholder.
-    this.children.forEach((child) => child.execute(human, context, blackboard));
-    return NodeStatus.SUCCESS;
+    if (this.name) {
+      btProfiler.nodeStart(this.name);
+    }
+    try {
+      // TODO: Implement parallel execution logic.
+      // This is more complex as it might involve managing running state for multiple children simultaneously.
+      // For now, we can just execute them in sequence as a placeholder.
+      this.children.forEach((child) => child.execute(human, context, blackboard));
+      return NodeStatus.SUCCESS;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
   }
 }
