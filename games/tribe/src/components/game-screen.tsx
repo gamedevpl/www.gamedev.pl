@@ -23,6 +23,7 @@ import {
   HUMAN_ATTACK_RANGE,
   BERRY_BUSH_SPREAD_RADIUS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
+  FAST_FORWARD_AMOUNT_SECONDS,
 } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
@@ -210,6 +211,9 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
             case UIButtonActionType.TogglePause:
               gameStateRef.current.isPaused = !gameStateRef.current.isPaused;
               break;
+            case UIButtonActionType.FastForward:
+              gameStateRef.current = updateWorld(gameStateRef.current, FAST_FORWARD_AMOUNT_SECONDS);
+              break;
             case UIButtonActionType.ToggleProcreationBehavior:
               gameStateRef.current.autopilotControls.behaviors.procreation =
                 !gameStateRef.current.autopilotControls.behaviors.procreation;
@@ -328,7 +332,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       }
 
       if (key === 't') {
-        gameStateRef.current = updateWorld(gameStateRef.current, 10);
+        gameStateRef.current = updateWorld(gameStateRef.current, FAST_FORWARD_AMOUNT_SECONDS);
         return;
       }
 

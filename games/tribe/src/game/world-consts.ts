@@ -165,6 +165,7 @@ export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a clai
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
+export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 export const AUTOPILOT_MOVE_DISTANCE_THRESHOLD = 20;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.15; // representing 15% of max health
 export const AI_FLEE_DISTANCE = 200;

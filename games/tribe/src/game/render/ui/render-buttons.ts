@@ -215,6 +215,20 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
 export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWorldState, canvasWidth: number): void {
   ctx.save();
 
+  // Ensure main control buttons exist
+  if (!gameState.uiButtons.some((b) => b.action === UIButtonActionType.FastForward)) {
+    gameState.uiButtons.push({
+      id: 'fastForwardButton',
+      action: UIButtonActionType.FastForward,
+      rect: { x: 0, y: 0, width: 0, height: 0 }, // Will be calculated during layout
+      text: 'FFWD [T]',
+      currentWidth: UI_BUTTON_WIDTH,
+      backgroundColor: UI_BUTTON_BACKGROUND_COLOR,
+      textColor: UI_BUTTON_TEXT_COLOR,
+      tooltip: 'Fast-forward time',
+    });
+  }
+
   // --- Update Button State & Definitions ---
   // This section modifies the buttons in the gameState before drawing.
 
@@ -246,6 +260,13 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     pauseButton.currentWidth = gameState.isPaused ? UI_BUTTON_WIDTH * 1.4 : UI_BUTTON_WIDTH * 1.1;
     pauseButton.tooltip = gameState.isPaused ? 'Resume Game' : 'Pause Game';
   }
+  const fastForwardButton = gameState.uiButtons.find((b) => b.action === UIButtonActionType.FastForward);
+  if (fastForwardButton) {
+    fastForwardButton.text = `FFWD [T]`;
+    fastForwardButton.backgroundColor = UI_BUTTON_BACKGROUND_COLOR;
+    fastForwardButton.currentWidth = UI_BUTTON_WIDTH * 1.3;
+    fastForwardButton.tooltip = `Fast-forward time`;
+  }
 
   // 2. Update Autopilot Panel Buttons (if active)
   renderAutopilotPanel(gameState, canvasWidth, ctx.canvas.height);
@@ -257,6 +278,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
   gameState.uiButtons
     .filter(
       (b) =>
+        b.action === UIButtonActionType.FastForward ||
         b.action === UIButtonActionType.ToggleAutopilot ||
         b.action === UIButtonActionType.ToggleMute ||
         b.action === UIButtonActionType.TogglePause,

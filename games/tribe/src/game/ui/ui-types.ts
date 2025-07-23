@@ -75,6 +75,7 @@ export enum UIButtonActionType {
   ToggleAttackBehavior = 'ToggleAttackBehavior',
   ToggleCallToAttackBehavior = 'ToggleCallToAttackBehavior',
   ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
+  FastForward = 'FastForward',
 }
 
 export interface ClickableUIButton {
