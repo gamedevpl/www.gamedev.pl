@@ -4,6 +4,7 @@ import { FoodItem } from '../../../food/food-types';
 import { AIType } from '../../../ai/ai-types';
 import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
 import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
+import { Vector2D } from '../../../utils/math-types';
 
 /**
  * Represents a human entity in the game.
@@ -119,6 +120,21 @@ export interface HumanEntity extends Entity {
 
   /** The blackboard for the behavior tree AI. */
   aiBlackboard?: Blackboard;
+
+  /** The target position for the autopilot planting behavior. */
+  autopilotPlantTarget?: Vector2D;
+
+  /** The target entity for the autopilot attacking behavior. */
+  autopilotAttackTargetId?: EntityId;
+
+  /** The target entity for the autopilot procreation behavior. */
+  autopilotProcreateTargetId?: EntityId;
+
+  /** The target entity for the autopilot feeding child behavior. */
+  autopilotFeedChildTargetId?: EntityId;
+
+  /** The target entity for the autopilot gathering behavior. */
+  autopilotGatherTargetId?: EntityId;
 }
 
 export type HumanAction =

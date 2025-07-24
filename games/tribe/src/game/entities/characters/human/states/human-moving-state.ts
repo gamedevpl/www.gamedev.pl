@@ -108,7 +108,6 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
     // Reset  acceleration when exiting moving state
     entity.acceleration = 0;
-    entity.target = undefined;
   }
 }
 

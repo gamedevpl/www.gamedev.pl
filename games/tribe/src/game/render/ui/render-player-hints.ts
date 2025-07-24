@@ -12,7 +12,7 @@ const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;
 const LINE_HEIGHT = 28;
 
-function drawDottedOutline(
+export function drawDottedOutline(
   ctx: CanvasRenderingContext2D,
   position: Vector2D,
   radius: number,

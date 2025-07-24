@@ -10,7 +10,13 @@ export enum PlayerActionType {
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
   FeedChildren = 'FeedChildren',
+  // Autopilot specific
   AutopilotMove = 'AutopilotMove',
+  AutopilotGather = 'AutopilotGather',
+  AutopilotAttack = 'AutopilotAttack',
+  AutopilotProcreate = 'AutopilotProcreate',
+  AutopilotPlant = 'AutopilotPlant',
+  AutopilotFeedChildren = 'AutopilotFeedChildren',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -23,6 +29,28 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.TribeSplit]: '🔱',
   [PlayerActionType.FeedChildren]: '👨‍👧',
   [PlayerActionType.AutopilotMove]: '🎯',
+  [PlayerActionType.AutopilotGather]: '👇',
+  [PlayerActionType.AutopilotAttack]: '⚔️',
+  [PlayerActionType.AutopilotProcreate]: '❤️',
+  [PlayerActionType.AutopilotPlant]: '🌱',
+  [PlayerActionType.AutopilotFeedChildren]: '👨‍👧',
+};
+
+export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
+  [PlayerActionType.GatherFood]: 'Gather',
+  [PlayerActionType.Eat]: 'Eat',
+  [PlayerActionType.Procreate]: 'Procreate',
+  [PlayerActionType.Attack]: 'Attack',
+  [PlayerActionType.PlantBush]: 'Plant',
+  [PlayerActionType.CallToAttack]: 'Call to Attack',
+  [PlayerActionType.TribeSplit]: 'Split Tribe',
+  [PlayerActionType.FeedChildren]: 'Feed',
+  [PlayerActionType.AutopilotMove]: 'Walk',
+  [PlayerActionType.AutopilotGather]: 'Gather',
+  [PlayerActionType.AutopilotAttack]: 'Attack',
+  [PlayerActionType.AutopilotProcreate]: 'Procreate',
+  [PlayerActionType.AutopilotPlant]: 'Plant',
+  [PlayerActionType.AutopilotFeedChildren]: 'Feed',
 };
 
 export interface PlayerActionHint {

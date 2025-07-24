@@ -5,3 +5,4 @@ export * from './ui/render-pause-overlay';
 export * from './ui/render-player-hints';
 export * from './ui/render-tribe-list';
 export * from './ui/render-tutorial';
+export * from './ui/render-autopilot-hints';

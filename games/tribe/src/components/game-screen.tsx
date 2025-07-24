@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/world-update';
-import { GameWorldState } from '../game/world-types';
+import { GameWorldState, HoveredAutopilotAction } from '../game/world-types';
 import { useGameContext } from '../context/game-context';
 import { renderGame } from '../game/render';
 import {} from '../game/entities/entities-types';
@@ -15,6 +15,7 @@ import {
   performTribeSplit,
   findAllHumans,
   screenToWorldCoords,
+  findEntityAtPosition,
 } from '../game/utils/world-utils';
 import {
   HUMAN_INTERACTION_RANGE,
@@ -24,6 +25,8 @@ import {
   BERRY_BUSH_SPREAD_RADIUS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   FAST_FORWARD_AMOUNT_SECONDS,
+  BERRY_COST_FOR_PLANTING,
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
 } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
@@ -36,6 +39,7 @@ import { HumanCorpseEntity } from '../game/entities/characters/human/human-corps
 import { addVisualEffect } from '../game/utils/visual-effects-utils';
 import { VisualEffectType } from '../game/visual-effects/visual-effect-types';
 import { initGame } from '../game';
+import { FoodType } from '../game/food/food-types';
 
 export const GameScreen: React.FC = () => {
   const [initialState] = useState(() => initGame());
@@ -92,7 +96,11 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
     const player = findPlayerEntity(gameStateRef.current);
 
     if (player) {
-      playerActionHintsRef.current = getAvailablePlayerActions(gameStateRef.current, player);
+      if (gameStateRef.current.autopilotControls.isActive) {
+        playerActionHintsRef.current = [];
+      } else {
+        playerActionHintsRef.current = getAvailablePlayerActions(gameStateRef.current, player);
+      }
     } else {
       playerActionHintsRef.current = [];
     }
@@ -246,10 +254,42 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         return;
       }
 
-      // Handle click-to-move for autopilot
+      // Handle click-to-action for autopilot
       if (gameStateRef.current.autopilotControls.isActive && !gameStateRef.current.isPaused) {
         const player = findPlayerEntity(gameStateRef.current);
-        if (player) {
+        const action = gameStateRef.current.hoveredAutopilotAction;
+
+        if (player && action) {
+          // Clear any previous commands
+          gameStateRef.current.autopilotControls.autopilotMoveTarget = undefined;
+          player.autopilotGatherTargetId = undefined;
+          player.autopilotPlantTarget = undefined;
+          player.autopilotAttackTargetId = undefined;
+          player.autopilotProcreateTargetId = undefined;
+          player.autopilotFeedChildTargetId = undefined;
+
+          switch (action.action) {
+            case PlayerActionType.AutopilotGather:
+              player.autopilotGatherTargetId = action.targetEntityId;
+              break;
+            case PlayerActionType.AutopilotMove:
+              gameStateRef.current.autopilotControls.autopilotMoveTarget = action.position;
+              break;
+            case PlayerActionType.AutopilotPlant:
+              player.autopilotPlantTarget = action.position;
+              break;
+            case PlayerActionType.AutopilotAttack:
+              player.autopilotAttackTargetId = action.targetEntityId;
+              break;
+            case PlayerActionType.AutopilotProcreate:
+              player.autopilotProcreateTargetId = action.targetEntityId;
+              break;
+            case PlayerActionType.AutopilotFeedChildren:
+              player.autopilotFeedChildTargetId = action.targetEntityId;
+              break;
+          }
+        } else if (player) {
+          // Fallback to default click-to-move if no specific action is hovered
           const worldPos = screenToWorldCoords(
             { x: mouseX, y: mouseY },
             viewportCenterRef.current,
@@ -276,6 +316,75 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       const mouseY = event.clientY - rect.top;
 
       gameStateRef.current.mousePosition = { x: mouseX, y: mouseY };
+
+      // Handle autopilot hover hints
+      if (gameStateRef.current.autopilotControls.isActive) {
+        const player = findPlayerEntity(gameStateRef.current);
+        if (!player) {
+          gameStateRef.current.hoveredAutopilotAction = undefined;
+          return;
+        }
+
+        const worldPos = screenToWorldCoords(
+          { x: mouseX, y: mouseY },
+          viewportCenterRef.current,
+          { width: canvasRef.current.width, height: canvasRef.current.height },
+          gameStateRef.current.mapDimensions,
+        );
+
+        let determinedAction: HoveredAutopilotAction | undefined = undefined;
+        let hoveredEntity = findEntityAtPosition(worldPos, gameStateRef.current);
+
+        if (hoveredEntity) {
+          // --- ENTITY-BASED ACTIONS ---
+          if (hoveredEntity.type === 'berryBush' && (hoveredEntity as BerryBushEntity).food.length > 0) {
+            determinedAction = {
+              action: PlayerActionType.AutopilotGather,
+              targetEntityId: hoveredEntity.id,
+            };
+          } else if (hoveredEntity.type === 'human') {
+            const targetHuman = hoveredEntity as HumanEntity;
+
+            // Check for Attack
+            if (targetHuman.id !== player.id && targetHuman.leaderId !== player.leaderId) {
+              determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: targetHuman.id };
+            }
+            // Check for Procreate
+            else if (
+              targetHuman.id !== player.id &&
+              targetHuman.gender !== player.gender &&
+              targetHuman.isAdult &&
+              player.isAdult &&
+              (targetHuman.procreationCooldown || 0) <= 0
+            ) {
+              determinedAction = { action: PlayerActionType.AutopilotProcreate, targetEntityId: targetHuman.id };
+            }
+            // Check for Feed Child
+            else if (
+              player.food.length > 0 &&
+              !targetHuman.isAdult &&
+              (targetHuman.motherId === player.id || targetHuman.fatherId === player.id)
+            ) {
+              determinedAction = { action: PlayerActionType.AutopilotFeedChildren, targetEntityId: targetHuman.id };
+            }
+          }
+        } else {
+          // --- POSITION-BASED ACTIONS ---
+          if (
+            gameStateRef.current.autopilotControls.behaviors.planting &&
+            player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
+            findValidPlantingSpot(worldPos, gameStateRef.current, 1, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, player.id)
+          ) {
+            determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
+          } else {
+            determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+          }
+        }
+
+        gameStateRef.current.hoveredAutopilotAction = determinedAction;
+      } else {
+        gameStateRef.current.hoveredAutopilotAction = undefined;
+      }
 
       let hoveredButtonId: string | undefined = undefined;
       // Iterate in reverse to find the topmost button first
@@ -306,8 +415,12 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
 
       const key = event.key.toLowerCase();
       if (key === 'escape') {
-        // Cancel autopilot move target
+        // Cancel autopilot move/gather target
         gameStateRef.current.autopilotControls.autopilotMoveTarget = undefined;
+        const player = findPlayerEntity(gameStateRef.current);
+        if (player) {
+          player.autopilotGatherTargetId = undefined;
+        }
         return;
       }
 

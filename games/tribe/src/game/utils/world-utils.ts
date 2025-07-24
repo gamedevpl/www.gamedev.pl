@@ -1,6 +1,6 @@
 import { EntityId, Entity, EntityType } from '../entities/entities-types';
 import { Vector2D } from './math-types';
-import { calculateWrappedDistance, vectorAdd, getAveragePosition } from './math-utils';
+import { calculateWrappedDistance, vectorAdd, getAveragePosition, vectorDistance } from './math-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -34,6 +34,9 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
+  if (gameState.autopilotControls.isActive) {
+    return [];
+  }
   const actions: PlayerActionHint[] = [];
   const indexedState = gameState as IndexedWorldState;
 
@@ -1106,4 +1109,26 @@ export function screenToWorldCoords(
   const wrappedY = ((absoluteWorldY % mapDimensions.height) + mapDimensions.height) % mapDimensions.height;
 
   return { x: wrappedX, y: wrappedY };
+}
+
+
+export function findEntityAtPosition(
+  position: Vector2D,
+  gameState: GameWorldState,
+  entityType?: EntityType,
+): Entity | undefined {
+  // Iterate in reverse to find the top-most entity first (assuming entities are sorted by y-pos for rendering)
+  const entities = Array.from(gameState.entities.entities.values()).reverse();
+
+  for (const entity of entities) {
+    if (entityType && entity.type !== entityType) {
+      continue;
+    }
+
+    const distance = vectorDistance(position, entity.position);
+    if (distance < entity.radius) {
+      return entity;
+    }
+  }
+  return undefined;
 }

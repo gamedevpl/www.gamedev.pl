@@ -21,6 +21,11 @@ import {
   createDefendClaimedBushBehavior,
   createDesperateAttackBehavior,
   createAutopilotMovingBehavior,
+  createAutopilotGatheringBehavior,
+  createAutopilotAttackingBehavior,
+  createAutopilotFeedingChildBehavior,
+  createAutopilotPlantingBehavior,
+  createAutopilotProcreationBehavior,
 } from './behaviors';
 
 /**
@@ -44,6 +49,11 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // This sequence handles direct player commands like click-to-move.
       // It checks if it's the player and if autopilot is on, then executes the move.
       createAutopilotMovingBehavior(1),
+      createAutopilotGatheringBehavior(1),
+      createAutopilotAttackingBehavior(1),
+      createAutopilotProcreationBehavior(1),
+      createAutopilotPlantingBehavior(1),
+      createAutopilotFeedingChildBehavior(1),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),

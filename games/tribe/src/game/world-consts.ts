@@ -167,6 +167,7 @@ export const AI_GATHERING_SEARCH_RADIUS = 300; // Radius for AI to search for fo
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
+export const AUTOPILOT_ACTION_PROXIMITY = HUMAN_INTERACTION_PROXIMITY * 1.2;
 export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 export const AUTOPILOT_MOVE_DISTANCE_THRESHOLD = 20;
 export const AI_FLEE_HEALTH_THRESHOLD = 0.15; // representing 15% of max health
@@ -187,7 +188,7 @@ export const NON_FAMILY_CLAIM_COLOR: string = '#DC143C'; // Crimson
 export const PLAYER_ACTION_OUTLINE_COLOR: string = '#FFFFFF';
 export const PLAYER_ACTION_OUTLINE_DASH_PATTERN: number[] = [5, 5];
 export const PLAYER_ACTION_OUTLINE_RADIUS_OFFSET: number = 5;
-export const PLAYER_ACTION_HINT_FONT_SIZE: number = 20;
+export const PLAYER_ACTION_HINT_FONT_SIZE: number = 15;
 
 // Crown Sizes
 export const PLAYER_CROWN_SIZE: number = 20; // Size of the crown for player character

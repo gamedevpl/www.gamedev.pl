@@ -17,3 +17,8 @@ export * from './defend-family-behavior';
 export * from './defend-claimed-bush-behavior';
 export * from './desperate-attack-behavior';
 export * from './autopilot-moving-behavior';
+export * from './autopilot-gathering-behavior';
+export * from "./autopilot-attacking-behavior";
+export * from "./autopilot-feeding-child-behavior";
+export * from "./autopilot-planting-behavior";
+export * from "./autopilot-procreation-behavior";

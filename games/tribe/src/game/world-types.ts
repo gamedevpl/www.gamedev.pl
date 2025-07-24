@@ -4,10 +4,36 @@
  */
 
 import { EntityId, Entities } from './entities/entities-types';
-import { ClickableUIButton } from './ui/ui-types';
+import { ClickableUIButton, PlayerActionType } from './ui/ui-types';
 import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
+
+export type HoveredAutopilotAction =
+  | {
+      action: PlayerActionType.AutopilotGather;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotProcreate;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotAttack;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotFeedChildren;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotPlant;
+      position: Vector2D;
+    }
+  | {
+      action: PlayerActionType.AutopilotMove;
+      position: Vector2D;
+    };
 
 // Game State Interface
 export interface GameWorldState {
@@ -35,6 +61,7 @@ export interface GameWorldState {
   debugCharacterId?: EntityId;
   hoveredButtonId?: string;
   mousePosition?: Vector2D;
+  hoveredAutopilotAction?: HoveredAutopilotAction;
 }
 
 export type UpdateContext = {
@@ -44,7 +71,7 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.\\n   */
+   * Time since the last update in milliseconds.\\\\n   */
   deltaTime: number;
 };
 

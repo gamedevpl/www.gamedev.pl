@@ -107,6 +107,7 @@ export function initWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
+    hoveredAutopilotAction: undefined,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -174,6 +175,7 @@ export function initIntroWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
+    hoveredAutopilotAction: undefined,
   };
 
   return indexWorldState(initialWorldState);

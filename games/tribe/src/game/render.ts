@@ -14,6 +14,7 @@ import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
 import { renderAutopilotMoveTarget } from './render/render-effects';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
+import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -81,8 +82,19 @@ export function renderGame(
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
 
-    if (player && playerActionHints.length > 0) {
-      renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+    if (player) {
+      if (gameState.autopilotControls.isActive) {
+        renderAutopilotHints(ctx, gameState, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+      } else if (playerActionHints.length > 0) {
+        renderPlayerActionHints(
+          ctx,
+          playerActionHints,
+          player,
+          viewportCenter,
+          ctx.canvas.width,
+          ctx.canvas.height,
+        );
+      }
     }
 
     // --- UI Highlights ---
