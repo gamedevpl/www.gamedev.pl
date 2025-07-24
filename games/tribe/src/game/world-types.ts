@@ -27,6 +27,10 @@ export type HoveredAutopilotAction =
       targetEntityId: EntityId;
     }
   | {
+      action: PlayerActionType.AutopilotFollowMe;
+      targetEntityId: EntityId;
+    }
+  | {
       action: PlayerActionType.AutopilotPlant;
       position: Vector2D;
     }
@@ -61,7 +65,6 @@ export interface GameWorldState {
   debugCharacterId?: EntityId;
   hoveredButtonId?: string;
   mousePosition?: Vector2D;
-  hoveredAutopilotAction?: HoveredAutopilotAction;
 }
 
 export type UpdateContext = {
@@ -71,7 +74,8 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.\\\\n   */
+   * Time since the last update in milliseconds.\\\\
+   */
   deltaTime: number;
 };
 
@@ -83,7 +87,9 @@ export type AutopilotControls = {
     gathering: boolean;
     attack: boolean;
     callToAttack: boolean;
+    followMe: boolean;
     feedChildren: boolean;
   };
-  autopilotMoveTarget?: Vector2D;
+  hoveredAutopilotAction?: HoveredAutopilotAction;
+  activeAutopilotAction?: HoveredAutopilotAction;
 };

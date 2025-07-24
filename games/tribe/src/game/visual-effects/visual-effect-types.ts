@@ -20,6 +20,7 @@ export enum VisualEffectType {
   SeizeBuildup,
   Seize,
   CallToAttack,
+  CallToFollow,
   AutopilotMoveTarget,
 }
 

@@ -22,3 +22,6 @@ export * from "./autopilot-attacking-behavior";
 export * from "./autopilot-feeding-child-behavior";
 export * from "./autopilot-planting-behavior";
 export * from "./autopilot-procreation-behavior";
+export * from "./follow-leader-behavior";
+export * from "./tribe-migration-behavior";
+export * from "./autopilot-follow-leader-behavior";

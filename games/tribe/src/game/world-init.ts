@@ -96,8 +96,11 @@ export function initWorld(): GameWorldState {
         gathering: true,
         attack: false,
         callToAttack: false,
+        followMe: false,
         feedChildren: true,
       },
+      hoveredAutopilotAction: undefined,
+      activeAutopilotAction: undefined,
     },
     hasPlayerMovedEver: false,
     masterVolume: INITIAL_MASTER_VOLUME,
@@ -107,7 +110,6 @@ export function initWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
-    hoveredAutopilotAction: undefined,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -164,8 +166,11 @@ export function initIntroWorld(): GameWorldState {
         gathering: true,
         attack: false,
         callToAttack: true,
+        followMe: false,
         feedChildren: true,
       },
+      hoveredAutopilotAction: undefined,
+      activeAutopilotAction: undefined,
     },
     hasPlayerMovedEver: false,
     masterVolume: INITIAL_MASTER_VOLUME,
@@ -175,7 +180,6 @@ export function initIntroWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
-    hoveredAutopilotAction: undefined,
   };
 
   return indexWorldState(initialWorldState);

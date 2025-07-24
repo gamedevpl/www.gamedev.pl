@@ -12,9 +12,9 @@ import { renderTribeList } from './render/ui/render-tribe-list';
 import { renderTutorialPanel, renderUIElementHighlight } from './render/ui/render-tutorial';
 import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
-import { renderAutopilotMoveTarget } from './render/render-effects';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
+import { renderAutopilotIndicator } from './render/render-ui';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -40,10 +40,8 @@ export function renderGame(
 
   renderWorld(ctx, gameState, isDebugOn);
 
-  // Render persistent effects that are tied to game state, not the temporary effect system
-  if (gameState.autopilotControls.autopilotMoveTarget) {
-    renderAutopilotMoveTarget(ctx, gameState.autopilotControls.autopilotMoveTarget, gameState.time);
-  }
+  // Render persistent autopilot command indicator
+  renderAutopilotIndicator(ctx, gameState);
 
   ctx.restore(); // Restore context to draw UI in fixed positions
 

@@ -15,7 +15,10 @@ import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
   AI_DESPERATE_ATTACK_SEARCH_RADIUS,
+  AI_MIGRATION_TARGET_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
+  LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
+  LEADER_WORLD_ANALYSIS_GRID_STEP,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -149,6 +152,11 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   // Check for Tribe Split
   if (canSplitTribe(player, gameState).canSplit) {
     actions.push({ type: PlayerActionType.TribeSplit, action: 'tribeSplitting', key: 'k' });
+  }
+
+  // Check for Follow Me
+  if (player.leaderId === player.id && !player.isCallingToFollow) {
+    actions.push({ type: PlayerActionType.FollowMe, action: 'following', key: 'c' });
   }
 
   return actions;
@@ -1111,7 +1119,6 @@ export function screenToWorldCoords(
   return { x: wrappedX, y: wrappedY };
 }
 
-
 export function findEntityAtPosition(
   position: Vector2D,
   gameState: GameWorldState,
@@ -1131,4 +1138,62 @@ export function findEntityAtPosition(
     }
   }
   return undefined;
+}
+
+export function findOptimalMigrationTarget(leader: HumanEntity, gameState: GameWorldState): Vector2D | null {
+  if (leader.id !== leader.leaderId) {
+    return null;
+  }
+
+  const indexedState = gameState as IndexedWorldState;
+  const currentTribeCenter = getTribeCenter(leader.id, gameState);
+  const { score: currentScore } = calculateHabitabilityScore(
+    currentTribeCenter,
+    LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
+    indexedState,
+    leader.id,
+  );
+
+  let bestCandidate: Vector2D | null = null;
+  let bestScore = currentScore;
+
+  const gridStep = LEADER_WORLD_ANALYSIS_GRID_STEP;
+  const searchRadius = AI_MIGRATION_TARGET_SEARCH_RADIUS;
+
+  // Search in a grid around the leader
+  for (let x = leader.position.x - searchRadius; x < leader.position.x + searchRadius; x += gridStep) {
+    for (let y = leader.position.y - searchRadius; y < leader.position.y + searchRadius; y += gridStep) {
+      const position = {
+        x: ((x % gameState.mapDimensions.width) + gameState.mapDimensions.width) % gameState.mapDimensions.width,
+        y: ((y % gameState.mapDimensions.height) + gameState.mapDimensions.height) % gameState.mapDimensions.height,
+      };
+
+      const distanceFromCurrent = calculateWrappedDistance(
+        currentTribeCenter,
+        position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      );
+
+      // Don't consider spots too close to the current location
+      if (distanceFromCurrent < LEADER_WORLD_ANALYSIS_GRID_SIZE * 2) {
+        continue;
+      }
+
+      const { score: newScore } = calculateHabitabilityScore(
+        position,
+        LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
+        indexedState,
+        leader.id,
+      );
+
+      // Check if the new spot is significantly better and the best one so far
+      if (newScore > bestScore * LEADER_MIGRATION_SUPERIORITY_THRESHOLD) {
+        bestScore = newScore;
+        bestCandidate = position;
+      }
+    }
+  }
+
+  return bestCandidate;
 }

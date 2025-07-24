@@ -106,6 +106,7 @@ export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
 export const FATHER_FOLLOW_DISTANCE = 150;
 export const FATHER_FOLLOW_STOP_DISTANCE = 100;
 export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
+export const FOLLOW_LEADER_MIN_HUNGER_THRESHOLD = 120; // Followers will stop following if hunger is above this
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
 export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 1000;
@@ -141,6 +142,8 @@ export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 500;
 
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
+export const AI_MIGRATION_CHECK_INTERVAL_HOURS = 24;
+export const AI_MIGRATION_TARGET_SEARCH_RADIUS = 1500;
 export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid
 export const LEADER_WORLD_ANALYSIS_GRID_STEP = 400; // The distance between the centers of each cell
 export const LEADER_HABITAT_SCORE_BUSH_WEIGHT = 10; // Points for each bush in a region
@@ -166,6 +169,8 @@ export const AI_GATHERING_SEARCH_RADIUS = 300; // Radius for AI to search for fo
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
 export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
+export const PLAYER_CALL_TO_FOLLOW_DURATION_HOURS: number = 12;
+export const PLAYER_CALL_TO_FOLLOW_RADIUS: number = 300;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
 export const AUTOPILOT_ACTION_PROXIMITY = HUMAN_INTERACTION_PROXIMITY * 1.2;
 export const FAST_FORWARD_AMOUNT_SECONDS = 10;

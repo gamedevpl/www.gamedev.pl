@@ -40,6 +40,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     entity.callToAttackEndTime = undefined;
   }
 
+  // --- Call to Follow Cooldown ---
+  if (entity.isCallingToFollow && entity.callToFollowEndTime && gameState.time > entity.callToFollowEndTime) {
+    entity.isCallingToFollow = false;
+    entity.callToFollowEndTime = undefined;
+  }
+
   // --- Movement Slowdown Cooldown ---
   if (entity.movementSlowdown && gameState.time > entity.movementSlowdown.endTime) {
     entity.movementSlowdown = undefined;

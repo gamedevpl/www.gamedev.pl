@@ -9,6 +9,7 @@ export enum PlayerActionType {
   PlantBush = 'PlantBush',
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
+  FollowMe = 'FollowMe',
   FeedChildren = 'FeedChildren',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
@@ -17,6 +18,7 @@ export enum PlayerActionType {
   AutopilotProcreate = 'AutopilotProcreate',
   AutopilotPlant = 'AutopilotPlant',
   AutopilotFeedChildren = 'AutopilotFeedChildren',
+  AutopilotFollowMe = 'AutopilotFollowMe',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -27,6 +29,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.PlantBush]: '🌱',
   [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
+  [PlayerActionType.FollowMe]: '➡️',
   [PlayerActionType.FeedChildren]: '👨‍👧',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '👇',
@@ -34,6 +37,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotProcreate]: '❤️',
   [PlayerActionType.AutopilotPlant]: '🌱',
   [PlayerActionType.AutopilotFeedChildren]: '👨‍👧',
+  [PlayerActionType.AutopilotFollowMe]: '➡️',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -44,6 +48,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.PlantBush]: 'Plant',
   [PlayerActionType.CallToAttack]: 'Call to Attack',
   [PlayerActionType.TribeSplit]: 'Split Tribe',
+  [PlayerActionType.FollowMe]: 'Follow Me',
   [PlayerActionType.FeedChildren]: 'Feed',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
@@ -51,6 +56,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotProcreate]: 'Procreate',
   [PlayerActionType.AutopilotPlant]: 'Plant',
   [PlayerActionType.AutopilotFeedChildren]: 'Feed',
+  [PlayerActionType.AutopilotFollowMe]: 'Follow',
 };
 
 export interface PlayerActionHint {
@@ -103,6 +109,7 @@ export enum UIButtonActionType {
   ToggleAttackBehavior = 'ToggleAttackBehavior',
   ToggleCallToAttackBehavior = 'ToggleCallToAttackBehavior',
   ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
+  ToggleFollowMeBehavior = 'ToggleFollowMeBehavior',
   FastForward = 'FastForward',
 }
 

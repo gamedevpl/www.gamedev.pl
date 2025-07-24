@@ -1,37 +1,43 @@
-import { HumanEntity } from "../../../entities/characters/human/human-types";
-import { UpdateContext } from "../../../world-types";
-import { ActionNode, ConditionNode, Sequence } from "../nodes";
-import { BehaviorNode, NodeStatus } from "../behavior-tree-types";
-import { calculateWrappedDistance, dirToTarget } from "../../../utils/math-utils";
-import { AUTOPILOT_ACTION_PROXIMITY } from "../../../world-consts";
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
+import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { AUTOPILOT_ACTION_PROXIMITY } from '../../../world-consts';
+import { PlayerActionType } from '../../../ui/ui-types';
 
 export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode {
   return new Sequence(
     [
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          const targetId = human.autopilotFeedChildTargetId;
-          if (!targetId || human.food.length === 0) {
-            if (targetId) human.autopilotFeedChildTargetId = undefined;
-            return false;
-          }
-          const target = context.gameState.entities.entities.get(targetId);
-          if (!target || target.type !== "human" || (target as HumanEntity).isAdult) {
-            human.autopilotFeedChildTargetId = undefined;
-            return false;
-          }
-          return true;
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
+          return (
+            human.isPlayer === true &&
+            context.gameState.autopilotControls.isActive &&
+            activeAction?.action === PlayerActionType.AutopilotFeedChildren
+          );
         },
-        "Has Autopilot Feed Child Target",
+        'Has Autopilot Feed Child Command',
         depth + 1,
       ),
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          const targetId = human.autopilotFeedChildTargetId;
-          if (!targetId) {
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
+
+          if (activeAction?.action !== PlayerActionType.AutopilotFeedChildren) {
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.FAILURE;
           }
-          const target = context.gameState.entities.entities.get(targetId) as HumanEntity;
+
+          const targetId = activeAction.targetEntityId;
+          const target = context.gameState.entities.entities.get(targetId) as HumanEntity | undefined;
+
+          // Validate target
+          if (!target || target.type !== 'human' || target.isAdult || human.food.length === 0) {
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
+            return NodeStatus.FAILURE;
+          }
 
           const distance = calculateWrappedDistance(
             human.position,
@@ -41,25 +47,21 @@ export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode
           );
 
           if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
-            human.autopilotFeedChildTargetId = undefined; // Clear target
-            // Succeed here; the HumanChildFeedingInteraction will handle the rest
+            // Clear the command. The HumanChildFeedingInteraction will handle the actual feeding.
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.SUCCESS;
           } else {
-            human.activeAction = "moving";
+            human.activeAction = 'moving';
             human.target = target.id;
-            human.direction = dirToTarget(
-              human.position,
-              target.position,
-              context.gameState.mapDimensions,
-            );
+            human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
             return NodeStatus.RUNNING;
           }
         },
-        "Move to Child to Feed",
+        'Execute Autopilot Feed Child',
         depth + 1,
       ),
     ],
-    "Autopilot Feed Child",
+    'Autopilot Feed Child',
     depth,
   );
 }

@@ -27,6 +27,8 @@ import {
   FAST_FORWARD_AMOUNT_SECONDS,
   BERRY_COST_FOR_PLANTING,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
 } from '../game/world-consts';
 import { playSound } from '../game/sound/sound-utils';
 import { playSoundAt } from '../game/sound/sound-manager';
@@ -242,6 +244,10 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
               gameStateRef.current.autopilotControls.behaviors.callToAttack =
                 !gameStateRef.current.autopilotControls.behaviors.callToAttack;
               break;
+            case UIButtonActionType.ToggleFollowMeBehavior:
+              gameStateRef.current.autopilotControls.behaviors.followMe =
+                !gameStateRef.current.autopilotControls.behaviors.followMe;
+              break;
             case UIButtonActionType.ToggleFeedChildrenBehavior:
               gameStateRef.current.autopilotControls.behaviors.feedChildren =
                 !gameStateRef.current.autopilotControls.behaviors.feedChildren;
@@ -257,37 +263,14 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       // Handle click-to-action for autopilot
       if (gameStateRef.current.autopilotControls.isActive && !gameStateRef.current.isPaused) {
         const player = findPlayerEntity(gameStateRef.current);
-        const action = gameStateRef.current.hoveredAutopilotAction;
+        const hoveredAction = gameStateRef.current.autopilotControls.hoveredAutopilotAction;
 
-        if (player && action) {
-          // Clear any previous commands
-          gameStateRef.current.autopilotControls.autopilotMoveTarget = undefined;
-          player.autopilotGatherTargetId = undefined;
-          player.autopilotPlantTarget = undefined;
-          player.autopilotAttackTargetId = undefined;
-          player.autopilotProcreateTargetId = undefined;
-          player.autopilotFeedChildTargetId = undefined;
+        // Always clear the previous active command
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
 
-          switch (action.action) {
-            case PlayerActionType.AutopilotGather:
-              player.autopilotGatherTargetId = action.targetEntityId;
-              break;
-            case PlayerActionType.AutopilotMove:
-              gameStateRef.current.autopilotControls.autopilotMoveTarget = action.position;
-              break;
-            case PlayerActionType.AutopilotPlant:
-              player.autopilotPlantTarget = action.position;
-              break;
-            case PlayerActionType.AutopilotAttack:
-              player.autopilotAttackTargetId = action.targetEntityId;
-              break;
-            case PlayerActionType.AutopilotProcreate:
-              player.autopilotProcreateTargetId = action.targetEntityId;
-              break;
-            case PlayerActionType.AutopilotFeedChildren:
-              player.autopilotFeedChildTargetId = action.targetEntityId;
-              break;
-          }
+        if (player && hoveredAction) {
+          // Set the new active command based on the hovered action
+          gameStateRef.current.autopilotControls.activeAutopilotAction = hoveredAction;
         } else if (player) {
           // Fallback to default click-to-move if no specific action is hovered
           const worldPos = screenToWorldCoords(
@@ -296,7 +279,10 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
             { width: canvasRef.current.width, height: canvasRef.current.height },
             gameStateRef.current.mapDimensions,
           );
-          gameStateRef.current.autopilotControls.autopilotMoveTarget = worldPos;
+          gameStateRef.current.autopilotControls.activeAutopilotAction = {
+            action: PlayerActionType.AutopilotMove,
+            position: worldPos,
+          };
         }
       }
     };
@@ -321,7 +307,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       if (gameStateRef.current.autopilotControls.isActive) {
         const player = findPlayerEntity(gameStateRef.current);
         if (!player) {
-          gameStateRef.current.hoveredAutopilotAction = undefined;
+          gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
           return;
         }
 
@@ -336,7 +322,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         let hoveredEntity = findEntityAtPosition(worldPos, gameStateRef.current);
 
         if (hoveredEntity) {
-          // --- ENTITY-BASED ACTIONS ---
+          // --- ENTITY-BASED ACTIONS ---\
           if (hoveredEntity.type === 'berryBush' && (hoveredEntity as BerryBushEntity).food.length > 0) {
             determinedAction = {
               action: PlayerActionType.AutopilotGather,
@@ -355,7 +341,9 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
               targetHuman.gender !== player.gender &&
               targetHuman.isAdult &&
               player.isAdult &&
-              (targetHuman.procreationCooldown || 0) <= 0
+              (targetHuman.procreationCooldown || 0) <= 0 &&
+              targetHuman.gender === 'female' &&
+              targetHuman.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
             ) {
               determinedAction = { action: PlayerActionType.AutopilotProcreate, targetEntityId: targetHuman.id };
             }
@@ -367,9 +355,13 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
             ) {
               determinedAction = { action: PlayerActionType.AutopilotFeedChildren, targetEntityId: targetHuman.id };
             }
+            // Check for Follow Me
+            else if (player.leaderId === targetHuman.id && targetHuman.id === targetHuman.leaderId) {
+              determinedAction = { action: PlayerActionType.AutopilotFollowMe, targetEntityId: targetHuman.id };
+            }
           }
         } else {
-          // --- POSITION-BASED ACTIONS ---
+          // --- POSITION-BASED ACTIONS ---\
           if (
             gameStateRef.current.autopilotControls.behaviors.planting &&
             player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
@@ -381,9 +373,9 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           }
         }
 
-        gameStateRef.current.hoveredAutopilotAction = determinedAction;
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = determinedAction;
       } else {
-        gameStateRef.current.hoveredAutopilotAction = undefined;
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
       }
 
       let hoveredButtonId: string | undefined = undefined;
@@ -415,12 +407,8 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
 
       const key = event.key.toLowerCase();
       if (key === 'escape') {
-        // Cancel autopilot move/gather target
-        gameStateRef.current.autopilotControls.autopilotMoveTarget = undefined;
-        const player = findPlayerEntity(gameStateRef.current);
-        if (player) {
-          player.autopilotGatherTargetId = undefined;
-        }
+        // Cancel active autopilot command
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
         return;
       }
 
@@ -517,6 +505,10 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           gameStateRef.current.autopilotControls.behaviors.callToAttack =
             !gameStateRef.current.autopilotControls.behaviors.callToAttack;
           playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+        } else if (key === 'c') {
+          gameStateRef.current.autopilotControls.behaviors.followMe =
+            !gameStateRef.current.autopilotControls.behaviors.followMe;
+          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
         } else if (key === 'h') {
           gameStateRef.current.autopilotControls.behaviors.feedChildren =
             !gameStateRef.current.autopilotControls.behaviors.feedChildren;
@@ -601,18 +593,22 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       } else if (key === 'arrowup' || key === 'w') {
         playerEntity.direction.y = -1;
         playerEntity.activeAction = 'moving';
+        playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowdown' || key === 's') {
         playerEntity.direction.y = 1;
         playerEntity.activeAction = 'moving';
+        playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowleft' || key === 'a') {
         playerEntity.direction.x = -1;
         playerEntity.activeAction = 'moving';
+        playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'arrowright' || key === 'd') {
         playerEntity.direction.x = 1;
         playerEntity.activeAction = 'moving';
+        playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
       } else if (key === 'q') {
         const humanTarget = findClosestEntity<HumanEntity>(
@@ -654,6 +650,19 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
             PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
           );
           playSoundAt(updateContext, SoundType.CallToAttack, playerEntity.position);
+        }
+      } else if (key === 'c') {
+        const callToFollowAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.FollowMe);
+        if (callToFollowAction) {
+          playerEntity.isCallingToFollow = true;
+          playerEntity.callToFollowEndTime = gameStateRef.current.time + PLAYER_CALL_TO_FOLLOW_DURATION_HOURS;
+          addVisualEffect(
+            gameStateRef.current,
+            VisualEffectType.CallToFollow,
+            playerEntity.position,
+            PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
+          );
+          playSoundAt(updateContext, SoundType.CallToFollow, playerEntity.position);
         }
       } else if (key === 'k') {
         const tribeSplitAction = playerActionHintsRef.current.find((a) => a.type === PlayerActionType.TribeSplit);

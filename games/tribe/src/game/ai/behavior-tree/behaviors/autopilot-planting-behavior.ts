@@ -5,32 +5,42 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { AUTOPILOT_ACTION_PROXIMITY, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../world-consts';
 import { isPositionOccupied } from '../../../utils/world-utils';
+import { PlayerActionType } from '../../../ui/ui-types';
 
 export function createAutopilotPlantingBehavior(depth: number): BehaviorNode {
   return new Sequence(
     [
       new ConditionNode(
-        (human: HumanEntity) => {
-          return !!human.autopilotPlantTarget;
+        (human: HumanEntity, context: UpdateContext) => {
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
+          return (
+            human.isPlayer === true &&
+            context.gameState.autopilotControls.isActive &&
+            activeAction?.action === PlayerActionType.AutopilotPlant
+          );
         },
-        'Has Autopilot Plant Target',
+        'Has Autopilot Plant Command',
         depth + 1,
       ),
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          if (human.activeAction === 'planting') {
-            // If already planting, we just return RUNNING to keep the state machine active.
-            return NodeStatus.RUNNING;
-          }
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
 
-          const plantTarget = human.autopilotPlantTarget;
-          if (!plantTarget) {
+          if (activeAction?.action !== PlayerActionType.AutopilotPlant) {
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.FAILURE;
           }
 
+          // If already planting (from a previous tick), we just return RUNNING to keep the state machine active.
+          if (human.activeAction === 'planting') {
+            return NodeStatus.RUNNING;
+          }
+
+          const plantTarget = activeAction.position;
+
           // Check if the spot is now occupied
           if (isPositionOccupied(plantTarget, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
-            human.autopilotPlantTarget = undefined;
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.FAILURE;
           }
 
@@ -44,7 +54,8 @@ export function createAutopilotPlantingBehavior(depth: number): BehaviorNode {
           if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
             human.activeAction = 'planting';
             human.target = plantTarget;
-            human.autopilotPlantTarget = undefined; // Clear target
+            // Clear the command, but the action continues.
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.RUNNING; // Planting takes time, so we run until the state machine changes it
           } else {
             human.activeAction = 'moving';
@@ -53,7 +64,7 @@ export function createAutopilotPlantingBehavior(depth: number): BehaviorNode {
             return NodeStatus.RUNNING;
           }
         },
-        'Move to Plant Spot and Plant',
+        'Execute Autopilot Plant',
         depth + 1,
       ),
     ],

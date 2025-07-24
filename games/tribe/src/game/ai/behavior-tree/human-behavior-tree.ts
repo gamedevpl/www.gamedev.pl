@@ -26,6 +26,9 @@ import {
   createAutopilotFeedingChildBehavior,
   createAutopilotPlantingBehavior,
   createAutopilotProcreationBehavior,
+  createAutopilotFollowLeaderBehavior,
+  createFollowLeaderBehavior,
+  createTribeMigrationBehavior,
 } from './behaviors';
 
 /**
@@ -54,6 +57,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createAutopilotProcreationBehavior(1),
       createAutopilotPlantingBehavior(1),
       createAutopilotFeedingChildBehavior(1),
+      createAutopilotFollowLeaderBehavior(1),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),
@@ -95,6 +99,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- TRIBE MANAGEMENT (SPLIT) ---
       new CachingNode(createTribeSplitBehavior(2), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 1),
 
+      // --- TRIBE MANAGEMENT (MIGRATION) ---
+      createTribeMigrationBehavior(1),
+
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       new CachingNode(
         createEstablishFamilyTerritoryBehavior(2),
@@ -103,7 +110,8 @@ export function buildHumanBehaviorTree(): BehaviorNode {
         1,
       ),
 
-      // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW PATRIARCH) ---
+      // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
+      createFollowLeaderBehavior(1),
       createFollowPatriarchBehavior(1),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---

@@ -1,89 +1,79 @@
 import { AUTOPILOT_MOVE_DISTANCE_THRESHOLD } from '../../../world-consts';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { UpdateContext } from '../../../world-types';
+import { PlayerActionType } from '../../../ui/ui-types';
 
 /**
  * Creates a behavior tree branch that moves the human to a player-commanded
  * target location when autopilot is active.
  *
  * The behavior is structured as a Sequence:
- * 1. Condition: Check if an autopilot move target is set in the game state.
- * 2. Action: Set the human's action to 'moving' and assign the target.
- * 3. Action: Continuously check the distance to the target.
- *    - Return RUNNING while the human is moving towards the target.
- *    - Return SUCCESS and clear the target from the game state once arrived.
+ * 1. Condition: Check if an AutopilotMove action is active.
+ * 2. Action: Move towards the target, clearing the action upon arrival.
  */
 export function createAutopilotMovingBehavior(depth: number): BehaviorNode {
   return new Sequence(
     [
+      // 1. Condition: Is there an active AutopilotMove command?
       new ConditionNode(
-        (human, context) => human.isPlayer === true && context.gameState.autopilotControls.isActive,
-        'Is Autopilot Active?',
-        depth + 1,
-      ),
-      // 1. Condition: Is there a move target?
-      new ConditionNode(
-        (_human, context) => {
-          return [
-            !!context.gameState.autopilotControls.autopilotMoveTarget,
-            `Target: ${JSON.stringify(context.gameState.autopilotControls.autopilotMoveTarget)}`,
-          ];
-        },
-        'Has Autopilot Move Target',
-        depth + 1,
-      ),
-
-      // 2. Action: Set the human's state to move towards the target.
-      new ActionNode(
         (human, context) => {
-          const target = context.gameState.autopilotControls.autopilotMoveTarget;
-          // This check is redundant due to the ConditionNode, but it's a good safeguard.
-          if (!target) {
-            return [NodeStatus.FAILURE, 'Target disappeared unexpectedly'];
-          }
-          human.activeAction = 'moving';
-          human.target = target;
-          return [NodeStatus.SUCCESS, `Set target to ${target.x.toFixed(0)},${target.y.toFixed(0)}`];
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
+          return (
+            human.isPlayer === true &&
+            context.gameState.autopilotControls.isActive &&
+            activeAction?.action === PlayerActionType.AutopilotMove
+          );
         },
-        'Set Autopilot Move Action',
+        'Has Autopilot Move Command',
         depth + 1,
       ),
 
-      // 3. Action: Check if arrived at the target.
+      // 2. Action: Execute the move.
       new ActionNode(
-        (human, context) => {
-          const target = context.gameState.autopilotControls.autopilotMoveTarget;
+        (human: HumanEntity, context: UpdateContext) => {
+          const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
 
-          // If target was cleared by another process, we succeed.
-          if (!target) {
-            if (human.activeAction === 'moving') {
+          // Guard against action changing between condition and action execution
+          if (activeAction?.action !== PlayerActionType.AutopilotMove) {
+            // Action was cleared or changed by another process, so we fail.
+            if (human.activeAction === 'moving' && typeof human.target === 'object') {
+              // If we were moving to a position target, stop.
               human.activeAction = 'idle';
+              human.target = undefined;
             }
-            return [NodeStatus.SUCCESS, 'Target cleared externally'];
+            return NodeStatus.FAILURE;
           }
+
+          const targetPosition = activeAction.position;
 
           const distance = calculateWrappedDistance(
             human.position,
-            target,
+            targetPosition,
             context.gameState.mapDimensions.width,
             context.gameState.mapDimensions.height,
           );
 
           // Check if we have arrived.
           if (distance < AUTOPILOT_MOVE_DISTANCE_THRESHOLD) {
-            context.gameState.autopilotControls.autopilotMoveTarget = undefined;
-            human.target = undefined;
+            context.gameState.autopilotControls.activeAutopilotAction = undefined;
             if (human.activeAction === 'moving') {
               human.activeAction = 'idle';
+              human.target = undefined;
             }
-            return [NodeStatus.SUCCESS, 'Arrived at autopilot target'];
+            return NodeStatus.SUCCESS;
           }
 
           // Still moving towards the target.
-          return [NodeStatus.RUNNING, `Moving to target, ${distance.toFixed(0)}px away`];
+          human.activeAction = 'moving';
+          human.target = targetPosition;
+          // The human-moving-state will calculate the direction, but we can set it here for immediate response.
+          human.direction = dirToTarget(human.position, targetPosition, context.gameState.mapDimensions);
+          return NodeStatus.RUNNING;
         },
-        'Check Arrival at Autopilot Target',
+        'Execute Autopilot Move',
         depth + 1,
       ),
     ],

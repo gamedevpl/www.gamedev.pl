@@ -17,7 +17,7 @@ export function renderAutopilotHints(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  const action = gameState.hoveredAutopilotAction;
+  const action = gameState.autopilotControls.hoveredAutopilotAction;
   if (!action) {
     return;
   }

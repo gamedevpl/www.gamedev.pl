@@ -121,6 +121,7 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
         UIButtonActionType.ToggleGatheringBehavior,
         UIButtonActionType.ToggleAttackBehavior,
         UIButtonActionType.ToggleCallToAttackBehavior,
+        UIButtonActionType.ToggleFollowMeBehavior,
         UIButtonActionType.ToggleFeedChildrenBehavior,
       ].includes(btn.action),
   );
@@ -155,6 +156,13 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
         name: 'Call to Attack',
       },
       {
+        key: 'followMe',
+        action: UIButtonActionType.ToggleFollowMeBehavior,
+        emoji: PlayerActionType.FollowMe,
+        shortcut: 'C',
+        name: 'Follow Me',
+      },
+      {
         key: 'procreation',
         action: UIButtonActionType.ToggleProcreationBehavior,
         emoji: PlayerActionType.Procreate,
@@ -177,7 +185,7 @@ function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, ca
       },
     ];
 
-    const cols = 3;
+    const cols = 4;
     const rows = 2;
     const totalWidth = cols * UI_AUTOPILOT_BUTTON_SIZE + (cols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
     const totalHeight = rows * UI_AUTOPILOT_BUTTON_SIZE + (rows - 1) * UI_AUTOPILOT_BUTTON_SPACING;
@@ -300,6 +308,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         UIButtonActionType.ToggleGatheringBehavior,
         UIButtonActionType.ToggleAttackBehavior,
         UIButtonActionType.ToggleCallToAttackBehavior,
+        UIButtonActionType.ToggleFollowMeBehavior,
         UIButtonActionType.ToggleFeedChildrenBehavior,
       ].includes(b.action),
     )
