@@ -1,10 +1,10 @@
-import React from "react";
-import { useGameContext } from "../context/game-context";
-import { IntroScreen } from "./intro-screen";
-import { GameScreen } from "./game-screen";
-import { GameOverScreen } from "./GameOverScreen";
-import { GlobalStyle } from "../styles/global";
-import { usePersistState } from "../hooks/persist-state";
+import React from 'react';
+import { useGameContext } from '../context/game-context';
+import { IntroScreen } from './intro-screen';
+import { GameScreen } from './game-screen';
+import { GameOverScreen } from './game-over-screen';
+import { GlobalStyle } from '../styles/global';
+import { usePersistState } from '../hooks/persist-state';
 
 export const App: React.FC = () => {
   const { appState, setAppState } = useGameContext();
@@ -13,11 +13,11 @@ export const App: React.FC = () => {
 
   const renderContent = () => {
     switch (appState) {
-      case "intro":
+      case 'intro':
         return <IntroScreen />;
-      case "game":
+      case 'game':
         return <GameScreen />;
-      case "gameOver":
+      case 'gameOver':
         return (
           <>
             <GameScreen />
