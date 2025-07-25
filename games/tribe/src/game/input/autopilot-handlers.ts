@@ -102,7 +102,10 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
   if (hoveredAction) {
     // Set the new active command based on the hovered action
     gameState.autopilotControls.activeAutopilotAction = hoveredAction;
-    if (hoveredAction.action === PlayerActionType.AutopilotMove) {
+    if (
+      hoveredAction.action === PlayerActionType.AutopilotMove ||
+      hoveredAction.action === PlayerActionType.AutopilotGather
+    ) {
       gameState.hasPlayerMovedEver = true;
     }
     if (hoveredAction.action === PlayerActionType.AutopilotPlant) {
