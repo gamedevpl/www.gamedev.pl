@@ -2,11 +2,11 @@ import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
 
 export enum PlayerActionType {
-  GatherFood = 'GatherFood',
+  Gather = 'Gather',
   Eat = 'Eat',
   Procreate = 'Procreate',
   Attack = 'Attack',
-  PlantBush = 'PlantBush',
+  Plant = 'Plant',
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
   FollowMe = 'FollowMe',
@@ -22,17 +22,17 @@ export enum PlayerActionType {
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
-  [PlayerActionType.GatherFood]: '✋',
+  [PlayerActionType.Gather]: '✋',
   [PlayerActionType.Eat]: '🍖',
   [PlayerActionType.Procreate]: '❤️',
   [PlayerActionType.Attack]: '⚔️',
-  [PlayerActionType.PlantBush]: '🌱',
+  [PlayerActionType.Plant]: '🌱',
   [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
   [PlayerActionType.FollowMe]: '➡️',
   [PlayerActionType.FeedChildren]: '👨‍👧',
   [PlayerActionType.AutopilotMove]: '🎯',
-  [PlayerActionType.AutopilotGather]: '👇',
+  [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
   [PlayerActionType.AutopilotProcreate]: '❤️',
   [PlayerActionType.AutopilotPlant]: '🌱',
@@ -41,15 +41,15 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
-  [PlayerActionType.GatherFood]: 'Gather',
+  [PlayerActionType.Gather]: 'Gather',
   [PlayerActionType.Eat]: 'Eat',
   [PlayerActionType.Procreate]: 'Procreate',
   [PlayerActionType.Attack]: 'Attack',
-  [PlayerActionType.PlantBush]: 'Plant',
+  [PlayerActionType.Plant]: 'Plant',
   [PlayerActionType.CallToAttack]: 'Call to Attack',
   [PlayerActionType.TribeSplit]: 'Split Tribe',
   [PlayerActionType.FollowMe]: 'Follow Me',
-  [PlayerActionType.FeedChildren]: 'Feed',
+  [PlayerActionType.FeedChildren]: 'Feed Children',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -100,16 +100,27 @@ export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
 };
 
 export enum UIButtonActionType {
+  // System Controls
   ToggleMute = 'ToggleMute',
   TogglePause = 'TogglePause',
+  FastForward = 'FastForward',
+
+  // --- Player Commands (One-Time Actions) ---
+  CommandEat = 'CommandEat',
+  CommandPlant = 'CommandPlant',
+  CommandCallToAttack = 'CommandCallToAttack',
+  CommandFollowMe = 'CommandFollowMe',
+  CommandGather = 'CommandGather',
+  CommandTribeSplit = 'CommandTribeSplit',
+
+  // --- Autopilot Behavior Toggles ---
+  // These are behaviors that can be toggled on/off for the AI
   ToggleProcreationBehavior = 'ToggleProcreationBehavior',
+  ToggleAttackBehavior = 'ToggleAttackBehavior',
+  ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
   TogglePlantingBehavior = 'TogglePlantingBehavior',
   ToggleGatheringBehavior = 'ToggleGatheringBehavior',
-  ToggleAttackBehavior = 'ToggleAttackBehavior',
-  ToggleCallToAttackBehavior = 'ToggleCallToAttackBehavior',
-  ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
-  ToggleFollowMeBehavior = 'ToggleFollowMeBehavior',
-  FastForward = 'FastForward',
+  ToggleAutopilotFollowLeaderBehavior = 'ToggleAutopilotFollowLeaderBehavior',
 }
 
 export interface ClickableUIButton {
@@ -122,4 +133,7 @@ export interface ClickableUIButton {
   backgroundColor: string;
   textColor: string;
   tooltip?: string;
+  isDisabled?: boolean;
+  lastActivated?: number;
+  activated?: boolean;
 }

@@ -25,6 +25,7 @@ export const determineHoveredAutopilotAction = (
 ): HoveredAutopilotAction | undefined => {
   let determinedAction: HoveredAutopilotAction | undefined = undefined;
   const hoveredEntity = findEntityAtPosition(worldPos, gameState);
+  const { behaviors } = gameState.autopilotControls;
 
   if (hoveredEntity) {
     // --- ENTITY-BASED ACTIONS ---
@@ -61,14 +62,18 @@ export const determineHoveredAutopilotAction = (
         determinedAction = { action: PlayerActionType.AutopilotFeedChildren, targetEntityId: targetHuman.id };
       }
       // Check for Follow Me
-      else if (player.leaderId === targetHuman.id && targetHuman.id === targetHuman.leaderId) {
+      else if (
+        behaviors.followLeader &&
+        player.leaderId === targetHuman.id &&
+        targetHuman.id === targetHuman.leaderId
+      ) {
         determinedAction = { action: PlayerActionType.AutopilotFollowMe, targetEntityId: targetHuman.id };
       }
     }
   } else {
     // --- POSITION-BASED ACTIONS ---
     if (
-      gameState.autopilotControls.behaviors.planting &&
+      gameState.autopilotControls.isManuallyPlanting &&
       player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
       findValidPlantingSpot(worldPos, gameState, 1, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, player.id)
     ) {
@@ -118,4 +123,7 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
       position: worldPos,
     };
   }
+
+  gameState.autopilotControls.isManuallyMoving = false;
+  gameState.autopilotControls.isManuallyPlanting = false;
 };

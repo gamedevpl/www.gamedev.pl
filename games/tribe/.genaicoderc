@@ -10,6 +10,13 @@
     "result-chain.cache.json",
     "simulate.cache.json"
   ],
+  "importantContext": {
+    "files": [
+      "./.prettierrc",
+      "./.eslintrc.cjs",
+      "src/game/world-types.ts"
+    ]
+  },
   "modelOverrides": {
     "aiStudio": {
       "default": "gemini-2.5-pro",

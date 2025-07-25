@@ -38,7 +38,6 @@ import { SoundType } from '../sound/sound-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
-  const indexedState = gameState as IndexedWorldState;
 
   // Check for Eating
   if (player.food.length > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
@@ -85,7 +84,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     }
 
     if (target) {
-      actions.push({ type: PlayerActionType.GatherFood, action: 'gathering', key: 'e', targetEntity: target });
+      actions.push({ type: PlayerActionType.Gather, action: 'gathering', key: 'e', targetEntity: target });
     }
   }
 
@@ -130,11 +129,12 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
 
   // Check for Planting
   if (player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING) {
-    actions.push({ type: PlayerActionType.PlantBush, action: 'planting', key: 'b' });
+    actions.push({ type: PlayerActionType.Plant, action: 'planting', key: 'b' });
   }
 
   // Check for Call to Attack
   if (player.leaderId === player.id && !player.isCallingToAttack) {
+    const indexedState = gameState as IndexedWorldState;
     const nearbyEnemies = findNearbyEnemiesOfTribe(
       player.position,
       player.id,

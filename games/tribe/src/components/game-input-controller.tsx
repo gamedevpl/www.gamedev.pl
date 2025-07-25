@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
-import { GameWorldState } from "../game/world-types";
-import { Vector2D } from "../game/utils/math-types";
-import { PlayerActionHint } from "../game/ui/ui-types";
-import { findPlayerEntity, screenToWorldCoords } from "../game/utils/world-utils";
+import React, { useEffect } from 'react';
+import { GameWorldState } from '../game/world-types';
+import { Vector2D } from '../game/utils/math-types';
+import { PlayerActionHint } from '../game/ui/ui-types';
+import { findPlayerEntity, screenToWorldCoords } from '../game/utils/world-utils';
 import {
   handleUIButtonClick,
   determineHoveredAutopilotAction,
@@ -10,7 +10,7 @@ import {
   handleGameControlKeyDown,
   handlePlayerActionKeyDown,
   handlePlayerActionKeyUp,
-} from "../game/input";
+} from '../game/input';
 
 interface GameInputControllerProps {
   isActive: () => boolean;
@@ -50,7 +50,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       );
 
       if (clickedButton) {
-        gameStateRef.current = handleUIButtonClick(clickedButton, gameStateRef.current);
+        gameStateRef.current = handleUIButtonClick(clickedButton, event.shiftKey, gameStateRef.current);
         return;
       }
 
@@ -64,9 +64,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       handleAutopilotClick(gameStateRef.current, worldPos);
     };
 
-    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener('mousedown', handleMouseDown);
     return () => {
-      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener('mousedown', handleMouseDown);
     };
   }, [isActive, canvasRef, gameStateRef, viewportCenterRef]);
 
@@ -122,9 +122,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       }
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener('mousemove', handleMouseMove);
     };
   }, [isActive, canvasRef, gameStateRef, viewportCenterRef]);
 
@@ -135,11 +135,11 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const key = event.key.toLowerCase();
 
       // Prevent default browser actions for certain keys that we handle
-      if (key === " " || key === "p" || key === "tab") {
+      if (key === ' ' || key === 'p' || key === 'tab') {
         event.preventDefault();
       }
 
-      if (key === "escape") {
+      if (key === 'escape') {
         // Cancel active autopilot command
         gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
         return;
@@ -157,7 +157,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       if (!playerEntity) return;
 
       keysPressed.current.add(key);
-      handlePlayerActionKeyDown(key, gameStateRef.current, playerEntity, playerActionHintsRef);
+      handlePlayerActionKeyDown(key, gameStateRef.current, playerEntity, playerActionHintsRef.current);
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -171,11 +171,11 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       handlePlayerActionKeyUp(key, playerEntity, gameStateRef.current, keysPressed);
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, [isActive, gameStateRef, playerActionHintsRef, isDebugOnRef, keysPressed]);
 

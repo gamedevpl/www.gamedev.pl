@@ -1,4 +1,3 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
 import {
   PLAYER_ACTION_HINT_FONT_SIZE,
   PLAYER_ACTION_OUTLINE_COLOR,
@@ -7,6 +6,7 @@ import {
 } from '../../world-consts';
 import { Vector2D } from '../../utils/math-types';
 import { PlayerActionHint, PLAYER_ACTION_EMOJIS } from '../../ui/ui-types';
+import { HumanEntity } from '../../entities/characters/human/human-types';
 
 const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;

@@ -74,7 +74,7 @@ export type UpdateContext = {
   gameState: GameWorldState;
 
   /**
-   * Time since the last update in milliseconds.\\\\\\\\
+   * Time since the last update in milliseconds.
    */
   deltaTime: number;
 };
@@ -85,11 +85,11 @@ export type AutopilotControls = {
     planting: boolean;
     gathering: boolean;
     attack: boolean;
-    callToAttack: boolean;
-    followMe: boolean;
     feedChildren: boolean;
+    followLeader: boolean;
   };
   hoveredAutopilotAction?: HoveredAutopilotAction;
   activeAutopilotAction?: HoveredAutopilotAction;
   isManuallyMoving: boolean;
+  isManuallyPlanting?: boolean;
 };

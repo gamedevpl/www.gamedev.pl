@@ -254,12 +254,18 @@ export const UI_BUTTON_BACKGROUND_COLOR: string = '#2d3748';
 export const UI_BUTTON_TEXT_COLOR: string = '#ffffff';
 export const UI_BUTTON_ACTIVE_BACKGROUND_COLOR: string = '#4a5568';
 export const UI_BUTTON_BORDER_RADIUS = 5;
-export const UI_BUTTON_HOVER_BACKGROUND_COLOR: string = '#3a445892';
+export const UI_BUTTON_HOVER_BACKGROUND_COLOR: string = '#bdc9f792';
+export const UI_BUTTON_DISABLED_BACKGROUND_COLOR: string = '#272c36ff'; // A bit lighter than active
+export const UI_BUTTON_DISABLED_TEXT_COLOR: string = '#a0aec0'; // Grayed out text
+export const UI_BUTTON_FLASH_DURATION_MS: number = 300; // 300ms flash
+export const UI_BUTTON_FLASH_COLOR: string = 'rgba(255, 255, 255, 0.5)'; // White flash
 export const UI_TOOLTIP_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
 export const UI_TOOLTIP_TEXT_COLOR: string = '#FFFFFF';
 export const UI_TOOLTIP_FONT_SIZE: number = 14;
 export const UI_TOOLTIP_PADDING: number = 8;
 export const UI_TOOLTIP_OFFSET_Y: number = -15;
+export const UI_BUTTON_ACTIVATED_BORDER_COLOR: string = '#FFD700'; // Gold
+export const UI_BUTTON_ACTIVATED_PULSE_SPEED: number = 5;
 
 // Behavior Tree Debug UI Constants
 export const UI_BT_DEBUG_X_OFFSET = 60;

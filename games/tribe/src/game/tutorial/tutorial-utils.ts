@@ -131,7 +131,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: "You can plant new berry bushes. Carry some berries and press 'B' to plant.",
     condition: (world: GameWorldState, player: HumanEntity) => {
       const actions = getAvailablePlayerActions(world, player);
-      return actions.some((a) => a.type === PlayerActionType.PlantBush) && world.hasPlayerPlantedBush === true;
+      return actions.some((a) => a.type === PlayerActionType.Plant) && world.hasPlayerPlantedBush === true;
     },
     isCompleted: false,
   },

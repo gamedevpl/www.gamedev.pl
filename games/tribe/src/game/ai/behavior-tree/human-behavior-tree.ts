@@ -48,9 +48,8 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createDefendClaimedBushBehavior(2),
       createDesperateAttackBehavior(2),
 
-      // --- PLAYER AUTOPILOT COMMANDS ---
-      // This sequence handles direct player commands like click-to-move.
-      // It checks if it's the player and if autopilot is on, then executes the move.
+      // --- PLAYER AUTOPILOT COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
+      // These actions are triggered by direct player clicks on targets and should always work.
       createAutopilotMovingBehavior(2),
       createAutopilotGatheringBehavior(2),
       createAutopilotAttackingBehavior(2),
@@ -60,7 +59,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createAutopilotFollowLeaderBehavior(2),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
-      new AutopilotControlled(createLeaderCombatStrategyBehavior(3), 'callToAttack', 'Gated Leader Combat', 2),
+      createLeaderCombatStrategyBehavior(2),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
@@ -72,10 +71,10 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createEatingBehavior(2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
-      new AutopilotControlled(
-        new TimeoutNode(createGatheringBehavior(4), BT_ACTION_TIMEOUT_HOURS, 'Timeout Gathering', 3),
-        'gathering',
-        'Gated Gathering',
+      new TimeoutNode(
+        new AutopilotControlled(createGatheringBehavior(4), 'gathering', 'Gated Gathering', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Gathering',
         2,
       ),
 
@@ -86,10 +85,10 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createSeekingFoodFromParentBehavior(2),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
-      new AutopilotControlled(
-        new TimeoutNode(createPlantingBehavior(4), BT_ACTION_TIMEOUT_HOURS, 'Timeout Planting', 3),
-        'planting',
-        'Gated Planting',
+      new TimeoutNode(
+        new AutopilotControlled(createPlantingBehavior(4), 'planting', 'Gated Planting', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Planting',
         2,
       ),
 
@@ -111,7 +110,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       ),
 
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
-      createFollowLeaderBehavior(2),
+      new AutopilotControlled(createFollowLeaderBehavior(3), 'followLeader', 'Gated Follow Leader', 2),
       createFollowPatriarchBehavior(2),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
@@ -121,7 +120,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
     1,
   );
 
-  // Wrap the entire AI logic in a ManualControl decorator.
+  // Wrap the entire tree in a ManualControl decorator.
   // This is the true root of the tree, ensuring manual movement overrides AI.
   const root = new ManualControl(aiRoot, 'Manual Control Gate', 0);
 

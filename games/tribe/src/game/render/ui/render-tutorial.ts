@@ -86,7 +86,7 @@ export function renderTutorialPanel(
 
   const panelHeight = padding * 2 + UI_TUTORIAL_TITLE_FONT_SIZE + padding / 2 + lines.length * lineHeight;
   const panelX = (canvasWidth - panelWidth) / 2;
-  const panelY = canvasHeight - panelHeight - 240;
+  const panelY = canvasHeight - panelHeight - 160;
 
   // --- Draw panel background --
   ctx.fillStyle = UI_TUTORIAL_PANEL_BACKGROUND_COLOR;
