@@ -183,7 +183,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
       key: 'gathering',
       action: UIButtonActionType.ToggleGatheringBehavior,
       emoji: PlayerActionType.GatherFood,
-      shortcut: 'G',
+      shortcut: 'E',
       name: 'Gathering',
     },
     {
