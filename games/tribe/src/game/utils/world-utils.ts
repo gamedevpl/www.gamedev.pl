@@ -37,9 +37,6 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
-  if (gameState.autopilotControls.isActive) {
-    return [];
-  }
   const actions: PlayerActionHint[] = [];
   const indexedState = gameState as IndexedWorldState;
 

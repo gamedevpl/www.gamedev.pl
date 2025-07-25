@@ -100,7 +100,6 @@ export const UI_STATUS_EMOJIS: Record<UIStatusType, string> = {
 };
 
 export enum UIButtonActionType {
-  ToggleAutopilot = 'ToggleAutopilot',
   ToggleMute = 'ToggleMute',
   TogglePause = 'TogglePause',
   ToggleProcreationBehavior = 'ToggleProcreationBehavior',

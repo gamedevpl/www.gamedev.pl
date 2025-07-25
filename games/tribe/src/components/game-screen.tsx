@@ -98,11 +98,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
     const player = findPlayerEntity(gameStateRef.current);
 
     if (player) {
-      if (gameStateRef.current.autopilotControls.isActive) {
-        playerActionHintsRef.current = [];
-      } else {
-        playerActionHintsRef.current = getAvailablePlayerActions(gameStateRef.current, player);
-      }
+      playerActionHintsRef.current = getAvailablePlayerActions(gameStateRef.current, player);
     } else {
       playerActionHintsRef.current = [];
     }
@@ -209,9 +205,6 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           }
 
           switch (button.action) {
-            case UIButtonActionType.ToggleAutopilot:
-              gameStateRef.current.autopilotControls.isActive = !gameStateRef.current.autopilotControls.isActive;
-              break;
             case UIButtonActionType.ToggleMute:
               // The state is toggled first...
               gameStateRef.current.isMuted = !gameStateRef.current.isMuted;
@@ -260,8 +253,8 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         return;
       }
 
-      // Handle click-to-action for autopilot
-      if (gameStateRef.current.autopilotControls.isActive && !gameStateRef.current.isPaused) {
+      // Handle click-to-action
+      if (!gameStateRef.current.isPaused) {
         const player = findPlayerEntity(gameStateRef.current);
         const hoveredAction = gameStateRef.current.autopilotControls.hoveredAutopilotAction;
 
@@ -304,13 +297,8 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       gameStateRef.current.mousePosition = { x: mouseX, y: mouseY };
 
       // Handle autopilot hover hints
-      if (gameStateRef.current.autopilotControls.isActive) {
-        const player = findPlayerEntity(gameStateRef.current);
-        if (!player) {
-          gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
-          return;
-        }
-
+      const player = findPlayerEntity(gameStateRef.current);
+      if (player) {
         const worldPos = screenToWorldCoords(
           { x: mouseX, y: mouseY },
           viewportCenterRef.current,
@@ -389,6 +377,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
           mouseY <= button.rect.y + button.rect.height
         ) {
           hoveredButtonId = button.id;
+          gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
           break;
         }
       }
@@ -443,11 +432,6 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         return;
       }
 
-      if (key === 'o') {
-        gameStateRef.current.autopilotControls.isActive = !gameStateRef.current.autopilotControls.isActive;
-        return;
-      }
-
       if (key === '§' || key === '`') {
         isDebugOnRef.current = !isDebugOnRef.current;
         if (!isDebugOnRef.current) {
@@ -483,39 +467,6 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       const playerEntity = findPlayerEntity(gameStateRef.current);
       if (!playerEntity) return;
       const updateContext = { gameState: gameStateRef.current, deltaTime: 0 };
-
-      if (gameStateRef.current.autopilotControls.isActive) {
-        if (key === 'r') {
-          gameStateRef.current.autopilotControls.behaviors.procreation =
-            !gameStateRef.current.autopilotControls.behaviors.procreation;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'b') {
-          gameStateRef.current.autopilotControls.behaviors.planting =
-            !gameStateRef.current.autopilotControls.behaviors.planting;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'g') {
-          gameStateRef.current.autopilotControls.behaviors.gathering =
-            !gameStateRef.current.autopilotControls.behaviors.gathering;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'q') {
-          gameStateRef.current.autopilotControls.behaviors.attack =
-            !gameStateRef.current.autopilotControls.behaviors.attack;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'v') {
-          gameStateRef.current.autopilotControls.behaviors.callToAttack =
-            !gameStateRef.current.autopilotControls.behaviors.callToAttack;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'c') {
-          gameStateRef.current.autopilotControls.behaviors.followMe =
-            !gameStateRef.current.autopilotControls.behaviors.followMe;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        } else if (key === 'h') {
-          gameStateRef.current.autopilotControls.behaviors.feedChildren =
-            !gameStateRef.current.autopilotControls.behaviors.feedChildren;
-          playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-        }
-        return;
-      }
 
       keysPressed.current.add(key);
 
@@ -595,21 +546,29 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         playerEntity.activeAction = 'moving';
         playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
+        gameStateRef.current.autopilotControls.isManuallyMoving = true;
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
       } else if (key === 'arrowdown' || key === 's') {
         playerEntity.direction.y = 1;
         playerEntity.activeAction = 'moving';
         playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
+        gameStateRef.current.autopilotControls.isManuallyMoving = true;
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
       } else if (key === 'arrowleft' || key === 'a') {
         playerEntity.direction.x = -1;
         playerEntity.activeAction = 'moving';
         playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
+        gameStateRef.current.autopilotControls.isManuallyMoving = true;
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
       } else if (key === 'arrowright' || key === 'd') {
         playerEntity.direction.x = 1;
         playerEntity.activeAction = 'moving';
         playerEntity.target = undefined;
         gameStateRef.current.hasPlayerMovedEver = true;
+        gameStateRef.current.autopilotControls.isManuallyMoving = true;
+        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
       } else if (key === 'q') {
         const humanTarget = findClosestEntity<HumanEntity>(
           playerEntity,
@@ -680,7 +639,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
       keysPressed.current.delete(key);
 
       const playerEntity = findPlayerEntity(gameStateRef.current);
-      if (!playerEntity || gameStateRef.current.autopilotControls.isActive) return;
+      if (!playerEntity) return;
 
       if (key === 'arrowup' || key === 'w') {
         playerEntity.direction.y = 0;
@@ -705,6 +664,8 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         if (playerEntity && playerEntity.activeAction === 'moving') {
           playerEntity.activeAction = 'idle';
         }
+        // Player is no longer manually moving
+        gameStateRef.current.autopilotControls.isManuallyMoving = false;
       }
 
       if (!keysPressed.current.has('e') && playerEntity.activeAction === 'gathering') {

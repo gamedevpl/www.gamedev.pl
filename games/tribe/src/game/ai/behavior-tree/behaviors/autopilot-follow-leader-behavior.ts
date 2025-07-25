@@ -17,11 +17,7 @@ export function createAutopilotFollowLeaderBehavior(depth: number): BehaviorNode
       new ConditionNode(
         (human, context) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotFollowMe
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotFollowMe;
         },
         'Has Autopilot Follow Command',
         depth + 1,

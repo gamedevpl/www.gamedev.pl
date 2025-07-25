@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { ActionNode, CachingNode, ConditionNode, Sequence } from '../nodes';
+import { ActionNode, CachingNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findOptimalMigrationTarget } from '../../../utils/world-utils';
 import {
@@ -22,7 +22,7 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (human: HumanEntity) => !!human.leaderId && human.leaderId === human.id,
         'Is Tribe Leader',
-        depth + 1,
+        depth + 2,
       ),
 
       // 2. Condition: Has enough time passed since the last migration check?
@@ -35,7 +35,7 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode {
           return context.gameState.time - lastCheckTime >= AI_MIGRATION_CHECK_INTERVAL_HOURS;
         },
         'Is Migration Check Cooldown Over',
-        depth + 1,
+        depth + 2,
       ),
 
       // 3. Action: Find a new habitat and initiate migration if a better one is found.
@@ -62,12 +62,13 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode {
           return NodeStatus.FAILURE; // No better place to go, for now.
         },
         'Execute Tribe Migration',
-        depth + 1,
+        depth + 2,
       ),
     ],
     'Tribe Migration Strategy',
-    depth,
+    depth + 1,
   );
 
-  return new CachingNode(sequence, BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Migration', depth);
+  const cached = new CachingNode(sequence, BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Migration', depth + 1);
+  return new CooldownNode(AI_MIGRATION_CHECK_INTERVAL_HOURS, cached, 'Tribe Migration Cooldown', depth);
 }

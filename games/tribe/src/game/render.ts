@@ -81,17 +81,9 @@ export function renderGame(
     ctx.shadowBlur = 0;
 
     if (player) {
-      if (gameState.autopilotControls.isActive) {
-        renderAutopilotHints(ctx, gameState, viewportCenter, ctx.canvas.width, ctx.canvas.height);
-      } else if (playerActionHints.length > 0) {
-        renderPlayerActionHints(
-          ctx,
-          playerActionHints,
-          player,
-          viewportCenter,
-          ctx.canvas.width,
-          ctx.canvas.height,
-        );
+      renderAutopilotHints(ctx, gameState, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+      if (playerActionHints.length > 0) {
+        renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
       }
     }
 

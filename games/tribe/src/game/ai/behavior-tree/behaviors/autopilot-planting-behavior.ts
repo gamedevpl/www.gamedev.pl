@@ -13,11 +13,7 @@ export function createAutopilotPlantingBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotPlant
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotPlant;
         },
         'Has Autopilot Plant Command',
         depth + 1,

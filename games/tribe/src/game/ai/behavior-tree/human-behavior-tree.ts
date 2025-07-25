@@ -1,6 +1,6 @@
 import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../world-consts';
 import { BehaviorNode } from './behavior-tree-types';
-import { AutopilotControlled, CachingNode, Selector, TimeoutNode } from './nodes';
+import { AutopilotControlled, CachingNode, ManualControl, Selector, TimeoutNode } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -37,89 +37,93 @@ import {
  * in order until one of them succeeds or is running. This creates a priority system.
  */
 export function buildHumanBehaviorTree(): BehaviorNode {
-  // The root of the tree is a Selector, which acts like an "OR" gate.
+  // The AI logic is a Selector, which acts like an "OR" gate.
   // It will try each child branch in order until one succeeds or is running.
-  const root = new Selector(
+  const aiRoot = new Selector(
     [
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
-      createFleeingBehavior(1),
-      createDefendFamilyBehavior(1),
-      createJealousyAttackBehavior(1),
-      createDefendClaimedBushBehavior(1),
-      createDesperateAttackBehavior(1),
+      createFleeingBehavior(2),
+      createDefendFamilyBehavior(2),
+      createJealousyAttackBehavior(2),
+      createDefendClaimedBushBehavior(2),
+      createDesperateAttackBehavior(2),
 
       // --- PLAYER AUTOPILOT COMMANDS ---
       // This sequence handles direct player commands like click-to-move.
       // It checks if it's the player and if autopilot is on, then executes the move.
-      createAutopilotMovingBehavior(1),
-      createAutopilotGatheringBehavior(1),
-      createAutopilotAttackingBehavior(1),
-      createAutopilotProcreationBehavior(1),
-      createAutopilotPlantingBehavior(1),
-      createAutopilotFeedingChildBehavior(1),
-      createAutopilotFollowLeaderBehavior(1),
+      createAutopilotMovingBehavior(2),
+      createAutopilotGatheringBehavior(2),
+      createAutopilotAttackingBehavior(2),
+      createAutopilotProcreationBehavior(2),
+      createAutopilotPlantingBehavior(2),
+      createAutopilotFeedingChildBehavior(2),
+      createAutopilotFollowLeaderBehavior(2),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
-      new AutopilotControlled(createLeaderCombatStrategyBehavior(2), 'callToAttack', 'Gated Leader Combat', 1),
+      new AutopilotControlled(createLeaderCombatStrategyBehavior(3), 'callToAttack', 'Gated Leader Combat', 2),
 
       // --- TRIBE COMBAT (MEMBER) ---
-      createTribeMemberCombatBehavior(1),
+      createTribeMemberCombatBehavior(2),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
-      new AutopilotControlled(createAttackingBehavior(2), 'attack', 'Gated Attacking', 1),
+      new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
 
       // --- PERSONAL NEEDS (EAT) ---
-      createEatingBehavior(1),
+      createEatingBehavior(2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new AutopilotControlled(
-        new TimeoutNode(createGatheringBehavior(3), BT_ACTION_TIMEOUT_HOURS, 'Timeout Gathering', 2),
+        new TimeoutNode(createGatheringBehavior(4), BT_ACTION_TIMEOUT_HOURS, 'Timeout Gathering', 3),
         'gathering',
         'Gated Gathering',
-        1,
+        2,
       ),
 
       // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
-      new AutopilotControlled(createFeedingChildBehavior(2), 'feedChildren', 'Gated Feed Child', 1),
+      new AutopilotControlled(createFeedingChildBehavior(3), 'feedChildren', 'Gated Feed Child', 2),
 
       // --- CHILD NEEDS (SEEK FOOD) ---
-      createSeekingFoodFromParentBehavior(1),
+      createSeekingFoodFromParentBehavior(2),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
       new AutopilotControlled(
-        new TimeoutNode(createPlantingBehavior(3), BT_ACTION_TIMEOUT_HOURS, 'Timeout Planting', 2),
+        new TimeoutNode(createPlantingBehavior(4), BT_ACTION_TIMEOUT_HOURS, 'Timeout Planting', 3),
         'planting',
         'Gated Planting',
-        1,
+        2,
       ),
 
       // --- SOCIAL & REPRODUCTION (PROCREATE) ---
-      new AutopilotControlled(createProcreationBehavior(2), 'procreation', 'Gated Procreation', 1),
+      new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
-      new CachingNode(createTribeSplitBehavior(2), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 1),
+      new CachingNode(createTribeSplitBehavior(3), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 2),
 
       // --- TRIBE MANAGEMENT (MIGRATION) ---
-      createTribeMigrationBehavior(1),
+      createTribeMigrationBehavior(2),
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       new CachingNode(
-        createEstablishFamilyTerritoryBehavior(2),
+        createEstablishFamilyTerritoryBehavior(3),
         BT_EXPENSIVE_OPERATION_CACHE_HOURS,
         'Cache Establish Territory',
-        1,
+        2,
       ),
 
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
-      createFollowLeaderBehavior(1),
-      createFollowPatriarchBehavior(1),
+      createFollowLeaderBehavior(2),
+      createFollowPatriarchBehavior(2),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
-      createIdleWanderBehavior(1),
+      createIdleWanderBehavior(2),
     ],
-    'Human Behavior',
-    0,
+    'AI Root Selector',
+    1,
   );
+
+  // Wrap the entire AI logic in a ManualControl decorator.
+  // This is the true root of the tree, ensuring manual movement overrides AI.
+  const root = new ManualControl(aiRoot, 'Manual Control Gate', 0);
 
   return root;
 }

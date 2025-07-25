@@ -21,11 +21,7 @@ export function createAutopilotMovingBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (human, context) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotMove
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotMove;
         },
         'Has Autopilot Move Command',
         depth + 1,

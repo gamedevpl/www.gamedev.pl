@@ -16,11 +16,7 @@ export function createAutopilotProcreationBehavior(depth: number): BehaviorNode 
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotProcreate
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotProcreate;
         },
         'Has Autopilot Procreate Command',
         depth + 1,

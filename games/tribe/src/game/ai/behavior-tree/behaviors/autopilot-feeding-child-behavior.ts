@@ -12,11 +12,7 @@ export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotFeedChildren
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotFeedChildren;
         },
         'Has Autopilot Feed Child Command',
         depth + 1,

@@ -111,115 +111,6 @@ function renderTooltip(ctx: CanvasRenderingContext2D, rect: Rect2D, text: string
   ctx.restore();
 }
 
-function renderAutopilotPanel(gameState: GameWorldState, canvasWidth: number, canvasHeight: number): void {
-  // Remove all old behavior buttons before adding new ones
-  gameState.uiButtons = gameState.uiButtons.filter(
-    (btn) =>
-      ![
-        UIButtonActionType.ToggleProcreationBehavior,
-        UIButtonActionType.TogglePlantingBehavior,
-        UIButtonActionType.ToggleGatheringBehavior,
-        UIButtonActionType.ToggleAttackBehavior,
-        UIButtonActionType.ToggleCallToAttackBehavior,
-        UIButtonActionType.ToggleFollowMeBehavior,
-        UIButtonActionType.ToggleFeedChildrenBehavior,
-      ].includes(btn.action),
-  );
-
-  if (gameState.autopilotControls.isActive) {
-    const behaviors: {
-      key: keyof typeof gameState.autopilotControls.behaviors;
-      action: UIButtonActionType;
-      emoji: PlayerActionType;
-      shortcut: string;
-      name: string;
-    }[] = [
-      {
-        key: 'gathering',
-        action: UIButtonActionType.ToggleGatheringBehavior,
-        emoji: PlayerActionType.GatherFood,
-        shortcut: 'G',
-        name: 'Gathering',
-      },
-      {
-        key: 'attack',
-        action: UIButtonActionType.ToggleAttackBehavior,
-        emoji: PlayerActionType.Attack,
-        shortcut: 'Q',
-        name: 'Attack',
-      },
-      {
-        key: 'callToAttack',
-        action: UIButtonActionType.ToggleCallToAttackBehavior,
-        emoji: PlayerActionType.CallToAttack,
-        shortcut: 'V',
-        name: 'Call to Attack',
-      },
-      {
-        key: 'followMe',
-        action: UIButtonActionType.ToggleFollowMeBehavior,
-        emoji: PlayerActionType.FollowMe,
-        shortcut: 'C',
-        name: 'Follow Me',
-      },
-      {
-        key: 'procreation',
-        action: UIButtonActionType.ToggleProcreationBehavior,
-        emoji: PlayerActionType.Procreate,
-        shortcut: 'R',
-        name: 'Procreation',
-      },
-      {
-        key: 'planting',
-        action: UIButtonActionType.TogglePlantingBehavior,
-        emoji: PlayerActionType.PlantBush,
-        shortcut: 'B',
-        name: 'Planting',
-      },
-      {
-        key: 'feedChildren',
-        action: UIButtonActionType.ToggleFeedChildrenBehavior,
-        emoji: PlayerActionType.FeedChildren,
-        shortcut: 'H',
-        name: 'Feed Children',
-      },
-    ];
-
-    const cols = 4;
-    const rows = 2;
-    const totalWidth = cols * UI_AUTOPILOT_BUTTON_SIZE + (cols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
-    const totalHeight = rows * UI_AUTOPILOT_BUTTON_SIZE + (rows - 1) * UI_AUTOPILOT_BUTTON_SPACING;
-    const startX = (canvasWidth - totalWidth) / 2;
-    const startY = canvasHeight - totalHeight - 20;
-
-    behaviors.forEach((behavior, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const buttonX = startX + col * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
-      const buttonY = startY + row * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
-
-      const isBehaviorActive = gameState.autopilotControls.behaviors[behavior.key];
-      const button: ClickableUIButton = {
-        id: `toggle${behavior.name}Button`,
-        action: behavior.action,
-        rect: {
-          x: buttonX,
-          y: buttonY,
-          width: UI_AUTOPILOT_BUTTON_SIZE,
-          height: UI_AUTOPILOT_BUTTON_SIZE,
-        },
-        icon: PLAYER_ACTION_EMOJIS[behavior.emoji],
-        text: behavior.shortcut,
-        backgroundColor: isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
-        textColor: UI_BUTTON_TEXT_COLOR,
-        currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
-        tooltip: `${behavior.name}: ${isBehaviorActive ? 'ON' : 'OFF'}`,
-      };
-      gameState.uiButtons.push(button);
-    });
-  }
-}
-
 export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWorldState, canvasWidth: number): void {
   ctx.save();
 
@@ -237,22 +128,12 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     });
   }
 
-  // --- Update Button State & Definitions ---
+  // --- Update Button State & Definitions -- -
   // This section modifies the buttons in the gameState before drawing.
 
   // 1. Update Top-Right Buttons
   ctx.textAlign = 'right';
   let currentButtonX = canvasWidth - UI_PADDING;
-
-  // Find and update main control buttons
-  const autopilotButton = gameState.uiButtons.find((b) => b.action === UIButtonActionType.ToggleAutopilot);
-  if (autopilotButton) {
-    autopilotButton.text = `AUT[O]`;
-    autopilotButton.backgroundColor = gameState.autopilotControls.isActive
-      ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
-      : UI_BUTTON_BACKGROUND_COLOR;
-    autopilotButton.tooltip = `Toggle Autopilot (${gameState.autopilotControls.isActive ? 'ON' : 'OFF'})`;
-  }
 
   const muteButton = gameState.uiButtons.find((b) => b.action === UIButtonActionType.ToggleMute);
   if (muteButton) {
@@ -276,8 +157,111 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     fastForwardButton.tooltip = `Fast-forward time`;
   }
 
-  // 2. Update Autopilot Panel Buttons (if active)
-  renderAutopilotPanel(gameState, canvasWidth, ctx.canvas.height);
+  // 2. Update and define Autopilot Behavior Panel Buttons
+  // Remove all old behavior buttons before adding new ones
+  gameState.uiButtons = gameState.uiButtons.filter(
+    (btn) =>
+      ![
+        UIButtonActionType.ToggleProcreationBehavior,
+        UIButtonActionType.TogglePlantingBehavior,
+        UIButtonActionType.ToggleGatheringBehavior,
+        UIButtonActionType.ToggleAttackBehavior,
+        UIButtonActionType.ToggleCallToAttackBehavior,
+        UIButtonActionType.ToggleFollowMeBehavior,
+        UIButtonActionType.ToggleFeedChildrenBehavior,
+      ].includes(btn.action),
+  );
+
+  const behaviors: {
+    key: keyof typeof gameState.autopilotControls.behaviors;
+    action: UIButtonActionType;
+    emoji: PlayerActionType;
+    shortcut: string;
+    name: string;
+  }[] = [
+    {
+      key: 'gathering',
+      action: UIButtonActionType.ToggleGatheringBehavior,
+      emoji: PlayerActionType.GatherFood,
+      shortcut: 'G',
+      name: 'Gathering',
+    },
+    {
+      key: 'attack',
+      action: UIButtonActionType.ToggleAttackBehavior,
+      emoji: PlayerActionType.Attack,
+      shortcut: 'Q',
+      name: 'Attack',
+    },
+    {
+      key: 'callToAttack',
+      action: UIButtonActionType.ToggleCallToAttackBehavior,
+      emoji: PlayerActionType.CallToAttack,
+      shortcut: 'V',
+      name: 'Call to Attack',
+    },
+    {
+      key: 'followMe',
+      action: UIButtonActionType.ToggleFollowMeBehavior,
+      emoji: PlayerActionType.FollowMe,
+      shortcut: 'C',
+      name: 'Follow Me',
+    },
+    {
+      key: 'procreation',
+      action: UIButtonActionType.ToggleProcreationBehavior,
+      emoji: PlayerActionType.Procreate,
+      shortcut: 'R',
+      name: 'Procreation',
+    },
+    {
+      key: 'planting',
+      action: UIButtonActionType.TogglePlantingBehavior,
+      emoji: PlayerActionType.PlantBush,
+      shortcut: 'B',
+      name: 'Planting',
+    },
+    {
+      key: 'feedChildren',
+      action: UIButtonActionType.ToggleFeedChildrenBehavior,
+      emoji: PlayerActionType.FeedChildren,
+      shortcut: 'H',
+      name: 'Feed Children',
+    },
+  ];
+
+  const cols = 4;
+  const rows = 2;
+  const totalWidth = cols * UI_AUTOPILOT_BUTTON_SIZE + (cols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
+  const totalHeight = rows * UI_AUTOPILOT_BUTTON_SIZE + (rows - 1) * UI_AUTOPILOT_BUTTON_SPACING;
+  const startX = (canvasWidth - totalWidth) / 2;
+  const startY = ctx.canvas.height - totalHeight - 20;
+
+  behaviors.forEach((behavior, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const buttonX = startX + col * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
+    const buttonY = startY + row * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
+
+    const isBehaviorActive = gameState.autopilotControls.behaviors[behavior.key];
+    const button: ClickableUIButton = {
+      id: `toggle${behavior.name}Button`,
+      action: behavior.action,
+      rect: {
+        x: buttonX,
+        y: buttonY,
+        width: UI_AUTOPILOT_BUTTON_SIZE,
+        height: UI_AUTOPILOT_BUTTON_SIZE,
+      },
+      icon: PLAYER_ACTION_EMOJIS[behavior.emoji],
+      text: behavior.shortcut,
+      backgroundColor: isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
+      textColor: UI_BUTTON_TEXT_COLOR,
+      currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
+      tooltip: `${behavior.name}: ${isBehaviorActive ? 'AUTO' : 'MANUAL'}`,
+    };
+    gameState.uiButtons.push(button);
+  });
 
   // --- Position and Draw All Buttons ---
   // This section draws the buttons based on their updated state.
@@ -287,7 +271,6 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     .filter(
       (b) =>
         b.action === UIButtonActionType.FastForward ||
-        b.action === UIButtonActionType.ToggleAutopilot ||
         b.action === UIButtonActionType.ToggleMute ||
         b.action === UIButtonActionType.TogglePause,
     )
@@ -313,7 +296,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
       ].includes(b.action),
     )
     .forEach((button) => {
-      // The rect is already set in renderAutopilotPanel
+      // The rect is already set
       drawButton(ctx, button, gameState.hoveredButtonId === button.id);
     });
 

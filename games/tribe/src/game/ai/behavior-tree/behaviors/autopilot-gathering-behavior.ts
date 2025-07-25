@@ -18,11 +18,7 @@ export function createAutopilotGatheringBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotGather
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotGather;
         },
         'Has Autopilot Gather Command',
         depth + 1,

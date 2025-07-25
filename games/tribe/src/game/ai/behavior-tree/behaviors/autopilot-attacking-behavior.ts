@@ -12,11 +12,7 @@ export function createAutopilotAttackingBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return (
-            human.isPlayer === true &&
-            context.gameState.autopilotControls.isActive &&
-            activeAction?.action === PlayerActionType.AutopilotAttack
-          );
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotAttack;
         },
         'Has Autopilot Attack Command',
         depth + 1,

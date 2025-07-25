@@ -212,11 +212,7 @@ export class CachingNode implements BehaviorNode {
     private readonly cacheDurationHours: number,
     name: string, // Name is mandatory for CachingNode
     depth: number = 0,
-    private readonly validityCheck?: (
-      human: HumanEntity,
-      context: UpdateContext,
-      blackboard: Blackboard,
-    ) => boolean,
+    private readonly validityCheck?: (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => boolean,
   ) {
     this.name = name;
     this.depth = depth;
@@ -377,9 +373,7 @@ export class AutopilotControlled implements BehaviorNode {
     }
     try {
       const isPlayerAndBehaviorDisabled =
-        human.isPlayer &&
-        context.gameState.autopilotControls.isActive &&
-        !context.gameState.autopilotControls.behaviors[this.behaviorKey];
+        human.isPlayer && !context.gameState.autopilotControls.behaviors[this.behaviorKey];
 
       if (isPlayerAndBehaviorDisabled) {
         const debugInfo = `Player autopilot for '${this.behaviorKey}' is disabled.`;
@@ -397,6 +391,60 @@ export class AutopilotControlled implements BehaviorNode {
         blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
       }
 
+      return this.lastStatus;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
+  }
+}
+
+/**
+ * A decorator node that blocks its child from executing if the player
+ * is manually controlling their character's movement (e.g., via WASD).
+ * This ensures player input has priority over AI behaviors.
+ */
+export class ManualControl implements BehaviorNode {
+  public name?: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+
+  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+    this.name = name;
+    this.depth = depth;
+    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+      node.depth = newDepth;
+      if (node.children) {
+        node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
+      } else if (node.child) {
+        updateDepth(node.child, newDepth + 1);
+      }
+    };
+    updateDepth(this.child, (this.depth ?? 0) + 1);
+  }
+
+  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+    if (this.name) {
+      btProfiler.nodeStart(this.name);
+    }
+    try {
+      if (human.isPlayer && context.gameState.autopilotControls.isManuallyMoving) {
+        // Player is manually moving, so block the AI.
+        this.lastStatus = NodeStatus.FAILURE;
+        const debugInfo = 'Manual movement active, AI blocked.';
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+        }
+        return this.lastStatus;
+      }
+
+      // Player is not manually moving or it's an NPC, so execute the child.
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      this.lastStatus = childStatus;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+      }
       return this.lastStatus;
     } finally {
       if (this.name) {
