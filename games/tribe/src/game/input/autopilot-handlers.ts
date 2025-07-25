@@ -1,15 +1,15 @@
-import { BerryBushEntity } from "../entities/plants/berry-bush/berry-bush-types";
-import { HumanEntity } from "../entities/characters/human/human-types";
-import { FoodType } from "../food/food-types";
-import { PlayerActionType } from "../ui/ui-types";
+import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
+import { FoodType } from '../food/food-types';
+import { PlayerActionType } from '../ui/ui-types';
 import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   BERRY_COST_FOR_PLANTING,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
-} from "../world-consts";
-import { GameWorldState, HoveredAutopilotAction } from "../world-types";
-import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot } from "../utils/world-utils";
-import { Vector2D } from "../utils/math-types";
+} from '../world-consts';
+import { GameWorldState, HoveredAutopilotAction } from '../world-types';
+import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot } from '../utils/world-utils';
+import { Vector2D } from '../utils/math-types';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -28,12 +28,12 @@ export const determineHoveredAutopilotAction = (
 
   if (hoveredEntity) {
     // --- ENTITY-BASED ACTIONS ---
-    if (hoveredEntity.type === "berryBush" && (hoveredEntity as BerryBushEntity).food.length > 0) {
+    if (hoveredEntity.type === 'berryBush' && (hoveredEntity as BerryBushEntity).food.length > 0) {
       determinedAction = {
         action: PlayerActionType.AutopilotGather,
         targetEntityId: hoveredEntity.id,
       };
-    } else if (hoveredEntity.type === "human") {
+    } else if (hoveredEntity.type === 'human') {
       const targetHuman = hoveredEntity as HumanEntity;
 
       // Check for Attack
@@ -47,7 +47,7 @@ export const determineHoveredAutopilotAction = (
         targetHuman.isAdult &&
         player.isAdult &&
         (targetHuman.procreationCooldown || 0) <= 0 &&
-        targetHuman.gender === "female" &&
+        targetHuman.gender === 'female' &&
         targetHuman.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
       ) {
         determinedAction = { action: PlayerActionType.AutopilotProcreate, targetEntityId: targetHuman.id };
@@ -102,6 +102,12 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
   if (hoveredAction) {
     // Set the new active command based on the hovered action
     gameState.autopilotControls.activeAutopilotAction = hoveredAction;
+    if (hoveredAction.action === PlayerActionType.AutopilotMove) {
+      gameState.hasPlayerMovedEver = true;
+    }
+    if (hoveredAction.action === PlayerActionType.AutopilotPlant) {
+      gameState.hasPlayerPlantedBush = true;
+    }
   } else {
     // Fallback to default click-to-move if no specific action is hovered
     gameState.autopilotControls.activeAutopilotAction = {
