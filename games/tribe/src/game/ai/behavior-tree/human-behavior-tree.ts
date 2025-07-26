@@ -1,6 +1,6 @@
 import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../world-consts';
 import { BehaviorNode } from './behavior-tree-types';
-import { AutopilotControlled, CachingNode, ManualControl, Selector, TimeoutNode } from './nodes';
+import { AutopilotControlled, CachingNode, ManualControl, NonPlayerControlled, Selector, TimeoutNode } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -99,7 +99,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       new CachingNode(createTribeSplitBehavior(3), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 2),
 
       // --- TRIBE MANAGEMENT (MIGRATION) ---
-      createTribeMigrationBehavior(2),
+      new NonPlayerControlled(createTribeMigrationBehavior(3), 'Gated Tribe Migration', 2),
 
       // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
       new CachingNode(
@@ -111,10 +111,10 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
       new AutopilotControlled(createFollowLeaderBehavior(3), 'followLeader', 'Gated Follow Leader', 2),
-      createFollowPatriarchBehavior(2),
+      new NonPlayerControlled(createFollowPatriarchBehavior(2), 'Gated Follow Patriarch', 2),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
-      createIdleWanderBehavior(2),
+      new NonPlayerControlled(createIdleWanderBehavior(2), 'Gated Idle Wander', 2),
     ],
     'AI Root Selector',
     1,

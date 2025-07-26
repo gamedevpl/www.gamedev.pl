@@ -67,6 +67,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
       const isPlayerAttackTarget = player?.attackTargetId === human.id;
+      const isFollower = player ? human.leaderId === player.id && human.activeAction === 'following' : false;
+
       renderWithWrapping(
         ctx,
         worldWidth,
@@ -79,6 +81,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
         isPlayerPartner,
         isPlayerHeir,
         isPlayerAttackTarget,
+        isFollower,
         isDebugOn,
         gameState.time,
         gameState.debugCharacterId,

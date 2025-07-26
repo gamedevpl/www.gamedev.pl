@@ -5,7 +5,7 @@ import {
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
 } from '../../world-consts';
 import { Vector2D } from '../../utils/math-types';
-import { PlayerActionHint, PLAYER_ACTION_EMOJIS } from '../../ui/ui-types';
+import { PlayerActionHint, PLAYER_ACTION_EMOJIS, PlayerActionType } from '../../ui/ui-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
 const HINT_OFFSET_X = 25;
@@ -44,6 +44,7 @@ export function renderPlayerActionHints(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
+  hints = hints.filter((hint) => hint.type !== PlayerActionType.FollowMe);
   if (hints.length === 0) {
     return;
   }

@@ -9,6 +9,7 @@ import {
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
 } from '../../world-consts';
 import { GameWorldState } from '../../world-types';
+import { findPlayerEntity } from '../../utils/world-utils';
 
 function drawIndicator(
   ctx: CanvasRenderingContext2D,
@@ -48,27 +49,66 @@ function drawIndicator(
   ctx.restore();
 }
 
+function drawRippleEffect(ctx: CanvasRenderingContext2D, position: Vector2D, time: number) {
+  ctx.save();
+  const rippleSpeed = 30; // radius units per hour
+  const maxRadius = 70;
+  const numRipples = 3;
+  const rippleSeparation = maxRadius / numRipples;
+
+  for (let i = 0; i < numRipples; i++) {
+    const offset = i * rippleSeparation;
+    const baseRadius = (time * rippleSpeed + offset) % maxRadius;
+    const opacity = 1 - baseRadius / maxRadius;
+
+    ctx.strokeStyle = `rgba(255, 215, 0, ${opacity * 0.7})`; // Gold-ish color
+    ctx.lineWidth = 1 + (1 - opacity) * 2; // gets thicker as it expands
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, baseRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
-  const activeAction = gameState.autopilotControls.activeAutopilotAction;
-  if (!activeAction) {
+  const { activeAutopilotAction: activeAction, behaviors } = gameState.autopilotControls;
+  const player = findPlayerEntity(gameState);
+
+  if (!player) {
     return;
   }
 
-  let targetPosition: Vector2D | undefined;
-  let targetRadius = 15; // Default radius for position-based actions
-
-  if ('position' in activeAction) {
-    targetPosition = activeAction.position;
-  } else if ('targetEntityId' in activeAction) {
-    // Handles all entity-based actions like Attack, Procreate, FollowMe, etc.
-    const targetEntity = gameState.entities.entities.get(activeAction.targetEntityId);
-    if (targetEntity) {
-      targetPosition = targetEntity.position;
-      targetRadius = (targetEntity as Entity).radius || 30;
-    }
+  // Render ripple for player's "Follow Me" command
+  if (player.isCallingToFollow) {
+    drawRippleEffect(ctx, player.position, gameState.time);
   }
 
-  if (targetPosition) {
-    drawIndicator(ctx, targetPosition, targetRadius, activeAction.action, gameState.time);
+  // Render ripple for AI "Follow Leader" behavior toggle
+  // This shows that the tribe is in "follow" mode.
+  if (behaviors.followLeader && !activeAction) {
+    drawRippleEffect(ctx, player.position, gameState.time);
+  }
+
+  // Render indicators for other one-time autopilot actions
+  if (activeAction) {
+    let targetPosition: Vector2D | undefined;
+    let targetRadius = 15; // Default radius for position-based actions
+
+    if ('position' in activeAction) {
+      targetPosition = activeAction.position;
+    } else if ('targetEntityId' in activeAction) {
+      const targetEntity = gameState.entities.entities.get(activeAction.targetEntityId);
+      if (targetEntity) {
+        targetPosition = targetEntity.position;
+        targetRadius = (targetEntity as Entity).radius || 30;
+      }
+    }
+
+    if (targetPosition) {
+      // We don't want to draw the old indicator for follow actions
+      if (activeAction.action !== PlayerActionType.AutopilotFollowMe && !player.isCallingToFollow) {
+        drawIndicator(ctx, targetPosition, targetRadius, activeAction.action, gameState.time);
+      }
+    }
   }
 }

@@ -25,7 +25,6 @@ export const determineHoveredAutopilotAction = (
 ): HoveredAutopilotAction | undefined => {
   let determinedAction: HoveredAutopilotAction | undefined = undefined;
   const hoveredEntity = findEntityAtPosition(worldPos, gameState);
-  const { behaviors } = gameState.autopilotControls;
 
   if (hoveredEntity) {
     // --- ENTITY-BASED ACTIONS ---
@@ -60,14 +59,6 @@ export const determineHoveredAutopilotAction = (
         (targetHuman.motherId === player.id || targetHuman.fatherId === player.id)
       ) {
         determinedAction = { action: PlayerActionType.AutopilotFeedChildren, targetEntityId: targetHuman.id };
-      }
-      // Check for Follow Me
-      else if (
-        behaviors.followLeader &&
-        player.leaderId === targetHuman.id &&
-        targetHuman.id === targetHuman.leaderId
-      ) {
-        determinedAction = { action: PlayerActionType.AutopilotFollowMe, targetEntityId: targetHuman.id };
       }
     }
   } else {

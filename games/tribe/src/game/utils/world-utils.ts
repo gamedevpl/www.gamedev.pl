@@ -6,7 +6,6 @@ import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_RANGE,
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
-  HUMAN_HUNGER_THRESHOLD_SLOW,
   HUMAN_ATTACK_RANGE,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   AI_PLANTING_SEARCH_RADIUS,
@@ -40,7 +39,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   const actions: PlayerActionHint[] = [];
 
   // Check for Eating
-  if (player.food.length > 0 && player.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
+  if (player.food.length > 0) {
     actions.push({ type: PlayerActionType.Eat, action: 'eating', key: 'f' });
   }
 

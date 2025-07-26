@@ -453,3 +453,55 @@ export class ManualControl implements BehaviorNode {
     }
   }
 }
+
+/**
+ * A decorator node that executes its child only if the human is not player controlled.
+ */
+export class NonPlayerControlled implements BehaviorNode {
+  public name?: string;
+  public lastStatus?: NodeStatus;
+  public depth: number;
+
+  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+    this.name = name;
+    this.depth = depth;
+    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+      node.depth = newDepth;
+      if (node.children) {
+        node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
+      } else if (node.child) {
+        updateDepth(node.child, newDepth + 1);
+      }
+    };
+    updateDepth(this.child, (this.depth ?? 0) + 1);
+  }
+
+  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+    if (this.name) {
+      btProfiler.nodeStart(this.name);
+    }
+    try {
+      if (human.isPlayer) {
+        // Player controlled, so block the AI.
+        this.lastStatus = NodeStatus.FAILURE;
+        const debugInfo = 'Player controlled, AI blocked.';
+        if (this.name) {
+          blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+        }
+        return this.lastStatus;
+      }
+
+      // Not player controlled, so execute the child.
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      this.lastStatus = childStatus;
+      if (this.name) {
+        blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
+      }
+      return this.lastStatus;
+    } finally {
+      if (this.name) {
+        btProfiler.nodeEnd();
+      }
+    }
+  }
+}

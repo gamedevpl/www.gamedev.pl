@@ -392,6 +392,20 @@ function renderAttackProgress(ctx: CanvasRenderingContext2D, human: HumanEntity,
   }
 }
 
+function drawFollowerIcon(ctx: CanvasRenderingContext2D, position: { x: number; y: number }, yOffset: number): void {
+  const iconSize = 15;
+  const icon = '➡️'; // Follow me emoji
+
+  ctx.save();
+  ctx.font = `${iconSize}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.shadowColor = 'black';
+  ctx.shadowBlur = 3;
+  ctx.fillText(icon, position.x, position.y - yOffset);
+  ctx.restore();
+}
+
 /**
  * Renders a human character on the canvas
  * @param ctx Canvas rendering context
@@ -406,6 +420,7 @@ export function renderCharacter(
   isPlayerPartner: boolean = false,
   isPlayerHeir: boolean = false,
   isPlayerAttackTarget: boolean = false,
+  isFollower: boolean = false,
   isDebugOn: boolean = false,
   currentTime: number,
   debugCharacterId?: EntityId,
@@ -470,6 +485,17 @@ export function renderCharacter(
 
   if (human.tribeBadge) {
     drawTribeBadge(ctx, position, human.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
+  }
+
+  if (isFollower) {
+    let yOffset = (human.isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS) + 5;
+    if (crownSize) {
+      yOffset += crownSize;
+    }
+    if (human.tribeBadge) {
+      yOffset += TRIBE_BADGE_SIZE;
+    }
+    drawFollowerIcon(ctx, position, yOffset);
   }
 
   const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
