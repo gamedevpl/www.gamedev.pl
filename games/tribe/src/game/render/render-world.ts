@@ -67,7 +67,15 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
       const isPlayerAttackTarget = player?.attackTargetId === human.id;
-      const isFollower = player ? human.leaderId === player.id && human.activeAction === 'following' : false;
+      const leader = human.leaderId
+        ? (gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined)
+        : undefined;
+      const isFollower = player
+        ? human.leaderId === player.id &&
+          human.activeAction === 'moving' &&
+          human.target === human.leaderId &&
+          leader?.isCallingToFollow
+        : false;
 
       renderWithWrapping(
         ctx,

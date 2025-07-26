@@ -141,18 +141,18 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
       PLAYER_CALL_TO_ATTACK_RADIUS,
     );
     if (nearbyEnemies.length > 0) {
-      actions.push({ type: PlayerActionType.CallToAttack, action: 'callingToAttack', key: 'v' });
+      actions.push({ type: PlayerActionType.CallToAttack, action: 'idle', key: 'v' });
     }
   }
 
   // Check for Tribe Split
   if (canSplitTribe(player, gameState).canSplit) {
-    actions.push({ type: PlayerActionType.TribeSplit, action: 'tribeSplitting', key: 'k' });
+    actions.push({ type: PlayerActionType.TribeSplit, action: 'idle', key: 'k' });
   }
 
   // Check for Follow Me
   if (player.leaderId === player.id && !player.isCallingToFollow) {
-    actions.push({ type: PlayerActionType.FollowMe, action: 'following', key: 'c' });
+    actions.push({ type: PlayerActionType.FollowMe, action: 'idle', key: 'c' });
   }
 
   return actions;

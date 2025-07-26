@@ -127,13 +127,10 @@ export interface HumanEntity extends Entity {
 }
 
 export type HumanAction =
-  | 'gathering'
-  | 'eating'
-  | 'moving'
-  | 'idle'
-  | 'procreating'
-  | 'attacking'
-  | 'planting'
-  | 'callingToAttack'
-  | 'tribeSplitting'
-  | 'following';
+  | 'gathering' // Collecting resources
+  | 'eating' // Consuming food
+  | 'moving' // Changing position
+  | 'idle' // Not performing any action
+  | 'procreating' // Reproducing
+  | 'attacking' // Engaging in combat
+  | 'planting'; // Sowing seeds or placing plants

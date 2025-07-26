@@ -60,10 +60,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   procreating: 'procreate',
   idle: 'idle',
   attacking: 'attacking',
-  planting: 'gathering', // Use gathering stance for planting for now
-  callingToAttack: 'idle',
-  following: 'idle',
-  tribeSplitting: 'idle',
+  planting: 'gathering',
 };
 
 /**
