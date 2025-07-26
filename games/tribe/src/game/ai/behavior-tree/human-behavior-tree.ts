@@ -59,7 +59,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createAutopilotFollowLeaderBehavior(2),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
-      createLeaderCombatStrategyBehavior(2),
+      new NonPlayerControlled(createLeaderCombatStrategyBehavior(3), 'Gated Leader Combat Strategy', 2),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),

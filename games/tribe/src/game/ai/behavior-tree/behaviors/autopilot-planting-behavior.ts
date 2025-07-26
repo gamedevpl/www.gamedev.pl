@@ -52,6 +52,7 @@ export function createAutopilotPlantingBehavior(depth: number): BehaviorNode {
             human.target = plantTarget;
             // Clear the command, but the action continues.
             context.gameState.autopilotControls.activeAutopilotAction = undefined;
+            context.gameState.hasPlayerPlantedBush = true;
             return NodeStatus.RUNNING; // Planting takes time, so we run until the state machine changes it
           } else {
             human.activeAction = 'moving';
