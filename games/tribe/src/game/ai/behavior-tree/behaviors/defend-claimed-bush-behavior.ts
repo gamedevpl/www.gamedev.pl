@@ -18,6 +18,10 @@ export function createDefendClaimedBushBehavior(depth: number): BehaviorNode {
       // 1. Condition: Is an outsider stealing from our bushes?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          if (!human.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           const intruder = findIntruderOnClaimedBush(human, context.gameState, AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS);
 
           if (intruder) {

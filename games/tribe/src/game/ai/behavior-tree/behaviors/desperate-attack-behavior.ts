@@ -27,6 +27,10 @@ export function createDesperateAttackBehavior(depth: number): BehaviorNode {
       // 2. Condition: Are there absolutely no other food sources nearby?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
+          if (!human.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           const closestBush = findClosestEntity<BerryBushEntity>(
             human,
             context.gameState,

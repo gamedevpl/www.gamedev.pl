@@ -182,12 +182,13 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     const availableActions = getAvailablePlayerActions(gameState, player);
     const availableActionTypes = new Set(availableActions.map((a) => a.type));
 
-    const playerCommandButtons: {
+    let playerCommandButtons: {
       playerAction: PlayerActionType;
       buttonAction: UIButtonActionType;
       shortcut: string;
       name: string;
       toggleKey?: keyof AutopilotControls['behaviors'];
+      condition?: () => boolean;
     }[] = [
       {
         playerAction: PlayerActionType.Gather,
@@ -195,6 +196,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'E',
         name: 'Gather',
         toggleKey: 'gathering',
+        condition: () => player.isAdult === true,
       },
       { playerAction: PlayerActionType.Eat, buttonAction: UIButtonActionType.CommandEat, shortcut: 'F', name: 'Eat' },
       {
@@ -203,6 +205,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'B',
         name: 'Plant',
         toggleKey: 'planting',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.Procreate,
@@ -210,6 +213,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'R',
         name: 'Procreation',
         toggleKey: 'procreation',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.FeedChildren,
@@ -217,6 +221,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'H',
         name: 'Feed Children',
         toggleKey: 'feedChildren',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.Attack,
@@ -224,6 +229,7 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'Q',
         name: 'Attack',
         toggleKey: 'attack',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.FollowMe,
@@ -231,23 +237,28 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         shortcut: 'C',
         name: 'Follow Me',
         toggleKey: 'followLeader',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.CallToAttack,
         buttonAction: UIButtonActionType.CommandCallToAttack,
         shortcut: 'V',
         name: 'Call to Attack',
+        condition: () => player.isAdult === true,
       },
       {
         playerAction: PlayerActionType.TribeSplit,
         buttonAction: UIButtonActionType.CommandTribeSplit,
         shortcut: 'K',
         name: 'Split Tribe',
+        condition: () => player.leaderId !== undefined && player.leaderId !== player.id && player.isAdult === true,
       },
     ];
 
+    playerCommandButtons = playerCommandButtons.filter((b) => (b.condition ? b.condition() : true));
+
     const rows = 1;
-    const cols = 10;
+    const cols = playerCommandButtons.length;
     const totalWidth = cols * UI_AUTOPILOT_BUTTON_SIZE + (cols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
     const totalHeight = rows * UI_AUTOPILOT_BUTTON_SIZE + (rows - 1) * UI_AUTOPILOT_BUTTON_SPACING;
     const startX = (canvasWidth - totalWidth) / 2;

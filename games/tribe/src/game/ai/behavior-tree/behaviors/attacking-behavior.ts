@@ -47,6 +47,10 @@ export function createAttackingBehavior(depth: number): BehaviorNode {
       // 1. Condition: Is there a valid enemy to attack?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          if (!human.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           // If already attacking a valid target, continue with that target.
           const { gameState } = context;
           if (human.activeAction === 'attacking' && human.attackTargetId) {

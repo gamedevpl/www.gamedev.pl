@@ -28,7 +28,16 @@ export const determineHoveredAutopilotAction = (
 
   if (hoveredEntity) {
     // --- ENTITY-BASED ACTIONS ---
-    if (hoveredEntity.type === 'berryBush' && (hoveredEntity as BerryBushEntity).food.length > 0) {
+    if (player.isAdult && hoveredEntity.type === 'berryBush' && (hoveredEntity as BerryBushEntity).food.length > 0) {
+      determinedAction = {
+        action: PlayerActionType.AutopilotGather,
+        targetEntityId: hoveredEntity.id,
+      };
+    } else if (
+      player.isAdult &&
+      hoveredEntity.type === 'humanCorpse' &&
+      (hoveredEntity as HumanEntity).food.length > 0
+    ) {
       determinedAction = {
         action: PlayerActionType.AutopilotGather,
         targetEntityId: hoveredEntity.id,
@@ -37,7 +46,7 @@ export const determineHoveredAutopilotAction = (
       const targetHuman = hoveredEntity as HumanEntity;
 
       // Check for Attack
-      if (targetHuman.id !== player.id && targetHuman.leaderId !== player.leaderId) {
+      if (targetHuman.id !== player.id && targetHuman.leaderId !== player.leaderId && player.isAdult) {
         determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: targetHuman.id };
       }
       // Check for Procreate

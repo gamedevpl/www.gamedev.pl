@@ -18,6 +18,10 @@ export function createDefendFamilyBehavior(depth: number): BehaviorNode {
       // 1. Condition: Is a family member under attack by an outsider?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          if (!human.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           const result = findFamilyMemberUnderAttack(human, context.gameState, AI_DEFEND_FAMILY_TRIGGER_RADIUS);
 
           if (result) {

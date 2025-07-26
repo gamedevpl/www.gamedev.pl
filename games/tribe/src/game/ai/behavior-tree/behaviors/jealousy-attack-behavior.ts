@@ -19,6 +19,10 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode {
       // 1. Condition: Is my primary partner procreating with a stranger nearby?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          if (!human.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           const stranger = findPartnerProcreatingWithStranger(
             human,
             context.gameState as IndexedWorldState,
