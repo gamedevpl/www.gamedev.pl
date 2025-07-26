@@ -1,4 +1,5 @@
 import { PromptItem } from 'genaicode';
+import '../assets-types.js';
 /**
  * Instructions for Reference Image Analysis
  * Guides the AI in analyzing reference images to establish standards for asset evaluation
