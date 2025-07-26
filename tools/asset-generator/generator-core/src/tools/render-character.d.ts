@@ -6,6 +6,7 @@ export declare function renderAsset(assetName: string, asset: Asset, assetPath: 
     stance: string;
     mediaType: string;
     dataUrl: string;
+    filePath: string;
 }[]>;
 /**
  * Verbosity levels for logging
@@ -28,4 +29,5 @@ export declare function renderAssetVideos(assetName: string, asset: Asset, asset
     stance: string;
     mediaType: string;
     dataUrl: string;
+    filePath: string;
 }[]>;

@@ -18,4 +18,5 @@ currentImplementation: string | null, renderedMedia: {
     stance: string;
     mediaType: string;
     dataUrl: string;
+    filePath: string;
 }[] | null, additionalPrompt?: string, fromScratch?: boolean, originalDescription?: string, modelType?: ModelType): Promise<string>;

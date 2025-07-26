@@ -57,6 +57,7 @@ export interface AssetGenerationResult {
         stance: string;
         mediaType: string;
         dataUrl: string;
+        filePath: string;
     }[];
     /** Results of linting process */
     linting?: AssetLintingResult;
