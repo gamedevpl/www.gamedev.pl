@@ -164,7 +164,7 @@ export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a p
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
 export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
 export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a claimed bush is within this radius, avoid gathering
-export const AI_GATHERING_SEARCH_RADIUS = 300; // Radius for AI to search for food sources
+export const AI_GATHERING_SEARCH_RADIUS = 400; // Radius for AI to search for food sources
 
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
