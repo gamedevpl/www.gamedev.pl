@@ -53,7 +53,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
 
   // Parent is in range, interaction system will handle the feeding.
   // We can clear the target and succeed.
-  human.activeAction = 'idle';
+  human.activeAction = 'feeding';
   human.target = undefined;
   blackboard.set('targetChild', undefined);
   return NodeStatus.SUCCESS;

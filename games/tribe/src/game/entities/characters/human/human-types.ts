@@ -132,5 +132,6 @@ export type HumanAction =
   | 'moving' // Changing position
   | 'idle' // Not performing any action
   | 'procreating' // Reproducing
+  | 'feeding' // Giving food to a child
   | 'attacking' // Engaging in combat
   | 'planting'; // Sowing seeds or placing plants

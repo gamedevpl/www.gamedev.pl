@@ -23,7 +23,7 @@ export type HoveredAutopilotAction =
       targetEntityId: EntityId;
     }
   | {
-      action: PlayerActionType.AutopilotFeedChildren;
+      action: PlayerActionType.AutopilotFeedChild;
       targetEntityId: EntityId;
     }
   | {

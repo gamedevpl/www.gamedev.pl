@@ -67,7 +67,7 @@ export const determineHoveredAutopilotAction = (
         !targetHuman.isAdult &&
         (targetHuman.motherId === player.id || targetHuman.fatherId === player.id)
       ) {
-        determinedAction = { action: PlayerActionType.AutopilotFeedChildren, targetEntityId: targetHuman.id };
+        determinedAction = { action: PlayerActionType.AutopilotFeedChild, targetEntityId: targetHuman.id };
       }
     }
   } else {
@@ -90,9 +90,7 @@ export const determineHoveredAutopilotAction = (
 /**
  * Handles a click in the game world for autopilot actions.
  * It sets the active autopilot action based on what was hovered, or defaults to a move command.
- * @param gameState The current game state, which will be mutated.
- * @param worldPos The position of the click in world coordinates.
- */
+ * @param gameState The current game state, which will be mutated.\n * @param worldPos The position of the click in world coordinates.\n */
 export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector2D): void => {
   if (gameState.isPaused) return;
 

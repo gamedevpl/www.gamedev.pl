@@ -12,7 +12,7 @@ export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
-          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotFeedChildren;
+          return human.isPlayer === true && activeAction?.action === PlayerActionType.AutopilotFeedChild;
         },
         'Has Autopilot Feed Child Command',
         depth + 1,
@@ -21,7 +21,7 @@ export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode
         (human: HumanEntity, context: UpdateContext) => {
           const activeAction = context.gameState.autopilotControls.activeAutopilotAction;
 
-          if (activeAction?.action !== PlayerActionType.AutopilotFeedChildren) {
+          if (activeAction?.action !== PlayerActionType.AutopilotFeedChild) {
             context.gameState.autopilotControls.activeAutopilotAction = undefined;
             return NodeStatus.FAILURE;
           }
@@ -45,6 +45,7 @@ export function createAutopilotFeedingChildBehavior(depth: number): BehaviorNode
           if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
             // Clear the command. The HumanChildFeedingInteraction will handle the actual feeding.
             context.gameState.autopilotControls.activeAutopilotAction = undefined;
+            human.activeAction = 'feeding';
             return NodeStatus.SUCCESS;
           } else {
             human.activeAction = 'moving';

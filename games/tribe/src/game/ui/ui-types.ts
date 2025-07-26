@@ -10,14 +10,14 @@ export enum PlayerActionType {
   CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
   FollowMe = 'FollowMe',
-  FeedChildren = 'FeedChildren',
+  FeedChild = 'FeedChild',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
   AutopilotAttack = 'AutopilotAttack',
   AutopilotProcreate = 'AutopilotProcreate',
   AutopilotPlant = 'AutopilotPlant',
-  AutopilotFeedChildren = 'AutopilotFeedChildren',
+  AutopilotFeedChild = 'AutopilotFeedChild',
   AutopilotFollowMe = 'AutopilotFollowMe',
 }
 
@@ -30,13 +30,13 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
   [PlayerActionType.FollowMe]: '➡️',
-  [PlayerActionType.FeedChildren]: '👨‍👧',
+  [PlayerActionType.FeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
   [PlayerActionType.AutopilotProcreate]: '❤️',
   [PlayerActionType.AutopilotPlant]: '🌱',
-  [PlayerActionType.AutopilotFeedChildren]: '👨‍👧',
+  [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotFollowMe]: '➡️',
 };
 
@@ -49,13 +49,13 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.CallToAttack]: 'Call to Attack',
   [PlayerActionType.TribeSplit]: 'Split Tribe',
   [PlayerActionType.FollowMe]: 'Follow Me',
-  [PlayerActionType.FeedChildren]: 'Feed Children',
+  [PlayerActionType.FeedChild]: 'Feed Child',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
   [PlayerActionType.AutopilotProcreate]: 'Procreate',
   [PlayerActionType.AutopilotPlant]: 'Plant',
-  [PlayerActionType.AutopilotFeedChildren]: 'Feed',
+  [PlayerActionType.AutopilotFeedChild]: 'Feed',
   [PlayerActionType.AutopilotFollowMe]: 'Follow',
 };
 
@@ -117,7 +117,7 @@ export enum UIButtonActionType {
   // These are behaviors that can be toggled on/off for the AI
   ToggleProcreationBehavior = 'ToggleProcreationBehavior',
   ToggleAttackBehavior = 'ToggleAttackBehavior',
-  ToggleFeedChildrenBehavior = 'ToggleFeedChildrenBehavior',
+  ToggleFeedChildBehavior = 'ToggleFeedChildBehavior',
   TogglePlantingBehavior = 'TogglePlantingBehavior',
   ToggleGatheringBehavior = 'ToggleGatheringBehavior',
   ToggleAutopilotFollowLeaderBehavior = 'ToggleAutopilotFollowLeaderBehavior',

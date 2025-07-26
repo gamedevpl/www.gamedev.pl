@@ -86,14 +86,14 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
 
   if (button.icon) {
     // Render large icon in the center
-    ctx.font = `${height * 0.55}px "Press Start 2P", Arial`;
+    ctx.font = `${height * 0.55}px \"Press Start 2P\", Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(button.icon, x + width / 2, y + height / 2);
 
     // Render small text in the bottom right corner
     if (button.text) {
-      ctx.font = `${height * 0.18}px "Press Start 2P", Arial`;
+      ctx.font = `${height * 0.18}px \"Press Start 2P\", Arial`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'bottom';
       ctx.fillText(button.text, x + width - 4, y + height - 2);
@@ -110,7 +110,7 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
 function renderTooltip(ctx: CanvasRenderingContext2D, rect: Rect2D, text: string, mousePosition: Vector2D): void {
   ctx.save();
 
-  ctx.font = `${UI_TOOLTIP_FONT_SIZE}px "Press Start 2P", Arial`;
+  ctx.font = `${UI_TOOLTIP_FONT_SIZE}px \"Press Start 2P\", Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
 
@@ -216,10 +216,10 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
         condition: () => player.isAdult === true,
       },
       {
-        playerAction: PlayerActionType.FeedChildren,
-        buttonAction: UIButtonActionType.ToggleFeedChildrenBehavior,
+        playerAction: PlayerActionType.FeedChild,
+        buttonAction: UIButtonActionType.ToggleFeedChildBehavior,
         shortcut: 'H',
-        name: 'Feed Children',
+        name: 'Feed Child',
         toggleKey: 'feedChildren',
         condition: () => player.isAdult === true,
       },

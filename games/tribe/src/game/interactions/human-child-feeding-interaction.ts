@@ -3,7 +3,6 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   PARENT_FEEDING_RANGE,
   HUMAN_FOOD_HUNGER_REDUCTION,
-  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   PARENT_FEED_CHILD_COOLDOWN_HOURS,
   EFFECT_DURATION_SHORT_HOURS,
 } from '../world-consts';
@@ -24,7 +23,8 @@ export const humanChildFeedingInteraction: InteractionDefinition<HumanEntity, Hu
       (!parent.feedChildCooldownTime || parent.feedChildCooldownTime <= 0) &&
       child.isAdult === false &&
       (child.motherId === parent.id || child.fatherId === parent.id) &&
-      child.hunger >= CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD
+      child.hunger >= HUMAN_FOOD_HUNGER_REDUCTION &&
+      parent.activeAction === 'feeding'
     );
   },
   perform: (parent: HumanEntity, child: HumanEntity, context): void => {

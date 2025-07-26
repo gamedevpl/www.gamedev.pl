@@ -57,6 +57,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   moving: 'walk',
   gathering: 'gathering',
   eating: 'eat',
+  feeding: 'eat',
   procreating: 'procreate',
   idle: 'idle',
   attacking: 'attacking',

@@ -120,6 +120,16 @@ export const handlePlayerActionKeyDown = (
       playerEntity.activeAction = 'eating';
       playSoundAt(updateContext, SoundType.Eat, playerEntity.position);
     }
+  } else if (key === 'h') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.feedChildren = !gameState.autopilotControls.behaviors.feedChildren;
+      return;
+    }
+    const feedAction = playerActionHints.find((a) => a.type === PlayerActionType.FeedChild);
+    if (feedAction && feedAction.targetEntity) {
+      playerEntity.activeAction = 'feeding';
+      playerEntity.target = feedAction.targetEntity.id;
+    }
   } else if (key === 'arrowup' || key === 'w') {
     playerEntity.direction.y = -1;
     playerEntity.activeAction = 'moving';
@@ -254,6 +264,9 @@ export const handlePlayerActionKeyUp = (
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('r') && playerEntity.activeAction === 'procreating') {
+    playerEntity.activeAction = 'idle';
+  }
+  if (!keysPressed.current.has('h') && playerEntity.activeAction === 'feeding') {
     playerEntity.activeAction = 'idle';
   }
 };

@@ -82,7 +82,7 @@ export const handleUIButtonClick = (
     case UIButtonActionType.ToggleAttackBehavior:
       behaviors.attack = !behaviors.attack;
       break;
-    case UIButtonActionType.ToggleFeedChildrenBehavior:
+    case UIButtonActionType.ToggleFeedChildBehavior:
       behaviors.feedChildren = !behaviors.feedChildren;
       break;
     case UIButtonActionType.ToggleAutopilotFollowLeaderBehavior:

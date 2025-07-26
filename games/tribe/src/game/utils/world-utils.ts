@@ -18,6 +18,7 @@ import {
   AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
   LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
   LEADER_WORLD_ANALYSIS_GRID_STEP,
+  HUMAN_FOOD_HUNGER_REDUCTION,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -39,7 +40,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   const actions: PlayerActionHint[] = [];
 
   // Check for Eating
-  if (player.food.length > 0) {
+  if (player.food.length > 0 && player.hunger > HUMAN_FOOD_HUNGER_REDUCTION) {
     actions.push({ type: PlayerActionType.Eat, action: 'eating', key: 'f' });
   }
 
@@ -112,6 +113,26 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
       key: 'r',
       targetEntity: procreationTarget,
     });
+  }
+
+  // Check for Feeding Child
+  if (player.food.length > 0 && player.isAdult) {
+    const hungryChild = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_INTERACTION_RANGE, (h) => {
+      const human = h as HumanEntity;
+      return (
+        !human.isAdult &&
+        (human.motherId === player.id || human.fatherId === player.id) &&
+        human.hunger >= HUMAN_FOOD_HUNGER_REDUCTION
+      );
+    });
+    if (hungryChild) {
+      actions.push({
+        type: PlayerActionType.FeedChild,
+        action: 'feeding',
+        key: 'h',
+        targetEntity: hungryChild,
+      });
+    }
   }
 
   // Check for Attacking
