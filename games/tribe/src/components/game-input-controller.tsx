@@ -157,7 +157,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       if (!playerEntity) return;
 
       keysPressed.current.add(key);
-      handlePlayerActionKeyDown(key, gameStateRef.current, playerEntity, playerActionHintsRef.current);
+      handlePlayerActionKeyDown(key, event.shiftKey, gameStateRef.current, playerEntity, playerActionHintsRef.current);
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {

@@ -38,6 +38,10 @@ export const handleUIButtonClick = (
     clickedButtonInState.lastActivated = Date.now();
   }
 
+  if (shift) {
+    gameState.hasPlayerEnabledAutopilot = true;
+  }
+
   const { behaviors } = gameState.autopilotControls;
 
   switch (button.action) {

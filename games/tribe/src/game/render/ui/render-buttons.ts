@@ -274,7 +274,8 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
       const isBehaviorActive = isToggleButton && gameState.autopilotControls.behaviors[behavior.toggleKey!];
       const isDisabled = !availableActionTypes.has(behavior.playerAction);
 
-      const tooltipText = isToggleButton ? `${behavior.name} (Shift + Click to toggle Autopilot)` : behavior.name;
+      const shiftTooltip = !gameState.hasPlayerEnabledAutopilot ? ' (Press Shift to toggle Auto)' : '';
+      const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
       const backgroundColor = isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
 

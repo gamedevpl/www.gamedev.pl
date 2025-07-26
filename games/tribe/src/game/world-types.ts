@@ -57,6 +57,7 @@ export interface GameWorldState {
   autopilotControls: AutopilotControls;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush?: boolean;
+  hasPlayerEnabledAutopilot?: boolean;
   masterVolume: number; // Global volume level (0.0 to 1.0)
   isMuted: boolean; // Global mute state
   uiButtons: ClickableUIButton[];

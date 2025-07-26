@@ -21,19 +21,29 @@ import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 /**
  * Handles keyboard events that correspond to direct player actions.
  * @param key The key that was pressed (lowercase).
+ * @param shiftKey Whether the shift key was held down.
  * @param gameState The current game state (may be mutated).
  * @param playerEntity The player entity (will be mutated).
  * @param playerActionHints A ref to the list of available player actions.
  */
 export const handlePlayerActionKeyDown = (
   key: string,
+  shiftKey: boolean,
   gameState: GameWorldState,
   playerEntity: HumanEntity,
   playerActionHints: PlayerActionHint[],
 ): void => {
   const updateContext = { gameState, deltaTime: 0 };
 
+  if (shiftKey) {
+    gameState.hasPlayerEnabledAutopilot = true;
+  }
+
   if (key === 'e') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.gathering = !gameState.autopilotControls.behaviors.gathering;
+      return;
+    }
     const gatherBushTarget = findClosestEntity<BerryBushEntity>(
       playerEntity,
       gameState,
@@ -76,6 +86,10 @@ export const handlePlayerActionKeyDown = (
       playSoundAt(updateContext, SoundType.Gather, playerEntity.position);
     }
   } else if (key === 'r') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.procreation = !gameState.autopilotControls.behaviors.procreation;
+      return;
+    }
     const potentialPartner = findClosestEntity<HumanEntity>(
       playerEntity,
       gameState,
@@ -135,6 +149,10 @@ export const handlePlayerActionKeyDown = (
     gameState.autopilotControls.isManuallyMoving = true;
     gameState.autopilotControls.activeAutopilotAction = undefined;
   } else if (key === 'q') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.attack = !gameState.autopilotControls.behaviors.attack;
+      return;
+    }
     const humanTarget = findClosestEntity<HumanEntity>(
       playerEntity,
       gameState,
@@ -148,6 +166,11 @@ export const handlePlayerActionKeyDown = (
       playerEntity.attackTargetId = humanTarget.id;
     }
   } else if (key === 'b') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.planting = !gameState.autopilotControls.behaviors.planting;
+      return;
+    }
+
     const plantAction = playerActionHints.find((a) => a.type === PlayerActionType.Plant);
     if (plantAction) {
       const plantingSpot = findValidPlantingSpot(playerEntity.position, gameState, 50, BERRY_BUSH_SPREAD_RADIUS);
