@@ -135,8 +135,8 @@ export const BT_ACTION_TIMEOUT_HOURS = 24; // Timeout for actions to prevent get
 export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expensive checks
 
 // Tribe Split Constants
-export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 30;
-export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.25;
+export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
+export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.3;
 export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
 export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 300;
 
