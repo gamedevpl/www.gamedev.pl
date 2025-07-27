@@ -36,7 +36,7 @@ export const handlePlayerActionKeyDown = (
   const updateContext = { gameState, deltaTime: 0 };
 
   if (shiftKey) {
-    gameState.hasPlayerEnabledAutopilot = true;
+    gameState.hasPlayerEnabledAutopilot++;
   }
 
   if (key === 'e') {

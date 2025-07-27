@@ -93,6 +93,8 @@ export function initWorld(): GameWorldState {
       isManuallyMoving: false,
     },
     hasPlayerMovedEver: false,
+    hasPlayerPlantedBush: false,
+    hasPlayerEnabledAutopilot: 0,
     masterVolume: INITIAL_MASTER_VOLUME,
     isMuted: false,
     uiButtons,
@@ -162,6 +164,8 @@ export function initIntroWorld(): GameWorldState {
       isManuallyMoving: false,
     },
     hasPlayerMovedEver: false,
+    hasPlayerPlantedBush: false,
+    hasPlayerEnabledAutopilot: 0,
     masterVolume: INITIAL_MASTER_VOLUME,
     isMuted: true, // Muted by default for the intro
     uiButtons: [], // No UI buttons in the intro

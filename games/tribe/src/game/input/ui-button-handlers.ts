@@ -39,7 +39,7 @@ export const handleUIButtonClick = (
   }
 
   if (shift) {
-    gameState.hasPlayerEnabledAutopilot = true;
+    gameState.hasPlayerEnabledAutopilot++;
   }
 
   const { behaviors } = gameState.autopilotControls;

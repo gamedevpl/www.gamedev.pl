@@ -113,7 +113,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
           );
           const children = findChildren(context.gameState, human);
           // Plant more if the bush-to-child ratio is less than 2:1
-          const hasEnoughBushesForChildren = children.length === 0 || nearbyBushes >= children.length * 2;
+          const hasEnoughBushesForChildren = children.length === 0 || nearbyBushes >= children.length * 5;
           return !hasEnoughBushesForChildren;
         },
         'Has Not Enough Nearby Bushes',
