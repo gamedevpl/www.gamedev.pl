@@ -18,6 +18,8 @@ import {
   CHARACTER_RADIUS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
+  CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
+  NOTIFICATION_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -27,6 +29,8 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findChildren, findHeir } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
+import { addNotification, dismissNotification } from '../../../notifications/notification-utils';
+import { NotificationType } from '../../../notifications/notification-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -69,6 +73,31 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
+
+  // --- Starving Children Notification Check (for player) ---
+  if (entity.isPlayer) {
+    const starvingChildren = findChildren(gameState, entity).filter(
+      (child) => child.hunger >= CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
+    );
+    const existingNotification = gameState.notifications.find((n) => n.identifier === 'children_starving');
+
+    if (starvingChildren.length > 0) {
+      const starvingIds = starvingChildren.map((c) => c.id);
+      addNotification(gameState, {
+        identifier: 'children_starving',
+        type: NotificationType.ChildrenStarving,
+        message: 'Your children are starving!',
+        duration: NOTIFICATION_DURATION_MEDIUM_HOURS,
+        targetEntityIds: starvingIds,
+        highlightedEntityIds: starvingIds,
+      });
+    } else {
+      if (existingNotification && !existingNotification.isDismissed) {
+        // Dismiss the notification if no children are starving anymore
+        dismissNotification(gameState, existingNotification.id);
+      }
+    }
+  }
 
   if (entity.gender === 'female' && entity.isPregnant && entity.gestationTime) {
     entity.gestationTime -= gameHoursDelta;
@@ -215,6 +244,13 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       } else {
         gameState.gameOver = true;
         gameState.causeOfGameOver = causeOfDeath;
+        // --- No Heir Notification ---
+        addNotification(gameState, {
+          identifier: 'no_heir',
+          type: NotificationType.NoHeir,
+          message: 'Your lineage has ended. You have no heir.',
+          duration: 0, // Permanent
+        });
       }
     }
     createHumanCorpse(

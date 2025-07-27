@@ -10,6 +10,7 @@ import {
   handleGameControlKeyDown,
   handlePlayerActionKeyDown,
   handlePlayerActionKeyUp,
+  handleNotificationClick,
 } from '../game/input';
 
 interface GameInputControllerProps {
@@ -40,7 +41,13 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
-      // Check for UI button click first
+      // Check for notification click first, as they overlay other UI
+      const notificationClicked = handleNotificationClick(gameStateRef.current, mouseX, mouseY);
+      if (notificationClicked) {
+        return; // Event handled by notification system
+      }
+
+      // Check for general UI button click
       const clickedButton = gameStateRef.current.uiButtons.find(
         (button) =>
           mouseX >= button.rect.x &&
@@ -54,7 +61,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         return;
       }
 
-      // If not a UI button, handle as an autopilot/world click
+      // If not a UI element, handle as an autopilot/world click
       const worldPos = screenToWorldCoords(
         { x: mouseX, y: mouseY },
         viewportCenterRef.current,
@@ -80,24 +87,56 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
 
       gameStateRef.current.mousePosition = { x: mouseX, y: mouseY };
 
-      // Determine hovered button
       let hoveredButtonId: string | undefined = undefined;
-      // Iterate in reverse to find the topmost button first
-      for (let i = gameStateRef.current.uiButtons.length - 1; i >= 0; i--) {
-        const button = gameStateRef.current.uiButtons[i];
-        if (
-          mouseX >= button.rect.x &&
-          mouseX <= button.rect.x + button.rect.width &&
-          mouseY >= button.rect.y &&
-          mouseY <= button.rect.y + button.rect.height
-        ) {
-          hoveredButtonId = button.id;
-          break;
+
+      // Check for hovered notification buttons first
+      if (gameStateRef.current.notificationButtonRects) {
+        for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.dismiss.entries()) {
+          if (
+            mouseX >= buttonRect.x &&
+            mouseX <= buttonRect.x + buttonRect.width &&
+            mouseY >= buttonRect.y &&
+            mouseY <= buttonRect.y + buttonRect.height
+          ) {
+            hoveredButtonId = `notification-dismiss-${id}`;
+            break;
+          }
+        }
+        if (!hoveredButtonId) {
+          for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.view.entries()) {
+            if (
+              mouseX >= buttonRect.x &&
+              mouseX <= buttonRect.x + buttonRect.width &&
+              mouseY >= buttonRect.y &&
+              mouseY <= buttonRect.y + buttonRect.height
+            ) {
+              hoveredButtonId = `notification-view-${id}`;
+              break;
+            }
+          }
         }
       }
+
+      // If not hovering a notification button, check general UI buttons
+      if (!hoveredButtonId) {
+        // Iterate in reverse to find the topmost button first
+        for (let i = gameStateRef.current.uiButtons.length - 1; i >= 0; i--) {
+          const button = gameStateRef.current.uiButtons[i];
+          if (
+            mouseX >= button.rect.x &&
+            mouseX <= button.rect.x + button.rect.width &&
+            mouseY >= button.rect.y &&
+            mouseY <= button.rect.y + button.rect.height
+          ) {
+            hoveredButtonId = button.id;
+            break;
+          }
+        }
+      }
+
       gameStateRef.current.hoveredButtonId = hoveredButtonId;
 
-      // If hovering over a button, don't determine world actions
+      // If hovering over any button, don't determine world actions
       if (hoveredButtonId) {
         gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
         return;

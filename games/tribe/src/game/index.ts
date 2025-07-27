@@ -7,6 +7,9 @@
 import { initWorld } from "./world-init";
 import { GameWorldState } from "./world-types";
 
+export * from './notifications/notification-types';
+export * from './notifications/notification-utils';
+
 /**
  * Initialize the game
  * This function will be called when the application loads.

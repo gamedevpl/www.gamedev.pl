@@ -20,6 +20,7 @@ export interface Entity {
   debuffs: ActiveDebuff[];
   gatheringCooldownTime?: number;
   eatingCooldownTime?: number;
+  isHighlighted?: boolean;
 }
 
 /**

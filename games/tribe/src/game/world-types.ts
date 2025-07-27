@@ -8,6 +8,7 @@ import { ClickableUIButton, PlayerActionType } from './ui/ui-types';
 import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
+import { Notification, Rect } from './notifications/notification-types';
 
 export type HoveredAutopilotAction =
   | {
@@ -66,6 +67,12 @@ export interface GameWorldState {
   debugCharacterId?: EntityId;
   hoveredButtonId?: string;
   mousePosition?: Vector2D;
+  notifications: Notification[];
+  // Holds the screen-space rectangles for notification buttons, updated each frame by the renderer.
+  notificationButtonRects?: {
+    dismiss: Map<string, Rect>;
+    view: Map<string, Rect>;
+  };
 }
 
 export type UpdateContext = {

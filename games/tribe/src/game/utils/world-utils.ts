@@ -19,6 +19,7 @@ import {
   LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
   LEADER_WORLD_ANALYSIS_GRID_STEP,
   HUMAN_FOOD_HUNGER_REDUCTION,
+  NOTIFICATION_DURATION_LONG_HOURS,
 } from '../world-consts';
 import {
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
@@ -35,6 +36,8 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
+import { addNotification } from '../notifications/notification-utils';
+import { NotificationType } from '../notifications/notification-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -866,6 +869,15 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
     descendant.leaderId = human.id;
     descendant.tribeBadge = newTribeBadge;
   }
+
+  // Add notification
+  addNotification(gameState, {
+    type: NotificationType.NewTribeFormed,
+    message: `A new tribe has formed! ${newTribeBadge}`,
+    duration: NOTIFICATION_DURATION_LONG_HOURS,
+    targetEntityIds: [human.id],
+    highlightedEntityIds: [human.id, ...descendants.map((d) => d.id)],
+  });
 
   // Play sound
   const updateContext: UpdateContext = { gameState, deltaTime: 0 };

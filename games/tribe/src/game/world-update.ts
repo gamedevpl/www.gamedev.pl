@@ -7,6 +7,7 @@ import { indexWorldState } from './world-index/world-state-index';
 import { findPlayerEntity } from './utils/world-utils';
 import { vectorLerp } from './utils/math-utils';
 import { updateTutorial } from './tutorial/tutorial-utils';
+import { updateNotifications } from './notifications/notification-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -14,6 +15,30 @@ function updateViewport(state: GameWorldState, deltaTime: number): void {
   const player = findPlayerEntity(state);
   if (player) {
     state.viewportCenter = vectorLerp(state.viewportCenter, player.position, VIEWPORT_FOLLOW_SPEED * deltaTime);
+  }
+}
+
+/**
+ * Handles the visual effects of active notifications, such as highlighting entities.
+ * @param state The current game world state.
+ */
+function updateNotificationEffects(state: GameWorldState): void {
+  // Reset all highlights first
+  for (const entity of state.entities.entities.values()) {
+    entity.isHighlighted = false;
+  }
+
+  // Apply highlights from active, non-dismissed notifications
+  const activeNotifications = state.notifications.filter((n) => !n.isDismissed);
+  for (const notification of activeNotifications) {
+    if (notification.highlightedEntityIds) {
+      for (const entityId of notification.highlightedEntityIds) {
+        const entity = state.entities.entities.get(entityId);
+        if (entity) {
+          entity.isHighlighted = true;
+        }
+      }
+    }
   }
 }
 
@@ -35,6 +60,12 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Viewport update
     updateViewport(indexedState, deltaTime);
+
+    // Update notifications (removes expired ones)
+    updateNotifications(indexedState);
+
+    // Update notification effects (e.g., highlighting)
+    updateNotificationEffects(indexedState);
 
     // Entities update
     entitiesUpdate({

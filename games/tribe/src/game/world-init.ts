@@ -12,6 +12,7 @@ import {
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
+import { NotificationType } from './notifications/notification-types';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -102,6 +103,19 @@ export function initWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
+    notifications: [
+      {
+        id: 'welcome',
+        type: NotificationType.Hello,
+        message: 'Welcome to the game!',
+        duration: 5000, // 5 seconds
+        targetEntityIds: [player.id],
+        highlightedEntityIds: [player.id],
+        timestamp: 0,
+        isDismissed: false,
+        creationTime: Date.now(),
+      },
+    ],
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -173,6 +187,7 @@ export function initIntroWorld(): GameWorldState {
     tutorialState,
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
+    notifications: [],
   };
 
   return indexWorldState(initialWorldState);

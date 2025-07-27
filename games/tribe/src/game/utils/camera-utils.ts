@@ -1,9 +1,9 @@
-import { GameWorldState } from "../world-types";
-import { Vector2D } from "./math-types";
-import { findPlayerEntity } from "./world-utils";
-import { vectorLerp } from "./math-utils";
-import { VIEWPORT_FOLLOW_SPEED } from "../world-consts";
-import { HumanEntity } from "../entities/characters/human/human-types";
+import { GameWorldState } from '../world-types';
+import { Vector2D } from './math-types';
+import { findPlayerEntity } from './world-utils';
+import { vectorLerp } from './math-utils';
+import { VIEWPORT_FOLLOW_SPEED } from '../world-consts';
+import { HumanEntity } from '../entities/characters/human/human-types';
 
 export const updateViewportCenter = (
   gameState: GameWorldState,
@@ -15,7 +15,7 @@ export const updateViewportCenter = (
 
   if (gameState.debugCharacterId) {
     const debugEntity = gameState.entities.entities.get(gameState.debugCharacterId);
-    if (debugEntity && "position" in debugEntity) {
+    if (debugEntity && 'position' in debugEntity) {
       targetEntity = debugEntity as HumanEntity;
     }
   }
@@ -61,3 +61,17 @@ export const updateViewportCenter = (
   // If there's no target, just return the game state's viewport center.
   return gameState.viewportCenter;
 };
+
+/**
+ * Immediately centers the viewport on a specific world position.
+ * @param gameState The game world state to mutate.
+ * @param position The world coordinates to center on.
+ */
+export function centerViewportOn(gameState: GameWorldState, position: Vector2D): void {
+  const { width, height } = gameState.mapDimensions;
+  // Ensure the position is wrapped within the world bounds
+  gameState.viewportCenter = {
+    x: ((position.x % width) + width) % width,
+    y: ((position.y % height) + height) % height,
+  };
+}

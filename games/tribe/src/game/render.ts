@@ -1,5 +1,12 @@
 import { GameWorldState } from './world-types';
-import { UI_FONT_SIZE, UI_TEXT_SHADOW_BLUR, UI_TEXT_SHADOW_COLOR, UI_TEXT_COLOR } from './world-consts';
+import {
+  UI_FONT_SIZE,
+  UI_TEXT_SHADOW_BLUR,
+  UI_TEXT_SHADOW_COLOR,
+  UI_TEXT_COLOR,
+  UI_NOTIFICATION_HIGHLIGHT_COLOR,
+  UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED,
+} from './world-consts';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils/world-utils';
 import { Vector2D } from './utils/math-types';
@@ -14,7 +21,7 @@ import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
-import { renderAutopilotIndicator } from './render/render-ui';
+import { renderAutopilotIndicator, renderNotifications } from './render/render-ui';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -39,6 +46,35 @@ export function renderGame(
   }
 
   renderWorld(ctx, gameState, isDebugOn);
+
+  // --- Notification Area Highlights ---
+  const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
+  for (const notification of activeNotifications) {
+    const pulse = (Math.sin(gameState.time * UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED) + 1) / 2; // 0 to 1 pulse
+    ctx.globalAlpha = pulse * 0.5 + 0.25; // Pulsing alpha
+    ctx.fillStyle = UI_NOTIFICATION_HIGHLIGHT_COLOR;
+
+    if (notification.targetArea) {
+      ctx.fillRect(
+        notification.targetArea.x,
+        notification.targetArea.y,
+        notification.targetArea.width,
+        notification.targetArea.height,
+      );
+    }
+    if (notification.targetRadius) {
+      ctx.beginPath();
+      ctx.arc(
+        notification.targetRadius.x,
+        notification.targetRadius.y,
+        notification.targetRadius.radius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1; // Reset alpha
 
   // Render persistent autopilot command indicator
   renderAutopilotIndicator(ctx, gameState);
@@ -104,6 +140,9 @@ export function renderGame(
     if (gameState.tutorialState.isActive) {
       renderTutorialPanel(ctx, gameState.tutorialState, gameState.tutorial, ctx.canvas.width, ctx.canvas.height);
     }
+
+    // --- Notifications Panel ---
+    renderNotifications(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
 
     if (gameState.isPaused) {
       renderPauseOverlay(ctx);

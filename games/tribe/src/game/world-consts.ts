@@ -99,7 +99,7 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; 
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
-export const HUMAN_AI_IDLE_WANDER_COOLDOWN = 10;
+export const HUMAN_AI_IDle_WANDER_COOLDOWN = 10;
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
@@ -328,3 +328,27 @@ export const LLM_AUTOPILOT_COOLDOWN_HOURS = 1; // Cooldown in game hours for LLM
 export const UI_AUTOPILOT_BUTTON_SIZE = 80;
 export const UI_AUTOPILOT_BUTTON_SPACING = 10;
 export const UI_AUTOPILOT_BUTTON_FONT_SIZE = 14;
+
+// Notification Constants
+export const NOTIFICATION_DURATION_MEDIUM_HOURS: number = 12; // e.g., for starving children warning
+export const NOTIFICATION_DURATION_LONG_HOURS: number = 24; // e.g., for new tribe formed
+export const CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION: number = HUMAN_HUNGER_DEATH * 0.75; // At 75% hunger
+export const NOTIFICATION_DISMISS_COOLDOWN_HOURS: number = 24; // Cooldown before a dismissed notification can reappear
+
+// UI Notification Constants
+export const UI_NOTIFICATION_PANEL_WIDTH: number = 300;
+export const UI_NOTIFICATION_PANEL_PADDING: number = 15;
+export const UI_NOTIFICATION_PANEL_BORDER_RADIUS: number = 8;
+export const UI_NOTIFICATION_PANEL_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
+export const UI_NOTIFICATION_TEXT_COLOR: string = '#FFFFFF';
+export const UI_NOTIFICATION_TITLE_FONT_SIZE: number = 16;
+export const UI_NOTIFICATION_TEXT_FONT_SIZE: number = 14;
+export const UI_NOTIFICATION_SPACING: number = 10;
+export const UI_NOTIFICATION_DISMISS_BUTTON_SIZE: number = 20;
+export const UI_NOTIFICATION_DISMISS_BUTTON_COLOR: string = '#FF6B6B';
+export const UI_NOTIFICATION_VIEW_BUTTON_COLOR: string = '#4CAF50';
+export const UI_NOTIFICATION_BUTTON_HOVER_COLOR: string = '#FFD700'; // Gold for hover
+export const UI_NOTIFICATION_HIGHLIGHT_COLOR: string = 'rgba(255, 255, 0, 0.3)'; // Yellow highlight for entities/areas
+export const UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED: number = 2;
+export const UI_NOTIFICATION_SLIDE_IN_DURATION_MS = 500;
+export const UI_NOTIFICATION_AREA_PADDING_BOTTOM = 120; // Pushes notifications above the bottom button row

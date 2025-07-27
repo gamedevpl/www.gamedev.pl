@@ -12,6 +12,8 @@ import { SoundType } from '../sound/sound-types';
 import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
+import { dismissNotification } from '../notifications/notification-utils';
+import { centerViewportOn } from '../utils/camera-utils';
 
 /**
  * Handles the logic for a UI button click event.
@@ -126,3 +128,55 @@ export const handleUIButtonClick = (
   // For most cases, the original gameState object is mutated, so we return it.
   return gameState;
 };
+
+/**
+ * Handles a click event within the notification area.
+ * @param gameState The current game state.
+ * @param mouseX The x-coordinate of the mouse click.
+ * @param mouseY The y-coordinate of the mouse click.
+ * @returns True if a notification button was clicked and the event was handled.
+ */
+export function handleNotificationClick(gameState: GameWorldState, mouseX: number, mouseY: number): boolean {
+  if (!gameState.notificationButtonRects) {
+    return false;
+  }
+
+  const player = findPlayerEntity(gameState);
+
+  // Check dismiss buttons
+  for (const [notificationId, rect] of gameState.notificationButtonRects.dismiss.entries()) {
+    if (mouseX >= rect.x && mouseX <= rect.x + rect.width && mouseY >= rect.y && mouseY <= rect.y + rect.height) {
+      dismissNotification(gameState, notificationId);
+      if (player) {
+        playSoundAt({ gameState, deltaTime: 0 }, SoundType.ButtonClick, player.position);
+      }
+      return true;
+    }
+  }
+
+  // Check view buttons
+  for (const [notificationId, rect] of gameState.notificationButtonRects.view.entries()) {
+    if (mouseX >= rect.x && mouseX <= rect.x + rect.width && mouseY >= rect.y && mouseY <= rect.y + rect.height) {
+      const notification = gameState.notifications.find((n) => n.id === notificationId);
+      if (notification) {
+        let targetPos = notification.targetPosition;
+        if (!targetPos && notification.targetEntityIds && notification.targetEntityIds.length > 0) {
+          const targetEntity = gameState.entities.entities.get(notification.targetEntityIds[0]);
+          if (targetEntity) {
+            targetPos = targetEntity.position;
+          }
+        }
+
+        if (targetPos) {
+          centerViewportOn(gameState, targetPos);
+        }
+        if (player) {
+          playSoundAt({ gameState, deltaTime: 0 }, SoundType.ButtonClick, player.position);
+        }
+        return true; // Click handled
+      }
+    }
+  }
+
+  return false;
+}

@@ -7,3 +7,4 @@ export * from './ui/render-tribe-list';
 export * from './ui/render-tutorial';
 export * from './ui/render-autopilot-hints';
 export * from './ui/render-autopilot-indicator';
+export * from './ui/render-notifications';
