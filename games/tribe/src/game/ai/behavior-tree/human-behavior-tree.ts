@@ -20,13 +20,7 @@ import {
   createDefendFamilyBehavior,
   createDefendClaimedBushBehavior,
   createDesperateAttackBehavior,
-  createAutopilotMovingBehavior,
-  createAutopilotGatheringBehavior,
-  createAutopilotAttackingBehavior,
-  createAutopilotFeedingChildBehavior,
-  createAutopilotPlantingBehavior,
-  createAutopilotProcreationBehavior,
-  createAutopilotFollowLeaderBehavior,
+  createPlayerCommandBehavior,
   createFollowLeaderBehavior,
   createTribeMigrationBehavior,
 } from './behaviors';
@@ -48,15 +42,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       createDefendClaimedBushBehavior(2),
       createDesperateAttackBehavior(2),
 
-      // --- PLAYER AUTOPILOT COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
-      // These actions are triggered by direct player clicks on targets and should always work.
-      createAutopilotMovingBehavior(2),
-      createAutopilotGatheringBehavior(2),
-      createAutopilotAttackingBehavior(2),
-      createAutopilotProcreationBehavior(2),
-      createAutopilotPlantingBehavior(2),
-      createAutopilotFeedingChildBehavior(2),
-      createAutopilotFollowLeaderBehavior(2),
+      // --- PLAYER COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
+      // These actions are triggered by direct player clicks and should always have high priority.
+      createPlayerCommandBehavior(2),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new NonPlayerControlled(createLeaderCombatStrategyBehavior(3), 'Gated Leader Combat Strategy', 2),
