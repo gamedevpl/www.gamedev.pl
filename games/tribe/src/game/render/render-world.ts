@@ -9,8 +9,17 @@ import { renderCharacter } from './render-character';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity } from '../utils/world-utils';
 import { renderVisualEffect } from './render-effects';
-import { renderTutorialHighlight } from './ui/render-tutorial';
-import { UI_TUTORIAL_HIGHLIGHT_COLOR, UI_TUTORIAL_HIGHLIGHT_RADIUS } from '../world-consts';
+import {
+  UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR,
+  UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH,
+  UI_NOTIFICATION_ENTITY_HIGHLIGHT_PULSE_SPEED,
+  UI_NOTIFICATION_ENTITY_HIGHLIGHT_RADIUS,
+  UI_TUTORIAL_HIGHLIGHT_COLOR,
+  UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
+  UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
+  UI_TUTORIAL_HIGHLIGHT_RADIUS,
+} from '../world-consts';
+import { renderEntityHighlight } from './render-highlights';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
@@ -103,6 +112,30 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
 
+  // Render notification entity highlights
+  const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
+  for (const notification of activeNotifications) {
+    if (notification.highlightedEntityIds && notification.renderHighlights) {
+      for (const highlightedEntityId of notification.highlightedEntityIds) {
+        const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
+        if (highlightedEntity) {
+          renderWithWrapping(
+            ctx,
+            worldWidth,
+            worldHeight,
+            renderEntityHighlight,
+            highlightedEntity,
+            UI_NOTIFICATION_ENTITY_HIGHLIGHT_RADIUS,
+            UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR,
+            UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH,
+            UI_NOTIFICATION_ENTITY_HIGHLIGHT_PULSE_SPEED,
+            gameState.time,
+          );
+        }
+      }
+    }
+  }
+
   // Render tutorial highlights if active
   if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityIds.size > 0) {
     for (const highlightedEntityId of gameState.tutorialState.highlightedEntityIds) {
@@ -112,10 +145,12 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
           ctx,
           worldWidth,
           worldHeight,
-          renderTutorialHighlight,
+          renderEntityHighlight,
           highlightedEntity,
           UI_TUTORIAL_HIGHLIGHT_RADIUS,
           UI_TUTORIAL_HIGHLIGHT_COLOR,
+          UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
+          UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
           gameState.time,
         );
       }

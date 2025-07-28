@@ -135,6 +135,14 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     },
     isCompleted: false,
   },
+  {
+    key: TutorialStepKey.AUTOPILOT,
+    title: 'Autopilot!',
+    text: 'You can turn autopilot for specific actions, press Shift and click on the action button to enable it.',
+    condition: (world: GameWorldState) => world.hasPlayerEnabledAutopilot > 1,
+    highlightedUIElements: [TutorialUIHighlightKey.COMMAND_BUTTONS],
+    isCompleted: false,
+  },
 ];
 
 export function createTutorial(): Tutorial {

@@ -1,4 +1,3 @@
-import { Entity } from '../../entities/entities-types';
 import { TransitionState, Tutorial, TutorialState } from '../../tutorial/tutorial-types.js';
 import {
   UI_TUTORIAL_HIGHLIGHT_COLOR,
@@ -13,26 +12,6 @@ import {
   UI_TUTORIAL_TEXT_FONT_SIZE,
   UI_TUTORIAL_TITLE_FONT_SIZE,
 } from '../../world-consts';
-
-export function renderTutorialHighlight(
-  ctx: CanvasRenderingContext2D,
-  entity: Entity,
-  radius: number,
-  color: string,
-  time: number,
-): void {
-  ctx.save();
-  const { position } = entity;
-
-  ctx.strokeStyle = color;
-  // Pulsing effect for line width
-  ctx.lineWidth = 2 + Math.sin(time * 5) * 1.5;
-  ctx.setLineDash([8, 8]);
-  ctx.beginPath();
-  ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI);
-  ctx.stroke();
-  ctx.restore();
-}
 
 export function renderTutorialPanel(
   ctx: CanvasRenderingContext2D,

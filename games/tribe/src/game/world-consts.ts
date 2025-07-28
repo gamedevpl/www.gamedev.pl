@@ -352,3 +352,8 @@ export const UI_NOTIFICATION_HIGHLIGHT_COLOR: string = 'rgba(255, 255, 0, 0.3)';
 export const UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED: number = 2;
 export const UI_NOTIFICATION_SLIDE_IN_DURATION_MS = 500;
 export const UI_NOTIFICATION_AREA_PADDING_BOTTOM = 120; // Pushes notifications above the bottom button row
+
+export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_RADIUS: number = 45;
+export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR: string = '#FFD700'; // Gold
+export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_PULSE_SPEED: number = 3;
+export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;

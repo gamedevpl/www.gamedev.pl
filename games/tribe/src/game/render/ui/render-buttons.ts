@@ -134,7 +134,13 @@ function renderTooltip(ctx: CanvasRenderingContext2D, rect: Rect2D, text: string
   ctx.restore();
 }
 
-export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWorldState, canvasWidth: number): void {
+export function renderUIButtons(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  canvasWidth: number,
+): {
+  commandButtonsRect: Rect2D | null;
+} {
   ctx.save();
   const player = findPlayerEntity(gameState);
 
@@ -274,7 +280,10 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
       const isBehaviorActive = isToggleButton && gameState.autopilotControls.behaviors[behavior.toggleKey!];
       const isDisabled = !availableActionTypes.has(behavior.playerAction);
 
-      const shiftTooltip = !gameState.hasPlayerEnabledAutopilot ? ' (Press Shift to toggle Auto)' : '';
+      const shiftTooltip =
+        !gameState.hasPlayerEnabledAutopilot || gameState.hasPlayerEnabledAutopilot < 3
+          ? ' (Press Shift to toggle Auto)'
+          : '';
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
       const backgroundColor = isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
@@ -306,11 +315,24 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
     currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
   });
 
-  gameState.uiButtons
-    .filter((b) => b.id.startsWith('commandButton_'))
-    .forEach((button) => {
-      drawButton(ctx, button, gameState.hoveredButtonId === button.id);
-    });
+  let commandButtonsRect: Rect2D | null = null;
+  const commandButtons = gameState.uiButtons.filter((b) => b.id.startsWith('commandButton_'));
+  commandButtons.forEach((button) => {
+    if (!commandButtonsRect) {
+      commandButtonsRect = { x: button.rect.x, y: button.rect.y, width: button.rect.width, height: button.rect.height };
+    }
+    commandButtonsRect.x = Math.min(commandButtonsRect.x, button.rect.x);
+    commandButtonsRect.y = Math.min(commandButtonsRect.y, button.rect.y);
+    commandButtonsRect.width = Math.max(
+      commandButtonsRect.width,
+      button.rect.x + button.rect.width - commandButtonsRect.x,
+    );
+    commandButtonsRect.height = Math.max(
+      commandButtonsRect.height,
+      button.rect.y + button.rect.height - commandButtonsRect.y,
+    );
+    drawButton(ctx, button, gameState.hoveredButtonId === button.id);
+  });
 
   // --- Render Tooltip ---
   const hoveredButton = gameState.hoveredButtonId
@@ -322,4 +344,8 @@ export function renderUIButtons(ctx: CanvasRenderingContext2D, gameState: GameWo
   }
 
   ctx.restore();
+
+  return {
+    commandButtonsRect,
+  };
 }

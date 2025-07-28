@@ -37,6 +37,7 @@ export interface Notification {
   duration: number; // How long the notification should be displayed in game hours. 0 for permanent until dismissed.
   isDismissed: boolean; // Flag to indicate if the user has dismissed it
   dismissedUntil?: number; // Game time until which the notification should not reappear after being dismissed
+  renderHighlights?: boolean; // Flag to indicate if the notification should render highlights
 
   // --- Generic Targeting ---
   /** IDs of entities to scroll to when the notification is clicked. */

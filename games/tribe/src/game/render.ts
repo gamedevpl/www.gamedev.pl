@@ -110,7 +110,7 @@ export function renderGame(
     renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
 
     // --- Buttons & Tooltips ---
-    renderUIButtons(ctx, gameState, ctx.canvas.width);
+    const { commandButtonsRect } = renderUIButtons(ctx, gameState, ctx.canvas.width);
 
     // Reset shadow for other UI elements if needed
     ctx.shadowColor = 'transparent';
@@ -133,6 +133,10 @@ export function renderGame(
 
       if (activeUIHighlights.has(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
         renderUIElementHighlight(ctx, foodBarRect, gameState.time);
+      }
+
+      if (activeUIHighlights.has(TutorialUIHighlightKey.COMMAND_BUTTONS) && commandButtonsRect) {
+        renderUIElementHighlight(ctx, commandButtonsRect, gameState.time);
       }
     }
 

@@ -40,7 +40,14 @@ export const handleUIButtonClick = (
     clickedButtonInState.lastActivated = Date.now();
   }
 
-  if (shift) {
+  if (
+    shift &&
+    [
+      UIButtonActionType.CommandGather,
+      UIButtonActionType.CommandPlant,
+      UIButtonActionType.ToggleProcreationBehavior,
+    ].includes(button.action)
+  ) {
     gameState.hasPlayerEnabledAutopilot++;
   }
 
@@ -172,6 +179,9 @@ export function handleNotificationClick(gameState: GameWorldState, mouseX: numbe
         }
         if (player) {
           playSoundAt({ gameState, deltaTime: 0 }, SoundType.ButtonClick, player.position);
+        }
+        if (notification.highlightedEntityIds) {
+          notification.renderHighlights = !notification.renderHighlights;
         }
         return true; // Click handled
       }
