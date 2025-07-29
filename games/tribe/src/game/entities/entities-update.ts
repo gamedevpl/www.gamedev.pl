@@ -209,8 +209,8 @@ export function giveBirth(
     mother.id, // Mother ID
     fatherId, // Father ID
     childAncestors,
-    father?.leaderId,
-    father?.tribeBadge,
+    father?.leaderId ?? mother.leaderId, // Inherit leader ID from mother or father
+    father?.tribeBadge ?? mother.tribeBadge, // Inherit tribe badge from mother or father
   );
 
   // Play birth sound

@@ -680,6 +680,15 @@ export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldStat
     }
   }
 
+  // Heir follows their father
+  if (human.isAdult && human.fatherId) {
+    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+
+    if (father && father.type === 'human' && findHeir(findChildren(gameState, father))?.id === human.id) {
+      return father;
+    }
+  }
+
   // Adult females follow their male partner
   if (human.isAdult && human.gender === 'female' && human.partnerIds && human.partnerIds.length > 0) {
     // This reuses the existing logic to find the first male partner

@@ -26,7 +26,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     key: TutorialStepKey.MOVE,
     title: 'Movement',
     text: 'Use WASD or Arrow Keys to move your character around the world.',
-    condition: (world: GameWorldState) => world.hasPlayerMovedEver,
+    condition: (world: GameWorldState) => world.hasPlayerMovedEver || world.hasPlayerEnabledAutopilot > 2,
     isCompleted: false,
   },
   {
@@ -139,7 +139,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     key: TutorialStepKey.AUTOPILOT,
     title: 'Autopilot!',
     text: 'You can turn autopilot for specific actions, press Shift and click on the action button to enable it.',
-    condition: (world: GameWorldState) => world.hasPlayerEnabledAutopilot > 1,
+    condition: (world: GameWorldState) => world.hasPlayerEnabledAutopilot > 2,
     highlightedUIElements: [TutorialUIHighlightKey.COMMAND_BUTTONS],
     isCompleted: false,
   },

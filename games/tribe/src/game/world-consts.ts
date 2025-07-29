@@ -105,6 +105,7 @@ export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
 export const FATHER_FOLLOW_DISTANCE = 150;
 export const FATHER_FOLLOW_STOP_DISTANCE = 100;
+export const HEIR_FOLLOW_STOP_DISTANCE = 150;
 export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
 export const FOLLOW_LEADER_MIN_HUNGER_THRESHOLD = 120; // Followers will stop following if hunger is above this
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
@@ -138,7 +139,7 @@ export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expe
 export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
 export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.3;
 export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
-export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 300;
+export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 500;
 
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
@@ -332,7 +333,7 @@ export const UI_AUTOPILOT_BUTTON_FONT_SIZE = 14;
 // Notification Constants
 export const NOTIFICATION_DURATION_MEDIUM_HOURS: number = 12; // e.g., for starving children warning
 export const NOTIFICATION_DURATION_LONG_HOURS: number = 24; // e.g., for new tribe formed
-export const CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION: number = HUMAN_HUNGER_DEATH * 0.75; // At 75% hunger
+export const CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION: number = HUMAN_HUNGER_DEATH * 0.9; // At 90% hunger
 export const NOTIFICATION_DISMISS_COOLDOWN_HOURS: number = 24; // Cooldown before a dismissed notification can reappear
 
 // UI Notification Constants

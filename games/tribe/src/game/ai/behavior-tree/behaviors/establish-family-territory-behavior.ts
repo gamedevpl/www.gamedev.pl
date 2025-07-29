@@ -8,7 +8,7 @@ import {
   ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
-import { findChildren, findHeir, getRandomNearbyPosition } from '../../../utils/world-utils';
+import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } from '../../../utils/world-utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';
@@ -33,6 +33,15 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   const isTooCloseToParents = new ConditionNode(
     (human: HumanEntity, context: UpdateContext) => {
+      // The player's heir should not try to establish a new territory.
+      const player = findPlayerEntity(context.gameState);
+      if (player) {
+        const playerHeir = findHeir(findChildren(context.gameState, player));
+        if (playerHeir?.id === human.id) {
+          return false;
+        }
+      }
+
       if (!human.fatherId) {
         return false;
       }
@@ -62,7 +71,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
     depth + 1,
   );
 
-  // --- Decomposed Nodes ---\n\n  // Node to check if a move is already in progress
+  // --- Decomposed Nodes ---\\n\\n  // Node to check if a move is already in progress
   const isMovingToTerritory = new ConditionNode(
     (_human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
       return blackboard.get('territoryMoveTarget') !== undefined;

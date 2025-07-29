@@ -29,7 +29,7 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findChildren, findHeir } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
-import { addNotification, dismissNotification } from '../../../notifications/notification-utils';
+import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
@@ -79,7 +79,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     const starvingChildren = findChildren(gameState, entity).filter(
       (child) => child.hunger >= CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
     );
-    const existingNotification = gameState.notifications.find((n) => n.identifier === 'children_starving');
 
     if (starvingChildren.length > 0) {
       const starvingIds = starvingChildren.map((c) => c.id);
@@ -91,11 +90,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         targetEntityIds: starvingIds,
         highlightedEntityIds: starvingIds,
       });
-    } else {
-      if (existingNotification && !existingNotification.isDismissed) {
-        // Dismiss the notification if no children are starving anymore
-        dismissNotification(gameState, existingNotification.id);
-      }
     }
   }
 
