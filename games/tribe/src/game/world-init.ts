@@ -108,7 +108,7 @@ export function initWorld(): GameWorldState {
         id: 'welcome',
         type: NotificationType.Hello,
         message: 'Welcome to the game!',
-        duration: 5000, // 5 seconds
+        duration: 50,
         targetEntityIds: [player.id],
         highlightedEntityIds: [player.id],
         timestamp: 0,

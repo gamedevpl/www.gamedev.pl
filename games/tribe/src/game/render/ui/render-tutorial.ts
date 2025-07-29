@@ -1,5 +1,10 @@
-import { TransitionState, Tutorial, TutorialState } from '../../tutorial/tutorial-types.js';
+import { GameWorldState } from '../../world-types';
+import { TransitionState } from '../../tutorial/tutorial-types.js';
 import {
+  UI_TUTORIAL_DISMISS_BUTTON_COLOR,
+  UI_TUTORIAL_DISMISS_BUTTON_HOVER_COLOR,
+  UI_TUTORIAL_DISMISS_BUTTON_PADDING,
+  UI_TUTORIAL_DISMISS_BUTTON_SIZE,
   UI_TUTORIAL_HIGHLIGHT_COLOR,
   UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
   UI_TUTORIAL_HIGHLIGHT_PADDING,
@@ -13,13 +18,40 @@ import {
   UI_TUTORIAL_TITLE_FONT_SIZE,
 } from '../../world-consts';
 
+function renderDismissButton(
+  ctx: CanvasRenderingContext2D,
+  panelX: number,
+  panelY: number,
+  panelWidth: number,
+  isHovered: boolean,
+) {
+  const buttonSize = UI_TUTORIAL_DISMISS_BUTTON_SIZE;
+  const buttonPadding = UI_TUTORIAL_DISMISS_BUTTON_PADDING;
+  const buttonX = panelX + panelWidth - buttonSize - buttonPadding;
+  const buttonY = panelY + buttonPadding;
+
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = isHovered ? UI_TUTORIAL_DISMISS_BUTTON_HOVER_COLOR : UI_TUTORIAL_DISMISS_BUTTON_COLOR;
+
+  ctx.beginPath();
+  const offset = 5;
+  ctx.moveTo(buttonX + offset, buttonY + offset);
+  ctx.lineTo(buttonX + buttonSize - offset, buttonY + buttonSize - offset);
+  ctx.moveTo(buttonX + buttonSize - offset, buttonY + offset);
+  ctx.lineTo(buttonX + offset, buttonY + buttonSize - offset);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderTutorialPanel(
   ctx: CanvasRenderingContext2D,
-  tutorialState: TutorialState,
-  tutorial: Tutorial,
+  gameState: GameWorldState,
   canvasWidth: number,
   canvasHeight: number,
-): void {
+): { x: number; y: number; width: number; height: number } | undefined {
+  const { tutorialState, tutorial } = gameState;
+
   if (tutorialState.transitionState === TransitionState.INACTIVE) {
     return;
   }
@@ -104,7 +136,18 @@ export function renderTutorialPanel(
     textY += lineHeight;
   }
 
+  // --- Draw Dismiss Button ---
+  const isHovered = gameState.hoveredButtonId === 'tutorial-dismiss';
+  renderDismissButton(ctx, panelX, panelY, panelWidth, isHovered);
+
   ctx.restore();
+
+  const buttonSize = UI_TUTORIAL_DISMISS_BUTTON_SIZE;
+  const buttonPadding = UI_TUTORIAL_DISMISS_BUTTON_PADDING;
+  const buttonX = panelX + panelWidth - buttonSize - buttonPadding;
+  const buttonY = panelY + buttonPadding;
+
+  return { x: buttonX, y: buttonY, width: buttonSize, height: buttonSize };
 }
 
 export function renderUIElementHighlight(

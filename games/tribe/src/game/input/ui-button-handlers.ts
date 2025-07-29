@@ -64,6 +64,9 @@ export const handleUIButtonClick = (
       break;
     case UIButtonActionType.FastForward:
       return updateWorld(gameState, FAST_FORWARD_AMOUNT_SECONDS);
+    case UIButtonActionType.DismissTutorial:
+      gameState.tutorialState.isActive = false;
+      break;
 
     // --- Player Commands & Autopilot Toggles ---
     case UIButtonActionType.CommandEat:

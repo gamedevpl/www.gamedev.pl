@@ -104,6 +104,7 @@ export enum UIButtonActionType {
   ToggleMute = 'ToggleMute',
   TogglePause = 'TogglePause',
   FastForward = 'FastForward',
+  DismissTutorial = 'DismissTutorial',
 
   // --- Player Commands (One-Time Actions) ---
   CommandEat = 'CommandEat',

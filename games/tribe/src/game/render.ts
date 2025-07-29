@@ -10,7 +10,7 @@ import {
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils/world-utils';
 import { Vector2D } from './utils/math-types';
-import { PlayerActionHint } from './ui/ui-types';
+import { PlayerActionHint, UIButtonActionType } from './ui/ui-types';
 import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
 import { renderUIButtons } from './render/ui/render-buttons';
 import { renderPauseOverlay } from './render/ui/render-pause-overlay';
@@ -142,7 +142,18 @@ export function renderGame(
 
     // Render tutorial panel if active
     if (gameState.tutorialState.isActive) {
-      renderTutorialPanel(ctx, gameState.tutorialState, gameState.tutorial, ctx.canvas.width, ctx.canvas.height);
+      const dismissButtonRect = renderTutorialPanel(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+      if (dismissButtonRect) {
+        gameState.uiButtons.push({
+          id: 'tutorial-dismiss',
+          action: UIButtonActionType.DismissTutorial,
+          rect: dismissButtonRect,
+          text: '',
+          currentWidth: dismissButtonRect.width,
+          backgroundColor: 'transparent',
+          textColor: 'transparent',
+        });
+      }
     }
 
     // --- Notifications Panel ---

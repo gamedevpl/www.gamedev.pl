@@ -307,6 +307,10 @@ export const UI_TUTORIAL_HIGHLIGHT_RADIUS: number = 40;
 export const UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED: number = 4;
 export const UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH: number = 3;
 export const UI_TUTORIAL_HIGHLIGHT_PADDING: number = 5;
+export const UI_TUTORIAL_DISMISS_BUTTON_SIZE: number = 20;
+export const UI_TUTORIAL_DISMISS_BUTTON_PADDING: number = 5;
+export const UI_TUTORIAL_DISMISS_BUTTON_COLOR: string = '#FFFFFF';
+export const UI_TUTORIAL_DISMISS_BUTTON_HOVER_COLOR: string = '#FF6B6B';
 
 // Visual Effects Constants
 export const EFFECT_DURATION_SHORT_HOURS: number = 1;
