@@ -85,7 +85,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
         (player.procreationCooldown || 0) <= 0 &&
         (human.gender === 'female'
           ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
-          : !player.isPregnant && (player.age ?? 0) <= HUMAN_FEMALE_MAX_PROCREATION_AGE)) ??
+          : !player.isPregnant && player.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE)) ??
       false
     );
   });
