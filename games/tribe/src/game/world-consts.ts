@@ -26,7 +26,6 @@ export const HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD: number = HUMAN_MAX_AGE
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
 export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
-export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 35; // Age at which male without heir urgently seeks procreation
 export const PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS: number = 24; // 1 game day
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
@@ -45,7 +44,6 @@ export const ADULT_CHILD_FEEDING_RANGE: number = 50; // Range in pixels for an a
 export const ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS: number = 1; // Cooldown in game hours for an adult child after feeding a parent
 
 // Human Corpse Constants
-export const HUMAN_CORPSE_DECAY_TIME_HOURS: number = 128;
 export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a fresh corpse
 
 // Human Attack Constants
@@ -55,13 +53,10 @@ export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for
 export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
 export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 0.1;
 export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
-export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
 
 // Human Planting Constants
-export const MAX_BUSHES_PER_TRIBE_TERRITORY = 10;
 export const BERRY_COST_FOR_PLANTING = 5;
 export const HUMAN_PLANTING_DURATION_HOURS = 0.5; // Time in game hours for planting action
-export const AI_PLANTING_BERRY_THRESHOLD = 6; // Min berries for AI to consider planting
 export const AI_PLANTING_SEARCH_RADIUS = 100; // Radius for AI to search for a planting spot
 export const AI_PLANTING_CHECK_RADIUS = 300; // Radius for AI to check if bushes are already planted
 export const BERRY_BUSH_PLANTING_CLEARANCE_RADIUS = 30;
@@ -72,8 +67,6 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = HUMAN_HUNGER_DEATH *
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEATH * 0.25; // AI decides to gather if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to attack if hunger >= this
-export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
-export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_IDle_WANDER_COOLDOWN = 10;
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
@@ -262,11 +255,6 @@ export const UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH = 50;
 export const UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT = 8;
 export const UI_BT_DEBUG_HISTOGRAM_X_OFFSET = 10;
 
-// Pause UI Constants
-export const UI_PAUSE_OVERLAY_COLOR: string = 'rgba(0, 0, 0, 0.5)';
-export const UI_PAUSE_TEXT_COLOR: string = '#FFFFFF';
-export const UI_PAUSE_FONT_SIZE: number = 33;
-
 // UI Tutorial Constants
 export const UI_TUTORIAL_PANEL_WIDTH: number = 400;
 export const UI_TUTORIAL_PANEL_PADDING: number = 20;
@@ -293,21 +281,14 @@ export const EFFECT_DURATION_MEDIUM_HOURS: number = 3;
 export const HUNGER_EFFECT_THRESHOLD: number = 70;
 
 // Sound Constants
-export const SOUND_MAX_DISTANCE = 600;
-export const SOUND_FALLOFF = 1.5;
 export const INITIAL_MASTER_VOLUME = 0.1;
 
 // Intro Screen Constants
 export const INTRO_SCREEN_INITIAL_HUMANS: number = 15;
-export const INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS: number = 5000;
-
-// LLM Autopilot
-export const LLM_AUTOPILOT_COOLDOWN_HOURS = 1; // Cooldown in game hours for LLM Autopilot decisions
 
 // LLM Autopilot UI Constants
 export const UI_AUTOPILOT_BUTTON_SIZE = 80;
 export const UI_AUTOPILOT_BUTTON_SPACING = 10;
-export const UI_AUTOPILOT_BUTTON_FONT_SIZE = 14;
 
 // Notification Constants
 export const NOTIFICATION_DURATION_MEDIUM_HOURS: number = 12; // e.g., for starving children warning
@@ -321,7 +302,6 @@ export const UI_NOTIFICATION_PANEL_PADDING: number = 15;
 export const UI_NOTIFICATION_PANEL_BORDER_RADIUS: number = 8;
 export const UI_NOTIFICATION_PANEL_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
 export const UI_NOTIFICATION_TEXT_COLOR: string = '#FFFFFF';
-export const UI_NOTIFICATION_TITLE_FONT_SIZE: number = 16;
 export const UI_NOTIFICATION_TEXT_FONT_SIZE: number = 14;
 export const UI_NOTIFICATION_SPACING: number = 10;
 export const UI_NOTIFICATION_DISMISS_BUTTON_SIZE: number = 20;

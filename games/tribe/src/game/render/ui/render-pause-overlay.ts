@@ -1,6 +1,9 @@
-import { UI_PAUSE_FONT_SIZE, UI_PAUSE_OVERLAY_COLOR, UI_PAUSE_TEXT_COLOR } from '../../world-consts';
-
 export function renderPauseOverlay(ctx: CanvasRenderingContext2D): void {
+  // Pause UI constants
+  const UI_PAUSE_OVERLAY_COLOR = 'rgba(0, 0, 0, 0.5)';
+  const UI_PAUSE_TEXT_COLOR = '#FFFFFF';
+  const UI_PAUSE_FONT_SIZE = 33;
+
   ctx.save();
   ctx.fillStyle = UI_PAUSE_OVERLAY_COLOR;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);

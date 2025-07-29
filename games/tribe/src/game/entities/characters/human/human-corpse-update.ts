@@ -1,7 +1,7 @@
 import { HumanCorpseEntity } from './human-corpse-types';
 import { UpdateContext } from '../../../world-types';
 import { removeEntity } from '../../entities-update';
-import { HUMAN_CORPSE_DECAY_TIME_HOURS, HUMAN_CORPSE_INITIAL_FOOD } from '../../../world-consts';
+import { HUMAN_CORPSE_INITIAL_FOOD } from '../../../world-consts';
 
 /**
  * Updates a human corpse entity, handling its decay over time.
@@ -10,6 +10,9 @@ import { HUMAN_CORPSE_DECAY_TIME_HOURS, HUMAN_CORPSE_INITIAL_FOOD } from '../../
  */
 export function humanCorpseUpdate(entity: HumanCorpseEntity, updateContext: UpdateContext): void {
   const timeSinceDeath = updateContext.gameState.time - entity.timeOfDeath;
+
+  // Human corpse decay constant
+  const HUMAN_CORPSE_DECAY_TIME_HOURS = 128;
 
   if (HUMAN_CORPSE_DECAY_TIME_HOURS > 0) {
     entity.decayProgress = Math.min(1, timeSinceDeath / HUMAN_CORPSE_DECAY_TIME_HOURS);

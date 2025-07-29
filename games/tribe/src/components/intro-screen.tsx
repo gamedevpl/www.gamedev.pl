@@ -9,7 +9,7 @@ import { GameWorldState } from '../game/world-types';
 import { findAllHumans } from '../game/utils/world-utils';
 import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
-import { INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS, VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
+import { VIEWPORT_FOLLOW_SPEED } from '../game/world-consts';
 import { EntityId } from '../game/entities/entities-types';
 import { playSound, stopSound } from '../game/sound/sound-utils';
 import { SoundType } from '../game/sound/sound-types';
@@ -116,6 +116,8 @@ export const IntroScreen: React.FC = () => {
 
   // Viewport switching logic
   useEffect(() => {
+    const INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS = 5000;
+    
     const switchFocus = () => {
       const humans = findAllHumans(gameStateRef.current);
       if (humans.length > 0) {

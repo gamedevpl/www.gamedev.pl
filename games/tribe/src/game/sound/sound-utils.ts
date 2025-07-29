@@ -1,5 +1,4 @@
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../utils/math-utils';
-import { SOUND_FALLOFF, SOUND_MAX_DISTANCE } from '../world-consts';
 import { SoundOptions, SoundType } from './sound-types';
 import { getAudioContext, soundBuffers, getMasterGainNode } from './sound-loader';
 
@@ -7,6 +6,10 @@ import { getAudioContext, soundBuffers, getMasterGainNode } from './sound-loader
 const activeSoundSources = new Map<string, { sourceNode: AudioBufferSourceNode; gainNode: GainNode }>();
 
 export function playSound(soundType: SoundType, options?: SoundOptions): void {
+  // Sound constants
+  const SOUND_MAX_DISTANCE = 600;
+  const SOUND_FALLOFF = 1.5;
+
   const context = getAudioContext();
   const masterGainNode = getMasterGainNode();
 
