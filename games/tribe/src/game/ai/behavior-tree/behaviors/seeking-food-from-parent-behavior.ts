@@ -5,7 +5,7 @@ import {
   PARENT_FEEDING_RANGE,
 } from '../../../world-consts';
 import { UpdateContext } from '../../../world-types';
-import { findClosestEntity, findParents } from '../../../utils/world-utils';
+import { findClosestEntity, findParents } from '../../../utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';

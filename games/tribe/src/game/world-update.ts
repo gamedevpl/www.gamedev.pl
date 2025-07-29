@@ -3,11 +3,11 @@ import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY, VIEWPORT_FOLLOW_SPEED } f
 import { interactionsUpdate } from './interactions/interactions-update';
 import { entitiesUpdate } from './entities/entities-update';
 import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
-import { indexWorldState } from './world-index/world-state-index';
-import { findPlayerEntity } from './utils/world-utils';
+import { findPlayerEntity } from './utils';
 import { vectorLerp } from './utils/math-utils';
 import { updateTutorial } from './tutorial/tutorial-utils';
 import { updateNotifications } from './notifications/notification-utils';
+import { indexWorldState } from './world-index/world-state-index';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 

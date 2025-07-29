@@ -16,7 +16,7 @@ import {
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
 } from '../world-consts';
-import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions } from '../utils/world-utils';
+import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions } from '../utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { calculateWrappedDistance } from '../utils/math-utils';

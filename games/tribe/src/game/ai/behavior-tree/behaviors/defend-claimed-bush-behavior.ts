@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { findIntruderOnClaimedBush } from '../../../utils/world-utils';
+import { findIntruderOnClaimedBush } from '../../../utils';
 import { AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS } from '../../../world-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';

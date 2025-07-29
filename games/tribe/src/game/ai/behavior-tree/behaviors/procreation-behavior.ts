@@ -17,7 +17,7 @@ import {
   findPotentialNewPartners,
   findChildren,
   findHeir,
-} from '../../../utils/world-utils';
+} from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';

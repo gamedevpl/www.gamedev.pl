@@ -7,7 +7,7 @@ import {
 } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { findNearbyEnemiesOfTribe, calculateTribeStrength, findTribeMembers } from '../../../utils/world-utils';
+import { findNearbyEnemiesOfTribe, calculateTribeStrength, findTribeMembers } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, Selector, CooldownNode } from '../nodes';
 import { IndexedWorldState } from '../../../world-index/world-index-types';

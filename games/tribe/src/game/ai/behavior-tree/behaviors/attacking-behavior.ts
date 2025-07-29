@@ -5,7 +5,7 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER } from '../../../world-consts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { getFamilyCenter, getFamilyMembers, getTribeCenter } from '../../../utils/world-utils';
+import { getFamilyCenter, getFamilyMembers, getTribeCenter } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
 
 const ATTACK_TARGET_KEY = 'attackTarget';

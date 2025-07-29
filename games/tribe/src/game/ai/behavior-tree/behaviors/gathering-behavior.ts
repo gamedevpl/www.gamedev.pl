@@ -8,7 +8,7 @@ import {
 } from '../../../world-consts';
 import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { findChildren, findClosestEntity } from '../../../utils/world-utils';
+import { findChildren, findClosestEntity } from '../../../utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';

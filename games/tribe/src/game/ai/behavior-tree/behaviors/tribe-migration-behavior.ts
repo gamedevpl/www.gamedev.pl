@@ -2,7 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { ActionNode, CachingNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { findOptimalMigrationTarget } from '../../../utils/world-utils';
+import { findOptimalMigrationTarget } from '../../../utils';
 import {
   AI_MIGRATION_CHECK_INTERVAL_HOURS,
   BT_EXPENSIVE_OPERATION_CACHE_HOURS,
