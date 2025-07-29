@@ -5,7 +5,7 @@ import {
   performTribeSplit,
   findSafeTribeSplitLocation,
   getTribeCenter,
-} from '../../../utils/world-utils';
+} from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS, HUMAN_INTERACTION_PROXIMITY } from '../../../world-consts';

@@ -8,7 +8,7 @@ import {
   ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
-import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } from '../../../utils/world-utils';
+import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';

@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { findFamilyMemberUnderAttack } from '../../../utils/world-utils';
+import { findFamilyMemberUnderAttack } from '../../../utils';
 import { AI_DEFEND_FAMILY_TRIGGER_RADIUS } from '../../../world-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
@@ -22,11 +22,11 @@ export function createDefendFamilyBehavior(depth: number): BehaviorNode {
             return [false, 'Not an adult'];
           }
 
-          const result = findFamilyMemberUnderAttack(human, context.gameState, AI_DEFEND_FAMILY_TRIGGER_RADIUS);
+          const intruder = findFamilyMemberUnderAttack(human, context.gameState, AI_DEFEND_FAMILY_TRIGGER_RADIUS);
 
-          if (result) {
-            blackboard.set(AGGRESSOR_KEY, result.aggressor);
-            return [true, `Family member ${result.familyMember.id} attacked by ${result.aggressor.id}`];
+          if (intruder) {
+            blackboard.set(AGGRESSOR_KEY, intruder);
+            return [true, `Family member ${intruder.familyMember.id} attacked by ${intruder.aggressor.id}`];
           }
 
           blackboard.delete(AGGRESSOR_KEY);
@@ -46,16 +46,13 @@ export function createDefendFamilyBehavior(depth: number): BehaviorNode {
             return [NodeStatus.FAILURE, 'Target invalid/dead'];
           }
 
-          // If already attacking this target, the behavior is running.
           if (human.activeAction === 'attacking' && human.attackTargetId === target.id) {
             return NodeStatus.RUNNING;
           }
 
-          // Initiate the attack.
           human.activeAction = 'attacking';
           human.attackTargetId = target.id;
 
-          // This behavior remains running as long as the human is attacking the aggressor.
           return [NodeStatus.RUNNING, `Attacking aggressor ${target.id}`];
         },
         'Execute Family Defense Attack',

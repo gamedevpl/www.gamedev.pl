@@ -8,7 +8,7 @@ import {
   UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED,
 } from './world-consts';
 import { HumanEntity } from './entities/characters/human/human-types';
-import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils/world-utils';
+import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils';
 import { Vector2D } from './utils/math-types';
 import { PlayerActionHint, UIButtonActionType } from './ui/ui-types';
 import { TutorialUIHighlightKey } from './tutorial/tutorial-types';

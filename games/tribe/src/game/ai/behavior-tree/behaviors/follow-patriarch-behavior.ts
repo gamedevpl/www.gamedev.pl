@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { FATHER_FOLLOW_STOP_DISTANCE } from '../../../world-consts';
 import { UpdateContext } from '../../../world-types';
-import { findFamilyPatriarch } from '../../../utils/world-utils';
+import { findFamilyPatriarch } from '../../../utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, Sequence } from '../nodes';

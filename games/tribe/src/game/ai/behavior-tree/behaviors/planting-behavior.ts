@@ -6,7 +6,7 @@ import {
   findChildren,
   findOptimalBushPlantingSpot,
   isPositionOccupied,
-} from '../../../utils/world-utils';
+} from '../../../utils';
 import {
   AI_PLANTING_CHECK_RADIUS,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
