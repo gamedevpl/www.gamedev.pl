@@ -4,7 +4,6 @@ import { BushGrowingStateData, BUSH_DYING, BUSH_FULL, BUSH_GROWING } from './bus
 import {
   HOURS_PER_GAME_DAY,
   GAME_DAY_IN_REAL_SECONDS,
-  BERRY_BUSH_REGENERATION_HOURS,
   EFFECT_DURATION_SHORT_HOURS,
 } from '../../../../world-consts';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';
@@ -16,6 +15,9 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
   update: (data: BushGrowingStateData, context: StateContext<BerryBushEntity>): StateTransition => {
     const { entity, updateContext } = context;
     const gameHoursDelta = updateContext.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+
+    // Berry bush regeneration constant
+    const BERRY_BUSH_REGENERATION_HOURS = 12; // Hours for 1 food to grow
 
     entity.age += gameHoursDelta;
     if (entity.age >= entity.lifespan) {

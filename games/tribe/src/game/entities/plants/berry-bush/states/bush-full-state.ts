@@ -4,7 +4,6 @@ import { BushFullStateData, BUSH_DYING, BUSH_SPREADING, BUSH_FULL, BUSH_GROWING 
 import {
   HOURS_PER_GAME_DAY,
   GAME_DAY_IN_REAL_SECONDS,
-  BERRY_BUSH_SPREAD_COOLDOWN_HOURS,
 } from '../../../../world-consts';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
@@ -15,6 +14,9 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
   update: (data: BushFullStateData, context: StateContext<BerryBushEntity>): StateTransition => {
     const { entity, updateContext } = context;
     const gameHoursDelta = updateContext.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+
+    // Berry bush spread cooldown constant
+    const BERRY_BUSH_SPREAD_COOLDOWN_HOURS = 90;
 
     entity.age += gameHoursDelta;
     if (entity.age >= entity.lifespan) {

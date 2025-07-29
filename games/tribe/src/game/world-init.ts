@@ -1,9 +1,6 @@
 import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
 import { GameWorldState } from './world-types';
 import {
-  MAP_WIDTH,
-  MAP_HEIGHT,
-  INITIAL_BERRY_BUSH_COUNT,
   INITIAL_MASTER_VOLUME,
   UI_BUTTON_WIDTH,
   INTRO_SCREEN_INITIAL_HUMANS,
@@ -17,6 +14,13 @@ import { NotificationType } from './notifications/notification-types';
 export function initWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0; // Game starts at time 0
+
+  // Map dimensions
+  const MAP_WIDTH = 3000; // pixels
+  const MAP_HEIGHT = 3000; // pixels
+
+  // Berry bush initialization constants
+  const INITIAL_BERRY_BUSH_COUNT = 45;
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
@@ -128,6 +132,13 @@ export function initWorld(): GameWorldState {
 export function initIntroWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0;
+
+  // Map dimensions
+  const MAP_WIDTH = 3000; // pixels
+  const MAP_HEIGHT = 3000; // pixels
+
+  // Berry bush initialization constants
+  const INITIAL_BERRY_BUSH_COUNT = 45;
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {

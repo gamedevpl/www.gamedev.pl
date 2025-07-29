@@ -4,25 +4,16 @@ export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Constants
 
 // Time Constants
-export const MAP_WIDTH: number = 3000; // pixels
-export const MAP_HEIGHT: number = 3000; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
 
 // Berry Bush Constants
-export const BERRY_BUSH_MAX_FOOD: number = 5;
-export const BERRY_BUSH_INITIAL_FOOD: number = 3;
-export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 food to grow
-export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 940;
 export const BERRY_BUSH_SPREAD_CHANCE: number = 0.7;
 export const BERRY_BUSH_SPREAD_RADIUS: number = 20; // pixels
-export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 90;
-export const INITIAL_BERRY_BUSH_COUNT: number = 45;
 export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant represents the duration in game hours for which a human's claim on a berry bush remains active.
 
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
 export const HUMAN_MAX_AGE_YEARS: number = 80; // Maximum lifespan in game years
-export const MAX_ANCESTORS_TO_TRACK: number = 3;
 export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_DEATH: number = 150; // Hunger level that causes death
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = HUMAN_HUNGER_DEATH * 0.8; // Hunger level that triggers speed reduction

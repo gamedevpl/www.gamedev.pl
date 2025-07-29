@@ -6,9 +6,6 @@ import { vectorAdd } from '../utils/math-utils';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
-  BERRY_BUSH_INITIAL_FOOD,
-  BERRY_BUSH_MAX_FOOD,
-  BERRY_BUSH_LIFESPAN_GAME_HOURS,
   BERRY_BUSH_SPREAD_CHANCE,
   BERRY_BUSH_SPREAD_RADIUS,
   HUMAN_INITIAL_AGE,
@@ -21,7 +18,6 @@ import {
   HUMAN_CORPSE_INITIAL_FOOD,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
-  MAX_ANCESTORS_TO_TRACK,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -70,6 +66,11 @@ function createEntity<T extends Entity>(
 }
 
 export function createBerryBush(state: Entities, initialPosition: Vector2D, currentTime: number): BerryBushEntity {
+  // Berry bush constants
+  const BERRY_BUSH_MAX_FOOD = 5;
+  const BERRY_BUSH_INITIAL_FOOD = 3;
+  const BERRY_BUSH_LIFESPAN_GAME_HOURS = 940;
+
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
     radius: BERRY_BUSH_SPREAD_RADIUS,
@@ -181,6 +182,9 @@ export function giveBirth(
   updateContext: UpdateContext,
 ): HumanEntity | undefined {
   const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
+
+  // Ancestor tracking constant
+  const MAX_ANCESTORS_TO_TRACK = 3;
 
   // Combine ancestor lists from both parents
   const motherAncestors = [...(mother.ancestorIds || []), mother.id];
