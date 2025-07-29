@@ -1,7 +1,6 @@
 import {
   GAME_DAY_IN_REAL_SECONDS,
   HOURS_PER_GAME_DAY,
-  HUMAN_HUNGER_INCREASE_PER_HOUR,
   HUMAN_HUNGER_DEATH,
   CHILD_TO_ADULT_AGE,
   HUMAN_PREGNANCY_HUNGER_INCREASE_RATE_MODIFIER,
@@ -35,6 +34,9 @@ import { NotificationType } from '../../../notifications/notification-types';
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
   const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+
+  // Human hunger constant
+  const HUMAN_HUNGER_INCREASE_PER_HOUR = 5; // Hunger increase rate
 
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
 

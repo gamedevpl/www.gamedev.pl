@@ -14,21 +14,14 @@ export const BERRY_BUSH_CLAIM_DURATION_HOURS: number = 240; // This constant rep
 // Human Constants
 export const HUMAN_YEAR_IN_REAL_SECONDS: number = 10;
 export const HUMAN_MAX_AGE_YEARS: number = 80; // Maximum lifespan in game years
-export const HUMAN_HUNGER_INCREASE_PER_HOUR: number = 5; // Hunger increase rate
 export const HUMAN_HUNGER_DEATH: number = 150; // Hunger level that causes death
 export const HUMAN_HUNGER_THRESHOLD_SLOW: number = HUMAN_HUNGER_DEATH * 0.8; // Hunger level that triggers speed reduction
-export const HUMAN_HUNGER_THRESHOLD_TUTORIAL: number = HUMAN_HUNGER_DEATH * 0.2; // Hunger level that triggers the tutorial
 export const HUMAN_HUNGER_THRESHOLD_CRITICAL: number = HUMAN_HUNGER_DEATH * 0.95; // Hunger level that prevents procreation
 export const HUMAN_FOOD_HUNGER_REDUCTION: number = 30; // How much hunger is reduced by eating food
 export const HUMAN_MAX_FOOD: number = 10; // Maximum food a human can carry
-export const HUMAN_BASE_SPEED: number = 10; // Base movement speed in pixels per second
-export const HUMAN_SLOW_SPEED_MODIFIER: number = 0.5; // Speed modifier when hunger > threshold
 export const HUMAN_INTERACTION_RANGE: number = 30; // Range in pixels for interactions
 export const HUMAN_INTERACTION_PROXIMITY = HUMAN_INTERACTION_RANGE * 0.75; // Proximity for interactions (75% of interaction range)
-export const HUMAN_INITIAL_HUNGER: number = 50; // Initial hunger level for new humans
-export const HUMAN_INITIAL_AGE: number = 20; // Initial age in years for new humans
 export const HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD: number = HUMAN_MAX_AGE_YEARS * 0.8; // Age at which humans start moving slower (80% of max age)
-export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for old age (e.g., 0.7 for 70% speed)
 
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
@@ -57,20 +50,11 @@ export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a
 
 // Human Attack Constants
 export const HUMAN_MAX_HITPOINTS = 100;
-export const HUMAN_ATTACK_DAMAGE = 35;
 export const HUMAN_ATTACK_RANGE: number = HUMAN_INTERACTION_RANGE; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
 export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
-export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 5; // Force applied to target on successful attack
-export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER = 0.5; // 50% speed reduction
-export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS = 1.5; // in game hours
 export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 0.1;
 export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
-export const HUMAN_MALE_DAMAGE_MODIFIER = 1.5;
-export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
-export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
-export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
-export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 export const MAX_ATTACKERS_PER_TARGET = 1; // Maximum number of humans that should ideally attack a single target
 
 // Human Planting Constants

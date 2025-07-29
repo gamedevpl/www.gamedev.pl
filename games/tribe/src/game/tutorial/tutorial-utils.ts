@@ -9,7 +9,6 @@ import {
   TutorialUIHighlightKey,
 } from './tutorial-types';
 import {
-  HUMAN_HUNGER_THRESHOLD_TUTORIAL,
   HUMAN_INTERACTION_RANGE,
   UI_TUTORIAL_TRANSITION_DURATION_SECONDS,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
@@ -33,7 +32,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     key: TutorialStepKey.HUNGER,
     title: 'Hunger',
     text: 'Your character gets hungry over time. Watch the hunger bar!',
-    condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > HUMAN_HUNGER_THRESHOLD_TUTORIAL,
+    condition: (_world: GameWorldState, player: HumanEntity) => player.hunger > 30, // HUMAN_HUNGER_THRESHOLD_TUTORIAL (20% of HUMAN_HUNGER_DEATH)
     isCompleted: false,
     minDisplayTime: UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
     highlightedUIElements: [TutorialUIHighlightKey.HUNGER_BAR],

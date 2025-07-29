@@ -8,8 +8,6 @@ import { BUSH_GROWING } from './plants/berry-bush/states/bush-state-types';
 import {
   BERRY_BUSH_SPREAD_CHANCE,
   BERRY_BUSH_SPREAD_RADIUS,
-  HUMAN_INITIAL_AGE,
-  HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
   CHARACTER_RADIUS,
@@ -97,8 +95,8 @@ export function createHuman(
   currentTime: number,
   gender: 'male' | 'female',
   isPlayer: boolean = false,
-  initialAge: number = HUMAN_INITIAL_AGE,
-  initialHunger: number = HUMAN_INITIAL_HUNGER,
+  initialAge: number = 20, // Initial age in years for new humans (HUMAN_INITIAL_AGE)
+  initialHunger: number = 50, // Initial hunger level for new humans (HUMAN_INITIAL_HUNGER)
   motherId?: EntityId,
   fatherId?: EntityId,
   ancestorIds: EntityId[] = [],
@@ -209,7 +207,7 @@ export function giveBirth(
     childGender,
     false, // Not player-controlled
     0, // Age 0
-    HUMAN_INITIAL_HUNGER / 2, // Start with half hunger
+    50 / 2, // Start with half hunger (HUMAN_INITIAL_HUNGER / 2)
     mother.id, // Mother ID
     fatherId, // Father ID
     childAncestors,

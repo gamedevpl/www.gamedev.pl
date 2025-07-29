@@ -4,17 +4,8 @@ import {
   HUMAN_ATTACK_RANGE,
   HUMAN_ATTACK_COOLDOWN_HOURS,
   HUMAN_ATTACK_BUILDUP_HOURS,
-  HUMAN_ATTACK_PUSHBACK_FORCE,
-  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
-  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
   EFFECT_DURATION_SHORT_HOURS,
-  HUMAN_ATTACK_DAMAGE,
-  HUMAN_PARRY_ANGLE_DEGREES,
-  HUMAN_PARRY_CHANCE,
   HUMAN_OLD_AGE_THRESHOLD,
-  HUMAN_MALE_DAMAGE_MODIFIER,
-  HUMAN_CHILD_DAMAGE_MODIFIER,
-  HUMAN_VULNERABLE_DAMAGE_MODIFIER,
 } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
@@ -45,6 +36,17 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   },
 
   perform: (source, target, context) => {
+    // Attack constants
+    const HUMAN_ATTACK_DAMAGE = 35;
+    const HUMAN_ATTACK_PUSHBACK_FORCE = 5; // Force applied to target on successful attack
+    const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER = 0.5; // 50% speed reduction
+    const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS = 1.5; // in game hours
+    const HUMAN_MALE_DAMAGE_MODIFIER = 1.5;
+    const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
+    const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
+    const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
+    const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
+
     // --- Parry Check --
     const toTarget = getDirectionVectorOnTorus(
       source.position,
