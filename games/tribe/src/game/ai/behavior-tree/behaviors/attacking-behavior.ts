@@ -5,7 +5,7 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER } from '../../../world-consts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { getFamilyCenter, getFamilyMembers, getTribeCenter } from '../../../utils';
+import { getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
 
 const ATTACK_TARGET_KEY = 'attackTarget';
@@ -18,9 +18,9 @@ function findClosestEnemy(world: GameWorldState, human: HumanEntity, range: numb
 
   // This is inefficient, should be replaced with spatial index search later
   for (const entity of Object.values(world.entities.entities)) {
-    if (entity.type === 'human' && entity.id !== human.id && (entity as HumanEntity).hitpoints > 0) {
+    if (entity.type === 'human' && (entity as HumanEntity).hitpoints > 0) {
       // An enemy is a human not from the same tribe.
-      if ((entity as HumanEntity).leaderId !== human.leaderId) {
+      if (isHostile(human, entity as HumanEntity)) {
         const distance = calculateWrappedDistance(
           human.position,
           entity.position,

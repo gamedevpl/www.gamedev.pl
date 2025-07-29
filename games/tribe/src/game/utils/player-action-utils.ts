@@ -1,9 +1,7 @@
 import {
   BERRY_COST_FOR_PLANTING,
   HUMAN_ATTACK_RANGE,
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
   HUMAN_FOOD_HUNGER_REDUCTION,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_RANGE,
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
@@ -18,6 +16,7 @@ import { calculateWrappedDistance } from './math-utils';
 import { findNearbyEnemiesOfTribe } from './ai-world-analysis-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from './tribe-split-utils';
+import { canProcreate, isHostile } from '.';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -72,23 +71,13 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   // Check for Procreation
-  const procreationTarget = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_INTERACTION_RANGE, (h) => {
-    const human = h as HumanEntity;
-    return (
-      (human.id !== player.id &&
-        human.gender !== player.gender &&
-        human.isAdult &&
-        player.isAdult &&
-        human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-        player.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-        (human.procreationCooldown || 0) <= 0 &&
-        (player.procreationCooldown || 0) <= 0 &&
-        (human.gender === 'female'
-          ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
-          : !player.isPregnant && player.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE)) ??
-      false
-    );
-  });
+  const procreationTarget = findClosestEntity<HumanEntity>(
+    player,
+    gameState,
+    'human',
+    HUMAN_INTERACTION_RANGE,
+    (h) => canProcreate(player, h as HumanEntity),
+  );
   if (procreationTarget) {
     actions.push({
       type: PlayerActionType.Procreate,
@@ -124,7 +113,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     gameState,
     'human',
     HUMAN_ATTACK_RANGE,
-    (h) => (h as HumanEntity).id !== player.id && (h as HumanEntity).leaderId !== player.leaderId,
+    (h) => isHostile(player, h as HumanEntity),
   );
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });

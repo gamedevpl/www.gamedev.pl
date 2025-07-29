@@ -8,13 +8,11 @@ import {
   AUTOPILOT_MOVE_DISTANCE_THRESHOLD,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   FATHER_FOLLOW_STOP_DISTANCE,
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_PROXIMITY,
 } from '../../../world-consts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { isPositionOccupied } from '../../../utils/world-utils';
+import { canProcreate, isPositionOccupied } from '../../../utils';
 
 /**
  * Creates a behavior that handles all direct player commands via the autopilot system.
@@ -135,19 +133,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode {
             case PlayerActionType.AutopilotProcreate: {
               const target = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
 
-              if (
-                !target ||
-                target.type !== 'human' ||
-                target.gender === human.gender ||
-                !target.isAdult ||
-                !human.isAdult ||
-                (target.gender === 'female' && (target.isPregnant || target.age > HUMAN_FEMALE_MAX_PROCREATION_AGE)) ||
-                (human.gender === 'female' && (human.isPregnant || human.age > HUMAN_FEMALE_MAX_PROCREATION_AGE)) ||
-                (target.procreationCooldown || 0) > 0 ||
-                (human.procreationCooldown || 0) > 0 ||
-                target.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
-                human.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL
-              ) {
+              if (!target || target.type !== 'human' || !canProcreate(human, target)) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
               }

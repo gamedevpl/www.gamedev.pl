@@ -54,7 +54,6 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode {
             human.activeAction = 'moving';
 
             // TODO: Add a visual effect and sound for the leader's call
-            console.log(`Tribe ${human.tribeBadge} led by ${human.id} is migrating to`, migrationTarget);
 
             return NodeStatus.SUCCESS; // We've successfully started the migration
           }

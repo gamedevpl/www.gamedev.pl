@@ -2,13 +2,15 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
-import {
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  BERRY_COST_FOR_PLANTING,
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
-} from '../world-consts';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { GameWorldState, HoveredAutopilotAction } from '../world-types';
-import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot } from '../utils/world-utils';
+import {
+  findEntityAtPosition,
+  findPlayerEntity,
+  findValidPlantingSpot,
+  isHostile,
+  canProcreate,
+} from '../utils';
 import { Vector2D } from '../utils/math-types';
 
 /**
@@ -46,19 +48,11 @@ export const determineHoveredAutopilotAction = (
       const targetHuman = hoveredEntity as HumanEntity;
 
       // Check for Attack
-      if (targetHuman.id !== player.id && targetHuman.leaderId !== player.leaderId && player.isAdult) {
+      if (player.isAdult && isHostile(player, targetHuman)) {
         determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: targetHuman.id };
       }
       // Check for Procreate
-      else if (
-        targetHuman.id !== player.id &&
-        targetHuman.gender !== player.gender &&
-        targetHuman.isAdult &&
-        player.isAdult &&
-        (targetHuman.procreationCooldown || 0) <= 0 &&
-        targetHuman.gender === 'female' &&
-        targetHuman.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
-      ) {
+      else if (canProcreate(player, targetHuman)) {
         determinedAction = { action: PlayerActionType.AutopilotProcreate, targetEntityId: targetHuman.id };
       }
       // Check for Feed Child
@@ -90,7 +84,7 @@ export const determineHoveredAutopilotAction = (
 /**
  * Handles a click in the game world for autopilot actions.
  * It sets the active autopilot action based on what was hovered, or defaults to a move command.
- * @param gameState The current game state, which will be mutated.\n * @param worldPos The position of the click in world coordinates.\n */
+ * @param gameState The current game state, which will be mutated.\\n * @param worldPos The position of the click in world coordinates.\\n */
 export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector2D): void => {
   if (gameState.isPaused) return;
 

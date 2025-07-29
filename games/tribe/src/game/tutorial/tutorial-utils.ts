@@ -12,11 +12,9 @@ import {
   HUMAN_HUNGER_THRESHOLD_TUTORIAL,
   HUMAN_INTERACTION_RANGE,
   UI_TUTORIAL_TRANSITION_DURATION_SECONDS,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
   UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS,
 } from '../world-consts';
-import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions } from '../utils';
+import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions, canProcreate } from '../utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
@@ -104,23 +102,13 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: "Find a mate and press 'R' to start a family. This is how you continue your lineage.",
     condition: (world: GameWorldState, player: HumanEntity) => findChildren(world, player).length > 0,
     getTargets: (world: GameWorldState, player: HumanEntity) => {
-      const potentialPartner = findClosestEntity<HumanEntity>(player, world, 'human', HUMAN_INTERACTION_RANGE, (h) => {
-        const human = h as HumanEntity;
-        return (
-          (human.id !== player.id &&
-            human.gender !== player.gender &&
-            human.isAdult &&
-            player.isAdult &&
-            human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-            player.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-            (human.procreationCooldown || 0) <= 0 &&
-            (player.procreationCooldown || 0) <= 0 &&
-            (human.gender === 'female'
-              ? !human.isPregnant && human.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE
-              : !player.isPregnant)) ??
-          false
-        );
-      });
+      const potentialPartner = findClosestEntity<HumanEntity>(
+        player,
+        world,
+        'human',
+        HUMAN_INTERACTION_RANGE,
+        (h) => canProcreate(player, h as HumanEntity),
+      );
       return potentialPartner ? [potentialPartner.id] : [];
     },
     isCompleted: false,

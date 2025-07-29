@@ -2,18 +2,13 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
-import {
-  HUMAN_INTERACTION_RANGE,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
-} from '../world-consts';
-import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
+import { HUMAN_INTERACTION_RANGE, EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
-import { generateTribeBadge, isLineage } from '../utils/world-utils';
+import { generateTribeBadge, isLineage, canProcreate } from '../utils';
 
 /**
  * Defines an interaction for human procreation.
@@ -27,44 +22,17 @@ const targetType = 'human' as EntityType;
 const maxDistance = HUMAN_INTERACTION_RANGE;
 
 const checker = (source: HumanEntity, target: HumanEntity): boolean => {
-  // Prevent self-interaction
-  if (source.id === target.id) return false;
+  // Use the centralized utility for all biological and state checks
+  if (!canProcreate(source, target)) {
+    return false;
+  }
 
-  // Must be of opposite genders
-  if (source.gender === target.gender) return false;
-
-  // Helper function to check common eligibility criteria for an individual
-  const isIndividuallyEligible = (entity: HumanEntity, isEntityFemale: boolean): boolean => {
-    const commonConditions =
-      entity.isAdult && entity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL && (entity.procreationCooldown || 0) <= 0;
-
-    if (!commonConditions) return false;
-
-    if (isEntityFemale) {
-      // Specific checks if the entity being checked is female
-      return !entity.isPregnant && entity.age <= HUMAN_FEMALE_MAX_PROCREATION_AGE;
-    }
-    return true; // No further specific checks if the entity being checked is male
-  };
-
-  // Apply checks based on the source's gender
+  // Preserve the original interaction-specific activeAction logic
   if (source.gender === 'male') {
-    // Source is MALE, Target is FEMALE
-    // Check male's (source) eligibility
-    if (!isIndividuallyEligible(source, false)) return false;
-    // Check female's (target) eligibility
-    if (!isIndividuallyEligible(target, true)) return false;
-
-    // Male (source) must be 'procreating'. Female's (target) activeAction is not checked.
+    // Male (source) must be 'procreating'. Female's (target) action is not checked.
     return source.activeAction === 'procreating';
   } else {
-    // source.gender === 'female'
-    // Source is FEMALE, Target is MALE
-    // Check female's (source) eligibility
-    if (!isIndividuallyEligible(source, true)) return false;
-    // Check male's (target) eligibility
-    if (!isIndividuallyEligible(target, false)) return false;
-
+    // source is female
     // Female (source) must be 'procreating', AND Male (target) must also be 'procreating'.
     return source.activeAction === 'procreating' && target.activeAction === 'procreating';
   }

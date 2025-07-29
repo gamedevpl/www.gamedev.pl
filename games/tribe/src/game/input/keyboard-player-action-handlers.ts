@@ -1,9 +1,14 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
-import { findClosestEntity, findValidPlantingSpot, performTribeSplit } from '../utils/world-utils';
+import {
+  findClosestEntity,
+  findValidPlantingSpot,
+  performTribeSplit,
+  isHostile,
+  canProcreate,
+} from '../utils';
 import {
   HUMAN_INTERACTION_RANGE,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_ATTACK_RANGE,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
@@ -95,21 +100,7 @@ export const handlePlayerActionKeyDown = (
       gameState,
       'human',
       HUMAN_INTERACTION_RANGE,
-      (h) => {
-        const human = h as HumanEntity;
-        return (
-          (human.id !== playerEntity.id &&
-            human.gender !== playerEntity.gender &&
-            human.isAdult &&
-            playerEntity.isAdult &&
-            human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-            playerEntity.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
-            (human.procreationCooldown || 0) <= 0 &&
-            (playerEntity.procreationCooldown || 0) <= 0 &&
-            (human.gender === 'female' ? !human.isPregnant : !playerEntity.isPregnant)) ||
-          false
-        );
-      },
+      (h) => canProcreate(playerEntity, h as HumanEntity),
     );
     if (potentialPartner) {
       playerEntity.activeAction = 'procreating';
@@ -168,7 +159,7 @@ export const handlePlayerActionKeyDown = (
       gameState,
       'human',
       HUMAN_ATTACK_RANGE,
-      (h) => (h as HumanEntity).id !== playerEntity.id && (h as HumanEntity).leaderId !== playerEntity.leaderId,
+      (h) => isHostile(playerEntity, h as HumanEntity),
     );
 
     if (humanTarget) {
