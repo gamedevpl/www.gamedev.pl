@@ -36,8 +36,7 @@ export interface PredatorEntity extends CharacterEntity {
   /** ID of the predator's mother, if known. */
   motherId?: EntityId;
 
-  /** IDs of the predator's ancestors. */
-  ancestorIds: EntityId[];
+
 
   /** Current active action. Set by AI decision. */
   activeAction?: PredatorAction;

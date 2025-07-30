@@ -45,33 +45,69 @@ export function initWorld(): GameWorldState {
     false, // isPlayer = false
   );
 
-  // Spawn initial prey animals scattered around the map
+  // Spawn initial prey animals in specific zones away from center
+  const preySpawnZones = [
+    { centerX: MAP_WIDTH * 0.2, centerY: MAP_HEIGHT * 0.2, radius: 200 },
+    { centerX: MAP_WIDTH * 0.8, centerY: MAP_HEIGHT * 0.2, radius: 200 },
+    { centerX: MAP_WIDTH * 0.2, centerY: MAP_HEIGHT * 0.8, radius: 200 },
+    { centerX: MAP_WIDTH * 0.8, centerY: MAP_HEIGHT * 0.8, radius: 200 },
+  ];
+  
   for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
-    const randomPosition = {
-      x: Math.random() * MAP_WIDTH,
-      y: Math.random() * MAP_HEIGHT,
+    const zone = preySpawnZones[i % preySpawnZones.length];
+    const angle = (i / INITIAL_PREY_COUNT) * 2 * Math.PI;
+    const distance = zone.radius * (0.3 + 0.4 * (i % 3) / 2); // Varying distances within zone
+    
+    const spawnPosition = {
+      x: zone.centerX + Math.cos(angle) * distance,
+      y: zone.centerY + Math.sin(angle) * distance,
     };
-    const gender = Math.random() < 0.5 ? 'male' : 'female';
-    createPrey(entities, randomPosition, gender);
+    
+    // Ensure spawn position is within map bounds
+    spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
+    spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
+    
+    const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
+    createPrey(entities, spawnPosition, gender);
   }
 
-  // Spawn initial predators scattered around the map (away from center)
+  // Spawn initial predators in corners away from center (minimum 400 pixels from center)
+  const predatorSpawnZones = [
+    { centerX: MAP_WIDTH * 0.1, centerY: MAP_HEIGHT * 0.1 },
+    { centerX: MAP_WIDTH * 0.9, centerY: MAP_HEIGHT * 0.9 },
+  ];
+  
   for (let i = 0; i < INITIAL_PREDATOR_COUNT; i++) {
-    let randomPosition;
-    let distanceFromCenter;
-    do {
-      randomPosition = {
-        x: Math.random() * MAP_WIDTH,
-        y: Math.random() * MAP_HEIGHT,
-      };
-      // Keep predators away from the center where humans spawn
-      distanceFromCenter = Math.sqrt(
-        Math.pow(randomPosition.x - centerX, 2) + Math.pow(randomPosition.y - centerY, 2)
-      );
-    } while (distanceFromCenter < 300); // Minimum distance from center
+    const zone = predatorSpawnZones[i % predatorSpawnZones.length];
+    const offsetDistance = 100 + (i * 50); // Spread them out within the zone
+    const angle = (i / INITIAL_PREDATOR_COUNT) * Math.PI; // Half circle distribution
     
-    const gender = Math.random() < 0.5 ? 'male' : 'female';
-    createPredator(entities, randomPosition, gender);
+    const spawnPosition = {
+      x: zone.centerX + Math.cos(angle) * offsetDistance,
+      y: zone.centerY + Math.sin(angle) * offsetDistance,
+    };
+    
+    // Ensure spawn position is within map bounds and far from center
+    spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
+    spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
+    
+    // Double-check distance from center
+    const distanceFromCenter = Math.sqrt(
+      Math.pow(spawnPosition.x - centerX, 2) + Math.pow(spawnPosition.y - centerY, 2)
+    );
+    
+    if (distanceFromCenter < 400) {
+      // Push further away from center if too close
+      const pushDirection = {
+        x: (spawnPosition.x - centerX) / distanceFromCenter,
+        y: (spawnPosition.y - centerY) / distanceFromCenter,
+      };
+      spawnPosition.x = centerX + pushDirection.x * 400;
+      spawnPosition.y = centerY + pushDirection.y * 400;
+    }
+    
+    const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
+    createPredator(entities, spawnPosition, gender);
   }
 
   const uiButtons: ClickableUIButton[] = [
@@ -177,6 +213,26 @@ export function initIntroWorld(): GameWorldState {
     };
     const gender = Math.random() < 0.5 ? 'male' : 'female';
     createHuman(entities, randomPosition, initialTime, gender, false);
+  }
+
+  // Spawn initial prey animals in the intro world
+  for (let i = 0; i < Math.floor(INITIAL_PREY_COUNT * 0.6); i++) { // Fewer animals in intro
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    const gender = i % 2 === 0 ? 'male' : 'female';
+    createPrey(entities, randomPosition, gender);
+  }
+
+  // Spawn initial predators in the intro world
+  for (let i = 0; i < Math.floor(INITIAL_PREDATOR_COUNT * 0.5); i++) { // Even fewer predators in intro
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    const gender = i % 2 === 0 ? 'male' : 'female';
+    createPredator(entities, randomPosition, gender);
   }
 
   const tutorial = createTutorial();

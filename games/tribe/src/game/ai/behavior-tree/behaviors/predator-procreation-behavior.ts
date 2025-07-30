@@ -33,7 +33,6 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 100 && // Not too hungry
-            !predator.ancestorIds.includes(potentialPartner.id) && // Avoid inbreeding
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
           ) {
@@ -101,7 +100,6 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 100 &&
-            !predator.ancestorIds.includes(potentialPartner.id) &&
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
           ) {

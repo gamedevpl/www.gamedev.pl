@@ -37,6 +37,14 @@ export type HoveredAutopilotAction =
       targetEntityId: EntityId;
     }
   | {
+      action: PlayerActionType.AutopilotHuntPrey;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotDefendAgainstPredator;
+      targetEntityId: EntityId;
+    }
+  | {
       action: PlayerActionType.AutopilotPlant;
       position: Vector2D;
     }

@@ -247,7 +247,6 @@ export function createPrey(
   initialHunger: number = PREY_INITIAL_HUNGER,
   motherId?: EntityId,
   fatherId?: EntityId,
-  ancestorIds: EntityId[] = [],
 ): PreyEntity {
   const isAdult = initialAge >= PREY_MIN_PROCREATION_AGE;
 
@@ -266,7 +265,6 @@ export function createPrey(
     procreationCooldown: 0,
     motherId,
     fatherId,
-    ancestorIds,
     aiType: AIType.BehaviorTreeBased,
     aiBehaviorTree: buildPreyBehaviorTree(),
     aiBlackboard: new Blackboard(),
@@ -283,7 +281,6 @@ export function createPredator(
   initialHunger: number = PREDATOR_INITIAL_HUNGER,
   motherId?: EntityId,
   fatherId?: EntityId,
-  ancestorIds: EntityId[] = [],
 ): PredatorEntity {
   const isAdult = initialAge >= PREDATOR_MIN_PROCREATION_AGE;
 
@@ -302,7 +299,6 @@ export function createPredator(
     procreationCooldown: 0,
     motherId,
     fatherId,
-    ancestorIds,
     aiType: AIType.BehaviorTreeBased,
     aiBehaviorTree: buildPredatorBehaviorTree(),
     aiBlackboard: new Blackboard(),

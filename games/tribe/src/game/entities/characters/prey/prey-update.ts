@@ -4,8 +4,14 @@ import {
   PREY_HUNGER_INCREASE_PER_HOUR,
   PREY_HUNGER_DEATH,
   PREY_MAX_AGE_YEARS,
+  PREY_INITIAL_HUNGER,
+  EFFECT_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
-import { removeEntity } from '../../entities-update';
+import { removeEntity, createPrey } from '../../entities-update';
+import { addVisualEffect } from '../../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
+import { playSoundAt } from '../../../sound/sound-manager';
+import { SoundType } from '../../../sound/sound-types';
 
 /**
  * Updates a prey entity's stats and handles lifecycle events.
@@ -31,11 +37,44 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
     prey.gestationTime -= gameHoursElapsed;
     
     if (prey.gestationTime <= 0) {
-      // Give birth (simplified - just spawn a new prey nearby)
-      // This would normally create a new prey entity, but for now we just end pregnancy
+      // Give birth - spawn a new prey nearby
+      const birthPosition = {
+        x: prey.position.x + (Math.random() - 0.5) * 40, // Random offset
+        y: prey.position.y + (Math.random() - 0.5) * 40,
+      };
+      
+      // Ensure birth position is within map bounds
+      birthPosition.x = Math.max(20, Math.min(updateContext.gameState.mapDimensions.width - 20, birthPosition.x));
+      birthPosition.y = Math.max(20, Math.min(updateContext.gameState.mapDimensions.height - 20, birthPosition.y));
+      
+      const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
+      
+      const child = createPrey(
+        updateContext.gameState.entities,
+        birthPosition,
+        childGender,
+        0, // Start as baby
+        PREY_INITIAL_HUNGER * 0.5, // Start with low hunger
+        prey.id, // Mother ID
+        prey.fatherId, // Father ID from pregnancy
+      );
+      
+      // Add birth visual effect
+      addVisualEffect(
+        updateContext.gameState,
+        VisualEffectType.Birth,
+        prey.position,
+        EFFECT_DURATION_MEDIUM_HOURS,
+        prey.id,
+      );
+      
+      // Play birth sound
+      playSoundAt(updateContext, SoundType.Birth, prey.position);
+      
       prey.isPregnant = false;
       prey.gestationTime = 0;
       prey.procreationCooldown = 12; // 12 hours cooldown
+      prey.fatherId = undefined; // Clear father reference
     }
   }
 

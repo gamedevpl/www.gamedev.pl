@@ -4,8 +4,14 @@ import {
   PREDATOR_HUNGER_INCREASE_PER_HOUR,
   PREDATOR_HUNGER_DEATH,
   PREDATOR_MAX_AGE_YEARS,
+  PREDATOR_INITIAL_HUNGER,
+  EFFECT_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
-import { removeEntity } from '../../entities-update';
+import { removeEntity, createPredator } from '../../entities-update';
+import { addVisualEffect } from '../../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
+import { playSoundAt } from '../../../sound/sound-manager';
+import { SoundType } from '../../../sound/sound-types';
 
 /**
  * Updates a predator entity's stats and handles lifecycle events.
@@ -31,11 +37,44 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
     predator.gestationTime -= gameHoursElapsed;
     
     if (predator.gestationTime <= 0) {
-      // Give birth (simplified - just spawn a new predator nearby)
-      // This would normally create a new predator entity, but for now we just end pregnancy
+      // Give birth - spawn a new predator nearby
+      const birthPosition = {
+        x: predator.position.x + (Math.random() - 0.5) * 50, // Random offset
+        y: predator.position.y + (Math.random() - 0.5) * 50,
+      };
+      
+      // Ensure birth position is within map bounds
+      birthPosition.x = Math.max(25, Math.min(updateContext.gameState.mapDimensions.width - 25, birthPosition.x));
+      birthPosition.y = Math.max(25, Math.min(updateContext.gameState.mapDimensions.height - 25, birthPosition.y));
+      
+      const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
+      
+      const child = createPredator(
+        updateContext.gameState.entities,
+        birthPosition,
+        childGender,
+        0, // Start as baby
+        PREDATOR_INITIAL_HUNGER * 0.6, // Start with moderate hunger
+        predator.id, // Mother ID
+        predator.fatherId, // Father ID from pregnancy
+      );
+      
+      // Add birth visual effect
+      addVisualEffect(
+        updateContext.gameState,
+        VisualEffectType.Birth,
+        predator.position,
+        EFFECT_DURATION_MEDIUM_HOURS,
+        predator.id,
+      );
+      
+      // Play birth sound
+      playSoundAt(updateContext, SoundType.Birth, predator.position);
+      
       predator.isPregnant = false;
       predator.gestationTime = 0;
       predator.procreationCooldown = 18; // 18 hours cooldown
+      predator.fatherId = undefined; // Clear father reference
     }
   }
 

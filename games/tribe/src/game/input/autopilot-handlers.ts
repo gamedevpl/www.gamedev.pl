@@ -1,5 +1,7 @@
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../world-consts';
@@ -12,6 +14,7 @@ import {
   canProcreate,
 } from '../utils';
 import { Vector2D } from '../utils/math-types';
+import { calculateWrappedDistance } from '../utils/math-utils';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -62,6 +65,40 @@ export const determineHoveredAutopilotAction = (
         (targetHuman.motherId === player.id || targetHuman.fatherId === player.id)
       ) {
         determinedAction = { action: PlayerActionType.AutopilotFeedChild, targetEntityId: targetHuman.id };
+      }
+    } else if (hoveredEntity.type === 'prey') {
+      const targetPrey = hoveredEntity as PreyEntity;
+      
+      // Check if player can hunt this prey
+      if (player.isAdult && targetPrey.hitpoints > 0) {
+        const distance = calculateWrappedDistance(
+          player.position,
+          targetPrey.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
+        
+        // Only offer hunt action if prey is reasonably close
+        if (distance <= 120) {
+          determinedAction = { action: PlayerActionType.AutopilotHuntPrey, targetEntityId: targetPrey.id };
+        }
+      }
+    } else if (hoveredEntity.type === 'predator') {
+      const targetPredator = hoveredEntity as PredatorEntity;
+      
+      // Check if player should defend against this predator
+      if (player.isAdult && targetPredator.hitpoints > 0) {
+        const distance = calculateWrappedDistance(
+          player.position,
+          targetPredator.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
+        
+        // Only offer defend action if predator is close enough to be a threat
+        if (distance <= 150) {
+          determinedAction = { action: PlayerActionType.AutopilotDefendAgainstPredator, targetEntityId: targetPredator.id };
+        }
       }
     }
   } else {

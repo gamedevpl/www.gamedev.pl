@@ -24,6 +24,8 @@ import {
   createFollowLeaderBehavior,
   createTribeMigrationBehavior,
   createDiplomacyBehavior,
+  createHumanHuntPreyBehavior,
+  createHumanDefendAgainstPredatorBehavior,
 } from './behaviors';
 
 /**
@@ -39,6 +41,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(2),
       createDefendFamilyBehavior(2),
+      createHumanDefendAgainstPredatorBehavior(2), // Defend against predator attacks
       createJealousyAttackBehavior(2),
       createDefendClaimedBushBehavior(2),
       createDesperateAttackBehavior(2),
@@ -61,6 +64,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- PERSONAL NEEDS (EAT) ---
       createEatingBehavior(2),
+
+      // --- HUNTING BEHAVIORS ---
+      new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new TimeoutNode(

@@ -8,6 +8,7 @@ import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
 import { predatorHuntPreyInteraction } from './predator-hunt-prey-interaction';
 import { humanHuntPreyInteraction } from './human-hunt-prey-interaction';
 import { predatorAttackHumanInteraction } from './predator-attack-human-interaction';
+import { humanAttackPredatorInteraction } from './human-attack-predator-interaction';
 import { preyProcreationInteraction } from './prey-procreation-interaction';
 import { predatorProcreationInteraction } from './predator-procreation-interaction';
 
@@ -21,6 +22,7 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   preyEatBerryBushInteraction,
   predatorHuntPreyInteraction,
   humanHuntPreyInteraction,
+  humanAttackPredatorInteraction, // Humans can defend against predators
   predatorAttackHumanInteraction,
   preyProcreationInteraction,
   predatorProcreationInteraction,

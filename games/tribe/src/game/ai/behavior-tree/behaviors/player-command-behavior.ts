@@ -1,4 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+// PreyEntity and PredatorEntity types used for type checking in switch cases
 import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -244,6 +245,64 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode {
               human.activeAction = 'moving';
               human.target = leader.id;
               human.direction = dirToTarget(human.position, leader.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- HUNT PREY ---
+            case PlayerActionType.AutopilotHuntPrey: {
+              const target = gameState.entities.entities.get(activeAction.targetEntityId);
+
+              if (!target || target.type !== 'prey' || (target as any).hitpoints <= 0) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const distance = calculateWrappedDistance(
+                human.position,
+                target.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
+                human.activeAction = 'attacking';
+                human.attackTargetId = target.id;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = target.id;
+              human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- DEFEND AGAINST PREDATOR ---
+            case PlayerActionType.AutopilotDefendAgainstPredator: {
+              const target = gameState.entities.entities.get(activeAction.targetEntityId);
+
+              if (!target || target.type !== 'predator' || (target as any).hitpoints <= 0) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const distance = calculateWrappedDistance(
+                human.position,
+                target.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
+                human.activeAction = 'attacking';
+                human.attackTargetId = target.id;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = target.id;
+              human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 
