@@ -4,13 +4,6 @@
 
 🎮 **[Play the game online](https://www.gamedev.pl/games/tribe/)**
 
-## Features
-
-- Modern TypeScript and React codebase
-- Modular architecture for easy development and extension
-- Game logic separated from UI for maintainability
-- Designed for web browsers—no installation needed
-
 ## Getting Started
 
 1. **Install dependencies:**
