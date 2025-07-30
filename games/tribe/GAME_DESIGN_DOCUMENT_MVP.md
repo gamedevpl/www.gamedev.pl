@@ -1,4 +1,4 @@
-# Game Design Document: Tribe - Complete Implementation
+# Game Design Document: Tribe
 
 ## 1. Game Overview
 
