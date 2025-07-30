@@ -15,6 +15,7 @@ export default defineConfig({
     checker({ typescript: true }),
     genaicodeVite({
       imagen: 'vertex-ai',
+      aiService: 'ai-studio',
     }),
   ],
   publicDir: './src/public',
