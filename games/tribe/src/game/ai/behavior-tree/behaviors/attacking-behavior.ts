@@ -1,41 +1,16 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { UpdateContext, GameWorldState } from '../../../world-types';
+import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER } from '../../../world-consts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
+import { findClosestEntity, getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
 
 const ATTACK_TARGET_KEY = 'attackTarget';
 const HOME_CENTER_KEY = 'homeCenter';
 const ATTACK_RANGE = 150; // The maximum distance to initiate an attack
-
-function findClosestEnemy(world: GameWorldState, human: HumanEntity, range: number): HumanEntity | undefined {
-  let closestEnemy: HumanEntity | undefined = undefined;
-  let minDistance = Infinity;
-
-  // This is inefficient, should be replaced with spatial index search later
-  for (const entity of Object.values(world.entities.entities)) {
-    if (entity.type === 'human' && (entity as HumanEntity).hitpoints > 0) {
-      // An enemy is a human not from the same tribe.
-      if (isHostile(human, entity as HumanEntity)) {
-        const distance = calculateWrappedDistance(
-          human.position,
-          entity.position,
-          world.mapDimensions.width,
-          world.mapDimensions.height,
-        );
-        if (distance < range && distance < minDistance) {
-          minDistance = distance;
-          closestEnemy = entity as HumanEntity;
-        }
-      }
-    }
-  }
-  return closestEnemy;
-}
 
 /**
  * Creates a behavior tree branch for attacking enemies, but with a leash to home territory.
@@ -80,7 +55,13 @@ export function createAttackingBehavior(depth: number): BehaviorNode {
           }
 
           // Find a new target if not currently engaged.
-          const enemy = findClosestEnemy(gameState, human, ATTACK_RANGE);
+          const enemy = findClosestEntity<HumanEntity>(
+            human,
+            gameState,
+            'human',
+            ATTACK_RANGE,
+            (entity) => entity.hitpoints > 0 && isHostile(human, entity, gameState),
+          );
           if (enemy) {
             blackboard.set(ATTACK_TARGET_KEY, enemy);
             const homeCenter = human.leaderId

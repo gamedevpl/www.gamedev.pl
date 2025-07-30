@@ -82,6 +82,7 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
   ctx.fillText(`HP: ${human.hitpoints}`, position.x, position.y - yOffset + 20);
   ctx.fillText(`Cooldown: ${human.attackCooldown || 'N/A'}`, position.x, position.y - yOffset + 30);
+  ctx.fillText(`Tribe: ${human.leaderId || 'N/A'}`, position.x, position.y - yOffset + 40);
   ctx.restore();
 
   // render character radius
@@ -265,7 +266,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
     return currentY;
   };
 
-  // --- Main execution ---
+  // --- Main execution --
   const { width: panelWidth, height: panelHeight } = calculateDimensions(human.aiBehaviorTree);
   if (panelHeight === 0) {
     ctx.restore();

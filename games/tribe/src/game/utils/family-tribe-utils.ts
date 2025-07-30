@@ -260,6 +260,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       isPlayerTribe: tribe.leaderId === playerLeaderId,
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
+      diplomacyStatus: leader?.diplomacy?.get(playerLeaderId ?? -1),
     };
   });
 

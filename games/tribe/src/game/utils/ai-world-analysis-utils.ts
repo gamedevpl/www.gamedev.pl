@@ -21,6 +21,7 @@ import { Vector2D } from './math-types';
 import { areFamily, getFamilyMembers, isLineage } from './family-tribe-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { findValidPlantingSpot, getTribeCenter } from './spatial-utils';
+import { isHostile } from './world-utils';
 
 /**
  * Checks if a human's primary partner is procreating with another human nearby.
@@ -228,13 +229,12 @@ export function findBestAttackTarget(
 }
 
 export function findNearbyEnemiesOfTribe(
-  center: Vector2D,
-  leaderId: EntityId,
+  human: HumanEntity,
   gameState: IndexedWorldState,
   radius: number,
 ): HumanEntity[] {
-  const nearbyHumans = gameState.search.human.byRadius(center, radius);
-  return nearbyHumans.filter((human) => human.leaderId !== leaderId && human.id !== leaderId);
+  const nearbyHumans = gameState.search.human.byRadius(human.position, radius);
+  return nearbyHumans.filter((h) => isHostile(human, h, gameState));
 }
 
 export function countTribeAttackersOnTarget(

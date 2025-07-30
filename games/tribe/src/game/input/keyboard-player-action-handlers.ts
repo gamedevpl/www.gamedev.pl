@@ -100,7 +100,7 @@ export const handlePlayerActionKeyDown = (
       gameState,
       'human',
       HUMAN_INTERACTION_RANGE,
-      (h) => canProcreate(playerEntity, h as HumanEntity),
+      (h) => canProcreate(playerEntity, h as HumanEntity, gameState),
     );
     if (potentialPartner) {
       playerEntity.activeAction = 'procreating';
@@ -159,7 +159,7 @@ export const handlePlayerActionKeyDown = (
       gameState,
       'human',
       HUMAN_ATTACK_RANGE,
-      (h) => isHostile(playerEntity, h as HumanEntity),
+      (h) => isHostile(playerEntity, h as HumanEntity, gameState),
     );
 
     if (humanTarget) {

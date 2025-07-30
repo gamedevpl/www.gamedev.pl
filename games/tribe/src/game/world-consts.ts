@@ -143,6 +143,7 @@ export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 500;
 
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
+export const AI_DIPLOMACY_CHECK_INTERVAL_HOURS = 24; // How often the AI leader re-evaluates diplomacy
 export const AI_MIGRATION_CHECK_INTERVAL_HOURS = 24;
 export const AI_MIGRATION_TARGET_SEARCH_RADIUS = 1500;
 export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid

@@ -55,12 +55,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
         return NodeStatus.FAILURE;
       }
 
-      const enemies = findNearbyEnemiesOfTribe(
-        leader.position,
-        leader.id,
-        gameState as IndexedWorldState,
-        AI_TRIBE_BATTLE_RADIUS,
-      );
+      const enemies = findNearbyEnemiesOfTribe(leader, gameState as IndexedWorldState, AI_TRIBE_BATTLE_RADIUS);
 
       if (enemies.length === 0) {
         return NodeStatus.FAILURE;

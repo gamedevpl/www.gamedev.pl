@@ -43,8 +43,7 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
   const findEnemies = new ActionNode(
     (human, context, blackboard) => {
       const enemies = findNearbyEnemiesOfTribe(
-        human.position,
-        human.id,
+        human,
         context.gameState as IndexedWorldState,
         PLAYER_CALL_TO_ATTACK_RADIUS,
       );
@@ -131,8 +130,7 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
               ((targetPosition.x % context.gameState.mapDimensions.width) + context.gameState.mapDimensions.width) %
               context.gameState.mapDimensions.width,
             y:
-              ((targetPosition.y % context.gameState.mapDimensions.height) +
-                context.gameState.mapDimensions.height) %
+              ((targetPosition.y % context.gameState.mapDimensions.height) + context.gameState.mapDimensions.height) %
               context.gameState.mapDimensions.height,
           };
           human.direction = fleeDirection;
@@ -154,12 +152,7 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
       isLeader,
       isNotAlreadyCalling,
       findEnemies,
-      new CooldownNode(
-        LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS,
-        attackOrRetreat,
-        'Leader Combat Cooldown',
-        depth + 1,
-      ),
+      new CooldownNode(LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS, attackOrRetreat, 'Leader Combat Cooldown', depth + 1),
     ],
     'Leader Combat Strategy',
     depth,

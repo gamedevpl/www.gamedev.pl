@@ -19,3 +19,4 @@ export * from './desperate-attack-behavior';
 export * from './player-command-behavior';
 export * from './follow-leader-behavior';
 export * from './tribe-migration-behavior';
+export * from './diplomacy-behavior';

@@ -7,12 +7,15 @@ import {
   UI_TRIBE_LIST_MINIATURE_SIZE,
   UI_TRIBE_LIST_PADDING,
   UI_TRIBE_LIST_SPACING,
+  UI_BUTTON_HOVER_BACKGROUND_COLOR,
 } from '../../world-consts';
-import { TribeInfo } from '../../ui/ui-types';
+import { ClickableUIButton, TribeInfo, UIButtonActionType } from '../../ui/ui-types';
 import { renderMiniatureCharacter } from './render-characters-ui';
+import { DiplomacyStatus, GameWorldState } from '../../world-types';
 
 export function renderTribeList(
   ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
   tribes: TribeInfo[],
   _canvasWidth: number,
   canvasHeight: number,
@@ -34,7 +37,9 @@ export function renderTribeList(
   const panelWidth =
     UI_TRIBE_LIST_PADDING + // left padding
     UI_TRIBE_LIST_BADGE_SIZE + // badge size
-    UI_TRIBE_LIST_PADDING + // padding between badge and counts
+    UI_TRIBE_LIST_PADDING + // padding between badge and diplomacy icon
+    UI_TRIBE_LIST_BADGE_SIZE + // diplomacy icon size
+    UI_TRIBE_LIST_PADDING + // padding between diplomacy and counts
     UI_TRIBE_LIST_MINIATURE_SIZE + // adult icon
     adultTextWidth + // adult count text
     UI_TRIBE_LIST_PADDING / 2 + // padding between counts
@@ -67,7 +72,49 @@ export function renderTribeList(
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillText(tribe.tribeBadge, currentX, centerY - UI_TRIBE_LIST_BADGE_SIZE / 4);
-    currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING * 1.1;
+    currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
+
+    // --- Diplomacy Status & Button ---
+    if (!tribe.isPlayerTribe) {
+      const diplomacyIcon = tribe.diplomacyStatus === DiplomacyStatus.Friendly ? '🤝' : '⚔️';
+      const buttonId = `diplomacyButton_${tribe.leaderId}`;
+      const buttonRect = {
+        x: currentX,
+        y: centerY - UI_TRIBE_LIST_BADGE_SIZE / 2,
+        width: UI_TRIBE_LIST_BADGE_SIZE,
+        height: UI_TRIBE_LIST_BADGE_SIZE,
+      };
+
+      // Create and add the button to the game state for interaction handling
+      const button: ClickableUIButton = {
+        id: buttonId,
+        action: UIButtonActionType.ToggleDiplomacy,
+        rect: buttonRect,
+        text: '',
+        icon: diplomacyIcon,
+        backgroundColor: 'transparent',
+        textColor: 'white',
+        currentWidth: UI_TRIBE_LIST_BADGE_SIZE,
+        tooltip: `Toggle diplomacy with this tribe (Currently: ${tribe.diplomacyStatus})`,
+        targetTribeId: tribe.leaderId,
+      };
+      gameState.uiButtons.push(button);
+
+      // Draw hover effect
+      if (gameState.hoveredButtonId === buttonId) {
+        ctx.fillStyle = UI_BUTTON_HOVER_BACKGROUND_COLOR;
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(buttonRect.x, buttonRect.y, buttonRect.width, buttonRect.height);
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw the icon
+      ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE * 0.8}px "Press Start 2P", Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.fillText(diplomacyIcon, currentX + UI_TRIBE_LIST_BADGE_SIZE / 2, centerY);
+    }
+    currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
 
     // --- Adult Count --
     if (tribe.adultCount > 0) {

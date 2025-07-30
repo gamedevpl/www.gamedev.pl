@@ -102,12 +102,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: "Find a mate and press 'R' to start a family. This is how you continue your lineage.",
     condition: (world: GameWorldState, player: HumanEntity) => findChildren(world, player).length > 0,
     getTargets: (world: GameWorldState, player: HumanEntity) => {
-      const potentialPartner = findClosestEntity<HumanEntity>(
-        player,
-        world,
-        'human',
-        HUMAN_INTERACTION_RANGE,
-        (h) => canProcreate(player, h as HumanEntity),
+      const potentialPartner = findClosestEntity<HumanEntity>(player, world, 'human', HUMAN_INTERACTION_RANGE, (h) =>
+        canProcreate(player, h as HumanEntity, world),
       );
       return potentialPartner ? [potentialPartner.id] : [];
     },

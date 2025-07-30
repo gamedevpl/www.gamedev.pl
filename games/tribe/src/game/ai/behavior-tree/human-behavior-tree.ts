@@ -23,6 +23,7 @@ import {
   createPlayerCommandBehavior,
   createFollowLeaderBehavior,
   createTribeMigrationBehavior,
+  createDiplomacyBehavior,
 } from './behaviors';
 
 /**
@@ -48,6 +49,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new NonPlayerControlled(createLeaderCombatStrategyBehavior(3), 'Gated Leader Combat Strategy', 2),
+
+      // --- DIPLOMACY (LEADER) ---
+      new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),

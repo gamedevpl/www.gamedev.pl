@@ -88,6 +88,9 @@ export function renderGame(
     ctx.shadowColor = UI_TEXT_SHADOW_COLOR;
     ctx.shadowBlur = UI_TEXT_SHADOW_BLUR;
 
+    // Reset UI buttons for this frame
+    gameState.uiButtons = [];
+
     const player = findPlayerEntity(gameState);
     let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
     let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
@@ -107,7 +110,7 @@ export function renderGame(
 
     // --- Bottom-Left UI (Tribe List) ---
     const tribesInfo = getTribesInfo(gameState, player?.leaderId);
-    renderTribeList(ctx, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+    renderTribeList(ctx, gameState, tribesInfo, ctx.canvas.width, ctx.canvas.height);
 
     // --- Buttons & Tooltips ---
     const { commandButtonsRect } = renderUIButtons(ctx, gameState, ctx.canvas.width);

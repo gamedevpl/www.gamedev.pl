@@ -21,9 +21,9 @@ const sourceType = 'human' as EntityType;
 const targetType = 'human' as EntityType;
 const maxDistance = HUMAN_INTERACTION_RANGE;
 
-const checker = (source: HumanEntity, target: HumanEntity): boolean => {
+const checker = (source: HumanEntity, target: HumanEntity, context: UpdateContext): boolean => {
   // Use the centralized utility for all biological and state checks
-  if (!canProcreate(source, target)) {
+  if (!canProcreate(source, target, context.gameState)) {
     return false;
   }
 
@@ -94,6 +94,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         const newTribeBadge = generateTribeBadge();
         male.leaderId = male.id; // The male becomes the leader of a new tribe
         male.tribeBadge = newTribeBadge;
+        male.diplomacy = new Map();
         female.leaderId = male.id; // The female joins the new tribe
         female.tribeBadge = newTribeBadge;
       }
@@ -104,6 +105,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       const newTribeBadge = generateTribeBadge();
       male.leaderId = male.id; // The male becomes the leader
       male.tribeBadge = newTribeBadge;
+      male.diplomacy = new Map();
       female.leaderId = male.id; // The female joins the new tribe
       female.tribeBadge = newTribeBadge;
     }

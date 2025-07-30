@@ -133,7 +133,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode {
             case PlayerActionType.AutopilotProcreate: {
               const target = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
 
-              if (!target || target.type !== 'human' || !canProcreate(human, target)) {
+              if (!target || target.type !== 'human' || !canProcreate(human, target, context.gameState)) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
               }

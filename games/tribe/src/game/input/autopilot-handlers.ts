@@ -48,11 +48,11 @@ export const determineHoveredAutopilotAction = (
       const targetHuman = hoveredEntity as HumanEntity;
 
       // Check for Attack
-      if (player.isAdult && isHostile(player, targetHuman)) {
+      if (player.isAdult && isHostile(player, targetHuman, gameState)) {
         determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: targetHuman.id };
       }
       // Check for Procreate
-      else if (canProcreate(player, targetHuman)) {
+      else if (canProcreate(player, targetHuman, gameState)) {
         determinedAction = { action: PlayerActionType.AutopilotProcreate, targetEntityId: targetHuman.id };
       }
       // Check for Feed Child
@@ -84,7 +84,7 @@ export const determineHoveredAutopilotAction = (
 /**
  * Handles a click in the game world for autopilot actions.
  * It sets the active autopilot action based on what was hovered, or defaults to a move command.
- * @param gameState The current game state, which will be mutated.\\n * @param worldPos The position of the click in world coordinates.\\n */
+ * @param gameState The current game state, which will be mutated.\\\\n * @param worldPos The position of the click in world coordinates.\\\\n */
 export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector2D): void => {
   if (gameState.isPaused) return;
 

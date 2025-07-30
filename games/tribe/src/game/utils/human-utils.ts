@@ -1,33 +1,52 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { HUMAN_FEMALE_MAX_PROCREATION_AGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import { DiplomacyStatus, GameWorldState } from '../world-types';
 
 /**
  * Checks if two human entities are hostile towards each other.
- * Hostility is currently defined as belonging to different tribes.
+ * Hostility is determined by the diplomatic status between their tribes.
  *
  * @param human1 The first human entity.
  * @param human2 The second human entity.
+ * @param gameState The current game world state.
  * @returns `true` if the humans are hostile, `false` otherwise.
  */
-export const isHostile = (human1: HumanEntity, human2: HumanEntity): boolean => {
+export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: GameWorldState): boolean => {
   // Cannot be hostile to oneself
   if (human1.id === human2.id) {
     return false;
   }
 
-  // Hostile if they are not in the same tribe (different leaders)
-  return human1.leaderId !== human2.leaderId;
+  // Not hostile if they are in the same tribe
+  if (human1.leaderId === human2.leaderId) {
+    return false;
+  }
+
+  // Check diplomacy status if they are in different tribes
+  if (human1.leaderId && human2.leaderId) {
+    const tribe1Diplomacy = (gameState.entities.entities.get(human1.leaderId) as HumanEntity)?.diplomacy?.get(
+      human2.leaderId,
+    );
+    const tribe2Diplomacy = (gameState.entities.entities.get(human2.leaderId) as HumanEntity)?.diplomacy?.get(
+      human1.leaderId,
+    );
+    return tribe1Diplomacy === tribe2Diplomacy && tribe1Diplomacy === DiplomacyStatus.Hostile;
+  }
+
+  // Default to not hostile if tribe information is missing
+  return false;
 };
 
 /**
  * Checks if two human entities can procreate with each other.
- * This function consolidates all the necessary conditions for procreation.
+ * This function consolidates all the necessary conditions for procreation, including diplomacy.
  *
  * @param human1 The first human entity.
  * @param human2 The second human entity.
+ * @param gameState The current game world state.
  * @returns `true` if they can procreate, `false` otherwise.
  */
-export const canProcreate = (human1: HumanEntity, human2: HumanEntity): boolean => {
+export const canProcreate = (human1: HumanEntity, human2: HumanEntity, gameState: GameWorldState): boolean => {
   // Basic checks that apply to both partners
   if (
     human1.id === human2.id ||
@@ -37,9 +56,13 @@ export const canProcreate = (human1: HumanEntity, human2: HumanEntity): boolean 
     human1.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
     human2.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
     (human1.procreationCooldown || 0) > 0 ||
-    (human2.procreationCooldown || 0) > 0 ||
-    human1.leaderId !== human2.leaderId
+    (human2.procreationCooldown || 0) > 0
   ) {
+    return false;
+  }
+
+  // Diplomacy check: procreation is only allowed between members of the same tribe or friendly tribes
+  if (isHostile(human1, human2, gameState)) {
     return false;
   }
 

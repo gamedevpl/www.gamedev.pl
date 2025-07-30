@@ -27,15 +27,19 @@ import { Blackboard } from '../behavior-tree-blackboard';
 const PROCREATION_WANDER_START_TIME_KEY = 'procreationWanderStartTime';
 
 // Helper function to find a valid partner from a list of potentials
-const findValidPartner = (human: HumanEntity, potentials: HumanEntity[]): HumanEntity | undefined => {
-  return potentials.find((p) => canProcreate(human, p));
+const findValidPartner = (
+  human: HumanEntity,
+  potentials: HumanEntity[],
+  gameState: UpdateContext['gameState'],
+): HumanEntity | undefined => {
+  return potentials.find((p) => canProcreate(human, p, gameState));
 };
 
 export function createProcreationBehavior(depth: number): BehaviorNode {
   const findImmediatePartner = new ConditionNode(
     (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
       const potentialPartners = findPotentialNewPartners(human, context.gameState, HUMAN_INTERACTION_PROXIMITY);
-      const partner = findValidPartner(human, potentialPartners);
+      const partner = findValidPartner(human, potentialPartners, context.gameState);
       if (partner) {
         blackboard.set('procreationPartner', partner);
         return true;
@@ -69,7 +73,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode {
         context.gameState,
         PROCREATION_PARTNER_SEARCH_RADIUS_LONG,
       );
-      const partner = findValidPartner(human, potentialPartners);
+      const partner = findValidPartner(human, potentialPartners, context.gameState);
       if (partner) {
         blackboard.set('procreationPartner', partner);
         return true;

@@ -71,12 +71,8 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   // Check for Procreation
-  const procreationTarget = findClosestEntity<HumanEntity>(
-    player,
-    gameState,
-    'human',
-    HUMAN_INTERACTION_RANGE,
-    (h) => canProcreate(player, h as HumanEntity),
+  const procreationTarget = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_INTERACTION_RANGE, (h) =>
+    canProcreate(player, h as HumanEntity, gameState),
   );
   if (procreationTarget) {
     actions.push({
@@ -108,12 +104,8 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   // Check for Attacking
-  const attackTarget = findClosestEntity<HumanEntity>(
-    player,
-    gameState,
-    'human',
-    HUMAN_ATTACK_RANGE,
-    (h) => isHostile(player, h as HumanEntity),
+  const attackTarget = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
+    isHostile(player, h as HumanEntity, gameState),
   );
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
@@ -127,12 +119,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   // Check for Call to Attack
   if (player.leaderId === player.id && !player.isCallingToAttack) {
     const indexedState = gameState as IndexedWorldState;
-    const nearbyEnemies = findNearbyEnemiesOfTribe(
-      player.position,
-      player.id,
-      indexedState,
-      PLAYER_CALL_TO_ATTACK_RADIUS,
-    );
+    const nearbyEnemies = findNearbyEnemiesOfTribe(player, indexedState, PLAYER_CALL_TO_ATTACK_RADIUS);
     if (nearbyEnemies.length > 0) {
       actions.push({ type: PlayerActionType.CallToAttack, action: 'idle', key: 'v' });
     }

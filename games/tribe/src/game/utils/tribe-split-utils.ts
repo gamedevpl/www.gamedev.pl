@@ -9,7 +9,7 @@ import { NotificationType } from '../notifications/notification-types';
 import { addNotification } from '../notifications/notification-utils';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { GameWorldState, UpdateContext } from '../world-types';
+import { DiplomacyStatus, GameWorldState, UpdateContext } from '../world-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
 import { findChildren, findDescendants, findHeir, findTribeMembers } from './family-tribe-utils';
@@ -87,12 +87,20 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
     return;
   }
 
+  const previousLeader = human.leaderId
+    ? (gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined)
+    : undefined;
+
   const newTribeBadge = generateTribeBadge();
   const descendants = findDescendants(human, gameState);
 
   // The founder becomes the new leader
   human.leaderId = human.id;
   human.tribeBadge = newTribeBadge;
+  human.diplomacy = new Map();
+  if (previousLeader) {
+    previousLeader.diplomacy?.set(human.id, DiplomacyStatus.Hostile);
+  }
 
   // Update all descendants
   for (const descendant of descendants) {

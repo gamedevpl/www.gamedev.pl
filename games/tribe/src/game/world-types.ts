@@ -10,6 +10,11 @@ import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 import { Notification, Rect } from './notifications/notification-types';
 
+export enum DiplomacyStatus {
+  Friendly = 'Friendly',
+  Hostile = 'Hostile',
+}
+
 export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotGather;

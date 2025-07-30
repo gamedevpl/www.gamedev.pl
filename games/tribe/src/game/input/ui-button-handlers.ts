@@ -1,5 +1,5 @@
 import { ClickableUIButton, UIButtonActionType } from '../ui/ui-types';
-import { GameWorldState } from '../world-types';
+import { DiplomacyStatus, GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
 import {
@@ -14,6 +14,7 @@ import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
+import { HumanEntity } from '../entities/characters/human/human-types';
 
 /**
  * Handles the logic for a UI button click event.
@@ -131,6 +132,25 @@ export const handleUIButtonClick = (
     case UIButtonActionType.CommandTribeSplit:
       if (player) {
         performTribeSplit(player, gameState);
+      }
+      break;
+    case UIButtonActionType.ToggleDiplomacy:
+      if (player && player.leaderId && button.targetTribeId) {
+        const playerTribeId = player.leaderId;
+        const otherTribeId = button.targetTribeId;
+        const otherTribe = gameState.entities.entities.get(otherTribeId) as HumanEntity | undefined;
+
+        const playerDiplomacy = player.diplomacy;
+        const otherDiplomacy = otherTribe?.diplomacy;
+
+        if (playerDiplomacy && otherDiplomacy) {
+          const currentStatus = playerDiplomacy.get(otherTribeId) || DiplomacyStatus.Friendly;
+          const newStatus =
+            currentStatus === DiplomacyStatus.Friendly ? DiplomacyStatus.Hostile : DiplomacyStatus.Friendly;
+
+          playerDiplomacy.set(otherTribeId, newStatus);
+          otherDiplomacy.set(playerTribeId, newStatus);
+        }
       }
       break;
   }

@@ -4,6 +4,7 @@ import { FoodItem } from '../../../food/food-types';
 import { AIType } from '../../../ai/ai-types';
 import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
 import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
+import { DiplomacyStatus } from '../../../world-types';
 
 /**
  * Represents a human entity in the game.
@@ -63,6 +64,9 @@ export interface HumanEntity extends Entity {
 
   /** ID of the human's tribe leader. If it's the same as the human's ID, they are the leader. */
   leaderId?: EntityId;
+
+  /** ID of the human's tribe. This is the same as the leader's ID. */
+  tribeId?: EntityId;
 
   /** Visual representation of the tribe badge. */
   tribeBadge?: string;
@@ -124,6 +128,9 @@ export interface HumanEntity extends Entity {
 
   /** The blackboard for the behavior tree AI. */
   aiBlackboard?: Blackboard;
+
+  /** The current state machine of the human, if any. */
+  diplomacy?: Map<EntityId, DiplomacyStatus>; // LeaderId -> Status
 }
 
 export type HumanAction =

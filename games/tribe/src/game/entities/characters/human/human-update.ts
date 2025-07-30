@@ -210,6 +210,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
         heir.tribeBadge = entity.tribeBadge;
+        heir.diplomacy = new Map(entity.diplomacy);
 
         // Update followers
         gameState.entities.entities.forEach((e) => {

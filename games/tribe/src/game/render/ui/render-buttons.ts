@@ -145,8 +145,6 @@ export function renderUIButtons(
   const player = findPlayerEntity(gameState);
 
   // --- Update Button State & Definitions ---
-  // This section modifies the buttons in the gameState before drawing.
-  gameState.uiButtons = []; // Clear old buttons to redefine them
 
   // 1. Define Top-Right System Buttons
   const systemButtons: ClickableUIButton[] = [

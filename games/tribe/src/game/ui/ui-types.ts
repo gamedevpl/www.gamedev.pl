@@ -1,5 +1,6 @@
 import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
+import { DiplomacyStatus } from '../world-types';
 
 export enum PlayerActionType {
   Gather = 'Gather',
@@ -74,6 +75,7 @@ export interface TribeInfo {
   isPlayerTribe: boolean;
   leaderAge: number;
   leaderGender: 'male' | 'female';
+  diplomacyStatus?: DiplomacyStatus;
 }
 
 export enum UIStatusType {
@@ -122,6 +124,9 @@ export enum UIButtonActionType {
   TogglePlantingBehavior = 'TogglePlantingBehavior',
   ToggleGatheringBehavior = 'ToggleGatheringBehavior',
   ToggleAutopilotFollowLeaderBehavior = 'ToggleAutopilotFollowLeaderBehavior',
+
+  // --- Diplomacy ---
+  ToggleDiplomacy = 'ToggleDiplomacy',
 }
 
 export interface ClickableUIButton {
@@ -137,4 +142,5 @@ export interface ClickableUIButton {
   isDisabled?: boolean;
   lastActivated?: number;
   activated?: boolean;
+  targetTribeId?: EntityId;
 }
