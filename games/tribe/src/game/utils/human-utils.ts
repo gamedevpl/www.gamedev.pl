@@ -30,7 +30,7 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
     const tribe2Diplomacy = (gameState.entities.entities.get(human2.leaderId) as HumanEntity)?.diplomacy?.get(
       human1.leaderId,
     );
-    return tribe1Diplomacy === tribe2Diplomacy && tribe1Diplomacy === DiplomacyStatus.Hostile;
+    return tribe1Diplomacy === DiplomacyStatus.Hostile || tribe2Diplomacy === DiplomacyStatus.Hostile;
   }
 
   // Default to not hostile if tribe information is missing

@@ -247,6 +247,10 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
     }
   }
 
+  const playerDiplomacy = playerLeaderId
+    ? (gameState.entities.entities.get(playerLeaderId) as HumanEntity | undefined)?.diplomacy
+    : undefined;
+
   const tribeInfoList: TribeInfo[] = Array.from(tribes.values()).map((tribe) => {
     const leader = gameState.entities.entities.get(tribe.leaderId) as HumanEntity | undefined;
     const adultCount = tribe.members.filter((m) => m.isAdult).length;
@@ -260,7 +264,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       isPlayerTribe: tribe.leaderId === playerLeaderId,
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
-      diplomacyStatus: leader?.diplomacy?.get(playerLeaderId ?? -1),
+      diplomacyStatus: playerDiplomacy?.get(tribe.leaderId ?? -1),
     };
   });
 
