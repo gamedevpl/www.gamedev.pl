@@ -20,3 +20,12 @@ export * from './player-command-behavior';
 export * from './follow-leader-behavior';
 export * from './tribe-migration-behavior';
 export * from './diplomacy-behavior';
+
+// Animal-specific behaviors
+export * from './prey-flee-behavior';
+export * from './prey-graze-behavior';
+export * from './prey-procreation-behavior';
+export * from './predator-hunt-behavior';
+export * from './predator-attack-behavior';
+export * from './predator-procreation-behavior';
+export * from './animal-wander-behavior';

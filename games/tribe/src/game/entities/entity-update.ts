@@ -10,7 +10,8 @@ import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { PreyEntity } from './characters/prey/prey-types';
 import { PredatorEntity } from './characters/predator/predator-types';
-import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
+import { humanAIUpdate } from '../ai/human-ai-update';
+import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -83,8 +84,12 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     humanAIUpdate(entity as HumanEntity, updateContext);
   }
   
-  // TODO: Add AI updates for prey and predator entities
-  // For now, they will use basic behavior trees without complex AI
+  // AI decision making for animals
+  if (entity.type === 'prey') {
+    preyAIUpdate(entity as PreyEntity, updateContext);
+  } else if (entity.type === 'predator') {
+    predatorAIUpdate(entity as PredatorEntity, updateContext);
+  }
 
   // Update state machine if present
   if (entity.stateMachine) {

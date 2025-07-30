@@ -1,0 +1,111 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { PREY_INTERACTION_RANGE } from '../../../world-consts';
+import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
+import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { UpdateContext } from '../../../world-types';
+
+/**
+ * Creates a behavior sub-tree for prey grazing on berry bushes.
+ */
+export function createPreyGrazingBehavior(depth: number): BehaviorNode {
+  return new Sequence(
+    [
+      // Condition: Should I graze?
+      new ConditionNode(
+        (prey: any, context: UpdateContext, blackboard) => {
+          // Only graze if hungry and not on cooldown
+          if (prey.hunger < 30 || (prey.eatingCooldownTime && prey.eatingCooldownTime > context.gameState.time)) {
+            return false;
+          }
+
+          // Find nearby berry bushes with food
+          let closestBush: BerryBushEntity | null = null;
+          let closestDistance = Infinity;
+
+          context.gameState.entities.entities.forEach((entity) => {
+            if (entity.type === 'berryBush') {
+              const bush = entity as BerryBushEntity;
+              if (bush.food.length > 0) {
+                const distance = calculateWrappedDistance(
+                  prey.position,
+                  bush.position,
+                  context.gameState.mapDimensions.width,
+                  context.gameState.mapDimensions.height,
+                );
+                
+                if (distance < closestDistance) {
+                  closestDistance = distance;
+                  closestBush = bush;
+                }
+              }
+            }
+          });
+
+          if (closestBush && closestDistance <= PREY_INTERACTION_RANGE) {
+            // Berry bush is within interaction range
+            blackboard.set('grazingTarget', closestBush);
+            return true;
+          } else if (closestBush) {
+            // Berry bush found but need to move closer
+            blackboard.set('grazingTarget', closestBush);
+            blackboard.set('needToMoveToTarget', true);
+            return true;
+          }
+          
+          return false;
+        },
+        'Find Berry Bush',
+        depth + 1,
+      ),
+      // Action: Move to bush or graze directly
+      new ActionNode(
+        (prey: any, context: UpdateContext, blackboard) => {
+          const target = blackboard.get<BerryBushEntity>('grazingTarget');
+          const needToMove = blackboard.get<boolean>('needToMoveToTarget');
+          
+          if (!target) {
+            return NodeStatus.FAILURE;
+          }
+
+          const distance = calculateWrappedDistance(
+            prey.position,
+            target.position,
+            context.gameState.mapDimensions.width,
+            context.gameState.mapDimensions.height,
+          );
+
+          if (distance <= PREY_INTERACTION_RANGE) {
+            // Within range, start grazing
+            prey.activeAction = 'grazing';
+            prey.target = target.id;
+            prey.direction = { x: 0, y: 0 };
+            blackboard.delete('needToMoveToTarget');
+            return NodeStatus.RUNNING;
+          } else if (needToMove || distance > PREY_INTERACTION_RANGE) {
+            // Need to move closer to the bush
+            prey.activeAction = 'moving';
+            prey.target = target.id;
+            
+            const directionToTarget = getDirectionVectorOnTorus(
+              prey.position,
+              target.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+            
+            prey.direction = vectorNormalize(directionToTarget);
+            return NodeStatus.RUNNING;
+          }
+
+          return NodeStatus.FAILURE;
+        },
+        'Move to Bush or Graze',
+        depth + 1,
+      ),
+    ],
+    'Prey Graze',
+    depth,
+  );
+}

@@ -39,6 +39,12 @@ export interface PredatorEntity extends CharacterEntity {
   /** IDs of the predator's ancestors. */
   ancestorIds: EntityId[];
 
+  /** Current active action. Set by AI decision. */
+  activeAction?: PredatorAction;
+
+  /** Target for 'moving' action, either a position or entity. */
+  target?: { x: number; y: number } | EntityId;
+
   /** The current progress of the entity's animation (0-1). */
   animationProgress?: number;
 

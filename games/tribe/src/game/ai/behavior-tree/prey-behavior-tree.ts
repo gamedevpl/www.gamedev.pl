@@ -1,14 +1,29 @@
 import { BehaviorNode } from './behavior-tree-types';
 import { Selector } from './nodes';
+import {
+  createPreyFleeingBehavior,
+  createPreyGrazingBehavior,
+  createPreyProcreationBehavior,
+  createAnimalWanderBehavior,
+} from './behaviors';
 
 /**
- * Builds a basic behavior tree for prey entities.
- * Prey behavior focuses on: eating berries, fleeing from threats, procreating
- * For now, this is a placeholder that will be extended later with actual behaviors.
+ * Builds a complete behavior tree for prey entities.
+ * Prey behavior focuses on: fleeing from threats, eating berries, procreating, and wandering.
+ * The tree is structured as a priority system where higher-priority behaviors are evaluated first.
  */
 export function buildPreyBehaviorTree(): BehaviorNode {
-  // Create a simple selector for now - actual behaviors will be implemented later
   return new Selector([
-    // TODO: Add prey-specific behaviors
-  ]);
+    // HIGHEST PRIORITY: Survival - flee from predators and humans
+    createPreyFleeingBehavior(1),
+    
+    // MEDIUM PRIORITY: Basic needs - eat when hungry
+    createPreyGrazingBehavior(1),
+    
+    // LOWER PRIORITY: Reproduction - procreate when conditions are favorable
+    createPreyProcreationBehavior(1),
+    
+    // FALLBACK: Wander around when nothing else to do
+    createAnimalWanderBehavior(1),
+  ], 'Prey Behavior Root', 0);
 }
