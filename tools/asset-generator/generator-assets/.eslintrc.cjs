@@ -7,6 +7,7 @@ module.exports = {
   rules: {
     '@typescript-eslint/no-unused-vars': 'off',
     'prefer-const': 'off',
+    'no-case-declarations': 'off',
   },
   parserOptions: {
     warnOnUnsupportedTypeScriptVersion: false,
