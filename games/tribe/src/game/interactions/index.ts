@@ -4,6 +4,12 @@ import { humanChildFeedingInteraction } from './human-child-feeding-interaction'
 import { humanAttackInteraction } from './human-attack-interaction';
 import { humanCollisionInteraction } from './collision-interaction';
 import { humanGatherFoodInteractions } from './human-gather-food-interaction';
+import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
+import { predatorHuntPreyInteraction } from './predator-hunt-prey-interaction';
+import { humanHuntPreyInteraction } from './human-hunt-prey-interaction';
+import { predatorAttackHumanInteraction } from './predator-attack-human-interaction';
+import { preyProcreationInteraction } from './prey-procreation-interaction';
+import { predatorProcreationInteraction } from './predator-procreation-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -11,5 +17,11 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
   humanAttackInteraction,
-  // TODO: Add other interaction definitions here (imported from dedicated files)
+  // Animal interactions
+  preyEatBerryBushInteraction,
+  predatorHuntPreyInteraction,
+  humanHuntPreyInteraction,
+  predatorAttackHumanInteraction,
+  preyProcreationInteraction,
+  predatorProcreationInteraction,
 ] as InteractionDefinition[];
