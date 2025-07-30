@@ -1,6 +1,8 @@
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
 
@@ -55,5 +57,7 @@ export interface IndexedWorldState extends GameWorldState {
     human: IndexType<HumanEntity>;
     berryBush: IndexType<BerryBushEntity>;
     humanCorpse: IndexType<HumanCorpseEntity>;
+    prey: IndexType<PreyEntity>;
+    predator: IndexType<PredatorEntity>;
   };
 }

@@ -363,3 +363,46 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_RADIUS: number = 45;
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR: string = '#FFD700'; // Gold
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_PULSE_SPEED: number = 3;
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
+
+// Prey Constants
+export const PREY_MAX_AGE_YEARS: number = 12; // Maximum lifespan in game years
+export const PREY_HUNGER_INCREASE_PER_HOUR: number = 8; // Faster hunger than humans
+export const PREY_HUNGER_DEATH: number = 120; // Lower hunger threshold than humans
+export const PREY_MAX_HITPOINTS: number = 50; // Lower health than humans
+export const PREY_BASE_SPEED: number = 15; // Faster than humans
+export const PREY_INITIAL_HUNGER: number = 30;
+export const PREY_INITIAL_AGE: number = 2;
+export const PREY_INTERACTION_RANGE: number = 25;
+export const PREY_FLEE_DISTANCE: number = 150;
+export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
+export const PREY_GESTATION_PERIOD_HOURS: number = 48; // 2 game days
+export const PREY_PROCREATION_COOLDOWN_HOURS: number = 12; // Half game day
+export const PREY_MIN_PROCREATION_AGE: number = 2;
+export const PREY_MAX_PROCREATION_AGE: number = 8;
+export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
+export const PREY_BERRY_BUSH_DAMAGE: number = 1; // Reduces berry bush lifespan
+
+// Predator Constants  
+export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
+export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 6; // Between humans and prey
+export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
+export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
+export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
+export const PREDATOR_INITIAL_HUNGER: number = 40;
+export const PREDATOR_INITIAL_AGE: number = 3;
+export const PREDATOR_INTERACTION_RANGE: number = 35;
+export const PREDATOR_ATTACK_RANGE: number = 40;
+export const PREDATOR_HUNT_RANGE: number = 50;
+export const PREDATOR_ATTACK_DAMAGE: number = 45; // Higher than human attack
+export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
+export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
+export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
+export const PREDATOR_GESTATION_PERIOD_HOURS: number = 60; // 2.5 game days
+export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 18;
+export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
+export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
+export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is reduced by eating meat
+
+// Animal Spawning Constants
+export const INITIAL_PREY_COUNT: number = 8;
+export const INITIAL_PREDATOR_COUNT: number = 2;

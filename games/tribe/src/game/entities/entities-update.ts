@@ -22,15 +22,29 @@ import {
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
   MAX_ANCESTORS_TO_TRACK,
+  PREY_MAX_AGE_YEARS,
+  PREY_INITIAL_HUNGER,
+  PREY_INITIAL_AGE,
+  PREY_MAX_HITPOINTS,
+  PREY_MIN_PROCREATION_AGE,
+  PREDATOR_MAX_AGE_YEARS,
+  PREDATOR_INITIAL_HUNGER,
+  PREDATOR_INITIAL_AGE,
+  PREDATOR_MAX_HITPOINTS,
+  PREDATOR_MIN_PROCREATION_AGE,
 } from '../world-consts';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
+import { PreyEntity } from './characters/prey/prey-types';
+import { PredatorEntity } from './characters/predator/predator-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
 import { AIType } from '../ai/ai-types';
 import { buildHumanBehaviorTree } from '../ai/behavior-tree/human-behavior-tree';
+import { buildPreyBehaviorTree } from '../ai/behavior-tree/prey-behavior-tree';
+import { buildPredatorBehaviorTree } from '../ai/behavior-tree/predator-behavior-tree';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
@@ -223,4 +237,76 @@ export function removeEntity(state: Entities, entityId: EntityId): boolean {
   if (!state.entities.get(entityId)) return false;
   state.entities.delete(entityId);
   return true;
+}
+
+export function createPrey(
+  state: Entities,
+  initialPosition: Vector2D,
+  gender: 'male' | 'female',
+  initialAge: number = PREY_INITIAL_AGE,
+  initialHunger: number = PREY_INITIAL_HUNGER,
+  motherId?: EntityId,
+  fatherId?: EntityId,
+  ancestorIds: EntityId[] = [],
+): PreyEntity {
+  const isAdult = initialAge >= PREY_MIN_PROCREATION_AGE;
+
+  const prey = createEntity<PreyEntity>(state, 'prey', {
+    position: initialPosition,
+    radius: isAdult ? CHARACTER_RADIUS * 0.7 : CHARACTER_CHILD_RADIUS * 0.7, // Smaller than humans
+    hunger: initialHunger,
+    hitpoints: PREY_MAX_HITPOINTS,
+    maxHitpoints: PREY_MAX_HITPOINTS,
+    age: initialAge,
+    maxAge: PREY_MAX_AGE_YEARS,
+    gender,
+    isAdult,
+    isPregnant: false,
+    gestationTime: 0,
+    procreationCooldown: 0,
+    motherId,
+    fatherId,
+    ancestorIds,
+    aiType: AIType.BehaviorTreeBased,
+    aiBehaviorTree: buildPreyBehaviorTree(),
+    aiBlackboard: new Blackboard(),
+  });
+
+  return prey;
+}
+
+export function createPredator(
+  state: Entities,
+  initialPosition: Vector2D,
+  gender: 'male' | 'female',
+  initialAge: number = PREDATOR_INITIAL_AGE,
+  initialHunger: number = PREDATOR_INITIAL_HUNGER,
+  motherId?: EntityId,
+  fatherId?: EntityId,
+  ancestorIds: EntityId[] = [],
+): PredatorEntity {
+  const isAdult = initialAge >= PREDATOR_MIN_PROCREATION_AGE;
+
+  const predator = createEntity<PredatorEntity>(state, 'predator', {
+    position: initialPosition,
+    radius: isAdult ? CHARACTER_RADIUS * 0.9 : CHARACTER_CHILD_RADIUS * 0.9, // Slightly smaller than humans
+    hunger: initialHunger,
+    hitpoints: PREDATOR_MAX_HITPOINTS,
+    maxHitpoints: PREDATOR_MAX_HITPOINTS,
+    age: initialAge,
+    maxAge: PREDATOR_MAX_AGE_YEARS,
+    gender,
+    isAdult,
+    isPregnant: false,
+    gestationTime: 0,
+    procreationCooldown: 0,
+    motherId,
+    fatherId,
+    ancestorIds,
+    aiType: AIType.BehaviorTreeBased,
+    aiBehaviorTree: buildPredatorBehaviorTree(),
+    aiBlackboard: new Blackboard(),
+  });
+
+  return predator;
 }

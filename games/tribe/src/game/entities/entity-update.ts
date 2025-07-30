@@ -4,8 +4,12 @@ import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
 import { humanCorpseUpdate } from './characters/human/human-corpse-update';
+import { preyUpdate } from './characters/prey/prey-update';
+import { predatorUpdate } from './characters/predator/predator-update';
 import { HumanCorpseEntity } from './characters/human/human-corpse-types';
 import { HumanEntity } from './characters/human/human-types';
+import { PreyEntity } from './characters/prey/prey-types';
+import { PredatorEntity } from './characters/predator/predator-types';
 import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
@@ -68,12 +72,19 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'humanCorpse') {
     humanCorpseUpdate(entity as HumanCorpseEntity, updateContext);
+  } else if (entity.type === 'prey') {
+    preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
+  } else if (entity.type === 'predator') {
+    predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
   }
 
   // AI decision making for all humans (player and non-player)
   if (entity.type === 'human') {
     humanAIUpdate(entity as HumanEntity, updateContext);
   }
+  
+  // TODO: Add AI updates for prey and predator entities
+  // For now, they will use basic behavior trees without complex AI
 
   // Update state machine if present
   if (entity.stateMachine) {

@@ -1,4 +1,4 @@
-import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
+import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
 import { GameWorldState } from './world-types';
 import {
   MAP_WIDTH,
@@ -8,6 +8,8 @@ import {
   UI_BUTTON_WIDTH,
   INTRO_SCREEN_INITIAL_HUMANS,
   UI_BUTTON_TEXT_COLOR,
+  INITIAL_PREY_COUNT,
+  INITIAL_PREDATOR_COUNT,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -42,6 +44,35 @@ export function initWorld(): GameWorldState {
     'female',
     false, // isPlayer = false
   );
+
+  // Spawn initial prey animals scattered around the map
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    const gender = Math.random() < 0.5 ? 'male' : 'female';
+    createPrey(entities, randomPosition, gender);
+  }
+
+  // Spawn initial predators scattered around the map (away from center)
+  for (let i = 0; i < INITIAL_PREDATOR_COUNT; i++) {
+    let randomPosition;
+    let distanceFromCenter;
+    do {
+      randomPosition = {
+        x: Math.random() * MAP_WIDTH,
+        y: Math.random() * MAP_HEIGHT,
+      };
+      // Keep predators away from the center where humans spawn
+      distanceFromCenter = Math.sqrt(
+        Math.pow(randomPosition.x - centerX, 2) + Math.pow(randomPosition.y - centerY, 2)
+      );
+    } while (distanceFromCenter < 300); // Minimum distance from center
+    
+    const gender = Math.random() < 0.5 ? 'male' : 'female';
+    createPredator(entities, randomPosition, gender);
+  }
 
   const uiButtons: ClickableUIButton[] = [
     {
