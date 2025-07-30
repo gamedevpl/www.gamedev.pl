@@ -2,6 +2,8 @@
 
 **Tribe** is a browser-based strategy/simulation game developed as part of the Gamedev.pl open source initiative.
 
+🎮 **[Play the game online](https://www.gamedev.pl/games/tribe/)**
+
 ## Features
 
 - Modern TypeScript and React codebase
