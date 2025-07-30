@@ -65,9 +65,6 @@ export interface HumanEntity extends Entity {
   /** ID of the human's tribe leader. If it's the same as the human's ID, they are the leader. */
   leaderId?: EntityId;
 
-  /** ID of the human's tribe. This is the same as the leader's ID. */
-  tribeId?: EntityId;
-
   /** Visual representation of the tribe badge. */
   tribeBadge?: string;
 
