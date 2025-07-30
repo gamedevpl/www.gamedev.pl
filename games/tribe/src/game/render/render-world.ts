@@ -21,7 +21,6 @@ import {
 } from '../world-consts';
 import { renderEntityHighlight } from './render-highlights';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderWithWrapping(
   ctx: CanvasRenderingContext2D,
   worldWidth: number,
