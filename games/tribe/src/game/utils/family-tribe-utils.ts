@@ -1,7 +1,7 @@
 import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
-import { GameWorldState } from '../world-types';
+import { DiplomacyStatus, GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { TribeInfo } from '../ui/ui-types';
 
@@ -264,7 +264,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       isPlayerTribe: tribe.leaderId === playerLeaderId,
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
-      diplomacyStatus: playerDiplomacy?.get(tribe.leaderId ?? -1),
+      diplomacyStatus: playerDiplomacy?.get(tribe.leaderId ?? -1) ?? DiplomacyStatus.Friendly,
     };
   });
 
