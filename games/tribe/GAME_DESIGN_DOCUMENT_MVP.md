@@ -87,7 +87,7 @@
 
 - **Tribe Structure:**
   - Each tribe has a leader (`leaderId`) who makes strategic decisions
-  - All tribe members share the same `tribeId` (equals the leader's ID)
+  - All tribe members share the same `tribeId` (equals the leader's character ID)
   - Tribes are identified by unique visual badges (`tribeBadge`)
 
 - **Leadership:**
