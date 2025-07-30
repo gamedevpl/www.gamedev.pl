@@ -177,6 +177,13 @@
   - Bushes regenerate 1 berry every 12 game hours
   - Gathering has a brief cooldown to prevent spam-clicking
 
+- **Meat Recovery from Corpses:**
+  - When characters die, they leave corpses that contain meat (10 food items initially)
+  - Corpses can be harvested by other characters for emergency food supplies
+  - Corpses decay over time (128 game hours), losing their food value
+  - Provides alternative food source during resource scarcity
+  - Same gathering mechanics as berry bushes (interaction range, cooldown)
+
 - **Berry Bush Planting:**
   - Players and AI can plant new bushes using carried berries
   - Planted bushes start with lower berry counts but grow over time
@@ -497,53 +504,31 @@
 - ✅ Social behaviors (jealousy, defense, cooperation)
 - ✅ Leadership succession and tribal hierarchies
 
-### 8.2 Deferred/Future Features
+### 8.2 Future Features
 
-**Advanced Combat:**
-- ⏸️ Weapon crafting and tool systems
-- ⏸️ Armor and defensive equipment
-- ⏸️ Siege warfare and large-scale battles
+**Wildlife System:**
+- Predators and prey animals that populate the world
+- Predators hunt prey animals for survival
+- Prey animals eat berries, creating resource competition with humans
+- Humans can hunt prey animals for food (meat source)
+- Predators compete with humans for territory and resources
+- Predators can hunt humans, creating additional survival challenge
+- Dynamic ecosystem with predator-prey-human relationships
 
-**Economic Expansion:**
-- ⏸️ Multiple resource types (wood, stone, water)
-- ⏸️ Crafting systems and tool creation  
-- ⏸️ Trade systems between tribes
-- ⏸️ Advanced resource processing
+**Tribe Camps:**
+- Designated world fragments owned and controlled by tribes
+- Food storage systems for long-term resource management
+- Defensive structures and tribal headquarters
+- Centralized resource distribution and planning
 
-**Environmental Systems:**
-- ⏸️ Weather and seasonal changes
-- ⏸️ Natural disasters and environmental hazards
-- ⏸️ Disease and plague systems
-- ⏸️ Multiple biomes and terrain types
+**Game Persistence:**
+- Save and load game functionality
+- Continue long-term tribal civilizations across sessions
+- Preserve world state and tribal progress
 
-**Cultural Evolution:**
-- ⏸️ Technology trees and advancement
-- ⏸️ Cultural practices and traditions
-- ⏸️ Language and communication systems
-- ⏸️ Religious or belief systems
+**Game Modes:**
+- **Sandbox Mode (Adam & Eve)**: Start with two characters and build civilization from scratch
+- **Mission Mode**: Structured scenarios with specific objectives and challenges
+- Varied starting conditions and gameplay objectives
 
-**World Expansion:**
-- ⏸️ Multiple connected world areas
-- ⏸️ Ocean and water systems
-- ⏸️ Wildlife and animal interactions
-- ⏸️ Non-human intelligent species
 
-**Advanced UI/UX:**
-- ⏸️ Character customization systems
-- ⏸️ Advanced statistics and analytics
-- ⏸️ Replay and history systems
-- ⏸️ Multiplayer or cooperative modes
-
-### 8.3 Design Notes
-
-**Scope Achievement:** The current implementation significantly exceeds the original MVP scope, implementing a complex tribal simulation with sophisticated AI, diplomacy, combat, and strategic systems.
-
-**System Integration:** All implemented systems work together cohesively, creating emergent gameplay through the interaction of survival, social, economic, and strategic mechanics.
-
-**Scalability:** The behavior tree architecture and modular design allow for easy addition of new behaviors and systems without disrupting existing functionality.
-
-**Performance:** The system handles large worlds with many autonomous AI entities while maintaining smooth gameplay performance.
-
----
-
-*This document represents the complete implemented feature set of the Tribe game as of July 2025. All described mechanics are functional and integrated into the game system.*
