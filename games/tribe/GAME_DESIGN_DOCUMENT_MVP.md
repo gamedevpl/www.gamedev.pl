@@ -1,134 +1,551 @@
-# Game Design Document: Tribe (MVP) Hills
+# Game Design Document: Tribe - Complete Implementation
 
-## 1. Game Overview (MVP)
+> **Document Update Note:** This Game Design Document has been comprehensively updated as of July 2025 to accurately reflect the current state of the Tribe game codebase. All sections describe implemented features and mechanics as they exist in the game, not original MVP plans.
 
-- **Concept Statement:** You control a single character. Your primary goal is to ensure your lineage survives by procreating. Once your current character dies (from hunger or old age), you gain control over your oldest living descendant. The game ends if, upon the current character\'s death, no living offspring exists (Lineage Extinct).
-- **Core Gameplay Loop (MVP):**
-  1.  Manage the current character\'s hunger by finding and consuming food. Hunger increases at a fixed rate (e.g., per game hour);
-  2.  Procreate with a partner to produce offspring. Procreation is always successful in the MVP if conditions (e.g., not critically hungry, cooldown met) are met.
-  3.  Witness time pass at a fixed rate, characters age, and children grow.
-  4.  Upon character death, seamlessly transition control to the next generation (oldest offspring). There is no grace period if the offspring is in a critical state.
-- **Player Goal (MVP):** Keep your lineage alive for as many generations as possible. Success is measured by a simple counter for the number of generations that persist, displayed in the UI.
+## 1. Game Overview
 
-## 2. Core Mechanics (MVP)
+- **Concept Statement:** You control a human character in a dynamic tribal world. Your primary goal is to ensure your lineage survives and your tribe thrives through multiple generations. The game features complex survival mechanics, tribal politics, diplomacy, combat, and strategic resource management in a persistent world populated by AI-controlled tribes.
 
-- **Movement & Spatial Interaction:**
+- **Core Gameplay Systems:**
+  1. **Survival Management**: Monitor hunger and health, gather food, manage resources
+  2. **Tribe Leadership**: Lead your tribe, make strategic decisions, manage diplomacy with other tribes
+  3. **Combat & Warfare**: Engage in tactical combat, coordinate attacks, defend territory
+  4. **Family & Lineage**: Procreate, raise children, establish family territories, manage inheritance
+  5. **Resource Economics**: Gather berries, plant bushes, claim territory, optimize resource distribution
+  6. **AI Autopilot**: Enable automated behaviors for gathering, combat, procreation, and other activities
 
-  - **Movement System:** Characters move freely in 2D space using continuous positioning (not grid-based). Movement is smooth and immediate in response to player input.
-  - **Base Speed:** All characters have a standard movement speed of 100 pixels per second.
-  - **Speed Modifiers:** When hunger exceeds 80/100, movement speed is reduced to 50% of base speed (50 pixels per second).
-  - **Old Age Speed Reduction:** When a human character reaches a certain age (e.g., 80% of their maximum lifespan, defined by `HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD`), their movement speed is reduced by a specific factor (e.g., to 70% of their current speed, defined by `HUMAN_OLD_AGE_SPEED_MODIFIER`). This speed reduction due to old age stacks multiplicatively with other speed penalties, such as those caused by high hunger.
-  - **World Wrapping:** The game world behaves like a sphere. When characters move off one edge of the map (800x600 pixel area), they seamlessly reappear on the opposite side. Moving off the right edge brings them back on the left, moving off the top brings them back at the bottom, and vice versa.
-  - **Interaction Range:** Characters must be within 30 pixels of an object or another character to interact with them (gather berries, initiate procreation).
-  - **Collision:** Characters cannot occupy the same space. Simple collision detection prevents overlapping, with characters sliding around each other when paths intersect.
-  - **Pathfinding:** Direct movement toward target locations. No complex pathfinding required due to simple environment with no obstacles beyond other characters.
+- **Player Goals:**
+  - **Short-term**: Survive, feed your family, establish territory, grow your tribe
+  - **Long-term**: Lead your tribe to dominance, expand territory through migration or conquest, maintain diplomatic relationships, achieve multi-generational prosperity
+  - **Victory Conditions**: Keep your lineage alive through generations while building a thriving, dominant tribe
 
-- **Survival (Hunger Focus):**
+## 2. Core Mechanics
 
-  - **Attribute:** Characters possess a \'hunger\' level (0-100).
-  - **Progression:** Hunger increases automatically over time (e.g., +5 per game hour). If hunger reaches 80/100, movement speed is reduced. If hunger is above 95/100, procreation is not possible.
-  - **Satisfaction:** Consuming \'berries\' (the basic food item) reduces hunger (e.g., 1 berry = -25 hunger).
-  - **Consequence:** If hunger reaches 100, the character dies.
+### 2.1 Movement & Spatial Interaction
 
-- **Procreation & Offspring (Basic):**
+- **Movement System:** Characters move freely in a large 2D world (3000x3000 pixels) using continuous positioning. Movement is smooth and responds to both player input and AI decisions.
+- **Base Speed:** Characters have a base movement speed of 10 pixels per second (implemented as `HUMAN_BASE_SPEED`).
+- **Speed Modifiers:** 
+  - When hunger exceeds 80% of death threshold (120/150), movement speed is reduced by 50%
+  - When characters reach old age (80% of max age = 64 years), movement speed is reduced to 70% of current speed
+  - Combat damage can apply temporary movement slowdowns
+  - All speed modifiers stack multiplicatively
+- **World Navigation:** The game world wraps around like a sphere - characters moving off one edge reappear on the opposite side.
+- **Interaction Range:** Characters can interact with objects and other characters within 30 pixels (`HUMAN_INTERACTION_RANGE`).
+- **Collision:** Characters cannot occupy the same space and will slide around each other when paths intersect.
+- **Pathfinding:** Direct movement toward targets with sophisticated AI behavior trees managing complex decision-making.
 
-  - **Initiation:** A male and female human can attempt procreation if both are adults (e.g., age >= 16), not critically hungry (hunger < 95), and not currently on procreation cooldown. Procreation is initiated via interaction (e.g., \'E\' key for player, AI decision for NPC).
-  - **Food Availability Check for AI:** AI-controlled characters will only attempt procreation if they detect a sufficient number of food sources (e.g., at least 2 berry bushes) within a certain radius (e.g., 200 pixels) around them. This ensures that procreation is more likely to occur in resource-rich areas, contributing to the sustainability of the tribe.
+### 2.2 Health & Survival System
 
-  **AI Lineage Management and New Lineage Formation:**
+- **Dual Health System:**
+  - **Hunger**: Ranges from 0-150, increases at 5 points per game hour. Death occurs at 150.
+  - **Hitpoints**: Separate health pool that can be damaged through combat, healing over time.
+  
+- **Hunger Effects:**
+  - 30+ hunger: Mild hunger, tutorial notifications trigger
+  - 120+ hunger: Speed reduction to 50%, prevents procreation at 142+
+  - 127+ hunger: Critical hunger, enables desperate behaviors
+  - 150 hunger: Death from starvation
 
-  To prevent overpopulation from a single pair and encourage diverse lineage growth, AI-controlled humans follow additional rules for procreation:
+- **Food System:**
+  - Characters can carry up to 10 food items (`HUMAN_MAX_FOOD`)
+  - Eating 1 berry reduces hunger by 30 points
+  - Berries must be gathered from berry bushes or obtained from other characters
 
-  - **Lineage Size Limit:** An AI human will generally not attempt to procreate if they already have `PROCREATION_MAX_CHILDREN_FOR_AI` (e.g., 3) living offspring. This helps manage the population originating from a single genetic line.
-  - **New Lineage Opportunity:** If an AI human has reached their lineage size limit (i.e., `livingOffspringCount >= PROCREATION_MAX_CHILDREN_FOR_AI`), they will then assess the possibility of starting a new lineage with an unrelated partner. This requires:
-    - Finding at least `PROCREATION_MIN_UNRELATED_PARTNERS_FOR_NEW_LINEAGE` (e.g., 1) suitable, unrelated adult partners of the opposite gender.
-    - These potential new partners must be within `PROCREATION_PARTNER_SEARCH_RADIUS_FOR_NEW_LINEAGE` (e.g., 250 pixels).
-    - An \'unrelated\' partner for MVP purposes is defined as not being a direct parent or direct child of the AI human.
-  - **Food Availability:** The standard check for `PROCREATION_MIN_NEARBY_BERRY_BUSHES` (e.g., at least 2 berry bushes within 200 pixels) must still be met for an AI to consider procreation, regardless of whether it\'s continuing an existing lineage or attempting to start a new one.
+### 2.3 Combat System
 
-  This system encourages AI to contribute to the tribe\'s growth more broadly once their immediate family line is established, provided sufficient resources and unrelated partners are available.
+- **Combat Mechanics:**
+  - **Attack Range:** 50 pixels (`HUMAN_ATTACK_RANGE`)
+  - **Attack Cooldown:** 2 game hours between attacks
+  - **Attack Buildup:** 0.1 hours preparation time before damage is dealt
+  - **Damage System:** Base damage with modifiers for gender, age, and vulnerability
+  - **Parry System:** Chance to block attacks based on positioning and timing
 
-  - **Gestation:** Upon successful procreation, the female enters a \'pregnant\' state. A gestation period begins (e.g., 3 game days/72 game hours). During gestation, the female\'s hunger increases at a slightly faster rate.
-  - **Birth:** After the gestation period, a new child (human entity) is born at the mother\'s position. The child\'s gender is randomly determined. Both parents (if alive) are linked to the child. The mother and father (if applicable) enter a procreation cooldown.
-  - **Procreation Cooldown:** After a successful procreation (or birth), both the male and female involved enter a cooldown period (e.g., 1 game day/24 game hours) during which they cannot initiate or be involved in another procreation attempt.
-  - **Parentage:** All offspring are linked to their biological mother and father.
-  - **Aging & Child Development:** Children are born with 0 age. They age over time. At a certain age (e.g., 16 game years), they become adults, capable of independent actions, including procreation.
-  - **Child Needs (Simplified):** Children have hunger needs and their hunger increases at a faster rate than adults. If a child\'s hunger exceeds `CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD`, they will actively attempt to find a nearby parent (mother or father within `CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS`) who is carrying berries. If a suitable parent is found, the child will move towards them. Once the child is within `PARENT_FEEDING_RANGE` of such a parent, one berry is automatically consumed from the parent\'s inventory to feed the child, reducing the child\'s hunger. If no parent with berries is found or reachable, the child\'s hunger continues to increase, potentially leading to death. Direct player management of children\'s needs is deferred.
-  - **Parent AI Feeding Children:**
-    AI-controlled adult parents will proactively attempt to feed their hungry children. This behavior is governed by a dedicated AI strategy (`ParentFeedingChildStrategy`) with the following logic:
-    _ **Conditions for Parent AI to Act:** The parent must be an adult, possess berries in their inventory, not be on a `feedChildCooldownTime`, and identify one oftheir own offspring who is hungry (hunger >= `CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD`).
-    _ **Parent\'s Actions:** If the identified hungry child is not within `PARENT_FEEDING_RANGE`, the parent will change their `activeAction` to \'moving\' and navigate towards the child. If the child is already within `PARENT_FEEDING_RANGE`, the parent will typically set their `activeAction` to \'idle\', making themselves available for the `HumanChildFeedingInteraction` (defined elsewhere) to automatically occur, which handles the berry transfer and cooldowns. \* **Priority:** This feeding behavior is a high priority for AI parents. It is considered after their own immediate survival needs (like eating via `EatingStrategy`) but before other activities such as gathering more resources for themselves (`GatheringStrategy`) or procreation (`ProcreationStrategy`).
-  - **Adult Child Feeds Old Parent:** Adult children will attempt to feed their old and hungry parents. If an adult child has berries in their inventory, is not on a feeding cooldown, and is within `ADULT_CHILD_FEEDING_RANGE` (e.g., 50 pixels) of a parent who is considered \'old\' (e.g., age >= `HUMAN_OLD_AGE_THRESHOLD`, which is 75% of max age) and \'very hungry\' (e.g., hunger >= `HUMAN_OLD_PARENT_HUNGER_THRESHOLD_FOR_FEEDING`, e.g., 80/100), the child will consume one berry from their inventory, and the parent\'s hunger will be reduced accordingly (e.g., by `HUMAN_BERRY_HUNGER_REDUCTION`). The child will then enter a short cooldown period (`ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS`) before they can perform this action again.
+- **Damage Modifiers:**
+  - Male characters deal more damage (`HUMAN_MALE_DAMAGE_MODIFIER`)
+  - Child characters deal reduced damage (`HUMAN_CHILD_DAMAGE_MODIFIER`) 
+  - Vulnerable targets (low health) take increased damage
+  - Old age affects combat effectiveness
 
-- **Generational Transfer:**
+- **Combat Effects:**
+  - Successful attacks push back the target and apply movement slowdown
+  - Visual and audio effects accompany all combat actions
+  - Death results in corpse entities that persist in the world
 
-  - **Trigger:** Occurs when the currently controlled player character dies (due to hunger or reaching a maximum age).
-  - **Mechanism:** Control automatically transfers to the character\'s oldest living offspring. If multiple offspring were created at the exact same internal timestamp, the first one created in the game\'s internal list is chosen. If no living offspring exist, the game ends with a \"Lineage Extinct\" message.
+### 2.4 Advanced AI Behavior System
 
-- **Resource Gathering (Simplified):**
+- **Behavior Trees:** All AI-controlled characters use sophisticated behavior trees with 20+ different behaviors:
+  - **Survival**: Eating, gathering, fleeing from danger
+  - **Social**: Procreation, feeding children, following leaders
+  - **Combat**: Attacking, defending family/territory, calling for help
+  - **Strategic**: Territory establishment, resource planning, diplomacy
+  - **Tribe Management**: Migration, splitting, leadership decisions
 
-  - **Resource:** A single food resource: \'Berries\'. Player inventory limit is 10 berries.
-  - **Source:** Berries can be collected from static \'Berry Bush\' locations on the map. Each bush is finite (e.g., holds a maximum of 5 berries).
-  - **Collection:** Player interacts with a Berry Bush to gather 1 berry at a time, added to their inventory, if the bush has berries and player inventory is not full.
-  - **Regeneration:** Berry Bushes regenerate berries (e.g., 1 berry per game day, up to its maximum of 5). If all bushes are empty and none are regenerating, the player must wait or manage existing resources carefully.
+- **Priority System:** Behaviors are prioritized with survival and defense taking precedence over social and strategic actions.
 
-- **Time Progression & Aging:**
+- **Blackboard System:** AI uses shared memory for complex decision-making and coordination between tribe members.
 
-  - **Clock:** A simple game clock tracks passing days/years. 1 game day = 10 real seconds.
-  - **Aging:** Characters (player, partner, offspring) age as game time progresses.
-  - **Old Age Death:** Characters have a maximum lifespan (e.g., 60 game years) and will die of old age if they survive hunger. If a character reaches maximum age and has no living offspring, it results in a game over upon their death.
+### 2.5 Tribe System
 
-- **Character Representation (Basic):**
-  - **Entities:** Player character, initial partner, and their offspring.
-  - **Visuals:** Simple visual differentiation (e.g., different sprites or colors for male/female, adult/child). No additional visual cues for hunger beyond the UI display in MVP.
-  - **Movement:** Basic 2D movement on the map. Speed is constant unless affected by high hunger (above 80).
+- **Tribe Structure:**
+  - Each tribe has a leader (`leaderId`) who makes strategic decisions
+  - All tribe members share the same `tribeId` (equals the leader's ID)
+  - Tribes are identified by unique visual badges (`tribeBadge`)
 
-## 3. World & Environment (MVP)
+- **Leadership:**
+  - Leaders make high-level strategic decisions every 10 game hours
+  - Leaders can call tribe members to attack or follow
+  - Leadership succession occurs when leaders die (eldest child inherits)
 
-- **Map:** A small, static 2D area (e.g., 800x600 pixels) that wraps around like a sphere - characters moving off one edge reappear on the opposite side.
-- **Key Locations / Objects:**
-  - **Bonfire (Visual Only):** A central point, purely for visual reference. No interaction or gameplay effect.
-  - **Berry Bushes:** 3 designated spots on the map where berries can be gathered. Their positions are fixed and defined at game start.
-- **Hazards:** None, beyond starvation and old age. No aggressive animals, environmental threats, or other tribes in the MVP.
+- **Tribe Behaviors:**
+  - **Splitting**: Large tribes (40+ members) can split when families grow large enough
+  - **Migration**: Leaders can relocate entire tribes to better territories
+  - **Combat Coordination**: Tribes coordinate attacks and defense through leader commands
 
-## 4. User Interface (UI) & Controls (MVP - Basic)
+### 2.6 Diplomacy System
 
-- **Displays (Located top-left corner of the screen):**
-  - Current character\'s hunger level (numerical display: 0-100).
-  - Number of \'berries\' in inventory (numerical display: 0-10).
-  - Current character\'s age (numerical display: years).
-  - Current generation number (numerical display, e.g., \"Generation: 1\").
-- **Controls:**
-  - Movement: WASD keys.
-  - Interact: \'E\' key. Context-sensitive: gathers a berry if next to a bush with berries and inventory not full; initiates procreation if next to a valid partner and conditions are met.
-  - Eat: \'F\' key (consumes 1 berry from inventory if available).
-- **Notifications:**
-  - Alert for character death.
-  - Notification of transfer to the next generation.
-  - Game Over screen if the lineage ends.
-  - Notifications persist for 5 real seconds or until a key is pressed.
-  - Game Over screen displays: \"Game Over! Lineage Extinct. Generations Survived: X. Cause of Death: [Hunger/Old Age].\"
+- **Diplomacy States:**
+  - **Friendly**: Tribes cooperate, share resources, avoid conflict
+  - **Hostile**: Tribes compete aggressively, engage in combat
 
-## 5. Initial State (MVP)
+- **Diplomatic Decisions:** Tribe leaders periodically reassess relationships based on:
+  - Territory proximity and resource competition
+  - Historical conflicts and cooperation
+  - Relative tribe strength and strategic advantage
 
-- The game starts with one adult male player character and one adult female non-player character (NPC) partner, both located near the central bonfire.
-  - Player (Male): Age 20 years, Hunger 50/100, 0 Berries in inventory.
-  - Partner (Female): Age 20 years, Hunger 50/100.
-- Three Berry Bushes are present on the map at predefined locations (e.g., map edges). Each bush starts with 3 berries.
-- A visual bonfire is present at a central map location.
+### 2.7 Territory & Resource Management
 
-## 6. Deferred Features (For Future Iterations)
+- **Berry Bush System:**
+  - Bushes contain 0-5 berries, regenerating 1 berry every 12 game hours
+  - Bushes have lifespans (940 hours) and can spread to nearby locations
+  - Characters can plant new bushes using carried berries
 
-This list outlines features from the full GDD that are intentionally excluded from the MVP to maintain focus:
+- **Territory Claiming:**
+  - Characters can claim berry bushes for 240 game hours
+  - Claimed bushes are defended by the family/tribe
+  - Visual indicators show ownership status
 
-- Complex AI for tribe members and other tribes (beyond the initial partner\'s basic existence).\
-- Combat system (no hunting, no hostile encounters).\
-- Advanced resource gathering (wood, stone, etc.) and crafting (tools, shelters).\
-- Reputation system or complex social interactions.\
-- Detailed skills, abilities, and a technology tree.\
-- The overarching goal of \'world dominance\'.\
-- Multiple biomes, dynamic environmental changes, complex environmental hazards (weather, disease).\
-- Auto-run mode, multi-year time jumps.\
-- Detailed character customization, wider range of character attributes beyond hunger and age.\
-- Tribe management beyond the direct lineage.\
-- Sound and advanced visual effects.
+- **Resource Analysis:** Leaders periodically analyze territory quality based on:
+  - Berry bush density and productivity
+  - Threat levels from hostile tribes
+  - Strategic positioning for defense and expansion
+
+### 2.8 Procreation & Family Systems
+
+- **Procreation Requirements:**
+  - Both partners must be adults (age 16+, females max age 40)
+  - Neither can be critically hungry (hunger < 142/150)
+  - Neither can be on procreation cooldown (24 game hours)
+  - Must be within interaction range (30 pixels)
+
+- **AI Procreation Logic:**
+  - AI checks for sufficient food sources (2+ berry bushes within 400 pixels)
+  - Lineage size limits prevent overpopulation (max 3 children per AI)
+  - AI seeks unrelated partners for genetic diversity
+  - Avoids procreation if partner's primary mate is nearby
+
+- **Pregnancy & Birth:**
+  - Gestation period: 24 game hours (reduced from original 72)
+  - Pregnant females have 25% increased hunger rate
+  - Birth creates new child at mother's location
+  - Both parents enter 24-hour procreation cooldown
+
+- **Child Development:**
+  - Children become adults at age 16
+  - Children have faster hunger increase than adults
+  - Children actively seek food from parents when hungry
+  - Parents automatically feed hungry children within range
+
+- **Family Relationships:**
+  - Complex family trees track fathers, mothers, partners, and ancestors
+  - Family territories can be established by adult males with families
+  - Adult children will feed elderly parents (age 60+, hunger 80+)
+  - Inheritance system transfers leadership to eldest child
+
+### 2.9 Generational Transfer
+
+- **Death Triggers:** Character death from hunger (150), old age (80 years), or combat (0 hitpoints)
+- **Succession System:** 
+  - Control transfers to oldest living offspring
+  - If no offspring exist, game ends with "Lineage Extinct"
+  - Leadership roles transfer through inheritance
+- **Continuity:** World continues with all other characters, tribes, and systems intact
+
+### 2.10 Resource Management
+
+- **Berry Collection:**
+  - Primary food source gathered from berry bushes
+  - Each bush holds 0-5 berries, starting with 3 berries
+  - Bushes regenerate 1 berry every 12 game hours
+  - Gathering has a brief cooldown to prevent spam-clicking
+
+- **Berry Bush Planting:**
+  - Players and AI can plant new bushes using carried berries
+  - Planted bushes start with lower berry counts but grow over time
+  - Strategic planting expands available food sources
+
+- **Inventory Management:**
+  - Characters can carry up to 10 berries
+  - Food is automatically consumed when eating (reduces hunger by 30)
+  - Visual indicators show food levels in UI
+
+- **Resource Competition:**
+  - Multiple characters can gather from the same bush
+  - Claimed bushes create territorial disputes
+  - Resource scarcity drives tribal conflicts
+
+### 2.11 Time & Aging System
+
+- **Time Scale:**
+  - 1 game day = 10 real seconds (24 game hours)
+  - 1 game year = 4 real minutes approximately
+  - Time controls allow pausing and fast-forwarding
+
+- **Character Aging:**
+  - Characters age continuously as game time passes
+  - Maximum lifespan: 80 game years
+  - Age affects movement speed, combat ability, and procreation eligibility
+  - Death from old age triggers succession mechanics
+
+## 3. World & Environment
+
+### 3.1 World Structure
+
+- **Map Size:** Large 3000x3000 pixel world (expanded from 800x600 MVP)
+- **World Topology:** Spherical wrapping - characters moving off edges reappear on opposite sides
+- **Dynamic Ecosystem:** 
+  - Initially spawns 45 berry bushes across the world
+  - Bushes can spread naturally with 70% chance every 90 hours
+  - Bush lifespans create natural resource cycles
+
+### 3.2 Environmental Elements
+
+- **Berry Bushes:** Primary food source scattered throughout the world
+- **Visual Landmarks:** Bonfire and other environmental features for navigation
+- **Territory Markers:** Visual indicators show claimed areas and tribal boundaries
+- **Dynamic Population:** Multiple AI tribes populate the world simultaneously
+
+### 3.3 World Dynamics
+
+- **Ecosystem Balance:** Bush regeneration and spreading maintain food supply
+- **Population Cycles:** Tribes grow, split, migrate, and compete for resources
+- **Environmental Pressure:** Resource scarcity drives migration and conflict
+- **Persistent World:** All actions have lasting consequences on the world state
+
+## 4. User Interface & Controls
+
+### 4.1 Status Display System
+
+- **Core Status Indicators (Top-left):**
+  - **Time**: Current game day/year with calendar icon
+  - **Hunger**: Visual bar and numerical value (0-150) with meat icon
+  - **Hitpoints**: Health bar with numerical value and heart icon  
+  - **Food Inventory**: Berry count (0-10) with berry icon
+  - **Autopilot Status**: Shows active AI behaviors with robot icon
+  - **Mute Status**: Audio control indicator
+
+- **Family Information Panel:**
+  - Current character's age and generation number
+  - Family relationships and lineage tree
+  - Partner and children information
+
+### 4.2 Tribe Management Interface
+
+- **Tribe List Panel:**
+  - All tribes in the world with member counts
+  - Tribe badges and leader information
+  - Diplomacy status indicators (Friendly/Hostile)
+  - Distance and relationship data
+
+- **Diplomatic Interface:**
+  - Current relationships with other tribes
+  - Options to change diplomatic stance
+  - Threat assessment and strategic information
+
+### 4.3 Control Systems
+
+- **Basic Controls:**
+  - **Movement**: WASD keys for character movement
+  - **Interact**: E key for context-sensitive interactions
+  - **Eat**: F key to consume food from inventory
+  - **Pause**: Spacebar to pause/unpause game time
+
+- **Advanced Player Actions:**
+  - **Gather**: Collect berries from bushes (✋)
+  - **Procreate**: Initiate reproduction with partners (❤️)
+  - **Attack**: Engage in combat with enemies (⚔️)
+  - **Plant**: Place new berry bushes (🌱)
+  - **Call to Attack**: Rally tribe members for combat (📢)
+  - **Split Tribe**: Create new tribe from current one (🔱)
+  - **Follow Me**: Command tribe members to follow (➡️)
+  - **Feed Child**: Give food to offspring (👨‍👧)
+
+### 4.4 Autopilot AI System
+
+- **Automated Behaviors (Toggle On/Off):**
+  - **Gathering**: Automatically collect food sources
+  - **Procreation**: Seek partners and reproduce
+  - **Planting**: Place berry bushes strategically
+  - **Attack**: Engage enemies and defend territory
+  - **Feed Children**: Care for offspring automatically
+  - **Follow Leader**: Maintain tribal cohesion
+
+- **Autopilot Interface:**
+  - Individual behavior toggles with visual indicators
+  - Active action highlights and status displays
+  - Override controls for manual intervention
+
+### 4.5 Notification System
+
+- **Notification Types:**
+  - **Hello**: Welcome and tutorial messages
+  - **New Tribe Formed**: Tribal splitting announcements
+  - **No Heir**: Warnings about lineage extinction risk
+  - **Children Starving**: Family emergency alerts
+
+- **Notification Features:**
+  - Persistent display with dismiss options
+  - Clickable notifications to jump to relevant locations
+  - Visual highlights for important game events
+  - Timed auto-dismiss for less critical messages
+
+### 4.6 Visual Feedback Systems
+
+- **Character Highlighting:**
+  - **Player Character**: Green highlight
+  - **Family Members**: Color-coded by relationship
+  - **Partners**: Purple highlighting
+  - **Children**: Blue highlighting
+  - **Heirs**: Gold/amber highlighting
+
+- **Territory Visualization:**
+  - Claimed berry bushes show ownership colors
+  - Family territory boundaries when established
+  - Tribal territory and influence zones
+
+- **Action Indicators:**
+  - Visual hints for available actions
+  - Range indicators for attacks and interactions
+  - Progress bars for ongoing activities
+
+### 4.7 Audio System
+
+- **Sound Effects:**
+  - Combat sounds (attacks, parrying, death)
+  - Eating and gathering audio feedback
+  - Birth and procreation sounds
+  - UI interaction sounds (button clicks)
+
+- **Music System:**
+  - Ambient soundtrack with volume controls
+  - Dynamic audio that responds to game events
+  - Master volume and mute controls
+
+## 5. Initial Game State
+
+### 5.1 Starting Conditions
+
+- **Player Character**: Adult male, age 20, hunger 50/150, full hitpoints, 0 berries
+- **Starting Partner**: Adult female NPC, age 20, hunger 50/150, basic AI behaviors
+- **World Population**: Multiple AI tribes already established with varying sizes and territories
+- **Berry Bushes**: 45 bushes distributed across the 3000x3000 world, each with 3 initial berries
+- **Environmental Features**: Central bonfire and other landmark features for navigation
+
+### 5.2 Initial AI Behavior
+
+- **Partner AI**: Basic survival and social behaviors, will procreate and gather food
+- **Other Tribes**: Fully autonomous tribes with leaders, diplomacy, and strategic AI
+- **World Dynamics**: Berry bush spreading, tribal interactions, and resource competition already active
+
+## 6. Advanced Systems (Beyond MVP)
+
+### 6.1 Strategic AI Systems
+
+- **Leader Meta-Strategy**: Tribe leaders periodically (every 10 hours) assess:
+  - Territory quality and resource availability
+  - Threat levels from other tribes
+  - Migration opportunities for better habitats
+  - Diplomatic opportunities and risks
+
+- **World Analysis Grid**: Leaders analyze the world in 500x500 pixel cells to:
+  - Evaluate habitat quality (bush density, safety)
+  - Identify optimal territories for migration
+  - Assess strategic positions for defense
+
+- **Combat Strategy**: Leaders coordinate tribal warfare through:
+  - Strength assessments before engaging enemies
+  - Tactical positioning and group combat
+  - Defensive positioning around claimed resources
+
+### 6.2 Complex Social Behaviors
+
+- **Jealousy System**: Characters may attack when witnessing partners with others
+- **Family Defense**: Automatic defense of family members under attack
+- **Territorial Defense**: Protection of claimed berry bushes from intruders
+- **Succession Planning**: Strategic considerations for heir development
+
+- **Social Hierarchies**:
+  - Patriarchal family structures with male leaders
+  - Children following father figures for protection
+  - Adult children establishing independent territories
+
+### 6.3 Advanced Diplomatic System
+
+- **Dynamic Relations**: Diplomatic status changes based on:
+  - Resource competition and territorial disputes
+  - Historical conflicts and cooperation
+  - Tribal strength ratios and strategic advantages
+
+- **Diplomatic Actions**:
+  - Peace negotiations and alliance formations
+  - Declarations of war and hostility
+  - Resource sharing agreements
+  - Territorial boundary negotiations
+
+### 6.4 Territory Management
+
+- **Family Territories**: Adult males with families can establish territories:
+  - Defined boundary areas with preferred resources
+  - Defense of territory from outside intrusion
+  - Strategic positioning away from extended family
+
+- **Tribal Territories**: Large-scale territorial control by entire tribes:
+  - Migration to superior territories when identified
+  - Expansion through peaceful settlement or conquest
+  - Resource optimization within controlled areas
+
+### 6.5 Economic Systems
+
+- **Resource Planning**: Strategic food distribution and storage:
+  - Bush planting for long-term sustainability
+  - Optimal gathering patterns and efficiency
+  - Emergency resource allocation during scarcity
+
+- **Labor Specialization**: Different tribe members focus on:
+  - Gathering specialists for resource collection
+  - Warriors for defense and expansion
+  - Planters for ecosystem development
+  - Leaders for strategic decision-making
+
+### 6.6 Tribal Lifecycle Management
+
+- **Tribe Formation**: New tribes form through:
+  - Splitting from parent tribes when population grows large
+  - Exile or voluntary departure of family groups
+  - Merger of small struggling groups
+
+- **Tribe Evolution**: Tribes adapt and change through:
+  - Leadership succession and changing strategies
+  - Adaptation to environmental pressures
+  - Cultural evolution through generations
+
+## 7. Technical Implementation
+
+### 7.1 AI Architecture
+
+- **Behavior Trees**: Hierarchical decision-making system with:
+  - Priority-based behavior selection
+  - Timeout mechanisms to prevent AI getting stuck
+  - Caching for expensive calculations
+  - Modular behavior composition
+
+- **Blackboard System**: Shared memory for:
+  - Inter-character communication
+  - Strategic information storage
+  - Coordination of group actions
+  - Historical decision tracking
+
+### 7.2 Performance Optimization
+
+- **Spatial Optimization**: Efficient handling of large world with many entities
+- **AI Optimization**: Behavior tree caching and timeout systems
+- **Rendering Optimization**: Viewport-based rendering for large world
+- **Memory Management**: Efficient entity and interaction systems
+
+## 8. Feature Implementation Status
+
+### 8.1 Fully Implemented Features
+
+**Core Systems:**
+- ✅ Movement and spatial interaction with world wrapping
+- ✅ Dual health system (hunger + hitpoints)
+- ✅ Complete combat system with damage, parrying, and effects
+- ✅ Advanced procreation and family relationship systems
+- ✅ Generational transfer and inheritance
+- ✅ Resource gathering and berry bush management
+- ✅ Time progression and aging with realistic lifespans
+
+**Advanced Systems:**
+- ✅ Sophisticated AI behavior trees with 20+ behaviors
+- ✅ Tribe system with leaders, badges, and management
+- ✅ Diplomacy system with dynamic relationship changes
+- ✅ Territory establishment and resource claiming
+- ✅ Bush planting and ecosystem management
+- ✅ Strategic AI for leaders with world analysis
+- ✅ Tribe splitting and migration systems
+- ✅ Combat coordination and group tactics
+
+**User Interface:**
+- ✅ Comprehensive status displays and information panels
+- ✅ Autopilot system with behavior toggles
+- ✅ Notification system with multiple message types
+- ✅ Tribe management and diplomacy interfaces
+- ✅ Visual highlighting and feedback systems
+- ✅ Complete audio system with effects and music
+
+**Social Systems:**
+- ✅ Complex family relationships and care systems
+- ✅ Child feeding and parental care mechanics
+- ✅ Social behaviors (jealousy, defense, cooperation)
+- ✅ Leadership succession and tribal hierarchies
+
+### 8.2 Deferred/Future Features
+
+**Advanced Combat:**
+- ⏸️ Weapon crafting and tool systems
+- ⏸️ Armor and defensive equipment
+- ⏸️ Siege warfare and large-scale battles
+
+**Economic Expansion:**
+- ⏸️ Multiple resource types (wood, stone, water)
+- ⏸️ Crafting systems and tool creation  
+- ⏸️ Trade systems between tribes
+- ⏸️ Advanced resource processing
+
+**Environmental Systems:**
+- ⏸️ Weather and seasonal changes
+- ⏸️ Natural disasters and environmental hazards
+- ⏸️ Disease and plague systems
+- ⏸️ Multiple biomes and terrain types
+
+**Cultural Evolution:**
+- ⏸️ Technology trees and advancement
+- ⏸️ Cultural practices and traditions
+- ⏸️ Language and communication systems
+- ⏸️ Religious or belief systems
+
+**World Expansion:**
+- ⏸️ Multiple connected world areas
+- ⏸️ Ocean and water systems
+- ⏸️ Wildlife and animal interactions
+- ⏸️ Non-human intelligent species
+
+**Advanced UI/UX:**
+- ⏸️ Character customization systems
+- ⏸️ Advanced statistics and analytics
+- ⏸️ Replay and history systems
+- ⏸️ Multiplayer or cooperative modes
+
+### 8.3 Design Notes
+
+**Scope Achievement:** The current implementation significantly exceeds the original MVP scope, implementing a complex tribal simulation with sophisticated AI, diplomacy, combat, and strategic systems.
+
+**System Integration:** All implemented systems work together cohesively, creating emergent gameplay through the interaction of survival, social, economic, and strategic mechanics.
+
+**Scalability:** The behavior tree architecture and modular design allow for easy addition of new behaviors and systems without disrupting existing functionality.
+
+**Performance:** The system handles large worlds with many autonomous AI entities while maintaining smooth gameplay performance.
+
+---
+
+*This document represents the complete implemented feature set of the Tribe game as of July 2025. All described mechanics are functional and integrated into the game system.*
