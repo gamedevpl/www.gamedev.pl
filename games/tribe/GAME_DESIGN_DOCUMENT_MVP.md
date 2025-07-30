@@ -1,7 +1,5 @@
 # Game Design Document: Tribe - Complete Implementation
 
-> **Document Update Note:** This Game Design Document has been comprehensively updated as of July 2025 to accurately reflect the current state of the Tribe game codebase. All sections describe implemented features and mechanics as they exist in the game, not original MVP plans.
-
 ## 1. Game Overview
 
 - **Concept Statement:** You control a human character in a dynamic tribal world. Your primary goal is to ensure your lineage survives and your tribe thrives through multiple generations. The game features complex survival mechanics, tribal politics, diplomacy, combat, and strategic resource management in a persistent world populated by AI-controlled tribes.
