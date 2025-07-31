@@ -6,6 +6,9 @@ import {
   PREDATOR_MAX_AGE_YEARS,
   PREDATOR_INITIAL_HUNGER,
   EFFECT_DURATION_MEDIUM_HOURS,
+  HOURS_PER_GAME_DAY,
+  GAME_DAY_IN_REAL_SECONDS,
+  HUMAN_YEAR_IN_REAL_SECONDS,
 } from '../../../world-consts';
 import { removeEntity, createPredator, createPredatorCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
@@ -18,42 +21,44 @@ import { combineGenes } from './predator-utils';
  * Updates a predator entity's stats and handles lifecycle events.
  */
 export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateContext, deltaTime: number): void {
-  const gameHoursElapsed = deltaTime;
+  const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
   // Age the predator
-  predator.age += gameHoursElapsed / 8760; // Convert hours to years (assuming 8760 hours per year)
+  predator.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
 
   // Increase hunger over time
-  let hungerIncrease = PREDATOR_HUNGER_INCREASE_PER_HOUR * gameHoursElapsed;
-  
+  let hungerIncrease = PREDATOR_HUNGER_INCREASE_PER_HOUR * gameHoursDelta;
+
   // Pregnancy increases hunger faster
   if (predator.isPregnant) {
     hungerIncrease *= 1.3;
   }
-  
+
   predator.hunger += hungerIncrease;
 
   // Handle gestation for pregnant females
   if (predator.isPregnant && predator.gestationTime !== undefined) {
-    predator.gestationTime -= gameHoursElapsed;
-    
+    predator.gestationTime -= gameHoursDelta;
+
     if (predator.gestationTime <= 0) {
       // Give birth - spawn a new predator nearby
       const birthPosition = {
         x: predator.position.x + (Math.random() - 0.5) * 50, // Random offset
         y: predator.position.y + (Math.random() - 0.5) * 50,
       };
-      
+
       // Ensure birth position is within map bounds
       birthPosition.x = Math.max(25, Math.min(updateContext.gameState.mapDimensions.width - 25, birthPosition.x));
       birthPosition.y = Math.max(25, Math.min(updateContext.gameState.mapDimensions.height - 25, birthPosition.y));
-      
+
       const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
-      
+
       // Get parents for genetic combination
       const mother = predator;
-      const father = predator.fatherId ? updateContext.gameState.entities.entities.get(predator.fatherId) as PredatorEntity : undefined;
-      
+      const father = predator.fatherId
+        ? (updateContext.gameState.entities.entities.get(predator.fatherId) as PredatorEntity)
+        : undefined;
+
       // Generate child gene code by combining parents or using mother's genes with mutation
       let childGeneCode: number;
       if (father) {
@@ -63,9 +68,9 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         childGeneCode = mother.geneCode;
         // Add some mutation
         const mutation = Math.floor((Math.random() - 0.5) * 0x1000);
-        childGeneCode = Math.max(0x000000, Math.min(0xFFFFFF, childGeneCode + mutation));
+        childGeneCode = Math.max(0x000000, Math.min(0xffffff, childGeneCode + mutation));
       }
-      
+
       const child = createPredator(
         updateContext.gameState.entities,
         birthPosition,
@@ -76,10 +81,10 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         predator.id, // Mother ID
         predator.fatherId, // Father ID from pregnancy
       );
-      
+
       // Birth creates new life - child variable is used for entity creation
       void child;
-      
+
       // Add birth visual effect
       addVisualEffect(
         updateContext.gameState,
@@ -88,10 +93,10 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         EFFECT_DURATION_MEDIUM_HOURS,
         predator.id,
       );
-      
+
       // Play birth sound
       playSoundAt(updateContext, SoundType.Birth, predator.position);
-      
+
       predator.isPregnant = false;
       predator.gestationTime = 0;
       predator.procreationCooldown = 18; // 18 hours cooldown
@@ -101,36 +106,36 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
 
   // Decrease cooldowns
   if (predator.procreationCooldown && predator.procreationCooldown > 0) {
-    predator.procreationCooldown -= gameHoursElapsed;
+    predator.procreationCooldown -= gameHoursDelta;
     if (predator.procreationCooldown < 0) predator.procreationCooldown = 0;
   }
 
   if (predator.attackCooldown && predator.attackCooldown > 0) {
-    predator.attackCooldown -= gameHoursElapsed;
+    predator.attackCooldown -= gameHoursDelta;
     if (predator.attackCooldown < 0) predator.attackCooldown = 0;
   }
 
   if (predator.huntCooldown && predator.huntCooldown > 0) {
-    predator.huntCooldown -= gameHoursElapsed;
+    predator.huntCooldown -= gameHoursDelta;
     if (predator.huntCooldown < 0) predator.huntCooldown = 0;
   }
 
   if (predator.feedChildCooldownTime && predator.feedChildCooldownTime > 0) {
-    predator.feedChildCooldownTime -= gameHoursElapsed;
+    predator.feedChildCooldownTime -= gameHoursDelta;
     if (predator.feedChildCooldownTime < 0) predator.feedChildCooldownTime = 0;
   }
 
   // Check for death conditions
   let shouldDie = false;
-  
+
   if (predator.hunger >= PREDATOR_HUNGER_DEATH) {
     shouldDie = true;
   }
-  
+
   if (predator.hitpoints <= 0) {
     shouldDie = true;
   }
-  
+
   if (predator.age >= PREDATOR_MAX_AGE_YEARS) {
     shouldDie = true;
   }
@@ -147,7 +152,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
       updateContext.gameState.time,
       predator.geneCode,
     );
-    
+
     // Remove the predator entity from the world
     removeEntity(updateContext.gameState.entities, predator.id);
   }

@@ -19,7 +19,7 @@ describe('Ecosystem Balance', () => {
       gameState.entities.entities.delete(id);
     }
 
-    const yearsToSimulate = 8; // Test ecosystem balance over 8 years to see reproduction patterns
+    const yearsToSimulate = 30;
     const totalSimulationSeconds = yearsToSimulate * HUMAN_YEAR_IN_REAL_SECONDS;
     const timeStepSeconds = GAME_DAY_IN_REAL_SECONDS / 24; // One hour at a time
     let yearsSimulated = 0;
@@ -124,7 +124,9 @@ describe('Ecosystem Balance', () => {
 
     // Overall ecosystem should be growing and thriving
     console.log('Final ecosystem state:', finalStats);
-    console.log(`Population growth: Prey ${initialStats.preyCount} → ${finalStats.preyCount}, Predators ${initialStats.predatorCount} → ${finalStats.predatorCount}`);
+    console.log(
+      `Population growth: Prey ${initialStats.preyCount} → ${finalStats.preyCount}, Predators ${initialStats.predatorCount} → ${finalStats.predatorCount}`,
+    );
     console.log('Ecosystem growth and balance test passed');
   }, 60000); // 60 second timeout
 });

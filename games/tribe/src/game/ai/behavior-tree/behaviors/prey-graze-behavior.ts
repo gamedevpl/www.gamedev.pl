@@ -23,11 +23,11 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
 
           // Find nearby berry bushes with food
           const closestBush = findClosestEntity<BerryBushEntity>(
-            prey, 
-            context.gameState, 
-            'berryBush', 
-            PREY_INTERACTION_RANGE * 5, // Increased search range to prevent starvation
-            (bush) => bush.food.length > 0
+            prey,
+            context.gameState,
+            'berryBush',
+            PREY_INTERACTION_RANGE * 10, // Increased search range to prevent starvation
+            (bush) => bush.food.length > 0,
           );
 
           if (closestBush) {
@@ -49,7 +49,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Berry Bush',
@@ -60,7 +60,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
         (prey: any, context: UpdateContext, blackboard) => {
           const target = blackboard.get<BerryBushEntity>('grazingTarget');
           const needToMove = blackboard.get<boolean>('needToMoveToTarget');
-          
+
           if (!target) {
             return NodeStatus.FAILURE;
           }
@@ -83,13 +83,9 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
             // Need to move closer to the bush
             prey.activeAction = 'moving';
             prey.target = target.id;
-            
-            const directionToTarget = dirToTarget(
-              prey.position,
-              target.position,
-              context.gameState.mapDimensions,
-            );
-            
+
+            const directionToTarget = dirToTarget(prey.position, target.position, context.gameState.mapDimensions);
+
             prey.direction = directionToTarget;
             return NodeStatus.RUNNING;
           }

@@ -17,10 +17,7 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (predator: any, context: UpdateContext, blackboard) => {
           // Only hunt if moderately hungry and not on cooldown
-          if (
-            predator.hunger <= 50 || 
-            (predator.huntCooldown && predator.huntCooldown > 0)
-          ) {
+          if (predator.hunger <= 50 || (predator.huntCooldown && predator.huntCooldown > 0)) {
             return false;
           }
 
@@ -29,8 +26,8 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
             predator,
             context.gameState,
             'prey',
-            PREDATOR_HUNT_RANGE * 2, // Search in wider range
-            (prey) => prey.hitpoints > 0 // Target must be alive
+            PREDATOR_HUNT_RANGE * 10, // Search in wider range
+            (prey) => prey.hitpoints > 0, // Target must be alive
           );
 
           if (closestPrey) {
@@ -45,14 +42,14 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
               // Prey is within hunting range
               blackboard.set('huntTarget', closestPrey);
               return true;
-            } else if (distance <= PREDATOR_HUNT_RANGE * 2) {
+            } else if (distance <= PREDATOR_HUNT_RANGE * 10) {
               // Prey found but need to get closer
               blackboard.set('huntTarget', closestPrey);
               blackboard.set('needToApproach', true);
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Prey Target',
@@ -63,7 +60,7 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
         (predator: any, context: UpdateContext, blackboard) => {
           const target = blackboard.get<PreyEntity>('huntTarget');
           const needToApproach = blackboard.get<boolean>('needToApproach');
-          
+
           if (!target || target.hitpoints <= 0) {
             return NodeStatus.FAILURE;
           }
@@ -87,14 +84,14 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
             // Need to move closer to the prey
             predator.activeAction = 'moving';
             predator.target = target.id;
-            
+
             const directionToTarget = getDirectionVectorOnTorus(
               predator.position,
               target.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-            
+
             predator.direction = vectorNormalize(directionToTarget);
             return NodeStatus.RUNNING;
           }

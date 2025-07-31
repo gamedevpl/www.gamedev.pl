@@ -377,7 +377,7 @@ export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better 
 // Player interaction ranges for animal hunting/defending
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
-export const PREY_GESTATION_PERIOD_HOURS: number = 48; // 2 game days
+export const PREY_GESTATION_PERIOD_HOURS: number = 12; // 2 game days
 export const PREY_PROCREATION_COOLDOWN_HOURS: number = 3; // Reduced for better population sustainability
 export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 8;
@@ -388,7 +388,7 @@ export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hun
 
 // Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
-export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 4; // Reduced for better ecosystem balance and reproduction
+export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 2; // Reduced for better ecosystem balance and reproduction
 export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
 export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
 export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
@@ -404,14 +404,14 @@ export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
 export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
 export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
-export const PREDATOR_GESTATION_PERIOD_HOURS: number = 60; // 2.5 game days
+export const PREDATOR_GESTATION_PERIOD_HOURS: number = 12;
 export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 6; // Reduced for better population sustainability
 export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
 export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
 export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is reduced by eating meat
 
 // Animal Spawning Constants
-export const INITIAL_PREY_COUNT: number = 8;
+export const INITIAL_PREY_COUNT: number = 30;
 export const INITIAL_PREDATOR_COUNT: number = 2;
 
 // Animal Feeding Constants (only females can feed children)

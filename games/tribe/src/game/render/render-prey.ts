@@ -29,11 +29,11 @@ import { EntityId } from '../entities/entities-types';
 
 // Map prey actions to sprite stances
 const preyStanceMap: Record<string, string> = {
-  'grazing': 'eat',
-  'moving': 'walk',
-  'procreating': 'procreate',
-  'feeding': 'eat', // Feeding children uses same stance as eating
-  'idle': 'idle',
+  grazing: 'eat',
+  moving: 'walk',
+  procreating: 'procreate',
+  feeding: 'eat', // Feeding children uses same stance as eating
+  idle: 'idle',
 };
 
 /**
@@ -261,19 +261,19 @@ function renderPreyBehaviorTreeDebug(ctx: CanvasRenderingContext2D, prey: PreyEn
  * Renders a prey entity using the asset generator sprite system.
  */
 export function renderPrey(
-  ctx: CanvasRenderingContext2D, 
+  ctx: CanvasRenderingContext2D,
   prey: PreyEntity,
   isDebugOn: boolean = false,
   currentTime: number = 0,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = prey;
-  
+
   // Adjust radius based on adult status
   const currentRadius = prey.isAdult ? prey.radius : prey.radius * 0.6;
-  
+
   const stance = preyStanceMap[activeAction] || 'idle';
-  
+
   // Use asset generator to render the prey sprite
   TribePrey2D.render(
     ctx,
@@ -290,7 +290,7 @@ export function renderPrey(
       isPregnant: prey.isPregnant ?? false,
       hungryLevel: prey.hunger,
       geneCode: prey.geneCode, // Use actual genetic code
-    }
+    },
   );
 
   // Health bar if injured
@@ -308,15 +308,6 @@ export function renderPrey(
     const healthRatio = prey.hitpoints / prey.maxHitpoints;
     ctx.fillStyle = healthRatio > 0.5 ? '#4CAF50' : healthRatio > 0.25 ? '#FFC107' : '#F44336';
     ctx.fillRect(barX, barY, barWidth * healthRatio, barHeight);
-  }
-
-  // Flee cooldown indicator (red outline when in flee cooldown)
-  if (prey.fleeCooldown && prey.fleeCooldown > 0) {
-    ctx.strokeStyle = '#FF0000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(position.x, position.y, currentRadius + 2, 0, 2 * Math.PI);
-    ctx.stroke();
   }
 
   // Debug rendering

@@ -9,7 +9,6 @@ import {
   INTRO_SCREEN_INITIAL_HUMANS,
   UI_BUTTON_TEXT_COLOR,
   INITIAL_PREY_COUNT,
-  INITIAL_PREDATOR_COUNT,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -47,88 +46,37 @@ export function initWorld(): GameWorldState {
     false, // isPlayer = false
   );
 
-  // Spawn initial prey animals in two tight packs
-  const preyPacks = [
-    { centerX: MAP_WIDTH * 0.25, centerY: MAP_HEIGHT * 0.25, packRadius: 80 },
-    { centerX: MAP_WIDTH * 0.75, centerY: MAP_HEIGHT * 0.75, packRadius: 80 },
-  ];
-  
-  const preyPerPack = Math.ceil(INITIAL_PREY_COUNT / 2);
-  
-  for (let packIndex = 0; packIndex < preyPacks.length; packIndex++) {
-    const pack = preyPacks[packIndex];
-    const preyInThisPack = packIndex === 0 ? preyPerPack : INITIAL_PREY_COUNT - preyPerPack;
-    
-    for (let i = 0; i < preyInThisPack; i++) {
-      // Create tight pack formation with small random spread
-      const angle = Math.random() * 2 * Math.PI;
-      const distance = Math.random() * pack.packRadius; // Random position within pack radius
-      
-      const spawnPosition = {
-        x: pack.centerX + Math.cos(angle) * distance,
-        y: pack.centerY + Math.sin(angle) * distance,
-      };
-      
-      // Ensure spawn position is within map bounds
-      spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
-      spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
-      
-      const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-      const geneCode = generateRandomPreyGeneCode();
-      createPrey(entities, spawnPosition, gender, undefined, undefined, geneCode);
-    }
+  // Spawn a pairs of prey at random positions
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const preyMalePosition = {
+      x: centerX + MAP_WIDTH * (Math.random() - Math.random()),
+      y: centerY + MAP_HEIGHT * (Math.random() - Math.random()),
+    };
+    createPrey(entities, preyMalePosition, 'male', undefined, undefined, generateRandomPreyGeneCode());
+    createPrey(
+      entities,
+      { x: preyMalePosition.x + 20, y: preyMalePosition.y },
+      'female',
+      undefined,
+      undefined,
+      generateRandomPreyGeneCode(),
+    );
   }
 
-  // Spawn initial predators in two tight packs away from center and prey
-  const predatorPacks = [
-    { centerX: MAP_WIDTH * 0.15, centerY: MAP_HEIGHT * 0.85, packRadius: 60 },
-    { centerX: MAP_WIDTH * 0.85, centerY: MAP_HEIGHT * 0.15, packRadius: 60 },
-  ];
-  
-  const predatorsPerPack = Math.ceil(INITIAL_PREDATOR_COUNT / 2);
-  
-  for (let packIndex = 0; packIndex < predatorPacks.length; packIndex++) {
-    const pack = predatorPacks[packIndex];
-    const predatorsInThisPack = packIndex === 0 ? predatorsPerPack : INITIAL_PREDATOR_COUNT - predatorsPerPack;
-    
-    for (let i = 0; i < predatorsInThisPack; i++) {
-      // Create tight pack formation
-      const angle = Math.random() * 2 * Math.PI;
-      const distance = Math.random() * pack.packRadius;
-      
-      const spawnPosition = {
-        x: pack.centerX + Math.cos(angle) * distance,
-        y: pack.centerY + Math.sin(angle) * distance,
-      };
-      
-      // Ensure spawn position is within map bounds and not too close to center
-      spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
-      spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
-      
-      // Ensure minimum distance from center for predators
-      const distanceFromCenter = Math.sqrt(
-        Math.pow(spawnPosition.x - centerX, 2) + Math.pow(spawnPosition.y - centerY, 2)
-      );
-      
-      if (distanceFromCenter < 300) {
-        // Push further away from center if too close
-        const pushDirection = {
-          x: (spawnPosition.x - centerX) / distanceFromCenter,
-          y: (spawnPosition.y - centerY) / distanceFromCenter,
-        };
-        spawnPosition.x = centerX + pushDirection.x * 300;
-        spawnPosition.y = centerY + pushDirection.y * 300;
-        
-        // Ensure still within bounds
-        spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
-        spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
-      }
-      
-      const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-      const geneCode = generateRandomPredatorGeneCode();
-      createPredator(entities, spawnPosition, gender, undefined, undefined, geneCode);
-    }
-  }
+  // Spawn a pair of predators
+  const predatorMalePosition = {
+    x: centerX + MAP_WIDTH * (Math.random() - Math.random()),
+    y: centerY + MAP_HEIGHT * (Math.random() - Math.random()),
+  };
+  createPredator(entities, predatorMalePosition, 'male', undefined, undefined, generateRandomPredatorGeneCode());
+  createPredator(
+    entities,
+    { x: predatorMalePosition.x + 20, y: predatorMalePosition.y },
+    'female',
+    undefined,
+    undefined,
+    generateRandomPredatorGeneCode(),
+  );
 
   const uiButtons: ClickableUIButton[] = [
     {
@@ -235,27 +183,37 @@ export function initIntroWorld(): GameWorldState {
     createHuman(entities, randomPosition, initialTime, gender, false);
   }
 
-  // Spawn initial prey animals in the intro world
-  for (let i = 0; i < Math.floor(INITIAL_PREY_COUNT * 0.6); i++) { // Fewer animals in intro
-    const randomPosition = {
+  // Spawn a pairs of prey at random positions
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const preyMalePosition = {
       x: Math.random() * MAP_WIDTH,
       y: Math.random() * MAP_HEIGHT,
     };
-    const gender = i % 2 === 0 ? 'male' : 'female';
-    const geneCode = generateRandomPreyGeneCode();
-    createPrey(entities, randomPosition, gender, undefined, undefined, geneCode);
+    createPrey(entities, preyMalePosition, 'male', undefined, undefined, generateRandomPreyGeneCode());
+    createPrey(
+      entities,
+      { x: preyMalePosition.x + 20, y: preyMalePosition.y },
+      'female',
+      undefined,
+      undefined,
+      generateRandomPreyGeneCode(),
+    );
   }
 
-  // Spawn initial predators in the intro world
-  for (let i = 0; i < Math.floor(INITIAL_PREDATOR_COUNT * 0.5); i++) { // Even fewer predators in intro
-    const randomPosition = {
-      x: Math.random() * MAP_WIDTH,
-      y: Math.random() * MAP_HEIGHT,
-    };
-    const gender = i % 2 === 0 ? 'male' : 'female';
-    const geneCode = generateRandomPredatorGeneCode();
-    createPredator(entities, randomPosition, gender, undefined, undefined, geneCode);
-  }
+  // Spawn a pair of predators
+  const predatorMalePosition = {
+    x: Math.random() * MAP_WIDTH,
+    y: Math.random() * MAP_HEIGHT,
+  };
+  createPredator(entities, predatorMalePosition, 'male', undefined, undefined, generateRandomPredatorGeneCode());
+  createPredator(
+    entities,
+    { x: predatorMalePosition.x + 20, y: predatorMalePosition.y },
+    'female',
+    undefined,
+    undefined,
+    generateRandomPredatorGeneCode(),
+  );
 
   const tutorial = createTutorial();
   const tutorialState = createTutorialState();
