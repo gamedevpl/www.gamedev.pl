@@ -7,6 +7,7 @@ import { Blackboard } from './behavior-tree-blackboard';
 import { ActionNode, ConditionNode } from './nodes/leaf-nodes';
 import { GameWorldState } from '../../world-types';
 import { CachingNode, TimeoutNode } from './nodes';
+import { CharacterEntity } from '../../entities/characters/character-types';
 
 // --- Mocks and Helpers ---\n
 const mockHuman = {} as HumanEntity;
@@ -39,7 +40,7 @@ const createSuccessNode = (name = 'SuccessNode') => new ConditionNode(() => true
 const createFailureNode = (name = 'FailureNode') => new ConditionNode(() => false, name);
 
 // A controllable node that can be set to return RUNNING then SUCCESS
-class ControllableActionNode extends ActionNode {
+class ControllableActionNode<T extends CharacterEntity> extends ActionNode<T> {
   runCount = 0;
   maxRuns: number;
   statusOnRun: NodeStatus;
@@ -253,8 +254,8 @@ describe('Behavior Tree Composite Nodes', () => {
 describe('Decorator Nodes', () => {
   describe('CachingNode', () => {
     const CACHE_DURATION = 10; // hours
-    let childNode: ControllableActionNode;
-    let cachingNode: CachingNode;
+    let childNode: ControllableActionNode<HumanEntity>;
+    let cachingNode: CachingNode<HumanEntity>;
 
     beforeEach(() => {
       childNode = new ControllableActionNode(0, NodeStatus.SUCCESS, NodeStatus.SUCCESS, 'Child');
@@ -337,8 +338,8 @@ describe('Decorator Nodes', () => {
 
   describe('TimeoutNode', () => {
     const TIMEOUT_DURATION = 5; // hours
-    let childNode: ControllableActionNode;
-    let timeoutNode: TimeoutNode;
+    let childNode: ControllableActionNode<HumanEntity>;
+    let timeoutNode: TimeoutNode<HumanEntity>;
 
     beforeEach(() => {
       // This child will run for 2 ticks, then succeed

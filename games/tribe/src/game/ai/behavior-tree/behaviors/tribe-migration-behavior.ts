@@ -15,7 +15,7 @@ const MIGRATION_CHECK_COOLDOWN_KEY = 'tribeMigrationCheckCooldown';
  * Creates a high-level strategic behavior for an AI leader to decide if the tribe should migrate to a new, better location.
  * This is an expensive check, so it's wrapped in a CachingNode.
  */
-export function createTribeMigrationBehavior(depth: number): BehaviorNode {
+export function createTribeMigrationBehavior(depth: number): BehaviorNode<HumanEntity> {
   const sequence = new Sequence(
     [
       // 1. Condition: Is this human a leader of a tribe?

@@ -24,14 +24,17 @@ import {
   createFollowLeaderBehavior,
   createTribeMigrationBehavior,
   createDiplomacyBehavior,
+  createHumanHuntPreyBehavior,
+  createHumanDefendAgainstPredatorBehavior,
 } from './behaviors';
+import { HumanEntity } from '../../entities/characters/human/human-types';
 
 /**
  * Builds the complete behavior tree for a human entity.
  * The tree is a Selector at its root, which means it will try each branch
  * in order until one of them succeeds or is running. This creates a priority system.
  */
-export function buildHumanBehaviorTree(): BehaviorNode {
+export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
   // The AI logic is a Selector, which acts like an "OR" gate.
   // It will try each child branch in order until one succeeds or is running.
   const aiRoot = new Selector(
@@ -39,6 +42,7 @@ export function buildHumanBehaviorTree(): BehaviorNode {
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(2),
       createDefendFamilyBehavior(2),
+      createHumanDefendAgainstPredatorBehavior(2), // Defend against predator attacks
       createJealousyAttackBehavior(2),
       createDefendClaimedBushBehavior(2),
       createDesperateAttackBehavior(2),
@@ -61,6 +65,9 @@ export function buildHumanBehaviorTree(): BehaviorNode {
 
       // --- PERSONAL NEEDS (EAT) ---
       createEatingBehavior(2),
+
+      // --- HUNTING BEHAVIORS ---
+      new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new TimeoutNode(

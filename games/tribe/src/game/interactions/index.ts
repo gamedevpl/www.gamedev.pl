@@ -4,6 +4,16 @@ import { humanChildFeedingInteraction } from './human-child-feeding-interaction'
 import { humanAttackInteraction } from './human-attack-interaction';
 import { humanCollisionInteraction } from './collision-interaction';
 import { humanGatherFoodInteractions } from './human-gather-food-interaction';
+import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
+import { predatorHuntPreyInteraction } from './predator-hunt-prey-interaction';
+import { humanHuntPreyInteraction } from './human-hunt-prey-interaction';
+import { predatorAttackHumanInteraction } from './predator-attack-human-interaction';
+import { humanAttackPredatorInteraction } from './human-attack-predator-interaction';
+import { preyProcreationInteraction } from './prey-procreation-interaction';
+import { predatorProcreationInteraction } from './predator-procreation-interaction';
+import { preyChildFeedingInteraction } from './prey-child-feeding-interaction';
+import { predatorChildFeedingInteraction } from './predator-child-feeding-interaction';
+import { predatorEatCorpseInteraction } from './predator-eat-corpse-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -11,5 +21,15 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
   humanAttackInteraction,
-  // TODO: Add other interaction definitions here (imported from dedicated files)
+  // Animal interactions
+  preyEatBerryBushInteraction,
+  preyChildFeedingInteraction, // Prey parent-child feeding
+  predatorChildFeedingInteraction, // Predator parent-child feeding
+  predatorEatCorpseInteraction, // Predators can eat from any corpse
+  predatorHuntPreyInteraction,
+  humanHuntPreyInteraction,
+  humanAttackPredatorInteraction, // Humans can defend against predators
+  predatorAttackHumanInteraction,
+  preyProcreationInteraction,
+  predatorProcreationInteraction,
 ] as InteractionDefinition[];

@@ -35,7 +35,7 @@ const findValidPartner = (
   return potentials.find((p) => canProcreate(human, p, gameState));
 };
 
-export function createProcreationBehavior(depth: number): BehaviorNode {
+export function createProcreationBehavior(depth: number): BehaviorNode<HumanEntity> {
   const findImmediatePartner = new ConditionNode(
     (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
       const potentialPartners = findPotentialNewPartners(human, context.gameState, HUMAN_INTERACTION_PROXIMITY);

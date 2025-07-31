@@ -3,6 +3,7 @@ import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
+
 import { GAME_DAY_IN_REAL_SECONDS, HUMAN_PLANTING_DURATION_HOURS, HUMAN_YEAR_IN_REAL_SECONDS } from './world-consts';
 import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
@@ -47,7 +48,7 @@ describe('Game Mechanics', () => {
         const maxHumanAge = Math.max(...humans.map((e) => e.age));
         const averageHunger = humans.reduce((sum, e) => sum + e.hunger, 0) / humanCount || 0;
         const corpsesCount = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'humanCorpse',
+          (e) => e.type === 'corpse',
         ).length;
         const foodBerries = humans
           .filter((e) => e.food.length > 0)

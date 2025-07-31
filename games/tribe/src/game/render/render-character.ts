@@ -131,7 +131,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   };
 
   // Helper to calculate the required panel dimensions by traversing the static tree
-  const calculateDimensions = (node: BehaviorNode): { width: number; height: number } => {
+  const calculateDimensions = (node: BehaviorNode<HumanEntity>): { width: number; height: number } => {
     if (!node.name || !executionData.has(node.name)) {
       return { width: 0, height: 0 };
     }
@@ -168,7 +168,7 @@ function renderBehaviorTreeDebug(ctx: CanvasRenderingContext2D, human: HumanEnti
   };
 
   // Helper to recursively render each node of the tree
-  const renderNode = (node: BehaviorNode, yPos: number, panelX: number, panelWidth: number): number => {
+  const renderNode = (node: BehaviorNode<HumanEntity>, yPos: number, panelX: number, panelWidth: number): number => {
     if (!node.name || !executionData.has(node.name)) {
       return yPos;
     }

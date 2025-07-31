@@ -16,7 +16,7 @@ const ATTACK_RANGE = 150; // The maximum distance to initiate an attack
  * Creates a behavior tree branch for attacking enemies, but with a leash to home territory.
  * The behavior is a sequence that finds a target, checks distance from home, and then executes the attack.
  */
-export function createAttackingBehavior(depth: number): BehaviorNode {
+export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is there a valid enemy to attack?

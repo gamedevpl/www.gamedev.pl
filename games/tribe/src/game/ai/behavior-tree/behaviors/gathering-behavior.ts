@@ -10,12 +10,12 @@ import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../n
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../../../entities/characters/corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
 
-type FoodSource = BerryBushEntity | HumanCorpseEntity;
+type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
 
 /**
@@ -26,9 +26,9 @@ const BLACKBOARD_KEY = 'foodSource';
  * food source is computationally more expensive, so it's wrapped in a CachingNode
  * to prevent it from running on every single AI tick, improving performance.
  */
-export function createGatheringBehavior(depth: number): BehaviorNode {
+export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find the closest food source and store it in the blackboard.
-  const findFoodSourceAction = new ActionNode(
+  const findFoodSourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const distanceToOwnerCache = new Map<EntityId, number>();
       const closestBush = findClosestEntity<BerryBushEntity>(
@@ -73,10 +73,10 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
         },
       );
 
-      const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+      const closestCorpse = findClosestEntity<CorpseEntity>(
         human,
         context.gameState,
-        'humanCorpse',
+        'corpse',
         AI_GATHERING_SEARCH_RADIUS,
         (c) => c.food.length > 0,
       );
@@ -114,7 +114,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
   );
 
   // Action to move towards the food source and gather from it.
-  const moveAndGatherAction = new ActionNode(
+  const moveAndGatherAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const target = blackboard.get<FoodSource>(BLACKBOARD_KEY);
 

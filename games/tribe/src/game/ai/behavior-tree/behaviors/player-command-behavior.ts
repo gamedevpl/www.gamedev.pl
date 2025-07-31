@@ -1,5 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { UpdateContext } from '../../../world-types';
+// PreyEntity and PredatorEntity types used for type checking in switch cases
+import { UpdateContext, GameWorldState } from '../../../world-types';
+import { Entity } from '../../../entities/entities-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
@@ -15,11 +17,56 @@ import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-
 import { canProcreate, isPositionOccupied } from '../../../utils';
 
 /**
+ * Shared autopilot attack behavior logic used by multiple action types.
+ * This demonstrates that AutopilotAttack, AutopilotHuntPrey, and AutopilotDefendAgainstPredator
+ * have identical behavior - they differ only in target validation.
+ */
+function handleAutopilotAttack(
+  gameState: GameWorldState,
+  human: HumanEntity,
+  activeAction: { targetEntityId: number },
+  targetValidator?: (target: Entity) => boolean,
+): NodeStatus {
+  const target = gameState.entities.entities.get(activeAction.targetEntityId);
+
+  // Validate target existence, hitpoints, and optional type-specific validation
+  if (!target || !('hitpoints' in target) || (target as { hitpoints: number }).hitpoints <= 0) {
+    gameState.autopilotControls.activeAutopilotAction = undefined;
+    return NodeStatus.FAILURE;
+  }
+
+  // Apply optional target validation (e.g., type === 'prey')
+  if (targetValidator && !targetValidator(target)) {
+    gameState.autopilotControls.activeAutopilotAction = undefined;
+    return NodeStatus.FAILURE;
+  }
+
+  const distance = calculateWrappedDistance(
+    human.position,
+    target.position,
+    gameState.mapDimensions.width,
+    gameState.mapDimensions.height,
+  );
+
+  if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
+    human.activeAction = 'attacking';
+    human.attackTargetId = target.id;
+    gameState.autopilotControls.activeAutopilotAction = undefined;
+    return NodeStatus.SUCCESS;
+  }
+
+  human.activeAction = 'moving';
+  human.target = target.id;
+  human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
+  return NodeStatus.RUNNING;
+}
+
+/**
  * Creates a behavior that handles all direct player commands via the autopilot system.
  * This is a high-priority behavior for the player character that interprets and executes
  * actions like moving, gathering, attacking, etc., based on player input.
  */
-export function createPlayerCommandBehavior(depth: number): BehaviorNode {
+export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is there an active autopilot command for the player?
@@ -102,31 +149,8 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode {
 
             // --- ATTACK ---
             case PlayerActionType.AutopilotAttack: {
-              const target = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
-
-              if (!target || target.type !== 'human' || target.hitpoints <= 0) {
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.FAILURE;
-              }
-
-              const distance = calculateWrappedDistance(
-                human.position,
-                target.position,
-                gameState.mapDimensions.width,
-                gameState.mapDimensions.height,
-              );
-
-              if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
-                human.activeAction = 'attacking';
-                human.attackTargetId = target.id;
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.SUCCESS;
-              }
-
-              human.activeAction = 'moving';
-              human.target = target.id;
-              human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
-              return NodeStatus.RUNNING;
+              // Generic attack that works with any attackable entity
+              return handleAutopilotAttack(gameState, human, activeAction);
             }
 
             // --- PROCREATE ---

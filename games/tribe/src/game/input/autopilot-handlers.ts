@@ -4,13 +4,7 @@ import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../world-consts';
 import { GameWorldState, HoveredAutopilotAction } from '../world-types';
-import {
-  findEntityAtPosition,
-  findPlayerEntity,
-  findValidPlantingSpot,
-  isHostile,
-  canProcreate,
-} from '../utils';
+import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot, isHostile, canProcreate } from '../utils';
 import { Vector2D } from '../utils/math-types';
 
 /**
@@ -37,7 +31,7 @@ export const determineHoveredAutopilotAction = (
       };
     } else if (
       player.isAdult &&
-      hoveredEntity.type === 'humanCorpse' &&
+      hoveredEntity.type === 'corpse' &&
       (hoveredEntity as HumanEntity).food.length > 0
     ) {
       determinedAction = {
@@ -63,6 +57,10 @@ export const determineHoveredAutopilotAction = (
       ) {
         determinedAction = { action: PlayerActionType.AutopilotFeedChild, targetEntityId: targetHuman.id };
       }
+    } else if (hoveredEntity.type === 'prey') {
+      determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: hoveredEntity.id };
+    } else if (hoveredEntity.type === 'predator') {
+      determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: hoveredEntity.id };
     }
   } else {
     // --- POSITION-BASED ACTIONS ---

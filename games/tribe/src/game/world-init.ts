@@ -1,4 +1,4 @@
-import { createEntities, createBerryBush, createHuman } from './entities/entities-update';
+import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
 import { GameWorldState } from './world-types';
 import {
   MAP_WIDTH,
@@ -8,11 +8,14 @@ import {
   UI_BUTTON_WIDTH,
   INTRO_SCREEN_INITIAL_HUMANS,
   UI_BUTTON_TEXT_COLOR,
+  INITIAL_PREY_COUNT,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
+import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
+import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -41,6 +44,38 @@ export function initWorld(): GameWorldState {
     initialTime,
     'female',
     false, // isPlayer = false
+  );
+
+  // Spawn a pairs of prey at random positions
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const preyMalePosition = {
+      x: centerX + MAP_WIDTH * (Math.random() - Math.random()),
+      y: centerY + MAP_HEIGHT * (Math.random() - Math.random()),
+    };
+    createPrey(entities, preyMalePosition, 'male', undefined, undefined, generateRandomPreyGeneCode());
+    createPrey(
+      entities,
+      { x: preyMalePosition.x + 20, y: preyMalePosition.y },
+      'female',
+      undefined,
+      undefined,
+      generateRandomPreyGeneCode(),
+    );
+  }
+
+  // Spawn a pair of predators
+  const predatorMalePosition = {
+    x: centerX + MAP_WIDTH * (Math.random() - Math.random()),
+    y: centerY + MAP_HEIGHT * (Math.random() - Math.random()),
+  };
+  createPredator(entities, predatorMalePosition, 'male', undefined, undefined, generateRandomPredatorGeneCode());
+  createPredator(
+    entities,
+    { x: predatorMalePosition.x + 20, y: predatorMalePosition.y },
+    'female',
+    undefined,
+    undefined,
+    generateRandomPredatorGeneCode(),
   );
 
   const uiButtons: ClickableUIButton[] = [
@@ -147,6 +182,38 @@ export function initIntroWorld(): GameWorldState {
     const gender = Math.random() < 0.5 ? 'male' : 'female';
     createHuman(entities, randomPosition, initialTime, gender, false);
   }
+
+  // Spawn a pairs of prey at random positions
+  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
+    const preyMalePosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    createPrey(entities, preyMalePosition, 'male', undefined, undefined, generateRandomPreyGeneCode());
+    createPrey(
+      entities,
+      { x: preyMalePosition.x + 20, y: preyMalePosition.y },
+      'female',
+      undefined,
+      undefined,
+      generateRandomPreyGeneCode(),
+    );
+  }
+
+  // Spawn a pair of predators
+  const predatorMalePosition = {
+    x: Math.random() * MAP_WIDTH,
+    y: Math.random() * MAP_HEIGHT,
+  };
+  createPredator(entities, predatorMalePosition, 'male', undefined, undefined, generateRandomPredatorGeneCode());
+  createPredator(
+    entities,
+    { x: predatorMalePosition.x + 20, y: predatorMalePosition.y },
+    'female',
+    undefined,
+    undefined,
+    generateRandomPredatorGeneCode(),
+  );
 
   const tutorial = createTutorial();
   const tutorialState = createTutorialState();

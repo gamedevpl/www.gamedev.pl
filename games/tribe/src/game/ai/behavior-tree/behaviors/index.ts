@@ -20,3 +20,21 @@ export * from './player-command-behavior';
 export * from './follow-leader-behavior';
 export * from './tribe-migration-behavior';
 export * from './diplomacy-behavior';
+export * from './human-hunt-prey-behavior';
+export * from './human-defend-predator-behavior';
+
+// Animal-specific behaviors
+export * from './prey-flee-behavior';
+export * from './prey-graze-behavior';
+export * from './prey-procreation-behavior';
+export * from './prey-feeding-behavior';
+export * from './prey-child-seek-food-behavior';
+export * from './predator-hunt-behavior';
+export * from './predator-attack-behavior';
+export * from './predator-procreation-behavior';
+export * from './predator-feeding-behavior';
+export * from './predator-child-seek-food-behavior';
+export * from './animal-wander-behavior';
+export * from './prey-herd-behavior';
+export * from './predator-pack-behavior';
+export * from './predator-territorial-behavior';

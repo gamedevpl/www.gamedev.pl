@@ -127,6 +127,52 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     highlightedUIElements: [TutorialUIHighlightKey.COMMAND_BUTTONS],
     isCompleted: false,
   },
+  {
+    key: TutorialStepKey.ANIMALS_INTRODUCTION,
+    title: 'Wild Animals!',
+    text: 'Your world now has wild animals! Prey provide meat when hunted, but beware of predators that may attack.',
+    condition: (world: GameWorldState) => {
+      // Show when there are animals in the world
+      const hasAnimals = Array.from(world.entities.entities.values()).some(
+        entity => entity.type === 'prey' || entity.type === 'predator'
+      );
+      return hasAnimals;
+    },
+    isCompleted: false,
+    dependsOn: TutorialStepKey.AUTOPILOT,
+  },
+  {
+    key: TutorialStepKey.HUNT_PREY,
+    title: 'Hunt for Meat',
+    text: 'Click on prey animals to hunt them for meat. Hunting provides more food than gathering berries!',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      // Show when player is hungry and there are prey nearby
+      const nearbyPrey = findClosestEntity(player, world, 'prey', 150);
+      return player.hunger > 40 && !!nearbyPrey;
+    },
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
+      const prey = findClosestEntity(player, world, 'prey', 150);
+      return prey ? [prey.id] : [];
+    },
+    isCompleted: false,
+    dependsOn: TutorialStepKey.ANIMALS_INTRODUCTION,
+  },
+  {
+    key: TutorialStepKey.DEFEND_FROM_PREDATORS,
+    title: 'Defend Against Predators',
+    text: 'Predators may attack when hungry! Click on them to fight back. Fighting together with family is more effective.',
+    condition: (world: GameWorldState, player: HumanEntity) => {
+      // Show when there are predators nearby
+      const nearbyPredator = findClosestEntity(player, world, 'predator', 120);
+      return !!nearbyPredator;
+    },
+    getTargets: (world: GameWorldState, player: HumanEntity) => {
+      const predator = findClosestEntity(player, world, 'predator', 120);
+      return predator ? [predator.id] : [];
+    },
+    isCompleted: false,
+    dependsOn: TutorialStepKey.HUNT_PREY,
+  },
 ];
 
 export function createTutorial(): Tutorial {

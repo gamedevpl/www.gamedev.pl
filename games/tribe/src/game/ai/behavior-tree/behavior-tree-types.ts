@@ -1,4 +1,4 @@
-import { HumanEntity } from '../../entities/characters/human/human-types';
+import { CharacterEntity } from '../../entities/characters/character-types';
 import { UpdateContext } from '../../world-types';
 import { Blackboard } from './behavior-tree-blackboard';
 
@@ -22,12 +22,12 @@ export enum NodeStatus {
  * - TimeoutNode:
  *   - `timeout_{nodeName}_startTime`: Stores the time the child started running.
  */
-export interface BehaviorNode {
+export interface BehaviorNode<T extends CharacterEntity> {
   name?: string;
   lastStatus?: NodeStatus;
   depth?: number;
-  children?: BehaviorNode[];
-  child?: BehaviorNode;
+  children?: BehaviorNode<T>[];
+  child?: BehaviorNode<T>;
   runningChildIndex?: number;
   /**
    * Executes the node's logic.
@@ -36,5 +36,5 @@ export interface BehaviorNode {
    * @param blackboard The blackboard for sharing data between nodes.
    * @returns The status of the node after execution.
    */
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): [NodeStatus, string] | NodeStatus;
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): [NodeStatus, string] | NodeStatus;
 }

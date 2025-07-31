@@ -1,0 +1,132 @@
+import { PreyEntity } from './entities/characters/prey/prey-types';
+import { PredatorEntity } from './entities/characters/predator/predator-types';
+import { initGame } from './index';
+import { GameWorldState } from './world-types';
+import { updateWorld } from './world-update';
+import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS } from './world-consts';
+import { describe, it, expect } from 'vitest';
+
+describe('Ecosystem Balance', () => {
+  it('should achieve balance of living prey/predators/bushes over multiple game years without humans', () => {
+    let gameState: GameWorldState = initGame();
+
+    // Remove all humans to test pure ecosystem balance
+    const humanIds = Array.from(gameState.entities.entities.values())
+      .filter((e) => e.type === 'human')
+      .map((e) => e.id);
+
+    for (const id of humanIds) {
+      gameState.entities.entities.delete(id);
+    }
+
+    const yearsToSimulate = 30;
+    const totalSimulationSeconds = yearsToSimulate * HUMAN_YEAR_IN_REAL_SECONDS;
+    const timeStepSeconds = GAME_DAY_IN_REAL_SECONDS / 24; // One hour at a time
+    let yearsSimulated = 0;
+
+    // Track population metrics over time
+    const populationHistory: Array<{
+      year: number;
+      preyCount: number;
+      predatorCount: number;
+      bushCount: number;
+      preyAdults: number;
+      predatorAdults: number;
+      preyBabies: number;
+      predatorBabies: number;
+      avgPreyHunger: number;
+      avgPredatorHunger: number;
+    }> = [];
+
+    for (let time = 0; time < totalSimulationSeconds; time += timeStepSeconds) {
+      gameState = updateWorld(gameState, timeStepSeconds);
+
+      if (gameState.time >= (yearsSimulated + 1) * HUMAN_YEAR_IN_REAL_SECONDS) {
+        yearsSimulated++;
+
+        const prey = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'prey') as PreyEntity[];
+        const predators = Array.from(gameState.entities.entities.values()).filter(
+          (e) => e.type === 'predator',
+        ) as PredatorEntity[];
+        const bushes = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush');
+
+        const preyCount = prey.length;
+        const predatorCount = predators.length;
+        const bushCount = bushes.length;
+        const preyAdults = prey.filter((e) => e.isAdult).length;
+        const predatorAdults = predators.filter((e) => e.isAdult).length;
+        const preyBabies = prey.filter((e) => !e.isAdult).length;
+        const predatorBabies = predators.filter((e) => !e.isAdult).length;
+        const avgPreyHunger = preyCount > 0 ? prey.reduce((sum, e) => sum + e.hunger, 0) / preyCount : 0;
+        const avgPredatorHunger =
+          predatorCount > 0 ? predators.reduce((sum, e) => sum + e.hunger, 0) / predatorCount : 0;
+
+        const stats = {
+          year: yearsSimulated,
+          preyCount,
+          predatorCount,
+          bushCount,
+          preyAdults,
+          predatorAdults,
+          preyBabies,
+          predatorBabies,
+          avgPreyHunger,
+          avgPredatorHunger,
+        };
+
+        populationHistory.push(stats);
+
+        console.log(
+          `Ecosystem Year ${yearsSimulated}: Prey: ${preyCount} (${preyAdults} adults, ${preyBabies} babies), ` +
+            `Predators: ${predatorCount} (${predatorAdults} adults, ${predatorBabies} babies), ` +
+            `Bushes: ${bushCount}, ` +
+            `Hunger (Prey:Predator): ${avgPreyHunger.toFixed(1)}:${avgPredatorHunger.toFixed(1)}`,
+        );
+
+        // Early exit if ecosystem collapses
+        if (preyCount === 0 && predatorCount === 0) {
+          console.log(`Ecosystem collapsed at year ${yearsSimulated}`);
+          break;
+        }
+      }
+
+      if (gameState.gameOver) {
+        console.log(`Game ended at year ${yearsSimulated}`);
+        break;
+      }
+    }
+
+    // Analyze ecosystem balance
+    const finalStats = populationHistory[populationHistory.length - 1];
+    const initialStats = populationHistory[0];
+
+    // Ecosystem should show growth over time or at least maintain populations
+    expect(finalStats.preyCount).toBeGreaterThan(0); // Prey should survive
+    expect(finalStats.predatorCount).toBeGreaterThan(0); // Predators should survive too
+    expect(finalStats.bushCount).toBeGreaterThan(10); // Berry bushes should be sustainable
+
+    // Check if any reproduction occurred (babies were born)
+    const totalBabiesBorn = populationHistory.reduce((sum, stats) => sum + stats.preyBabies + stats.predatorBabies, 0);
+    expect(totalBabiesBorn).toBeGreaterThan(0); // Some reproduction should have occurred
+
+    // Population should be viable, not just surviving
+    expect(finalStats.preyCount).toBeGreaterThan(2); // Healthy prey population
+    expect(finalStats.predatorCount).toBeGreaterThan(1); // Viable predator population
+
+    // There should be some ecosystem activity
+    expect(populationHistory.length).toBeGreaterThan(5); // Should run for at least 5 years
+
+    // Population shouldn't crash to zero immediately
+    const midpointStats = populationHistory[Math.floor(populationHistory.length / 2)];
+    expect(midpointStats.preyCount).toBeGreaterThan(0);
+    expect(midpointStats.predatorCount).toBeGreaterThan(0); // Predators should still be viable mid-game
+    expect(midpointStats.bushCount).toBeGreaterThan(5);
+
+    // Overall ecosystem should be growing and thriving
+    console.log('Final ecosystem state:', finalStats);
+    console.log(
+      `Population growth: Prey ${initialStats.preyCount} → ${finalStats.preyCount}, Predators ${initialStats.predatorCount} → ${finalStats.predatorCount}`,
+    );
+    console.log('Ecosystem growth and balance test passed');
+  }, 60000); // 60 second timeout
+});

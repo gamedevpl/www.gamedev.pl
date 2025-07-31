@@ -13,7 +13,7 @@ const JEALOUSY_TARGET_KEY = 'jealousyAttackTarget';
  * Creates a behavior that triggers an attack when a human's primary partner
  * is found procreating with another human nearby.
  */
-export function createJealousyAttackBehavior(depth: number): BehaviorNode {
+export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is my primary partner procreating with a stranger nearby?

@@ -17,7 +17,7 @@ import { Vector2D } from '../../../utils/math-types';
  * Creates a behavior for an adult male with a family to move away from his parents
  * to establish his own territory for his family to grow.
  */
-export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorNode {
+export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorNode<HumanEntity> {
   const isAdultMaleWithFamily = new ConditionNode(
     (human: HumanEntity, context: UpdateContext) => {
       if (!human.isAdult || human.gender !== 'male') {

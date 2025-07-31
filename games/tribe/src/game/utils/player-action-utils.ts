@@ -5,8 +5,10 @@ import {
   HUMAN_INTERACTION_RANGE,
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
@@ -36,15 +38,15 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
       (b) => b.food.length > 0,
     );
 
-    const gatherCorpseTarget = findClosestEntity<HumanCorpseEntity>(
+    const gatherCorpseTarget = findClosestEntity<CorpseEntity>(
       player,
       gameState,
-      'humanCorpse',
+      'corpse',
       HUMAN_INTERACTION_RANGE,
       (c) => c.food.length > 0,
     );
 
-    let target: BerryBushEntity | HumanCorpseEntity | null = null;
+    let target: BerryBushEntity | CorpseEntity | null = null;
     if (gatherBushTarget && gatherCorpseTarget) {
       target =
         calculateWrappedDistance(
@@ -109,6 +111,29 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   );
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
+  }
+
+  // Check for Hunt Prey
+  const preyTarget = findClosestEntity<PreyEntity>(player, gameState, 'prey', HUMAN_ATTACK_RANGE, () => true);
+  if (preyTarget) {
+    actions.push({ type: PlayerActionType.HuntPrey, action: 'attacking', key: 'q', targetEntity: preyTarget });
+  }
+
+  // Check for Defend Against Predator
+  const predatorTarget = findClosestEntity<PredatorEntity>(
+    player,
+    gameState,
+    'predator',
+    HUMAN_ATTACK_RANGE,
+    () => true,
+  );
+  if (predatorTarget) {
+    actions.push({
+      type: PlayerActionType.DefendAgainstPredator,
+      action: 'attacking',
+      key: 'q',
+      targetEntity: predatorTarget,
+    });
   }
 
   // Check for Planting

@@ -1,3 +1,4 @@
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
 
@@ -6,7 +7,7 @@ import { ActionNode } from '../nodes';
  * The entity will stand still.
  * @returns A behavior node representing the idle behavior.
  */
-export function createIdleWanderBehavior(depth: number): BehaviorNode {
+export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new ActionNode(
     (human, _context, blackboard) => {
       human.activeAction = 'idle';

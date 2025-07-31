@@ -13,8 +13,8 @@ import {
  * The leader will periodically assess the situation and may change diplomatic status
  * from Friendly to Hostile based on factors like relative strength and resource needs.
  */
-export function createDiplomacyBehavior(depth: number): BehaviorNode {
-  const isLeader = new ConditionNode((human) => human.id === human.leaderId, 'Is Leader?', depth + 1);
+export function createDiplomacyBehavior(depth: number): BehaviorNode<HumanEntity> {
+  const isLeader = new ConditionNode<HumanEntity>((human) => human.id === human.leaderId, 'Is Leader?', depth + 1);
 
   const evaluateAndSetDiplomacy = new ActionNode(
     (leader: HumanEntity, context: UpdateContext) => {

@@ -13,7 +13,7 @@ import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } 
  * @param depth The depth of the node in the behavior tree.
  * @returns A behavior node.
  */
-export function createFollowPatriarchBehavior(depth: number): BehaviorNode {
+export function createFollowPatriarchBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Find the patriarch (father or male partner).

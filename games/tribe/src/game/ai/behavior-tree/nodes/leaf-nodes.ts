@@ -1,4 +1,4 @@
-import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { CharacterEntity } from '../../../entities/characters/character-types';
 import { UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -8,7 +8,7 @@ import { unpackStatus } from './utils';
 /**
  * A leaf node that performs a specific action and returns a status.
  */
-export class ActionNode implements BehaviorNode {
+export class ActionNode<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
@@ -19,11 +19,7 @@ export class ActionNode implements BehaviorNode {
    * @param depth The depth of the node in the tree.
    */
   constructor(
-    private action: (
-      human: HumanEntity,
-      context: UpdateContext,
-      blackboard: Blackboard,
-    ) => [NodeStatus, string] | NodeStatus,
+    private action: (entity: T, context: UpdateContext, blackboard: Blackboard) => [NodeStatus, string] | NodeStatus,
     name?: string,
     depth: number = 0,
   ) {
@@ -31,12 +27,12 @@ export class ActionNode implements BehaviorNode {
     this.depth = depth;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      const [status, debugInfo] = unpackStatus(this.action(human, context, blackboard));
+      const [status, debugInfo] = unpackStatus(this.action(entity, context, blackboard));
       this.lastStatus = status;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, status, context.gameState.time, this.depth, debugInfo);
@@ -54,7 +50,7 @@ export class ActionNode implements BehaviorNode {
  * A leaf node that checks a condition.
  * It returns SUCCESS if the condition is true, and FAILURE otherwise.
  */
-export class ConditionNode implements BehaviorNode {
+export class ConditionNode<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
@@ -65,11 +61,7 @@ export class ConditionNode implements BehaviorNode {
    * @param depth The depth of the node in the tree.
    */
   constructor(
-    private condition: (
-      human: HumanEntity,
-      context: UpdateContext,
-      blackboard: Blackboard,
-    ) => [boolean, string] | boolean,
+    private condition: (entity: T, context: UpdateContext, blackboard: Blackboard) => [boolean, string] | boolean,
     name?: string,
     depth: number = 0,
   ) {
@@ -77,12 +69,12 @@ export class ConditionNode implements BehaviorNode {
     this.depth = depth;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      const [result, debugInfo] = unpackStatus(this.condition(human, context, blackboard));
+      const [result, debugInfo] = unpackStatus(this.condition(entity, context, blackboard));
       const status = result ? NodeStatus.SUCCESS : NodeStatus.FAILURE;
       this.lastStatus = status;
       if (this.name) {

@@ -3,10 +3,15 @@ import { stateUpdate } from '../state-machine/state-machine-update';
 import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
-import { humanCorpseUpdate } from './characters/human/human-corpse-update';
-import { HumanCorpseEntity } from './characters/human/human-corpse-types';
+import { corpseUpdate } from './characters/corpse-update';
+import { preyUpdate } from './characters/prey/prey-update';
+import { predatorUpdate } from './characters/predator/predator-update';
+import { CorpseEntity } from './characters/corpse-types';
 import { HumanEntity } from './characters/human/human-types';
-import { humanAIUpdate } from '../ai/human-ai-update'; // Added import
+import { PreyEntity } from './characters/prey/prey-types';
+import { PredatorEntity } from './characters/predator/predator-types';
+import { humanAIUpdate } from '../ai/human-ai-update';
+import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -66,13 +71,24 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   if (entity.type === 'human') {
     // Pass the full updateContext and deltaTime to humanUpdate
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
-  } else if (entity.type === 'humanCorpse') {
-    humanCorpseUpdate(entity as HumanCorpseEntity, updateContext);
+  } else if (entity.type === 'corpse') {
+    corpseUpdate(entity as CorpseEntity, updateContext);
+  } else if (entity.type === 'prey') {
+    preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
+  } else if (entity.type === 'predator') {
+    predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
   }
 
   // AI decision making for all humans (player and non-player)
   if (entity.type === 'human') {
     humanAIUpdate(entity as HumanEntity, updateContext);
+  }
+  
+  // AI decision making for animals
+  if (entity.type === 'prey') {
+    preyAIUpdate(entity as PreyEntity, updateContext);
+  } else if (entity.type === 'predator') {
+    predatorAIUpdate(entity as PredatorEntity, updateContext);
   }
 
   // Update state machine if present

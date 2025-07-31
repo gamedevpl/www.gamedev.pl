@@ -1,4 +1,4 @@
-import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { CharacterEntity } from '../../../entities/characters/character-types';
 import { AutopilotControls, UpdateContext } from '../../../world-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -10,23 +10,23 @@ import { unpackStatus } from './utils';
  * SUCCESS becomes FAILURE, and FAILURE becomes SUCCESS.
  * RUNNING remains RUNNING.
  */
-export class Inverter implements BehaviorNode {
+export class Inverter<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
-  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(public child: BehaviorNode<T>, name?: string, depth: number = 0) {
     this.name = name;
     this.depth = depth;
     this.child.depth = (this.depth ?? 0) + 1;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
       let finalStatus: NodeStatus;
 
       switch (childStatus) {
@@ -58,23 +58,23 @@ export class Inverter implements BehaviorNode {
 /**
  * A decorator node that always returns SUCCESS, regardless of its child's status.
  */
-export class Succeeder implements BehaviorNode {
+export class Succeeder<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
-  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(public child: BehaviorNode<T>, name?: string, depth: number = 0) {
     this.name = name;
     this.depth = depth;
     this.child.depth = (this.depth ?? 0) + 1;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      const [, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
       const finalStatus = NodeStatus.SUCCESS;
 
       this.lastStatus = finalStatus;
@@ -93,24 +93,24 @@ export class Succeeder implements BehaviorNode {
 /**
  * A decorator node that repeats its child's execution a specified number of times.
  */
-export class Repeater implements BehaviorNode {
+export class Repeater<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
-  constructor(public readonly child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(public readonly child: BehaviorNode<T>, name?: string, depth: number = 0) {
     this.name = name;
     this.depth = depth;
     this.child.depth = (this.depth ?? 0) + 1;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
       // TODO: Implement decorator logic
-      const [status, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [status, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
 
       this.lastStatus = status;
       if (this.name) {
@@ -130,14 +130,14 @@ export class Repeater implements BehaviorNode {
  * It stores the start time on the blackboard when the child first returns RUNNING.
  * If the child is still RUNNING after the timeout duration, it returns FAILURE.
  */
-export class TimeoutNode implements BehaviorNode {
+export class TimeoutNode<T extends CharacterEntity> implements BehaviorNode<T> {
   public name: string;
   public lastStatus?: NodeStatus;
   public depth: number;
   private readonly startTimeKey: string;
 
   constructor(
-    public readonly child: BehaviorNode,
+    public readonly child: BehaviorNode<T>,
     private readonly timeoutDurationHours: number,
     name: string,
     depth: number = 0,
@@ -148,13 +148,13 @@ export class TimeoutNode implements BehaviorNode {
     this.startTimeKey = `timeout_${this.name}_startTime`;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     btProfiler.nodeStart(this.name);
     try {
       const currentTime = context.gameState.time;
       let startTime = blackboard.get<number>(this.startTimeKey);
 
-      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
 
       if (childStatus === NodeStatus.RUNNING) {
         if (startTime === undefined) {
@@ -200,7 +200,7 @@ export class TimeoutNode implements BehaviorNode {
  * It does not cache a RUNNING status.
  * It requires a unique name to function correctly.
  */
-export class CachingNode implements BehaviorNode {
+export class CachingNode<T extends CharacterEntity> implements BehaviorNode<T> {
   public name: string;
   public lastStatus?: NodeStatus;
   public depth: number;
@@ -208,11 +208,11 @@ export class CachingNode implements BehaviorNode {
   private readonly timestampKey: string;
 
   constructor(
-    public readonly child: BehaviorNode,
+    public readonly child: BehaviorNode<T>,
     private readonly cacheDurationHours: number,
     name: string, // Name is mandatory for CachingNode
     depth: number = 0,
-    private readonly validityCheck?: (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => boolean,
+    private readonly validityCheck?: (entity: T, context: UpdateContext, blackboard: Blackboard) => boolean,
   ) {
     this.name = name;
     this.depth = depth;
@@ -221,7 +221,7 @@ export class CachingNode implements BehaviorNode {
     this.timestampKey = `caching_${this.name}_timestamp`;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     btProfiler.nodeStart(this.name);
     try {
       const currentTime = context.gameState.time;
@@ -232,7 +232,7 @@ export class CachingNode implements BehaviorNode {
 
       if (cachedStatus !== undefined && cachedTimestamp !== undefined) {
         const isExpired = currentTime - cachedTimestamp > this.cacheDurationHours;
-        const isStillValid = this.validityCheck ? this.validityCheck(human, context, blackboard) : true;
+        const isStillValid = this.validityCheck ? this.validityCheck(entity, context, blackboard) : true;
 
         if (!isExpired && isStillValid) {
           const remaining = (cachedTimestamp + this.cacheDurationHours - currentTime).toFixed(2);
@@ -244,7 +244,7 @@ export class CachingNode implements BehaviorNode {
       }
 
       // --- Cache Miss or Invalidated ---
-      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, childDebugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
 
       // Only cache SUCCESS or FAILURE, not RUNNING.
       if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.FAILURE) {
@@ -268,7 +268,7 @@ export class CachingNode implements BehaviorNode {
  * It requires a unique name to function correctly.
  * If the child is already RUNNING, it will be allowed to continue, bypassing the cooldown.
  */
-export class CooldownNode implements BehaviorNode {
+export class CooldownNode<T extends CharacterEntity> implements BehaviorNode<T> {
   public name: string;
   public lastStatus?: NodeStatus;
   public depth: number;
@@ -276,7 +276,7 @@ export class CooldownNode implements BehaviorNode {
 
   constructor(
     private readonly cooldownDurationHours: number,
-    public readonly child: BehaviorNode,
+    public readonly child: BehaviorNode<T>,
     name: string, // Name is mandatory for CooldownNode
     depth: number = 0,
   ) {
@@ -287,7 +287,7 @@ export class CooldownNode implements BehaviorNode {
     this.cooldownKey = `cooldown_${this.name}`;
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     btProfiler.nodeStart(this.name);
     try {
       const currentTime = context.gameState.time;
@@ -296,7 +296,7 @@ export class CooldownNode implements BehaviorNode {
       // If the child was already running, let it continue execution, bypassing the cooldown check.
       // The cooldown should only prevent *starting* an action, not interrupt one in progress.
       if (this.child.lastStatus === NodeStatus.RUNNING) {
-        const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+        const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
         this.lastStatus = childStatus;
         if (this.name) {
           const runningDebugInfo = `Continuing running child. ${debugInfo}`;
@@ -318,7 +318,7 @@ export class CooldownNode implements BehaviorNode {
       }
 
       // Cooldown is not active. Execute the child.
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
 
       // If the child succeeds or *starts* running for the first time, set the cooldown.
       if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.RUNNING) {
@@ -342,13 +342,13 @@ export class CooldownNode implements BehaviorNode {
  * autopilot behavior is enabled for the player character. For non-player
  * characters, it always executes the child.
  */
-export class AutopilotControlled implements BehaviorNode {
+export class AutopilotControlled<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
   constructor(
-    public child: BehaviorNode,
+    public child: BehaviorNode<T>,
     private readonly behaviorKey: keyof AutopilotControls['behaviors'],
     name?: string,
     depth: number = 0,
@@ -356,7 +356,7 @@ export class AutopilotControlled implements BehaviorNode {
     this.name = name;
     this.depth = depth;
     // Recursively update depth of all children for correct debug rendering
-    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+    const updateDepth = (node: BehaviorNode<T>, newDepth: number) => {
       node.depth = newDepth;
       if (node.children) {
         node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
@@ -367,13 +367,13 @@ export class AutopilotControlled implements BehaviorNode {
     updateDepth(this.child, (this.depth ?? 0) + 1);
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
       const isPlayerAndBehaviorDisabled =
-        human.isPlayer && !context.gameState.autopilotControls.behaviors[this.behaviorKey];
+        entity.isPlayer && !context.gameState.autopilotControls.behaviors[this.behaviorKey];
 
       if (isPlayerAndBehaviorDisabled) {
         const debugInfo = `Player autopilot for '${this.behaviorKey}' is disabled.`;
@@ -385,7 +385,7 @@ export class AutopilotControlled implements BehaviorNode {
       }
 
       // For NPCs or for players with the behavior enabled, execute the child
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
       this.lastStatus = childStatus;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
@@ -405,15 +405,15 @@ export class AutopilotControlled implements BehaviorNode {
  * is manually controlling their character's movement (e.g., via WASD).
  * This ensures player input has priority over AI behaviors.
  */
-export class ManualControl implements BehaviorNode {
+export class ManualControl<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
-  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(public child: BehaviorNode<T>, name?: string, depth: number = 0) {
     this.name = name;
     this.depth = depth;
-    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+    const updateDepth = (node: BehaviorNode<T>, newDepth: number) => {
       node.depth = newDepth;
       if (node.children) {
         node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
@@ -424,12 +424,12 @@ export class ManualControl implements BehaviorNode {
     updateDepth(this.child, (this.depth ?? 0) + 1);
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      if (human.isPlayer && context.gameState.autopilotControls.isManuallyMoving) {
+      if (entity.isPlayer && context.gameState.autopilotControls.isManuallyMoving) {
         // Player is manually moving, so block the AI.
         this.lastStatus = NodeStatus.FAILURE;
         const debugInfo = 'Manual movement active, AI blocked.';
@@ -440,7 +440,7 @@ export class ManualControl implements BehaviorNode {
       }
 
       // Player is not manually moving or it's an NPC, so execute the child.
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
       this.lastStatus = childStatus;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
@@ -457,15 +457,15 @@ export class ManualControl implements BehaviorNode {
 /**
  * A decorator node that executes its child only if the human is not player controlled.
  */
-export class NonPlayerControlled implements BehaviorNode {
+export class NonPlayerControlled<T extends CharacterEntity> implements BehaviorNode<T> {
   public name?: string;
   public lastStatus?: NodeStatus;
   public depth: number;
 
-  constructor(public child: BehaviorNode, name?: string, depth: number = 0) {
+  constructor(public child: BehaviorNode<T>, name?: string, depth: number = 0) {
     this.name = name;
     this.depth = depth;
-    const updateDepth = (node: BehaviorNode, newDepth: number) => {
+    const updateDepth = (node: BehaviorNode<T>, newDepth: number) => {
       node.depth = newDepth;
       if (node.children) {
         node.children.forEach((childNode) => updateDepth(childNode, newDepth + 1));
@@ -476,12 +476,12 @@ export class NonPlayerControlled implements BehaviorNode {
     updateDepth(this.child, (this.depth ?? 0) + 1);
   }
 
-  execute(human: HumanEntity, context: UpdateContext, blackboard: Blackboard): NodeStatus {
+  execute(entity: T, context: UpdateContext, blackboard: Blackboard): NodeStatus {
     if (this.name) {
       btProfiler.nodeStart(this.name);
     }
     try {
-      if (human.isPlayer) {
+      if (entity.isPlayer) {
         // Player controlled, so block the AI.
         this.lastStatus = NodeStatus.FAILURE;
         const debugInfo = 'Player controlled, AI blocked.';
@@ -492,7 +492,7 @@ export class NonPlayerControlled implements BehaviorNode {
       }
 
       // Not player controlled, so execute the child.
-      const [childStatus, debugInfo] = unpackStatus(this.child.execute(human, context, blackboard));
+      const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
       this.lastStatus = childStatus;
       if (this.name) {
         blackboard.recordNodeExecution(this.name, this.lastStatus, context.gameState.time, this.depth, debugInfo);
