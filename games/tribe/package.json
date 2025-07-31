@@ -17,7 +17,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^3.2.3",
     "eslint": "^8.54.0",
-    "genaicode": "^0.11.0",
+    "genaicode": "^0.11.1",
     "jsdom": "^24.1.1",
     "tsx": "^4.19.4",
     "typescript": "^5.6.2",
@@ -30,8 +30,8 @@
     "start": "vite",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
-    "test": "vitest --ui",
-    "test:run": "vitest run"
+    "test": "YEARS_TO_SIMULATE=10 vitest --ui",
+    "test:run": "YEARS_TO_SIMULATE=10 vitest run"
   },
   "author": "gtanczyk",
   "license": "ISC"
