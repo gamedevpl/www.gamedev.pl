@@ -59,13 +59,9 @@ export interface PredatorEntity extends CharacterEntity {
 
   /** Cooldown time before being able to hunt again. */
   huntCooldown?: number;
-
-  /** Current hunt target */
-  huntTargetId?: EntityId;
 }
 
 export type PredatorAction =
-  | 'hunting' // Hunting prey
   | 'attacking' // Fighting with humans
   | 'moving' // Changing position
   | 'idle' // Not performing any action

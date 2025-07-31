@@ -20,7 +20,6 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
           if (
             prey.hunger > 90 || // Too hungry to socialize
             prey.hitpoints < prey.maxHitpoints * 0.3 || // Too injured
-            prey.activeAction === 'fleeing' ||
             prey.activeAction === 'grazing' ||
             prey.activeAction === 'procreating'
           ) {

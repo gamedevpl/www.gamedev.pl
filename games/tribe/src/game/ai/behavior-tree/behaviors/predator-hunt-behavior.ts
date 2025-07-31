@@ -76,9 +76,9 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
           );
 
           if (distance <= PREDATOR_HUNT_RANGE) {
-            // Within hunting range, start hunting
-            predator.activeAction = 'hunting';
-            predator.huntTargetId = target.id;
+            // Within hunting range, start attacking
+            predator.activeAction = 'attacking';
+            predator.attackTargetId = target.id;
             predator.target = target.id;
             predator.direction = { x: 0, y: 0 };
             blackboard.delete('needToApproach');

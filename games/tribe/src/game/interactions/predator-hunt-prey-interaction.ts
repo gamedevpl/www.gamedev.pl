@@ -64,8 +64,7 @@ export const predatorHuntPreyInteraction: InteractionDefinition<PredatorEntity, 
       // Prey survives, just add hit effect and make it flee
       addVisualEffect(context.gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
       
-      // Set prey to flee from this predator
-      prey.fleeTargetId = predator.id;
+      // Set prey flee cooldown to prevent immediate re-fleeing
       prey.fleeCooldown = 5; // 5 hours of fleeing
       
       playSoundAt(context, SoundType.Attack, predator.position);

@@ -23,7 +23,7 @@ export const predatorAttackingState: State<PredatorEntity, PredatorStateData> = 
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: PREDATOR_ATTACKING,
-          preyId: entity.huntTargetId!,
+          preyId: entity.attackTargetId!,
           eatingStartTime: updateContext.gameState.time,
         } as PredatorEatingStateData,
       };

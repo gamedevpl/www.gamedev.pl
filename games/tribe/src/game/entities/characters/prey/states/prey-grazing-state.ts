@@ -4,8 +4,7 @@ import {
   PreyStateData,
   PREY_IDLE,
   PREY_GRAZING,
-  PREY_FLEEING,
-  PreyFleeingStateData,
+  PREY_MOVING,
 } from './prey-state-types';
 
 // Define the prey grazing state
@@ -14,17 +13,16 @@ export const preyGrazingState: State<PreyEntity, PreyStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    // Fleeing overrides grazing
-    if (entity.activeAction === 'fleeing' && entity.fleeTargetId) {
+    // Moving overrides grazing (includes fleeing behavior)
+    if (entity.activeAction === 'moving') {
       return {
-        nextState: PREY_FLEEING,
+        nextState: PREY_MOVING,
         data: {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: PREY_GRAZING,
-          fleeTargetId: entity.fleeTargetId,
-          fleeStartTime: updateContext.gameState.time,
-        } as PreyFleeingStateData,
+          target: entity.target,
+        },
       };
     }
 

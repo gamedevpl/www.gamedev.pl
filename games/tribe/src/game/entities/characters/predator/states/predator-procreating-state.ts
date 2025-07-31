@@ -4,10 +4,8 @@ import {
   PredatorStateData,
   PREDATOR_IDLE,
   PREDATOR_PROCREATING,
-  PREDATOR_HUNTING,
   PREDATOR_ATTACKING,
   PREDATOR_EATING,
-  PredatorHuntingStateData,
   PredatorAttackingStateData,
   PredatorEatingStateData,
 } from './predator-state-types';
@@ -26,22 +24,9 @@ export const predatorProcreatingState: State<PredatorEntity, PredatorStateData> 
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: PREDATOR_PROCREATING,
-          preyId: entity.huntTargetId!,
+          preyId: entity.attackTargetId!,
           eatingStartTime: updateContext.gameState.time,
         } as PredatorEatingStateData,
-      };
-    }
-
-    if (entity.activeAction === 'hunting' && entity.huntTargetId) {
-      return {
-        nextState: PREDATOR_HUNTING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: PREDATOR_PROCREATING,
-          huntTargetId: entity.huntTargetId,
-          huntStartTime: updateContext.gameState.time,
-        } as PredatorHuntingStateData,
       };
     }
 

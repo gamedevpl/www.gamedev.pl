@@ -6,7 +6,6 @@ export const PREY_IDLE = 'preyIdle';
 export const PREY_MOVING = 'preyMoving';
 export const PREY_GRAZING = 'preyGrazing';
 export const PREY_PROCREATING = 'preyProcreating';
-export const PREY_FLEEING = 'preyFleeing';
 
 interface PreyIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -26,14 +25,8 @@ export interface PreyProcreatingStateData extends StateData {
   procreationEndTime?: number; // When the procreation process ends
 }
 
-export interface PreyFleeingStateData extends StateData {
-  fleeTargetId: EntityId; // The ID of the threat to flee from
-  fleeStartTime: number; // When fleeing started
-}
-
 export type PreyStateData =
   | PreyIdleStateData
   | PreyMovingStateData
   | PreyGrazingStateData
-  | PreyProcreatingStateData
-  | PreyFleeingStateData;
+  | PreyProcreatingStateData;

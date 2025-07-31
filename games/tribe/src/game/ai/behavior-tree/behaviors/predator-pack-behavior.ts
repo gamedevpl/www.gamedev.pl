@@ -21,7 +21,6 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode {
           if (
             predator.hunger > 100 || // Too hungry to socialize
             predator.hitpoints < predator.maxHitpoints * 0.4 || // Too injured
-            predator.activeAction === 'hunting' ||
             predator.activeAction === 'attacking' ||
             predator.activeAction === 'procreating'
           ) {

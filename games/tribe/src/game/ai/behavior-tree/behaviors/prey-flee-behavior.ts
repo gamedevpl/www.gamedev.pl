@@ -82,8 +82,7 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode {
             return NodeStatus.FAILURE;
           }
 
-          prey.activeAction = 'fleeing';
-          prey.fleeTargetId = threat.id;
+          prey.activeAction = 'moving';
 
           // Calculate flee direction (directly away from threat)
           const fleeDirection = getDirectionVectorOnTorus(

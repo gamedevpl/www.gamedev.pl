@@ -65,7 +65,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
             );
 
             // Defend if predator is close or if it's targeting this human
-            const isTargetingHuman = predator.attackTargetId === human.id || predator.huntTargetId === human.id;
+            const isTargetingHuman = predator.attackTargetId === human.id;
             const isClose = distance < 80; // Close proximity triggers defense
             
             if (isTargetingHuman || isClose) {

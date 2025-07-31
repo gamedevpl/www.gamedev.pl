@@ -7,8 +7,6 @@ import {
   PreyStateData,
   PREY_IDLE,
   PREY_MOVING,
-  PREY_FLEEING,
-  PreyFleeingStateData,
 } from './prey-state-types';
 
 const MOVEMENT_THRESHOLD = 10; // Distance to consider "close enough" to target for prey
@@ -18,20 +16,6 @@ class PreyMovingState implements State<PreyEntity, PreyStateData> {
 
   update(movingData: PreyStateData, context: StateContext<PreyEntity>) {
     const { entity, updateContext } = context;
-
-    // Fleeing overrides moving
-    if (entity.activeAction === 'fleeing' && entity.fleeTargetId) {
-      return {
-        nextState: PREY_FLEEING,
-        data: {
-          ...movingData,
-          enteredAt: updateContext.gameState.time,
-          previousState: PREY_MOVING,
-          fleeTargetId: entity.fleeTargetId,
-          fleeStartTime: updateContext.gameState.time,
-        } as PreyFleeingStateData,
-      };
-    }
 
     // If not moving anymore, go to idle
     if (entity.activeAction !== 'moving') {

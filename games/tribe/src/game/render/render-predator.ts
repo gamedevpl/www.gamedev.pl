@@ -3,7 +3,6 @@ import { TribePredator2D } from '../../../../../tools/asset-generator/generator-
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
-  'hunting': 'attacking',
   'attacking': 'attacking',
   'eating': 'eat',
   'moving': 'walk',

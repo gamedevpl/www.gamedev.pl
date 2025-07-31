@@ -56,14 +56,10 @@ export interface PreyEntity extends CharacterEntity {
 
   /** Cooldown time before being able to flee again. */
   fleeCooldown?: number;
-
-  /** Current target to flee from */
-  fleeTargetId?: EntityId;
 }
 
 export type PreyAction =
   | 'grazing' // Eating berry bushes
   | 'moving' // Changing position
   | 'idle' // Not performing any action
-  | 'procreating' // Reproducing
-  | 'fleeing'; // Running away from predators/humans
+  | 'procreating'; // Reproducing

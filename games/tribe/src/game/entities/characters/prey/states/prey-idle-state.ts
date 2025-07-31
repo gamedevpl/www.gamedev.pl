@@ -6,8 +6,6 @@ import {
   PREY_MOVING,
   PREY_GRAZING,
   PREY_PROCREATING,
-  PREY_FLEEING,
-  PreyFleeingStateData,
 } from './prey-state-types';
 
 // Define the prey idle state
@@ -16,20 +14,7 @@ export const preyIdleState: State<PreyEntity, PreyStateData> = {
   update: (data, context) => {
     const { entity, updateContext } = context;
 
-    // Fleeing has highest priority
-    if (entity.activeAction === 'fleeing' && entity.fleeTargetId) {
-      return {
-        nextState: PREY_FLEEING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: PREY_IDLE,
-          fleeTargetId: entity.fleeTargetId,
-          fleeStartTime: updateContext.gameState.time,
-        } as PreyFleeingStateData,
-      };
-    }
-
+    // Moving has highest priority (includes fleeing behavior)
     if (entity.activeAction === 'moving') {
       return {
         nextState: PREY_MOVING,

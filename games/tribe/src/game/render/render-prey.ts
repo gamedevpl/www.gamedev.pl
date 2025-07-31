@@ -5,7 +5,6 @@ import { TribePrey2D } from '../../../../../tools/asset-generator/generator-asse
 const preyStanceMap: Record<string, string> = {
   'grazing': 'eat',
   'moving': 'walk',
-  'fleeing': 'walk',
   'procreating': 'procreate',
   'idle': 'idle',
 };
@@ -57,7 +56,7 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity): voi
     ctx.fillRect(barX, barY, barWidth * healthRatio, barHeight);
   }
 
-  // Fleeing indicator (red outline when fleeing)
+  // Flee cooldown indicator (red outline when in flee cooldown)
   if (prey.fleeCooldown && prey.fleeCooldown > 0) {
     ctx.strokeStyle = '#FF0000';
     ctx.lineWidth = 2;

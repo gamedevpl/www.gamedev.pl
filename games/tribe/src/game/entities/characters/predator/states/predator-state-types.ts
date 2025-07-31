@@ -4,7 +4,6 @@ import { Vector2D } from '../../../../utils/math-types';
 
 export const PREDATOR_IDLE = 'predatorIdle';
 export const PREDATOR_MOVING = 'predatorMoving';
-export const PREDATOR_HUNTING = 'predatorHunting';
 export const PREDATOR_ATTACKING = 'predatorAttacking';
 export const PREDATOR_PROCREATING = 'predatorProcreating';
 export const PREDATOR_EATING = 'predatorEating';
@@ -17,10 +16,6 @@ export interface PredatorMovingStateData extends StateData {
   target?: Vector2D | EntityId; // Where the predator is moving to
 }
 
-export interface PredatorHuntingStateData extends StateData {
-  huntTargetId: EntityId; // The ID of the prey being hunted
-  huntStartTime: number; // When hunting started
-}
 
 export interface PredatorAttackingStateData extends StateData {
   attackTargetId: EntityId; // The ID of the target being attacked
@@ -41,7 +36,6 @@ export interface PredatorEatingStateData extends StateData {
 export type PredatorStateData =
   | PredatorIdleStateData
   | PredatorMovingStateData
-  | PredatorHuntingStateData
   | PredatorAttackingStateData
   | PredatorProcreatingStateData
   | PredatorEatingStateData;

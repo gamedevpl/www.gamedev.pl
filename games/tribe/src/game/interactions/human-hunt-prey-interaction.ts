@@ -79,8 +79,7 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
       // Prey survives, just add hit effect and make it flee
       addVisualEffect(context.gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
       
-      // Set prey to flee from this human
-      prey.fleeTargetId = human.id;
+      // Set prey flee cooldown to prevent immediate re-fleeing
       prey.fleeCooldown = 8; // 8 hours of fleeing from humans (longer than predators)
       
       playSoundAt(context, SoundType.Attack, human.position);

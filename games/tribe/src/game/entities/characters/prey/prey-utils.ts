@@ -1,6 +1,5 @@
 import {
   PREY_BASE_SPEED,
-  PREY_FLEE_SPEED_MODIFIER,
   PREY_SLOW_SPEED_MODIFIER,
   PREY_HUNGER_THRESHOLD_SLOW,
 } from '../../../world-consts';
@@ -12,19 +11,14 @@ import { PreyEntity } from './prey-types';
 export function getEffectivePreySpeed(prey: PreyEntity): number {
   let effectiveSpeed = PREY_BASE_SPEED;
 
-  // Apply flee speed boost when fleeing
-  if (prey.activeAction === 'fleeing') {
-    effectiveSpeed *= PREY_FLEE_SPEED_MODIFIER;
+  // Young animals are slower
+  if (!prey.isAdult) {
+    effectiveSpeed *= 0.7;
   }
 
   // Apply hunger slowdown if too hungry
   if (prey.hunger >= PREY_HUNGER_THRESHOLD_SLOW) {
     effectiveSpeed *= PREY_SLOW_SPEED_MODIFIER;
-  }
-
-  // Young animals are slower
-  if (!prey.isAdult) {
-    effectiveSpeed *= 0.7;
   }
 
   // Apply movement slowdown from being hit

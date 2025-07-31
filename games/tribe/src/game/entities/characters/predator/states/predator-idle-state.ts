@@ -4,11 +4,9 @@ import {
   PredatorStateData,
   PREDATOR_IDLE,
   PREDATOR_MOVING,
-  PREDATOR_HUNTING,
   PREDATOR_ATTACKING,
   PREDATOR_PROCREATING,
   PREDATOR_EATING,
-  PredatorHuntingStateData,
   PredatorAttackingStateData,
   PredatorEatingStateData,
 } from './predator-state-types';
@@ -27,27 +25,13 @@ export const predatorIdleState: State<PredatorEntity, PredatorStateData> = {
           ...data,
           enteredAt: updateContext.gameState.time,
           previousState: PREDATOR_IDLE,
-          preyId: entity.huntTargetId!, // Assume huntTargetId contains the caught prey
+          preyId: entity.attackTargetId!, // Use attackTargetId for caught prey
           eatingStartTime: updateContext.gameState.time,
         } as PredatorEatingStateData,
       };
     }
 
-    // Hunting comes next
-    if (entity.activeAction === 'hunting' && entity.huntTargetId) {
-      return {
-        nextState: PREDATOR_HUNTING,
-        data: {
-          ...data,
-          enteredAt: updateContext.gameState.time,
-          previousState: PREDATOR_IDLE,
-          huntTargetId: entity.huntTargetId,
-          huntStartTime: updateContext.gameState.time,
-        } as PredatorHuntingStateData,
-      };
-    }
-
-    // Attacking humans
+    // Attacking (includes hunting prey and fighting humans)
     if (entity.activeAction === 'attacking' && entity.attackTargetId) {
       return {
         nextState: PREDATOR_ATTACKING,
