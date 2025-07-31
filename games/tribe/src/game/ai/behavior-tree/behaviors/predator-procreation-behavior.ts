@@ -6,6 +6,7 @@ import {
 } from '../../../world-consts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, Selector } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -17,39 +18,26 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
   const findImmediatePartner = new ConditionNode(
     (predator: any, context: UpdateContext, blackboard) => {
       // Find suitable partners nearby
-      let bestPartner: PredatorEntity | null = null;
-      let closestDistance = Infinity;
-
-      context.gameState.entities.entities.forEach((entity) => {
-        if (entity.type === 'predator' && entity.id !== predator.id) {
-          const potentialPartner = entity as PredatorEntity;
-          
-          // Check if this is a valid partner
-          if (
+      const bestPartner = findClosestEntity<PredatorEntity>(
+        predator,
+        context.gameState,
+        'predator',
+        PREDATOR_INTERACTION_RANGE,
+        (potentialPartner) => {
+          return (
+            potentialPartner.id !== predator.id &&
             potentialPartner.gender !== predator.gender && // Opposite gender
-            potentialPartner.isAdult &&
+            !!potentialPartner.isAdult &&
             potentialPartner.age >= PREDATOR_MIN_PROCREATION_AGE &&
             potentialPartner.age <= PREDATOR_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 100 && // Not too hungry
+            potentialPartner.hunger < 80 && // Not too hungry
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
-          ) {
-            const distance = calculateWrappedDistance(
-              predator.position,
-              potentialPartner.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-            
-            if (distance < closestDistance && distance <= PREDATOR_INTERACTION_RANGE) {
-              closestDistance = distance;
-              bestPartner = potentialPartner;
-            }
-          }
+          );
         }
-      });
+      );
 
       if (bestPartner) {
         blackboard.set('procreationPartner', bestPartner);
@@ -84,39 +72,26 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
   const locateDistantPartner = new ConditionNode(
     (predator: any, context: UpdateContext, blackboard) => {
       // Find suitable partners in a larger radius
-      let bestPartner: PredatorEntity | null = null;
-      let closestDistance = Infinity;
-
-      context.gameState.entities.entities.forEach((entity) => {
-        if (entity.type === 'predator' && entity.id !== predator.id) {
-          const potentialPartner = entity as PredatorEntity;
-          
-          // Check if this is a valid partner (same criteria as above)
-          if (
+      const bestPartner = findClosestEntity<PredatorEntity>(
+        predator,
+        context.gameState,
+        'predator',
+        PREDATOR_INTERACTION_RANGE * 3, // Wider search radius
+        (potentialPartner) => {
+          return (
+            potentialPartner.id !== predator.id &&
             potentialPartner.gender !== predator.gender &&
-            potentialPartner.isAdult &&
+            !!potentialPartner.isAdult &&
             potentialPartner.age >= PREDATOR_MIN_PROCREATION_AGE &&
             potentialPartner.age <= PREDATOR_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 100 &&
+            potentialPartner.hunger < 80 &&
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
-          ) {
-            const distance = calculateWrappedDistance(
-              predator.position,
-              potentialPartner.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-            
-            if (distance < closestDistance && distance <= PREDATOR_INTERACTION_RANGE * 3) {
-              closestDistance = distance;
-              bestPartner = potentialPartner;
-            }
-          }
+          );
         }
-      });
+      );
 
       if (bestPartner) {
         blackboard.set('procreationPartner', bestPartner);

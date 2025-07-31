@@ -2,6 +2,7 @@
 import { PREDATOR_HUNT_RANGE } from '../../../world-consts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -24,37 +25,32 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
           }
 
           // Find nearby prey
-          let closestPrey: PreyEntity | null = null;
-          let closestDistance = Infinity;
+          const closestPrey = findClosestEntity<PreyEntity>(
+            predator,
+            context.gameState,
+            'prey',
+            PREDATOR_HUNT_RANGE * 2, // Search in wider range
+            (prey) => prey.hitpoints > 0 // Target must be alive
+          );
 
-          context.gameState.entities.entities.forEach((entity) => {
-            if (entity.type === 'prey') {
-              const prey = entity as PreyEntity;
-              if (prey.hitpoints > 0) { // Target must be alive
-                const distance = calculateWrappedDistance(
-                  predator.position,
-                  prey.position,
-                  context.gameState.mapDimensions.width,
-                  context.gameState.mapDimensions.height,
-                );
-                
-                if (distance < closestDistance) {
-                  closestDistance = distance;
-                  closestPrey = prey;
-                }
-              }
+          if (closestPrey) {
+            const distance = calculateWrappedDistance(
+              predator.position,
+              closestPrey.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+
+            if (distance <= PREDATOR_HUNT_RANGE) {
+              // Prey is within hunting range
+              blackboard.set('huntTarget', closestPrey);
+              return true;
+            } else if (distance <= PREDATOR_HUNT_RANGE * 2) {
+              // Prey found but need to get closer
+              blackboard.set('huntTarget', closestPrey);
+              blackboard.set('needToApproach', true);
+              return true;
             }
-          });
-
-          if (closestPrey && closestDistance <= PREDATOR_HUNT_RANGE) {
-            // Prey is within hunting range
-            blackboard.set('huntTarget', closestPrey);
-            return true;
-          } else if (closestPrey && closestDistance <= PREDATOR_HUNT_RANGE * 2) {
-            // Prey found but need to get closer
-            blackboard.set('huntTarget', closestPrey);
-            blackboard.set('needToApproach', true);
-            return true;
           }
           
           return false;

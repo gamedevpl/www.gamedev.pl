@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { PREY_FLEE_DISTANCE, PREY_INTERACTION_RANGE } from '../../../world-consts';
-import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { getDirectionVectorOnTorus, vectorAdd, vectorNormalize, vectorScale, calculateWrappedDistance } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -18,26 +18,50 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (prey: any, context: UpdateContext, blackboard) => {
           // Find the closest threat (predator or human)
-          let closestThreat: PreyEntity | PredatorEntity | HumanEntity | null = null;
+          const closestPredator = findClosestEntity<PredatorEntity>(
+            prey,
+            context.gameState,
+            'predator',
+            PREY_INTERACTION_RANGE * 2,
+            () => true // All predators are threats
+          );
+          
+          const closestHuman = findClosestEntity<HumanEntity>(
+            prey,
+            context.gameState,
+            'human',
+            PREY_INTERACTION_RANGE * 2,
+            () => true // All humans are threats
+          );
+
+          let closestThreat: PredatorEntity | HumanEntity | null = null;
           let closestDistance = Infinity;
 
-          // Check for predators
-          context.gameState.entities.entities.forEach((entity) => {
-            if ((entity.type === 'predator' || entity.type === 'human') && entity.id !== prey.id) {
-              const distance = calculateWrappedDistance(
-                prey.position,
-                entity.position,
-                context.gameState.mapDimensions.width,
-                context.gameState.mapDimensions.height,
-              );
-              
-              // Only consider threats within a reasonable detection range
-              if (distance < PREY_INTERACTION_RANGE * 2 && distance < closestDistance) {
-                closestDistance = distance;
-                closestThreat = entity as PredatorEntity | HumanEntity;
-              }
+          if (closestPredator) {
+            const distance = calculateWrappedDistance(
+              prey.position,
+              closestPredator.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestThreat = closestPredator;
             }
-          });
+          }
+
+          if (closestHuman) {
+            const distance = calculateWrappedDistance(
+              prey.position,
+              closestHuman.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestThreat = closestHuman;
+            }
+          }
 
           if (closestThreat && closestDistance < PREY_INTERACTION_RANGE * 1.5) {
             // Store the threat for the action node

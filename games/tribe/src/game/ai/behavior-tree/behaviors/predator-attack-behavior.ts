@@ -2,6 +2,7 @@
 import { PREDATOR_ATTACK_RANGE } from '../../../world-consts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -29,37 +30,31 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode {
           }
 
           // Find nearby humans
-          let closestHuman: HumanEntity | null = null;
-          let closestDistance = Infinity;
-
-          context.gameState.entities.entities.forEach((entity) => {
-            if (entity.type === 'human') {
-              const human = entity as HumanEntity;
-              if (human.hitpoints > 0) { // Target must be alive
-                const distance = calculateWrappedDistance(
-                  predator.position,
-                  human.position,
-                  context.gameState.mapDimensions.width,
-                  context.gameState.mapDimensions.height,
-                );
-                
-                if (distance < closestDistance) {
-                  closestDistance = distance;
-                  closestHuman = human;
-                }
-              }
-            }
-          });
-
+          const closestHuman = findClosestEntity<HumanEntity>(
+            predator,
+            context.gameState,
+            'human',
+            PREDATOR_ATTACK_RANGE * 2, // Search in wider range
+            (human) => human.hitpoints > 0 // Target must be alive
+          );
           // Attack if human is within range, or approach if very hungry
-          if (closestHuman && closestDistance <= PREDATOR_ATTACK_RANGE) {
-            blackboard.set('attackTarget', closestHuman);
-            return true;
-          } else if (closestHuman && isVeryHungry && closestDistance <= PREDATOR_ATTACK_RANGE * 2) {
-            // Very hungry predators will approach humans more aggressively
-            blackboard.set('attackTarget', closestHuman);
-            blackboard.set('needToApproach', true);
-            return true;
+          if (closestHuman) {
+            const distance = calculateWrappedDistance(
+              predator.position,
+              closestHuman.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+
+            if (distance <= PREDATOR_ATTACK_RANGE) {
+              blackboard.set('attackTarget', closestHuman);
+              return true;
+            } else if (isVeryHungry && distance <= PREDATOR_ATTACK_RANGE * 2) {
+              // Very hungry predators will approach humans more aggressively
+              blackboard.set('attackTarget', closestHuman);
+              blackboard.set('needToApproach', true);
+              return true;
+            }
           }
           
           return false;

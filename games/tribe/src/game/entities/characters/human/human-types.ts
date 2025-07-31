@@ -1,30 +1,18 @@
-import { Entity } from '../../entities-types';
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
-import { AIType } from '../../../ai/ai-types';
-import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
-import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
 import { DiplomacyStatus } from '../../../world-types';
+import { CharacterEntity } from '../character-types';
 
 /**
  * Represents a human entity in the game.
  * Humans are the main characters controlled by the player or AI.
  */
-export interface HumanEntity extends Entity {
-  /** Current hunger level (0-100). Death occurs at 100. */
-  hunger: number;
-
+export interface HumanEntity extends CharacterEntity {
   /** Current hitpoints (0-maxHitpoints). Death occurs at 0. */
   hitpoints: number;
 
   /** Maximum hitpoints. */
   maxHitpoints: number;
-
-  /** Current age in game years. */
-  age: number;
-
-  /** Maximum age in game years. */
-  maxAge: number;
 
   /** Gender of the human. */
   gender: 'male' | 'female';
@@ -116,15 +104,6 @@ export interface HumanEntity extends Entity {
 
   /** A temporary slowdown effect, usually after being hit. */
   movementSlowdown?: { modifier: number; endTime: number };
-
-  /** The type of AI used by this human. */
-  aiType?: AIType;
-
-  /** The root node of the behavior tree for this AI. */
-  aiBehaviorTree?: BehaviorNode;
-
-  /** The blackboard for the behavior tree AI. */
-  aiBlackboard?: Blackboard;
 
   /** The current state machine of the human, if any. */
   diplomacy?: Map<EntityId, DiplomacyStatus>; // LeaderId -> Status

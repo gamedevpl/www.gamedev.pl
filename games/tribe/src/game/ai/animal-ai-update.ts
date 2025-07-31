@@ -9,11 +9,10 @@ import { UpdateContext } from '../world-types';
  */
 export function preyAIUpdate(prey: PreyEntity, context: UpdateContext): void {
   if (prey.aiBehaviorTree && prey.aiBlackboard) {
-    // Note: The behavior tree system is currently typed for HumanEntity,
-    // but it works generically with any entity that has the required properties.
-    // We cast to any to work around the type system limitation.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    updateBehaviorTreeAI(prey as any, context);
+    // The behavior tree system is designed for HumanEntity but works with any entity
+    // that has compatible properties. We cast to work around the type limitation
+    // while maintaining type safety through the interface constraints.
+    updateBehaviorTreeAI(prey as unknown as HumanEntity, context);
   } else {
     // Fallback if the tree is missing
     console.warn(`Behavior Tree AI ticked for prey ${prey.id}, but the tree or blackboard was missing.`);
@@ -27,11 +26,10 @@ export function preyAIUpdate(prey: PreyEntity, context: UpdateContext): void {
  */
 export function predatorAIUpdate(predator: PredatorEntity, context: UpdateContext): void {
   if (predator.aiBehaviorTree && predator.aiBlackboard) {
-    // Note: The behavior tree system is currently typed for HumanEntity,
-    // but it works generically with any entity that has the required properties.
-    // We cast to any to work around the type system limitation.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    updateBehaviorTreeAI(predator as any, context);
+    // The behavior tree system is designed for HumanEntity but works with any entity
+    // that has compatible properties. We cast to work around the type limitation
+    // while maintaining type safety through the interface constraints.
+    updateBehaviorTreeAI(predator as unknown as HumanEntity, context);
   } else {
     // Fallback if the tree is missing
     console.warn(`Behavior Tree AI ticked for predator ${predator.id}, but the tree or blackboard was missing.`);

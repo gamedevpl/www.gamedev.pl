@@ -2,6 +2,7 @@
 import { PREY_INTERACTION_RANGE } from '../../../world-consts';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -21,37 +22,32 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
           }
 
           // Find nearby berry bushes with food
-          let closestBush: BerryBushEntity | null = null;
-          let closestDistance = Infinity;
+          const closestBush = findClosestEntity<BerryBushEntity>(
+            prey, 
+            context.gameState, 
+            'berryBush', 
+            PREY_INTERACTION_RANGE * 3, // Search within reasonable range
+            (bush) => bush.food.length > 0
+          );
 
-          context.gameState.entities.entities.forEach((entity) => {
-            if (entity.type === 'berryBush') {
-              const bush = entity as BerryBushEntity;
-              if (bush.food.length > 0) {
-                const distance = calculateWrappedDistance(
-                  prey.position,
-                  bush.position,
-                  context.gameState.mapDimensions.width,
-                  context.gameState.mapDimensions.height,
-                );
-                
-                if (distance < closestDistance) {
-                  closestDistance = distance;
-                  closestBush = bush;
-                }
-              }
+          if (closestBush) {
+            const distance = calculateWrappedDistance(
+              prey.position,
+              closestBush.position,
+              context.gameState.mapDimensions.width,
+              context.gameState.mapDimensions.height,
+            );
+
+            if (distance <= PREY_INTERACTION_RANGE) {
+              // Berry bush is within interaction range
+              blackboard.set('grazingTarget', closestBush);
+              return true;
+            } else {
+              // Berry bush found but need to move closer
+              blackboard.set('grazingTarget', closestBush);
+              blackboard.set('needToMoveToTarget', true);
+              return true;
             }
-          });
-
-          if (closestBush && closestDistance <= PREY_INTERACTION_RANGE) {
-            // Berry bush is within interaction range
-            blackboard.set('grazingTarget', closestBush);
-            return true;
-          } else if (closestBush) {
-            // Berry bush found but need to move closer
-            blackboard.set('grazingTarget', closestBush);
-            blackboard.set('needToMoveToTarget', true);
-            return true;
           }
           
           return false;

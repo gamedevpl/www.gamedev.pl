@@ -1,7 +1,4 @@
 import { EntityId } from '../../entities-types';
-import { AIType } from '../../../ai/ai-types';
-import { BehaviorNode } from '../../../ai/behavior-tree/behavior-tree-types';
-import { Blackboard } from '../../../ai/behavior-tree/behavior-tree-blackboard';
 import { CharacterEntity } from '../character-types';
 
 /**
@@ -52,15 +49,6 @@ export interface PredatorEntity extends CharacterEntity {
 
   /** A temporary slowdown effect, usually after being hit. */
   movementSlowdown?: { modifier: number; endTime: number };
-
-  /** The type of AI used by this predator. */
-  aiType?: AIType;
-
-  /** The root node of the behavior tree for this AI. */
-  aiBehaviorTree?: BehaviorNode;
-
-  /** The blackboard for the behavior tree AI. */
-  aiBlackboard?: Blackboard;
 
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;

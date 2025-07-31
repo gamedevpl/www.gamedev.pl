@@ -6,6 +6,7 @@ import {
 } from '../../../world-consts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, Selector } from '../nodes';
 import { UpdateContext } from '../../../world-types';
@@ -17,17 +18,16 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
   const findImmediatePartner = new ConditionNode(
     (prey: any, context: UpdateContext, blackboard) => {
       // Find suitable partners nearby
-      let bestPartner: PreyEntity | null = null;
-      let closestDistance = Infinity;
-
-      context.gameState.entities.entities.forEach((entity) => {
-        if (entity.type === 'prey' && entity.id !== prey.id) {
-          const potentialPartner = entity as PreyEntity;
-          
-          // Check if this is a valid partner
-          if (
+      const bestPartner = findClosestEntity<PreyEntity>(
+        prey,
+        context.gameState,
+        'prey',
+        PREY_INTERACTION_RANGE,
+        (potentialPartner) => {
+          return (
+            potentialPartner.id !== prey.id &&
             potentialPartner.gender !== prey.gender && // Opposite gender
-            potentialPartner.isAdult &&
+            !!potentialPartner.isAdult &&
             potentialPartner.age >= PREY_MIN_PROCREATION_AGE &&
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
@@ -35,21 +35,9 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.hunger < 80 && // Not too hungry
             (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
             (!prey.motherId || prey.motherId !== potentialPartner.id)
-          ) {
-            const distance = calculateWrappedDistance(
-              prey.position,
-              potentialPartner.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-            
-            if (distance < closestDistance && distance <= PREY_INTERACTION_RANGE) {
-              closestDistance = distance;
-              bestPartner = potentialPartner;
-            }
-          }
+          );
         }
-      });
+      );
 
       if (bestPartner) {
         blackboard.set('procreationPartner', bestPartner);
@@ -84,17 +72,16 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
   const locateDistantPartner = new ConditionNode(
     (prey: any, context: UpdateContext, blackboard) => {
       // Find suitable partners in a larger radius
-      let bestPartner: PreyEntity | null = null;
-      let closestDistance = Infinity;
-
-      context.gameState.entities.entities.forEach((entity) => {
-        if (entity.type === 'prey' && entity.id !== prey.id) {
-          const potentialPartner = entity as PreyEntity;
-          
-          // Check if this is a valid partner (same criteria as above)
-          if (
+      const bestPartner = findClosestEntity<PreyEntity>(
+        prey,
+        context.gameState,
+        'prey',
+        PREY_INTERACTION_RANGE * 3, // Wider search radius
+        (potentialPartner) => {
+          return (
+            potentialPartner.id !== prey.id &&
             potentialPartner.gender !== prey.gender &&
-            potentialPartner.isAdult &&
+            !!potentialPartner.isAdult &&
             potentialPartner.age >= PREY_MIN_PROCREATION_AGE &&
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
@@ -102,21 +89,9 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.hunger < 80 &&
             (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
             (!prey.motherId || prey.motherId !== potentialPartner.id)
-          ) {
-            const distance = calculateWrappedDistance(
-              prey.position,
-              potentialPartner.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-            
-            if (distance < closestDistance && distance <= PREY_INTERACTION_RANGE * 3) {
-              closestDistance = distance;
-              bestPartner = potentialPartner;
-            }
-          }
+          );
         }
-      });
+      );
 
       if (bestPartner) {
         blackboard.set('procreationPartner', bestPartner);
