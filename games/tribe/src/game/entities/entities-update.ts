@@ -247,6 +247,7 @@ export function createPrey(
   gender: 'male' | 'female',
   initialAge: number = PREY_INITIAL_AGE,
   initialHunger: number = PREY_INITIAL_HUNGER,
+  geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
 ): PreyEntity {
@@ -266,6 +267,7 @@ export function createPrey(
     isPregnant: false,
     gestationTime: 0,
     procreationCooldown: 0,
+    geneCode,
     motherId,
     fatherId,
     stateMachine: [PREY_IDLE, { enteredAt: currentTime, previousState: undefined }],
@@ -283,6 +285,7 @@ export function createPredator(
   gender: 'male' | 'female',
   initialAge: number = PREDATOR_INITIAL_AGE,
   initialHunger: number = PREDATOR_INITIAL_HUNGER,
+  geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
 ): PredatorEntity {
@@ -302,6 +305,7 @@ export function createPredator(
     isPregnant: false,
     gestationTime: 0,
     procreationCooldown: 0,
+    geneCode,
     motherId,
     fatherId,
     stateMachine: [PREDATOR_IDLE, { enteredAt: currentTime, previousState: undefined }],

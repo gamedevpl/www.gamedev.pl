@@ -12,6 +12,7 @@ import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { playSoundAt } from '../../../sound/sound-manager';
 import { SoundType } from '../../../sound/sound-types';
+import { combineGenes } from './prey-utils';
 
 /**
  * Updates a prey entity's stats and handles lifecycle events.
@@ -49,12 +50,29 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
       
       const childGender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
       
+      // Get parents for genetic combination
+      const mother = prey;
+      const father = prey.fatherId ? updateContext.gameState.entities.entities.get(prey.fatherId) as PreyEntity : undefined;
+      
+      // Generate child gene code by combining parents or using mother's genes with mutation
+      let childGeneCode: number;
+      if (father) {
+        childGeneCode = combineGenes(mother.geneCode, father.geneCode);
+      } else {
+        // Use mother's genes with slight mutation if no father available
+        childGeneCode = mother.geneCode;
+        // Add some mutation
+        const mutation = Math.floor((Math.random() - 0.5) * 0x1000);
+        childGeneCode = Math.max(0x000000, Math.min(0xFFFFFF, childGeneCode + mutation));
+      }
+      
       const child = createPrey(
         updateContext.gameState.entities,
         birthPosition,
         childGender,
         0, // Start as baby
         PREY_INITIAL_HUNGER * 0.5, // Start with low hunger
+        childGeneCode, // Combined genetic code
         prey.id, // Mother ID
         prey.fatherId, // Father ID from pregnancy
       );

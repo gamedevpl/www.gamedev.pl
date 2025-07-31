@@ -33,7 +33,8 @@ export interface PreyEntity extends CharacterEntity {
   /** ID of the prey's mother, if known. */
   motherId?: EntityId;
 
-
+  /** Genetic code for visual appearance and traits. */
+  geneCode: number;
 
   /** Current active action. Set by AI decision. */
   activeAction?: PreyAction;

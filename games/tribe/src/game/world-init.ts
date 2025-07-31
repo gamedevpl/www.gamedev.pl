@@ -15,6 +15,8 @@ import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
+import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
+import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -68,7 +70,8 @@ export function initWorld(): GameWorldState {
     spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
     
     const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-    createPrey(entities, spawnPosition, gender);
+    const geneCode = generateRandomPreyGeneCode();
+    createPrey(entities, spawnPosition, gender, undefined, undefined, geneCode);
   }
 
   // Spawn initial predators in corners away from center (minimum 400 pixels from center)
@@ -107,7 +110,8 @@ export function initWorld(): GameWorldState {
     }
     
     const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-    createPredator(entities, spawnPosition, gender);
+    const geneCode = generateRandomPredatorGeneCode();
+    createPredator(entities, spawnPosition, gender, undefined, undefined, geneCode);
   }
 
   const uiButtons: ClickableUIButton[] = [
@@ -222,7 +226,8 @@ export function initIntroWorld(): GameWorldState {
       y: Math.random() * MAP_HEIGHT,
     };
     const gender = i % 2 === 0 ? 'male' : 'female';
-    createPrey(entities, randomPosition, gender);
+    const geneCode = generateRandomPreyGeneCode();
+    createPrey(entities, randomPosition, gender, undefined, undefined, geneCode);
   }
 
   // Spawn initial predators in the intro world
@@ -232,7 +237,8 @@ export function initIntroWorld(): GameWorldState {
       y: Math.random() * MAP_HEIGHT,
     };
     const gender = i % 2 === 0 ? 'male' : 'female';
-    createPredator(entities, randomPosition, gender);
+    const geneCode = generateRandomPredatorGeneCode();
+    createPredator(entities, randomPosition, gender, undefined, undefined, geneCode);
   }
 
   const tutorial = createTutorial();

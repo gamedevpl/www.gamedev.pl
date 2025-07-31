@@ -385,6 +385,8 @@ export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 8;
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
 export const PREY_BERRY_BUSH_DAMAGE: number = 1; // Reduces berry bush lifespan
+export const PREY_HUNGER_THRESHOLD_SLOW: number = 80; // When prey start moving slower
+export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 
 // Predator Constants  
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
@@ -401,6 +403,8 @@ export const PREDATOR_TERRITORIAL_RANGE: number = 120; // Range for detecting te
 export const PREDATOR_ATTACK_DAMAGE: number = 45; // Higher than human attack
 export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
 export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
+export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
+export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
 export const PREDATOR_GESTATION_PERIOD_HOURS: number = 60; // 2.5 game days
 export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 18;

@@ -37,7 +37,7 @@ export function renderPredator(ctx: CanvasRenderingContext2D, predator: Predator
       direction: [predator.direction?.x || 1, predator.direction?.y || 0],
       isPregnant: predator.isPregnant ?? false,
       hungryLevel: predator.hunger,
-      geneCode: predator.id % 0xFFFFFF || 0x804020, // Use entity ID as a simple gene code
+      geneCode: predator.geneCode, // Use actual genetic code
     }
   );
 

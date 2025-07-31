@@ -36,7 +36,7 @@ export function renderPrey(ctx: CanvasRenderingContext2D, prey: PreyEntity): voi
       direction: [prey.direction?.x || 1, prey.direction?.y || 0],
       isPregnant: prey.isPregnant ?? false,
       hungryLevel: prey.hunger,
-      geneCode: prey.id % 0xFFFFFF || 0x804020, // Use entity ID as a simple gene code
+      geneCode: prey.geneCode, // Use actual genetic code
     }
   );
 
