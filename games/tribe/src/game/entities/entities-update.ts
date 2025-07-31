@@ -38,6 +38,8 @@ import { HumanEntity } from './characters/human/human-types';
 import { PreyEntity } from './characters/prey/prey-types';
 import { PredatorEntity } from './characters/predator/predator-types';
 import { HUMAN_IDLE } from './characters/human/states/human-state-types';
+import { PREY_IDLE } from './characters/prey/states/prey-state-types';
+import { PREDATOR_IDLE } from './characters/predator/states/predator-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
@@ -249,6 +251,7 @@ export function createPrey(
   fatherId?: EntityId,
 ): PreyEntity {
   const isAdult = initialAge >= PREY_MIN_PROCREATION_AGE;
+  const currentTime = Date.now(); // Use current timestamp for state machine
 
   const prey = createEntity<PreyEntity>(state, 'prey', {
     position: initialPosition,
@@ -265,6 +268,7 @@ export function createPrey(
     procreationCooldown: 0,
     motherId,
     fatherId,
+    stateMachine: [PREY_IDLE, { enteredAt: currentTime, previousState: undefined }],
     aiType: AIType.BehaviorTreeBased,
     aiBehaviorTree: buildPreyBehaviorTree(),
     aiBlackboard: new Blackboard(),
@@ -283,6 +287,7 @@ export function createPredator(
   fatherId?: EntityId,
 ): PredatorEntity {
   const isAdult = initialAge >= PREDATOR_MIN_PROCREATION_AGE;
+  const currentTime = Date.now(); // Use current timestamp for state machine
 
   const predator = createEntity<PredatorEntity>(state, 'predator', {
     position: initialPosition,
@@ -299,6 +304,7 @@ export function createPredator(
     procreationCooldown: 0,
     motherId,
     fatherId,
+    stateMachine: [PREDATOR_IDLE, { enteredAt: currentTime, previousState: undefined }],
     aiType: AIType.BehaviorTreeBased,
     aiBehaviorTree: buildPredatorBehaviorTree(),
     aiBlackboard: new Blackboard(),
