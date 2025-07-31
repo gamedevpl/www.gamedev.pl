@@ -116,6 +116,9 @@ export function isLineage(human1: HumanEntity, human2: HumanEntity): boolean {
 
   if (human1.motherId === human2.id || human1.fatherId === human2.id) return true;
   if (human2.motherId === human1.id || human2.fatherId === human1.id) return true;
+
+  if (human1.partnerIds?.includes(human2.id) || human2.partnerIds?.includes(human1.id) || false) return true;
+
   if (human1.fatherId === undefined && human1.motherId === undefined) return false;
   if (human2.fatherId === undefined && human2.motherId === undefined) return false;
 
