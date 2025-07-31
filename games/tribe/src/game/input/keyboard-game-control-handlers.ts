@@ -3,6 +3,7 @@ import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
 import { FAST_FORWARD_AMOUNT_SECONDS } from '../world-consts';
 import { findPlayerEntity } from '../utils/world-utils';
+import { HumanEntity } from '../entities/characters/human/human-types';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -51,33 +52,34 @@ export const handleGameControlKeyDown = (
       if (!isDebugOnRef.current) {
         newState.debugCharacterId = undefined;
       } else {
-        newState.debugCharacterId = findPlayerEntity(newState)?.id ?? 
-          Array.from(newState.entities.entities.values()).find((e) => 
-            e.type === 'human' || e.type === 'prey' || e.type === 'predator'
+        newState.debugCharacterId =
+          findPlayerEntity(newState)?.id ??
+          Array.from(newState.entities.entities.values()).find(
+            (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
           )?.id;
       }
       break;
     case 'tab':
       isDebugOnRef.current = true; // Always turn on debug if cycling
 
-      const allCharacters = Array.from(newState.entities.entities.values()).filter((e) => 
-        e.type === 'human' || e.type === 'prey' || e.type === 'predator'
+      const allCharacters = Array.from(newState.entities.entities.values()).filter(
+        (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
       );
 
       if (allCharacters.length > 0) {
         // Sort: player first, then humans, then prey, then predators, all by ID
         const sortedCharacters = allCharacters.sort((a, b) => {
-          if (a.type === 'human' && (a as any).isPlayer) return -1;
-          if (b.type === 'human' && (b as any).isPlayer) return 1;
+          if (a.type === 'human' && (a as HumanEntity).isPlayer) return -1;
+          if (b.type === 'human' && (b as HumanEntity).isPlayer) return 1;
           if (a.type !== b.type) {
-            const order: Record<string, number> = { 'human': 0, 'prey': 1, 'predator': 2 };
+            const order: Record<string, number> = { human: 0, prey: 1, predator: 2 };
             const aOrder = order[a.type] ?? 999;
             const bOrder = order[b.type] ?? 999;
             return aOrder - bOrder;
           }
           return a.id - b.id;
         });
-        
+
         const currentDebugId = newState.debugCharacterId;
         const currentIndex = currentDebugId ? sortedCharacters.findIndex((c) => c.id === currentDebugId) : -1;
         const nextIndex = (currentIndex + 1) % sortedCharacters.length;
