@@ -9,6 +9,7 @@ import {
   HOURS_PER_GAME_DAY,
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_YEAR_IN_REAL_SECONDS,
+  PREY_MIN_PROCREATION_AGE,
 } from '../../../world-consts';
 import { removeEntity, createPrey, createPreyCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
@@ -25,6 +26,8 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
 
   // Age the prey
   prey.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
+
+  prey.isAdult = prey.age >= PREY_MIN_PROCREATION_AGE;
 
   // Increase hunger over time
   let hungerIncrease = PREY_HUNGER_INCREASE_PER_HOUR * gameHoursDelta;

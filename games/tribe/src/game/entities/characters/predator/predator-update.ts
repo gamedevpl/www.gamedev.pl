@@ -9,6 +9,7 @@ import {
   HOURS_PER_GAME_DAY,
   GAME_DAY_IN_REAL_SECONDS,
   HUMAN_YEAR_IN_REAL_SECONDS,
+  PREDATOR_MIN_PROCREATION_AGE,
 } from '../../../world-consts';
 import { removeEntity, createPredator, createPredatorCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
@@ -25,6 +26,8 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
 
   // Age the predator
   predator.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
+
+  predator.isAdult = predator.age >= PREDATOR_MIN_PROCREATION_AGE;
 
   // Increase hunger over time
   let hungerIncrease = PREDATOR_HUNGER_INCREASE_PER_HOUR * gameHoursDelta;

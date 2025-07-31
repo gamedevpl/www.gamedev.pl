@@ -2,45 +2,51 @@ import { Asset } from '../../../generator-core/src/assets-types';
 
 // Helper to create a HSL color string from a gene segment.
 const getColor = (geneCode: number, offset: number, saturation: number = 70, lightness: number = 50) => {
-    const value = (geneCode >> offset) & 0xFF;
-    const hue = Math.floor((value / 255) * 360);
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  const value = (geneCode >> offset) & 0xff;
+  const hue = Math.floor((value / 255) * 360);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
 
 // Helper to darken an HSL color, for the far-side legs.
 const darkenColor = (hslColor: string, amount: number): string => {
-    const match = hslColor.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
-    if (!match) return hslColor;
-    const [h, s, l] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
-    return `hsl(${h}, ${s}%, ${Math.max(0, l - amount)}%)`;
+  const match = hslColor.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+  if (!match) return hslColor;
+  const [h, s, l] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+  return `hsl(${h}, ${s}%, ${Math.max(0, l - amount)}%)`;
 };
 
 // Helper to draw a single leg.
 const drawLeg = (
-    ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number, h: number,
-    angle: number, color: string, isFarLeg: boolean = false
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  angle: number,
+  color: string,
+  isFarLeg: boolean = false,
 ) => {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-    ctx.fillStyle = isFarLeg ? darkenColor(color, 15) : color;
-    ctx.beginPath();
-    ctx.roundRect(-w / 2, 0, w, h, w / 2);
-    ctx.fill();
-    ctx.restore();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.fillStyle = isFarLeg ? darkenColor(color, 15) : color;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2, 0, w, h, w / 2);
+  ctx.fill();
+  ctx.restore();
 };
 
 // Helper to interpolate an HSL color towards a target gray color for the dead stance.
 const lerpToGray = (hslColor: string, t: number): string => {
-    const match = hslColor.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
-    const targetLightness = 75; // Lightness of a bone-like gray
-    if (!match) return `hsl(0, 0%, ${targetLightness}%)`;
-    
-    const [, h, s, l] = match.map(Number);
-    const newS = s * (1 - t);
-    const newL = l + (targetLightness - l) * t;
-    
-    return `hsl(${h}, ${newS}%, ${newL}%)`;
+  const match = hslColor.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+  const targetLightness = 75; // Lightness of a bone-like gray
+  if (!match) return `hsl(0, 0%, ${targetLightness}%)`;
+
+  const [, h, s, l] = match.map(Number);
+  const newS = s * (1 - t);
+  const newL = l + (targetLightness - l) * t;
+
+  return `hsl(${h}, ${newS}%, ${newL}%)`;
 };
 
 export const TribePrey2D: Asset = {
@@ -80,7 +86,7 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
 
 # Rendering parameters
 
-- age: The age of the character, which affects the size and proportions of the body parts. Age is a number between 1 and 60, with 20 being the average age.
+- age: The age of the character, which affects the size and proportions of the body parts. Age is a number between 0 and 12, with 2 being the average age.
 - gender:
   - 'male': Male prey are larger and more robust, with a more pronounced musculature.
   - 'female': Female prey are smaller and more agile, with a leaner build.
@@ -121,7 +127,7 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
       geneCode: number;
     } = {
       gender: 'male',
-      age: 20,
+      age: 2,
       direction: [1, 0],
       isPregnant: false,
       hungryLevel: 0,
@@ -139,7 +145,7 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
 
     const { gender, age, direction, isPregnant, hungryLevel, geneCode } = props;
 
-    const ageScale = 0.7 + (Math.min(age, 40) / 40) * 0.5;
+    const ageScale = 0.8 + (Math.min(age, 10) / 10) * 0.4;
     const genderScale = gender === 'male' ? 1.05 : 0.95;
     const hungerScale = 1.0 - (hungryLevel / 100) * 0.3;
 
@@ -152,10 +158,10 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
     const skinColor = getColor(geneCode, 0, 30, 50);
     let furColor = getColor(geneCode, 8, 50, 40);
     if (age > 45) {
-        const grayness = Math.min(1, (age - 45) / 15);
-        furColor = lerpToGray(furColor, grayness);
+      const grayness = Math.min(1, (age - 45) / 15);
+      furColor = lerpToGray(furColor, grayness);
     }
-    
+
     ctx.translate(centerX, centerY);
     if (direction[0] < 0) ctx.scale(-1, 1);
 
@@ -167,7 +173,7 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
       const t = Math.min(progress, 1);
       ctx.translate(0, effectiveHeight * 0.2);
       ctx.rotate(Math.PI / 2);
-      
+
       // Corpse color fades to bone
       const boneColor = lerpToGray(furColor, t);
       const skullColor = lerpToGray(skinColor, t);
@@ -182,9 +188,9 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
       ctx.lineTo(baseBodyWidth * 0.4, 0);
       ctx.stroke();
       for (let i = -1; i <= 1; i += 1) {
-          ctx.beginPath();
-          ctx.arc(0, 0, baseBodyHeight * 0.4, Math.PI * 0.4 * i - Math.PI*0.2, Math.PI * 0.4 * i + Math.PI*0.2);
-          ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, baseBodyHeight * 0.4, Math.PI * 0.4 * i - Math.PI * 0.2, Math.PI * 0.4 * i + Math.PI * 0.2);
+        ctx.stroke();
       }
       // Skull
       ctx.fillStyle = skullColor;
@@ -206,19 +212,27 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
     ctx.ellipse(0, shadowY, baseBodyWidth * 0.7, baseBodyWidth * 0.25, 0, 0, 2 * Math.PI);
     ctx.fill();
 
-    let headYOffset = 0, bodyYOffset = 0;
-    let leg1Angle = 0, leg2Angle = 0, leg3Angle = 0, leg4Angle = 0;
+    let headYOffset = 0,
+      bodyYOffset = 0;
+    let leg1Angle = 0,
+      leg2Angle = 0,
+      leg3Angle = 0,
+      leg4Angle = 0;
 
     switch (stance) {
       case 'idle':
         bodyYOffset = animSin * (effectiveHeight * 0.02);
-        leg1Angle = animSin * 0.05; leg2Angle = -animSin * 0.05;
-        leg3Angle = -animSin * 0.05; leg4Angle = animSin * 0.05;
+        leg1Angle = animSin * 0.05;
+        leg2Angle = -animSin * 0.05;
+        leg3Angle = -animSin * 0.05;
+        leg4Angle = animSin * 0.05;
         break;
       case 'walk':
         bodyYOffset = Math.abs(animCos) * (effectiveHeight * -0.04);
-        leg1Angle = animSin * 0.7; leg2Angle = -animSin * 0.7;
-        leg3Angle = -animSin * 0.7; leg4Angle = animSin * 0.7;
+        leg1Angle = animSin * 0.7;
+        leg2Angle = -animSin * 0.7;
+        leg3Angle = -animSin * 0.7;
+        leg4Angle = animSin * 0.7;
         break;
       case 'eat':
         headYOffset = effectiveHeight * 0.1;
@@ -235,16 +249,16 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
     }
 
     if (isPregnant && gender === 'female') {
-        baseBodyHeight *= 1.6;
+      baseBodyHeight *= 1.6;
     }
-    
+
     const torsoY = bodyYOffset;
     const bodyCenterline = torsoY - baseBodyHeight * 0.2;
 
     // Far-side legs (drawn first)
     drawLeg(ctx, baseBodyWidth * -0.35, bodyCenterline, legWidth, legHeight, leg3Angle, furColor, true);
     drawLeg(ctx, baseBodyWidth * 0.35, bodyCenterline, legWidth, legHeight, leg4Angle, furColor, true);
-    
+
     // Body
     ctx.fillStyle = furColor;
     ctx.beginPath();
@@ -261,16 +275,16 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
 
     // Face details if not facing away
     if (direction[1] >= 0) {
-        ctx.fillStyle = 'black';
-        ctx.beginPath();
-        ctx.arc(headX + headRadius * 0.3, headY - headRadius * 0.2, headRadius * 0.15, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.fillStyle = 'black';
+      ctx.beginPath();
+      ctx.arc(headX + headRadius * 0.3, headY - headRadius * 0.2, headRadius * 0.15, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // Near-side legs
     drawLeg(ctx, baseBodyWidth * -0.35, bodyCenterline, legWidth, legHeight, leg1Angle, furColor);
     drawLeg(ctx, baseBodyWidth * 0.35, bodyCenterline, legWidth, legHeight, leg2Angle, furColor);
-    
+
     ctx.restore();
   },
 };

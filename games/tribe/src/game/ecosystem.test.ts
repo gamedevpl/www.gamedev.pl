@@ -19,7 +19,7 @@ describe('Ecosystem Balance', () => {
       gameState.entities.entities.delete(id);
     }
 
-    const yearsToSimulate = 30;
+    const yearsToSimulate = 50;
     const totalSimulationSeconds = yearsToSimulate * HUMAN_YEAR_IN_REAL_SECONDS;
     const timeStepSeconds = GAME_DAY_IN_REAL_SECONDS / 24; // One hour at a time
     let yearsSimulated = 0;

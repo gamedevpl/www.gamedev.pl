@@ -411,7 +411,7 @@ export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
 export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is reduced by eating meat
 
 // Animal Spawning Constants
-export const INITIAL_PREY_COUNT: number = 30;
+export const INITIAL_PREY_COUNT: number = 20;
 export const INITIAL_PREDATOR_COUNT: number = 2;
 
 // Animal Feeding Constants (only females can feed children)

@@ -81,7 +81,7 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
 
 # Rendering parameters
 
-- age: The age of the character, which affects the size and proportions of the body parts. Age is a number between 1 and 60, with 20 being the average age.
+- age: The age of the character, which affects the size and proportions of the body parts. Age is a number between 1 and 20, with 3 being the average age.
 - gender:
   - 'male': Male predators are larger and more robust, with a more pronounced musculature.
   - 'female': Female predators are smaller and more agile, with a leaner build.
@@ -143,13 +143,13 @@ IMPORTANT: The character is visible from the side, just like in Sensible Soccer.
     if (flip) ctx.scale(-1, 1);
 
     const genes = parseGeneCode(geneCode);
-    const ageRatio = Math.max(0.6, Math.min(1.2, 1 + (age - 20) / 40));
+    const ageRatio = 0.8 + (Math.min(age, 20) / 20) * 0.4;
     const genderScale = gender === 'male' ? 1.05 : 0.95;
     const hungerScale = 1.0 - (hungryLevel / 100) * 0.25;
     const scale = ageRatio * genderScale * hungerScale;
 
     // Apply grayscale for old age
-    const ageGrayscale = Math.max(0, Math.min(1, (age - 45) / 15));
+    const ageGrayscale = Math.max(0, Math.min(1, (age - 15) / 5));
     ctx.filter = `grayscale(${ageGrayscale})`;
 
     const furColor = genes.furColor;
