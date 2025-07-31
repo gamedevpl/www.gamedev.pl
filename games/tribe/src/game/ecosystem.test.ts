@@ -4,7 +4,7 @@ import { initGame } from './index';
 import { GameWorldState } from './world-types';
 import { updateWorld } from './world-update';
 import { GAME_DAY_IN_REAL_SECONDS, HUMAN_YEAR_IN_REAL_SECONDS } from './world-consts';
-import { describe, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 describe('Ecosystem Balance', () => {
   it('should achieve balance of living prey/predators/bushes over multiple game years without humans', () => {
