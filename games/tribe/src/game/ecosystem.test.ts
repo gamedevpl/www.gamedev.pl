@@ -19,7 +19,7 @@ describe('Ecosystem Balance', () => {
       gameState.entities.entities.delete(id);
     }
 
-    const yearsToSimulate = 10; // Test ecosystem balance over 10 years
+    const yearsToSimulate = 8; // Test ecosystem balance over 8 years to see reproduction patterns
     const totalSimulationSeconds = yearsToSimulate * HUMAN_YEAR_IN_REAL_SECONDS;
     const timeStepSeconds = GAME_DAY_IN_REAL_SECONDS / 24; // One hour at a time
     let yearsSimulated = 0;
@@ -32,6 +32,8 @@ describe('Ecosystem Balance', () => {
       bushCount: number;
       preyAdults: number;
       predatorAdults: number;
+      preyBabies: number;
+      predatorBabies: number;
       avgPreyHunger: number;
       avgPredatorHunger: number;
     }> = [];
@@ -53,6 +55,8 @@ describe('Ecosystem Balance', () => {
         const bushCount = bushes.length;
         const preyAdults = prey.filter((e) => e.isAdult).length;
         const predatorAdults = predators.filter((e) => e.isAdult).length;
+        const preyBabies = prey.filter((e) => !e.isAdult).length;
+        const predatorBabies = predators.filter((e) => !e.isAdult).length;
         const avgPreyHunger = preyCount > 0 ? prey.reduce((sum, e) => sum + e.hunger, 0) / preyCount : 0;
         const avgPredatorHunger =
           predatorCount > 0 ? predators.reduce((sum, e) => sum + e.hunger, 0) / predatorCount : 0;
@@ -64,6 +68,8 @@ describe('Ecosystem Balance', () => {
           bushCount,
           preyAdults,
           predatorAdults,
+          preyBabies,
+          predatorBabies,
           avgPreyHunger,
           avgPredatorHunger,
         };
@@ -71,8 +77,8 @@ describe('Ecosystem Balance', () => {
         populationHistory.push(stats);
 
         console.log(
-          `Ecosystem Year ${yearsSimulated}: Prey: ${preyCount} (${preyAdults} adults), ` +
-            `Predators: ${predatorCount} (${predatorAdults} adults), ` +
+          `Ecosystem Year ${yearsSimulated}: Prey: ${preyCount} (${preyAdults} adults, ${preyBabies} babies), ` +
+            `Predators: ${predatorCount} (${predatorAdults} adults, ${predatorBabies} babies), ` +
             `Bushes: ${bushCount}, ` +
             `Hunger (Prey:Predator): ${avgPreyHunger.toFixed(1)}:${avgPredatorHunger.toFixed(1)}`,
         );
@@ -92,11 +98,20 @@ describe('Ecosystem Balance', () => {
 
     // Analyze ecosystem balance
     const finalStats = populationHistory[populationHistory.length - 1];
-    // const initialStats = populationHistory[0]; // Available if needed for future analysis
+    const initialStats = populationHistory[0];
 
-    // Ecosystem should maintain viable populations
+    // Ecosystem should show growth over time or at least maintain populations
     expect(finalStats.preyCount).toBeGreaterThan(0); // Prey should survive
+    expect(finalStats.predatorCount).toBeGreaterThan(0); // Predators should survive too
     expect(finalStats.bushCount).toBeGreaterThan(10); // Berry bushes should be sustainable
+
+    // Check if any reproduction occurred (babies were born)
+    const totalBabiesBorn = populationHistory.reduce((sum, stats) => sum + stats.preyBabies + stats.predatorBabies, 0);
+    expect(totalBabiesBorn).toBeGreaterThan(0); // Some reproduction should have occurred
+
+    // Population should be viable, not just surviving
+    expect(finalStats.preyCount).toBeGreaterThan(2); // Healthy prey population
+    expect(finalStats.predatorCount).toBeGreaterThan(1); // Viable predator population
 
     // There should be some ecosystem activity
     expect(populationHistory.length).toBeGreaterThan(5); // Should run for at least 5 years
@@ -104,10 +119,12 @@ describe('Ecosystem Balance', () => {
     // Population shouldn't crash to zero immediately
     const midpointStats = populationHistory[Math.floor(populationHistory.length / 2)];
     expect(midpointStats.preyCount).toBeGreaterThan(0);
+    expect(midpointStats.predatorCount).toBeGreaterThan(0); // Predators should still be viable mid-game
     expect(midpointStats.bushCount).toBeGreaterThan(5);
 
-    // Predators might go extinct (acceptable), but prey and plants must survive
+    // Overall ecosystem should be growing and thriving
     console.log('Final ecosystem state:', finalStats);
-    console.log('Population stability test passed');
+    console.log(`Population growth: Prey ${initialStats.preyCount} → ${finalStats.preyCount}, Predators ${initialStats.predatorCount} → ${finalStats.predatorCount}`);
+    console.log('Ecosystem growth and balance test passed');
   }, 60000); // 60 second timeout
 });

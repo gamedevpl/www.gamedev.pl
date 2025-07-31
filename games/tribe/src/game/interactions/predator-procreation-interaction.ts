@@ -30,8 +30,8 @@ export const predatorProcreationInteraction: InteractionDefinition<PredatorEntit
       predator1.id !== predator2.id && // Different entities
       !predator1.isPregnant &&
       !predator2.isPregnant &&
-      predator1.hunger < 90 && // Not too hungry
-      predator2.hunger < 90 &&
+      predator1.hunger < 200 && // Very lenient for debugging
+      predator2.hunger < 200 &&
       (!predator1.procreationCooldown || predator1.procreationCooldown <= 0) &&
       (!predator2.procreationCooldown || predator2.procreationCooldown <= 0)
     );

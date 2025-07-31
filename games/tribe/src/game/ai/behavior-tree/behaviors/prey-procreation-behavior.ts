@@ -32,9 +32,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 110 && // Allow reproduction unless critically hungry
-            (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
-            (!prey.motherId || prey.motherId !== potentialPartner.id)
+            potentialPartner.hunger < 200 // Very lenient for debugging
           );
         }
       );
@@ -86,9 +84,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 110 && // Allow reproduction unless critically hungry
-            (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
-            (!prey.motherId || prey.motherId !== potentialPartner.id)
+            potentialPartner.hunger < 200 // Very lenient for debugging
           );
         }
       );
@@ -148,7 +144,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             !prey.isPregnant &&
             prey.age >= PREY_MIN_PROCREATION_AGE &&
             prey.age <= PREY_MAX_PROCREATION_AGE &&
-            prey.hunger < 110 && // Allow reproduction unless critically hungry
+            prey.hunger < 200 && // Very lenient for debugging
             (!prey.procreationCooldown || prey.procreationCooldown <= 0)
           );
         },

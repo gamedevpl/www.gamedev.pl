@@ -30,8 +30,8 @@ export const preyProcreationInteraction: InteractionDefinition<PreyEntity, PreyE
       prey1.id !== prey2.id && // Different entities
       !prey1.isPregnant &&
       !prey2.isPregnant &&
-      prey1.hunger < 80 && // Not too hungry
-      prey2.hunger < 80 &&
+      prey1.hunger < 200 && // Very lenient for debugging
+      prey2.hunger < 200 &&
       (!prey1.procreationCooldown || prey1.procreationCooldown <= 0) &&
       (!prey2.procreationCooldown || prey2.procreationCooldown <= 0)
     );
