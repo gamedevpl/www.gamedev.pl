@@ -373,6 +373,10 @@ export const PREY_BASE_SPEED: number = 15; // Faster than humans
 export const PREY_INITIAL_HUNGER: number = 30;
 export const PREY_INITIAL_AGE: number = 2;
 export const PREY_INTERACTION_RANGE: number = 25;
+
+// Player interaction ranges for animal hunting/defending
+export const PLAYER_HUNT_PREY_RANGE: number = 120;
+export const PLAYER_DEFEND_PREDATOR_RANGE: number = 150;
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
 export const PREY_GESTATION_PERIOD_HOURS: number = 48; // 2 game days

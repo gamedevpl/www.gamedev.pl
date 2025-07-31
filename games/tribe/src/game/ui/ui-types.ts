@@ -22,8 +22,6 @@ export enum PlayerActionType {
   AutopilotPlant = 'AutopilotPlant',
   AutopilotFeedChild = 'AutopilotFeedChild',
   AutopilotFollowMe = 'AutopilotFollowMe',
-  AutopilotHuntPrey = 'AutopilotHuntPrey',
-  AutopilotDefendAgainstPredator = 'AutopilotDefendAgainstPredator',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -45,8 +43,6 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: '🌱',
   [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotFollowMe]: '➡️',
-  [PlayerActionType.AutopilotHuntPrey]: '🏹',
-  [PlayerActionType.AutopilotDefendAgainstPredator]: '🛡️',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -68,8 +64,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: 'Plant',
   [PlayerActionType.AutopilotFeedChild]: 'Feed',
   [PlayerActionType.AutopilotFollowMe]: 'Follow',
-  [PlayerActionType.AutopilotHuntPrey]: 'Hunt',
-  [PlayerActionType.AutopilotDefendAgainstPredator]: 'Defend',
 };
 
 export interface PlayerActionHint {

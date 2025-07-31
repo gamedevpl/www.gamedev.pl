@@ -6,7 +6,7 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { renderHumanCorpse } from './render-human-corpse';
 import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
 import { renderCharacter } from './render-character';
-import { renderPrey, renderPredator } from './render-animals';
+import { renderPreyEntity, renderPredatorEntity } from './render-animals';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
@@ -108,9 +108,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
     } else if (entity.type === 'humanCorpse') {
       renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);
     } else if (entity.type === 'prey') {
-      renderWithWrapping(ctx, worldWidth, worldHeight, renderPrey, entity as PreyEntity);
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderPreyEntity, entity as PreyEntity);
     } else if (entity.type === 'predator') {
-      renderWithWrapping(ctx, worldWidth, worldHeight, renderPredator, entity as PredatorEntity);
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderPredatorEntity, entity as PredatorEntity);
     }
   });
 

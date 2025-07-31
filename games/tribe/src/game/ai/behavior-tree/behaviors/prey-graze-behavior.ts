@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { PREY_INTERACTION_RANGE } from '../../../world-consts';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
@@ -26,7 +26,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
             prey, 
             context.gameState, 
             'berryBush', 
-            PREY_INTERACTION_RANGE * 3, // Search within reasonable range
+            PREY_INTERACTION_RANGE * 5, // Increased search range to prevent starvation
             (bush) => bush.food.length > 0
           );
 
@@ -84,14 +84,13 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
             prey.activeAction = 'moving';
             prey.target = target.id;
             
-            const directionToTarget = getDirectionVectorOnTorus(
+            const directionToTarget = dirToTarget(
               prey.position,
               target.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
+              context.gameState.mapDimensions,
             );
             
-            prey.direction = vectorNormalize(directionToTarget);
+            prey.direction = directionToTarget;
             return NodeStatus.RUNNING;
           }
 

@@ -1,6 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 // PreyEntity and PredatorEntity types used for type checking in switch cases
-import { UpdateContext } from '../../../world-types';
+import { UpdateContext, GameWorldState } from '../../../world-types';
+import { Entity } from '../../../entities/entities-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
@@ -21,10 +22,10 @@ import { canProcreate, isPositionOccupied } from '../../../utils';
  * have identical behavior - they differ only in target validation.
  */
 function handleAutopilotAttack(
-  gameState: any,
+  gameState: GameWorldState,
   human: HumanEntity,
   activeAction: { targetEntityId: number },
-  targetValidator?: (target: any) => boolean
+  targetValidator?: (target: Entity) => boolean
 ): NodeStatus {
   const target = gameState.entities.entities.get(activeAction.targetEntityId);
 
@@ -268,18 +269,6 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode {
               human.target = leader.id;
               human.direction = dirToTarget(human.position, leader.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
-            }
-
-            // --- HUNT PREY ---
-            case PlayerActionType.AutopilotHuntPrey: {
-              // Same logic as AutopilotAttack, but restricted to prey targets
-              return handleAutopilotAttack(gameState, human, activeAction, (target) => target.type === 'prey');
-            }
-
-            // --- DEFEND AGAINST PREDATOR ---
-            case PlayerActionType.AutopilotDefendAgainstPredator: {
-              // Same logic as AutopilotAttack, but restricted to predator targets
-              return handleAutopilotAttack(gameState, human, activeAction, (target) => target.type === 'predator');
             }
 
             default:
