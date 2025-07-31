@@ -18,7 +18,7 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
@@ -57,15 +57,15 @@ export const handlePlayerActionKeyDown = (
       (b) => b.food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
     );
 
-    const gatherCorpseTarget = findClosestEntity<HumanCorpseEntity>(
+    const gatherCorpseTarget = findClosestEntity<CorpseEntity>(
       playerEntity,
       gameState,
-      'humanCorpse',
+      'corpse',
       HUMAN_INTERACTION_RANGE,
       (c) => c.food.length > 0 && playerEntity.food.length < playerEntity.maxFood,
     );
 
-    let target: BerryBushEntity | HumanCorpseEntity | null = null;
+    let target: BerryBushEntity | CorpseEntity | null = null;
     if (gatherBushTarget && gatherCorpseTarget) {
       target =
         calculateWrappedDistance(

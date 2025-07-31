@@ -48,7 +48,7 @@ describe('Game Mechanics', () => {
         const maxHumanAge = Math.max(...humans.map((e) => e.age));
         const averageHunger = humans.reduce((sum, e) => sum + e.hunger, 0) / humanCount || 0;
         const corpsesCount = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'humanCorpse',
+          (e) => e.type === 'corpse',
         ).length;
         const foodBerries = humans
           .filter((e) => e.food.length > 0)

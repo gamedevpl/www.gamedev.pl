@@ -1,7 +1,7 @@
 import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HUMAN_GATHERING } from '../entities/characters/human/states/human-state-types';
 import { BERRY_BUSH_CLAIM_DURATION_HOURS, HUMAN_INTERACTION_RANGE, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
@@ -45,12 +45,12 @@ const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity, BerryB
   },
 };
 
-const humanCorpseGatherInteraction: InteractionDefinition<HumanEntity, HumanCorpseEntity> = {
-  id: 'humanCorpseGather',
+const corpseGatherInteraction: InteractionDefinition<HumanEntity, CorpseEntity> = {
+  id: 'corpseGather',
   sourceType: 'human',
-  targetType: 'humanCorpse',
+  targetType: 'corpse',
   maxDistance: HUMAN_INTERACTION_RANGE,
-  checker: (human: HumanEntity, corpse: HumanCorpseEntity, context): boolean => {
+  checker: (human: HumanEntity, corpse: CorpseEntity, context): boolean => {
     return (
       (human.isAdult &&
         corpse.food.length > 0 &&
@@ -72,4 +72,4 @@ const humanCorpseGatherInteraction: InteractionDefinition<HumanEntity, HumanCorp
   },
 };
 
-export const humanGatherFoodInteractions = [humanBerryBushGatherInteraction, humanCorpseGatherInteraction];
+export const humanGatherFoodInteractions = [humanBerryBushGatherInteraction, corpseGatherInteraction];

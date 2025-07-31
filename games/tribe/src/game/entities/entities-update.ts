@@ -33,7 +33,7 @@ import {
   PREDATOR_MAX_HITPOINTS,
   PREDATOR_MIN_PROCREATION_AGE,
 } from '../world-consts';
-import { HumanCorpseEntity } from './characters/human/human-corpse-types';
+import { CorpseEntity } from './characters/corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { PreyEntity } from './characters/prey/prey-types';
 import { PredatorEntity } from './characters/predator/predator-types';
@@ -153,31 +153,53 @@ export function createHuman(
   return human;
 }
 
-export function createHumanCorpse(
+export function createCorpse(
   state: Entities,
   position: Vector2D,
   gender: 'male' | 'female',
   age: number,
   radius: number,
-  originalHumanId: EntityId,
+  originalEntityId: EntityId,
+  originalEntityType: 'human' | 'prey' | 'predator',
   currentTime: number,
   carriedFood: FoodItem[],
   hunger: number,
-): HumanCorpseEntity {
-  const corpse = createEntity<HumanCorpseEntity>(state, 'humanCorpse', {
+  geneCode?: number,
+): CorpseEntity {
+  // Calculate meat amount based on original entity type and hunger level
+  let initialFood: number;
+  let hungerThreshold: number;
+  
+  switch (originalEntityType) {
+    case 'human':
+      initialFood = HUMAN_CORPSE_INITIAL_FOOD;
+      hungerThreshold = HUMAN_HUNGER_THRESHOLD_CRITICAL;
+      break;
+    case 'prey':
+      initialFood = 2; // Prey provides less meat than humans
+      hungerThreshold = 120; // Prey hunger death threshold
+      break;
+    case 'predator':
+      initialFood = 4; // Predators provide more meat than prey
+      hungerThreshold = 140; // Predator hunger death threshold
+      break;
+  }
+
+  const corpse = createEntity<CorpseEntity>(state, 'corpse', {
     position,
     radius: radius,
     gender,
     age,
-    originalHumanId,
+    originalEntityId,
+    originalEntityType,
     timeOfDeath: currentTime,
     decayProgress: 0,
+    geneCode,
     food: [
       ...Array.from(
         {
           length: Math.max(
-            (HUMAN_CORPSE_INITIAL_FOOD * Math.max(HUMAN_HUNGER_THRESHOLD_CRITICAL - hunger, 0)) /
-              HUMAN_HUNGER_THRESHOLD_CRITICAL,
+            (initialFood * Math.max(hungerThreshold - hunger, 0)) / hungerThreshold,
             1,
           ),
         },
@@ -189,6 +211,81 @@ export function createHumanCorpse(
     stateMachine: undefined,
   });
   return corpse;
+}
+
+export function createHumanCorpse(
+  state: Entities,
+  position: Vector2D,
+  gender: 'male' | 'female',
+  age: number,
+  radius: number,
+  originalHumanId: EntityId,
+  currentTime: number,
+  carriedFood: FoodItem[],
+  hunger: number,
+): CorpseEntity {
+  return createCorpse(
+    state,
+    position,
+    gender,
+    age,
+    radius,
+    originalHumanId,
+    'human',
+    currentTime,
+    carriedFood,
+    hunger,
+  );
+}
+
+export function createPreyCorpse(
+  state: Entities,
+  position: Vector2D,
+  gender: 'male' | 'female',
+  age: number,
+  radius: number,
+  originalPreyId: EntityId,
+  currentTime: number,
+  geneCode: number,
+): CorpseEntity {
+  return createCorpse(
+    state,
+    position,
+    gender,
+    age,
+    radius,
+    originalPreyId,
+    'prey',
+    currentTime,
+    [], // Prey don't carry food
+    0, // Default hunger for meat calculation
+    geneCode,
+  );
+}
+
+export function createPredatorCorpse(
+  state: Entities,
+  position: Vector2D,
+  gender: 'male' | 'female',
+  age: number,
+  radius: number,
+  originalPredatorId: EntityId,
+  currentTime: number,
+  geneCode: number,
+): CorpseEntity {
+  return createCorpse(
+    state,
+    position,
+    gender,
+    age,
+    radius,
+    originalPredatorId,
+    'predator',
+    currentTime,
+    [], // Predators don't carry food
+    0, // Default hunger for meat calculation
+    geneCode,
+  );
 }
 
 export function giveBirth(

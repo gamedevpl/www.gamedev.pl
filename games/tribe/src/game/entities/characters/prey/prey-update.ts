@@ -7,7 +7,7 @@ import {
   PREY_INITIAL_HUNGER,
   EFFECT_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
-import { removeEntity, createPrey } from '../../entities-update';
+import { removeEntity, createPrey, createPreyCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { playSoundAt } from '../../../sound/sound-manager';
@@ -137,6 +137,18 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
   }
 
   if (shouldDie) {
+    // Create a corpse before removing the prey entity
+    createPreyCorpse(
+      updateContext.gameState.entities,
+      prey.position,
+      prey.gender,
+      prey.age,
+      prey.radius,
+      prey.id,
+      updateContext.gameState.time,
+      prey.geneCode,
+    );
+    
     // Remove the prey entity from the world
     removeEntity(updateContext.gameState.entities, prey.id);
   }

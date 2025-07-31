@@ -6,7 +6,7 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../../../entities/characters/corpse-types';
 
 const DESPERATE_TARGET_KEY = 'desperateAttackTarget';
 
@@ -38,10 +38,10 @@ export function createDesperateAttackBehavior(depth: number): BehaviorNode {
             HUMAN_INTERACTION_RANGE,
             (b) => b.food.length > 0,
           );
-          const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+          const closestCorpse = findClosestEntity<CorpseEntity>(
             human,
             context.gameState,
-            'humanCorpse',
+            'corpse',
             HUMAN_INTERACTION_RANGE,
             (c) => c.food.length > 0,
           );

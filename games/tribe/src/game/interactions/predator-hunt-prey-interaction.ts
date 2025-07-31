@@ -5,7 +5,6 @@ import {
   PREDATOR_HUNT_RANGE,
   PREDATOR_HUNT_DAMAGE,
   PREDATOR_HUNT_COOLDOWN_HOURS,
-  PREDATOR_MEAT_HUNGER_REDUCTION,
   EFFECT_DURATION_SHORT_HOURS,
 } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
@@ -51,10 +50,8 @@ export const predatorHuntPreyInteraction: InteractionDefinition<PredatorEntity, 
     // Set hunt cooldown
     predator.huntCooldown = PREDATOR_HUNT_COOLDOWN_HOURS;
 
-    // If prey is killed, predator gets fed
+    // If prey is killed, create corpse (meat gathering handled separately)  
     if (prey.hitpoints <= 0) {
-      predator.hunger = Math.max(0, predator.hunger - PREDATOR_MEAT_HUNGER_REDUCTION);
-      
       // Play death sound
       playSoundAt(context, SoundType.HumanDeath, prey.position); // Reuse human death sound
       

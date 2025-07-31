@@ -7,7 +7,7 @@ import {
   PREDATOR_INITIAL_HUNGER,
   EFFECT_DURATION_MEDIUM_HOURS,
 } from '../../../world-consts';
-import { removeEntity, createPredator } from '../../entities-update';
+import { removeEntity, createPredator, createPredatorCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { playSoundAt } from '../../../sound/sound-manager';
@@ -136,6 +136,18 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
   }
 
   if (shouldDie) {
+    // Create a corpse before removing the predator entity
+    createPredatorCorpse(
+      updateContext.gameState.entities,
+      predator.position,
+      predator.gender,
+      predator.age,
+      predator.radius,
+      predator.id,
+      updateContext.gameState.time,
+      predator.geneCode,
+    );
+    
     // Remove the predator entity from the world
     removeEntity(updateContext.gameState.entities, predator.id);
   }

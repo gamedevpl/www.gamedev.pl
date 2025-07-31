@@ -13,6 +13,7 @@ import { preyProcreationInteraction } from './prey-procreation-interaction';
 import { predatorProcreationInteraction } from './predator-procreation-interaction';
 import { preyChildFeedingInteraction } from './prey-child-feeding-interaction';
 import { predatorChildFeedingInteraction } from './predator-child-feeding-interaction';
+import { predatorEatCorpseInteraction } from './predator-eat-corpse-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -24,6 +25,7 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   preyEatBerryBushInteraction,
   preyChildFeedingInteraction, // Prey parent-child feeding
   predatorChildFeedingInteraction, // Predator parent-child feeding
+  predatorEatCorpseInteraction, // Predators can eat from any corpse
   predatorHuntPreyInteraction,
   humanHuntPreyInteraction,
   humanAttackPredatorInteraction, // Humans can defend against predators

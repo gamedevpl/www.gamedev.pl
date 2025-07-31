@@ -10,12 +10,12 @@ import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../n
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../../../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../../../entities/characters/corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
 
-type FoodSource = BerryBushEntity | HumanCorpseEntity;
+type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
 
 /**
@@ -73,10 +73,10 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
         },
       );
 
-      const closestCorpse = findClosestEntity<HumanCorpseEntity>(
+      const closestCorpse = findClosestEntity<CorpseEntity>(
         human,
         context.gameState,
-        'humanCorpse',
+        'corpse',
         AI_GATHERING_SEARCH_RADIUS,
         (c) => c.food.length > 0,
       );

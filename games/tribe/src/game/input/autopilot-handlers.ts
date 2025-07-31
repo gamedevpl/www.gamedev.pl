@@ -31,7 +31,7 @@ export const determineHoveredAutopilotAction = (
       };
     } else if (
       player.isAdult &&
-      hoveredEntity.type === 'humanCorpse' &&
+      hoveredEntity.type === 'corpse' &&
       (hoveredEntity as HumanEntity).food.length > 0
     ) {
       determinedAction = {

@@ -1,5 +1,5 @@
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
@@ -56,7 +56,7 @@ export interface IndexedWorldState extends GameWorldState {
   search: {
     human: IndexType<HumanEntity>;
     berryBush: IndexType<BerryBushEntity>;
-    humanCorpse: IndexType<HumanCorpseEntity>;
+    corpse: IndexType<CorpseEntity>;
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
   };

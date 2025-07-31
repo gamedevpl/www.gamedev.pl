@@ -3,8 +3,8 @@ import { GameWorldState } from '../world-types';
 import { VisualEffect } from '../visual-effects/visual-effect-types';
 import { renderBerryBush } from './render-bush';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
-import { renderHumanCorpse } from './render-human-corpse';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { renderCorpse } from './render-corpse';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { renderCharacter } from './render-character';
 import { renderPrey } from './render-prey';
 import { renderPredator } from './render-predator';
@@ -106,8 +106,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
         gameState.time,
         gameState.debugCharacterId,
       );
-    } else if (entity.type === 'humanCorpse') {
-      renderWithWrapping(ctx, worldWidth, worldHeight, renderHumanCorpse, entity as HumanCorpseEntity);
+    } else if (entity.type === 'corpse') {
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderCorpse, entity as CorpseEntity);
     } else if (entity.type === 'prey') {
       renderWithWrapping(
         ctx, 

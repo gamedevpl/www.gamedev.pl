@@ -3,10 +3,10 @@ import { stateUpdate } from '../state-machine/state-machine-update';
 import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
-import { humanCorpseUpdate } from './characters/human/human-corpse-update';
+import { corpseUpdate } from './characters/corpse-update';
 import { preyUpdate } from './characters/prey/prey-update';
 import { predatorUpdate } from './characters/predator/predator-update';
-import { HumanCorpseEntity } from './characters/human/human-corpse-types';
+import { CorpseEntity } from './characters/corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { PreyEntity } from './characters/prey/prey-types';
 import { PredatorEntity } from './characters/predator/predator-types';
@@ -71,8 +71,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   if (entity.type === 'human') {
     // Pass the full updateContext and deltaTime to humanUpdate
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
-  } else if (entity.type === 'humanCorpse') {
-    humanCorpseUpdate(entity as HumanCorpseEntity, updateContext);
+  } else if (entity.type === 'corpse') {
+    corpseUpdate(entity as CorpseEntity, updateContext);
   } else if (entity.type === 'prey') {
     preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'predator') {

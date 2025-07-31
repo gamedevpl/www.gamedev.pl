@@ -42,7 +42,7 @@ export function isPositionOccupied(
   const potentialOccupants = [
     ...indexedState.search.human.byRect(searchRect),
     ...indexedState.search.berryBush.byRect(searchRect),
-    ...indexedState.search.humanCorpse.byRect(searchRect),
+    ...indexedState.search.corpse.byRect(searchRect),
   ];
 
   for (const entity of potentialOccupants) {

@@ -12,7 +12,6 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { getDirectionVectorOnTorus, vectorScale } from '../utils/math-utils';
-import { FoodType } from '../food/food-types';
 import { HUMAN_ATTACKING } from '../entities/characters/human/states/human-state-types';
 
 /**
@@ -61,15 +60,8 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
     // Set attack cooldown
     human.attackCooldown = HUMAN_ATTACK_COOLDOWN_HOURS;
 
-    // If prey is killed, human gets meat
+    // If prey is killed, create corpse (meat gathering handled separately)
     if (prey.hitpoints <= 0) {
-      // Add meat to human's inventory if there's space
-      if (human.food.length < human.maxFood) {
-        human.food.push({
-          type: FoodType.Meat,
-        });
-      }
-      
       // Play death sound
       playSoundAt(context, SoundType.HumanDeath, prey.position); // Reuse human death sound
       

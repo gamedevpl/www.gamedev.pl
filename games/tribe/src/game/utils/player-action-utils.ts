@@ -5,7 +5,7 @@ import {
   HUMAN_INTERACTION_RANGE,
   PLAYER_CALL_TO_ATTACK_RADIUS,
 } from '../world-consts';
-import { HumanCorpseEntity } from '../entities/characters/human/human-corpse-types';
+import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
@@ -38,15 +38,15 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
       (b) => b.food.length > 0,
     );
 
-    const gatherCorpseTarget = findClosestEntity<HumanCorpseEntity>(
+    const gatherCorpseTarget = findClosestEntity<CorpseEntity>(
       player,
       gameState,
-      'humanCorpse',
+      'corpse',
       HUMAN_INTERACTION_RANGE,
       (c) => c.food.length > 0,
     );
 
-    let target: BerryBushEntity | HumanCorpseEntity | null = null;
+    let target: BerryBushEntity | CorpseEntity | null = null;
     if (gatherBushTarget && gatherCorpseTarget) {
       target =
         calculateWrappedDistance(
