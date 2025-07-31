@@ -75,7 +75,7 @@ function loadSprite(spriteName: string): Promise<HTMLImageElement> {
       reject(new Error(`Failed to load sprite: ${spriteName}`));
     };
     
-    // Set sprite path - assumes sprites are in public/assets/sprites/emojis/
+    // Set sprite path - browser environment only
     img.src = `assets/sprites/emojis/${spriteName}.png`;
   });
   
@@ -87,6 +87,12 @@ function loadSprite(spriteName: string): Promise<HTMLImageElement> {
  * Preload all emoji sprites
  */
 export async function preloadSprites(): Promise<void> {
+  // Skip sprite loading in Node.js environment (tests)
+  if (typeof window === 'undefined') {
+    console.log('Skipping sprite preload in Node.js environment');
+    return;
+  }
+  
   const spriteNames = Object.values(EMOJI_TO_SPRITE_MAP);
   const uniqueSpriteNames = [...new Set(spriteNames)]; // Remove duplicates
   
