@@ -32,7 +32,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREDATOR_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 80 && // Not too hungry
+            potentialPartner.hunger < 100 && // Allow reproduction unless critically hungry
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
           );
@@ -86,7 +86,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREDATOR_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 80 &&
+            potentialPartner.hunger < 100 && // Allow reproduction unless critically hungry
             (!predator.fatherId || predator.fatherId !== potentialPartner.id) &&
             (!predator.motherId || predator.motherId !== potentialPartner.id)
           );

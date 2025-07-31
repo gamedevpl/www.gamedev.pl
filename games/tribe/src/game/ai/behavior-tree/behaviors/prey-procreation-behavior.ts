@@ -32,7 +32,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 80 && // Not too hungry
+            potentialPartner.hunger < 100 && // Allow reproduction unless critically hungry
             (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
             (!prey.motherId || prey.motherId !== potentialPartner.id)
           );
@@ -86,7 +86,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             potentialPartner.age <= PREY_MAX_PROCREATION_AGE &&
             !potentialPartner.isPregnant &&
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
-            potentialPartner.hunger < 80 &&
+            potentialPartner.hunger < 100 && // Allow reproduction unless critically hungry
             (!prey.fatherId || prey.fatherId !== potentialPartner.id) &&
             (!prey.motherId || prey.motherId !== potentialPartner.id)
           );
@@ -148,7 +148,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             !prey.isPregnant &&
             prey.age >= PREY_MIN_PROCREATION_AGE &&
             prey.age <= PREY_MAX_PROCREATION_AGE &&
-            prey.hunger < 80 && // Not too hungry
+            prey.hunger < 100 && // Allow reproduction unless critically hungry
             (!prey.procreationCooldown || prey.procreationCooldown <= 0)
           );
         },
