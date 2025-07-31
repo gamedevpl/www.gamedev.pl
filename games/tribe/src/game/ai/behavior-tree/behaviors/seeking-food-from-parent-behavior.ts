@@ -17,7 +17,7 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
  *
  * @returns A behavior node representing the entire "seeking food from parent" logic.
  */
-export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode {
+export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Am I a hungry child?

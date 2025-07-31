@@ -6,16 +6,17 @@ import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 
 /**
  * Creates a behavior sub-tree for predators hunting prey.
  */
-export function createPredatorHuntBehavior(depth: number): BehaviorNode {
+export function createPredatorHuntBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // Condition: Should I hunt?
       new ConditionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           // Only hunt if moderately hungry and not on cooldown
           if (predator.hunger <= 50 || (predator.huntCooldown && predator.huntCooldown > 0)) {
             return false;
@@ -57,7 +58,7 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
       ),
       // Action: Hunt or approach prey
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           const target = blackboard.get<PreyEntity>('huntTarget');
           const needToApproach = blackboard.get<boolean>('needToApproach');
 

@@ -14,9 +14,9 @@ import { UpdateContext } from '../../../world-types';
 /**
  * Creates a behavior sub-tree for predator procreation.
  */
-export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
+export function createPredatorProcreationBehavior(depth: number): BehaviorNode<PredatorEntity> {
   const findImmediatePartner = new ConditionNode(
-    (predator: any, context: UpdateContext, blackboard) => {
+    (predator: PredatorEntity, context: UpdateContext, blackboard) => {
       // Find suitable partners nearby
       const bestPartner = findClosestEntity<PredatorEntity>(
         predator,
@@ -34,7 +34,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 200 // Very lenient for debugging
           );
-        }
+        },
       );
 
       if (bestPartner) {
@@ -48,7 +48,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const startProcreating = new ActionNode(
-    (predator: any, _context: UpdateContext, blackboard) => {
+    (predator: PredatorEntity, _context: UpdateContext, blackboard) => {
       const partner = blackboard.get<PredatorEntity>('procreationPartner');
       if (!partner) {
         return NodeStatus.FAILURE;
@@ -68,7 +68,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const locateDistantPartner = new ConditionNode(
-    (predator: any, context: UpdateContext, blackboard) => {
+    (predator: PredatorEntity, context: UpdateContext, blackboard) => {
       // Find suitable partners in a larger radius
       const bestPartner = findClosestEntity<PredatorEntity>(
         predator,
@@ -86,7 +86,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 200 // Very lenient for debugging
           );
-        }
+        },
       );
 
       if (bestPartner) {
@@ -100,7 +100,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const moveTowardsPartner = new ActionNode(
-    (predator: any, context: UpdateContext, blackboard) => {
+    (predator: PredatorEntity, context: UpdateContext, blackboard) => {
       const partner = blackboard.get<PredatorEntity>('procreationPartner');
       if (!partner) {
         return NodeStatus.FAILURE;
@@ -119,14 +119,14 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
 
       predator.activeAction = 'moving';
       predator.target = partner.id;
-      
+
       const directionToPartner = getDirectionVectorOnTorus(
         predator.position,
         partner.position,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
-      
+
       predator.direction = vectorNormalize(directionToPartner);
       return NodeStatus.RUNNING;
     },
@@ -138,7 +138,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
     [
       // Basic fertility conditions
       new ConditionNode(
-        (predator: any) => {
+        (predator) => {
           return !!(
             predator.isAdult &&
             !predator.isPregnant &&

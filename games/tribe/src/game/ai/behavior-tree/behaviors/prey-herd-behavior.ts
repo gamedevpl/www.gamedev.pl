@@ -10,12 +10,12 @@ import { UpdateContext } from '../../../world-types';
  * Creates a behavior sub-tree for prey herding behavior.
  * Prey naturally form large herds for protection, following the largest nearby groups.
  */
-export function createPreyHerdBehavior(depth: number): BehaviorNode {
+export function createPreyHerdBehavior(depth: number): BehaviorNode<PreyEntity> {
   return new Sequence(
     [
       // Condition: Should I join/follow the herd?
       new ConditionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           // Only engage in herding when safe and not busy
           if (
             prey.hunger > 90 || // Too hungry to socialize
@@ -29,7 +29,7 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
           // Find nearby prey to form/join herd
           const nearbyPrey = context.gameState.entities.entities.values();
           const herdMembers: PreyEntity[] = [];
-          
+
           for (const entity of nearbyPrey) {
             if (entity.type === 'prey' && entity.id !== prey.id) {
               const otherPrey = entity as PreyEntity;
@@ -40,7 +40,7 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
                   context.gameState.mapDimensions.width,
                   context.gameState.mapDimensions.height,
                 );
-                
+
                 // Include in herd consideration if reasonably close
                 if (distance <= PREY_INTERACTION_RANGE * 5) {
                   herdMembers.push(otherPrey);
@@ -76,7 +76,7 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Herd',
@@ -84,9 +84,9 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
       ),
       // Action: Move towards herd center
       new ActionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           const herdCenter = blackboard.get<{ x: number; y: number }>('herdCenter');
-          
+
           if (!herdCenter) {
             return NodeStatus.FAILURE;
           }
@@ -102,14 +102,14 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode {
           if (distance > PREY_INTERACTION_RANGE * 2) {
             prey.activeAction = 'moving';
             prey.target = herdCenter;
-            
+
             const directionToHerd = getDirectionVectorOnTorus(
               prey.position,
               herdCenter,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-            
+
             prey.direction = vectorNormalize(directionToHerd);
             return NodeStatus.RUNNING;
           } else {

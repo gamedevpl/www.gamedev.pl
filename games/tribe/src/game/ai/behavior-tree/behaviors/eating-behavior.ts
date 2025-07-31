@@ -1,3 +1,4 @@
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../world-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
@@ -9,7 +10,7 @@ import { ActionNode, ConditionNode, Sequence } from '../nodes';
  * if the conditions to eat are no longer met.
  * @returns A behavior tree node representing the eating behavior.
  */
-export function createEatingBehavior(depth: number): BehaviorNode {
+export function createEatingBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       new ConditionNode(

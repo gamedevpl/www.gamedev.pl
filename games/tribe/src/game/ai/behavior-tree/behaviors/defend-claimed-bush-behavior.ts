@@ -12,7 +12,7 @@ const INTRUDER_KEY = 'bushIntruder';
  * Creates a behavior that triggers an attack on an outsider gathering from a
  * berry bush claimed by the human's tribe.
  */
-export function createDefendClaimedBushBehavior(depth: number): BehaviorNode {
+export function createDefendClaimedBushBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is an outsider stealing from our bushes?

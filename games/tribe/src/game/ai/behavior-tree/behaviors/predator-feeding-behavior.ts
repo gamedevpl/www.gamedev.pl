@@ -1,18 +1,16 @@
-import {
-  ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  ANIMAL_PARENT_FEEDING_RANGE,
-} from '../../../world-consts';
+import { ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, ANIMAL_PARENT_FEEDING_RANGE } from '../../../world-consts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
-import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { findChildren } from '../../../utils/world-utils';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
-const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-  const children = findChildren(context.gameState, human).filter((child) => !child.isAdult && child.type === 'predator') as unknown as PredatorEntity[];
+const findHungriestChild = (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
+  const children = (context.gameState as IndexedWorldState).search.predator
+    .byProperty('motherId', predator.id)
+    .filter((child) => !child.isAdult && child.type === 'predator') as unknown as PredatorEntity[];
   if (children.length === 0) {
     return NodeStatus.FAILURE;
   }
@@ -35,8 +33,7 @@ const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboa
   return NodeStatus.FAILURE;
 };
 
-const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-  const predator = human as unknown as PredatorEntity;
+const moveToChildAndFeed = (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
   const child = blackboard.get<PredatorEntity>('targetChild');
   if (!child) {
     return NodeStatus.FAILURE;
@@ -75,18 +72,19 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
  *
  * @returns A `BehaviorNode` that encapsulates the feeding child logic for predators.
  */
-export function createPredatorFeedingChildBehavior(depth: number): BehaviorNode {
+export function createPredatorFeedingChildBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // Condition: Is the predator a female adult capable of feeding?
       new ConditionNode(
-        (human: HumanEntity) => {
-          const predator = human as unknown as PredatorEntity;
-          return (predator.isAdult &&
-            predator.gender === 'female' &&
-            predator.hunger < 90 && // Parent must not be too hungry
-            (!predator.feedChildCooldownTime || predator.feedChildCooldownTime <= 0)) ??
-          false;
+        (predator) => {
+          return (
+            (predator.isAdult &&
+              predator.gender === 'female' &&
+              predator.hunger < 90 && // Parent must not be too hungry
+              (!predator.feedChildCooldownTime || predator.feedChildCooldownTime <= 0)) ??
+            false
+          );
         },
         'Can Feed Child (Female Only)',
         depth + 1,

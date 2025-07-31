@@ -10,7 +10,7 @@ import { ActionNode, ConditionNode, Sequence } from '../nodes';
  * The sequence checks if the human should flee and then executes the fleeing action.
  * @returns A BehaviorNode representing the fleeing behavior.
  */
-export function createFleeingBehavior(depth: number): BehaviorNode {
+export function createFleeingBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // Condition: Should I flee?

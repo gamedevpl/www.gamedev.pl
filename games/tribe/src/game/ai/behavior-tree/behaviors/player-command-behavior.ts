@@ -25,7 +25,7 @@ function handleAutopilotAttack(
   gameState: GameWorldState,
   human: HumanEntity,
   activeAction: { targetEntityId: number },
-  targetValidator?: (target: Entity) => boolean
+  targetValidator?: (target: Entity) => boolean,
 ): NodeStatus {
   const target = gameState.entities.entities.get(activeAction.targetEntityId);
 
@@ -66,7 +66,7 @@ function handleAutopilotAttack(
  * This is a high-priority behavior for the player character that interprets and executes
  * actions like moving, gathering, attacking, etc., based on player input.
  */
-export function createPlayerCommandBehavior(depth: number): BehaviorNode {
+export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is there an active autopilot command for the player?

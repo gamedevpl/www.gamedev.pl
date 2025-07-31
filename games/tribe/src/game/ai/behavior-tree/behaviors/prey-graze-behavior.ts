@@ -6,16 +6,17 @@ import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 
 /**
  * Creates a behavior sub-tree for prey grazing on berry bushes.
  */
-export function createPreyGrazingBehavior(depth: number): BehaviorNode {
+export function createPreyGrazingBehavior(depth: number): BehaviorNode<PreyEntity> {
   return new Sequence(
     [
       // Condition: Should I graze?
       new ConditionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           // Only graze if hungry and not on cooldown
           if (prey.hunger <= 30 || (prey.eatingCooldownTime && prey.eatingCooldownTime > context.gameState.time)) {
             return false;
@@ -57,7 +58,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
       ),
       // Action: Move to bush or graze directly
       new ActionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           const target = blackboard.get<BerryBushEntity>('grazingTarget');
           const needToMove = blackboard.get<boolean>('needToMoveToTarget');
 

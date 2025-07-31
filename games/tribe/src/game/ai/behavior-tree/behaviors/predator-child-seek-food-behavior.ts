@@ -1,12 +1,6 @@
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
-import { HumanEntity } from '../../../entities/characters/human/human-types';
-import {
-  ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
-  ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  ANIMAL_PARENT_FEEDING_RANGE,
-} from '../../../world-consts';
+import { ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, ANIMAL_PARENT_FEEDING_RANGE } from '../../../world-consts';
 import { UpdateContext } from '../../../world-types';
-import { findClosestEntity, findParents } from '../../../utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
@@ -18,13 +12,12 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
  *
  * @returns A behavior node representing the entire "seeking food from parent" logic for predators.
  */
-export function createPredatorSeekingFoodFromParentBehavior(depth: number): BehaviorNode {
+export function createPredatorSeekingFoodFromParentBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // 1. Condition: Am I a hungry predator child?
       new ConditionNode(
-        (human: HumanEntity) => {
-          const predator = human as unknown as PredatorEntity;
+        (predator: PredatorEntity) => {
           return !predator.isAdult && predator.hunger >= ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD;
         },
         'Is Hungry Predator Child',
@@ -33,28 +26,12 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
 
       // 2. Action: Find a suitable female parent nearby.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const predator = human as unknown as PredatorEntity;
-          const parents = findParents(human, context.gameState);
-          if (parents.length === 0) {
-            return NodeStatus.FAILURE;
+        (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
+          if (!predator.motherId) {
+            return NodeStatus.FAILURE; // No mother to seek food from
           }
 
-          const femaleParent = findClosestEntity<PredatorEntity>(
-            predator,
-            context.gameState,
-            'predator',
-            ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
-            (p) => {
-              // Check if the entity is a female parent
-              return !!(
-                parents.some((parent) => parent.id === p.id) &&
-                p.gender === 'female' &&
-                p.isAdult &&
-                p.hunger < 90 // Parent must not be too hungry herself
-              );
-            },
-          );
+          const femaleParent = context.gameState.entities.entities.get(predator.motherId) as PredatorEntity | undefined;
 
           if (femaleParent) {
             blackboard.set('targetParent', femaleParent);
@@ -69,8 +46,7 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
 
       // 3. Action: Move towards the found parent.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const predator = human as unknown as PredatorEntity;
+        (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
           const parent = blackboard.get<PredatorEntity>('targetParent');
           if (!parent) {
             return NodeStatus.FAILURE;

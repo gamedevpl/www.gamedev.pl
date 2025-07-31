@@ -15,7 +15,7 @@ const HUNT_RANGE = 120; // Range to detect and hunt prey
  * Creates a behavior tree branch for humans hunting prey for food.
  * Humans will hunt prey when they are hungry and see an opportunity.
  */
-export function createHumanHuntPreyBehavior(depth: number): BehaviorNode {
+export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Should hunt prey?
@@ -110,7 +110,7 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode {
           human.activeAction = 'attacking';
           human.attackTargetId = target.id;
           human.stateMachine = [HUMAN_ATTACKING, { enteredAt: context.gameState.time }];
-          
+
           // The actual hunting/attacking is handled by the interaction system
           return NodeStatus.RUNNING;
         },

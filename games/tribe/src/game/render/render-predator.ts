@@ -29,12 +29,12 @@ import { EntityId } from '../entities/entities-types';
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
-  'attacking': 'attacking',
-  'eating': 'eat',
-  'moving': 'walk',
-  'procreating': 'procreate',
-  'feeding': 'eat', // Feeding children uses same stance as eating
-  'idle': 'idle',
+  attacking: 'attacking',
+  eating: 'eat',
+  moving: 'walk',
+  procreating: 'procreate',
+  feeding: 'eat', // Feeding children uses same stance as eating
+  idle: 'idle',
 };
 
 /**
@@ -77,7 +77,11 @@ function renderPredatorDebugInfo(ctx: CanvasRenderingContext2D, predator: Predat
  * @param predator The predator entity whose AI tree is to be rendered.
  * @param currentTime The current game time, used for heatmap calculations.
  */
-function renderPredatorBehaviorTreeDebug(ctx: CanvasRenderingContext2D, predator: PredatorEntity, currentTime: number): void {
+function renderPredatorBehaviorTreeDebug(
+  ctx: CanvasRenderingContext2D,
+  predator: PredatorEntity,
+  currentTime: number,
+): void {
   if (!predator.aiBehaviorTree || !predator.aiBlackboard) {
     return;
   }
@@ -104,7 +108,7 @@ function renderPredatorBehaviorTreeDebug(ctx: CanvasRenderingContext2D, predator
   };
 
   // Helper to calculate the required panel dimensions by traversing the static tree
-  const calculateDimensions = (node: BehaviorNode): { width: number; height: number } => {
+  const calculateDimensions = (node: BehaviorNode<PredatorEntity>): { width: number; height: number } => {
     if (!node.name || !executionData.has(node.name)) {
       return { width: 0, height: 0 };
     }
@@ -141,7 +145,7 @@ function renderPredatorBehaviorTreeDebug(ctx: CanvasRenderingContext2D, predator
   };
 
   // Helper to recursively render each node of the tree
-  const renderNode = (node: BehaviorNode, yPos: number, panelX: number, panelWidth: number): number => {
+  const renderNode = (node: BehaviorNode<PredatorEntity>, yPos: number, panelX: number, panelWidth: number): number => {
     if (!node.name || !executionData.has(node.name)) {
       return yPos;
     }
@@ -262,19 +266,19 @@ function renderPredatorBehaviorTreeDebug(ctx: CanvasRenderingContext2D, predator
  * Renders a predator entity using the asset generator sprite system.
  */
 export function renderPredator(
-  ctx: CanvasRenderingContext2D, 
+  ctx: CanvasRenderingContext2D,
   predator: PredatorEntity,
   isDebugOn: boolean = false,
   currentTime: number = 0,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = predator;
-  
+
   // Adjust radius based on adult status
   const currentRadius = predator.isAdult ? predator.radius : predator.radius * 0.6;
-  
+
   const stance = predatorStanceMap[activeAction] || 'idle';
-  
+
   // Use asset generator to render the predator sprite
   TribePredator2D.render(
     ctx,
@@ -291,7 +295,7 @@ export function renderPredator(
       isPregnant: predator.isPregnant ?? false,
       hungryLevel: predator.hunger,
       geneCode: predator.geneCode, // Use actual genetic code
-    }
+    },
   );
 
   // Health bar if injured
@@ -312,7 +316,10 @@ export function renderPredator(
   }
 
   // Hunting/attacking indicator (orange outline when in combat)
-  if ((predator.attackCooldown && predator.attackCooldown > 0) || (predator.huntCooldown && predator.huntCooldown > 0)) {
+  if (
+    (predator.attackCooldown && predator.attackCooldown > 0) ||
+    (predator.huntCooldown && predator.huntCooldown > 0)
+  ) {
     ctx.strokeStyle = '#FF8C00'; // Dark orange
     ctx.lineWidth = 3;
     ctx.beginPath();

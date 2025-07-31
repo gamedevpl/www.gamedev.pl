@@ -1,11 +1,6 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import {
-  canSplitTribe,
-  performTribeSplit,
-  findSafeTribeSplitLocation,
-  getTribeCenter,
-} from '../../../utils';
+import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation, getTribeCenter } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS, HUMAN_INTERACTION_PROXIMITY } from '../../../world-consts';
@@ -29,7 +24,7 @@ const MIGRATION_TARGET_KEY = 'tribeSplitMigrationTarget';
  * @param depth The depth of the node in the behavior tree.
  * @returns A behavior node.
  */
-export function createTribeSplitBehavior(depth: number): BehaviorNode {
+export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntity> {
   const tribeSplitAction = new Sequence(
     [
       // 1. Perform the expensive check to see if all conditions are met.
@@ -43,7 +38,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode {
       ),
 
       // 2. Find a safe location and move there. This node is stateful.
-      new ActionNode(
+      new ActionNode<HumanEntity>(
         (human, context, aiBlackboard) => {
           const { gameState } = context;
           let migrationTarget = aiBlackboard.get<Vector2D>(MIGRATION_TARGET_KEY);

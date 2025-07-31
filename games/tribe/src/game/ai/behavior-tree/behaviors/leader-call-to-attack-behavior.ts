@@ -30,17 +30,17 @@ const ENEMIES_NEARBY_KEY = 'enemiesNearby';
  * either issue a "call to attack" if the tribe is strong enough, or retreat if not.
  * The entire decision-making process is placed on a cooldown to prevent it from running too frequently.
  */
-export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode {
+export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Basic conditions to check before any combat decision is made.
-  const isLeader = new ConditionNode((human) => human.id === human.leaderId, 'Is Leader?', depth + 1);
-  const isNotAlreadyCalling = new ConditionNode(
+  const isLeader = new ConditionNode<HumanEntity>((human) => human.id === human.leaderId, 'Is Leader?', depth + 1);
+  const isNotAlreadyCalling = new ConditionNode<HumanEntity>(
     (human) => !human.isCallingToAttack,
     'Is Not Already Calling?',
     depth + 1,
   );
 
   // Action to find enemies and store them in the blackboard. This is a prerequisite for the decision.
-  const findEnemies = new ActionNode(
+  const findEnemies = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const enemies = findNearbyEnemiesOfTribe(
         human,
@@ -105,7 +105,7 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode 
         depth + 2,
       ),
       // Branch 2: Retreat, if not strong enough. This is the fallback.
-      new ActionNode(
+      new ActionNode<HumanEntity>(
         (human, context, blackboard) => {
           const enemies = blackboard.get<HumanEntity[]>(ENEMIES_NEARBY_KEY);
           if (!enemies || enemies.length === 0) {

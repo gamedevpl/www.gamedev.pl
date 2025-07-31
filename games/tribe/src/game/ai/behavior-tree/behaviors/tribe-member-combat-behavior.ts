@@ -23,14 +23,14 @@ const HOME_CENTER_KEY = 'homeCenter';
  * Creates a behavior for a tribe member to join a battle when the leader calls,
  * but without chasing enemies too far from the tribe's center.
  */
-export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
-  const isTribeFollower = new ConditionNode(
+export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<HumanEntity> {
+  const isTribeFollower = new ConditionNode<HumanEntity>(
     (human) => (human.isAdult && human.leaderId ? human.id !== human.leaderId : false),
     'Is Tribe Follower?',
     depth + 1,
   );
 
-  const isFitForCombat = new ConditionNode(
+  const isFitForCombat = new ConditionNode<HumanEntity>(
     (human) =>
       human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING &&
       human.hitpoints >= human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD,
@@ -38,7 +38,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
     depth + 1,
   );
 
-  const isLeaderCallingToAttack = new ConditionNode(
+  const isLeaderCallingToAttack = new ConditionNode<HumanEntity>(
     (human, context) => {
       const leader = context.gameState.entities.entities.get(human.leaderId as number) as HumanEntity | undefined;
       return !!leader?.isCallingToAttack;
@@ -47,7 +47,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
     depth + 1,
   );
 
-  const findBestTarget = new ActionNode(
+  const findBestTarget = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const { gameState } = context;
       const leader = gameState.entities.entities.get(human.leaderId as number) as HumanEntity | undefined;
@@ -93,7 +93,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode {
     depth + 1,
   );
 
-  const attackTarget = new ActionNode(
+  const attackTarget = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const target = blackboard.get(COMBAT_TARGET_KEY) as HumanEntity | undefined;
       const homeCenter = blackboard.get(HOME_CENTER_KEY) as Vector2D | undefined;

@@ -14,7 +14,7 @@ const DESPERATE_TARGET_KEY = 'desperateAttackTarget';
  * Creates a behavior that triggers an attack on a weak, non-family human
  * when the attacker is starving and there are no other food sources available.
  */
-export function createDesperateAttackBehavior(depth: number): BehaviorNode {
+export function createDesperateAttackBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Am I starving?

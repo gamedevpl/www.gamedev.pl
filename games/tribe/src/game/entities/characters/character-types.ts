@@ -17,7 +17,7 @@ export interface CharacterEntity extends Entity {
   /** The type of AI used by this character. */
   aiType?: AIType;
   /** The root node of the behavior tree for this AI. */
-  aiBehaviorTree?: BehaviorNode;
+  aiBehaviorTree?: BehaviorNode<CharacterEntity>;
   /** The blackboard for the behavior tree AI. */
   aiBlackboard?: Blackboard;
   /** Current active action. Set by player input or AI decision. */

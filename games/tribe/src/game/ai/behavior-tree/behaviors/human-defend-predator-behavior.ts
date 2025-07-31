@@ -15,7 +15,7 @@ const PREDATOR_THREAT_RANGE = 150; // Range to detect predator threats
  * Creates a behavior tree branch for humans defending against predator attacks.
  * Humans will fight back when predators get too close or attack them.
  */
-export function createHumanDefendAgainstPredatorBehavior(depth: number): BehaviorNode {
+export function createHumanDefendAgainstPredatorBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is there a predator threat?
@@ -67,7 +67,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
             // Defend if predator is close or if it's targeting this human
             const isTargetingHuman = predator.attackTargetId === human.id;
             const isClose = distance < 80; // Close proximity triggers defense
-            
+
             if (isTargetingHuman || isClose) {
               blackboard.set(DEFEND_TARGET_KEY, predator);
               return [true, 'Predator threat detected'];
@@ -116,7 +116,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
           human.activeAction = 'attacking';
           human.attackTargetId = target.id;
           human.stateMachine = [HUMAN_ATTACKING, { enteredAt: context.gameState.time }];
-          
+
           // The actual combat is handled by the interaction system
           return NodeStatus.RUNNING;
         },

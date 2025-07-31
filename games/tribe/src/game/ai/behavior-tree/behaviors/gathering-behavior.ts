@@ -26,9 +26,9 @@ const BLACKBOARD_KEY = 'foodSource';
  * food source is computationally more expensive, so it's wrapped in a CachingNode
  * to prevent it from running on every single AI tick, improving performance.
  */
-export function createGatheringBehavior(depth: number): BehaviorNode {
+export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find the closest food source and store it in the blackboard.
-  const findFoodSourceAction = new ActionNode(
+  const findFoodSourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const distanceToOwnerCache = new Map<EntityId, number>();
       const closestBush = findClosestEntity<BerryBushEntity>(
@@ -114,7 +114,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode {
   );
 
   // Action to move towards the food source and gather from it.
-  const moveAndGatherAction = new ActionNode(
+  const moveAndGatherAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const target = blackboard.get<FoodSource>(BLACKBOARD_KEY);
 

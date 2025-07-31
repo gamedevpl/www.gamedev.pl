@@ -70,7 +70,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
  *
  * @returns A `BehaviorNode` that encapsulates the feeding child logic.
  */
-export function createFeedingChildBehavior(depth: number): BehaviorNode {
+export function createFeedingChildBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // Condition: Is the parent capable of feeding?

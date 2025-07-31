@@ -9,7 +9,7 @@ import { FOLLOW_LEADER_MIN_HUNGER_THRESHOLD, LEADER_FOLLOW_RADIUS } from '../../
  * Creates a behavior for a non-leader human to follow their leader if the leader
  * has issued a "Follow Me" command and the follower's basic needs are met.
  */
-export function createFollowLeaderBehavior(depth: number): BehaviorNode {
+export function createFollowLeaderBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is this human a follower in a tribe?

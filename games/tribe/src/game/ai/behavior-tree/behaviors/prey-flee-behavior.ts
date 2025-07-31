@@ -2,36 +2,43 @@
 import { PREY_FLEE_DISTANCE, PREY_INTERACTION_RANGE } from '../../../world-consts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { getDirectionVectorOnTorus, vectorAdd, vectorNormalize, vectorScale, calculateWrappedDistance } from '../../../utils/math-utils';
+import {
+  getDirectionVectorOnTorus,
+  vectorAdd,
+  vectorNormalize,
+  vectorScale,
+  calculateWrappedDistance,
+} from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 
 /**
  * Creates a behavior sub-tree for prey fleeing from threats (predators and humans).
  */
-export function createPreyFleeingBehavior(depth: number): BehaviorNode {
+export function createPreyFleeingBehavior(depth: number): BehaviorNode<PreyEntity> {
   return new Sequence(
     [
       // Condition: Should I flee?
       new ConditionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           // Find the closest threat (predator or human)
           const closestPredator = findClosestEntity<PredatorEntity>(
             prey,
             context.gameState,
             'predator',
             PREY_INTERACTION_RANGE * 2,
-            () => true // All predators are threats
+            () => true, // All predators are threats
           );
-          
+
           const closestHuman = findClosestEntity<HumanEntity>(
             prey,
             context.gameState,
             'human',
             PREY_INTERACTION_RANGE * 2,
-            () => true // All humans are threats
+            () => true, // All humans are threats
           );
 
           let closestThreat: PredatorEntity | HumanEntity | null = null;
@@ -76,7 +83,7 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode {
       ),
       // Action: Flee from the threat
       new ActionNode(
-        (prey: any, context: UpdateContext, blackboard) => {
+        (prey, context: UpdateContext, blackboard) => {
           const threat = blackboard.get<PredatorEntity | HumanEntity>('fleeThreat');
           if (!threat) {
             return NodeStatus.FAILURE;
@@ -99,8 +106,12 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode {
 
           // Set wrapped target position
           prey.target = {
-            x: ((targetPosition.x % context.gameState.mapDimensions.width) + context.gameState.mapDimensions.width) % context.gameState.mapDimensions.width,
-            y: ((targetPosition.y % context.gameState.mapDimensions.height) + context.gameState.mapDimensions.height) % context.gameState.mapDimensions.height,
+            x:
+              ((targetPosition.x % context.gameState.mapDimensions.width) + context.gameState.mapDimensions.width) %
+              context.gameState.mapDimensions.width,
+            y:
+              ((targetPosition.y % context.gameState.mapDimensions.height) + context.gameState.mapDimensions.height) %
+              context.gameState.mapDimensions.height,
           };
 
           prey.direction = normalizedFleeDirection;

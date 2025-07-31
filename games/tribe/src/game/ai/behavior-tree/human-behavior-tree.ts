@@ -27,13 +27,14 @@ import {
   createHumanHuntPreyBehavior,
   createHumanDefendAgainstPredatorBehavior,
 } from './behaviors';
+import { HumanEntity } from '../../entities/characters/human/human-types';
 
 /**
  * Builds the complete behavior tree for a human entity.
  * The tree is a Selector at its root, which means it will try each branch
  * in order until one of them succeeds or is running. This creates a priority system.
  */
-export function buildHumanBehaviorTree(): BehaviorNode {
+export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
   // The AI logic is a Selector, which acts like an "OR" gate.
   // It will try each child branch in order until one succeeds or is running.
   const aiRoot = new Selector(

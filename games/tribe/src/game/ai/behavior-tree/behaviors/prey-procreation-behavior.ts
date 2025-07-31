@@ -1,9 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {
-  PREY_MIN_PROCREATION_AGE,
-  PREY_MAX_PROCREATION_AGE,
-  PREY_INTERACTION_RANGE,
-} from '../../../world-consts';
+import { PREY_MIN_PROCREATION_AGE, PREY_MAX_PROCREATION_AGE, PREY_INTERACTION_RANGE } from '../../../world-consts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
@@ -14,9 +10,9 @@ import { UpdateContext } from '../../../world-types';
 /**
  * Creates a behavior sub-tree for prey procreation.
  */
-export function createPreyProcreationBehavior(depth: number): BehaviorNode {
-  const findImmediatePartner = new ConditionNode(
-    (prey: any, context: UpdateContext, blackboard) => {
+export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyEntity> {
+  const findImmediatePartner = new ConditionNode<PreyEntity>(
+    (prey, context: UpdateContext, blackboard) => {
       // Find suitable partners nearby
       const bestPartner = findClosestEntity<PreyEntity>(
         prey,
@@ -34,7 +30,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 200 // Very lenient for debugging
           );
-        }
+        },
       );
 
       if (bestPartner) {
@@ -48,7 +44,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const startProcreating = new ActionNode(
-    (prey: any, _context: UpdateContext, blackboard) => {
+    (prey: PreyEntity, _context: UpdateContext, blackboard) => {
       const partner = blackboard.get<PreyEntity>('procreationPartner');
       if (!partner) {
         return NodeStatus.FAILURE;
@@ -68,7 +64,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const locateDistantPartner = new ConditionNode(
-    (prey: any, context: UpdateContext, blackboard) => {
+    (prey: PreyEntity, context: UpdateContext, blackboard) => {
       // Find suitable partners in a larger radius
       const bestPartner = findClosestEntity<PreyEntity>(
         prey,
@@ -86,7 +82,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
             (!potentialPartner.procreationCooldown || potentialPartner.procreationCooldown <= 0) &&
             potentialPartner.hunger < 200 // Very lenient for debugging
           );
-        }
+        },
       );
 
       if (bestPartner) {
@@ -100,7 +96,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
   );
 
   const moveTowardsPartner = new ActionNode(
-    (prey: any, context: UpdateContext, blackboard) => {
+    (prey: PreyEntity, context: UpdateContext, blackboard) => {
       const partner = blackboard.get<PreyEntity>('procreationPartner');
       if (!partner) {
         return NodeStatus.FAILURE;
@@ -119,14 +115,14 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
 
       prey.activeAction = 'moving';
       prey.target = partner.id;
-      
+
       const directionToPartner = getDirectionVectorOnTorus(
         prey.position,
         partner.position,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
-      
+
       prey.direction = vectorNormalize(directionToPartner);
       return NodeStatus.RUNNING;
     },
@@ -138,7 +134,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode {
     [
       // Basic fertility conditions
       new ConditionNode(
-        (prey: any) => {
+        (prey) => {
           return !!(
             prey.isAdult &&
             !prey.isPregnant &&

@@ -11,12 +11,12 @@ import { UpdateContext } from '../../../world-types';
  * Creates a behavior sub-tree for predator territorial fighting.
  * Predators will fight other predators who have different fathers to establish territory dominance.
  */
-export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
+export function createPredatorTerritorialBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // Condition: Should I fight for territory?
       new ConditionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           // Only adult predators with sufficient health engage in territorial fights
           if (
             !predator.isAdult ||
@@ -44,7 +44,7 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
                 predator.fatherId !== undefined &&
                 rival.fatherId !== undefined
               );
-            }
+            },
           );
 
           if (rivalPredator) {
@@ -66,7 +66,7 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Territorial Rival',
@@ -74,10 +74,10 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
       ),
       // Action: Fight or approach rival predator
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           const target = blackboard.get<PredatorEntity>('territorialTarget');
           const needToApproach = blackboard.get<boolean>('needToApproach');
-          
+
           if (!target || target.hitpoints <= 0) {
             return NodeStatus.FAILURE;
           }
@@ -101,14 +101,14 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
             // Need to move closer to the rival
             predator.activeAction = 'moving';
             predator.target = target.id;
-            
+
             const directionToTarget = getDirectionVectorOnTorus(
               predator.position,
               target.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-            
+
             predator.direction = vectorNormalize(directionToTarget);
             return NodeStatus.RUNNING;
           }

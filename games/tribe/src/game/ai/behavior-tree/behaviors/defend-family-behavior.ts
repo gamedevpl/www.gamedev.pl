@@ -12,7 +12,7 @@ const AGGRESSOR_KEY = 'defendAggressor';
  * Creates a behavior that triggers an attack when a human observes a close family member
  * being attacked by an outsider.
  */
-export function createDefendFamilyBehavior(depth: number): BehaviorNode {
+export function createDefendFamilyBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
     [
       // 1. Condition: Is a family member under attack by an outsider?

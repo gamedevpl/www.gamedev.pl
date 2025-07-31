@@ -17,6 +17,7 @@ import {
 } from '../../../world-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 
@@ -28,9 +29,9 @@ const BLACKBOARD_KEY = 'plantingSpot';
  * spot is the most expensive part, so it's wrapped in a CooldownNode to prevent
  * it from running on every tick, which improves performance.
  */
-export function createPlantingBehavior(depth: number): BehaviorNode {
+export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to move to the spot and plant. Assumes 'plantingSpot' is in the blackboard.
-  const moveAndPlantAction = new ActionNode(
+  const moveAndPlantAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const plantingSpot = blackboard.get<Vector2D>(BLACKBOARD_KEY);
 
@@ -75,7 +76,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode {
   );
 
   // Action to find a new spot. This is the expensive operation.
-  const findSpotAction = new ActionNode(
+  const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const spot = findOptimalBushPlantingSpot(human, context.gameState);
       if (spot) {

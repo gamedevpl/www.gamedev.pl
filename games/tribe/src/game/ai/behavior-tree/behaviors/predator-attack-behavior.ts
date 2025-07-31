@@ -6,20 +6,21 @@ import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 
 /**
  * Creates a behavior sub-tree for predators attacking humans.
  */
-export function createPredatorAttackBehavior(depth: number): BehaviorNode {
+export function createPredatorAttackBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // Condition: Should I attack humans?
       new ConditionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           // Only attack if very hungry or if humans are very close (defensive)
           const isVeryHungry = predator.hunger > 100;
           const isDefensive = predator.hitpoints < predator.maxHitpoints * 0.5;
-          
+
           if (!isVeryHungry && !isDefensive) {
             return false;
           }
@@ -35,7 +36,7 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode {
             context.gameState,
             'human',
             PREDATOR_ATTACK_RANGE * 2, // Search in wider range
-            (human) => human.hitpoints > 0 // Target must be alive
+            (human) => human.hitpoints > 0, // Target must be alive
           );
           // Attack if human is within range, or approach if very hungry
           if (closestHuman) {
@@ -56,7 +57,7 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode {
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Human Target',
@@ -64,10 +65,10 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode {
       ),
       // Action: Attack or approach human
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           const target = blackboard.get<HumanEntity>('attackTarget');
           const needToApproach = blackboard.get<boolean>('needToApproach');
-          
+
           if (!target || target.hitpoints <= 0) {
             return NodeStatus.FAILURE;
           }
@@ -91,14 +92,14 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode {
             // Need to move closer to the human
             predator.activeAction = 'moving';
             predator.target = target.id;
-            
+
             const directionToTarget = getDirectionVectorOnTorus(
               predator.position,
               target.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-            
+
             predator.direction = vectorNormalize(directionToTarget);
             return NodeStatus.RUNNING;
           }

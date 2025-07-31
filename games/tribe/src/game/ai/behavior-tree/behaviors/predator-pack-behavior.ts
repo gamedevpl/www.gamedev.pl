@@ -11,12 +11,12 @@ import { UpdateContext } from '../../../world-types';
  * Creates a behavior sub-tree for predator pack following.
  * Predators follow their pack leader (same father) when not engaged in critical activities.
  */
-export function createPredatorPackBehavior(depth: number): BehaviorNode {
+export function createPredatorPackBehavior(depth: number): BehaviorNode<PredatorEntity> {
   return new Sequence(
     [
       // Condition: Should I follow my pack?
       new ConditionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           // Only follow pack if not engaged in critical activities
           if (
             predator.hunger > 100 || // Too hungry to socialize
@@ -35,17 +35,17 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode {
             PREDATOR_INTERACTION_RANGE * 4, // Wider search for pack members
             (packMember) => {
               return (
-                packMember.id !== predator.id &&
-                packMember.hitpoints > 0 &&
-                packMember.isAdult &&
-                // Same pack (same father)
-                predator.fatherId !== undefined &&
-                packMember.fatherId === predator.fatherId &&
-                // Prefer the oldest/strongest pack member as leader
-                packMember.age >= predator.age ||
+                (packMember.id !== predator.id &&
+                  packMember.hitpoints > 0 &&
+                  packMember.isAdult &&
+                  // Same pack (same father)
+                  predator.fatherId !== undefined &&
+                  packMember.fatherId === predator.fatherId &&
+                  // Prefer the oldest/strongest pack member as leader
+                  packMember.age >= predator.age) ||
                 packMember.hitpoints > predator.hitpoints
               );
-            }
+            },
           );
 
           if (packLeader) {
@@ -62,7 +62,7 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode {
               return true;
             }
           }
-          
+
           return false;
         },
         'Find Pack Leader',
@@ -70,9 +70,9 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode {
       ),
       // Action: Move towards pack leader
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard) => {
+        (predator, context: UpdateContext, blackboard) => {
           const packLeader = blackboard.get<PredatorEntity>('packLeader');
-          
+
           if (!packLeader || packLeader.hitpoints <= 0) {
             return NodeStatus.FAILURE;
           }
@@ -88,14 +88,14 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode {
           if (distance > PREDATOR_INTERACTION_RANGE * 2) {
             predator.activeAction = 'moving';
             predator.target = packLeader.id;
-            
+
             const directionToLeader = getDirectionVectorOnTorus(
               predator.position,
               packLeader.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-            
+
             predator.direction = vectorNormalize(directionToLeader);
             return NodeStatus.RUNNING;
           } else {
