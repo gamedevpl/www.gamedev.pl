@@ -393,6 +393,7 @@ export const PREDATOR_INITIAL_AGE: number = 3;
 export const PREDATOR_INTERACTION_RANGE: number = 35;
 export const PREDATOR_ATTACK_RANGE: number = 40;
 export const PREDATOR_HUNT_RANGE: number = 50;
+export const PREDATOR_TERRITORIAL_RANGE: number = 120; // Range for detecting territorial rivals
 export const PREDATOR_ATTACK_DAMAGE: number = 45; // Higher than human attack
 export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
 export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
