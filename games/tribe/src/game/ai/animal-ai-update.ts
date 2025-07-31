@@ -1,5 +1,6 @@
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
 import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 import { UpdateContext } from '../world-types';
 

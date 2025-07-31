@@ -59,10 +59,13 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
         prey.fatherId, // Father ID from pregnancy
       );
       
+      // Birth creates new life - child variable is used for entity creation
+      void child;
+      
       // Add birth visual effect
       addVisualEffect(
         updateContext.gameState,
-        VisualEffectType.Birth,
+        VisualEffectType.Procreation,
         prey.position,
         EFFECT_DURATION_MEDIUM_HOURS,
         prey.id,

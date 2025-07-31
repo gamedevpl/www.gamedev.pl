@@ -2,7 +2,6 @@
 import { PREY_INTERACTION_RANGE } from '../../../world-consts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
-import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';

@@ -34,7 +34,7 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode {
             'predator',
             PREDATOR_TERRITORIAL_RANGE,
             (rival) => {
-              return (
+              return !!(
                 rival.id !== predator.id &&
                 rival.hitpoints > 0 &&
                 rival.isAdult &&

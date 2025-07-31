@@ -59,10 +59,13 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         predator.fatherId, // Father ID from pregnancy
       );
       
+      // Birth creates new life - child variable is used for entity creation
+      void child;
+      
       // Add birth visual effect
       addVisualEffect(
         updateContext.gameState,
-        VisualEffectType.Birth,
+        VisualEffectType.Procreation,
         predator.position,
         EFFECT_DURATION_MEDIUM_HOURS,
         predator.id,
