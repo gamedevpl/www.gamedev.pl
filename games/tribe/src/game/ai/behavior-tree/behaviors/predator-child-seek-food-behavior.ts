@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
   ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
@@ -23,7 +23,8 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
     [
       // 1. Condition: Am I a hungry predator child?
       new ConditionNode(
-        (predator: any) => {
+        (human: HumanEntity) => {
+          const predator = human as unknown as PredatorEntity;
           return !predator.isAdult && predator.hunger >= ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD;
         },
         'Is Hungry Predator Child',
@@ -32,8 +33,9 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
 
       // 2. Action: Find a suitable female parent nearby.
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard: Blackboard) => {
-          const parents = findParents(predator as any, context.gameState);
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const predator = human as unknown as PredatorEntity;
+          const parents = findParents(human, context.gameState);
           if (parents.length === 0) {
             return NodeStatus.FAILURE;
           }
@@ -46,7 +48,7 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
             (p) => {
               // Check if the entity is a female parent
               return !!(
-                parents.some((pp: any) => pp.id === p.id) &&
+                parents.some((parent) => parent.id === p.id) &&
                 p.gender === 'female' &&
                 p.isAdult &&
                 p.hunger < 90 // Parent must not be too hungry herself
@@ -67,7 +69,8 @@ export function createPredatorSeekingFoodFromParentBehavior(depth: number): Beha
 
       // 3. Action: Move towards the found parent.
       new ActionNode(
-        (predator: any, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const predator = human as unknown as PredatorEntity;
           const parent = blackboard.get<PredatorEntity>('targetParent');
           if (!parent) {
             return NodeStatus.FAILURE;

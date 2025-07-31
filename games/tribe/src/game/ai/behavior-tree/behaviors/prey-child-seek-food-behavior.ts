@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
   ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
@@ -23,7 +23,8 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
     [
       // 1. Condition: Am I a hungry prey child?
       new ConditionNode(
-        (prey: any) => {
+        (human: HumanEntity) => {
+          const prey = human as unknown as PreyEntity;
           return !prey.isAdult && prey.hunger >= ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD;
         },
         'Is Hungry Prey Child',
@@ -32,8 +33,9 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
 
       // 2. Action: Find a suitable female parent nearby.
       new ActionNode(
-        (prey: any, context: UpdateContext, blackboard: Blackboard) => {
-          const parents = findParents(prey as any, context.gameState);
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const prey = human as unknown as PreyEntity;
+          const parents = findParents(human, context.gameState);
           if (parents.length === 0) {
             return NodeStatus.FAILURE;
           }
@@ -46,7 +48,7 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
             (p) => {
               // Check if the entity is a female parent
               return !!(
-                parents.some((pp: any) => pp.id === p.id) &&
+                parents.some((parent) => parent.id === p.id) &&
                 p.gender === 'female' &&
                 p.isAdult &&
                 p.hunger < 80 // Parent must not be too hungry herself
@@ -67,7 +69,8 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
 
       // 3. Action: Move towards the found parent.
       new ActionNode(
-        (prey: any, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          const prey = human as unknown as PreyEntity;
           const parent = blackboard.get<PreyEntity>('targetParent');
           if (!parent) {
             return NodeStatus.FAILURE;

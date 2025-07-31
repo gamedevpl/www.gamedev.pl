@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   ANIMAL_PARENT_FEEDING_RANGE,
 } from '../../../world-consts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findChildren } from '../../../utils/world-utils';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
@@ -11,8 +11,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
 
-const findHungriestChild = (prey: any, context: UpdateContext, blackboard: Blackboard) => {
-  const children = findChildren(context.gameState, prey as any).filter((p: any) => !p.isAdult && p.type === 'prey') as unknown as PreyEntity[];
+const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+  const children = findChildren(context.gameState, human).filter((child) => !child.isAdult && child.type === 'prey') as unknown as PreyEntity[];
   if (children.length === 0) {
     return NodeStatus.FAILURE;
   }
@@ -35,7 +35,8 @@ const findHungriestChild = (prey: any, context: UpdateContext, blackboard: Black
   return NodeStatus.FAILURE;
 };
 
-const moveToChildAndFeed = (prey: any, context: UpdateContext, blackboard: Blackboard) => {
+const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+  const prey = human as unknown as PreyEntity;
   const child = blackboard.get<PreyEntity>('targetChild');
   if (!child) {
     return NodeStatus.FAILURE;
@@ -79,12 +80,14 @@ export function createPreyFeedingChildBehavior(depth: number): BehaviorNode {
     [
       // Condition: Is the prey a female adult capable of feeding?
       new ConditionNode(
-        (prey: any) =>
-          (prey.isAdult &&
+        (human: HumanEntity) => {
+          const prey = human as unknown as PreyEntity;
+          return (prey.isAdult &&
             prey.gender === 'female' &&
             prey.hunger < 80 && // Parent must not be too hungry
             (!prey.feedChildCooldownTime || prey.feedChildCooldownTime <= 0)) ??
-          false,
+          false;
+        },
         'Can Feed Child (Female Only)',
         depth + 1,
       ),
