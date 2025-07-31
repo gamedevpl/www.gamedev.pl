@@ -2,8 +2,7 @@ import { GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
 import { FAST_FORWARD_AMOUNT_SECONDS } from '../world-consts';
-import { findAllHumans, findPlayerEntity } from '../utils/world-utils';
-import { HumanEntity } from '../entities/characters/human/human-types';
+import { findPlayerEntity } from '../utils/world-utils';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -52,20 +51,37 @@ export const handleGameControlKeyDown = (
       if (!isDebugOnRef.current) {
         newState.debugCharacterId = undefined;
       } else {
-        newState.debugCharacterId = findPlayerEntity(newState)?.id ?? findAllHumans(newState)?.[0]?.id;
+        newState.debugCharacterId = findPlayerEntity(newState)?.id ?? 
+          Array.from(newState.entities.entities.values()).find((e) => 
+            e.type === 'human' || e.type === 'prey' || e.type === 'predator'
+          )?.id;
       }
       break;
     case 'tab':
       isDebugOnRef.current = true; // Always turn on debug if cycling
 
-      const humans = Array.from(newState.entities.entities.values()).filter((e) => e.type === 'human') as HumanEntity[];
+      const allCharacters = Array.from(newState.entities.entities.values()).filter((e) => 
+        e.type === 'human' || e.type === 'prey' || e.type === 'predator'
+      );
 
-      if (humans.length > 0) {
-        const sortedHumans = humans.sort((a, b) => (a.isPlayer ? -1 : a.id - b.id));
+      if (allCharacters.length > 0) {
+        // Sort: player first, then humans, then prey, then predators, all by ID
+        const sortedCharacters = allCharacters.sort((a, b) => {
+          if (a.type === 'human' && (a as any).isPlayer) return -1;
+          if (b.type === 'human' && (b as any).isPlayer) return 1;
+          if (a.type !== b.type) {
+            const order: Record<string, number> = { 'human': 0, 'prey': 1, 'predator': 2 };
+            const aOrder = order[a.type] ?? 999;
+            const bOrder = order[b.type] ?? 999;
+            return aOrder - bOrder;
+          }
+          return a.id - b.id;
+        });
+        
         const currentDebugId = newState.debugCharacterId;
-        const currentIndex = currentDebugId ? sortedHumans.findIndex((h) => h.id === currentDebugId) : -1;
-        const nextIndex = (currentIndex + 1) % sortedHumans.length;
-        newState.debugCharacterId = sortedHumans[nextIndex].id;
+        const currentIndex = currentDebugId ? sortedCharacters.findIndex((c) => c.id === currentDebugId) : -1;
+        const nextIndex = (currentIndex + 1) % sortedCharacters.length;
+        newState.debugCharacterId = sortedCharacters[nextIndex].id;
       } else {
         newState.debugCharacterId = undefined;
       }
