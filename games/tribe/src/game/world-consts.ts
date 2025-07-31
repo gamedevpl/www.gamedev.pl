@@ -375,8 +375,6 @@ export const PREY_INITIAL_AGE: number = 2;
 export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better interactions
 
 // Player interaction ranges for animal hunting/defending
-export const PLAYER_HUNT_PREY_RANGE: number = 120;
-export const PLAYER_DEFEND_PREDATOR_RANGE: number = 150;
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
 export const PREY_GESTATION_PERIOD_HOURS: number = 48; // 2 game days
@@ -388,7 +386,7 @@ export const PREY_BERRY_BUSH_DAMAGE: number = 1; // Reduces berry bush lifespan
 export const PREY_HUNGER_THRESHOLD_SLOW: number = 80; // When prey start moving slower
 export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 
-// Predator Constants  
+// Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
 export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 4; // Reduced for better ecosystem balance and reproduction
 export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
