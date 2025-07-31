@@ -116,6 +116,11 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
     if (prey.fleeCooldown < 0) prey.fleeCooldown = 0;
   }
 
+  if (prey.feedChildCooldownTime && prey.feedChildCooldownTime > 0) {
+    prey.feedChildCooldownTime -= gameHoursElapsed;
+    if (prey.feedChildCooldownTime < 0) prey.feedChildCooldownTime = 0;
+  }
+
   // Check for death conditions
   let shouldDie = false;
   

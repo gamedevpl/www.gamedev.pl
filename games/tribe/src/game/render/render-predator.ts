@@ -7,6 +7,7 @@ const predatorStanceMap: Record<string, string> = {
   'eating': 'eat',
   'moving': 'walk',
   'procreating': 'procreate',
+  'feeding': 'eat', // Feeding children uses same stance as eating
   'idle': 'idle',
 };
 

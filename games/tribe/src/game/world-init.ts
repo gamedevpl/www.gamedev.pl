@@ -47,71 +47,87 @@ export function initWorld(): GameWorldState {
     false, // isPlayer = false
   );
 
-  // Spawn initial prey animals in specific zones away from center
-  const preySpawnZones = [
-    { centerX: MAP_WIDTH * 0.2, centerY: MAP_HEIGHT * 0.2, radius: 200 },
-    { centerX: MAP_WIDTH * 0.8, centerY: MAP_HEIGHT * 0.2, radius: 200 },
-    { centerX: MAP_WIDTH * 0.2, centerY: MAP_HEIGHT * 0.8, radius: 200 },
-    { centerX: MAP_WIDTH * 0.8, centerY: MAP_HEIGHT * 0.8, radius: 200 },
+  // Spawn initial prey animals in two tight packs
+  const preyPacks = [
+    { centerX: MAP_WIDTH * 0.25, centerY: MAP_HEIGHT * 0.25, packRadius: 80 },
+    { centerX: MAP_WIDTH * 0.75, centerY: MAP_HEIGHT * 0.75, packRadius: 80 },
   ];
   
-  for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
-    const zone = preySpawnZones[i % preySpawnZones.length];
-    const angle = (i / INITIAL_PREY_COUNT) * 2 * Math.PI;
-    const distance = zone.radius * (0.3 + 0.4 * (i % 3) / 2); // Varying distances within zone
+  const preyPerPack = Math.ceil(INITIAL_PREY_COUNT / 2);
+  
+  for (let packIndex = 0; packIndex < preyPacks.length; packIndex++) {
+    const pack = preyPacks[packIndex];
+    const preyInThisPack = packIndex === 0 ? preyPerPack : INITIAL_PREY_COUNT - preyPerPack;
     
-    const spawnPosition = {
-      x: zone.centerX + Math.cos(angle) * distance,
-      y: zone.centerY + Math.sin(angle) * distance,
-    };
-    
-    // Ensure spawn position is within map bounds
-    spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
-    spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
-    
-    const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-    const geneCode = generateRandomPreyGeneCode();
-    createPrey(entities, spawnPosition, gender, undefined, undefined, geneCode);
+    for (let i = 0; i < preyInThisPack; i++) {
+      // Create tight pack formation with small random spread
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = Math.random() * pack.packRadius; // Random position within pack radius
+      
+      const spawnPosition = {
+        x: pack.centerX + Math.cos(angle) * distance,
+        y: pack.centerY + Math.sin(angle) * distance,
+      };
+      
+      // Ensure spawn position is within map bounds
+      spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
+      spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
+      
+      const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
+      const geneCode = generateRandomPreyGeneCode();
+      createPrey(entities, spawnPosition, gender, undefined, undefined, geneCode);
+    }
   }
 
-  // Spawn initial predators in corners away from center (minimum 400 pixels from center)
-  const predatorSpawnZones = [
-    { centerX: MAP_WIDTH * 0.1, centerY: MAP_HEIGHT * 0.1 },
-    { centerX: MAP_WIDTH * 0.9, centerY: MAP_HEIGHT * 0.9 },
+  // Spawn initial predators in two tight packs away from center and prey
+  const predatorPacks = [
+    { centerX: MAP_WIDTH * 0.15, centerY: MAP_HEIGHT * 0.85, packRadius: 60 },
+    { centerX: MAP_WIDTH * 0.85, centerY: MAP_HEIGHT * 0.15, packRadius: 60 },
   ];
   
-  for (let i = 0; i < INITIAL_PREDATOR_COUNT; i++) {
-    const zone = predatorSpawnZones[i % predatorSpawnZones.length];
-    const offsetDistance = 100 + (i * 50); // Spread them out within the zone
-    const angle = (i / INITIAL_PREDATOR_COUNT) * Math.PI; // Half circle distribution
+  const predatorsPerPack = Math.ceil(INITIAL_PREDATOR_COUNT / 2);
+  
+  for (let packIndex = 0; packIndex < predatorPacks.length; packIndex++) {
+    const pack = predatorPacks[packIndex];
+    const predatorsInThisPack = packIndex === 0 ? predatorsPerPack : INITIAL_PREDATOR_COUNT - predatorsPerPack;
     
-    const spawnPosition = {
-      x: zone.centerX + Math.cos(angle) * offsetDistance,
-      y: zone.centerY + Math.sin(angle) * offsetDistance,
-    };
-    
-    // Ensure spawn position is within map bounds and far from center
-    spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
-    spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
-    
-    // Double-check distance from center
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(spawnPosition.x - centerX, 2) + Math.pow(spawnPosition.y - centerY, 2)
-    );
-    
-    if (distanceFromCenter < 400) {
-      // Push further away from center if too close
-      const pushDirection = {
-        x: (spawnPosition.x - centerX) / distanceFromCenter,
-        y: (spawnPosition.y - centerY) / distanceFromCenter,
+    for (let i = 0; i < predatorsInThisPack; i++) {
+      // Create tight pack formation
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = Math.random() * pack.packRadius;
+      
+      const spawnPosition = {
+        x: pack.centerX + Math.cos(angle) * distance,
+        y: pack.centerY + Math.sin(angle) * distance,
       };
-      spawnPosition.x = centerX + pushDirection.x * 400;
-      spawnPosition.y = centerY + pushDirection.y * 400;
+      
+      // Ensure spawn position is within map bounds and not too close to center
+      spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
+      spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
+      
+      // Ensure minimum distance from center for predators
+      const distanceFromCenter = Math.sqrt(
+        Math.pow(spawnPosition.x - centerX, 2) + Math.pow(spawnPosition.y - centerY, 2)
+      );
+      
+      if (distanceFromCenter < 300) {
+        // Push further away from center if too close
+        const pushDirection = {
+          x: (spawnPosition.x - centerX) / distanceFromCenter,
+          y: (spawnPosition.y - centerY) / distanceFromCenter,
+        };
+        spawnPosition.x = centerX + pushDirection.x * 300;
+        spawnPosition.y = centerY + pushDirection.y * 300;
+        
+        // Ensure still within bounds
+        spawnPosition.x = Math.max(50, Math.min(MAP_WIDTH - 50, spawnPosition.x));
+        spawnPosition.y = Math.max(50, Math.min(MAP_HEIGHT - 50, spawnPosition.y));
+      }
+      
+      const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
+      const geneCode = generateRandomPredatorGeneCode();
+      createPredator(entities, spawnPosition, gender, undefined, undefined, geneCode);
     }
-    
-    const gender = i % 2 === 0 ? 'male' : 'female'; // Alternating genders for balance
-    const geneCode = generateRandomPredatorGeneCode();
-    createPredator(entities, spawnPosition, gender, undefined, undefined, geneCode);
   }
 
   const uiButtons: ClickableUIButton[] = [

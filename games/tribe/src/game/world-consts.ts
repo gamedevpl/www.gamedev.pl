@@ -415,3 +415,10 @@ export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is 
 // Animal Spawning Constants
 export const INITIAL_PREY_COUNT: number = 8;
 export const INITIAL_PREDATOR_COUNT: number = 2;
+
+// Animal Feeding Constants (only females can feed children)
+export const ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = 80; // Higher than humans since animals use different hunger scale
+export const ANIMAL_PARENT_FEEDING_RANGE: number = 40; // Slightly smaller than humans
+export const ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 200; // Smaller than humans since animals have better senses
+export const ANIMAL_FEED_CHILD_COOLDOWN_HOURS: number = 2; // How long parent must wait between feedings
+export const ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION: number = 30; // How much hunger is reduced when fed by parent

@@ -115,6 +115,11 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
     if (predator.huntCooldown < 0) predator.huntCooldown = 0;
   }
 
+  if (predator.feedChildCooldownTime && predator.feedChildCooldownTime > 0) {
+    predator.feedChildCooldownTime -= gameHoursElapsed;
+    if (predator.feedChildCooldownTime < 0) predator.feedChildCooldownTime = 0;
+  }
+
   // Check for death conditions
   let shouldDie = false;
   

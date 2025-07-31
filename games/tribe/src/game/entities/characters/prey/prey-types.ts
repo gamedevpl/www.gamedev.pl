@@ -56,10 +56,17 @@ export interface PreyEntity extends CharacterEntity {
 
   /** Cooldown time before being able to flee again. */
   fleeCooldown?: number;
+
+  /** Cooldown time before being able to feed a child again (only for females). */
+  feedChildCooldownTime?: number;
+
+  /** Last time the child fed visual effect was triggered to prevent spam. */
+  lastChildFedEffectTime?: number;
 }
 
 export type PreyAction =
   | 'grazing' // Eating berry bushes
   | 'moving' // Changing position
   | 'idle' // Not performing any action
-  | 'procreating'; // Reproducing
+  | 'procreating' // Reproducing
+  | 'feeding'; // Feeding a child (only females)

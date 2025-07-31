@@ -59,6 +59,12 @@ export interface PredatorEntity extends CharacterEntity {
 
   /** Cooldown time before being able to hunt again. */
   huntCooldown?: number;
+
+  /** Cooldown time before being able to feed a child again (only for females). */
+  feedChildCooldownTime?: number;
+
+  /** Last time the child fed visual effect was triggered to prevent spam. */
+  lastChildFedEffectTime?: number;
 }
 
 export type PredatorAction =
@@ -66,4 +72,5 @@ export type PredatorAction =
   | 'moving' // Changing position
   | 'idle' // Not performing any action
   | 'procreating' // Reproducing
-  | 'eating'; // Consuming caught prey
+  | 'eating' // Consuming caught prey
+  | 'feeding'; // Feeding a child (only females)
