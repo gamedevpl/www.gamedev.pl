@@ -25,6 +25,24 @@ import { drawFoodBar, drawProgressBar } from './render-bars';
 import { drawFamilyMemberBar, renderMiniatureCharacter } from './render-characters-ui';
 import { EntityId } from '../../entities/entities-types';
 import { Rect2D } from '../../utils/math-types';
+import { drawSprite } from '../../sprites/sprite-loader';
+
+/**
+ * Helper function to render status icons using sprites with fallback to text
+ */
+function renderStatusIcon(ctx: CanvasRenderingContext2D, emoji: string, x: number, y: number, size: number = UI_FONT_SIZE): boolean {
+  const spriteRendered = drawSprite(ctx, emoji, x + size / 2, y, size);
+  if (!spriteRendered) {
+    // Fallback to text rendering
+    ctx.save();
+    ctx.font = `${size}px Arial`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, x, y);
+    ctx.restore();
+  }
+  return spriteRendered;
+}
 
 export function renderTopLeftPanel(
   ctx: CanvasRenderingContext2D,
@@ -47,7 +65,7 @@ export function renderTopLeftPanel(
   const iconTextPadding = 25;
   const barX = UI_PADDING + iconTextPadding;
 
-  ctx.fillText(timeEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+  renderStatusIcon(ctx, timeEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
   drawProgressBar(
     ctx,
     barX,
@@ -184,7 +202,7 @@ export function renderTopLeftPanel(
   const emojiY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2;
   ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
   ctx.textBaseline = 'middle';
-  ctx.fillText(familyEmoji, UI_PADDING, emojiY);
+  renderStatusIcon(ctx, familyEmoji, UI_PADDING, emojiY);
 
   const familyBarY = uiLineY + UI_FAMILY_MEMBER_ICON_SIZE / 2; // Center the single row
 
@@ -202,7 +220,7 @@ export function renderTopLeftPanel(
 
   // Hitpoints Bar
   const hpEmoji = UI_STATUS_EMOJIS[UIStatusType.Hitpoints];
-  ctx.fillText(hpEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+  renderStatusIcon(ctx, hpEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
   drawProgressBar(
     ctx,
     barX,
@@ -217,7 +235,7 @@ export function renderTopLeftPanel(
 
   // Hunger Bar
   const hungerEmoji = UI_STATUS_EMOJIS[UIStatusType.Hunger];
-  ctx.fillText(hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
+  renderStatusIcon(ctx, hungerEmoji, UI_PADDING, uiLineY + UI_BAR_HEIGHT / 2 + UI_FONT_SIZE / 3);
   drawProgressBar(
     ctx,
     barX,
@@ -239,7 +257,7 @@ export function renderTopLeftPanel(
   // Food Bar
   ctx.textBaseline = 'middle';
   const foodEmoji = UI_STATUS_EMOJIS[UIStatusType.Food];
-  ctx.fillText(foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE / 2);
+  renderStatusIcon(ctx, foodEmoji, UI_PADDING, uiLineY + UI_BERRY_ICON_SIZE / 2);
   drawFoodBar(
     ctx,
     barX, // Use the same X as other bars for alignment

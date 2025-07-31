@@ -10,6 +10,7 @@ import {
 } from '../../world-consts';
 import { GameWorldState } from '../../world-types';
 import { findPlayerEntity } from '../../utils/world-utils';
+import { drawSprite } from '../../sprites/sprite-loader';
 
 function drawIndicator(
   ctx: CanvasRenderingContext2D,
@@ -37,12 +38,24 @@ function drawIndicator(
   const emoji = PLAYER_ACTION_EMOJIS[action];
   const name = PLAYER_ACTION_NAMES[action];
   if (emoji) {
-    ctx.font = `${PLAYER_ACTION_HINT_FONT_SIZE * 1.5}px "Press Start 2P", Arial`;
+    const textY = position.y - circleRadius - 25;
+    const emojiSize = PLAYER_ACTION_HINT_FONT_SIZE * 1.5;
+    
+    // Try to render emoji as sprite
+    const spriteRendered = drawSprite(ctx, emoji, position.x, textY, emojiSize);
+    
+    if (!spriteRendered) {
+      // Fallback to text rendering
+      ctx.font = `${emojiSize}px "Press Start 2P", Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, position.x, textY);
+    }
+    
+    // Draw action name
+    ctx.font = `${PLAYER_ACTION_HINT_FONT_SIZE * 0.8}px "Press Start 2P", Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const textY = position.y - circleRadius - 25;
-    ctx.fillText(emoji, position.x, textY);
-    ctx.font = `${PLAYER_ACTION_HINT_FONT_SIZE * 0.8}px "Press Start 2P", Arial`;
     ctx.fillText(name, position.x, textY + 25);
   }
 

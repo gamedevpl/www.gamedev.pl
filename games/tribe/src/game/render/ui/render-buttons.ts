@@ -26,6 +26,7 @@ import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity, getAvailablePlayerActions } from '../../utils/world-utils';
+import { drawSprite } from '../../sprites/sprite-loader';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -85,11 +86,20 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
   ctx.fillStyle = button.isDisabled ? UI_BUTTON_DISABLED_TEXT_COLOR : button.textColor;
 
   if (button.icon) {
-    // Render large icon in the center
-    ctx.font = `${height * 0.55}px "Press Start 2P", Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(button.icon, x + width / 2, y + height / 2);
+    // Try to render icon as sprite first
+    const iconSize = height * 0.55;
+    const iconX = x + width / 2;
+    const iconY = y + height / 2;
+    
+    const spriteRendered = drawSprite(ctx, button.icon, iconX, iconY, iconSize);
+    
+    if (!spriteRendered) {
+      // Fallback to text rendering
+      ctx.font = `${iconSize}px "Press Start 2P", Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(button.icon, iconX, iconY);
+    }
 
     // Render small text in the bottom right corner
     if (button.text) {

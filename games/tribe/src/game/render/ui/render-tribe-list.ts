@@ -12,6 +12,7 @@ import {
 import { ClickableUIButton, TribeInfo, UIButtonActionType } from '../../ui/ui-types';
 import { renderMiniatureCharacter } from './render-characters-ui';
 import { DiplomacyStatus, GameWorldState } from '../../world-types';
+import { drawSprite } from '../../sprites/sprite-loader';
 
 export function renderTribeList(
   ctx: CanvasRenderingContext2D,
@@ -68,10 +69,20 @@ export function renderTribeList(
     let currentX = startX + UI_TRIBE_LIST_PADDING;
 
     // --- Badge --
-    ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE}px "Press Start 2P", Arial`;
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillText(tribe.tribeBadge, currentX, centerY - UI_TRIBE_LIST_BADGE_SIZE / 4);
+    const badgeX = currentX + UI_TRIBE_LIST_BADGE_SIZE / 2;
+    const badgeY = centerY;
+    
+    // Use sprite-based rendering for tribe badge
+    const badgeRendered = drawSprite(ctx, tribe.tribeBadge, badgeX, badgeY, UI_TRIBE_LIST_BADGE_SIZE);
+    
+    if (!badgeRendered) {
+      // Fallback: original text rendering
+      ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE}px "Press Start 2P", Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(tribe.tribeBadge, currentX, centerY - UI_TRIBE_LIST_BADGE_SIZE / 4);
+    }
+    
     currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
 
     // --- Diplomacy Status & Button ---
@@ -108,11 +119,18 @@ export function renderTribeList(
         ctx.globalAlpha = 1;
       }
 
-      // Draw the icon
-      ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE * 0.8}px "Press Start 2P", Arial`;
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'center';
-      ctx.fillText(diplomacyIcon, currentX + UI_TRIBE_LIST_BADGE_SIZE / 2, centerY);
+      // Draw the icon using sprite
+      const iconX = currentX + UI_TRIBE_LIST_BADGE_SIZE / 2;
+      const iconY = centerY;
+      const iconRendered = drawSprite(ctx, diplomacyIcon, iconX, iconY, UI_TRIBE_LIST_BADGE_SIZE * 0.8);
+      
+      if (!iconRendered) {
+        // Fallback: original text rendering
+        ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE * 0.8}px "Press Start 2P", Arial`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText(diplomacyIcon, currentX + UI_TRIBE_LIST_BADGE_SIZE / 2, centerY);
+      }
     }
     currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
 

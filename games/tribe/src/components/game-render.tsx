@@ -3,6 +3,7 @@ import { GameWorldState } from '../game/world-types';
 import { renderGame } from '../game/render';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
+import { preloadSprites } from '../game/sprites/sprite-loader';
 
 interface GameRenderProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -25,6 +26,11 @@ export const GameRender: React.FC<GameRenderProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     ctxRef.current = canvas.getContext('2d');
+
+    // Preload sprites when component mounts
+    preloadSprites().catch(error => {
+      console.warn('Failed to preload some sprites, fallback rendering will be used:', error);
+    });
 
     const handleResize = () => {
       if (canvas && ctxRef.current && gameStateRef.current) {

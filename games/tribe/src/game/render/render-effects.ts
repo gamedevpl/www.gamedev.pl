@@ -1,5 +1,6 @@
 import { VisualEffect, VisualEffectType } from '../visual-effects/visual-effect-types';
 import { Vector2D } from '../utils/math-types';
+import { drawSpriteWithEffect } from '../sprites/sprite-loader';
 
 const EFFECT_BASE_RADIUS = 15;
 
@@ -87,12 +88,22 @@ function drawEmoji(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentT
   const opacity = 1 - progress;
   const yOffset = -20 * progress; // Rise up
 
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.font = '20px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText(emoji, effect.position.x, effect.position.y + yOffset);
-  ctx.restore();
+  // Use sprite-based rendering with fallback to text
+  const spriteRendered = drawSpriteWithEffect(
+    ctx,
+    emoji,
+    effect.position.x,
+    effect.position.y,
+    opacity,
+    yOffset,
+    20 // Size of the sprite for effects
+  );
+
+  // If sprite rendering failed, log for debugging but don't fallback
+  // The drawSpriteWithEffect function already handles fallback internally
+  if (!spriteRendered) {
+    console.debug(`Sprite rendering fallback used for emoji: ${emoji}`);
+  }
 }
 
 export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number): void {
