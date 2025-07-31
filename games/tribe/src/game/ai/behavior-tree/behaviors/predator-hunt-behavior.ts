@@ -18,7 +18,7 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode {
         (predator: any, context: UpdateContext, blackboard) => {
           // Only hunt if moderately hungry and not on cooldown
           if (
-            predator.hunger < 50 || 
+            predator.hunger <= 50 || 
             (predator.huntCooldown && predator.huntCooldown > 0)
           ) {
             return false;

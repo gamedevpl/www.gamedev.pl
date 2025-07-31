@@ -17,7 +17,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode {
       new ConditionNode(
         (prey: any, context: UpdateContext, blackboard) => {
           // Only graze if hungry and not on cooldown
-          if (prey.hunger < 30 || (prey.eatingCooldownTime && prey.eatingCooldownTime > context.gameState.time)) {
+          if (prey.hunger <= 30 || (prey.eatingCooldownTime && prey.eatingCooldownTime > context.gameState.time)) {
             return false;
           }
 

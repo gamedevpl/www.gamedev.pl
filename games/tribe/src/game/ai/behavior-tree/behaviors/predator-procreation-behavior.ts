@@ -76,7 +76,7 @@ export function createPredatorProcreationBehavior(depth: number): BehaviorNode {
         predator,
         context.gameState,
         'predator',
-        PREDATOR_INTERACTION_RANGE * 3, // Wider search radius
+        PREDATOR_INTERACTION_RANGE * 10, // Much wider search radius for finding mates
         (potentialPartner) => {
           return (
             potentialPartner.id !== predator.id &&
