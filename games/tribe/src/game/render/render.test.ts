@@ -5,9 +5,13 @@ import * as path from 'path';
 import { initGame } from '../index';
 import { renderGame } from '../render';
 import { GameWorldState } from '../world-types';
+import { preloadSprites } from '../sprites/sprite-loader';
 
 describe('Game Rendering', () => {
-  it('should render the game world to a canvas and save it', () => {
+  it('should render the game world to a canvas and save it', async () => {
+    // Preload sprites first (works in both browser and Node.js now)
+    await preloadSprites();
+    
     // Initialize the game state
     const gameState: GameWorldState = initGame();
 

@@ -63,20 +63,46 @@ function loadSprite(spriteName: string): Promise<HTMLImageElement> {
   }
 
   const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
+    // Check if we're in Node.js environment - use more robust detection
+    const isNodeJS = typeof process !== 'undefined' && process.versions && process.versions.node;
     
-    img.onload = () => {
-      spriteCache.set(spriteName, img);
-      resolve(img);
-    };
-    
-    img.onerror = () => {
-      console.warn(`Failed to load sprite: ${spriteName}`);
-      reject(new Error(`Failed to load sprite: ${spriteName}`));
-    };
-    
-    // Set sprite path - browser environment only
-    img.src = `assets/sprites/emojis/${spriteName}.png`;
+    if (isNodeJS) {
+      // Node.js environment - load using canvas package
+      try {
+        const { loadImage } = require('canvas');
+        const path = require('path');
+        const spritePath = path.resolve(__dirname, `../../../public/assets/sprites/emojis/${spriteName}.png`);
+        
+        loadImage(spritePath)
+          .then((img: HTMLImageElement) => {
+            spriteCache.set(spriteName, img);
+            resolve(img);
+          })
+          .catch((error: Error) => {
+            console.warn(`Failed to load sprite in Node.js: ${spriteName}`, error);
+            reject(error);
+          });
+      } catch (error) {
+        console.warn(`Canvas package not available for sprite loading: ${spriteName}`, error);
+        reject(error);
+      }
+    } else {
+      // Browser environment - use standard Image loading
+      const img = new Image();
+      
+      img.onload = () => {
+        spriteCache.set(spriteName, img);
+        resolve(img);
+      };
+      
+      img.onerror = () => {
+        console.warn(`Failed to load sprite: ${spriteName}`);
+        reject(new Error(`Failed to load sprite: ${spriteName}`));
+      };
+      
+      // Set sprite path - browser environment
+      img.src = `assets/sprites/emojis/${spriteName}.png`;
+    }
   });
   
   loadingPromises.set(spriteName, promise);
@@ -87,20 +113,18 @@ function loadSprite(spriteName: string): Promise<HTMLImageElement> {
  * Preload all emoji sprites
  */
 export async function preloadSprites(): Promise<void> {
-  // Skip sprite loading in Node.js environment (tests)
-  if (typeof window === 'undefined') {
-    console.log('Skipping sprite preload in Node.js environment');
-    return;
-  }
-  
   const spriteNames = Object.values(EMOJI_TO_SPRITE_MAP);
   const uniqueSpriteNames = [...new Set(spriteNames)]; // Remove duplicates
   
+  const isNodeJS = typeof process !== 'undefined' && process.versions && process.versions.node;
+  const environment = isNodeJS ? 'Node.js' : 'Browser';
+  console.log(`Preloading ${uniqueSpriteNames.length} emoji sprites in ${environment} environment`);
+  
   try {
     await Promise.all(uniqueSpriteNames.map(loadSprite));
-    console.log(`Successfully preloaded ${uniqueSpriteNames.length} emoji sprites`);
+    console.log(`Successfully preloaded ${uniqueSpriteNames.length} emoji sprites in ${environment}`);
   } catch (error) {
-    console.error('Failed to preload some sprites:', error);
+    console.error(`Failed to preload some sprites in ${environment}:`, error);
     // Don't throw - game should continue with fallback rendering
   }
 }
