@@ -366,7 +366,7 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
 
 // Prey Constants
 export const PREY_MAX_AGE_YEARS: number = 12; // Maximum lifespan in game years
-export const PREY_HUNGER_INCREASE_PER_HOUR: number = 8; // Faster hunger than humans
+export const PREY_HUNGER_INCREASE_PER_HOUR: number = 6; // Reduced for better ecosystem balance
 export const PREY_HUNGER_DEATH: number = 120; // Lower hunger threshold than humans
 export const PREY_MAX_HITPOINTS: number = 50; // Lower health than humans
 export const PREY_BASE_SPEED: number = 15; // Faster than humans
@@ -380,7 +380,7 @@ export const PLAYER_DEFEND_PREDATOR_RANGE: number = 150;
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
 export const PREY_GESTATION_PERIOD_HOURS: number = 48; // 2 game days
-export const PREY_PROCREATION_COOLDOWN_HOURS: number = 12; // Half game day
+export const PREY_PROCREATION_COOLDOWN_HOURS: number = 6; // Reduced for better population sustainability
 export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 8;
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
@@ -407,7 +407,7 @@ export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators star
 export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
 export const PREDATOR_GESTATION_PERIOD_HOURS: number = 60; // 2.5 game days
-export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 18;
+export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 12; // Reduced for better population sustainability
 export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
 export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
 export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is reduced by eating meat
