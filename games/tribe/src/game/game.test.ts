@@ -3,12 +3,7 @@ import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
-import {
-  BERRY_COST_FOR_PLANTING,
-  GAME_DAY_IN_REAL_SECONDS,
-  HUMAN_PLANTING_DURATION_HOURS,
-  HUMAN_YEAR_IN_REAL_SECONDS,
-} from './world-consts';
+import { GAME_DAY_IN_REAL_SECONDS, HUMAN_PLANTING_DURATION_HOURS, HUMAN_YEAR_IN_REAL_SECONDS } from './world-consts';
 import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
