@@ -35,7 +35,7 @@ describe('Game Rendering', () => {
     // Save the canvas buffer to a file
     const buffer = canvas.toBuffer('image/png');
     const outputPath = path.resolve(
-      '/Users/gtanczyk/src/www.gamedev.pl/games/tribe/src/game/render',
+      __dirname,
       'render-test-output.png',
     );
     fs.writeFileSync(outputPath, new Uint8Array(buffer));
