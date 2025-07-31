@@ -366,13 +366,13 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
 
 // Prey Constants
 export const PREY_MAX_AGE_YEARS: number = 12; // Maximum lifespan in game years
-export const PREY_HUNGER_INCREASE_PER_HOUR: number = 4; // Reduced for better ecosystem balance and reproduction
+export const PREY_HUNGER_INCREASE_PER_HOUR: number = 2; // Much slower hunger for reproduction time
 export const PREY_HUNGER_DEATH: number = 120; // Lower hunger threshold than humans
 export const PREY_MAX_HITPOINTS: number = 50; // Lower health than humans
 export const PREY_BASE_SPEED: number = 15; // Faster than humans
 export const PREY_INITIAL_HUNGER: number = 30;
 export const PREY_INITIAL_AGE: number = 2;
-export const PREY_INTERACTION_RANGE: number = 25;
+export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better interactions
 
 // Player interaction ranges for animal hunting/defending
 export const PLAYER_HUNT_PREY_RANGE: number = 120;
@@ -396,7 +396,7 @@ export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
 export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
 export const PREDATOR_INITIAL_HUNGER: number = 40;
 export const PREDATOR_INITIAL_AGE: number = 3;
-export const PREDATOR_INTERACTION_RANGE: number = 35;
+export const PREDATOR_INTERACTION_RANGE: number = 60; // Increased range for better interactions
 export const PREDATOR_ATTACK_RANGE: number = 40;
 export const PREDATOR_HUNT_RANGE: number = 50;
 export const PREDATOR_TERRITORIAL_RANGE: number = 120; // Range for detecting territorial rivals
