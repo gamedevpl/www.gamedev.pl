@@ -151,8 +151,8 @@ export function drawSprite(
     ctx.font = `${size * 0.75}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Use white color for fallback text to ensure visibility
-    ctx.fillStyle = '#ffffff';
+    // Let the canvas render emoji naturally - don't override color
+    // This allows Unicode emojis to render with their natural colors
     ctx.fillText(emoji, x, y);
     ctx.restore();
     return false;
