@@ -9,7 +9,7 @@ import {
   HUMAN_PLANTING_DURATION_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
 } from './world-consts';
-import { isLineage } from './utils/world-utils';
+import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
 import { FoodType } from './food/food-types';
@@ -122,7 +122,7 @@ describe('Tribe Formation via Splitting', () => {
     // 1. Create a leader for the initial tribe
     const leaderA = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', false, 30);
     leaderA.leaderId = leaderA.id;
-    leaderA.tribeBadge = '👑';
+    leaderA.tribeBadge = generateTribeBadge();
 
     // 2. Create a male who is part of the leader's tribe but not related
     const maleB = createHuman(
