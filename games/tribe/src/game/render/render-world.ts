@@ -1,6 +1,5 @@
 import { Entity } from '../entities/entities-types';
 import { GameWorldState } from '../world-types';
-import { VisualEffect } from '../visual-effects/visual-effect-types';
 import { renderBerryBush } from './render-bush';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { renderCorpse } from './render-corpse';
@@ -24,28 +23,7 @@ import {
   UI_TUTORIAL_HIGHLIGHT_RADIUS,
 } from '../world-consts';
 import { renderEntityHighlight } from './render-highlights';
-
-function renderWithWrapping(
-  ctx: CanvasRenderingContext2D,
-  worldWidth: number,
-  worldHeight: number,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  renderFn: (ctx: CanvasRenderingContext2D, ...args: any[]) => void,
-  entity: Entity | VisualEffect,
-  ...args: unknown[]
-): void {
-  const originalPosition = { ...entity.position };
-
-  for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
-    for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
-      entity.position.x = originalPosition.x + dx;
-      entity.position.y = originalPosition.y + dy;
-      renderFn(ctx, entity, ...args);
-    }
-  }
-
-  entity.position = originalPosition;
-}
+import { renderWithWrapping } from './render-utils';
 
 export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldState, isDebugOn: boolean): void {
   const player = findPlayerEntity(gameState);
@@ -110,25 +88,25 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
       renderWithWrapping(ctx, worldWidth, worldHeight, renderCorpse, entity as CorpseEntity);
     } else if (entity.type === 'prey') {
       renderWithWrapping(
-        ctx, 
-        worldWidth, 
-        worldHeight, 
-        renderPrey, 
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderPrey,
         entity as PreyEntity,
         isDebugOn,
         gameState.time,
-        gameState.debugCharacterId
+        gameState.debugCharacterId,
       );
     } else if (entity.type === 'predator') {
       renderWithWrapping(
-        ctx, 
-        worldWidth, 
-        worldHeight, 
-        renderPredator, 
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderPredator,
         entity as PredatorEntity,
         isDebugOn,
         gameState.time,
-        gameState.debugCharacterId
+        gameState.debugCharacterId,
       );
     }
   });

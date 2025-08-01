@@ -1,12 +1,6 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
-import {
-  findClosestEntity,
-  findValidPlantingSpot,
-  performTribeSplit,
-  isHostile,
-  canProcreate,
-} from '../utils';
+import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
 import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_ATTACK_RANGE,
@@ -22,6 +16,7 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
+import { PreyEntity } from '../entities/characters/prey/prey-types';
 
 /**
  * Handles keyboard events that correspond to direct player actions.
@@ -154,17 +149,16 @@ export const handlePlayerActionKeyDown = (
       gameState.autopilotControls.behaviors.attack = !gameState.autopilotControls.behaviors.attack;
       return;
     }
-    const humanTarget = findClosestEntity<HumanEntity>(
-      playerEntity,
-      gameState,
-      'human',
-      HUMAN_ATTACK_RANGE,
-      (h) => isHostile(playerEntity, h as HumanEntity, gameState),
-    );
+    const target =
+      findClosestEntity<HumanEntity>(playerEntity, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
+        isHostile(playerEntity, h as HumanEntity, gameState),
+      ) ??
+      findClosestEntity<HumanEntity>(playerEntity, gameState, 'predator', HUMAN_ATTACK_RANGE) ??
+      findClosestEntity<PreyEntity>(playerEntity, gameState, 'prey', HUMAN_ATTACK_RANGE);
 
-    if (humanTarget) {
+    if (target) {
       playerEntity.activeAction = 'attacking';
-      playerEntity.attackTargetId = humanTarget.id;
+      playerEntity.attackTargetId = target.id;
     }
   } else if (key === 'b') {
     if (shiftKey) {

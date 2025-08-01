@@ -21,7 +21,8 @@ import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
-import { renderAutopilotIndicator, renderNotifications } from './render/render-ui';
+import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
+import { renderNotifications } from './render/render-ui';
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
 
 export function renderGame(
@@ -124,7 +125,15 @@ export function renderGame(
     if (player) {
       renderAutopilotHints(ctx, gameState, viewportCenter, ctx.canvas.width, ctx.canvas.height);
       if (playerActionHints.length > 0) {
-        renderPlayerActionHints(ctx, playerActionHints, player, viewportCenter, ctx.canvas.width, ctx.canvas.height);
+        renderPlayerActionHints(
+          ctx,
+          playerActionHints,
+          player,
+          viewportCenter,
+          ctx.canvas.width,
+          ctx.canvas.height,
+          gameState.mapDimensions,
+        );
       }
     }
 

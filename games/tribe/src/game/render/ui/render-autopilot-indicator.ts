@@ -9,11 +9,13 @@ import {
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
 } from '../../world-consts';
 import { GameWorldState } from '../../world-types';
-import { findPlayerEntity } from '../../utils/world-utils';
+import { findPlayerEntity } from '../../utils';
+import { renderWithWrapping } from '../render-utils';
+import { VisualEffect } from '../../visual-effects/visual-effect-types';
 
 function drawIndicator(
   ctx: CanvasRenderingContext2D,
-  position: Vector2D,
+  screenPos: Vector2D,
   radius: number,
   action: PlayerActionType,
   time: number,
@@ -29,7 +31,7 @@ function drawIndicator(
   ctx.lineWidth = 2;
   ctx.setLineDash(PLAYER_ACTION_OUTLINE_DASH_PATTERN);
   ctx.beginPath();
-  ctx.arc(position.x, position.y, circleRadius, 0, Math.PI * 2);
+  ctx.arc(screenPos.x, screenPos.y, circleRadius, 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -40,16 +42,16 @@ function drawIndicator(
     ctx.font = `${PLAYER_ACTION_HINT_FONT_SIZE * 1.5}px "Press Start 2P", Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const textY = position.y - circleRadius - 25;
-    ctx.fillText(emoji, position.x, textY);
+    const textY = screenPos.y - circleRadius - 25;
+    ctx.fillText(emoji, screenPos.x, textY);
     ctx.font = `${PLAYER_ACTION_HINT_FONT_SIZE * 0.8}px "Press Start 2P", Arial`;
-    ctx.fillText(name, position.x, textY + 25);
+    ctx.fillText(name, screenPos.x, textY + 25);
   }
 
   ctx.restore();
 }
 
-function drawRippleEffect(ctx: CanvasRenderingContext2D, position: Vector2D, time: number) {
+function drawRippleEffect(ctx: CanvasRenderingContext2D, screenPos: Vector2D, time: number) {
   ctx.save();
   const rippleSpeed = 30; // radius units per hour
   const maxRadius = 70;
@@ -64,7 +66,7 @@ function drawRippleEffect(ctx: CanvasRenderingContext2D, position: Vector2D, tim
     ctx.strokeStyle = `rgba(255, 215, 0, ${opacity * 0.7})`; // Gold-ish color
     ctx.lineWidth = 1 + (1 - opacity) * 2; // gets thicker as it expands
     ctx.beginPath();
-    ctx.arc(position.x, position.y, baseRadius, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, baseRadius, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -77,16 +79,30 @@ export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameStat
   if (!player) {
     return;
   }
+  const rippleCallback = (context: CanvasRenderingContext2D, ripple: VisualEffect) => {
+    drawRippleEffect(context, ripple.position, gameState.time);
+  };
 
   // Render ripple for player's "Follow Me" command
   if (player.isCallingToFollow) {
-    drawRippleEffect(ctx, player.position, gameState.time);
+    renderWithWrapping(ctx, gameState.mapDimensions.width, gameState.mapDimensions.height, rippleCallback, {
+      position: player.position,
+    } as VisualEffect);
   }
 
   // Render ripple for AI "Follow Leader" behavior toggle
   // This shows that the tribe is in "follow" mode.
   if (behaviors.followLeader && !activeAction) {
-    drawRippleEffect(ctx, player.position, gameState.time);
+    renderWithWrapping(
+      ctx,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+      rippleCallback,
+      {
+        position: player.position,
+      } as VisualEffect,
+      70,
+    );
   }
 
   // Render indicators for other one-time autopilot actions
@@ -107,7 +123,20 @@ export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameStat
     if (targetPosition) {
       // We don't want to draw the old indicator for follow actions
       if (activeAction.action !== PlayerActionType.AutopilotFollowMe && !player.isCallingToFollow) {
-        drawIndicator(ctx, targetPosition, targetRadius, activeAction.action, gameState.time);
+        const indicatorCallback = (context: CanvasRenderingContext2D, effect: VisualEffect) => {
+          drawIndicator(context, effect.position, targetRadius, activeAction.action, gameState.time);
+        };
+        renderWithWrapping(
+          ctx,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+          indicatorCallback,
+          {
+            position: { ...targetPosition },
+          } as VisualEffect,
+          targetPosition,
+          targetRadius + 30,
+        );
       }
     }
   }

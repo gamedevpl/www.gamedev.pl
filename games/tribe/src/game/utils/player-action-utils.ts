@@ -106,34 +106,14 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   // Check for Attacking
-  const attackTarget = findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
-    isHostile(player, h as HumanEntity, gameState),
-  );
+  const attackTarget =
+    findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
+      isHostile(player, h as HumanEntity, gameState),
+    ) ??
+    findClosestEntity<PredatorEntity>(player, gameState, 'predator', HUMAN_ATTACK_RANGE) ??
+    findClosestEntity<PreyEntity>(player, gameState, 'prey', HUMAN_ATTACK_RANGE);
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
-  }
-
-  // Check for Hunt Prey
-  const preyTarget = findClosestEntity<PreyEntity>(player, gameState, 'prey', HUMAN_ATTACK_RANGE, () => true);
-  if (preyTarget) {
-    actions.push({ type: PlayerActionType.HuntPrey, action: 'attacking', key: 'q', targetEntity: preyTarget });
-  }
-
-  // Check for Defend Against Predator
-  const predatorTarget = findClosestEntity<PredatorEntity>(
-    player,
-    gameState,
-    'predator',
-    HUMAN_ATTACK_RANGE,
-    () => true,
-  );
-  if (predatorTarget) {
-    actions.push({
-      type: PlayerActionType.DefendAgainstPredator,
-      action: 'attacking',
-      key: 'q',
-      targetEntity: predatorTarget,
-    });
   }
 
   // Check for Planting
