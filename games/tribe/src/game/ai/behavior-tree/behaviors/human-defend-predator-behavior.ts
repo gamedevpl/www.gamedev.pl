@@ -6,7 +6,6 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils';
-import { HUMAN_ATTACKING } from '../../../entities/characters/human/states/human-state-types';
 
 const DEFEND_TARGET_KEY = 'defendTarget';
 const PREDATOR_THREAT_RANGE = 150; // Range to detect predator threats
@@ -115,7 +114,6 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
           // Set defensive attack state
           human.activeAction = 'attacking';
           human.attackTargetId = target.id;
-          human.stateMachine = [HUMAN_ATTACKING, { enteredAt: context.gameState.time }];
 
           // The actual combat is handled by the interaction system
           return NodeStatus.RUNNING;
