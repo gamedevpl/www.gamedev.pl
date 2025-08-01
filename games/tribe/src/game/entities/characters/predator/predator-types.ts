@@ -21,6 +21,9 @@ export interface PredatorEntity extends CharacterEntity {
   /** Whether the predator (female) is pregnant. */
   isPregnant?: boolean;
 
+  /** Pregnancy father (if known). */
+  pregnancyFatherId?: EntityId;
+
   /** Remaining gestation time in game hours (for pregnant females). */
   gestationTime?: number;
 

@@ -4,7 +4,7 @@ import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, Sequence, TimeoutNode } from '../nodes';
 import { UpdateContext } from '../../../world-types';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 
@@ -61,49 +61,54 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
         depth + 1,
       ),
       // Action: Hunt or approach prey
-      new ActionNode(
-        (predator, context: UpdateContext, blackboard) => {
-          const target = blackboard.get<PreyEntity>('huntTarget');
-          const needToApproach = blackboard.get<boolean>('needToApproach');
+      new TimeoutNode(
+        new ActionNode(
+          (predator, context: UpdateContext, blackboard) => {
+            const target = blackboard.get<PreyEntity>('huntTarget');
+            const needToApproach = blackboard.get<boolean>('needToApproach');
 
-          if (!target || target.hitpoints <= 0) {
-            return NodeStatus.FAILURE;
-          }
+            if (!target || target.hitpoints <= 0) {
+              return NodeStatus.FAILURE;
+            }
 
-          const distance = calculateWrappedDistance(
-            predator.position,
-            target.position,
-            context.gameState.mapDimensions.width,
-            context.gameState.mapDimensions.height,
-          );
-
-          if (distance <= PREDATOR_HUNT_RANGE) {
-            // Within hunting range, start attacking
-            predator.activeAction = 'attacking';
-            predator.attackTargetId = target.id;
-            predator.target = target.id;
-            predator.direction = { x: 0, y: 0 };
-            blackboard.delete('needToApproach');
-            return NodeStatus.RUNNING;
-          } else if (needToApproach || distance > PREDATOR_HUNT_RANGE) {
-            // Need to move closer to the prey
-            predator.activeAction = 'moving';
-            predator.target = target.id;
-
-            const directionToTarget = getDirectionVectorOnTorus(
+            const distance = calculateWrappedDistance(
               predator.position,
               target.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
 
-            predator.direction = vectorNormalize(directionToTarget);
-            return NodeStatus.RUNNING;
-          }
+            if (distance <= PREDATOR_HUNT_RANGE) {
+              // Within hunting range, start attacking
+              predator.activeAction = 'attacking';
+              predator.attackTargetId = target.id;
+              predator.target = target.id;
+              predator.direction = { x: 0, y: 0 };
+              blackboard.delete('needToApproach');
+              return NodeStatus.RUNNING;
+            } else if (needToApproach || distance > PREDATOR_HUNT_RANGE) {
+              // Need to move closer to the prey
+              predator.activeAction = 'moving';
+              predator.target = target.id;
 
-          return NodeStatus.FAILURE;
-        },
-        'Hunt or Approach Prey',
+              const directionToTarget = getDirectionVectorOnTorus(
+                predator.position,
+                target.position,
+                context.gameState.mapDimensions.width,
+                context.gameState.mapDimensions.height,
+              );
+
+              predator.direction = vectorNormalize(directionToTarget);
+              return NodeStatus.RUNNING;
+            }
+
+            return NodeStatus.FAILURE;
+          },
+          'Hunt or Approach Prey',
+          depth + 2,
+        ),
+        10,
+        'Hunt Timeout (10 hour)',
         depth + 1,
       ),
     ],

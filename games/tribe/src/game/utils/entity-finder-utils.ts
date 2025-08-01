@@ -6,7 +6,7 @@ import { calculateWrappedDistance, vectorDistance } from './math-utils';
 import { Vector2D } from './math-types';
 
 export function findClosestEntity<T extends Entity>(
-  sourceEntity: Entity,
+  sourceEntityOrPosition: Entity | Vector2D,
   gameState: GameWorldState,
   targetType: EntityType,
   maxDistance: number,
@@ -14,19 +14,22 @@ export function findClosestEntity<T extends Entity>(
 ): T | null {
   const indexedState = gameState as IndexedWorldState;
   const searchRadius = maxDistance;
+  const sourceEntity =
+    'position' in sourceEntityOrPosition && sourceEntityOrPosition.id ? sourceEntityOrPosition : null;
+  const sourcePosition = sourceEntity ? sourceEntity.position : (sourceEntityOrPosition as Vector2D);
 
-  const candidates = indexedState.search[targetType].byRadius(sourceEntity.position, searchRadius) as unknown as T[];
+  const candidates = indexedState.search[targetType].byRadius(sourcePosition, searchRadius) as unknown as T[];
 
   let closestEntity: T | null = null;
   let minDistance = searchRadius;
 
   for (const entity of candidates) {
-    if (entity.id === sourceEntity.id || (filterFn && !filterFn(entity))) {
+    if (entity.id === sourceEntity?.id || (filterFn && !filterFn(entity))) {
       continue;
     }
 
     const distance = calculateWrappedDistance(
-      sourceEntity.position,
+      sourcePosition,
       entity.position,
       gameState.mapDimensions.width,
       gameState.mapDimensions.height,
@@ -41,14 +44,23 @@ export function findClosestEntity<T extends Entity>(
   return closestEntity;
 }
 
+export function findEntitiesOfTypeInRadius<T extends Entity>(
+  sourcePosition: Vector2D,
+  gameState: GameWorldState,
+  targetType: EntityType,
+  radius: number,
+): T[] {
+  const indexedState = gameState as IndexedWorldState;
+  return indexedState.search[targetType].byRadius(sourcePosition, radius) as unknown as T[];
+}
+
 export function countEntitiesOfTypeInRadius(
   sourcePosition: Vector2D,
   gameState: GameWorldState,
   targetType: EntityType,
   radius: number,
 ): number {
-  const indexedState = gameState as IndexedWorldState;
-  return indexedState.search[targetType].byRadius(sourcePosition, radius).length;
+  return findEntitiesOfTypeInRadius(sourcePosition, gameState, targetType, radius).length;
 }
 
 export function findPlayerEntity(gameState: GameWorldState): HumanEntity | undefined {

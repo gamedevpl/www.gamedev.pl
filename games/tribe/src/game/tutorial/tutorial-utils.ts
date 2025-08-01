@@ -134,7 +134,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     condition: (world: GameWorldState) => {
       // Show when there are animals in the world
       const hasAnimals = Array.from(world.entities.entities.values()).some(
-        entity => entity.type === 'prey' || entity.type === 'predator'
+        (entity) => entity.type === 'prey' || entity.type === 'predator',
       );
       return hasAnimals;
     },
@@ -159,7 +159,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     key: TutorialStepKey.DEFEND_FROM_PREDATORS,
-    title: 'Defend Against Predators',
+    title: 'Predators',
     text: 'Predators may attack when hungry! Click on them to fight back. Fighting together with family is more effective.',
     condition: (world: GameWorldState, player: HumanEntity) => {
       // Show when there are predators nearby

@@ -43,6 +43,7 @@ export const predatorProcreationInteraction: InteractionDefinition<PredatorEntit
 
     // Make female pregnant
     female.isPregnant = true;
+    female.pregnancyFatherId = predator1.gender === 'male' ? predator1.id : predator2.id;
     female.gestationTime = PREDATOR_GESTATION_PERIOD_HOURS;
 
     // Set cooldowns for both

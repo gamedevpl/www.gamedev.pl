@@ -169,7 +169,7 @@ export function createCorpse(
   // Calculate meat amount based on original entity type and hunger level
   let initialFood: number;
   let hungerThreshold: number;
-  
+
   switch (originalEntityType) {
     case 'human':
       initialFood = HUMAN_CORPSE_INITIAL_FOOD;
@@ -198,10 +198,7 @@ export function createCorpse(
     food: [
       ...Array.from(
         {
-          length: Math.max(
-            (initialFood * Math.max(hungerThreshold - hunger, 0)) / hungerThreshold,
-            1,
-          ),
+          length: Math.max((initialFood * Math.max(hungerThreshold - hunger, 0)) / hungerThreshold, 0),
         },
         () => ({ type: FoodType.Meat }),
       ),
@@ -224,18 +221,7 @@ export function createHumanCorpse(
   carriedFood: FoodItem[],
   hunger: number,
 ): CorpseEntity {
-  return createCorpse(
-    state,
-    position,
-    gender,
-    age,
-    radius,
-    originalHumanId,
-    'human',
-    currentTime,
-    carriedFood,
-    hunger,
-  );
+  return createCorpse(state, position, gender, age, radius, originalHumanId, 'human', currentTime, carriedFood, hunger);
 }
 
 export function createPreyCorpse(

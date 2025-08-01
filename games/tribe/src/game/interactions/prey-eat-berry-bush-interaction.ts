@@ -37,7 +37,7 @@ export const preyEatBerryBushInteraction: InteractionDefinition<PreyEntity, Berr
     if (food) {
       // Reduce prey hunger
       prey.hunger = Math.max(0, prey.hunger - 25);
-      
+
       // Damage the berry bush by reducing its lifespan
       berryBush.lifespan -= PREY_BERRY_BUSH_DAMAGE;
       berryBush.timeSinceLastHarvest = context.gameState.time;

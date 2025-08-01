@@ -49,7 +49,7 @@ const update = (data: HumanProcreatingStateData, context: StateContext<HumanEnti
     if (female && male) {
       female.isPregnant = true;
       female.gestationTime = HUMAN_GESTATION_PERIOD_HOURS;
-      female.fatherId = male.id; // Store father ID on mother for birth process
+      female.pregnancyFatherId = male.id;
       entity.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
       partner.procreationCooldown = HUMAN_PROCREATION_COOLDOWN_HOURS;
 

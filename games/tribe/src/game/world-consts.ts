@@ -98,6 +98,10 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = HUMAN_HUNGER_DEAT
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = HUMAN_HUNGER_DEATH * 0.7; // AI decides to plant if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = HUMAN_HUNGER_DEATH * 0.8; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
+export const AI_HUNTING_HUNGER_THRESHOLD = 80; // Hunger level to consider hunting prey
+export const AI_HUNTING_FOOD_SEARCH_RADIUS = 300; // Radius to search for other food before hunting
+export const AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER = 600; // Max distance from tribe center to chase prey
+export const AI_DEFEND_BUSH_PREY_SEARCH_RADIUS = 150; // Radius to search for prey on claimed bushes
 export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_IDle_WANDER_COOLDOWN = 10;
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
@@ -131,6 +135,8 @@ export const BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS = 24; // Cooldown for attempt
 export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
 export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
 
+export const BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS = 2; // Cooldown for searching for prey
+export const BT_DEFEND_BUSH_COOLDOWN_HOURS = 1; // Cooldown for the defend bush behavior
 // Behavior Tree Decorator Node Constants
 export const BT_ACTION_TIMEOUT_HOURS = 24; // Timeout for actions to prevent getting stuck
 export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expensive checks
@@ -366,10 +372,10 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
 
 // Prey Constants
 export const PREY_MAX_AGE_YEARS: number = 12; // Maximum lifespan in game years
-export const PREY_HUNGER_INCREASE_PER_HOUR: number = 2; // Much slower hunger for reproduction time
+export const PREY_HUNGER_INCREASE_PER_HOUR: number = 1.5; // Much slower hunger for reproduction time
 export const PREY_HUNGER_DEATH: number = 120; // Lower hunger threshold than humans
 export const PREY_MAX_HITPOINTS: number = 50; // Lower health than humans
-export const PREY_BASE_SPEED: number = 15; // Faster than humans
+export const PREY_BASE_SPEED: number = 12; // Faster than humans
 export const PREY_INITIAL_HUNGER: number = 30;
 export const PREY_INITIAL_AGE: number = 2;
 export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better interactions
@@ -377,8 +383,8 @@ export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better 
 // Player interaction ranges for animal hunting/defending
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
-export const PREY_GESTATION_PERIOD_HOURS: number = 12; // 2 game days
-export const PREY_PROCREATION_COOLDOWN_HOURS: number = 3; // Reduced for better population sustainability
+export const PREY_GESTATION_PERIOD_HOURS: number = 14; // 2 game days
+export const PREY_PROCREATION_COOLDOWN_HOURS: number = 18;
 export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 8;
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
@@ -388,7 +394,7 @@ export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hun
 
 // Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
-export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 2; // Reduced for better ecosystem balance and reproduction
+export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 1; // Reduced for better ecosystem balance and reproduction
 export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
 export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
 export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
@@ -397,21 +403,21 @@ export const PREDATOR_INITIAL_AGE: number = 3;
 export const PREDATOR_INTERACTION_RANGE: number = 60; // Increased range for better interactions
 export const PREDATOR_ATTACK_RANGE: number = 40;
 export const PREDATOR_HUNT_RANGE: number = 50;
-export const PREDATOR_TERRITORIAL_RANGE: number = 120; // Range for detecting territorial rivals
+export const PREDATOR_TERRITORIAL_RANGE: number = 320; // Range for detecting territorial rivals
 export const PREDATOR_ATTACK_DAMAGE: number = 45; // Higher than human attack
 export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
 export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
 export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
 export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
-export const PREDATOR_GESTATION_PERIOD_HOURS: number = 12;
-export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 6; // Reduced for better population sustainability
+export const PREDATOR_GESTATION_PERIOD_HOURS: number = 8;
+export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 12; // Reduced for better population sustainability
 export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
 export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
-export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 50; // How much hunger is reduced by eating meat
+export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 80; // How much hunger is reduced by eating meat
 
 // Animal Spawning Constants
-export const INITIAL_PREY_COUNT: number = 20;
+export const INITIAL_PREY_COUNT: number = 10;
 export const INITIAL_PREDATOR_COUNT: number = 2;
 
 // Animal Feeding Constants (only females can feed children)

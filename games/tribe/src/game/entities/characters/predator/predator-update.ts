@@ -58,8 +58,8 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
 
       // Get parents for genetic combination
       const mother = predator;
-      const father = predator.fatherId
-        ? (updateContext.gameState.entities.entities.get(predator.fatherId) as PredatorEntity)
+      const father = predator.pregnancyFatherId
+        ? (updateContext.gameState.entities.entities.get(predator.pregnancyFatherId) as PredatorEntity)
         : undefined;
 
       // Generate child gene code by combining parents or using mother's genes with mutation
@@ -82,7 +82,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         PREDATOR_INITIAL_HUNGER * 0.6, // Start with moderate hunger
         childGeneCode, // Combined genetic code
         predator.id, // Mother ID
-        predator.fatherId, // Father ID from pregnancy
+        predator.pregnancyFatherId, // Father ID from pregnancy
       );
 
       // Birth creates new life - child variable is used for entity creation
@@ -103,7 +103,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
       predator.isPregnant = false;
       predator.gestationTime = 0;
       predator.procreationCooldown = 18; // 18 hours cooldown
-      predator.fatherId = undefined; // Clear father reference
+      predator.pregnancyFatherId = undefined; // Clear father reference
     }
   }
 

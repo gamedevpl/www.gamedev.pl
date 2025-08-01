@@ -32,6 +32,9 @@ export interface HumanEntity extends CharacterEntity {
   /** Whether the human (female) is pregnant. */
   isPregnant?: boolean;
 
+  /** Pregnancy father (if known). */
+  pregnancyFatherId?: EntityId;
+
   /** Remaining gestation time in game hours (for pregnant females). */
   gestationTime?: number;
 

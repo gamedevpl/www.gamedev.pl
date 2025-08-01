@@ -1,4 +1,5 @@
 import {
+  AI_DEFEND_BUSH_PREY_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
   AI_MIGRATION_TARGET_SEARCH_RADIUS,
@@ -10,6 +11,7 @@ import {
   LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
   LEADER_WORLD_ANALYSIS_GRID_SIZE,
   LEADER_WORLD_ANALYSIS_GRID_STEP,
+  MAX_ATTACKERS_PER_TARGET,
 } from '../world-consts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
@@ -18,10 +20,11 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
-import { areFamily, getFamilyMembers, isLineage } from './family-tribe-utils';
+import { areFamily, getFamilyMembers, getTribeMembers, isLineage } from './family-tribe-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { findValidPlantingSpot, getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
+import { PreyEntity } from '../entities/characters/prey/prey-types';
 
 /**
  * Checks if a human's primary partner is procreating with another human nearby.
@@ -184,16 +187,17 @@ export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameW
   return spot;
 }
 
-export function findBestAttackTarget(
+export function findBestAttackTarget<T extends HumanEntity | PreyEntity>(
   sourceHuman: HumanEntity,
   gameState: GameWorldState,
+  targetType: 'human' | 'prey',
   maxDistance: number,
-  filterFn?: (entity: HumanEntity) => boolean,
-): HumanEntity | null {
+  filterFn?: (entity: T) => boolean,
+): T | null {
   const indexedState = gameState as IndexedWorldState;
-  const potentialTargets = indexedState.search.human.byRadius(sourceHuman.position, maxDistance) as HumanEntity[];
+  const potentialTargets = indexedState.search[targetType].byRadius(sourceHuman.position, maxDistance) as T[];
 
-  let bestTarget: HumanEntity | null = null;
+  let bestTarget: T | null = null;
   let minAttackers = Infinity;
   let minDistance = Infinity;
 
@@ -208,6 +212,10 @@ export function findBestAttackTarget(
       if (entity.type === 'human' && (entity as HumanEntity).attackTargetId === target.id) {
         currentAttackers++;
       }
+    }
+
+    if (currentAttackers >= MAX_ATTACKERS_PER_TARGET) {
+      continue; // Skip targets that are already sufficiently engaged
     }
 
     const distance = calculateWrappedDistance(
@@ -227,7 +235,6 @@ export function findBestAttackTarget(
 
   return bestTarget;
 }
-
 export function findNearbyEnemiesOfTribe(
   human: HumanEntity,
   gameState: IndexedWorldState,
@@ -391,4 +398,32 @@ export function findOptimalMigrationTarget(leader: HumanEntity, gameState: GameW
   }
 
   return bestCandidate;
+}
+
+/**
+ * Finds a prey entity that is currently eating from a berry bush claimed by the human's tribe.
+ * @returns The prey entity, otherwise undefined.
+ */
+export function findPreyOnClaimedBush(human: HumanEntity, gameState: GameWorldState): PreyEntity | undefined {
+  const indexedState = gameState as IndexedWorldState;
+  const tribeMembers = getTribeMembers(human, gameState);
+  const tribeMemberIds = new Set(tribeMembers.map((m) => m.id));
+
+  const nearbyBushes = indexedState.search.berryBush.byRadius(human.position, AI_DEFEND_BUSH_PREY_SEARCH_RADIUS);
+
+  for (const bush of nearbyBushes) {
+    // Check if the bush is owned by the human's tribe
+    if (bush.ownerId && tribeMemberIds.has(bush.ownerId) && bush.claimedUntil && gameState.time < bush.claimedUntil) {
+      // This is a tribe-claimed bush. Now check for prey eating from it.
+      const potentialPrey = indexedState.search.prey.byRadius(bush.position, HUMAN_INTERACTION_RANGE);
+
+      for (const prey of potentialPrey) {
+        if (prey.activeAction === 'grazing' && prey.target === bush.id) {
+          return prey; // Found a prey eating from a claimed bush!
+        }
+      }
+    }
+  }
+
+  return undefined;
 }

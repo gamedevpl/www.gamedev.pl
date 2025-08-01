@@ -14,6 +14,7 @@ import { predatorProcreationInteraction } from './predator-procreation-interacti
 import { preyChildFeedingInteraction } from './prey-child-feeding-interaction';
 import { predatorChildFeedingInteraction } from './predator-child-feeding-interaction';
 import { predatorEatCorpseInteraction } from './predator-eat-corpse-interaction';
+import { predatorAttackRivalInteraction } from './predator-attack-rival-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -30,6 +31,7 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   humanHuntPreyInteraction,
   humanAttackPredatorInteraction, // Humans can defend against predators
   predatorAttackHumanInteraction,
+  predatorAttackRivalInteraction,
   preyProcreationInteraction,
   predatorProcreationInteraction,
 ] as InteractionDefinition[];

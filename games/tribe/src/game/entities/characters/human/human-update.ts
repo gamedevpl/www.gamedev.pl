@@ -110,10 +110,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     }
 
     if (entity.gestationTime <= 0) {
-      giveBirth(entity, entity.fatherId, updateContext);
+      giveBirth(entity, entity.pregnancyFatherId, updateContext);
       entity.isPregnant = false;
       entity.gestationTime = 0;
-      entity.fatherId = undefined;
+      entity.pregnancyFatherId = undefined;
     }
   }
 

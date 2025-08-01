@@ -40,6 +40,7 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode<P
                 rival.isAdult &&
                 // Different territorial groups (different fathers)
                 predator.fatherId !== rival.fatherId &&
+                predator.gender === rival.gender && // Same
                 // Both must have fathers to determine territorial allegiance
                 predator.fatherId !== undefined &&
                 rival.fatherId !== undefined

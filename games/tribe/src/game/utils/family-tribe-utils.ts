@@ -294,3 +294,11 @@ export function getTribeForLeader(leaderId: EntityId, gameState: IndexedWorldSta
   }
   return tribeMembers;
 }
+
+export function getTribeMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
+  if (!human.leaderId) {
+    return [];
+  }
+  const indexedState = gameState as IndexedWorldState;
+  return indexedState.search.human.byProperty('leaderId', human.leaderId);
+}
