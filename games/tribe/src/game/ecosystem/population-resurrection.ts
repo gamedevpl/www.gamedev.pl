@@ -13,7 +13,7 @@ import { MAP_WIDTH, MAP_HEIGHT } from '../world-consts';
  * Respawn prey when they go extinct
  */
 export function respawnPrey(gameState: GameWorldState, count: number = 4): void {
-  console.log(`Respawning ${count} prey to prevent extinction`);
+  console.log(`🚨 Respawning ${count} prey to prevent extinction`);
   
   for (let i = 0; i < count; i++) {
     const randomPosition = {
@@ -30,7 +30,7 @@ export function respawnPrey(gameState: GameWorldState, count: number = 4): void 
  * Respawn predators when they go extinct
  */
 export function respawnPredators(gameState: GameWorldState, count: number = 2): void {
-  console.log(`Respawning ${count} predators to prevent extinction`);
+  console.log(`🚨 Respawning ${count} predators to prevent extinction`);
   
   for (let i = 0; i < count; i++) {
     const randomPosition = {
@@ -77,23 +77,23 @@ export function emergencyPopulationBoost(gameState: GameWorldState): boolean {
   
   let interventionMade = false;
   
-  // More aggressive thresholds for population boosts
-  if (preyCount > 0 && preyCount < 25) { // Increased from 5 to 25
-    const boostAmount = Math.max(3, Math.floor(25 - preyCount / 2));
+  // Much more conservative thresholds for population boosts to let RL learn
+  if (preyCount > 0 && preyCount < 5) { // Reduced from 25 to 5 - only at extreme low levels
+    const boostAmount = Math.max(2, Math.floor(8 - preyCount));
     respawnPrey(gameState, boostAmount);
     interventionMade = true;
   }
   
-  if (predatorCount > 0 && predatorCount < 8) { // Increased from 2 to 8
-    const boostAmount = Math.max(2, Math.floor(8 - predatorCount / 2));
+  if (predatorCount > 0 && predatorCount < 2) { // Reduced from 8 to 2 - only at extreme low levels
+    const boostAmount = Math.max(1, Math.floor(3 - predatorCount));
     respawnPredators(gameState, boostAmount);
     interventionMade = true;
   }
   
-  // Boost bushes if very low
-  if (bushCount < 30) {
-    console.log(`Boosting bush count from ${bushCount} to help ecosystem`);
-    for (let i = 0; i < 10; i++) {
+  // Boost bushes if very low - reduced threshold
+  if (bushCount < 5) { // Reduced from 30 to 5 - only when nearly extinct
+    console.log(`🚨 Boosting bush count from ${bushCount} to help ecosystem`);
+    for (let i = 0; i < 5; i++) { // Reduced from 10 to 5
       const randomPosition = {
         x: Math.random() * MAP_WIDTH,
         y: Math.random() * MAP_HEIGHT,

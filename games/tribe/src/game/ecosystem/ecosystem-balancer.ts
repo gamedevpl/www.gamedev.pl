@@ -138,8 +138,8 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
   const predatorRatio = predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
   const bushRatio = bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
 
-  // More aggressive safety mechanism: use deterministic balancer when populations are below target
-  const useSafetyMode = preyRatio < 0.4 || predatorRatio < 0.4 || bushRatio < 0.4;
+  // More conservative safety mechanism: only use deterministic balancer at very low levels
+  const useSafetyMode = preyRatio < 0.1 || predatorRatio < 0.1 || bushRatio < 0.1;
 
   if (useSafetyMode) {
     // Use deterministic balancer to stabilize populations
@@ -147,7 +147,7 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
     // Don't reset Q-learning state here - let it learn from safety mode transitions
   } else {
     // Use Q-learning for normal operation
-    globalQLearningAgent.act(preyCount, predatorCount, bushCount, gameState.ecosystem);
+    globalQLearningAgent.act(preyCount, predatorCount, bushCount, gameState.ecosystem, gameState.time);
   }
 }
 

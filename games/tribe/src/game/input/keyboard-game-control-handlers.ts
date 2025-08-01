@@ -13,12 +13,14 @@ import { HumanEntity } from '../entities/characters/human/human-types';
  * @param key The key that was pressed (lowercase).
  * @param gameState The current game state.
  * @param isDebugOnRef A ref to the debug flag.
+ * @param isEcosystemDebugOnRef A ref to the ecosystem debug flag.
  * @returns An object containing the potentially new game state and a boolean indicating if the key was handled.
  */
 export const handleGameControlKeyDown = (
   key: string,
   gameState: GameWorldState,
   isDebugOnRef: React.MutableRefObject<boolean>,
+  isEcosystemDebugOnRef?: React.MutableRefObject<boolean>,
 ): { newState: GameWorldState; handled: boolean } => {
   let handled = true;
   let newState = gameState;
@@ -57,6 +59,11 @@ export const handleGameControlKeyDown = (
           Array.from(newState.entities.entities.values()).find(
             (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
           )?.id;
+      }
+      break;
+    case 'e':
+      if (isEcosystemDebugOnRef) {
+        isEcosystemDebugOnRef.current = !isEcosystemDebugOnRef.current;
       }
       break;
     case 'tab':

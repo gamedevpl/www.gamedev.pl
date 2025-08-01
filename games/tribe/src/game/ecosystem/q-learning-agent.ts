@@ -21,16 +21,22 @@ import {
   MAX_PREY_HUNGER_INCREASE_PER_HOUR,
   MIN_PREY_PROCREATION_COOLDOWN,
   MAX_PREY_PROCREATION_COOLDOWN,
+  MAP_WIDTH,
+  MAP_HEIGHT,
 } from '../world-consts';
 import { EcosystemState } from './ecosystem-types';
 
-// State discretization for Q-table
+// State discretization for Q-table - enhanced with more environmental factors
 export interface EcosystemStateDiscrete {
   preyPopulationLevel: number; // 0-4 (very low, low, normal, high, very high)
   predatorPopulationLevel: number; // 0-4
   bushCountLevel: number; // 0-4
   preyToPredatorRatio: number; // 0-4 (ratios discretized)
   bushToPrey: number; // 0-4 (bush to prey ratio)
+  preyDensityLevel: number; // 0-4 (population density per 1000 pixels²)
+  predatorDensityLevel: number; // 0-4
+  bushDensityLevel: number; // 0-4
+  populationTrend: number; // 0-2 (declining, stable, growing) - based on recent changes
 }
 
 // Action space - which parameter to adjust and by how much
@@ -55,6 +61,8 @@ export class EcosystemQLearningAgent {
   private lastState?: EcosystemStateDiscrete;
   private lastAction?: EcosystemAction;
   private actionSpace: EcosystemAction[] = [];
+  private populationHistory: Array<{ prey: number; predators: number; bushes: number; time: number }> = [];
+  private mapArea: number = MAP_WIDTH * MAP_HEIGHT;
 
   constructor(config: QLearningConfig) {
     this.qTable = new Map();
@@ -79,14 +87,14 @@ export class EcosystemQLearningAgent {
   }
 
   private stateToKey(state: EcosystemStateDiscrete): string {
-    return `${state.preyPopulationLevel}_${state.predatorPopulationLevel}_${state.bushCountLevel}_${state.preyToPredatorRatio}_${state.bushToPrey}`;
+    return `${state.preyPopulationLevel}_${state.predatorPopulationLevel}_${state.bushCountLevel}_${state.preyToPredatorRatio}_${state.bushToPrey}_${state.preyDensityLevel}_${state.predatorDensityLevel}_${state.bushDensityLevel}_${state.populationTrend}`;
   }
 
   private actionToKey(action: EcosystemAction): string {
     return `${action.parameter}_${action.adjustment}`;
   }
 
-  private discretizeState(preyCount: number, predatorCount: number, bushCount: number): EcosystemStateDiscrete {
+  private discretizeState(preyCount: number, predatorCount: number, bushCount: number, gameTime: number): EcosystemStateDiscrete {
     const discretizePopulation = (count: number, target: number): number => {
       const ratio = count / target;
       if (ratio < 0.3) return 0; // very low
@@ -114,31 +122,81 @@ export class EcosystemQLearningAgent {
       return 4;
     };
 
+    // Calculate population densities per 1000 pixels²
+    const preyDensity = (preyCount / this.mapArea) * 1000000;
+    const predatorDensity = (predatorCount / this.mapArea) * 1000000;
+    const bushDensity = (bushCount / this.mapArea) * 1000000;
+
+    const discretizeDensity = (density: number, targetDensity: number): number => {
+      const ratio = density / targetDensity;
+      if (ratio < 0.3) return 0;
+      if (ratio < 0.7) return 1;
+      if (ratio < 1.3) return 2;
+      if (ratio < 1.7) return 3;
+      return 4;
+    };
+
+    // Target densities based on map size
+    const targetPreyDensity = (ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / this.mapArea) * 1000000;
+    const targetPredatorDensity = (ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION / this.mapArea) * 1000000;
+    const targetBushDensity = (ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT / this.mapArea) * 1000000;
+
+    // Calculate population trend
+    this.populationHistory.push({ prey: preyCount, predators: predatorCount, bushes: bushCount, time: gameTime });
+    
+    // Keep only recent history (last 10 data points or 1 day worth)
+    const maxAge = gameTime - 24; // 1 game day
+    this.populationHistory = this.populationHistory.filter(h => h.time > maxAge).slice(-10);
+
+    let populationTrend = 1; // stable
+    if (this.populationHistory.length >= 3) {
+      const recent = this.populationHistory.slice(-3);
+      const totalRecent = recent.map(h => h.prey + h.predators + h.bushes);
+      const isGrowing = totalRecent[2] > totalRecent[1] && totalRecent[1] > totalRecent[0];
+      const isDeclining = totalRecent[2] < totalRecent[1] && totalRecent[1] < totalRecent[0];
+      
+      if (isGrowing) populationTrend = 2;
+      else if (isDeclining) populationTrend = 0;
+    }
+
     return {
       preyPopulationLevel: discretizePopulation(preyCount, ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION),
       predatorPopulationLevel: discretizePopulation(predatorCount, ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION),
       bushCountLevel: discretizePopulation(bushCount, ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT),
       preyToPredatorRatio: discretizeRatio(preyToPredatorRatio),
       bushToPrey: discretizeBushRatio(bushToPreyRatio),
+      preyDensityLevel: discretizeDensity(preyDensity, targetPreyDensity),
+      predatorDensityLevel: discretizeDensity(predatorDensity, targetPredatorDensity),
+      bushDensityLevel: discretizeDensity(bushDensity, targetBushDensity),
+      populationTrend,
     };
   }
 
   private calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
     // Severely penalize extinctions with very large negative rewards
     if (preyCount === 0) return -1000;
-    if (predatorCount === 0) return -800; // Increased penalty for predator extinction
+    if (predatorCount === 0) return -800;
     if (bushCount === 0) return -300;
 
-    // Calculate normalized deviations from targets (0 = perfect, 1 = 100% off)
-    const preyDeviation = Math.abs(preyCount - ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION) / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION;
-    const predatorDeviation = Math.abs(predatorCount - ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION) / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
-    const bushDeviation = Math.abs(bushCount - ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT) / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
+    // Calculate target populations based on map size density
+    const targetPreyDensity = (ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / this.mapArea) * 1000000;
+    const targetPredatorDensity = (ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION / this.mapArea) * 1000000;
+    const targetBushDensity = (ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT / this.mapArea) * 1000000;
+
+    const currentPreyDensity = (preyCount / this.mapArea) * 1000000;
+    const currentPredatorDensity = (predatorCount / this.mapArea) * 1000000;
+    const currentBushDensity = (bushCount / this.mapArea) * 1000000;
+
+    // Calculate normalized deviations from target densities (0 = perfect, 1 = 100% off)
+    const preyDeviation = Math.abs(currentPreyDensity - targetPreyDensity) / targetPreyDensity;
+    const predatorDeviation = Math.abs(currentPredatorDensity - targetPredatorDensity) / targetPredatorDensity;
+    const bushDeviation = Math.abs(currentBushDensity - targetBushDensity) / targetBushDensity;
 
     // Strong early warning penalties for very low populations (before extinction)
     let earlyWarningPenalty = 0;
-    const preyRatio = preyCount / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION;
-    const predatorRatio = predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
-    const bushRatio = bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
+    const preyRatio = currentPreyDensity / targetPreyDensity;
+    const predatorRatio = currentPredatorDensity / targetPredatorDensity;
+    const bushRatio = currentBushDensity / targetBushDensity;
     
     // Graduated penalties based on how close to extinction
     if (preyRatio < 0.05) earlyWarningPenalty -= 500;
@@ -177,7 +235,11 @@ export class EcosystemQLearningAgent {
     // Diversity bonus - reward having all species present
     const diversityBonus = (preyCount > 0 && predatorCount > 0 && bushCount > 0) ? 20 : 0;
 
-    return baseReward + stabilityBonus + ratioBonus + diversityBonus + earlyWarningPenalty;
+    // Map utilization bonus - reward proper density utilization
+    const averageDensityUtilization = (preyRatio + predatorRatio + bushRatio) / 3;
+    const densityBonus = averageDensityUtilization > 0.8 && averageDensityUtilization < 1.2 ? 15 : 0;
+
+    return baseReward + stabilityBonus + ratioBonus + diversityBonus + densityBonus + earlyWarningPenalty;
   }
 
   private getQValue(state: EcosystemStateDiscrete, action: EcosystemAction): number {
@@ -273,8 +335,8 @@ export class EcosystemQLearningAgent {
     }
   }
 
-  public act(preyCount: number, predatorCount: number, bushCount: number, ecosystem: EcosystemState): void {
-    const currentState = this.discretizeState(preyCount, predatorCount, bushCount);
+  public act(preyCount: number, predatorCount: number, bushCount: number, ecosystem: EcosystemState, gameTime: number): void {
+    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
     
     // Update Q-value for previous state-action pair if exists
     if (this.lastState && this.lastAction) {
