@@ -391,7 +391,7 @@ export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hun
 // Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
 export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
-export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
+export const PREDATOR_MAX_HITPOINTS: number = 40;
 export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
 export const PREDATOR_INITIAL_HUNGER: number = 40;
 export const PREDATOR_INITIAL_AGE: number = 3;
@@ -399,7 +399,7 @@ export const PREDATOR_INTERACTION_RANGE: number = 60; // Increased range for bet
 export const PREDATOR_ATTACK_RANGE: number = 40;
 export const PREDATOR_HUNT_RANGE: number = 50;
 export const PREDATOR_TERRITORIAL_RANGE: number = 320; // Range for detecting territorial rivals
-export const PREDATOR_ATTACK_DAMAGE: number = 45; // Higher than human attack
+export const PREDATOR_ATTACK_DAMAGE: number = 25;
 export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
 export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
 export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
