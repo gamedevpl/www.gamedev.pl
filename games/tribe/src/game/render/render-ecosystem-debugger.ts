@@ -1,8 +1,5 @@
 import { GameWorldState } from '../world-types';
-import { 
-  getEcosystemBalancerStats, 
-  isQLearningEnabled 
-} from '../ecosystem/ecosystem-balancer';
+import { getEcosystemBalancerStats, isQLearningEnabled } from '../ecosystem/ecosystem-balancer';
 import {
   ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
@@ -33,7 +30,7 @@ export function renderEcosystemDebugger(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
 ): void {
   const preyCount = (gameState as IndexedWorldState).search.prey.count();
   const predatorCount = (gameState as IndexedWorldState).search.predator.count();
@@ -47,12 +44,12 @@ export function renderEcosystemDebugger(
       predators: predatorCount,
       bushes: bushCount,
     });
-    
+
     // Keep history at reasonable size
     if (populationHistory.length > MAX_HISTORY_LENGTH) {
       populationHistory = populationHistory.slice(-MAX_HISTORY_LENGTH);
     }
-    
+
     lastRecordTime = gameState.time;
   }
 
@@ -81,7 +78,7 @@ export function renderEcosystemDebugger(
   // Draw panel background
   ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-  
+
   // Draw panel border
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 2;
@@ -149,7 +146,7 @@ export function renderEcosystemDebugger(
   currentY += 20;
 
   renderPopulationHistogram(ctx, leftMargin, currentY, preyCount, predatorCount, bushCount);
-  currentY += 120;
+  currentY += 160;
 
   // Population Density
   ctx.fillStyle = '#66ccff';
@@ -165,7 +162,11 @@ export function renderEcosystemDebugger(
 
   ctx.fillText(`Prey: ${preyDensityPer1000.toFixed(2)} (target: ${preyTargetDensity})`, leftMargin, currentY);
   currentY += lineHeight;
-  ctx.fillText(`Predators: ${predatorDensityPer1000.toFixed(2)} (target: ${predatorTargetDensity})`, leftMargin, currentY);
+  ctx.fillText(
+    `Predators: ${predatorDensityPer1000.toFixed(2)} (target: ${predatorTargetDensity})`,
+    leftMargin,
+    currentY,
+  );
   currentY += lineHeight;
   ctx.fillText(`Bushes: ${bushDensityPer1000.toFixed(2)} (target: ${bushTargetDensity})`, leftMargin, currentY);
   currentY += 20;
@@ -178,7 +179,7 @@ export function renderEcosystemDebugger(
 
   ctx.fillStyle = 'white';
   ctx.font = '10px monospace';
-  
+
   ctx.fillText('Prey:', leftMargin, currentY);
   currentY += 13;
   ctx.fillText(`• Gestation: ${gameState.ecosystem.preyGestationPeriod.toFixed(1)}h`, leftMargin, currentY);
@@ -187,7 +188,7 @@ export function renderEcosystemDebugger(
   currentY += 11;
   ctx.fillText(`• Hunger: ${gameState.ecosystem.preyHungerIncreasePerHour.toFixed(1)}/h`, leftMargin, currentY);
   currentY += 13;
-  
+
   ctx.fillText('Predators:', leftMargin, currentY);
   currentY += 13;
   ctx.fillText(`• Gestation: ${gameState.ecosystem.predatorGestationPeriod.toFixed(1)}h`, leftMargin, currentY);
@@ -196,10 +197,14 @@ export function renderEcosystemDebugger(
   currentY += 11;
   ctx.fillText(`• Hunger: ${gameState.ecosystem.predatorHungerIncreasePerHour.toFixed(1)}/h`, leftMargin, currentY);
   currentY += 13;
-  
+
   ctx.fillText('Bushes:', leftMargin, currentY);
   currentY += 13;
-  ctx.fillText(`• Spread Chance: ${(gameState.ecosystem.berryBushSpreadChance * 100).toFixed(1)}%`, leftMargin, currentY);
+  ctx.fillText(
+    `• Spread Chance: ${(gameState.ecosystem.berryBushSpreadChance * 100).toFixed(1)}%`,
+    leftMargin,
+    currentY,
+  );
   currentY += 15;
 
   // Population History Mini-Chart
@@ -232,7 +237,7 @@ function renderPopulationHistogram(
   y: number,
   preyCount: number,
   predatorCount: number,
-  bushCount: number
+  bushCount: number,
 ): void {
   const barWidth = 20;
   const maxBarHeight = 100;
@@ -247,7 +252,7 @@ function renderPopulationHistogram(
     else if (percentage < 80) color = '#ffaa44';
     else if (percentage > 120) color = '#44aaff';
     else color = '#44ff44';
-    
+
     return {
       height,
       color,
@@ -261,8 +266,13 @@ function renderPopulationHistogram(
 
   const bars = [
     { bar: preyBar, label: 'Prey', current: preyCount, target: ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION },
-    { bar: predatorBar, label: 'Predators', current: predatorCount, target: ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION },
-    { bar: bushBar, label: 'Bushes', current: bushCount, target: ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT }
+    {
+      bar: predatorBar,
+      label: 'Predators',
+      current: predatorCount,
+      target: ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
+    },
+    { bar: bushBar, label: 'Bushes', current: bushCount, target: ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT },
   ];
 
   bars.forEach((barData, i) => {
@@ -292,7 +302,7 @@ function renderPopulationTrends(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  recentHistory: PopulationHistory[]
+  recentHistory: PopulationHistory[],
 ): void {
   const chartWidth = 100;
   const chartHeight = 30;
@@ -301,14 +311,26 @@ function renderPopulationTrends(
   if (recentHistory.length < 2) return;
 
   const maxValues = {
-    prey: Math.max(...recentHistory.map(h => h.prey), ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION),
-    predators: Math.max(...recentHistory.map(h => h.predators), ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION),
-    bushes: Math.max(...recentHistory.map(h => h.bushes), ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT),
+    prey: Math.max(...recentHistory.map((h) => h.prey), ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION),
+    predators: Math.max(...recentHistory.map((h) => h.predators), ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION),
+    bushes: Math.max(...recentHistory.map((h) => h.bushes), ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT),
   };
 
   const charts = [
-    { data: recentHistory.map(h => h.prey), color: '#44ff44', label: 'Prey', target: ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION, max: maxValues.prey },
-    { data: recentHistory.map(h => h.predators), color: '#ff4444', label: 'Predators', target: ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION, max: maxValues.predators }
+    {
+      data: recentHistory.map((h) => h.prey),
+      color: '#44ff44',
+      label: 'Prey',
+      target: ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
+      max: maxValues.prey,
+    },
+    {
+      data: recentHistory.map((h) => h.predators),
+      color: '#ff4444',
+      label: 'Predators',
+      target: ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
+      max: maxValues.predators,
+    },
   ];
 
   charts.forEach((chart, i) => {
@@ -331,7 +353,7 @@ function renderPopulationTrends(
     for (let j = 0; j < chart.data.length; j++) {
       const pointX = chartX + (j / (chart.data.length - 1)) * chartWidth;
       const pointY = chartY + chartHeight - (chart.data[j] / chart.max) * chartHeight;
-      
+
       if (j === 0) {
         ctx.moveTo(pointX, pointY);
       } else {
