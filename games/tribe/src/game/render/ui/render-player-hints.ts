@@ -7,6 +7,7 @@ import {
 import { Vector2D } from '../../utils/math-types';
 import { PlayerActionHint, PLAYER_ACTION_EMOJIS, PlayerActionType } from '../../ui/ui-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
+import { worldToScreenCoords } from '../render-utils';
 
 const HINT_OFFSET_X = 25;
 const HINT_OFFSET_Y = 0;
@@ -22,10 +23,15 @@ export function drawDottedOutline(
   viewportCenter: Vector2D,
   canvasWidth: number,
   canvasHeight: number,
+  mapDimensions: { width: number; height: number },
 ) {
   ctx.save();
-  const screenX = position.x - viewportCenter.x + canvasWidth / 2;
-  const screenY = position.y - viewportCenter.y + canvasHeight / 2;
+  const { x: screenX, y: screenY } = worldToScreenCoords(
+    position,
+    viewportCenter,
+    { width: canvasWidth, height: canvasHeight },
+    mapDimensions,
+  );
 
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
@@ -43,6 +49,7 @@ export function renderPlayerActionHints(
   viewportCenter: Vector2D,
   canvasWidth: number,
   canvasHeight: number,
+  mapDimensions: { width: number; height: number },
 ): void {
   hints = hints.filter((hint) => hint.type !== PlayerActionType.FollowMe);
   if (hints.length === 0) {
@@ -64,6 +71,7 @@ export function renderPlayerActionHints(
         viewportCenter,
         canvasWidth,
         canvasHeight,
+        mapDimensions,
       );
     }
   });
@@ -76,8 +84,12 @@ export function renderPlayerActionHints(
   ctx.shadowColor = 'black';
   ctx.shadowBlur = 5;
 
-  const playerScreenX = player.position.x - viewportCenter.x + canvasWidth / 2;
-  const playerScreenY = player.position.y - viewportCenter.y + canvasHeight / 2;
+  const { x: playerScreenX, y: playerScreenY } = worldToScreenCoords(
+    player.position,
+    viewportCenter,
+    { width: canvasWidth, height: canvasHeight },
+    mapDimensions,
+  );
 
   let nonTargetedHintIndex = 0;
   let targetHintIndicies: Record<number, number> = {};

@@ -9,6 +9,7 @@ import {
 import { drawDottedOutline } from './render-player-hints';
 import { PLAYER_ACTION_EMOJIS, PLAYER_ACTION_NAMES } from '../../ui/ui-types';
 import { Vector2D } from '../../utils/math-types';
+import { worldToScreenCoords } from '../render-utils';
 
 export function renderAutopilotHints(
   ctx: CanvasRenderingContext2D,
@@ -50,6 +51,7 @@ export function renderAutopilotHints(
       viewportCenter,
       canvasWidth,
       canvasHeight,
+      gameState.mapDimensions,
     );
 
     // Render text hint
@@ -61,8 +63,12 @@ export function renderAutopilotHints(
     ctx.shadowColor = 'black';
     ctx.shadowBlur = 5;
 
-    const targetScreenX = targetPosition.x - viewportCenter.x + canvasWidth / 2;
-    const targetScreenY = targetPosition.y - viewportCenter.y + canvasHeight / 2;
+    const { x: targetScreenX, y: targetScreenY } = worldToScreenCoords(
+      targetPosition,
+      viewportCenter,
+      { width: canvasWidth, height: canvasHeight },
+      gameState.mapDimensions,
+    );
 
     const yOffset =
       targetScreenY - targetRadius - PLAYER_ACTION_OUTLINE_RADIUS_OFFSET - PLAYER_ACTION_HINT_FONT_SIZE / 2;

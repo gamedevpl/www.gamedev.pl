@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { GameWorldState } from '../game/world-types';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
-import { findPlayerEntity, screenToWorldCoords } from '../game/utils/world-utils';
+import { findPlayerEntity } from '../game/utils/world-utils';
 import {
   handleUIButtonClick,
   determineHoveredAutopilotAction,
@@ -12,6 +12,7 @@ import {
   handlePlayerActionKeyUp,
   handleNotificationClick,
 } from '../game/input';
+import { screenToWorldCoords } from '../game/render/render-utils';
 
 interface GameInputControllerProps {
   isActive: () => boolean;
