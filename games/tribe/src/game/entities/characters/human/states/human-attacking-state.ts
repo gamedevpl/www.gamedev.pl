@@ -20,7 +20,7 @@ export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = 
       return { nextState: HUMAN_IDLE, data: { ...data } };
     }
     const targetEntity = context.updateContext.gameState.entities.entities.get(context.entity.attackTargetId);
-    if (!targetEntity || targetEntity.type !== 'human') {
+    if (!targetEntity) {
       context.entity.activeAction = 'idle';
       return { nextState: HUMAN_IDLE, data: { ...data } };
     }
