@@ -11,9 +11,17 @@ import {
 } from './world-consts';
 import { describe, it, expect } from 'vitest';
 import { IndexedWorldState } from './world-index/world-index-types';
+import { trainEcosystemAgent } from './ecosystem/q-learning-trainer';
+import { resetEcosystemBalancer } from './ecosystem';
 
 describe('Ecosystem Balance', () => {
   it('should maintain a stable balance of prey, predators, and bushes over a long simulation', () => {
+    // Quick training before the test
+    resetEcosystemBalancer();
+    console.log('Training Q-learning agent...');
+    const trainingResults = trainEcosystemAgent(10, 10); // Reduced training for faster tests
+    console.log(`Training results: ${trainingResults.successfulEpisodes}/${trainingResults.episodesCompleted} successful episodes`);
+
     let gameState: GameWorldState = initGame();
 
     // Remove all humans to test pure ecosystem balance
@@ -85,5 +93,5 @@ describe('Ecosystem Balance', () => {
     console.log(
       `Final Populations - Prey: ${finalPreyCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION}), Predators: ${finalPredatorCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION}), Bushes: ${finalBushCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT})`,
     );
-  }, 120000); // 120 second timeout for the long simulation
+  }, 180000); // 3 minute timeout for training + simulation
 });
