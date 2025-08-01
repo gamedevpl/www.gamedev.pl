@@ -119,9 +119,10 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
     globalQLearningAgent = new EcosystemQLearningAgent(DEFAULT_Q_LEARNING_CONFIG);
   }
 
-  const preyCount = (gameState as IndexedWorldState).search.prey.count();
-  const predatorCount = (gameState as IndexedWorldState).search.predator.count();
-  const bushCount = (gameState as IndexedWorldState).search.berryBush.count();
+  const indexedState = gameState as IndexedWorldState;
+  const preyCount = indexedState.search.prey.count();
+  const predatorCount = indexedState.search.predator.count();
+  const bushCount = indexedState.search.berryBush.count();
 
   // First priority: Handle extinctions with direct population intervention
   const extinctionHandled = handlePopulationExtinction(gameState);
@@ -165,12 +166,12 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
   } else {
     // Phase 1: If we have previous population counts, update Q-value for previous action
     if (lastPreyCount !== undefined && lastPredatorCount !== undefined && lastBushCount !== undefined) {
-      const reward = globalQLearningAgent.calculateReward(preyCount, predatorCount, bushCount);
-      globalQLearningAgent.updateQ(reward, preyCount, predatorCount, bushCount, gameState.time);
+      const reward = globalQLearningAgent.calculateReward(indexedState);
+      globalQLearningAgent.updateQ(reward, indexedState, gameState.time);
     }
 
     // Phase 2: Choose and apply action for current state
-    globalQLearningAgent.chooseAndApplyAction(preyCount, predatorCount, bushCount, gameState.ecosystem, gameState.time);
+    globalQLearningAgent.chooseAndApplyAction(indexedState, gameState.ecosystem, gameState.time);
 
     // Save current counts for next update
     lastPreyCount = preyCount;

@@ -25,18 +25,24 @@ import {
   MAP_HEIGHT,
 } from '../world-consts';
 import { EcosystemState } from './ecosystem-types';
+import { IndexedWorldState } from '../world-index/world-index-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
 
-// State discretization for Q-table - enhanced with more environmental factors
+// State discretization for Q-table - enhanced with child populations and human impact
 export interface EcosystemStateDiscrete {
   preyPopulationLevel: number; // 0-4 (very low, low, normal, high, very high)
   predatorPopulationLevel: number; // 0-4
   bushCountLevel: number; // 0-4
+  childPreyLevel: number; // 0-4 (non-adult prey population)
+  childPredatorLevel: number; // 0-4 (non-adult predator population)
+  humanPopulationLevel: number; // 0-4 (human impact on ecosystem)
   preyToPredatorRatio: number; // 0-4 (ratios discretized)
   bushToPrey: number; // 0-4 (bush to prey ratio)
   preyDensityLevel: number; // 0-4 (population density per 1000 pixels²)
   predatorDensityLevel: number; // 0-4
   bushDensityLevel: number; // 0-4
   populationTrend: number; // 0-2 (declining, stable, growing) - based on recent changes
+  humanActivity: number; // 0-4 (level of human gathering/planting activity)
 }
 
 // Action space - which parameter to adjust and by how much
@@ -62,6 +68,7 @@ export class EcosystemQLearningAgent {
   private lastAction?: EcosystemAction;
   private actionSpace: EcosystemAction[] = [];
   private populationHistory: Array<{ prey: number; predators: number; bushes: number; time: number }> = [];
+  private humanActivityHistory: Array<{ time: number; gatheredBushes: number; plantedBushes: number }> = [];
   private mapArea: number = MAP_WIDTH * MAP_HEIGHT;
 
   constructor(config: QLearningConfig) {
@@ -87,20 +94,80 @@ export class EcosystemQLearningAgent {
   }
 
   private stateToKey(state: EcosystemStateDiscrete): string {
-    return `${state.preyPopulationLevel}_${state.predatorPopulationLevel}_${state.bushCountLevel}_${state.preyToPredatorRatio}_${state.bushToPrey}_${state.preyDensityLevel}_${state.predatorDensityLevel}_${state.bushDensityLevel}_${state.populationTrend}`;
+    return `${state.preyPopulationLevel}_${state.predatorPopulationLevel}_${state.bushCountLevel}_${state.childPreyLevel}_${state.childPredatorLevel}_${state.humanPopulationLevel}_${state.preyToPredatorRatio}_${state.bushToPrey}_${state.preyDensityLevel}_${state.predatorDensityLevel}_${state.bushDensityLevel}_${state.populationTrend}_${state.humanActivity}`;
   }
 
   private actionToKey(action: EcosystemAction): string {
     return `${action.parameter}_${action.adjustment}`;
   }
 
-  private discretizeState(preyCount: number, predatorCount: number, bushCount: number, gameTime: number): EcosystemStateDiscrete {
+  private discretizeState(indexedWorldState: IndexedWorldState, gameTime: number): EcosystemStateDiscrete {
+    const preyCount = indexedWorldState.search.prey.count();
+    const predatorCount = indexedWorldState.search.predator.count();
+    const bushCount = indexedWorldState.search.berryBush.count();
+    const humanCount = indexedWorldState.search.human.count();
+    
+    // Get child counts (non-adult entities)
+    const childPrey = indexedWorldState.search.prey.byProperty('isAdult', false);
+    const childPredators = indexedWorldState.search.predator.byProperty('isAdult', false);
+    const childPreyCount = childPrey.length;
+    const childPredatorCount = childPredators.length;
+    
+    // Calculate human activity metrics
+    const humans = indexedWorldState.search.human.byProperty('type', 'human') as HumanEntity[];
+    let activeGatherers = 0;
+    let activePlanters = 0;
+    
+    for (const human of humans) {
+      if (human.activeAction === 'gathering') activeGatherers++;
+      if (human.activeAction === 'planting') activePlanters++;
+    }
+    
+    // Track human activity over time
+    this.humanActivityHistory.push({ 
+      time: gameTime, 
+      gatheredBushes: activeGatherers, 
+      plantedBushes: activePlanters 
+    });
+    
+    // Keep only recent history (last 24 game hours)
+    const maxAge = gameTime - 24;
+    this.humanActivityHistory = this.humanActivityHistory.filter(h => h.time > maxAge).slice(-20);
+    
+    // Calculate average human activity
+    const avgGathering = this.humanActivityHistory.length > 0 
+      ? this.humanActivityHistory.reduce((sum, h) => sum + h.gatheredBushes, 0) / this.humanActivityHistory.length 
+      : 0;
+    const avgPlanting = this.humanActivityHistory.length > 0 
+      ? this.humanActivityHistory.reduce((sum, h) => sum + h.plantedBushes, 0) / this.humanActivityHistory.length 
+      : 0;
+    
+    const humanActivityLevel = avgGathering + avgPlanting;
+
     const discretizePopulation = (count: number, target: number): number => {
       const ratio = count / target;
       if (ratio < 0.3) return 0; // very low
       if (ratio < 0.7) return 1; // low
       if (ratio < 1.3) return 2; // normal
       if (ratio < 1.7) return 3; // high
+      return 4; // very high
+    };
+
+    const discretizeChildPopulation = (count: number, parentCount: number): number => {
+      if (parentCount === 0) return 0;
+      const ratio = count / parentCount; // Child to adult ratio
+      if (ratio < 0.1) return 0; // very low
+      if (ratio < 0.3) return 1; // low
+      if (ratio < 0.6) return 2; // normal
+      if (ratio < 1.0) return 3; // high
+      return 4; // very high
+    };
+
+    const discretizeHumanActivity = (activityLevel: number): number => {
+      if (activityLevel < 0.5) return 0; // very low
+      if (activityLevel < 1.5) return 1; // low
+      if (activityLevel < 3.0) return 2; // normal
+      if (activityLevel < 5.0) return 3; // high
       return 4; // very high
     };
 
@@ -145,8 +212,8 @@ export class EcosystemQLearningAgent {
     this.populationHistory.push({ prey: preyCount, predators: predatorCount, bushes: bushCount, time: gameTime });
     
     // Keep only recent history (last 10 data points or 1 day worth)
-    const maxAge = gameTime - 24; // 1 game day
-    this.populationHistory = this.populationHistory.filter(h => h.time > maxAge).slice(-10);
+    const maxHistoryAge = gameTime - 24; // 1 game day
+    this.populationHistory = this.populationHistory.filter(h => h.time > maxHistoryAge).slice(-10);
 
     let populationTrend = 1; // stable
     if (this.populationHistory.length >= 3) {
@@ -163,16 +230,29 @@ export class EcosystemQLearningAgent {
       preyPopulationLevel: discretizePopulation(preyCount, ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION),
       predatorPopulationLevel: discretizePopulation(predatorCount, ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION),
       bushCountLevel: discretizePopulation(bushCount, ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT),
+      childPreyLevel: discretizeChildPopulation(childPreyCount, preyCount - childPreyCount),
+      childPredatorLevel: discretizeChildPopulation(childPredatorCount, predatorCount - childPredatorCount),
+      humanPopulationLevel: discretizePopulation(humanCount, 10), // Assume target human population of 10
       preyToPredatorRatio: discretizeRatio(preyToPredatorRatio),
       bushToPrey: discretizeBushRatio(bushToPreyRatio),
       preyDensityLevel: discretizeDensity(preyDensity, targetPreyDensity),
       predatorDensityLevel: discretizeDensity(predatorDensity, targetPredatorDensity),
       bushDensityLevel: discretizeDensity(bushDensity, targetBushDensity),
       populationTrend,
+      humanActivity: discretizeHumanActivity(humanActivityLevel),
     };
   }
 
-  public calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
+  public calculateReward(indexedWorldState: IndexedWorldState): number {
+    const preyCount = indexedWorldState.search.prey.count();
+    const predatorCount = indexedWorldState.search.predator.count();
+    const bushCount = indexedWorldState.search.berryBush.count();
+    const humanCount = indexedWorldState.search.human.count();
+    
+    // Get child counts
+    const childPreyCount = indexedWorldState.search.prey.byProperty('isAdult', false).length;
+    const childPredatorCount = indexedWorldState.search.predator.byProperty('isAdult', false).length;
+    
     // Severely penalize extinctions with very large negative rewards
     if (preyCount === 0) return -1000;
     if (predatorCount === 0) return -800;
@@ -262,8 +342,32 @@ export class EcosystemQLearningAgent {
         trendBonus = 15; // Reward consistent growth
       }
     }
+    
+    // Child population bonus - reward healthy reproduction
+    let reproductionBonus = 0;
+    const childPreyRatio = preyCount > 0 ? childPreyCount / preyCount : 0;
+    const childPredatorRatio = predatorCount > 0 ? childPredatorCount / predatorCount : 0;
+    
+    // Reward moderate child populations (indicates healthy reproduction)
+    if (childPreyRatio > 0.1 && childPreyRatio < 0.5) reproductionBonus += 10;
+    if (childPredatorRatio > 0.1 && childPredatorRatio < 0.5) reproductionBonus += 10;
+    
+    // Human impact consideration
+    let humanImpactAdjustment = 0;
+    if (humanCount > 0) {
+      // Humans generally put pressure on the ecosystem through gathering
+      // Adjust expectations slightly - with humans, we expect lower bush counts but stable prey/predator
+      const humanPressure = Math.min(humanCount / 10, 1.0); // Normalize human count
+      humanImpactAdjustment = -5 * humanPressure; // Small penalty for human pressure
+      
+      // But reward if ecosystem remains stable despite human presence
+      if (preyCount >= ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.7 && 
+          predatorCount >= ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.7) {
+        humanImpactAdjustment += 15; // Bonus for maintaining stability with humans
+      }
+    }
 
-    return baseReward + stabilityBonus + ratioBonus + diversityBonus + densityBonus + trendBonus + earlyWarningPenalty;
+    return baseReward + stabilityBonus + ratioBonus + diversityBonus + densityBonus + trendBonus + reproductionBonus + humanImpactAdjustment + earlyWarningPenalty;
   }
 
   private getQValue(state: EcosystemStateDiscrete, action: EcosystemAction): number {
@@ -359,49 +463,17 @@ export class EcosystemQLearningAgent {
     }
   }
 
-  public act(preyCount: number, predatorCount: number, bushCount: number, ecosystem: EcosystemState, gameTime: number): void {
-    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
-    
-    // Update Q-value for previous state-action pair if exists
-    if (this.lastState && this.lastAction) {
-      const reward = this.calculateReward(preyCount, predatorCount, bushCount);
-      const oldQValue = this.getQValue(this.lastState, this.lastAction);
-      
-      // Find max Q-value for current state
-      let maxQValue = Number.NEGATIVE_INFINITY;
-      for (const action of this.actionSpace) {
-        const qValue = this.getQValue(currentState, action);
-        maxQValue = Math.max(maxQValue, qValue);
-      }
-      
-      // Q-learning update rule
-      const newQValue = oldQValue + this.config.learningRate * 
-        (reward + this.config.discountFactor * maxQValue - oldQValue);
-      
-      this.setQValue(this.lastState, this.lastAction, newQValue);
-    }
-
-    // Select and apply action for current state
-    const action = this.selectAction(currentState);
-    this.applyAction(ecosystem, action);
-
-    // Store state and action for next update
-    this.lastState = currentState;
-    this.lastAction = action;
-
-    // Decay exploration rate
-    this.config.explorationRate = Math.max(
-      this.config.minExplorationRate,
-      this.config.explorationRate * this.config.explorationDecay
-    );
+  public act(_preyCount: number, _predatorCount: number, _bushCount: number, _ecosystem: EcosystemState, _gameTime: number): void {
+    // This method is kept for backward compatibility but should not be used with the enhanced agent
+    console.warn('Using deprecated act method. Please use updateQ and chooseAndApplyAction separately.');
   }
 
   /**
    * Update Q-value based on reward from previous action
    * This should be called AFTER the world simulation has run
    */
-  public updateQ(reward: number, preyCount: number, predatorCount: number, bushCount: number, gameTime: number): void {
-    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
+  public updateQ(reward: number, indexedWorldState: IndexedWorldState, gameTime: number): void {
+    const currentState = this.discretizeState(indexedWorldState, gameTime);
     
     if (this.lastState && this.lastAction) {
       const oldQValue = this.getQValue(this.lastState, this.lastAction);
@@ -427,8 +499,8 @@ export class EcosystemQLearningAgent {
    * Choose and apply action for current state
    * This should be called BEFORE the world simulation runs
    */
-  public chooseAndApplyAction(preyCount: number, predatorCount: number, bushCount: number, ecosystem: EcosystemState, gameTime: number): void {
-    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
+  public chooseAndApplyAction(indexedWorldState: IndexedWorldState, ecosystem: EcosystemState, gameTime: number): void {
+    const currentState = this.discretizeState(indexedWorldState, gameTime);
     const action = this.selectAction(currentState);
     this.applyAction(ecosystem, action);
     
