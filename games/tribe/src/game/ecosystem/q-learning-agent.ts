@@ -43,8 +43,7 @@ export interface EcosystemStateDiscrete {
 export interface EcosystemAction {
   parameter: 'preyGestation' | 'preyProcreation' | 'preyHunger' | 
              'predatorGestation' | 'predatorProcreation' | 'predatorHunger' |
-             'bushSpread' | 'preySpeed' | 'predatorSpeed' | 
-             'preyFleeDistance' | 'predatorHuntRange';
+             'bushSpread';
   adjustment: number; // -2, -1, 0, 1, 2 (direction and magnitude)
 }
 
@@ -77,8 +76,6 @@ export class EcosystemQLearningAgent {
       'preyGestation', 'preyProcreation', 'preyHunger',
       'predatorGestation', 'predatorProcreation', 'predatorHunger',
       'bushSpread'
-      // TODO: Add new parameters when ecosystem state supports them:
-      // 'preySpeed', 'predatorSpeed', 'preyFleeDistance', 'predatorHuntRange'
     ];
     const adjustments = [-2, -1, 0, 1, 2];
 
@@ -358,14 +355,6 @@ export class EcosystemQLearningAgent {
         ecosystem.berryBushSpreadChance = Math.max(MIN_BERRY_BUSH_SPREAD_CHANCE,
           Math.min(MAX_BERRY_BUSH_SPREAD_CHANCE,
             ecosystem.berryBushSpreadChance + action.adjustment * adjustmentFactor * (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE)));
-        break;
-        
-      // New parameters - For now just break (would need ecosystem state extensions)
-      case 'preySpeed':
-      case 'predatorSpeed':
-      case 'preyFleeDistance':
-      case 'predatorHuntRange':
-        // TODO: Implement when ecosystem state supports these parameters
         break;
     }
   }
