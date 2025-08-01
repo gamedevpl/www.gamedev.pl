@@ -1,5 +1,5 @@
 import { GameWorldState } from '../world-types';
-import { getEcosystemBalancerStats, isQLearningEnabled } from '../ecosystem/ecosystem-balancer';
+import { getEcosystemBalancerStats } from '../ecosystem/ecosystem-balancer';
 import {
   ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
@@ -59,7 +59,6 @@ export function renderEcosystemDebugger(
   const bushDensityPer1000 = (bushCount / mapArea) * 1000000;
 
   const qlStats = getEcosystemBalancerStats();
-  const isQLEnabled = isQLearningEnabled();
 
   // Game time calculations
   const gameYear = Math.floor(gameState.time / (24 * 365));
@@ -113,18 +112,10 @@ export function renderEcosystemDebugger(
   ctx.fillText('🧠 Q-Learning Status', leftMargin, currentY);
   currentY += 18;
 
-  ctx.fillStyle = 'white';
-  ctx.font = '12px monospace';
-  ctx.fillText(`Mode: ${isQLEnabled ? '✅ Active' : '❌ Disabled'}`, leftMargin, currentY);
-  currentY += lineHeight;
-
   if (qlStats) {
     ctx.fillText(`Q-Table Size: ${qlStats.qTableSize} entries`, leftMargin, currentY);
     currentY += lineHeight;
     ctx.fillText(`Exploration Rate: ${(qlStats.explorationRate * 100).toFixed(1)}%`, leftMargin, currentY);
-    currentY += lineHeight;
-    ctx.fillStyle = qlStats.inSafetyMode ? '#ff6666' : '#66ff66';
-    ctx.fillText(`Safety Mode: ${qlStats.inSafetyMode ? '🚨 ACTIVE' : '✅ INACTIVE'}`, leftMargin, currentY);
     currentY += lineHeight;
   }
 

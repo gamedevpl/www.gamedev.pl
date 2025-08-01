@@ -11,7 +11,6 @@ import {
 } from './world-consts';
 import { describe, it, expect } from 'vitest';
 import { IndexedWorldState } from './world-index/world-index-types';
-import { trainEcosystemAgent } from './ecosystem/q-learning-trainer';
 import { resetEcosystemBalancer } from './ecosystem';
 
 /**
@@ -21,7 +20,7 @@ function simulateEcosystem(gameState: GameWorldState, yearsToSimulate: number, t
   const totalSimulationSeconds = yearsToSimulate * HUMAN_YEAR_IN_REAL_SECONDS;
   const timeStepSeconds = GAME_DAY_IN_REAL_SECONDS / 24; // One hour at a time
   let yearsSimulated = 0;
-  
+
   const stats = {
     interventions: 0,
     avgPrey: 0,
@@ -38,7 +37,7 @@ function simulateEcosystem(gameState: GameWorldState, yearsToSimulate: number, t
       childPrey: number;
       childPredators: number;
       humans: number;
-    }>
+    }>,
   };
 
   for (let time = 0; time < totalSimulationSeconds; time += timeStepSeconds) {
@@ -52,7 +51,7 @@ function simulateEcosystem(gameState: GameWorldState, yearsToSimulate: number, t
       const predatorCount = indexedState.search.predator.count();
       const bushCount = indexedState.search.berryBush.count();
       const humanCount = indexedState.search.human.count();
-      
+
       // Count child populations
       const childPreyCount = indexedState.search.prey.byProperty('isAdult', false).length;
       const childPredatorCount = indexedState.search.predator.byProperty('isAdult', false).length;
@@ -64,9 +63,9 @@ function simulateEcosystem(gameState: GameWorldState, yearsToSimulate: number, t
         bushes: bushCount,
         childPrey: childPreyCount,
         childPredators: childPredatorCount,
-        humans: humanCount
+        humans: humanCount,
       };
-      
+
       stats.yearlyData.push(yearData);
 
       console.log(
@@ -85,7 +84,7 @@ function simulateEcosystem(gameState: GameWorldState, yearsToSimulate: number, t
   stats.finalPrey = (gameState as IndexedWorldState).search.prey.count();
   stats.finalPredators = (gameState as IndexedWorldState).search.predator.count();
   stats.finalBushes = (gameState as IndexedWorldState).search.berryBush.count();
-  
+
   if (stats.yearlyData.length > 0) {
     stats.avgPrey = stats.yearlyData.reduce((sum, d) => sum + d.prey, 0) / stats.yearlyData.length;
     stats.avgPredators = stats.yearlyData.reduce((sum, d) => sum + d.predators, 0) / stats.yearlyData.length;
@@ -99,9 +98,6 @@ describe('Enhanced Ecosystem Balance', () => {
   it('should maintain stable ecosystem without human interference', () => {
     // Quick training before the test
     resetEcosystemBalancer();
-    console.log('Training Q-learning agent for pure ecosystem test...');
-    const trainingResults = trainEcosystemAgent(15, 10); // More training for pure ecosystem
-    console.log(`Training results: ${trainingResults.successfulEpisodes}/${trainingResults.episodesCompleted} successful episodes`);
 
     let gameState: GameWorldState = initGame();
 
@@ -118,11 +114,11 @@ describe('Enhanced Ecosystem Balance', () => {
 
     // Assert that populations are within a healthy range of the target
     const preyLowerBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.25; // 25
-    const preyUpperBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.5;  // 150
+    const preyUpperBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.5; // 150
     const predatorLowerBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.25; // 5
-    const predatorUpperBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.5;  // 30
+    const predatorUpperBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.5; // 30
     const bushLowerBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.25; // 15
-    const bushUpperBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.5;  // 90
+    const bushUpperBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.5; // 90
 
     expect(stats.finalPrey).toBeGreaterThan(preyLowerBound);
     expect(stats.finalPrey).toBeLessThan(preyUpperBound);
@@ -132,20 +128,19 @@ describe('Enhanced Ecosystem Balance', () => {
     expect(stats.finalBushes).toBeLessThan(bushUpperBound);
 
     console.log(
-      `Pure Ecosystem Final - Prey: ${stats.finalPrey} (Avg: ${stats.avgPrey.toFixed(1)}), Predators: ${stats.finalPredators} (Avg: ${stats.avgPredators.toFixed(1)}), Bushes: ${stats.finalBushes} (Avg: ${stats.avgBushes.toFixed(1)})`,
+      `Pure Ecosystem Final - Prey: ${stats.finalPrey} (Avg: ${stats.avgPrey.toFixed(1)}), Predators: ${
+        stats.finalPredators
+      } (Avg: ${stats.avgPredators.toFixed(1)}), Bushes: ${stats.finalBushes} (Avg: ${stats.avgBushes.toFixed(1)})`,
     );
-    
+
     // Check that child populations exist (indicating reproduction)
-    const hasChildPopulations = stats.yearlyData.some(d => d.childPrey > 0 || d.childPredators > 0);
+    const hasChildPopulations = stats.yearlyData.some((d) => d.childPrey > 0 || d.childPredators > 0);
     expect(hasChildPopulations).toBe(true);
   }, 240000); // 4 minute timeout
 
   it('should maintain stable ecosystem with human population', () => {
     // Train agent for ecosystem with humans
     resetEcosystemBalancer();
-    console.log('Training Q-learning agent for human-ecosystem interaction...');
-    const trainingResults = trainEcosystemAgent(12, 8); // Training for human interaction
-    console.log(`Training results: ${trainingResults.successfulEpisodes}/${trainingResults.episodesCompleted} successful episodes`);
 
     let gameState: GameWorldState = initGame();
     // Keep humans in this test
@@ -154,11 +149,11 @@ describe('Enhanced Ecosystem Balance', () => {
 
     // With humans, expect slightly different balance due to gathering pressure
     const preyLowerBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.3; // 30 - higher minimum due to human hunting
-    const preyUpperBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.4;  // 140
+    const preyUpperBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.4; // 140
     const predatorLowerBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.2; // 4 - may be lower due to human competition
-    const predatorUpperBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.3;  // 26
+    const predatorUpperBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.3; // 26
     const bushLowerBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.2; // 12 - lower due to human gathering
-    const bushUpperBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.2;  // 72
+    const bushUpperBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.2; // 72
 
     expect(stats.finalPrey).toBeGreaterThan(preyLowerBound);
     expect(stats.finalPrey).toBeLessThan(preyUpperBound);
@@ -168,14 +163,16 @@ describe('Enhanced Ecosystem Balance', () => {
     expect(stats.finalBushes).toBeLessThan(bushUpperBound);
 
     console.log(
-      `Human-Ecosystem Final - Prey: ${stats.finalPrey} (Avg: ${stats.avgPrey.toFixed(1)}), Predators: ${stats.finalPredators} (Avg: ${stats.avgPredators.toFixed(1)}), Bushes: ${stats.finalBushes} (Avg: ${stats.avgBushes.toFixed(1)})`,
+      `Human-Ecosystem Final - Prey: ${stats.finalPrey} (Avg: ${stats.avgPrey.toFixed(1)}), Predators: ${
+        stats.finalPredators
+      } (Avg: ${stats.avgPredators.toFixed(1)}), Bushes: ${stats.finalBushes} (Avg: ${stats.avgBushes.toFixed(1)})`,
     );
 
     // Verify human population exists and is stable
     const avgHumans = stats.yearlyData.reduce((sum, d) => sum + d.humans, 0) / stats.yearlyData.length;
     expect(avgHumans).toBeGreaterThan(0);
     console.log(`Average human population: ${avgHumans.toFixed(1)}`);
-    
+
     // Check for reproductive health in wildlife despite human presence
     const avgChildPrey = stats.yearlyData.reduce((sum, d) => sum + d.childPrey, 0) / stats.yearlyData.length;
     const avgChildPredators = stats.yearlyData.reduce((sum, d) => sum + d.childPredators, 0) / stats.yearlyData.length;

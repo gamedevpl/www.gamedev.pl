@@ -6,12 +6,12 @@
  */
 import {
   MIN_BERRY_BUSH_SPREAD_CHANCE,
-  MIN_PREDATOR_GESTATION_PERIOD,
-  MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
-  MIN_PREDATOR_PROCREATION_COOLDOWN,
-  MIN_PREY_GESTATION_PERIOD,
-  MIN_PREY_HUNGER_INCREASE_PER_HOUR,
-  MIN_PREY_PROCREATION_COOLDOWN,
+  MAX_PREDATOR_GESTATION_PERIOD,
+  MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+  MAX_PREDATOR_PROCREATION_COOLDOWN,
+  MAX_PREY_GESTATION_PERIOD,
+  MAX_PREY_HUNGER_INCREASE_PER_HOUR,
+  MAX_PREY_PROCREATION_COOLDOWN,
 } from './world-consts';
 import { initWorld } from './world-init';
 import { GameWorldState } from './world-types';
@@ -31,12 +31,12 @@ export function initGame(): GameWorldState {
 
   // Initialize ecosystem parameters
   initialWorldState.ecosystem = {
-    preyGestationPeriod: MIN_PREY_GESTATION_PERIOD,
-    preyProcreationCooldown: MIN_PREY_PROCREATION_COOLDOWN,
-    predatorGestationPeriod: MIN_PREDATOR_GESTATION_PERIOD,
-    predatorProcreationCooldown: MIN_PREDATOR_PROCREATION_COOLDOWN,
-    preyHungerIncreasePerHour: MIN_PREY_HUNGER_INCREASE_PER_HOUR,
-    predatorHungerIncreasePerHour: MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+    preyGestationPeriod: MAX_PREY_GESTATION_PERIOD,
+    preyProcreationCooldown: MAX_PREY_PROCREATION_COOLDOWN,
+    predatorGestationPeriod: MAX_PREDATOR_GESTATION_PERIOD,
+    predatorProcreationCooldown: MAX_PREDATOR_PROCREATION_COOLDOWN,
+    preyHungerIncreasePerHour: MAX_PREY_HUNGER_INCREASE_PER_HOUR,
+    predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
     berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
   };
 
