@@ -17,6 +17,10 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode<PreyEntit
       // Condition: Should I graze?
       new ConditionNode(
         (prey, context: UpdateContext, blackboard) => {
+          if (!prey.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           // Only graze if hungry and not on cooldown
           if (prey.hunger <= 30 || (prey.eatingCooldownTime && prey.eatingCooldownTime > context.gameState.time)) {
             return false;

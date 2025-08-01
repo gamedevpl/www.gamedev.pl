@@ -17,6 +17,10 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
       // Condition: Should I hunt?
       new ConditionNode(
         (predator, context: UpdateContext, blackboard) => {
+          if (!predator.isAdult) {
+            return [false, 'Not an adult'];
+          }
+
           // Only hunt if moderately hungry and not on cooldown
           if (predator.hunger <= 50 || (predator.huntCooldown && predator.huntCooldown > 0)) {
             return false;
