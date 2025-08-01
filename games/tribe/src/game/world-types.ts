@@ -9,6 +9,7 @@ import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 import { Notification, Rect } from './notifications/notification-types';
+import { EcosystemState } from './ecosystem';
 
 export enum DiplomacyStatus {
   Friendly = 'Friendly',
@@ -78,6 +79,7 @@ export interface GameWorldState {
     dismiss: Map<string, Rect>;
     view: Map<string, Rect>;
   };
+  ecosystem: EcosystemState;
 }
 
 export type UpdateContext = {

@@ -9,6 +9,10 @@ import {
   INTRO_SCREEN_INITIAL_HUMANS,
   UI_BUTTON_TEXT_COLOR,
   INITIAL_PREY_COUNT,
+  MIN_PREY_GESTATION_PERIOD,
+  MIN_PREY_PROCREATION_COOLDOWN,
+  MIN_PREDATOR_GESTATION_PERIOD,
+  MIN_PREDATOR_PROCREATION_COOLDOWN,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -151,6 +155,12 @@ export function initWorld(): GameWorldState {
         creationTime: Date.now(),
       },
     ],
+    ecosystem: {
+      preyGestationPeriod: MIN_PREY_GESTATION_PERIOD,
+      preyProcreationCooldown: MIN_PREY_PROCREATION_COOLDOWN,
+      predatorGestationPeriod: MIN_PREDATOR_GESTATION_PERIOD,
+      predatorProcreationCooldown: MIN_PREDATOR_PROCREATION_COOLDOWN,
+    },
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -255,6 +265,12 @@ export function initIntroWorld(): GameWorldState {
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
     notifications: [],
+    ecosystem: {
+      preyGestationPeriod: MIN_PREY_GESTATION_PERIOD,
+      preyProcreationCooldown: MIN_PREY_PROCREATION_COOLDOWN,
+      predatorGestationPeriod: MIN_PREDATOR_GESTATION_PERIOD,
+      predatorProcreationCooldown: MIN_PREDATOR_PROCREATION_COOLDOWN,
+    },
   };
 
   return indexWorldState(initialWorldState);

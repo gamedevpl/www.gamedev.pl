@@ -8,6 +8,7 @@ import { vectorLerp } from './utils/math-utils';
 import { updateTutorial } from './tutorial/tutorial-utils';
 import { updateNotifications } from './notifications/notification-utils';
 import { indexWorldState } from './world-index/world-state-index';
+import { updateEcosystemBalancer } from './ecosystem';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -63,6 +64,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update notifications (removes expired ones)
     updateNotifications(indexedState);
+
+    // Update ecosystem balancer
+    updateEcosystemBalancer(indexedState);
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);

@@ -383,8 +383,6 @@ export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better 
 // Player interaction ranges for animal hunting/defending
 export const PREY_FLEE_DISTANCE: number = 150;
 export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
-export const PREY_GESTATION_PERIOD_HOURS: number = 14; // 2 game days
-export const PREY_PROCREATION_COOLDOWN_HOURS: number = 18;
 export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 8;
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
@@ -410,8 +408,6 @@ export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
 export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
 export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
 export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
-export const PREDATOR_GESTATION_PERIOD_HOURS: number = 8;
-export const PREDATOR_PROCREATION_COOLDOWN_HOURS: number = 12; // Reduced for better population sustainability
 export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
 export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
 export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 80; // How much hunger is reduced by eating meat
@@ -426,3 +422,17 @@ export const ANIMAL_PARENT_FEEDING_RANGE: number = 40; // Slightly smaller than 
 export const ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 200; // Smaller than humans since animals have better senses
 export const ANIMAL_FEED_CHILD_COOLDOWN_HOURS: number = 2; // How long parent must wait between feedings
 export const ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION: number = 30; // How much hunger is reduced when fed by parent
+
+// Ecosystem Balancer Constants
+export const ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION = 100;
+export const ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION = 20;
+
+export const MIN_PREY_GESTATION_PERIOD = 10; // in game hours
+export const MAX_PREY_GESTATION_PERIOD = 40; // in game hours
+export const MIN_PREY_PROCREATION_COOLDOWN = 12; // in game hours
+export const MAX_PREY_PROCREATION_COOLDOWN = 48; // in game hours
+
+export const MIN_PREDATOR_GESTATION_PERIOD = 12; // in game hours
+export const MAX_PREDATOR_GESTATION_PERIOD = 50; // in game hours
+export const MIN_PREDATOR_PROCREATION_COOLDOWN = 18; // in game hours
+export const MAX_PREDATOR_PROCREATION_COOLDOWN = 60; // in game hours

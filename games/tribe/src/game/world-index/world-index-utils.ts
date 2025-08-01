@@ -22,6 +22,7 @@ export function indexItems<T extends Entity>(items: T[], cacheKey?: string): Ind
       byRadius: () => [],
       byProperty: () => [],
       resetPropertyCache: () => {},
+      count: () => 0,
     } as IndexType<T>;
   }
 
@@ -61,6 +62,10 @@ export function indexItems<T extends Entity>(items: T[], cacheKey?: string): Ind
 
     resetPropertyCache() {
       propertyCache.clear();
+    },
+
+    count() {
+      return items.length;
     },
   };
 

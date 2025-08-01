@@ -47,6 +47,12 @@ export interface IndexType<T> {
    * Clears the internal cache for property queries.
    */
   resetPropertyCache(): void;
+
+  /**
+   * Counts the number of entities of type T.
+   * @returns The number of entities of type T.
+   */
+  count(): number;
 }
 
 /**

@@ -102,7 +102,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
 
       predator.isPregnant = false;
       predator.gestationTime = 0;
-      predator.procreationCooldown = 18; // 18 hours cooldown
+      predator.procreationCooldown = updateContext.gameState.ecosystem.predatorProcreationCooldown;
       predator.pregnancyFatherId = undefined; // Clear father reference
     }
   }

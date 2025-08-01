@@ -1,11 +1,6 @@
 import { InteractionDefinition } from './interactions-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
-import {
-  PREDATOR_INTERACTION_RANGE,
-  PREDATOR_GESTATION_PERIOD_HOURS,
-  PREDATOR_PROCREATION_COOLDOWN_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+import { PREDATOR_INTERACTION_RANGE, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
@@ -44,12 +39,10 @@ export const predatorProcreationInteraction: InteractionDefinition<PredatorEntit
     // Make female pregnant
     female.isPregnant = true;
     female.pregnancyFatherId = predator1.gender === 'male' ? predator1.id : predator2.id;
-    female.gestationTime = PREDATOR_GESTATION_PERIOD_HOURS;
-
+    female.gestationTime = context.gameState.ecosystem.predatorGestationPeriod;
     // Set cooldowns for both
-    predator1.procreationCooldown = PREDATOR_PROCREATION_COOLDOWN_HOURS;
-    predator2.procreationCooldown = PREDATOR_PROCREATION_COOLDOWN_HOURS;
-
+    predator1.procreationCooldown = context.gameState.ecosystem.predatorProcreationCooldown;
+    predator2.procreationCooldown = context.gameState.ecosystem.predatorProcreationCooldown;
     // Add visual effect
     addVisualEffect(
       context.gameState,
