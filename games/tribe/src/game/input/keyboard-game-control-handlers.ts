@@ -61,7 +61,7 @@ export const handleGameControlKeyDown = (
           )?.id;
       }
       break;
-    case 'e':
+    case '1':
       if (isEcosystemDebugOnRef) {
         isEcosystemDebugOnRef.current = !isEcosystemDebugOnRef.current;
       }
