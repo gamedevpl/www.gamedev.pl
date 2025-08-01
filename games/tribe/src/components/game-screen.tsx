@@ -6,7 +6,6 @@ import { PlayerActionHint } from '../game/ui/ui-types';
 import { initGame } from '../game';
 import { GameRender } from './game-render';
 import { GameWorldController } from './game-world-controller';
-import { EcosystemDebugger } from './ecosystem-debugger';
 
 export const GameScreen: React.FC = () => {
   const [initialState] = useState(() => initGame());
@@ -63,10 +62,6 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         canvasRef={canvasRef}
         setAppState={setAppState}
         appState={appState}
-      />
-      <EcosystemDebugger
-        gameState={gameStateRef.current}
-        isVisible={isEcosystemDebugOn}
       />
     </>
   );

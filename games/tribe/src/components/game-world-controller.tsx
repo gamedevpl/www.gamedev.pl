@@ -66,6 +66,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       viewportCenterRef.current,
       playerActionHintsRef.current,
       false, // isIntro
+      isEcosystemDebugOnRef.current, // isEcosystemDebugOn
     );
     lastUpdateTimeRef.current = time;
 
