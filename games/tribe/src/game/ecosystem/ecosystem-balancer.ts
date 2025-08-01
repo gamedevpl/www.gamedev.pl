@@ -141,59 +141,63 @@ class QLearningAgent {
    * Apply rule-based corrections for critical population levels
    */
   private applyEmergencyCorrections(preyCount: number, predatorCount: number, bushCount: number, gameState: GameWorldState): void {
-    // Emergency corrections when populations are critically low
-    if (preyCount < ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.3) {
-      // Boost prey reproduction by reducing gestation and cooldown, reducing hunger
+    // More aggressive emergency corrections when populations are critically low
+    if (preyCount < ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.5) {
+      // Aggressively boost prey reproduction
       gameState.ecosystem.preyGestationPeriod = Math.max(
         MIN_PREY_GESTATION_PERIOD,
-        gameState.ecosystem.preyGestationPeriod * 0.9
+        gameState.ecosystem.preyGestationPeriod * 0.8
       );
       gameState.ecosystem.preyProcreationCooldown = Math.max(
         MIN_PREY_PROCREATION_COOLDOWN,
-        gameState.ecosystem.preyProcreationCooldown * 0.9
+        gameState.ecosystem.preyProcreationCooldown * 0.8
       );
       gameState.ecosystem.preyHungerIncreasePerHour = Math.max(
         MIN_PREY_HUNGER_INCREASE_PER_HOUR,
-        gameState.ecosystem.preyHungerIncreasePerHour * 0.95
+        gameState.ecosystem.preyHungerIncreasePerHour * 0.9
       );
     }
     
-    if (predatorCount < ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.3) {
-      // Boost predator reproduction
+    if (predatorCount < ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.6) {
+      // Aggressively boost predator reproduction (increased threshold)
       gameState.ecosystem.predatorGestationPeriod = Math.max(
         MIN_PREDATOR_GESTATION_PERIOD,
-        gameState.ecosystem.predatorGestationPeriod * 0.9
+        gameState.ecosystem.predatorGestationPeriod * 0.75
       );
       gameState.ecosystem.predatorProcreationCooldown = Math.max(
         MIN_PREDATOR_PROCREATION_COOLDOWN,
-        gameState.ecosystem.predatorProcreationCooldown * 0.9
+        gameState.ecosystem.predatorProcreationCooldown * 0.75
+      );
+      gameState.ecosystem.predatorHungerIncreasePerHour = Math.max(
+        MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+        gameState.ecosystem.predatorHungerIncreasePerHour * 0.85
       );
     }
     
-    if (bushCount < ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.3) {
-      // Boost bush spread
+    if (bushCount < ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.5) {
+      // Aggressively boost bush spread
       gameState.ecosystem.berryBushSpreadChance = Math.min(
         MAX_BERRY_BUSH_SPREAD_CHANCE,
-        gameState.ecosystem.berryBushSpreadChance * 1.1
+        gameState.ecosystem.berryBushSpreadChance * 1.2
       );
     }
     
-    // Control overpopulation
-    if (preyCount > ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.5) {
+    // Control overpopulation - be more aggressive to stay within bounds
+    if (preyCount > ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.4) {
       gameState.ecosystem.preyHungerIncreasePerHour = Math.min(
         MAX_PREY_HUNGER_INCREASE_PER_HOUR,
         gameState.ecosystem.preyHungerIncreasePerHour * 1.05
       );
     }
     
-    if (predatorCount > ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.5) {
+    if (predatorCount > ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.4) {
       gameState.ecosystem.predatorHungerIncreasePerHour = Math.min(
         MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
         gameState.ecosystem.predatorHungerIncreasePerHour * 1.05
       );
     }
     
-    if (bushCount > ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.5) {
+    if (bushCount > ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.4) {
       gameState.ecosystem.berryBushSpreadChance = Math.max(
         MIN_BERRY_BUSH_SPREAD_CHANCE,
         gameState.ecosystem.berryBushSpreadChance * 0.95
@@ -394,13 +398,14 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
 
   // Initialize ecosystem parameters to more balanced values on first run
   if (!gameState.ecosystem.lastUpdateTime) {
-    gameState.ecosystem.preyGestationPeriod = (MIN_PREY_GESTATION_PERIOD + MAX_PREY_GESTATION_PERIOD) / 2;
-    gameState.ecosystem.preyProcreationCooldown = (MIN_PREY_PROCREATION_COOLDOWN + MAX_PREY_PROCREATION_COOLDOWN) / 2;
-    gameState.ecosystem.preyHungerIncreasePerHour = (MIN_PREY_HUNGER_INCREASE_PER_HOUR + MAX_PREY_HUNGER_INCREASE_PER_HOUR) / 2;
-    gameState.ecosystem.predatorGestationPeriod = (MIN_PREDATOR_GESTATION_PERIOD + MAX_PREDATOR_GESTATION_PERIOD) / 2;
-    gameState.ecosystem.predatorProcreationCooldown = (MIN_PREDATOR_PROCREATION_COOLDOWN + MAX_PREDATOR_PROCREATION_COOLDOWN) / 2;
-    gameState.ecosystem.predatorHungerIncreasePerHour = (MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR + MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR) / 2;
-    gameState.ecosystem.berryBushSpreadChance = (MIN_BERRY_BUSH_SPREAD_CHANCE + MAX_BERRY_BUSH_SPREAD_CHANCE) / 2;
+    // Start with parameters that favor survival and reproduction
+    gameState.ecosystem.preyGestationPeriod = MIN_PREY_GESTATION_PERIOD + (MAX_PREY_GESTATION_PERIOD - MIN_PREY_GESTATION_PERIOD) * 0.3; // Lower gestation = faster reproduction
+    gameState.ecosystem.preyProcreationCooldown = MIN_PREY_PROCREATION_COOLDOWN + (MAX_PREY_PROCREATION_COOLDOWN - MIN_PREY_PROCREATION_COOLDOWN) * 0.3; // Lower cooldown = more frequent reproduction
+    gameState.ecosystem.preyHungerIncreasePerHour = MIN_PREY_HUNGER_INCREASE_PER_HOUR + (MAX_PREY_HUNGER_INCREASE_PER_HOUR - MIN_PREY_HUNGER_INCREASE_PER_HOUR) * 0.3; // Lower hunger rate = better survival
+    gameState.ecosystem.predatorGestationPeriod = MIN_PREDATOR_GESTATION_PERIOD + (MAX_PREDATOR_GESTATION_PERIOD - MIN_PREDATOR_GESTATION_PERIOD) * 0.3;
+    gameState.ecosystem.predatorProcreationCooldown = MIN_PREDATOR_PROCREATION_COOLDOWN + (MAX_PREDATOR_PROCREATION_COOLDOWN - MIN_PREDATOR_PROCREATION_COOLDOWN) * 0.3;
+    gameState.ecosystem.predatorHungerIncreasePerHour = MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR + (MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR - MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR) * 0.3;
+    gameState.ecosystem.berryBushSpreadChance = MIN_BERRY_BUSH_SPREAD_CHANCE + (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE) * 0.7; // Higher spread chance = more food
   }
 
   // Apply Q-learning step
