@@ -126,7 +126,7 @@ export class EcosystemQLearningAgent {
   private calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
     // Severely penalize extinctions with very large negative rewards
     if (preyCount === 0) return -1000;
-    if (predatorCount === 0) return -500;
+    if (predatorCount === 0) return -800; // Increased penalty for predator extinction
     if (bushCount === 0) return -300;
 
     // Calculate normalized deviations from targets (0 = perfect, 1 = 100% off)
@@ -134,19 +134,31 @@ export class EcosystemQLearningAgent {
     const predatorDeviation = Math.abs(predatorCount - ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION) / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
     const bushDeviation = Math.abs(bushCount - ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT) / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
 
-    // Early warning penalties for very low populations (before extinction)
+    // Strong early warning penalties for very low populations (before extinction)
     let earlyWarningPenalty = 0;
-    if (preyCount < ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.1) earlyWarningPenalty -= 200;
-    if (predatorCount < ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.1) earlyWarningPenalty -= 100;
-    if (bushCount < ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.1) earlyWarningPenalty -= 100;
+    const preyRatio = preyCount / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION;
+    const predatorRatio = predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
+    const bushRatio = bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
+    
+    // Graduated penalties based on how close to extinction
+    if (preyRatio < 0.05) earlyWarningPenalty -= 500;
+    else if (preyRatio < 0.1) earlyWarningPenalty -= 300;
+    else if (preyRatio < 0.2) earlyWarningPenalty -= 150;
+    
+    if (predatorRatio < 0.05) earlyWarningPenalty -= 400;
+    else if (predatorRatio < 0.1) earlyWarningPenalty -= 250;
+    else if (predatorRatio < 0.2) earlyWarningPenalty -= 100;
+    
+    if (bushRatio < 0.1) earlyWarningPenalty -= 100;
+    else if (bushRatio < 0.2) earlyWarningPenalty -= 50;
 
     // Base reward calculation (scale: 0-100)
     const preyScore = Math.max(0, 100 - (preyDeviation * 100));
     const predatorScore = Math.max(0, 100 - (predatorDeviation * 100));
     const bushScore = Math.max(0, 100 - (bushDeviation * 100));
     
-    // Weighted average (prey is most important)
-    const baseReward = (preyScore * 0.5 + predatorScore * 0.3 + bushScore * 0.2);
+    // Weighted average (prey is most important, then predators)
+    const baseReward = (preyScore * 0.4 + predatorScore * 0.4 + bushScore * 0.2);
     
     // Stability bonus for all populations within 30% of target
     let stabilityBonus = 0;
@@ -160,9 +172,12 @@ export class EcosystemQLearningAgent {
     const preyToPredatorRatio = predatorCount > 0 ? preyCount / predatorCount : 0;
     const targetRatio = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
     const ratioDeviation = Math.abs(preyToPredatorRatio - targetRatio) / targetRatio;
-    const ratioBonus = ratioDeviation < 0.2 ? 20 : (ratioDeviation < 0.5 ? 10 : 0);
+    const ratioBonus = ratioDeviation < 0.2 ? 30 : (ratioDeviation < 0.5 ? 15 : 0);
 
-    return baseReward + stabilityBonus + ratioBonus + earlyWarningPenalty;
+    // Diversity bonus - reward having all species present
+    const diversityBonus = (preyCount > 0 && predatorCount > 0 && bushCount > 0) ? 20 : 0;
+
+    return baseReward + stabilityBonus + ratioBonus + diversityBonus + earlyWarningPenalty;
   }
 
   private getQValue(state: EcosystemStateDiscrete, action: EcosystemAction): number {
