@@ -34,6 +34,9 @@ let lastPreyCount: number | undefined = undefined;
 let lastPredatorCount: number | undefined = undefined;
 let lastBushCount: number | undefined = undefined;
 
+// Track safety mode state to prevent getting stuck
+let inSafetyMode = false;
+
 // Default Q-learning configuration - refined for better ecosystem control
 const DEFAULT_Q_LEARNING_CONFIG: QLearningConfig = {
   learningRate: 0.2, // Reduced from 0.3 for more stable learning
@@ -152,8 +155,21 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
   const predatorRatio = predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
   const bushRatio = bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
 
-  // More conservative safety mechanism: only use deterministic balancer at very low levels
-  const useSafetyMode = preyRatio < 0.1 || predatorRatio < 0.1 || bushRatio < 0.1;
+  // Implement hysteresis to prevent getting stuck in safety mode
+  const lowThreshold = 0.15;  // Enter safety mode at 15% (was 8%)
+  const highThreshold = 0.4;  // Exit safety mode at 40% (was 25%)
+  
+  const shouldEnterSafetyMode = preyRatio < lowThreshold || predatorRatio < lowThreshold || bushRatio < lowThreshold;
+  const shouldExitSafetyMode = preyRatio >= highThreshold && predatorRatio >= highThreshold && bushRatio >= highThreshold;
+  
+  // Update safety mode state
+  if (!inSafetyMode && shouldEnterSafetyMode) {
+    inSafetyMode = true;
+  } else if (inSafetyMode && shouldExitSafetyMode) {
+    inSafetyMode = false;
+  }
+  
+  const useSafetyMode = inSafetyMode;
 
   if (useSafetyMode) {
     // Use deterministic balancer to stabilize populations
@@ -199,12 +215,14 @@ export function resetEcosystemBalancer(): void {
   lastPreyCount = undefined;
   lastPredatorCount = undefined;
   lastBushCount = undefined;
+  // Reset safety mode state
+  inSafetyMode = false;
 }
 
 /**
  * Get Q-learning agent statistics for debugging
  */
-export function getEcosystemBalancerStats(): { qTableSize: number; explorationRate: number } | null {
+export function getEcosystemBalancerStats(): { qTableSize: number; explorationRate: number; inSafetyMode: boolean } | null {
   if (!globalQLearningAgent) {
     return null;
   }
@@ -212,6 +230,7 @@ export function getEcosystemBalancerStats(): { qTableSize: number; explorationRa
   return {
     qTableSize: globalQLearningAgent.getQTableSize(),
     explorationRate: (globalQLearningAgent as any).config.explorationRate,
+    inSafetyMode,
   };
 }
 

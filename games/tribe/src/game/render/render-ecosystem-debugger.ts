@@ -123,6 +123,9 @@ export function renderEcosystemDebugger(
     currentY += lineHeight;
     ctx.fillText(`Exploration Rate: ${(qlStats.explorationRate * 100).toFixed(1)}%`, leftMargin, currentY);
     currentY += lineHeight;
+    ctx.fillStyle = qlStats.inSafetyMode ? '#ff6666' : '#66ff66';
+    ctx.fillText(`Safety Mode: ${qlStats.inSafetyMode ? '🚨 ACTIVE' : '✅ INACTIVE'}`, leftMargin, currentY);
+    currentY += lineHeight;
   }
 
   // Enhanced state space info
@@ -139,13 +142,13 @@ export function renderEcosystemDebugger(
   ctx.fillText('• Map-aware density targets', leftMargin, currentY);
   currentY += 20;
 
-  // Current Populations Histogram
+  // Population History Histogram (True Time-Based)
   ctx.fillStyle = '#66ccff';
   ctx.font = 'bold 13px monospace';
-  ctx.fillText('📊 Current Populations', leftMargin, currentY);
+  ctx.fillText('📈 Population Trends Histogram', leftMargin, currentY);
   currentY += 20;
 
-  renderPopulationHistogram(ctx, leftMargin, currentY, preyCount, predatorCount, bushCount);
+  renderPopulationHistogram(ctx, leftMargin, currentY, populationHistory);
   currentY += 160;
 
   // Population Density
@@ -169,6 +172,38 @@ export function renderEcosystemDebugger(
   );
   currentY += lineHeight;
   ctx.fillText(`Bushes: ${bushDensityPer1000.toFixed(2)} (target: ${bushTargetDensity})`, leftMargin, currentY);
+  currentY += 20;
+
+  // Current Population Summary
+  ctx.fillStyle = '#66ccff';
+  ctx.font = 'bold 13px monospace';
+  ctx.fillText('📊 Current Population Status', leftMargin, currentY);
+  currentY += 18;
+
+  ctx.fillStyle = 'white';
+  ctx.font = '12px monospace';
+  
+  const preyPercentage = Math.round((preyCount / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION) * 100);
+  const predatorPercentage = Math.round((predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION) * 100);
+  const bushPercentage = Math.round((bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT) * 100);
+  
+  const getStatusColor = (percentage: number) => {
+    if (percentage < 50) return '#ff4444';
+    if (percentage < 80) return '#ffaa44';
+    if (percentage > 120) return '#44aaff';
+    return '#44ff44';
+  };
+  
+  ctx.fillStyle = getStatusColor(preyPercentage);
+  ctx.fillText(`Prey: ${preyCount}/${ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION} (${preyPercentage}%)`, leftMargin, currentY);
+  currentY += lineHeight;
+  
+  ctx.fillStyle = getStatusColor(predatorPercentage);
+  ctx.fillText(`Predators: ${predatorCount}/${ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION} (${predatorPercentage}%)`, leftMargin, currentY);
+  currentY += lineHeight;
+  
+  ctx.fillStyle = getStatusColor(bushPercentage);
+  ctx.fillText(`Bushes: ${bushCount}/${ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT} (${bushPercentage}%)`, leftMargin, currentY);
   currentY += 20;
 
   // Current Parameters
@@ -229,70 +264,113 @@ export function renderEcosystemDebugger(
 }
 
 /**
- * Renders population histogram bars
+ * Renders population histogram showing actual time-based trends
  */
 function renderPopulationHistogram(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  preyCount: number,
-  predatorCount: number,
-  bushCount: number,
+  history: PopulationHistory[],
 ): void {
-  const barWidth = 20;
-  const maxBarHeight = 100;
-  const barSpacing = 80;
+  if (history.length < 2) {
+    ctx.fillStyle = '#888';
+    ctx.font = '12px monospace';
+    ctx.fillText('Collecting population data...', x, y + 50);
+    return;
+  }
 
-  // Helper function to create histogram bar data
-  const createHistogramBar = (current: number, target: number) => {
-    const percentage = Math.min((current / target) * 100, 200); // Cap at 200%
-    const height = (percentage / 200) * maxBarHeight;
-    let color: string;
-    if (percentage < 50) color = '#ff4444';
-    else if (percentage < 80) color = '#ffaa44';
-    else if (percentage > 120) color = '#44aaff';
-    else color = '#44ff44';
+  const chartWidth = 350;
+  const chartHeight = 120;
+  const barWidth = Math.max(1, chartWidth / history.length);
+  
+  // Find max values for scaling
+  const maxPrey = Math.max(...history.map(h => h.prey), ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION);
+  const maxPredators = Math.max(...history.map(h => h.predators), ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION);
+  const maxBushes = Math.max(...history.map(h => h.bushes), ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT);
 
-    return {
-      height,
-      color,
-      percentage: Math.round(percentage),
-    };
-  };
+  // Chart border
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, chartWidth, chartHeight);
 
-  const preyBar = createHistogramBar(preyCount, ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION);
-  const predatorBar = createHistogramBar(predatorCount, ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION);
-  const bushBar = createHistogramBar(bushCount, ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT);
+  // Draw time axis
+  ctx.fillStyle = '#888';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  
+  // Show time labels (every 5th point)
+  for (let i = 0; i < history.length; i += 5) {
+    const barX = x + i * barWidth;
+    const timeHours = Math.floor(history[i].time);
+    const timeLabel = `${Math.floor(timeHours / 24)}d${timeHours % 24}h`;
+    ctx.fillText(timeLabel, barX, y + chartHeight + 12);
+  }
 
-  const bars = [
-    { bar: preyBar, label: 'Prey', current: preyCount, target: ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION },
-    {
-      bar: predatorBar,
-      label: 'Predators',
-      current: predatorCount,
-      target: ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
-    },
-    { bar: bushBar, label: 'Bushes', current: bushCount, target: ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT },
-  ];
+  // Draw stacked histogram bars for each time point
+  for (let i = 0; i < history.length; i++) {
+    const barX = x + i * barWidth;
+    const h = history[i];
+    
+    // Calculate bar heights (proportional to max values)
+    const preyHeight = (h.prey / maxPrey) * chartHeight;
+    const predatorHeight = (h.predators / maxPredators) * chartHeight;  
+    const bushHeight = (h.bushes / maxBushes) * chartHeight;
+    
+    // Draw prey bar (green)
+    ctx.fillStyle = '#44ff44';
+    ctx.fillRect(barX, y + chartHeight - preyHeight, barWidth - 1, preyHeight);
+    
+    // Draw predator bar (red) - overlay
+    ctx.fillStyle = '#ff4444';
+    ctx.fillRect(barX, y + chartHeight - predatorHeight, barWidth - 1, predatorHeight);
+    
+    // Draw bush bar (orange) - overlay with alpha for visibility
+    ctx.fillStyle = 'rgba(255, 170, 68, 0.7)';
+    ctx.fillRect(barX, y + chartHeight - bushHeight, barWidth - 1, bushHeight);
+  }
+  
+  // Draw target lines
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = '#888';
+  
+  // Prey target line
+  const preyTargetY = y + chartHeight - (ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / maxPrey) * chartHeight;
+  ctx.beginPath();
+  ctx.moveTo(x, preyTargetY);
+  ctx.lineTo(x + chartWidth, preyTargetY);
+  ctx.stroke();
+  
+  // Predator target line
+  const predatorTargetY = y + chartHeight - (ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION / maxPredators) * chartHeight;
+  ctx.beginPath();
+  ctx.moveTo(x, predatorTargetY);
+  ctx.lineTo(x + chartWidth, predatorTargetY);
+  ctx.stroke();
+  
+  ctx.setLineDash([]); // Reset line dash
 
-  bars.forEach((barData, i) => {
-    const barX = x + i * barSpacing;
-    const barY = y + maxBarHeight - barData.bar.height;
-
-    // Draw bar
-    ctx.fillStyle = barData.bar.color;
-    ctx.fillRect(barX, barY, barWidth, barData.bar.height);
-
-    // Draw label and values
-    ctx.fillStyle = 'white';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(barData.label, barX + barWidth / 2, y + maxBarHeight + 12);
-    ctx.fillText(`${barData.current} / ${barData.target}`, barX + barWidth / 2, y + maxBarHeight + 24);
-    ctx.fillText(`(${barData.bar.percentage}%)`, barX + barWidth / 2, y + maxBarHeight + 36);
-  });
-
-  ctx.textAlign = 'left'; // Reset alignment
+  // Legend
+  ctx.fillStyle = 'white';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  
+  ctx.fillStyle = '#44ff44';
+  ctx.fillRect(x, y - 15, 10, 8);
+  ctx.fillStyle = 'white';
+  ctx.fillText('Prey', x + 15, y - 8);
+  
+  ctx.fillStyle = '#ff4444';
+  ctx.fillRect(x + 60, y - 15, 10, 8);
+  ctx.fillStyle = 'white';
+  ctx.fillText('Predators', x + 75, y - 8);
+  
+  ctx.fillStyle = 'rgba(255, 170, 68, 0.7)';
+  ctx.fillRect(x + 140, y - 15, 10, 8);
+  ctx.fillStyle = 'white';
+  ctx.fillText('Bushes', x + 155, y - 8);
+  
+  ctx.fillStyle = '#888';
+  ctx.fillText('--- Target Lines', x + 210, y - 8);
 }
 
 /**

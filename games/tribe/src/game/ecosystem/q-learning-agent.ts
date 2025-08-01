@@ -471,11 +471,31 @@ export class EcosystemQLearningAgent {
   /**
    * Update Q-value based on reward from previous action
    * This should be called AFTER the world simulation has run
+   * Uses immediate reward but incorporates population trend analysis
    */
-  public updateQ(reward: number, indexedWorldState: IndexedWorldState, gameTime: number): void {
+  public updateQ(immediateReward: number, indexedWorldState: IndexedWorldState, gameTime: number): void {
     const currentState = this.discretizeState(indexedWorldState, gameTime);
     
     if (this.lastState && this.lastAction) {
+      // Use immediate reward but weight it with recent population trends
+      let finalReward = immediateReward;
+      
+      // If we have enough population history, add trend-based adjustment
+      if (this.populationHistory.length >= 3) {
+        const recent = this.populationHistory.slice(-3);
+        const totalRecent = recent.map(h => h.prey + h.predators + h.bushes);
+        
+        // Reward improving trends, penalize declining trends
+        let trendAdjustment = 0;
+        if (totalRecent[2] > totalRecent[1] && totalRecent[1] > totalRecent[0]) {
+          trendAdjustment = 20; // Reward consistent improvement
+        } else if (totalRecent[2] < totalRecent[1] && totalRecent[1] < totalRecent[0]) {
+          trendAdjustment = -20; // Penalize consistent decline
+        }
+        
+        finalReward += trendAdjustment;
+      }
+      
       const oldQValue = this.getQValue(this.lastState, this.lastAction);
       
       // Find max Q-value for current state
@@ -487,7 +507,7 @@ export class EcosystemQLearningAgent {
       
       // Q-learning update rule
       const newQValue = oldQValue + this.config.learningRate * 
-        (reward + this.config.discountFactor * maxQValue - oldQValue);
+        (finalReward + this.config.discountFactor * maxQValue - oldQValue);
       
       this.setQValue(this.lastState, this.lastAction, newQValue);
     }
