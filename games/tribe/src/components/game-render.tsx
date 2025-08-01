@@ -37,6 +37,7 @@ export const GameRender: React.FC<GameRenderProps> = ({
           viewportCenterRef.current,
           playerActionHintsRef.current,
           false, // isIntro
+          false, // isEcosystemDebugOn - not available in this context
         );
       }
     };

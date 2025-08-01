@@ -16,6 +16,7 @@ interface GameWorldControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
   ctxRef: React.RefObject<CanvasRenderingContext2D | null>;
   isDebugOnRef: React.MutableRefObject<boolean>;
+  isEcosystemDebugOnRef: React.MutableRefObject<boolean>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
   keysPressed: React.MutableRefObject<Set<string>>;
@@ -28,6 +29,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
   gameStateRef,
   ctxRef,
   isDebugOnRef,
+  isEcosystemDebugOnRef,
   viewportCenterRef,
   playerActionHintsRef,
   keysPressed,
@@ -64,6 +66,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       viewportCenterRef.current,
       playerActionHintsRef.current,
       false, // isIntro
+      isEcosystemDebugOnRef.current, // isEcosystemDebugOn
     );
     lastUpdateTimeRef.current = time;
 
@@ -92,6 +95,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       viewportCenterRef={viewportCenterRef}
       playerActionHintsRef={playerActionHintsRef}
       isDebugOnRef={isDebugOnRef}
+      isEcosystemDebugOnRef={isEcosystemDebugOnRef}
       keysPressed={keysPressed}
     />
   );

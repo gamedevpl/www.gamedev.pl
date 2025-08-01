@@ -23,6 +23,7 @@ import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
 import { renderNotifications } from './render/render-ui';
+import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -31,6 +32,7 @@ export function renderGame(
   viewportCenter: Vector2D,
   playerActionHints: PlayerActionHint[],
   isIntro: boolean = false,
+  isEcosystemDebugOn: boolean = false,
 ): void {
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -170,6 +172,11 @@ export function renderGame(
 
     // --- Notifications Panel ---
     renderNotifications(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+
+    // --- Ecosystem Debugger ---
+    if (isEcosystemDebugOn) {
+      renderEcosystemDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+    }
 
     if (gameState.isPaused) {
       renderPauseOverlay(ctx);

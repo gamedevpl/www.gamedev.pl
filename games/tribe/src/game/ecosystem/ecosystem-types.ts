@@ -3,6 +3,8 @@
  */
 
 export interface EcosystemState {
+  lastUpdateTime?: number; // Timestamp of the last ecosystem update
+
   // Prey reproduction parameters
   preyGestationPeriod: number;
   preyProcreationCooldown: number;

@@ -106,6 +106,7 @@ export const IntroScreen: React.FC = () => {
           viewportCenterRef.current,
           [], // playerActionHints
           true, // isIntro
+          false, // isEcosystemDebugOn
         );
       }
     };
@@ -186,6 +187,7 @@ export const IntroScreen: React.FC = () => {
       viewportCenterRef.current,
       [], // playerActionHints
       true, // isIntro
+      false, // isEcosystemDebugOn
     );
 
     lastUpdateTimeRef.current = time;

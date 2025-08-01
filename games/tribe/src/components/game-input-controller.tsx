@@ -21,6 +21,7 @@ interface GameInputControllerProps {
   viewportCenterRef: React.MutableRefObject<Vector2D>;
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
   isDebugOnRef: React.MutableRefObject<boolean>;
+  isEcosystemDebugOnRef: React.MutableRefObject<boolean>;
   keysPressed: React.MutableRefObject<Set<string>>;
 }
 
@@ -31,6 +32,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   viewportCenterRef,
   playerActionHintsRef,
   isDebugOnRef,
+  isEcosystemDebugOnRef,
   keysPressed,
 }) => {
   useEffect(() => {
@@ -186,7 +188,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       }
 
       // Handle game-wide controls first
-      const controlResult = handleGameControlKeyDown(key, gameStateRef.current, isDebugOnRef);
+      const controlResult = handleGameControlKeyDown(key, gameStateRef.current, isDebugOnRef, isEcosystemDebugOnRef);
       gameStateRef.current = controlResult.newState;
       if (controlResult.handled) {
         return;

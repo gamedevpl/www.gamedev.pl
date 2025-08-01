@@ -19,6 +19,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
   const gameStateRef = useRef<GameWorldState>(initialState);
   const keysPressed = useRef<Set<string>>(new Set());
   const isDebugOnRef = useRef<boolean>(false);
+  const isEcosystemDebugOnRef = useRef<boolean>(false);
   const viewportCenterRef = useRef<Vector2D>(initialState.viewportCenter);
   const playerActionHintsRef = useRef<PlayerActionHint[]>([]);
 
@@ -38,6 +39,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         gameStateRef={gameStateRef}
         ctxRef={ctxRef}
         isDebugOnRef={isDebugOnRef}
+        isEcosystemDebugOnRef={isEcosystemDebugOnRef}
         viewportCenterRef={viewportCenterRef}
         playerActionHintsRef={playerActionHintsRef}
         keysPressed={keysPressed}
