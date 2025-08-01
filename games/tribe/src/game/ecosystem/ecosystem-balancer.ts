@@ -29,6 +29,11 @@ import { handlePopulationExtinction, emergencyPopulationBoost } from './populati
 // Global Q-learning agent instance
 let globalQLearningAgent: EcosystemQLearningAgent | null = null;
 
+// Track previous population counts for proper reward timing
+let lastPreyCount: number | undefined = undefined;
+let lastPredatorCount: number | undefined = undefined;
+let lastBushCount: number | undefined = undefined;
+
 // Default Q-learning configuration - refined for better ecosystem control
 const DEFAULT_Q_LEARNING_CONFIG: QLearningConfig = {
   learningRate: 0.2, // Reduced from 0.3 for more stable learning
@@ -123,6 +128,10 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
   if (extinctionHandled) {
     // Reset Q-learning state after population intervention
     globalQLearningAgent.reset();
+    // Reset population tracking
+    lastPreyCount = undefined;
+    lastPredatorCount = undefined;
+    lastBushCount = undefined;
     return; // Skip parameter adjustments this round to let new populations establish
   }
 
@@ -130,6 +139,10 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
   const emergencyBoostApplied = emergencyPopulationBoost(gameState);
   if (emergencyBoostApplied) {
     globalQLearningAgent.reset();
+    // Reset population tracking
+    lastPreyCount = undefined;
+    lastPredatorCount = undefined;
+    lastBushCount = undefined;
     return;
   }
 
@@ -145,9 +158,24 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
     // Use deterministic balancer to stabilize populations
     updateEcosystemBalancerDeterministic(gameState);
     // Don't reset Q-learning state here - let it learn from safety mode transitions
+    // But reset population tracking since we're not using Q-learning this round
+    lastPreyCount = undefined;
+    lastPredatorCount = undefined;
+    lastBushCount = undefined;
   } else {
-    // Use Q-learning for normal operation
-    globalQLearningAgent.act(preyCount, predatorCount, bushCount, gameState.ecosystem, gameState.time);
+    // Phase 1: If we have previous population counts, update Q-value for previous action
+    if (lastPreyCount !== undefined && lastPredatorCount !== undefined && lastBushCount !== undefined) {
+      const reward = globalQLearningAgent.calculateReward(preyCount, predatorCount, bushCount);
+      globalQLearningAgent.updateQ(reward, preyCount, predatorCount, bushCount, gameState.time);
+    }
+
+    // Phase 2: Choose and apply action for current state
+    globalQLearningAgent.chooseAndApplyAction(preyCount, predatorCount, bushCount, gameState.ecosystem, gameState.time);
+
+    // Save current counts for next update
+    lastPreyCount = preyCount;
+    lastPredatorCount = predatorCount;
+    lastBushCount = bushCount;
   }
 }
 
@@ -166,6 +194,10 @@ export function resetEcosystemBalancer(): void {
   if (globalQLearningAgent) {
     globalQLearningAgent.reset();
   }
+  // Reset population tracking
+  lastPreyCount = undefined;
+  lastPredatorCount = undefined;
+  lastBushCount = undefined;
 }
 
 /**

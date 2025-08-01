@@ -172,7 +172,7 @@ export class EcosystemQLearningAgent {
     };
   }
 
-  private calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
+  public calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
     // Severely penalize extinctions with very large negative rewards
     if (preyCount === 0) return -1000;
     if (predatorCount === 0) return -800;
@@ -389,6 +389,51 @@ export class EcosystemQLearningAgent {
     this.lastState = currentState;
     this.lastAction = action;
 
+    // Decay exploration rate
+    this.config.explorationRate = Math.max(
+      this.config.minExplorationRate,
+      this.config.explorationRate * this.config.explorationDecay
+    );
+  }
+
+  /**
+   * Update Q-value based on reward from previous action
+   * This should be called AFTER the world simulation has run
+   */
+  public updateQ(reward: number, preyCount: number, predatorCount: number, bushCount: number, gameTime: number): void {
+    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
+    
+    if (this.lastState && this.lastAction) {
+      const oldQValue = this.getQValue(this.lastState, this.lastAction);
+      
+      // Find max Q-value for current state
+      let maxQValue = Number.NEGATIVE_INFINITY;
+      for (const action of this.actionSpace) {
+        const qValue = this.getQValue(currentState, action);
+        maxQValue = Math.max(maxQValue, qValue);
+      }
+      
+      // Q-learning update rule
+      const newQValue = oldQValue + this.config.learningRate * 
+        (reward + this.config.discountFactor * maxQValue - oldQValue);
+      
+      this.setQValue(this.lastState, this.lastAction, newQValue);
+    }
+    
+    this.lastState = currentState;
+  }
+
+  /**
+   * Choose and apply action for current state
+   * This should be called BEFORE the world simulation runs
+   */
+  public chooseAndApplyAction(preyCount: number, predatorCount: number, bushCount: number, ecosystem: EcosystemState, gameTime: number): void {
+    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, gameTime);
+    const action = this.selectAction(currentState);
+    this.applyAction(ecosystem, action);
+    
+    this.lastAction = action;
+    
     // Decay exploration rate
     this.config.explorationRate = Math.max(
       this.config.minExplorationRate,
