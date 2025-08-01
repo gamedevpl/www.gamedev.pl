@@ -141,7 +141,9 @@ export const EcosystemDebugger: React.FC<EcosystemDebuggerProps> = ({
           • Population levels & ratios<br/>
           • Population density per 1000px²<br/>
           • Population trends<br/>
-          • Map-aware density targets
+          • Map-aware density targets<br/>
+          • Improved reward function with sigmoid curves<br/>
+          • Better extinction prevention penalties
         </div>
       </div>
       </div>

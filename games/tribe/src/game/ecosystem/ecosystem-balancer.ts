@@ -29,13 +29,13 @@ import { handlePopulationExtinction, emergencyPopulationBoost } from './populati
 // Global Q-learning agent instance
 let globalQLearningAgent: EcosystemQLearningAgent | null = null;
 
-// Default Q-learning configuration
+// Default Q-learning configuration - refined for better ecosystem control
 const DEFAULT_Q_LEARNING_CONFIG: QLearningConfig = {
-  learningRate: 0.3, // Increased for faster learning
-  discountFactor: 0.8, // Reduced to focus more on immediate rewards
-  explorationRate: 0.6, // Increased initial exploration
-  explorationDecay: 0.99, // Slower decay
-  minExplorationRate: 0.05, // Higher minimum exploration
+  learningRate: 0.2, // Reduced from 0.3 for more stable learning
+  discountFactor: 0.9, // Increased from 0.8 to value long-term stability more
+  explorationRate: 0.4, // Reduced from 0.6 for more exploitation
+  explorationDecay: 0.995, // Slower decay to maintain some exploration
+  minExplorationRate: 0.02, // Lower minimum for better final performance
 };
 
 function calculateDynamicParameter(

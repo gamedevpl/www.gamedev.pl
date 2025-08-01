@@ -43,7 +43,8 @@ export interface EcosystemStateDiscrete {
 export interface EcosystemAction {
   parameter: 'preyGestation' | 'preyProcreation' | 'preyHunger' | 
              'predatorGestation' | 'predatorProcreation' | 'predatorHunger' |
-             'bushSpread';
+             'bushSpread' | 'preySpeed' | 'predatorSpeed' | 
+             'preyFleeDistance' | 'predatorHuntRange';
   adjustment: number; // -2, -1, 0, 1, 2 (direction and magnitude)
 }
 
@@ -76,6 +77,8 @@ export class EcosystemQLearningAgent {
       'preyGestation', 'preyProcreation', 'preyHunger',
       'predatorGestation', 'predatorProcreation', 'predatorHunger',
       'bushSpread'
+      // TODO: Add new parameters when ecosystem state supports them:
+      // 'preySpeed', 'predatorSpeed', 'preyFleeDistance', 'predatorHuntRange'
     ];
     const adjustments = [-2, -1, 0, 1, 2];
 
@@ -187,10 +190,10 @@ export class EcosystemQLearningAgent {
     const currentPredatorDensity = (predatorCount / this.mapArea) * 1000000;
     const currentBushDensity = (bushCount / this.mapArea) * 1000000;
 
-    // Calculate normalized deviations from target densities (0 = perfect, 1 = 100% off)
-    const preyDeviation = Math.abs(currentPreyDensity - targetPreyDensity) / targetPreyDensity;
-    const predatorDeviation = Math.abs(currentPredatorDensity - targetPredatorDensity) / targetPredatorDensity;
-    const bushDeviation = Math.abs(currentBushDensity - targetBushDensity) / targetBushDensity;
+    // Calculate normalized deviations from target densities but cap them to reduce oversensitivity
+    const preyDeviation = Math.min(Math.abs(currentPreyDensity - targetPreyDensity) / targetPreyDensity, 2);
+    const predatorDeviation = Math.min(Math.abs(currentPredatorDensity - targetPredatorDensity) / targetPredatorDensity, 2);
+    const bushDeviation = Math.min(Math.abs(currentBushDensity - targetBushDensity) / targetBushDensity, 2);
 
     // Strong early warning penalties for very low populations (before extinction)
     let earlyWarningPenalty = 0;
@@ -198,48 +201,72 @@ export class EcosystemQLearningAgent {
     const predatorRatio = currentPredatorDensity / targetPredatorDensity;
     const bushRatio = currentBushDensity / targetBushDensity;
     
-    // Graduated penalties based on how close to extinction
-    if (preyRatio < 0.05) earlyWarningPenalty -= 500;
-    else if (preyRatio < 0.1) earlyWarningPenalty -= 300;
-    else if (preyRatio < 0.2) earlyWarningPenalty -= 150;
+    // More aggressive penalties for very low populations to encourage prevention
+    if (preyRatio < 0.05) earlyWarningPenalty -= 600; // Increased
+    else if (preyRatio < 0.1) earlyWarningPenalty -= 400; // Increased
+    else if (preyRatio < 0.2) earlyWarningPenalty -= 200; // Increased
+    else if (preyRatio < 0.3) earlyWarningPenalty -= 50; // New tier
     
-    if (predatorRatio < 0.05) earlyWarningPenalty -= 400;
-    else if (predatorRatio < 0.1) earlyWarningPenalty -= 250;
-    else if (predatorRatio < 0.2) earlyWarningPenalty -= 100;
+    if (predatorRatio < 0.05) earlyWarningPenalty -= 500; // Increased  
+    else if (predatorRatio < 0.1) earlyWarningPenalty -= 300; // Increased
+    else if (predatorRatio < 0.2) earlyWarningPenalty -= 150; // Increased
+    else if (predatorRatio < 0.3) earlyWarningPenalty -= 30; // New tier
     
-    if (bushRatio < 0.1) earlyWarningPenalty -= 100;
-    else if (bushRatio < 0.2) earlyWarningPenalty -= 50;
+    if (bushRatio < 0.1) earlyWarningPenalty -= 150; // Increased
+    else if (bushRatio < 0.2) earlyWarningPenalty -= 75; // Increased
+    else if (bushRatio < 0.3) earlyWarningPenalty -= 25; // New tier
 
-    // Base reward calculation (scale: 0-100)
-    const preyScore = Math.max(0, 100 - (preyDeviation * 100));
-    const predatorScore = Math.max(0, 100 - (predatorDeviation * 100));
-    const bushScore = Math.max(0, 100 - (bushDeviation * 100));
+    // Base reward calculation using sigmoid function for smoother rewards
+    const sigmoidReward = (deviation: number) => {
+      return 100 / (1 + Math.exp(deviation * 3 - 1)); // Sigmoid centered around 0.33 deviation
+    };
+    
+    const preyScore = sigmoidReward(preyDeviation);
+    const predatorScore = sigmoidReward(predatorDeviation);
+    const bushScore = sigmoidReward(bushDeviation);
     
     // Weighted average (prey is most important, then predators)
     const baseReward = (preyScore * 0.4 + predatorScore * 0.4 + bushScore * 0.2);
     
-    // Stability bonus for all populations within 30% of target
+    // Stability bonus for all populations within acceptable ranges
     let stabilityBonus = 0;
-    if (preyDeviation < 0.3 && predatorDeviation < 0.3 && bushDeviation < 0.3) {
-      stabilityBonus = 50;
-    } else if (preyDeviation < 0.5 && predatorDeviation < 0.5 && bushDeviation < 0.5) {
-      stabilityBonus = 25;
+    if (preyDeviation < 0.2 && predatorDeviation < 0.2 && bushDeviation < 0.2) {
+      stabilityBonus = 75; // Increased bonus for tight control
+    } else if (preyDeviation < 0.4 && predatorDeviation < 0.4 && bushDeviation < 0.4) {
+      stabilityBonus = 40; // Increased
+    } else if (preyDeviation < 0.6 && predatorDeviation < 0.6 && bushDeviation < 0.6) {
+      stabilityBonus = 20; // New tier
     }
 
     // Ecosystem balance bonus - reward appropriate prey/predator ratio
     const preyToPredatorRatio = predatorCount > 0 ? preyCount / predatorCount : 0;
     const targetRatio = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
     const ratioDeviation = Math.abs(preyToPredatorRatio - targetRatio) / targetRatio;
-    const ratioBonus = ratioDeviation < 0.2 ? 30 : (ratioDeviation < 0.5 ? 15 : 0);
+    const ratioBonus = ratioDeviation < 0.2 ? 40 : (ratioDeviation < 0.5 ? 20 : 0); // Increased
 
-    // Diversity bonus - reward having all species present
-    const diversityBonus = (preyCount > 0 && predatorCount > 0 && bushCount > 0) ? 20 : 0;
+    // Diversity bonus - reward having all species present with minimum viable populations
+    let diversityBonus = 0;
+    if (preyCount >= 5 && predatorCount >= 2 && bushCount >= 10) {
+      diversityBonus = 30; // Increased for maintaining viable populations
+    } else if (preyCount > 0 && predatorCount > 0 && bushCount > 0) {
+      diversityBonus = 10; // Basic survival bonus
+    }
 
     // Map utilization bonus - reward proper density utilization
     const averageDensityUtilization = (preyRatio + predatorRatio + bushRatio) / 3;
-    const densityBonus = averageDensityUtilization > 0.8 && averageDensityUtilization < 1.2 ? 15 : 0;
+    const densityBonus = averageDensityUtilization > 0.7 && averageDensityUtilization < 1.3 ? 25 : 0; // Increased
 
-    return baseReward + stabilityBonus + ratioBonus + diversityBonus + densityBonus + earlyWarningPenalty;
+    // Growth trend bonus - reward when populations are recovering
+    let trendBonus = 0;
+    if (this.populationHistory.length >= 3) {
+      const recent = this.populationHistory.slice(-3);
+      const totalRecent = recent.map(h => h.prey + h.predators + h.bushes);
+      if (totalRecent[2] > totalRecent[1] && totalRecent[1] > totalRecent[0]) {
+        trendBonus = 15; // Reward consistent growth
+      }
+    }
+
+    return baseReward + stabilityBonus + ratioBonus + diversityBonus + densityBonus + trendBonus + earlyWarningPenalty;
   }
 
   private getQValue(state: EcosystemStateDiscrete, action: EcosystemAction): number {
@@ -288,7 +315,7 @@ export class EcosystemQLearningAgent {
   }
 
   private applyAction(ecosystem: EcosystemState, action: EcosystemAction): void {
-    const adjustmentFactor = 0.25; // Increased from 0.1 for more aggressive changes
+    const adjustmentFactor = 0.15; // Reduced from 0.25 for more gradual learning
     
     switch (action.parameter) {
       case 'preyGestation':
@@ -331,6 +358,14 @@ export class EcosystemQLearningAgent {
         ecosystem.berryBushSpreadChance = Math.max(MIN_BERRY_BUSH_SPREAD_CHANCE,
           Math.min(MAX_BERRY_BUSH_SPREAD_CHANCE,
             ecosystem.berryBushSpreadChance + action.adjustment * adjustmentFactor * (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE)));
+        break;
+        
+      // New parameters - For now just break (would need ecosystem state extensions)
+      case 'preySpeed':
+      case 'predatorSpeed':
+      case 'preyFleeDistance':
+      case 'predatorHuntRange':
+        // TODO: Implement when ecosystem state supports these parameters
         break;
     }
   }
