@@ -2,16 +2,18 @@ import { initGame } from './index';
 import { GameWorldState } from './world-types';
 import { updateWorld } from './world-update';
 import {
+  ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   GAME_DAY_IN_REAL_SECONDS,
+  HOURS_PER_GAME_DAY,
   HUMAN_YEAR_IN_REAL_SECONDS,
 } from './world-consts';
 import { describe, it, expect } from 'vitest';
 import { IndexedWorldState } from './world-index/world-index-types';
 
 describe('Ecosystem Balance', () => {
-  it('should maintain a stable balance of prey and predators over a long simulation', () => {
+  it('should maintain a stable balance of prey, predators, and bushes over a long simulation', () => {
     let gameState: GameWorldState = initGame();
 
     // Remove all humans to test pure ecosystem balance
@@ -31,16 +33,27 @@ describe('Ecosystem Balance', () => {
     for (let time = 0; time < totalSimulationSeconds; time += timeStepSeconds) {
       gameState = updateWorld(gameState, timeStepSeconds);
 
-      if (gameState.time >= (yearsSimulated + 1) * HUMAN_YEAR_IN_REAL_SECONDS) {
-        yearsSimulated++;
+      const currentYear = Math.floor(gameState.time / (HUMAN_YEAR_IN_REAL_SECONDS * HOURS_PER_GAME_DAY));
+      if (currentYear > yearsSimulated) {
+        yearsSimulated = currentYear;
         const preyCount = (gameState as IndexedWorldState).search.prey.count();
         const predatorCount = (gameState as IndexedWorldState).search.predator.count();
+        const bushCount = (gameState as IndexedWorldState).search.berryBush.count();
 
         console.log(
-          `Ecosystem Year ${yearsSimulated}: Prey: ${preyCount}, Predators: ${predatorCount}, Prey Gestation: ${gameState.ecosystem.preyGestationPeriod.toFixed(
-            2,
-          )}, Predator Gestation: ${gameState.ecosystem.predatorGestationPeriod.toFixed(2)}`,
+          `Ecosystem Year ${yearsSimulated}: Prey: ${preyCount}, Predators: ${predatorCount}, Bushes: ${bushCount}`,
         );
+        console.log(
+          `  - Prey (Gestation: ${gameState.ecosystem.preyGestationPeriod.toFixed(
+            2,
+          )}, Hunger Rate: ${gameState.ecosystem.preyHungerIncreasePerHour.toFixed(2)})`,
+        );
+        console.log(
+          `  - Predator (Gestation: ${gameState.ecosystem.predatorGestationPeriod.toFixed(
+            2,
+          )}, Hunger Rate: ${gameState.ecosystem.predatorHungerIncreasePerHour.toFixed(2)})`,
+        );
+        console.log(`  - Bush Spread Chance: ${gameState.ecosystem.berryBushSpreadChance.toFixed(2)}`);
 
         // Early exit if ecosystem collapses
         if (preyCount === 0 && predatorCount === 0) {
@@ -51,21 +64,26 @@ describe('Ecosystem Balance', () => {
     }
 
     const finalPreyCount = (gameState as IndexedWorldState).search.prey.count();
-    const finalPredatorCount = (gameState as IndexedWorldState).search.predator.count;
+    const finalPredatorCount = (gameState as IndexedWorldState).search.predator.count();
+    const finalBushCount = (gameState as IndexedWorldState).search.berryBush.count();
 
     // Assert that populations are within a healthy range of the target
     const preyLowerBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 0.5;
     const preyUpperBound = ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.5;
     const predatorLowerBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 0.5;
     const predatorUpperBound = ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION * 1.5;
+    const bushLowerBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 0.5;
+    const bushUpperBound = ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT * 1.5;
 
     expect(finalPreyCount).toBeGreaterThan(preyLowerBound);
     expect(finalPreyCount).toBeLessThan(preyUpperBound);
     expect(finalPredatorCount).toBeGreaterThan(predatorLowerBound);
     expect(finalPredatorCount).toBeLessThan(predatorUpperBound);
+    expect(finalBushCount).toBeGreaterThan(bushLowerBound);
+    expect(finalBushCount).toBeLessThan(bushUpperBound);
 
     console.log(
-      `Final Populations - Prey: ${finalPreyCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION}), Predators: ${finalPredatorCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION})`,
+      `Final Populations - Prey: ${finalPreyCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION}), Predators: ${finalPredatorCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION}), Bushes: ${finalBushCount} (Target: ${ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT})`,
     );
   }, 120000); // 120 second timeout for the long simulation
 });

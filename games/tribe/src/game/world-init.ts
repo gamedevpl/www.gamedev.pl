@@ -13,6 +13,9 @@ import {
   MIN_PREY_PROCREATION_COOLDOWN,
   MIN_PREDATOR_GESTATION_PERIOD,
   MIN_PREDATOR_PROCREATION_COOLDOWN,
+  MIN_PREY_HUNGER_INCREASE_PER_HOUR,
+  MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+  MIN_BERRY_BUSH_SPREAD_CHANCE,
 } from './world-consts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
@@ -160,6 +163,9 @@ export function initWorld(): GameWorldState {
       preyProcreationCooldown: MIN_PREY_PROCREATION_COOLDOWN,
       predatorGestationPeriod: MIN_PREDATOR_GESTATION_PERIOD,
       predatorProcreationCooldown: MIN_PREDATOR_PROCREATION_COOLDOWN,
+      preyHungerIncreasePerHour: MIN_PREY_HUNGER_INCREASE_PER_HOUR,
+      predatorHungerIncreasePerHour: MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+      berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
   };
 
@@ -270,6 +276,9 @@ export function initIntroWorld(): GameWorldState {
       preyProcreationCooldown: MIN_PREY_PROCREATION_COOLDOWN,
       predatorGestationPeriod: MIN_PREDATOR_GESTATION_PERIOD,
       predatorProcreationCooldown: MIN_PREDATOR_PROCREATION_COOLDOWN,
+      preyHungerIncreasePerHour: MIN_PREY_HUNGER_INCREASE_PER_HOUR,
+      predatorHungerIncreasePerHour: MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR,
+      berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
   };
 

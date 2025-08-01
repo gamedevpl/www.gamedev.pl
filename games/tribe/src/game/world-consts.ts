@@ -13,7 +13,6 @@ export const BERRY_BUSH_MAX_FOOD: number = 5;
 export const BERRY_BUSH_INITIAL_FOOD: number = 3;
 export const BERRY_BUSH_REGENERATION_HOURS: number = 12; // Hours for 1 food to grow
 export const BERRY_BUSH_LIFESPAN_GAME_HOURS: number = 940;
-export const BERRY_BUSH_SPREAD_CHANCE: number = 0.7;
 export const BERRY_BUSH_SPREAD_RADIUS: number = 20; // pixels
 export const BERRY_BUSH_SPREAD_COOLDOWN_HOURS: number = 90;
 export const INITIAL_BERRY_BUSH_COUNT: number = 45;
@@ -102,7 +101,7 @@ export const AI_HUNTING_HUNGER_THRESHOLD = 80; // Hunger level to consider hunti
 export const AI_HUNTING_FOOD_SEARCH_RADIUS = 300; // Radius to search for other food before hunting
 export const AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER = 600; // Max distance from tribe center to chase prey
 export const AI_DEFEND_BUSH_PREY_SEARCH_RADIUS = 150; // Radius to search for prey on claimed bushes
-export const HUMAN_AI_IDLE_WANDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
+export const HUMAN_AI_IDLE_WONDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_IDle_WANDER_COOLDOWN = 10;
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
@@ -372,7 +371,6 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
 
 // Prey Constants
 export const PREY_MAX_AGE_YEARS: number = 12; // Maximum lifespan in game years
-export const PREY_HUNGER_INCREASE_PER_HOUR: number = 1.5; // Much slower hunger for reproduction time
 export const PREY_HUNGER_DEATH: number = 120; // Lower hunger threshold than humans
 export const PREY_MAX_HITPOINTS: number = 50; // Lower health than humans
 export const PREY_BASE_SPEED: number = 12; // Faster than humans
@@ -392,7 +390,6 @@ export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hun
 
 // Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
-export const PREDATOR_HUNGER_INCREASE_PER_HOUR: number = 1; // Reduced for better ecosystem balance and reproduction
 export const PREDATOR_HUNGER_DEATH: number = 140; // Higher than prey, lower than humans
 export const PREDATOR_MAX_HITPOINTS: number = 80; // Between prey and humans
 export const PREDATOR_BASE_SPEED: number = 12; // Slightly faster than humans
@@ -426,6 +423,7 @@ export const ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION: number = 30; // How much hun
 // Ecosystem Balancer Constants
 export const ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION = 100;
 export const ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION = 20;
+export const ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT = 60;
 
 export const MIN_PREY_GESTATION_PERIOD = 10; // in game hours
 export const MAX_PREY_GESTATION_PERIOD = 40; // in game hours
@@ -436,3 +434,11 @@ export const MIN_PREDATOR_GESTATION_PERIOD = 12; // in game hours
 export const MAX_PREDATOR_GESTATION_PERIOD = 50; // in game hours
 export const MIN_PREDATOR_PROCREATION_COOLDOWN = 18; // in game hours
 export const MAX_PREDATOR_PROCREATION_COOLDOWN = 60; // in game hours
+
+export const MIN_PREY_HUNGER_INCREASE_PER_HOUR = 0.5;
+export const MAX_PREY_HUNGER_INCREASE_PER_HOUR = 2.5;
+export const MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR = 0.25;
+export const MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR = 2.0;
+
+export const MIN_BERRY_BUSH_SPREAD_CHANCE = 0.1;
+export const MAX_BERRY_BUSH_SPREAD_CHANCE = 0.9;

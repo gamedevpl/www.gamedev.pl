@@ -51,7 +51,7 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
       const timeSinceHarvest = updateContext.gameState.time - entity.timeSinceLastHarvest;
       const hasBeenLeftAlone = timeSinceHarvest >= BERRY_BUSH_SPREAD_COOLDOWN_HOURS;
 
-      if (hasBeenLeftAlone && Math.random() < entity.spreadChance) {
+      if (hasBeenLeftAlone && Math.random() < updateContext.gameState.ecosystem.berryBushSpreadChance) {
         return {
           nextState: BUSH_SPREADING,
           data: { ...data, enteredAt: updateContext.gameState.time, previousState: BUSH_FULL },

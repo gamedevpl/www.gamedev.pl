@@ -10,4 +10,13 @@ export interface EcosystemState {
   // Predator reproduction parameters
   predatorGestationPeriod: number;
   predatorProcreationCooldown: number;
+
+  // Prey hunger parameters
+  preyHungerIncreasePerHour: number;
+
+  // Predator hunger parameters
+  predatorHungerIncreasePerHour: number;
+
+  // Bush spread parameters
+  berryBushSpreadChance: number;
 }

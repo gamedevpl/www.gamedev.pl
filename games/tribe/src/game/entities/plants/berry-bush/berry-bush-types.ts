@@ -12,8 +12,6 @@ export interface BerryBushEntity extends PlantEntity {
   maxFood: number;
   /** Game hours passed since the last berry was regenerated. */
   timeSinceLastBerryRegen: number;
-  /** The chance (0.0 to 1.0) that the bush will attempt to spread in a given opportunity. */
-  spreadChance: number;
   /** The maximum radius (in pixels) from the parent bush where a new bush can spawn. */
   spreadRadius: number;
   /** Game hours passed since the last spread attempt. */

@@ -1,7 +1,6 @@
 import { PreyEntity } from './prey-types';
 import { UpdateContext } from '../../../world-types';
 import {
-  PREY_HUNGER_INCREASE_PER_HOUR,
   PREY_HUNGER_DEATH,
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
@@ -30,7 +29,7 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
   prey.isAdult = prey.age >= PREY_MIN_PROCREATION_AGE;
 
   // Increase hunger over time
-  let hungerIncrease = PREY_HUNGER_INCREASE_PER_HOUR * gameHoursDelta;
+  let hungerIncrease = updateContext.gameState.ecosystem.preyHungerIncreasePerHour * gameHoursDelta;
 
   // Pregnancy increases hunger faster
   if (prey.isPregnant) {
