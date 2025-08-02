@@ -25,11 +25,12 @@ import {
   HUMAN_ATTACK_BUILDUP_HOURS,
   HUMAN_ATTACK_COOLDOWN_HOURS,
 } from '../human-consts';
-import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 import { EntityId } from '../entities/entities-types';
 import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
+import { getCharacterSpriteType, shouldFlipCharacterSprite, getCharacterSpriteScale } from '../assets/character-sprites';
+import { getImageAsset } from '../assets/image-loader';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -44,6 +45,77 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   attacking: 'attacking',
   planting: 'gathering',
 };
+
+/**
+ * Renders a human character using Sprout Lands Asset Pack sprites
+ * @param ctx Canvas rendering context
+ * @param human The human entity to render
+ */
+function renderCharacterSprite(
+  ctx: CanvasRenderingContext2D,
+  human: HumanEntity,
+  currentCharacterRadius: number,
+  stance: Stance,
+): void {
+  const { position, gender = 'male', age = 20, direction, isAdult = true } = human;
+
+  // Get the appropriate sprite for this character
+  const spriteType = getCharacterSpriteType(stance, gender);
+  const spriteAsset = getImageAsset(spriteType);
+  
+  if (!spriteAsset) {
+    // Fallback: draw a simple circle if sprite not loaded
+    ctx.save();
+    ctx.fillStyle = gender === 'male' ? '#4A90E2' : '#E24A90';
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, currentCharacterRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  const scale = getCharacterSpriteScale(age, isAdult);
+  const spriteWidth = spriteAsset.width * scale;
+  const spriteHeight = spriteAsset.height * scale;
+  
+  ctx.save();
+  
+  // Apply direction-based transformations
+  const shouldFlip = shouldFlipCharacterSprite(direction);
+  
+  if (shouldFlip) {
+    ctx.scale(-1, 1);
+    ctx.drawImage(
+      spriteAsset.image,
+      -(position.x + spriteWidth / 2),
+      position.y - spriteHeight / 2,
+      spriteWidth,
+      spriteHeight
+    );
+  } else {
+    ctx.drawImage(
+      spriteAsset.image,
+      position.x - spriteWidth / 2,
+      position.y - spriteHeight / 2,
+      spriteWidth,
+      spriteHeight
+    );
+  }
+
+  // Add special effects for certain stances
+  if (stance === 'procreate') {
+    // Add a subtle glow effect
+    const glowAlpha = (Math.sin(Date.now() * 0.01) + 1) / 4; // 0 to 0.5
+    ctx.globalAlpha = glowAlpha;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, currentCharacterRadius + 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+  }
+  
+  ctx.restore();
+}
 
 /**
  * Renders debug information for a human character.
@@ -221,20 +293,8 @@ export function renderCharacter(
 
   const stance: Stance = actionToStanceMap[activeAction] || 'idle';
 
-  TribeHuman2D.render(
-    ctx,
-    position.x - currentCharacterRadius,
-    position.y - currentCharacterRadius,
-    currentCharacterRadius * 2,
-    currentCharacterRadius * 2,
-    human.animationProgress || 0,
-    stance,
-    human.gender,
-    human.age,
-    [human.direction.x, human.direction.y],
-    human.isPregnant ?? false,
-    human.hunger,
-  );
+  // Render character using sprite instead of TribeHuman2D
+  renderCharacterSprite(ctx, human, currentCharacterRadius, stance);
 
   // Draw attack target highlight
   if (isPlayerAttackTarget) {
