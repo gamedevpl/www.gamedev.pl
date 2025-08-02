@@ -17,12 +17,14 @@ import {
   UI_ATTACK_PROGRESS_BAR_Y_OFFSET,
   UI_ATTACK_BUILDUP_BAR_COLOR,
   UI_BAR_BACKGROUND_COLOR,
-  HUMAN_ATTACK_BUILDUP_HOURS,
   UI_ATTACK_COOLDOWN_BAR_COLOR,
-  HUMAN_ATTACK_COOLDOWN_HOURS,
   TRIBE_BADGE_SIZE,
   CHARACTER_CHILD_RADIUS,
-} from '../world-consts';
+} from '../ui-consts';
+import {
+  HUMAN_ATTACK_BUILDUP_HOURS,
+  HUMAN_ATTACK_COOLDOWN_HOURS,
+} from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';

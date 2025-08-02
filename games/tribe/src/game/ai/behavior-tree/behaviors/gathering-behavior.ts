@@ -1,11 +1,13 @@
 import {
   BT_GATHERING_SEARCH_COOLDOWN_HOURS,
-  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
-  HUMAN_INTERACTION_PROXIMITY,
   AI_GATHERING_AVOID_OWNER_PROXIMITY,
   AI_GATHERING_SEARCH_RADIUS,
-} from '../../../world-consts';
+} from '../../../ai-consts';
+import {
+  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
+  HUMAN_INTERACTION_PROXIMITY,
+} from '../../../human-consts';
 import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils';
