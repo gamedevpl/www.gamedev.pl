@@ -5,8 +5,8 @@ import {
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   MAP_WIDTH,
-  MAP_HEIGHT,
-} from '../world-consts';
+  MAP_HEIGHT
+} from '../game-consts.ts';
 import { IndexedWorldState } from '../world-index/world-index-types';
 
 interface PopulationHistory {

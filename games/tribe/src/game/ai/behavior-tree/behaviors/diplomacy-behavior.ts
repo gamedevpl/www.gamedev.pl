@@ -5,8 +5,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, CooldownNode } from '../nodes';
 import {
   AI_DIPLOMACY_CHECK_INTERVAL_HOURS,
-  LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD,
-} from '../../../world-consts';
+  LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD
+} from '../../../ai-consts.ts';
 
 /**
  * Creates a behavior for a tribe leader to manage diplomatic relations with other tribes.

@@ -3,9 +3,11 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import {
   PARENT_FEEDING_RANGE,
   HUMAN_FOOD_HUNGER_REDUCTION,
-  PARENT_FEED_CHILD_COOLDOWN_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+  PARENT_FEED_CHILD_COOLDOWN_HOURS
+} from '../human-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

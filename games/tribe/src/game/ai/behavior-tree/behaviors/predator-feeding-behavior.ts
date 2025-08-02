@@ -1,4 +1,7 @@
-import { ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, ANIMAL_PARENT_FEEDING_RANGE } from '../../../world-consts';
+import {
+  ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
+  ANIMAL_PARENT_FEEDING_RANGE
+} from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { UpdateContext } from '../../../world-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';

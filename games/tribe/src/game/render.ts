@@ -5,8 +5,8 @@ import {
   UI_TEXT_SHADOW_COLOR,
   UI_TEXT_COLOR,
   UI_NOTIFICATION_HIGHLIGHT_COLOR,
-  UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED,
-} from './world-consts';
+  UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED
+} from './ui-consts.ts';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils';
 import { Vector2D } from './utils/math-types';

@@ -20,8 +20,8 @@ import {
   UI_TOOLTIP_FONT_SIZE,
   UI_TOOLTIP_OFFSET_Y,
   UI_TOOLTIP_PADDING,
-  UI_TOOLTIP_TEXT_COLOR,
-} from '../../world-consts';
+  UI_TOOLTIP_TEXT_COLOR
+} from '../../ui-consts.ts';
 import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';

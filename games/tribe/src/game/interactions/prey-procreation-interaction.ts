@@ -1,6 +1,11 @@
 import { InteractionDefinition } from './interactions-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
-import { PREY_INTERACTION_RANGE, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
+import {
+  PREY_INTERACTION_RANGE
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

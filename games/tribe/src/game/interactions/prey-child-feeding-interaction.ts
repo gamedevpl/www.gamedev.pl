@@ -3,9 +3,11 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import {
   ANIMAL_PARENT_FEEDING_RANGE,
   ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION,
-  ANIMAL_FEED_CHILD_COOLDOWN_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+  ANIMAL_FEED_CHILD_COOLDOWN_HOURS
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

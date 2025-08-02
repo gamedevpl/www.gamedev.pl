@@ -10,11 +10,15 @@ import {
 import {
   AI_PLANTING_CHECK_RADIUS,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  BERRY_COST_FOR_PLANTING,
+  BERRY_COST_FOR_PLANTING
+} from '../../../berry-bush-consts.ts';
+import {
   BT_PLANTING_SEARCH_COOLDOWN_HOURS,
-  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
-  HUMAN_INTERACTION_PROXIMITY,
-} from '../../../world-consts';
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING
+} from '../../../ai-consts.ts';
+import {
+  HUMAN_INTERACTION_PROXIMITY
+} from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';

@@ -1,5 +1,8 @@
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../utils/math-utils';
-import { SOUND_FALLOFF, SOUND_MAX_DISTANCE } from '../world-consts';
+import {
+  SOUND_FALLOFF,
+  SOUND_MAX_DISTANCE
+} from '../sound-consts.ts';
 import { SoundOptions, SoundType } from './sound-types';
 import { getAudioContext, soundBuffers, getMasterGainNode } from './sound-loader';
 

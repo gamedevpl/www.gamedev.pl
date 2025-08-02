@@ -1,6 +1,8 @@
 import { GameWorldState } from '../world-types';
 import { Notification } from './notification-types';
-import { NOTIFICATION_DISMISS_COOLDOWN_HOURS } from '../world-consts';
+import {
+  NOTIFICATION_DISMISS_COOLDOWN_HOURS
+} from '../notification-consts.ts';
 
 let nextNotificationId = 0;
 function generateNotificationId(): string {

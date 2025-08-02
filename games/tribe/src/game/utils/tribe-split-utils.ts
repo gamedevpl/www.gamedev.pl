@@ -1,9 +1,11 @@
 import {
-  NOTIFICATION_DURATION_LONG_HOURS,
+  NOTIFICATION_DURATION_LONG_HOURS
+} from '../notification-consts.ts';
+import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
-  TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
-} from '../world-consts';
+  TRIBE_SPLIT_MOVE_AWAY_DISTANCE
+} from '../tribe-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { NotificationType } from '../notifications/notification-types';
 import { addNotification } from '../notifications/notification-utils';

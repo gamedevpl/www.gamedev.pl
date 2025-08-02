@@ -1,7 +1,11 @@
 import {
-  AI_UPDATE_INTERVAL,
+  AI_UPDATE_INTERVAL
+} from '../ai-consts.ts';
+import {
   GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY,
+  HOURS_PER_GAME_DAY
+} from '../game-consts.ts';
+import {
   UI_BT_DEBUG_BACKGROUND_COLOR,
   UI_BT_DEBUG_FONT_SIZE,
   UI_BT_DEBUG_HEATMAP_COLD_COLOR,
@@ -18,8 +22,8 @@ import {
   UI_BT_DEBUG_STATUS_RUNNING_COLOR,
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
   UI_BT_DEBUG_X_OFFSET,
-  UI_BT_DEBUG_Y_OFFSET,
-} from '../world-consts';
+  UI_BT_DEBUG_Y_OFFSET
+} from '../ui-consts.ts';
 import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
 import { lerpColor } from '../utils/math-utils';
 import { CharacterEntity } from '../entities/characters/character-types';

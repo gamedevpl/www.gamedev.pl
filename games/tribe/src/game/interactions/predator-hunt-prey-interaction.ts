@@ -4,9 +4,11 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import {
   PREDATOR_HUNT_RANGE,
   PREDATOR_HUNT_DAMAGE,
-  PREDATOR_HUNT_COOLDOWN_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+  PREDATOR_HUNT_COOLDOWN_HOURS
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

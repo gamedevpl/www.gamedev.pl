@@ -1,10 +1,14 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import {
   GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY,
+  HOURS_PER_GAME_DAY
+} from '../../game-consts.ts';
+import {
   HUMAN_HUNGER_DEATH,
   HUMAN_MAX_AGE_YEARS,
-  HUMAN_YEAR_IN_REAL_SECONDS,
+  HUMAN_YEAR_IN_REAL_SECONDS
+} from '../../human-consts.ts';
+import {
   UI_AGE_BAR_COLOR,
   UI_BAR_BACKGROUND_COLOR,
   UI_BAR_HEIGHT,
@@ -17,8 +21,8 @@ import {
   UI_HUNGER_BAR_COLOR,
   UI_MINIATURE_CHARACTER_SIZE,
   UI_PADDING,
-  UI_TIME_BAR_COLOR,
-} from '../../world-consts';
+  UI_TIME_BAR_COLOR
+} from '../../ui-consts.ts';
 import { GameWorldState } from '../../world-types';
 import { UIStatusType, UI_STATUS_EMOJIS } from '../../ui/ui-types';
 import { drawFoodBar, drawProgressBar } from './render-bars';

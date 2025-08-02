@@ -2,7 +2,13 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
-import { HUMAN_INTERACTION_RANGE, EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
+import {
+  HUMAN_INTERACTION_RANGE
+} from '../human-consts.ts';
+import {
+  EFFECT_DURATION_MEDIUM_HOURS,
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';

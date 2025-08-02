@@ -1,6 +1,11 @@
 import { InteractionDefinition } from './interactions-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
-import { PREDATOR_INTERACTION_RANGE, EFFECT_DURATION_SHORT_HOURS } from '../world-consts';
+import {
+  PREDATOR_INTERACTION_RANGE
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

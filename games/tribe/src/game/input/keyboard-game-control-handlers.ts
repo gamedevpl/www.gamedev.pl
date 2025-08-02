@@ -1,7 +1,9 @@
 import { GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
-import { FAST_FORWARD_AMOUNT_SECONDS } from '../world-consts';
+import {
+  FAST_FORWARD_AMOUNT_SECONDS
+} from '../tribe-consts.ts';
 import { findPlayerEntity } from '../utils/world-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 

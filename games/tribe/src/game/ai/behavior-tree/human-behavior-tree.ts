@@ -1,4 +1,7 @@
-import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../world-consts';
+import {
+  BT_ACTION_TIMEOUT_HOURS,
+  BT_EXPENSIVE_OPERATION_CACHE_HOURS
+} from '../../ai-consts.ts';
 import { BehaviorNode } from './behavior-tree-types';
 import { AutopilotControlled, CachingNode, ManualControl, NonPlayerControlled, Selector, TimeoutNode } from './nodes';
 import {

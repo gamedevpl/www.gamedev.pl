@@ -4,9 +4,11 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import {
   HUMAN_ATTACK_RANGE,
   HUMAN_ATTACK_DAMAGE,
-  HUMAN_ATTACK_COOLDOWN_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+  HUMAN_ATTACK_COOLDOWN_HOURS
+} from '../human-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

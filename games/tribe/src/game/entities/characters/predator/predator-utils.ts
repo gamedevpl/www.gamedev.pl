@@ -1,8 +1,8 @@
 import {
   PREDATOR_BASE_SPEED,
   PREDATOR_SLOW_SPEED_MODIFIER,
-  PREDATOR_HUNGER_THRESHOLD_SLOW,
-} from '../../../world-consts';
+  PREDATOR_HUNGER_THRESHOLD_SLOW
+} from '../../../animal-consts.ts';
 import { PredatorEntity } from './predator-types';
 
 /**

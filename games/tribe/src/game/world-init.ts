@@ -3,20 +3,28 @@ import { GameWorldState } from './world-types';
 import {
   MAP_WIDTH,
   MAP_HEIGHT,
+  INTRO_SCREEN_INITIAL_HUMANS
+} from './game-consts.ts';
+import {
   INITIAL_BERRY_BUSH_COUNT,
-  INITIAL_MASTER_VOLUME,
+  MIN_BERRY_BUSH_SPREAD_CHANCE
+} from './berry-bush-consts.ts';
+import {
+  INITIAL_MASTER_VOLUME
+} from './sound-consts.ts';
+import {
   UI_BUTTON_WIDTH,
-  INTRO_SCREEN_INITIAL_HUMANS,
-  UI_BUTTON_TEXT_COLOR,
+  UI_BUTTON_TEXT_COLOR
+} from './ui-consts.ts';
+import {
   INITIAL_PREY_COUNT,
   MAX_PREY_GESTATION_PERIOD,
   MAX_PREY_PROCREATION_COOLDOWN,
   MAX_PREDATOR_GESTATION_PERIOD,
   MAX_PREDATOR_PROCREATION_COOLDOWN,
   MAX_PREY_HUNGER_INCREASE_PER_HOUR,
-  MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
-  MIN_BERRY_BUSH_SPREAD_CHANCE,
-} from './world-consts';
+  MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR
+} from './animal-consts.ts';
 import { indexWorldState } from './world-index/world-state-index';
 import { createTutorial, createTutorialState } from './tutorial';
 import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';

@@ -3,16 +3,20 @@ import {
   AI_DESPERATE_ATTACK_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
   AI_MIGRATION_TARGET_SEARCH_RADIUS,
-  AI_PLANTING_SEARCH_RADIUS,
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  HUMAN_INTERACTION_RANGE,
   LEADER_HABITAT_SCORE_BUSH_WEIGHT,
   LEADER_HABITAT_SCORE_DANGER_WEIGHT,
   LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
   LEADER_WORLD_ANALYSIS_GRID_SIZE,
-  LEADER_WORLD_ANALYSIS_GRID_STEP,
-  MAX_ATTACKERS_PER_TARGET,
-} from '../world-consts';
+  LEADER_WORLD_ANALYSIS_GRID_STEP
+} from '../ai-consts.ts';
+import {
+  AI_PLANTING_SEARCH_RADIUS,
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS
+} from '../berry-bush-consts.ts';
+import {
+  HUMAN_INTERACTION_RANGE,
+  MAX_ATTACKERS_PER_TARGET
+} from '../human-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';

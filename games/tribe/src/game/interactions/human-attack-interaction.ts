@@ -7,15 +7,17 @@ import {
   HUMAN_ATTACK_PUSHBACK_FORCE,
   HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
   HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
   HUMAN_ATTACK_DAMAGE,
   HUMAN_PARRY_ANGLE_DEGREES,
   HUMAN_PARRY_CHANCE,
   HUMAN_OLD_AGE_THRESHOLD,
   HUMAN_MALE_DAMAGE_MODIFIER,
   HUMAN_CHILD_DAMAGE_MODIFIER,
-  HUMAN_VULNERABLE_DAMAGE_MODIFIER,
-} from '../world-consts';
+  HUMAN_VULNERABLE_DAMAGE_MODIFIER
+} from '../human-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

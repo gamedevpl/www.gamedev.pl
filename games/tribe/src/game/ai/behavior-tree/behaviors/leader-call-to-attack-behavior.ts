@@ -1,10 +1,12 @@
 import {
   LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS,
-  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-  PLAYER_CALL_TO_ATTACK_RADIUS,
   AI_FLEE_DISTANCE,
-  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD,
-} from '../../../world-consts';
+  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD
+} from '../../../ai-consts.ts';
+import {
+  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
+  PLAYER_CALL_TO_ATTACK_RADIUS
+} from '../../../tribe-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findNearbyEnemiesOfTribe, calculateTribeStrength, findTribeMembers } from '../../../utils';

@@ -5,9 +5,11 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findOptimalMigrationTarget } from '../../../utils';
 import {
   AI_MIGRATION_CHECK_INTERVAL_HOURS,
-  BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
-} from '../../../world-consts';
+  BT_EXPENSIVE_OPERATION_CACHE_HOURS
+} from '../../../ai-consts.ts';
+import {
+  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS
+} from '../../../tribe-consts.ts';
 
 const MIGRATION_CHECK_COOLDOWN_KEY = 'tribeMigrationCheckCooldown';
 

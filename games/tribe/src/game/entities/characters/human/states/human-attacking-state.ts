@@ -1,6 +1,8 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
-import { HUMAN_ATTACK_RANGE } from '../../../../world-consts';
+import {
+  HUMAN_ATTACK_RANGE
+} from '../../../../human-consts.ts';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import { HUMAN_ATTACKING, HumanAttackingStateData, HUMAN_IDLE } from './human-state-types';

@@ -1,8 +1,8 @@
 import {
   PREY_BASE_SPEED,
   PREY_SLOW_SPEED_MODIFIER,
-  PREY_HUNGER_THRESHOLD_SLOW,
-} from '../../../world-consts';
+  PREY_HUNGER_THRESHOLD_SLOW
+} from '../../../animal-consts.ts';
 import { PreyEntity } from './prey-types';
 
 /**

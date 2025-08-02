@@ -5,14 +5,16 @@
  * It will contain functions to initialize and manage the game state.
  */
 import {
-  MIN_BERRY_BUSH_SPREAD_CHANCE,
+  MIN_BERRY_BUSH_SPREAD_CHANCE
+} from './berry-bush-consts.ts';
+import {
   MAX_PREDATOR_GESTATION_PERIOD,
   MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
   MAX_PREDATOR_PROCREATION_COOLDOWN,
   MAX_PREY_GESTATION_PERIOD,
   MAX_PREY_HUNGER_INCREASE_PER_HOUR,
-  MAX_PREY_PROCREATION_COOLDOWN,
-} from './world-consts';
+  MAX_PREY_PROCREATION_COOLDOWN
+} from './animal-consts.ts';
 import { initWorld } from './world-init';
 import { GameWorldState } from './world-types';
 

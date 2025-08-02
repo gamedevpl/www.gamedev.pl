@@ -1,6 +1,8 @@
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
-import { CHARACTER_RADIUS } from '../world-consts';
+import {
+  CHARACTER_RADIUS
+} from '../ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
 

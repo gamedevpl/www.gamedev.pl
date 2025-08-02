@@ -1,7 +1,12 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findWeakCannibalismTarget, findClosestEntity } from '../../../utils';
-import { AI_DESPERATE_ATTACK_HUNGER_THRESHOLD, HUMAN_INTERACTION_RANGE } from '../../../world-consts';
+import {
+  AI_DESPERATE_ATTACK_HUNGER_THRESHOLD
+} from '../../../ai-consts.ts';
+import {
+  HUMAN_INTERACTION_RANGE
+} from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';

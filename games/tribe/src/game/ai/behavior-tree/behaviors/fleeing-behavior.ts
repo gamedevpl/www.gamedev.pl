@@ -1,4 +1,8 @@
-import { AI_ATTACK_HUNGER_THRESHOLD, AI_FLEE_DISTANCE, AI_FLEE_HEALTH_THRESHOLD } from '../../../world-consts';
+import {
+  AI_ATTACK_HUNGER_THRESHOLD,
+  AI_FLEE_DISTANCE,
+  AI_FLEE_HEALTH_THRESHOLD
+} from '../../../ai-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { findClosestAggressor } from '../../../utils/world-utils';
 import { getDirectionVectorOnTorus, vectorAdd, vectorNormalize, vectorScale } from '../../../utils/math-utils';

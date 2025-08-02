@@ -4,8 +4,8 @@ import { HumanPlantingStateData, HUMAN_IDLE, HUMAN_PLANTING } from './human-stat
 import {
   BERRY_BUSH_CLAIM_DURATION_HOURS,
   BERRY_COST_FOR_PLANTING,
-  HUMAN_PLANTING_DURATION_HOURS,
-} from '../../../../world-consts';
+  HUMAN_PLANTING_DURATION_HOURS
+} from '../../../../berry-bush-consts.ts';
 import { createBerryBush } from '../../../entities-update';
 import { FoodType } from '../../../../food/food-types';
 

@@ -3,10 +3,14 @@ import { BerryBushEntity } from '../berry-bush-types';
 import { BushGrowingStateData, BUSH_DYING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
 import {
   HOURS_PER_GAME_DAY,
-  GAME_DAY_IN_REAL_SECONDS,
-  BERRY_BUSH_REGENERATION_HOURS,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../../../../world-consts';
+  GAME_DAY_IN_REAL_SECONDS
+} from '../../../../game-consts.ts';
+import {
+  BERRY_BUSH_REGENERATION_HOURS
+} from '../../../../berry-bush-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../../../../effect-consts.ts';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
 import { FoodType } from '../../../../food/food-types';

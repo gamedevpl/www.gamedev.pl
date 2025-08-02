@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PREDATOR_ATTACK_RANGE, PREDATOR_TERRITORIAL_RANGE } from '../../../world-consts';
+import {
+  PREDATOR_ATTACK_RANGE,
+  PREDATOR_TERRITORIAL_RANGE
+} from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';

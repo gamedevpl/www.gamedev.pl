@@ -2,8 +2,8 @@
 import {
   PREDATOR_MIN_PROCREATION_AGE,
   PREDATOR_MAX_PROCREATION_AGE,
-  PREDATOR_INTERACTION_RANGE,
-} from '../../../world-consts';
+  PREDATOR_INTERACTION_RANGE
+} from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';

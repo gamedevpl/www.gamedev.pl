@@ -1,5 +1,9 @@
 import { GameWorldState } from './world-types';
-import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY, VIEWPORT_FOLLOW_SPEED } from './world-consts';
+import {
+  GAME_DAY_IN_REAL_SECONDS,
+  HOURS_PER_GAME_DAY,
+  VIEWPORT_FOLLOW_SPEED
+} from './game-consts.ts';
 import { interactionsUpdate } from './interactions/interactions-update';
 import { entitiesUpdate } from './entities/entities-update';
 import { visualEffectsUpdate } from './visual-effects/visual-effects-update';

@@ -1,5 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../world-consts';
+import {
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING
+} from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 

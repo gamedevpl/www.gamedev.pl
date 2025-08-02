@@ -3,7 +3,9 @@ import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard } from '../behavior-tree-blackboard';
-import { ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER } from '../../../world-consts';
+import {
+  ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER
+} from '../../../ai-consts.ts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity, getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';

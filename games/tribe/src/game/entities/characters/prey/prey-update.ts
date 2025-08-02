@@ -4,12 +4,18 @@ import {
   PREY_HUNGER_DEATH,
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
-  EFFECT_DURATION_MEDIUM_HOURS,
+  PREY_MIN_PROCREATION_AGE
+} from '../../../animal-consts.ts';
+import {
+  EFFECT_DURATION_MEDIUM_HOURS
+} from '../../../effect-consts.ts';
+import {
   HOURS_PER_GAME_DAY,
-  GAME_DAY_IN_REAL_SECONDS,
-  HUMAN_YEAR_IN_REAL_SECONDS,
-  PREY_MIN_PROCREATION_AGE,
-} from '../../../world-consts';
+  GAME_DAY_IN_REAL_SECONDS
+} from '../../../game-consts.ts';
+import {
+  HUMAN_YEAR_IN_REAL_SECONDS
+} from '../../../human-consts.ts';
 import { removeEntity, createPrey, createPreyCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';

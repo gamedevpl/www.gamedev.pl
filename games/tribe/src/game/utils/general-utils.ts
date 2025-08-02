@@ -1,4 +1,6 @@
-import { TRIBE_BADGE_EMOJIS } from '../world-consts';
+import {
+  TRIBE_BADGE_EMOJIS
+} from '../ui-consts.ts';
 
 let emojiIndex = 0;
 

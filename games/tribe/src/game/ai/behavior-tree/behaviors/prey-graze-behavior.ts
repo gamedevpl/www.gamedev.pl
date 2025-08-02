@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PREY_INTERACTION_RANGE } from '../../../world-consts';
+import {
+  PREY_INTERACTION_RANGE
+} from '../../../animal-consts.ts';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';

@@ -2,7 +2,13 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
-import { CHARACTER_RADIUS, CORPSE_MEAT_ICON_SIZE, HUMAN_MAX_FOOD } from '../world-consts';
+import {
+  CHARACTER_RADIUS,
+  CORPSE_MEAT_ICON_SIZE
+} from '../ui-consts.ts';
+import {
+  HUMAN_MAX_FOOD
+} from '../human-consts.ts';
 import { FOOD_TYPE_EMOJIS } from '../food/food-types';
 
 /**

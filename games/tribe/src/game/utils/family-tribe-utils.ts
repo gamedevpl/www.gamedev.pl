@@ -1,4 +1,6 @@
-import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import {
+  HUMAN_HUNGER_THRESHOLD_CRITICAL
+} from '../human-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
 import { DiplomacyStatus, GameWorldState } from '../world-types';

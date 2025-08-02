@@ -2,7 +2,10 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../world-consts';
+import {
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  BERRY_COST_FOR_PLANTING
+} from '../berry-bush-consts.ts';
 import { GameWorldState, HoveredAutopilotAction } from '../world-types';
 import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot, isHostile, canProcreate } from '../utils';
 import { Vector2D } from '../utils/math-types';

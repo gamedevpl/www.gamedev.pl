@@ -1,7 +1,9 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findFamilyMemberUnderAttack } from '../../../utils';
-import { AI_DEFEND_FAMILY_TRIGGER_RADIUS } from '../../../world-consts';
+import {
+  AI_DEFEND_FAMILY_TRIGGER_RADIUS
+} from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';

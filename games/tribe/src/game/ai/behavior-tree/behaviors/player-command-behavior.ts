@@ -8,10 +8,14 @@ import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils
 import {
   AUTOPILOT_ACTION_PROXIMITY,
   AUTOPILOT_MOVE_DISTANCE_THRESHOLD,
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  FATHER_FOLLOW_STOP_DISTANCE,
-  HUMAN_INTERACTION_PROXIMITY,
-} from '../../../world-consts';
+  FATHER_FOLLOW_STOP_DISTANCE
+} from '../../../ai-consts.ts';
+import {
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS
+} from '../../../berry-bush-consts.ts';
+import {
+  HUMAN_INTERACTION_PROXIMITY
+} from '../../../human-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { canProcreate, isPositionOccupied } from '../../../utils';

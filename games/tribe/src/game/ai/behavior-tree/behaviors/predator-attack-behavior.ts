@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PREDATOR_ATTACK_RANGE } from '../../../world-consts';
+import {
+  PREDATOR_ATTACK_RANGE
+} from '../../../animal-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';

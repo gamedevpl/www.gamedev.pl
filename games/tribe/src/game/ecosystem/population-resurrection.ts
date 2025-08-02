@@ -8,7 +8,10 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { generateRandomPreyGeneCode } from '../entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from '../entities/characters/predator/predator-utils';
-import { MAP_WIDTH, MAP_HEIGHT } from '../world-consts';
+import {
+  MAP_WIDTH,
+  MAP_HEIGHT
+} from '../game-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { Vector2D } from '../utils/math-types';

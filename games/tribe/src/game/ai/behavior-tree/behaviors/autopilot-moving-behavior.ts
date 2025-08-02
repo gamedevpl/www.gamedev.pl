@@ -1,4 +1,6 @@
-import { AUTOPILOT_MOVE_DISTANCE_THRESHOLD } from '../../../world-consts';
+import {
+  AUTOPILOT_MOVE_DISTANCE_THRESHOLD
+} from '../../../ai-consts.ts';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';

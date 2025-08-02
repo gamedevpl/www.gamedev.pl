@@ -1,6 +1,8 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
-import { PREDATOR_ATTACK_RANGE } from '../../../../world-consts';
+import {
+  PREDATOR_ATTACK_RANGE
+} from '../../../../animal-consts.ts';
 import { PredatorEntity } from '../predator-types';
 import { PreyEntity } from '../../prey/prey-types';
 import { HumanEntity } from '../../human/human-types';

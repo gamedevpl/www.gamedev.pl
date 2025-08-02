@@ -1,5 +1,7 @@
 import { State } from '../../../../state-machine/state-machine-types';
-import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../../world-consts';
+import {
+  HUMAN_HUNGER_THRESHOLD_SLOW
+} from '../../../../human-consts.ts';
 import { HumanEntity } from '../human-types';
 import {
   HumanStateData,

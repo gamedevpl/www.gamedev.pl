@@ -3,7 +3,10 @@ import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
-import { FOLLOW_LEADER_MIN_HUNGER_THRESHOLD, LEADER_FOLLOW_RADIUS } from '../../../world-consts';
+import {
+  FOLLOW_LEADER_MIN_HUNGER_THRESHOLD,
+  LEADER_FOLLOW_RADIUS
+} from '../../../ai-consts.ts';
 
 /**
  * Creates a behavior for a non-leader human to follow their leader if the leader

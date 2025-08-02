@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PREY_FLEE_DISTANCE, PREY_INTERACTION_RANGE } from '../../../world-consts';
+import {
+  PREY_FLEE_DISTANCE,
+  PREY_INTERACTION_RANGE
+} from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {

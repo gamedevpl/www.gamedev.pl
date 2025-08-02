@@ -1,4 +1,7 @@
-import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, PARENT_FEEDING_RANGE } from '../../../world-consts';
+import {
+  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
+  PARENT_FEEDING_RANGE
+} from '../../../human-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findChildren } from '../../../utils/world-utils';

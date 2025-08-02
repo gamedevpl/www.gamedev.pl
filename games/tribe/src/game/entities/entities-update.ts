@@ -9,18 +9,24 @@ import {
   BERRY_BUSH_INITIAL_FOOD,
   BERRY_BUSH_MAX_FOOD,
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
-  BERRY_BUSH_SPREAD_RADIUS,
+  BERRY_BUSH_SPREAD_RADIUS
+} from '../berry-bush-consts.ts';
+import {
   HUMAN_INITIAL_AGE,
   HUMAN_INITIAL_HUNGER,
   HUMAN_MAX_AGE_YEARS,
   CHILD_TO_ADULT_AGE,
-  CHARACTER_RADIUS,
-  CHARACTER_CHILD_RADIUS,
   HUMAN_MAX_FOOD,
   HUMAN_CORPSE_INITIAL_FOOD,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
-  MAX_ANCESTORS_TO_TRACK,
+  MAX_ANCESTORS_TO_TRACK
+} from '../human-consts.ts';
+import {
+  CHARACTER_RADIUS,
+  CHARACTER_CHILD_RADIUS
+} from '../ui-consts.ts';
+import {
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
   PREY_INITIAL_AGE,
@@ -30,8 +36,8 @@ import {
   PREDATOR_INITIAL_HUNGER,
   PREDATOR_INITIAL_AGE,
   PREDATOR_MAX_HITPOINTS,
-  PREDATOR_MIN_PROCREATION_AGE,
-} from '../world-consts';
+  PREDATOR_MIN_PROCREATION_AGE
+} from '../animal-consts.ts';
 import { CorpseEntity } from './characters/corpse-types';
 import { HumanEntity } from './characters/human/human-types';
 import { PreyEntity } from './characters/prey/prey-types';

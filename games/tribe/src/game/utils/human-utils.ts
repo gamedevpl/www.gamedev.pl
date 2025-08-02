@@ -1,5 +1,8 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { HUMAN_FEMALE_MAX_PROCREATION_AGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../world-consts';
+import {
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  HUMAN_HUNGER_THRESHOLD_CRITICAL
+} from '../human-consts.ts';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
 
 /**

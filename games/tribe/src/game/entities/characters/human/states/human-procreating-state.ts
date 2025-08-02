@@ -5,8 +5,8 @@ import { EntityId } from '../../../entities-types';
 import {
   HUMAN_GESTATION_PERIOD_HOURS,
   HUMAN_PROCREATION_COOLDOWN_HOURS,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL,
-} from '../../../../world-consts';
+  HUMAN_HUNGER_THRESHOLD_CRITICAL
+} from '../../../../human-consts.ts';
 import { playSoundAt } from '../../../../sound/sound-manager';
 import { SoundType } from '../../../../sound/sound-types';
 

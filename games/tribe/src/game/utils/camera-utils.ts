@@ -2,7 +2,9 @@ import { GameWorldState } from '../world-types';
 import { Vector2D } from './math-types';
 import { findPlayerEntity } from './world-utils';
 import { vectorLerp } from './math-utils';
-import { VIEWPORT_FOLLOW_SPEED } from '../world-consts';
+import {
+  VIEWPORT_FOLLOW_SPEED
+} from '../game-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 
 export const updateViewportCenter = (

@@ -1,7 +1,10 @@
 import { CorpseEntity } from './corpse-types';
 import { UpdateContext } from '../../world-types';
 import { removeEntity } from '../entities-update';
-import { HUMAN_CORPSE_DECAY_TIME_HOURS, HUMAN_CORPSE_INITIAL_FOOD } from '../../world-consts';
+import {
+  HUMAN_CORPSE_DECAY_TIME_HOURS,
+  HUMAN_CORPSE_INITIAL_FOOD
+} from '../../human-consts.ts';
 
 /**
  * Updates a corpse entity, handling its decay over time.

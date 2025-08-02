@@ -1,5 +1,7 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
-import { AI_UPDATE_INTERVAL } from '../../world-consts';
+import {
+  AI_UPDATE_INTERVAL
+} from '../../ai-consts.ts';
 import { UpdateContext } from '../../world-types';
 
 /**

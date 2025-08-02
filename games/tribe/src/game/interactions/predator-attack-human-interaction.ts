@@ -5,11 +5,15 @@ import {
   PREDATOR_ATTACK_RANGE,
   PREDATOR_ATTACK_DAMAGE,
   PREDATOR_ATTACK_COOLDOWN_HOURS,
-  PREDATOR_MEAT_HUNGER_REDUCTION,
-  EFFECT_DURATION_SHORT_HOURS,
+  PREDATOR_MEAT_HUNGER_REDUCTION
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
+import {
   HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
-  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
-} from '../world-consts';
+  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS
+} from '../human-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

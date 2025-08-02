@@ -3,8 +3,8 @@ import {
   HUMAN_OLD_AGE_FOR_SPEED_REDUCTION_THRESHOLD,
   HUMAN_OLD_AGE_SPEED_MODIFIER,
   HUMAN_HUNGER_THRESHOLD_SLOW,
-  HUMAN_SLOW_SPEED_MODIFIER,
-} from '../../../world-consts';
+  HUMAN_SLOW_SPEED_MODIFIER
+} from '../../../human-consts.ts';
 import { HumanEntity } from './human-types';
 
 export function getEffectiveSpeed(human: HumanEntity): number {

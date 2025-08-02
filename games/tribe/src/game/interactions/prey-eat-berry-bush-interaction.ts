@@ -4,9 +4,11 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import {
   PREY_INTERACTION_RANGE,
   PREY_EATING_COOLDOWN_HOURS,
-  PREY_BERRY_BUSH_DAMAGE,
-  EFFECT_DURATION_SHORT_HOURS,
-} from '../world-consts';
+  PREY_BERRY_BUSH_DAMAGE
+} from '../animal-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';

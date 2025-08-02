@@ -1,4 +1,8 @@
-import { UI_PAUSE_FONT_SIZE, UI_PAUSE_OVERLAY_COLOR, UI_PAUSE_TEXT_COLOR } from '../../world-consts';
+import {
+  UI_PAUSE_FONT_SIZE,
+  UI_PAUSE_OVERLAY_COLOR,
+  UI_PAUSE_TEXT_COLOR
+} from '../../ui-consts.ts';
 
 export function renderPauseOverlay(ctx: CanvasRenderingContext2D): void {
   ctx.save();

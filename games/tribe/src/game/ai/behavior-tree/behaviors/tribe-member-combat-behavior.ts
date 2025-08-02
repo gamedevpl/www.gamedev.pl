@@ -4,10 +4,12 @@ import {
   AI_FLEE_HEALTH_THRESHOLD,
   AI_TRIBE_BATTLE_RADIUS,
   ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER,
-  EFFECT_DURATION_SHORT_HOURS,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING,
-  MAX_TRIBE_ATTACKERS_PER_TARGET,
-} from '../../../world-consts';
+  MAX_TRIBE_ATTACKERS_PER_TARGET
+} from '../../../ai-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../../../effect-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { IndexedWorldState } from '../../../world-index/world-index-types';

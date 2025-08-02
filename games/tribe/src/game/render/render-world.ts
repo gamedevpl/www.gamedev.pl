@@ -20,8 +20,8 @@ import {
   UI_TUTORIAL_HIGHLIGHT_COLOR,
   UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
-  UI_TUTORIAL_HIGHLIGHT_RADIUS,
-} from '../world-consts';
+  UI_TUTORIAL_HIGHLIGHT_RADIUS
+} from '../ui-consts.ts';
 import { renderEntityHighlight } from './render-highlights';
 import { renderWithWrapping } from './render-utils';
 

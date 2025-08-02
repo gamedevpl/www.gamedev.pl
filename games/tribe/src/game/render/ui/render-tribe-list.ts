@@ -7,8 +7,8 @@ import {
   UI_TRIBE_LIST_MINIATURE_SIZE,
   UI_TRIBE_LIST_PADDING,
   UI_TRIBE_LIST_SPACING,
-  UI_BUTTON_HOVER_BACKGROUND_COLOR,
-} from '../../world-consts';
+  UI_BUTTON_HOVER_BACKGROUND_COLOR
+} from '../../ui-consts.ts';
 import { ClickableUIButton, TribeInfo, UIButtonActionType } from '../../ui/ui-types';
 import { renderMiniatureCharacter } from './render-characters-ui';
 import { DiplomacyStatus, GameWorldState } from '../../world-types';

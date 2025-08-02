@@ -1,5 +1,10 @@
 import { State } from '../../../../state-machine/state-machine-types';
-import { HUMAN_FOOD_HUNGER_REDUCTION, EFFECT_DURATION_SHORT_HOURS } from '../../../../world-consts';
+import {
+  HUMAN_FOOD_HUNGER_REDUCTION
+} from '../../../../human-consts.ts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../../../../effect-consts.ts';
 import { HumanEntity } from '../human-types';
 import { HumanStateData, HUMAN_EATING, HUMAN_IDLE } from './human-state-types';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';

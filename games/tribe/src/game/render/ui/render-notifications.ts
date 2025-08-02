@@ -12,8 +12,8 @@ import {
   UI_NOTIFICATION_PANEL_BORDER_RADIUS,
   UI_NOTIFICATION_SLIDE_IN_DURATION_MS,
   UI_NOTIFICATION_AREA_PADDING_BOTTOM,
-  UI_NOTIFICATION_BUTTON_HOVER_COLOR,
-} from '../../world-consts';
+  UI_NOTIFICATION_BUTTON_HOVER_COLOR
+} from '../../ui-consts.ts';
 import { Rect } from '../../notifications/notification-types';
 
 /**

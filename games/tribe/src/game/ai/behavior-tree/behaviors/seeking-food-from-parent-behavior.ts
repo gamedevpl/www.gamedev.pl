@@ -2,8 +2,8 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  PARENT_FEEDING_RANGE,
-} from '../../../world-consts';
+  PARENT_FEEDING_RANGE
+} from '../../../human-consts.ts';
 import { UpdateContext } from '../../../world-types';
 import { findClosestEntity, findParents } from '../../../utils';
 import { Blackboard } from '../behavior-tree-blackboard';

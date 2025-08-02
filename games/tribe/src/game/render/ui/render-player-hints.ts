@@ -2,8 +2,8 @@ import {
   PLAYER_ACTION_HINT_FONT_SIZE,
   PLAYER_ACTION_OUTLINE_COLOR,
   PLAYER_ACTION_OUTLINE_DASH_PATTERN,
-  PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
-} from '../../world-consts';
+  PLAYER_ACTION_OUTLINE_RADIUS_OFFSET
+} from '../../ui-consts.ts';
 import { Vector2D } from '../../utils/math-types';
 import { PlayerActionHint, PLAYER_ACTION_EMOJIS, PlayerActionType } from '../../ui/ui-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';

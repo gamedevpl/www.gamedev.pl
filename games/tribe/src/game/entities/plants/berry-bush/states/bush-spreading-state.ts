@@ -4,7 +4,10 @@ import { BushSpreadingStateData, BUSH_DYING, BUSH_FULL, BUSH_SPREADING } from '.
 import { isPositionOccupied } from '../../../../utils/world-utils';
 import { getRandomNearbyPosition } from '../../../../utils/world-utils';
 import { createBerryBush } from '../../../entities-update'; // Adjusted path
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../world-consts';
+import {
+  HOURS_PER_GAME_DAY,
+  GAME_DAY_IN_REAL_SECONDS
+} from '../../../../game-consts.ts';
 
 export const bushSpreadingState: State<BerryBushEntity, BushSpreadingStateData> = {
   id: BUSH_SPREADING,

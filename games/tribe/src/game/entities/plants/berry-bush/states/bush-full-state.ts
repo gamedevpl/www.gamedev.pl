@@ -3,12 +3,16 @@ import { BerryBushEntity } from '../berry-bush-types';
 import { BushFullStateData, BUSH_DYING, BUSH_SPREADING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
 import {
   HOURS_PER_GAME_DAY,
-  GAME_DAY_IN_REAL_SECONDS,
-  BERRY_BUSH_SPREAD_COOLDOWN_HOURS,
-} from '../../../../world-consts';
+  GAME_DAY_IN_REAL_SECONDS
+} from '../../../../game-consts';
+import {
+  BERRY_BUSH_SPREAD_COOLDOWN_HOURS
+} from '../../../../berry-bush-consts';
 import { addVisualEffect } from '../../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
-import { EFFECT_DURATION_SHORT_HOURS } from '../../../../world-consts';
+import {
+  EFFECT_DURATION_SHORT_HOURS
+} from '../../../../effect-consts';
 
 export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
   id: BUSH_FULL,

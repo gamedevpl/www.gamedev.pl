@@ -1,6 +1,8 @@
 import {
   GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY,
+  HOURS_PER_GAME_DAY
+} from '../../../game-consts.ts';
+import {
   HUMAN_HUNGER_INCREASE_PER_HOUR,
   HUMAN_HUNGER_DEATH,
   CHILD_TO_ADULT_AGE,
@@ -12,15 +14,21 @@ import {
   ADULT_CHILD_FEEDING_RANGE,
   ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
-  HUNGER_EFFECT_THRESHOLD,
-  EFFECT_DURATION_MEDIUM_HOURS,
-  CHARACTER_CHILD_RADIUS,
-  CHARACTER_RADIUS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
-  HITPOINT_REGEN_HUNGER_MODIFIER,
+  HITPOINT_REGEN_HUNGER_MODIFIER
+} from '../../../human-consts.ts';
+import {
+  HUNGER_EFFECT_THRESHOLD,
+  EFFECT_DURATION_MEDIUM_HOURS
+} from '../../../effect-consts.ts';
+import {
+  CHARACTER_CHILD_RADIUS,
+  CHARACTER_RADIUS
+} from '../../../ui-consts.ts';
+import {
   CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
-  NOTIFICATION_DURATION_MEDIUM_HOURS,
-} from '../../../world-consts';
+  NOTIFICATION_DURATION_MEDIUM_HOURS
+} from '../../../notification-consts.ts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';

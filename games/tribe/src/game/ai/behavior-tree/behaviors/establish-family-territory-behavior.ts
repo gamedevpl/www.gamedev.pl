@@ -5,9 +5,11 @@ import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../
 import {
   ADULT_MALE_FAMILY_DISTANCE_RADIUS,
   BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
-  ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
-  HUMAN_INTERACTION_PROXIMITY,
-} from '../../../world-consts';
+  ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS
+} from '../../../ai-consts.ts';
+import {
+  HUMAN_INTERACTION_PROXIMITY
+} from '../../../human-consts.ts';
 import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
