@@ -3,13 +3,14 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
 import {
-  CHARACTER_RADIUS,
-  CORPSE_MEAT_ICON_SIZE
-} from '../ui-consts.ts';
+  CHARACTER_RADIUS
+} from '../ui-consts';
 import {
   HUMAN_MAX_FOOD
-} from '../human-consts.ts';
+} from '../human-consts';
 import { FOOD_TYPE_EMOJIS } from '../food/food-types';
+
+const CORPSE_MEAT_ICON_SIZE = 9;
 
 /**
  * Renders a corpse on the canvas based on its original entity type.

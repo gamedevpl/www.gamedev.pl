@@ -43,7 +43,6 @@ export const UI_HITPOINTS_BAR_COLOR = '#4CAF50'; // Green for health
 export const UI_AGE_BAR_COLOR = '#2196F3';
 export const UI_TIME_BAR_COLOR = '#FFC107';
 export const UI_BERRY_ICON_SIZE = 16;
-export const CORPSE_MEAT_ICON_SIZE = 9;
 export const UI_MINIATURE_CHARACTER_SIZE = 32;
 export const UI_FAMILY_MEMBER_ICON_SIZE = 28;
 export const UI_MINIATURE_PLAYER_CROWN_SIZE = 10;
