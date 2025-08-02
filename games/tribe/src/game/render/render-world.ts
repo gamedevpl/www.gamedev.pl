@@ -24,6 +24,7 @@ import {
 } from '../ui-consts.ts';
 import { renderEntityHighlight } from './render-highlights';
 import { renderWithWrapping } from './render-utils';
+import { renderEnvironmentalObject } from './render-environment';
 
 export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldState, isDebugOn: boolean): void {
   const player = findPlayerEntity(gameState);
@@ -31,6 +32,16 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
   const playerHeir = findHeir(playerChildren);
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // Render environmental objects (trees, rocks, flowers) - sorted by Y position for depth
+  const sortedEnvironmentalObjects = [...gameState.environmentalObjects].sort(
+    (a, b) => a.position.y - b.position.y,
+  );
+  
+  sortedEnvironmentalObjects.forEach((envObject) => {
+    // Simple rendering without wrapping for now (environmental objects are typically large enough not to need wrapping)
+    renderEnvironmentalObject(ctx, envObject);
+  });
 
   const sortedEntities = Array.from(gameState.entities.entities.values()).sort(
     (a, b) => a.position.y - b.position.y || a.id - b.id,

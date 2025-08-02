@@ -11,6 +11,7 @@ import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-typ
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
 import { TerrainMap } from './terrain/terrain-types';
+import { EnvironmentalObject } from './environment/environment-types';
 
 export enum DiplomacyStatus {
   Friendly = 'Friendly',
@@ -58,6 +59,7 @@ export interface GameWorldState {
     height: number;
   };
   terrainMap: TerrainMap; // Tile-based terrain system
+  environmentalObjects: EnvironmentalObject[]; // Static decorative objects
   generationCount: number; // Number of generations that have passed
   gameOver: boolean; // Flag to indicate if the game is over
   causeOfGameOver?: string; // Optional cause of game over

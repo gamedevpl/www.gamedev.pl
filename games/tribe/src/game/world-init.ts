@@ -32,6 +32,7 @@ import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 import { generateTerrainMap } from './terrain/terrain-generator';
+import { generateEnvironmentalObjects } from './environment/environment-generator';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -39,6 +40,9 @@ export function initWorld(): GameWorldState {
 
   // Generate terrain map
   const terrainMap = generateTerrainMap(MAP_WIDTH, MAP_HEIGHT);
+  
+  // Generate environmental objects
+  const environmentalObjects = generateEnvironmentalObjects(MAP_WIDTH, MAP_HEIGHT);
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
@@ -129,6 +133,7 @@ export function initWorld(): GameWorldState {
       height: MAP_HEIGHT,
     },
     terrainMap: terrainMap,
+    environmentalObjects: environmentalObjects,
     generationCount: 1, // Start with generation 1 as per GDD context for player
     gameOver: false,
     visualEffects: [],
@@ -195,6 +200,9 @@ export function initIntroWorld(): GameWorldState {
 
   // Generate terrain map
   const terrainMap = generateTerrainMap(MAP_WIDTH, MAP_HEIGHT);
+  
+  // Generate environmental objects
+  const environmentalObjects = generateEnvironmentalObjects(MAP_WIDTH, MAP_HEIGHT);
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
@@ -258,6 +266,7 @@ export function initIntroWorld(): GameWorldState {
       height: MAP_HEIGHT,
     },
     terrainMap: terrainMap,
+    environmentalObjects: environmentalObjects,
     generationCount: 0,
     gameOver: false,
     visualEffects: [],
