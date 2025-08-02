@@ -3,10 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { App } from './components/app';
 import { GameProvider } from './context/game-context';
 import { initSoundLoader } from './game/sound/sound-loader';
+import { initImageLoader } from './game/assets/image-loader';
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
-  initSoundLoader().then(() => {
+  // Load both sound and image assets
+  Promise.all([initSoundLoader(), initImageLoader()]).then(() => {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <GameProvider initialAppState={document.location.hash === '#game' ? 'game' : 'intro'}>
