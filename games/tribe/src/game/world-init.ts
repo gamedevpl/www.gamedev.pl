@@ -31,10 +31,14 @@ import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
+import { generateTerrainMap } from './terrain/terrain-generator';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0; // Game starts at time 0
+
+  // Generate terrain map
+  const terrainMap = generateTerrainMap(MAP_WIDTH, MAP_HEIGHT);
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
@@ -124,6 +128,7 @@ export function initWorld(): GameWorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    terrainMap: terrainMap,
     generationCount: 1, // Start with generation 1 as per GDD context for player
     gameOver: false,
     visualEffects: [],
@@ -188,6 +193,9 @@ export function initIntroWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0;
 
+  // Generate terrain map
+  const terrainMap = generateTerrainMap(MAP_WIDTH, MAP_HEIGHT);
+
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
     const randomPosition = {
@@ -249,6 +257,7 @@ export function initIntroWorld(): GameWorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    terrainMap: terrainMap,
     generationCount: 0,
     gameOver: false,
     visualEffects: [],

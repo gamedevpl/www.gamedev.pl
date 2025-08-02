@@ -24,6 +24,7 @@ import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
 import { renderNotifications } from './render/render-ui';
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
+import { renderTerrain } from './render/render-terrain';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -37,10 +38,18 @@ export function renderGame(
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  ctx.fillStyle = '#2c5234';
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
+  // Apply viewport transformation
   ctx.translate(ctx.canvas.width / 2 - viewportCenter.x, ctx.canvas.height / 2 - viewportCenter.y);
+
+  // Render terrain background instead of solid color
+  renderTerrain(
+    ctx, 
+    gameState.terrainMap, 
+    viewportCenter.x - ctx.canvas.width / 2, 
+    viewportCenter.y - ctx.canvas.height / 2, 
+    ctx.canvas.width, 
+    ctx.canvas.height
+  );
 
   if (!isIntro && gameState.gameOver) {
     ctx.restore(); // Restore before drawing UI
