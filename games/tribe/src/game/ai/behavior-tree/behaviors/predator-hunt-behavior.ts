@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import {
   PREDATOR_HUNT_RANGE
 } from '../../../animal-consts.ts';

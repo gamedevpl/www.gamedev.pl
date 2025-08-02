@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import {
   PREY_FLEE_DISTANCE,
   PREY_INTERACTION_RANGE

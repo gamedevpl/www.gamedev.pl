@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import {
   PREY_MIN_PROCREATION_AGE,
   PREY_MAX_PROCREATION_AGE,
