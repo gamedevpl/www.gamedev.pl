@@ -22,6 +22,7 @@ describe('Game Rendering', () => {
       false, // isDebugOn
       gameState.viewportCenter, // viewportCenter
       [], // playerActionHints
+      { width: canvas.width, height: canvas.height }, // canvasDimensions
     );
 
     // Assert that a pixel at (10, 10) has the expected background color

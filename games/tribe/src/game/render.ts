@@ -5,7 +5,7 @@ import {
   UI_TEXT_SHADOW_COLOR,
   UI_TEXT_COLOR,
   UI_NOTIFICATION_HIGHLIGHT_COLOR,
-  UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED
+  UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED,
 } from './ui-consts.ts';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils';
@@ -31,6 +31,7 @@ export function renderGame(
   isDebugOn: boolean,
   viewportCenter: Vector2D,
   playerActionHints: PlayerActionHint[],
+  canvasDimensions: { width: number; height: number },
   isIntro: boolean = false,
   isEcosystemDebugOn: boolean = false,
 ): void {
@@ -48,7 +49,7 @@ export function renderGame(
     return;
   }
 
-  renderWorld(ctx, gameState, isDebugOn);
+  renderWorld(ctx, gameState, isDebugOn, viewportCenter, canvasDimensions);
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);

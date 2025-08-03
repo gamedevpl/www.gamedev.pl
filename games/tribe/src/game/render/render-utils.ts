@@ -59,6 +59,35 @@ export function worldToScreenCoords(
 }
 
 /**
+ * Checks if an entity is within the visible viewport (frustum culling).
+ * @param entity The entity to check.
+ * @param viewportCenter The center of the viewport in world coordinates.
+ * @param canvasDimensions The dimensions of the canvas.
+ * @param mapDimensions The dimensions of the game world.
+ * @returns True if the entity is at least partially visible, false otherwise.
+ */
+export function isEntityInView(
+  entity: Entity | VisualEffect,
+  viewportCenter: Vector2D,
+  canvasDimensions: { width: number; height: number },
+  mapDimensions: { width: number; height: number },
+): boolean {
+  const screenPos = worldToScreenCoords(entity.position, viewportCenter, canvasDimensions, mapDimensions);
+
+  // Use the entity's radius, or a default if it's not present (e.g., for some visual effects)
+  const radius = 'radius' in entity ? entity.radius : 20;
+  const margin = radius + 20; // Add a margin to avoid culling things just off-screen
+
+  return (
+    screenPos.x >= -margin &&
+    screenPos.x <= canvasDimensions.width + margin &&
+    screenPos.y >= -margin &&
+    screenPos.y <= canvasDimensions.height + margin
+  );
+}
+
+
+/**
  * Renders an entity or visual effect with wrapping around the game world boundaries.
  * @param ctx The canvas rendering context.
  * @param worldWidth The width of the game world.

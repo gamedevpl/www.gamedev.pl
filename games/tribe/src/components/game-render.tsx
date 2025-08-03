@@ -36,6 +36,7 @@ export const GameRender: React.FC<GameRenderProps> = ({
           isDebugOnRef.current === true,
           viewportCenterRef.current,
           playerActionHintsRef.current,
+          { width: canvas.width, height: canvas.height },
           false, // isIntro
           false, // isEcosystemDebugOn - not available in this context
         );

@@ -10,7 +10,7 @@ import { renderPredator } from './render-predator';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
-import { findChildren, findHeir, findPlayerEntity } from '../utils/world-utils';
+import { findChildren, findHeir, findPlayerEntity } from '../utils';
 import { renderVisualEffect } from './render-effects';
 import {
   UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR,
@@ -20,12 +20,19 @@ import {
   UI_TUTORIAL_HIGHLIGHT_COLOR,
   UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
-  UI_TUTORIAL_HIGHLIGHT_RADIUS
+  UI_TUTORIAL_HIGHLIGHT_RADIUS,
 } from '../ui-consts.ts';
 import { renderEntityHighlight } from './render-highlights';
-import { renderWithWrapping } from './render-utils';
+import { isEntityInView, renderWithWrapping } from './render-utils';
+import { Vector2D } from '../utils/math-types';
 
-export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldState, isDebugOn: boolean): void {
+export function renderWorld(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  isDebugOn: boolean,
+  viewportCenter: Vector2D,
+  canvasDimensions: { width: number; height: number },
+): void {
   const player = findPlayerEntity(gameState);
   const playerChildren = player ? findChildren(gameState, player) : [];
   const playerHeir = findHeir(playerChildren);
@@ -36,7 +43,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
     (a, b) => a.position.y - b.position.y || a.id - b.id,
   );
 
-  sortedEntities.forEach((entity: Entity) => {
+  const visibleEntities = sortedEntities.filter((entity) =>
+    isEntityInView(entity, viewportCenter, canvasDimensions, gameState.mapDimensions),
+  );
+
+  visibleEntities.forEach((entity: Entity) => {
     if (entity.type === 'berryBush') {
       renderWithWrapping(
         ctx,
@@ -111,7 +122,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
     }
   });
 
-  gameState.visualEffects.forEach((effect) => {
+  const visibleVisualEffects = gameState.visualEffects.filter((effect) =>
+    isEntityInView(effect, viewportCenter, canvasDimensions, gameState.mapDimensions),
+  );
+
+  visibleVisualEffects.forEach((effect) => {
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
 
@@ -121,7 +136,10 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
     if (notification.highlightedEntityIds && notification.renderHighlights) {
       for (const highlightedEntityId of notification.highlightedEntityIds) {
         const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
-        if (highlightedEntity) {
+        if (
+          highlightedEntity &&
+          isEntityInView(highlightedEntity, viewportCenter, canvasDimensions, gameState.mapDimensions)
+        ) {
           renderWithWrapping(
             ctx,
             worldWidth,
@@ -143,7 +161,10 @@ export function renderWorld(ctx: CanvasRenderingContext2D, gameState: GameWorldS
   if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityIds.size > 0) {
     for (const highlightedEntityId of gameState.tutorialState.highlightedEntityIds) {
       const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
-      if (highlightedEntity) {
+      if (
+        highlightedEntity &&
+        isEntityInView(highlightedEntity, viewportCenter, canvasDimensions, gameState.mapDimensions)
+      ) {
         renderWithWrapping(
           ctx,
           worldWidth,

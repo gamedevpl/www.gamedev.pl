@@ -1,16 +1,16 @@
-import React, { useRef, useEffect } from "react";
-import { useRafLoop } from "react-use";
-import { updateWorld } from "../game/world-update";
-import { GameWorldState } from "../game/world-types";
-import { renderGame } from "../game/render";
-import { findPlayerEntity, getAvailablePlayerActions } from "../game/utils/world-utils";
-import { playSound } from "../game/sound/sound-utils";
-import { SoundType } from "../game/sound/sound-types";
-import { Vector2D } from "../game/utils/math-types";
-import { PlayerActionHint } from "../game/ui/ui-types";
-import { GameInputController } from "./game-input-controller";
-import { updateViewportCenter } from "../game/utils/camera-utils";
-import { AppState } from "../context/game-context";
+import React, { useRef, useEffect } from 'react';
+import { useRafLoop } from 'react-use';
+import { updateWorld } from '../game/world-update';
+import { GameWorldState } from '../game/world-types';
+import { renderGame } from '../game/render';
+import { findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
+import { playSound } from '../game/sound/sound-utils';
+import { SoundType } from '../game/sound/sound-types';
+import { Vector2D } from '../game/utils/math-types';
+import { PlayerActionHint } from '../game/ui/ui-types';
+import { GameInputController } from './game-input-controller';
+import { updateViewportCenter } from '../game/utils/camera-utils';
+import { AppState } from '../context/game-context';
 
 interface GameWorldControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
@@ -65,19 +65,20 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       isDebugOnRef.current,
       viewportCenterRef.current,
       playerActionHintsRef.current,
+      { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
       false, // isIntro
       isEcosystemDebugOnRef.current, // isEcosystemDebugOn
     );
     lastUpdateTimeRef.current = time;
 
-    if (gameStateRef.current.gameOver && appState !== "gameOver") {
+    if (gameStateRef.current.gameOver && appState !== 'gameOver') {
       playSound(SoundType.GameOver, {
         masterVolume: gameStateRef.current.masterVolume,
         isMuted: gameStateRef.current.isMuted,
       });
-      setAppState("gameOver", {
+      setAppState('gameOver', {
         generations: gameStateRef.current.generationCount,
-        cause: gameStateRef.current.causeOfGameOver || "Unknown",
+        cause: gameStateRef.current.causeOfGameOver || 'Unknown',
       });
     }
   }, false);

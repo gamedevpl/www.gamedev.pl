@@ -9,10 +9,7 @@ import { GameWorldState } from '../game/world-types';
 import { findAllHumans } from '../game/utils/world-utils';
 import { vectorLerp } from '../game/utils/math-utils';
 import { Vector2D } from '../game/utils/math-types';
-import {
-  INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS,
-  VIEWPORT_FOLLOW_SPEED
-} from '../game/game-consts';
+import { INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS, VIEWPORT_FOLLOW_SPEED } from '../game/game-consts';
 import { EntityId } from '../game/entities/entities-types';
 import { playSound, stopSound } from '../game/sound/sound-utils';
 import { SoundType } from '../game/sound/sound-types';
@@ -108,6 +105,7 @@ export const IntroScreen: React.FC = () => {
           false, // isDebugOn
           viewportCenterRef.current,
           [], // playerActionHints
+          { width: canvas.width, height: canvas.height }, // canvasDimensions
           true, // isIntro
           false, // isEcosystemDebugOn
         );
@@ -189,6 +187,7 @@ export const IntroScreen: React.FC = () => {
       false, // isDebugOn
       viewportCenterRef.current,
       [], // playerActionHints
+      { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
       true, // isIntro
       false, // isEcosystemDebugOn
     );
