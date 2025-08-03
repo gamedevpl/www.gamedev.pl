@@ -19,10 +19,10 @@ describe('Game Rendering', () => {
     renderGame(
       ctx as unknown as CanvasRenderingContext2D, // Cast because node-canvas context is not identical to DOM one
       gameState,
-      false, // isDebugOn
       gameState.viewportCenter, // viewportCenter
       [], // playerActionHints
       { width: canvas.width, height: canvas.height }, // canvasDimensions
+      false, // isIntro
     );
 
     // Assert that a pixel at (10, 10) has the expected background color

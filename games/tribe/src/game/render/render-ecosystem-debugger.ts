@@ -5,9 +5,10 @@ import {
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   MAP_WIDTH,
-  MAP_HEIGHT
+  MAP_HEIGHT,
 } from '../game-consts.ts';
 import { IndexedWorldState } from '../world-index/world-index-types';
+import { UI_FONT_SIZE, UI_PADDING } from '../ui-consts.ts';
 
 interface PopulationHistory {
   time: number;
@@ -69,7 +70,7 @@ export function renderEcosystemDebugger(
   const panelWidth = 400;
   const panelHeight = Math.min(canvasHeight * 0.8, 600);
   const panelX = canvasWidth - panelWidth - 10;
-  const panelY = 10;
+  const panelY = UI_PADDING + UI_FONT_SIZE * 2;
 
   // Save context state
   ctx.save();

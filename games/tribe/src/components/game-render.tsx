@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { GameWorldState } from '../game/world-types';
+import { DebugPanelType, GameWorldState } from '../game/world-types';
 import { renderGame } from '../game/render';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
@@ -8,7 +8,7 @@ interface GameRenderProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   ctxRef: React.MutableRefObject<CanvasRenderingContext2D | null>;
   gameStateRef: React.RefObject<GameWorldState>;
-  isDebugOnRef: React.RefObject<boolean>;
+  debugPanelTypeRef: React.MutableRefObject<DebugPanelType>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
 }
@@ -17,7 +17,6 @@ export const GameRender: React.FC<GameRenderProps> = ({
   canvasRef,
   ctxRef,
   gameStateRef,
-  isDebugOnRef,
   viewportCenterRef,
   playerActionHintsRef,
 }) => {
@@ -33,12 +32,10 @@ export const GameRender: React.FC<GameRenderProps> = ({
         renderGame(
           ctxRef.current,
           gameStateRef.current,
-          isDebugOnRef.current === true,
           viewportCenterRef.current,
           playerActionHintsRef.current,
           { width: canvas.width, height: canvas.height },
           false, // isIntro
-          false, // isEcosystemDebugOn - not available in this context
         );
       }
     };

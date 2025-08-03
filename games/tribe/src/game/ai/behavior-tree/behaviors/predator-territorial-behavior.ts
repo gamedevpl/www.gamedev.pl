@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   PREDATOR_ATTACK_RANGE,
   PREDATOR_TERRITORIAL_RANGE

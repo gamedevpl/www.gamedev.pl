@@ -16,7 +16,7 @@ import {
   MAX_PREY_PROCREATION_COOLDOWN
 } from './animal-consts.ts';
 import { initWorld } from './world-init';
-import { GameWorldState } from './world-types';
+import { DebugPanelType, GameWorldState } from './world-types';
 
 export * from './notifications/notification-types';
 export * from './notifications/notification-utils';
@@ -40,6 +40,14 @@ export function initGame(): GameWorldState {
     preyHungerIncreasePerHour: MAX_PREY_HUNGER_INCREASE_PER_HOUR,
     predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
     berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
+  };
+
+  initialWorldState.debugPanel = DebugPanelType.None;
+  initialWorldState.performanceMetrics = {
+    fps: [],
+    worldUpdateTimes: [],
+    aiUpdateTimes: [],
+    gameRenderTimes: [],
   };
 
   return initialWorldState;

@@ -1,4 +1,4 @@
-import { GameWorldState } from './world-types';
+import { DebugPanelType, GameWorldState } from './world-types';
 import {
   UI_FONT_SIZE,
   UI_TEXT_SHADOW_BLUR,
@@ -22,18 +22,17 @@ import { renderWorld } from './render/render-world';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
-import { renderNotifications } from './render/render-ui';
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
+import { renderNotifications } from './render/ui/render-notifications';
+import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
-  isDebugOn: boolean,
   viewportCenter: Vector2D,
   playerActionHints: PlayerActionHint[],
   canvasDimensions: { width: number; height: number },
   isIntro: boolean = false,
-  isEcosystemDebugOn: boolean = false,
 ): void {
   ctx.save();
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -49,7 +48,7 @@ export function renderGame(
     return;
   }
 
-  renderWorld(ctx, gameState, isDebugOn, viewportCenter, canvasDimensions);
+  renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
@@ -174,9 +173,14 @@ export function renderGame(
     // --- Notifications Panel ---
     renderNotifications(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
 
-    // --- Ecosystem Debugger ---
-    if (isEcosystemDebugOn) {
-      renderEcosystemDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+    // --- Debug Panels ---
+    switch (gameState.debugPanel) {
+      case DebugPanelType.Ecosystem:
+        renderEcosystemDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+        break;
+      case DebugPanelType.Performance:
+        renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
+        break;
     }
 
     if (gameState.isPaused) {

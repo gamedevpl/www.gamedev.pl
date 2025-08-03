@@ -102,12 +102,10 @@ export const IntroScreen: React.FC = () => {
         renderGame(
           ctxRef.current,
           gameStateRef.current,
-          false, // isDebugOn
           viewportCenterRef.current,
           [], // playerActionHints
           { width: canvas.width, height: canvas.height }, // canvasDimensions
           true, // isIntro
-          false, // isEcosystemDebugOn
         );
       }
     };
@@ -184,12 +182,10 @@ export const IntroScreen: React.FC = () => {
     renderGame(
       ctxRef.current,
       gameStateRef.current,
-      false, // isDebugOn
       viewportCenterRef.current,
       [], // playerActionHints
       { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
       true, // isIntro
-      false, // isEcosystemDebugOn
     );
 
     lastUpdateTimeRef.current = time;

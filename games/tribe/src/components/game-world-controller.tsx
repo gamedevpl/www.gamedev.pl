@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/world-update';
-import { GameWorldState } from '../game/world-types';
+import { DebugPanelType, GameWorldState } from '../game/world-types';
 import { renderGame } from '../game/render';
 import { findPlayerEntity, getAvailablePlayerActions } from '../game/utils/world-utils';
 import { playSound } from '../game/sound/sound-utils';
@@ -11,12 +11,12 @@ import { PlayerActionHint } from '../game/ui/ui-types';
 import { GameInputController } from './game-input-controller';
 import { updateViewportCenter } from '../game/utils/camera-utils';
 import { AppState } from '../context/game-context';
+import { PERFORMANCE_METRICS_BUFFER_SIZE } from '../game/game-consts';
 
 interface GameWorldControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
   ctxRef: React.RefObject<CanvasRenderingContext2D | null>;
-  isDebugOnRef: React.MutableRefObject<boolean>;
-  isEcosystemDebugOnRef: React.MutableRefObject<boolean>;
+  debugPanelTypeRef: React.MutableRefObject<DebugPanelType>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
   keysPressed: React.MutableRefObject<Set<string>>;
@@ -28,8 +28,7 @@ interface GameWorldControllerProps {
 export const GameWorldController: React.FC<GameWorldControllerProps> = ({
   gameStateRef,
   ctxRef,
-  isDebugOnRef,
-  isEcosystemDebugOnRef,
+  debugPanelTypeRef,
   viewportCenterRef,
   playerActionHintsRef,
   keysPressed,
@@ -46,7 +45,21 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
     }
     const deltaTime = Math.min(time - lastUpdateTimeRef.current, 1000) / 1000; // Seconds (clamped to 1 second max)
 
+    const { performanceMetrics } = gameStateRef.current;
+
+    const fps = 1 / deltaTime;
+    performanceMetrics.fps.push(fps);
+    if (performanceMetrics.fps.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
+      performanceMetrics.fps.shift();
+    }
+
+    const worldUpdateStart = performance.now();
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
+    const worldUpdateTime = performance.now() - worldUpdateStart;
+    performanceMetrics.worldUpdateTimes.push(worldUpdateTime);
+    if (performanceMetrics.worldUpdateTimes.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
+      performanceMetrics.worldUpdateTimes.shift();
+    }
 
     const player = findPlayerEntity(gameStateRef.current);
 
@@ -59,16 +72,21 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
     // Update viewport center by calling the new utility function
     viewportCenterRef.current = updateViewportCenter(gameStateRef.current, viewportCenterRef.current, deltaTime);
 
+    const renderGameStart = performance.now();
     renderGame(
       ctxRef.current,
       gameStateRef.current,
-      isDebugOnRef.current,
       viewportCenterRef.current,
       playerActionHintsRef.current,
       { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
       false, // isIntro
-      isEcosystemDebugOnRef.current, // isEcosystemDebugOn
     );
+    const renderGameTime = performance.now() - renderGameStart;
+    performanceMetrics.gameRenderTimes.push(renderGameTime);
+    if (performanceMetrics.gameRenderTimes.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
+      performanceMetrics.gameRenderTimes.shift();
+    }
+
     lastUpdateTimeRef.current = time;
 
     if (gameStateRef.current.gameOver && appState !== 'gameOver') {
@@ -95,8 +113,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       canvasRef={canvasRef}
       viewportCenterRef={viewportCenterRef}
       playerActionHintsRef={playerActionHintsRef}
-      isDebugOnRef={isDebugOnRef}
-      isEcosystemDebugOnRef={isEcosystemDebugOnRef}
+      debugPanelTypeRef={debugPanelTypeRef}
       keysPressed={keysPressed}
     />
   );

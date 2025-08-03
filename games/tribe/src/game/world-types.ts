@@ -16,6 +16,20 @@ export enum DiplomacyStatus {
   Hostile = 'Hostile',
 }
 
+export enum DebugPanelType {
+  None,
+  General,
+  Performance,
+  Ecosystem,
+}
+
+export interface PerformanceMetrics {
+  fps: number[];
+  worldUpdateTimes: number[];
+  aiUpdateTimes: number[];
+  gameRenderTimes: number[];
+}
+
 export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotGather;
@@ -80,6 +94,8 @@ export interface GameWorldState {
     view: Map<string, Rect>;
   };
   ecosystem: EcosystemState;
+  debugPanel: DebugPanelType;
+  performanceMetrics: PerformanceMetrics;
 }
 
 export type UpdateContext = {

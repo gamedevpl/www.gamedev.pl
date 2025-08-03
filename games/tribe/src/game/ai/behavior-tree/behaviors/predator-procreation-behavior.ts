@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   PREDATOR_MIN_PROCREATION_AGE,
   PREDATOR_MAX_PROCREATION_AGE,

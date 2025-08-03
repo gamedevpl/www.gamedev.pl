@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { GameWorldState } from '../game/world-types';
+import { DebugPanelType, GameWorldState } from '../game/world-types';
 import { useGameContext } from '../context/game-context';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
@@ -18,8 +18,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const gameStateRef = useRef<GameWorldState>(initialState);
   const keysPressed = useRef<Set<string>>(new Set());
-  const isDebugOnRef = useRef<boolean>(false);
-  const isEcosystemDebugOnRef = useRef<boolean>(false);
+  const debugPanelTypeRef = useRef<DebugPanelType>(initialState.debugPanel);
   const viewportCenterRef = useRef<Vector2D>(initialState.viewportCenter);
   const playerActionHintsRef = useRef<PlayerActionHint[]>([]);
 
@@ -31,15 +30,14 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
         canvasRef={canvasRef}
         ctxRef={ctxRef}
         gameStateRef={gameStateRef}
-        isDebugOnRef={isDebugOnRef}
+        debugPanelTypeRef={debugPanelTypeRef}
         viewportCenterRef={viewportCenterRef}
         playerActionHintsRef={playerActionHintsRef}
       />
       <GameWorldController
         gameStateRef={gameStateRef}
         ctxRef={ctxRef}
-        isDebugOnRef={isDebugOnRef}
-        isEcosystemDebugOnRef={isEcosystemDebugOnRef}
+        debugPanelTypeRef={debugPanelTypeRef}
         viewportCenterRef={viewportCenterRef}
         playerActionHintsRef={playerActionHintsRef}
         keysPressed={keysPressed}

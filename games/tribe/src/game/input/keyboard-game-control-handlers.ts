@@ -1,9 +1,7 @@
-import { GameWorldState } from '../world-types';
+import { DebugPanelType, GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
-import {
-  FAST_FORWARD_AMOUNT_SECONDS
-} from '../tribe-consts.ts';
+import { FAST_FORWARD_AMOUNT_SECONDS } from '../tribe-consts.ts';
 import { findPlayerEntity } from '../utils/world-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 
@@ -14,15 +12,11 @@ import { HumanEntity } from '../entities/characters/human/human-types';
  *
  * @param key The key that was pressed (lowercase).
  * @param gameState The current game state.
- * @param isDebugOnRef A ref to the debug flag.
- * @param isEcosystemDebugOnRef A ref to the ecosystem debug flag.
  * @returns An object containing the potentially new game state and a boolean indicating if the key was handled.
  */
 export const handleGameControlKeyDown = (
   key: string,
   gameState: GameWorldState,
-  isDebugOnRef: React.MutableRefObject<boolean>,
-  isEcosystemDebugOnRef?: React.MutableRefObject<boolean>,
 ): { newState: GameWorldState; handled: boolean } => {
   let handled = true;
   let newState = gameState;
@@ -52,10 +46,23 @@ export const handleGameControlKeyDown = (
       break;
     case '§':
     case '`':
-      isDebugOnRef.current = !isDebugOnRef.current;
-      if (!isDebugOnRef.current) {
+      if (newState.debugPanel === DebugPanelType.General) {
+        newState.debugPanel = DebugPanelType.None;
         newState.debugCharacterId = undefined;
       } else {
+        newState.debugPanel = DebugPanelType.General;
+        if (!newState.debugCharacterId) {
+          newState.debugCharacterId =
+            findPlayerEntity(newState)?.id ??
+            Array.from(newState.entities.entities.values()).find(
+              (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
+            )?.id;
+        }
+      }
+      break;
+    case '1':
+      newState.debugPanel = DebugPanelType.Ecosystem;
+      if (!newState.debugCharacterId) {
         newState.debugCharacterId =
           findPlayerEntity(newState)?.id ??
           Array.from(newState.entities.entities.values()).find(
@@ -63,13 +70,14 @@ export const handleGameControlKeyDown = (
           )?.id;
       }
       break;
-    case '1':
-      if (isEcosystemDebugOnRef) {
-        isEcosystemDebugOnRef.current = !isEcosystemDebugOnRef.current;
-      }
+    case '2':
+      newState.debugPanel = DebugPanelType.Performance;
+      break;
+    case '3':
+      newState.debugPanel = DebugPanelType.Ecosystem;
       break;
     case 'tab':
-      isDebugOnRef.current = true; // Always turn on debug if cycling
+      newState.debugPanel = DebugPanelType.General; // Always turn on debug if cycling
 
       const allCharacters = Array.from(newState.entities.entities.values()).filter(
         (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',

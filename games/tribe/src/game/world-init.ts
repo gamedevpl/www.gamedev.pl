@@ -1,5 +1,5 @@
 import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
-import { GameWorldState } from './world-types';
+import { DebugPanelType, GameWorldState } from './world-types';
 import {
   MAP_WIDTH,
   MAP_HEIGHT,
@@ -151,6 +151,13 @@ export function initWorld(): GameWorldState {
     uiButtons,
     tutorial,
     tutorialState,
+    debugPanel: DebugPanelType.None,
+    performanceMetrics: {
+      fps: [],
+      worldUpdateTimes: [],
+      aiUpdateTimes: [],
+      gameRenderTimes: [],
+    },
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
     notifications: [
@@ -276,6 +283,13 @@ export function initIntroWorld(): GameWorldState {
     uiButtons: [], // No UI buttons in the intro
     tutorial,
     tutorialState,
+    debugPanel: DebugPanelType.None,
+    performanceMetrics: {
+      fps: [],
+      worldUpdateTimes: [],
+      aiUpdateTimes: [],
+      gameRenderTimes: [],
+    },
     hoveredButtonId: undefined,
     mousePosition: { x: 0, y: 0 },
     notifications: [],

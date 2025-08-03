@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { GameWorldState } from '../game/world-types';
+import { DebugPanelType, GameWorldState } from '../game/world-types';
 import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
 import { findPlayerEntity } from '../game/utils/world-utils';
@@ -20,8 +20,7 @@ interface GameInputControllerProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
-  isDebugOnRef: React.MutableRefObject<boolean>;
-  isEcosystemDebugOnRef: React.MutableRefObject<boolean>;
+  debugPanelTypeRef: React.MutableRefObject<DebugPanelType>;
   keysPressed: React.MutableRefObject<Set<string>>;
 }
 
@@ -31,8 +30,6 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   canvasRef,
   viewportCenterRef,
   playerActionHintsRef,
-  isDebugOnRef,
-  isEcosystemDebugOnRef,
   keysPressed,
 }) => {
   useEffect(() => {
@@ -188,7 +185,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       }
 
       // Handle game-wide controls first
-      const controlResult = handleGameControlKeyDown(key, gameStateRef.current, isDebugOnRef, isEcosystemDebugOnRef);
+      const controlResult = handleGameControlKeyDown(key, gameStateRef.current);
       gameStateRef.current = controlResult.newState;
       if (controlResult.handled) {
         return;
@@ -219,7 +216,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isActive, gameStateRef, playerActionHintsRef, isDebugOnRef, keysPressed]);
+  }, [isActive, gameStateRef, playerActionHintsRef, keysPressed]);
 
   return null;
 };
