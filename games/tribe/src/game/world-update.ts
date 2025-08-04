@@ -1,10 +1,5 @@
 import { GameWorldState } from './world-types';
-import {
-  GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY,
-  PERFORMANCE_METRICS_BUFFER_SIZE,
-  VIEWPORT_FOLLOW_SPEED,
-} from './game-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY, VIEWPORT_FOLLOW_SPEED } from './game-consts.ts';
 import { interactionsUpdate } from './interactions/interactions-update';
 import { entitiesUpdate } from './entities/entities-update';
 import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
@@ -53,8 +48,6 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     return currentState;
   }
 
-  const startTime = performance.now();
-
   while (realDeltaTimeSeconds > 0) {
     const indexedState = indexWorldState(currentState);
     const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
@@ -95,14 +88,6 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;
-  }
-
-  const duration = performance.now() - startTime;
-  if (currentState.performanceMetrics) {
-    currentState.performanceMetrics.worldUpdateTimes.push(duration);
-    if (currentState.performanceMetrics.worldUpdateTimes.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
-      currentState.performanceMetrics.worldUpdateTimes.shift();
-    }
   }
 
   return currentState;

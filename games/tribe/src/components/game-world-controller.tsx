@@ -47,19 +47,15 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
 
     const { performanceMetrics } = gameStateRef.current;
 
-    const fps = 1 / deltaTime;
-    performanceMetrics.fps.push(fps);
-    if (performanceMetrics.fps.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
-      performanceMetrics.fps.shift();
-    }
+    performanceMetrics.currentBucket = {
+      renderTime: 0,
+      worldUpdateTime: 0,
+      aiUpdateTime: 0,
+    };
 
     const worldUpdateStart = performance.now();
     gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
-    const worldUpdateTime = performance.now() - worldUpdateStart;
-    performanceMetrics.worldUpdateTimes.push(worldUpdateTime);
-    if (performanceMetrics.worldUpdateTimes.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
-      performanceMetrics.worldUpdateTimes.shift();
-    }
+    performanceMetrics.currentBucket.worldUpdateTime = performance.now() - worldUpdateStart;
 
     const player = findPlayerEntity(gameStateRef.current);
 
@@ -81,10 +77,13 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
       false, // isIntro
     );
-    const renderGameTime = performance.now() - renderGameStart;
-    performanceMetrics.gameRenderTimes.push(renderGameTime);
-    if (performanceMetrics.gameRenderTimes.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
-      performanceMetrics.gameRenderTimes.shift();
+    performanceMetrics.currentBucket.renderTime = performance.now() - renderGameStart;
+    performanceMetrics.history.push({
+      bucketTime: gameStateRef.current.time,
+      ...performanceMetrics.currentBucket,
+    });
+    if (performanceMetrics.history.length > PERFORMANCE_METRICS_BUFFER_SIZE) {
+      performanceMetrics.history.shift();
     }
 
     lastUpdateTimeRef.current = time;

@@ -4,16 +4,14 @@
  * This file serves as the entry point for the game's core logic.
  * It will contain functions to initialize and manage the game state.
  */
-import {
-  MIN_BERRY_BUSH_SPREAD_CHANCE
-} from './berry-bush-consts.ts';
+import { MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';
 import {
   MAX_PREDATOR_GESTATION_PERIOD,
   MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
   MAX_PREDATOR_PROCREATION_COOLDOWN,
   MAX_PREY_GESTATION_PERIOD,
   MAX_PREY_HUNGER_INCREASE_PER_HOUR,
-  MAX_PREY_PROCREATION_COOLDOWN
+  MAX_PREY_PROCREATION_COOLDOWN,
 } from './animal-consts.ts';
 import { initWorld } from './world-init';
 import { DebugPanelType, GameWorldState } from './world-types';
@@ -44,10 +42,12 @@ export function initGame(): GameWorldState {
 
   initialWorldState.debugPanel = DebugPanelType.None;
   initialWorldState.performanceMetrics = {
-    fps: [],
-    worldUpdateTimes: [],
-    aiUpdateTimes: [],
-    gameRenderTimes: [],
+    currentBucket: {
+      renderTime: 0,
+      worldUpdateTime: 0,
+      aiUpdateTime: 0,
+    },
+    history: [],
   };
 
   return initialWorldState;

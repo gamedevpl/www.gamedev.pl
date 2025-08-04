@@ -1,5 +1,6 @@
-import { GameWorldState } from '../../world-types';
+import { GameWorldState, PerformanceMetricsBucket } from '../../world-types';
 import { UI_FONT_SIZE, UI_PADDING } from '../../ui-consts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts';
 
 function calculateAverage(numbers: number[]): number {
   if (numbers.length === 0) {
@@ -7,6 +8,65 @@ function calculateAverage(numbers: number[]): number {
   }
   const sum = numbers.reduce((a, b) => a + b, 0);
   return sum / numbers.length;
+}
+
+function renderMetricGraph(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  data: number[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+) {
+  ctx.save();
+
+  // Draw background and border
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, width, height);
+
+  // Draw label
+  const avg = calculateAverage(data);
+  ctx.fillStyle = 'white';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${label}: ${avg.toFixed(2)}ms`, x + UI_PADDING, y + UI_PADDING + 8);
+
+  // Draw graph line
+  const maxValue = Math.max(...data, 1); // Avoid division by zero, ensure at least 1
+  const normalizedData = data.map((d) => (d / maxValue) * height);
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+
+  if (normalizedData.length > 1) {
+    ctx.moveTo(x, y + height - normalizedData[0]);
+
+    for (let i = 1; i < normalizedData.length; i++) {
+      const pointX = x + (i / (normalizedData.length - 1)) * width;
+      const pointY = y + height - normalizedData[i];
+      ctx.lineTo(pointX, pointY);
+    }
+  } else if (normalizedData.length === 1) {
+    // If there's only one point, draw a flat line across the graph
+    const pointY = y + height - normalizedData[0];
+    ctx.moveTo(x, pointY);
+    ctx.lineTo(x + width, pointY);
+  }
+  ctx.stroke();
+
+  // Draw max value label
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${maxValue.toFixed(2)}ms`, x + width - UI_PADDING, y + UI_PADDING + 8);
+
+  ctx.restore();
 }
 
 export function renderPerformanceDebugger(
@@ -19,14 +79,9 @@ export function renderPerformanceDebugger(
     return;
   }
 
-  const avgFps = calculateAverage(performanceMetrics.fps);
-  const avgWorldUpdateTime = calculateAverage(performanceMetrics.worldUpdateTimes);
-  const avgAiUpdateTime = calculateAverage(performanceMetrics.aiUpdateTimes);
-  const avgGameRenderTime = calculateAverage(performanceMetrics.gameRenderTimes);
-
   // Panel dimensions and position
-  const panelWidth = 260;
-  const panelHeight = 200;
+  const panelWidth = 280;
+  const panelHeight = 240;
   const panelX = canvasWidth - panelWidth - UI_PADDING;
   const panelY = UI_PADDING + UI_FONT_SIZE * 2;
 
@@ -34,7 +89,7 @@ export function renderPerformanceDebugger(
   ctx.save();
 
   // Draw panel background
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 2;
@@ -46,7 +101,6 @@ export function renderPerformanceDebugger(
   ctx.textAlign = 'left';
 
   let currentY = panelY + UI_PADDING + 5;
-  const lineHeight = 16;
   const leftMargin = panelX + UI_PADDING;
 
   // Title
@@ -58,37 +112,49 @@ export function renderPerformanceDebugger(
   // --- Display FPS ---
   ctx.fillStyle = 'white';
   ctx.font = '12px monospace';
+  const avgFps = calculateFps(gameState);
   ctx.fillText(`FPS: ${avgFps.toFixed(1)}`, leftMargin, currentY);
-  currentY += lineHeight * 1.5;
+  currentY += 20;
 
-  // --- Histograms ---
-  const histograms = [
-    { label: 'Render', time: avgGameRenderTime, color: '#4CAF50' }, // Green
-    { label: 'World Update', time: avgWorldUpdateTime, color: '#2196F3' }, // Blue
-    { label: 'AI Update', time: avgAiUpdateTime, color: '#FFC107' }, // Yellow
-  ];
+  // --- Graphs ---
+  const graphWidth = panelWidth - UI_PADDING * 2;
+  const graphHeight = 45;
+  const graphSpacing = 10;
 
-  const maxBarWidth = panelWidth - UI_PADDING * 2;
-  const barHeight = 12;
-  const scale = 10; // 1ms = 10px, adjusted for better visibility
+  renderMetricGraph(
+    ctx,
+    'Render',
+    getMetric(gameState, 'renderTime'),
+    leftMargin,
+    currentY,
+    graphWidth,
+    graphHeight,
+    '#4CAF50', // Green
+  );
+  currentY += graphHeight + graphSpacing;
 
-  for (const item of histograms) {
-    // Draw label and time
-    ctx.fillStyle = 'white';
-    ctx.fillText(`${item.label}: ${item.time.toFixed(2)}ms`, leftMargin, currentY);
-    currentY += lineHeight * 1.2;
+  renderMetricGraph(
+    ctx,
+    'World Update',
+    getMetric(gameState, 'worldUpdateTime'),
+    leftMargin,
+    currentY,
+    graphWidth,
+    graphHeight,
+    '#2196F3', // Blue
+  );
+  currentY += graphHeight + graphSpacing;
 
-    // Draw bar background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.fillRect(leftMargin, currentY, maxBarWidth, barHeight);
-
-    // Draw bar foreground
-    const barWidth = Math.min(item.time * scale, maxBarWidth);
-    ctx.fillStyle = item.color;
-    ctx.fillRect(leftMargin, currentY, barWidth, barHeight);
-
-    currentY += barHeight + UI_PADDING * 0.8;
-  }
+  renderMetricGraph(
+    ctx,
+    'AI Update',
+    getMetric(gameState, 'aiUpdateTime'),
+    leftMargin,
+    currentY,
+    graphWidth,
+    graphHeight,
+    '#FFC107', // Yellow
+  );
 
   // Footer
   ctx.fillStyle = '#888';
@@ -98,4 +164,56 @@ export function renderPerformanceDebugger(
 
   // Restore context state
   ctx.restore();
+}
+
+function calculateFps(gameState: GameWorldState): number {
+  const { performanceMetrics } = gameState;
+  if (!performanceMetrics || performanceMetrics.history.length === 0) {
+    return 0;
+  }
+  const lastBucketTime =
+    performanceMetrics.history[performanceMetrics.history.length - 1].bucketTime /
+    (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+  const frames = performanceMetrics.history.filter(
+    (bucket) => lastBucketTime - bucket.bucketTime / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS) < 1,
+  );
+  const frameCount = frames.length;
+  return frameCount;
+}
+
+/**
+ * Groups performance metrics from the frame history into per-second buckets.
+ * This is used to display a smoother, more readable graph than per-frame data.
+ * @param history - The performance metrics history buffer.
+ * @param key - The specific metric to extract (e.g., 'renderTime').
+ * @returns An array of numbers, where each number is the sum of the metric for one second.
+ */
+function bucketMetricsBySecond(
+  history: (PerformanceMetricsBucket & { bucketTime: number })[],
+  key: keyof PerformanceMetricsBucket,
+): number[] {
+  if (history.length === 0) {
+    return [];
+  }
+
+  const summedMetrics: Map<number, number> = new Map();
+
+  // Sum metrics for each second
+  for (const bucket of history) {
+    const second = Math.floor(bucket.bucketTime / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+    summedMetrics.set(second, (summedMetrics.get(second) || 0) + bucket[key]);
+  }
+
+  // Create the final array of metric values, sorted chronologically
+  const sortedSeconds = Array.from(summedMetrics.keys()).sort();
+  const result = sortedSeconds.map((second) => summedMetrics.get(second)!);
+
+  // ignore last bucket if it's not a full second
+  // als ignore first bucket if it's not a full second
+  return result.slice(0, -1).slice(1).reverse();
+}
+
+function getMetric(gameState: GameWorldState, key: keyof PerformanceMetricsBucket): number[] {
+  // Returns an array of metric values summed up per second for graph display.
+  return bucketMetricsBySecond(gameState.performanceMetrics.history, key);
 }

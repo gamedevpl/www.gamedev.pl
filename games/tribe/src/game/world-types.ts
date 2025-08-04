@@ -23,11 +23,17 @@ export enum DebugPanelType {
   Ecosystem,
 }
 
+export const PERFORMANCE_METRICS_HISTORY_LENGTH = 100;
+
+export type PerformanceMetricsBucket = {
+  renderTime: number; // Time taken to render the frame
+  worldUpdateTime: number; // Time taken to update the world state
+  aiUpdateTime: number; // Time taken to update AI behaviors
+};
+
 export interface PerformanceMetrics {
-  fps: number[];
-  worldUpdateTimes: number[];
-  aiUpdateTimes: number[];
-  gameRenderTimes: number[];
+  currentBucket: PerformanceMetricsBucket;
+  history: (PerformanceMetricsBucket & { bucketTime: number })[];
 }
 
 export type HoveredAutopilotAction =
