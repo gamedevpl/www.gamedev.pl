@@ -71,6 +71,22 @@ const StartButton = styled.button`
   }
 `;
 
+const AuthorInfo = styled.div`
+  position: absolute;
+  bottom: 1rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 2px 2px 0px #000;
+  a {
+    color: #fff;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
 const INTRO_SOUNDTRACK_ID = 'intro-soundtrack';
 
 export const IntroScreen: React.FC = () => {
@@ -207,6 +223,9 @@ export const IntroScreen: React.FC = () => {
       <Overlay>
         <Title>Tribe</Title>
         <StartButton onClick={handleStartGame}>Start Game</StartButton>
+        <AuthorInfo>
+          by <a href="https://github.com/gtanczyk" target="_blank" rel="noopener noreferrer">gtanczyk</a>
+        </AuthorInfo>
       </Overlay>
     </IntroContainer>
   );
