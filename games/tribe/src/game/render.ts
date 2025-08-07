@@ -25,6 +25,7 @@ import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
+import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -183,8 +184,12 @@ export function renderGame(
         break;
     }
 
-    if (gameState.isPaused) {
+    if (gameState.isPaused && gameState.exitConfirmation !== 'pending') {
       renderPauseOverlay(ctx);
+    }
+
+    if (gameState.exitConfirmation === 'pending') {
+      renderExitConfirmation(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
     }
   }
 }

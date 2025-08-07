@@ -5,7 +5,7 @@ import { updateWorld } from '../world-update';
 import {
   FAST_FORWARD_AMOUNT_SECONDS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS
+  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
 } from '../tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
@@ -22,12 +22,14 @@ import { HumanEntity } from '../entities/characters/human/human-types';
  * @param button The UI button that was clicked.
  * @param shift Whether the Shift key was held during the click.
  * @param gameState The current state of the game world.
+ * @param returnToIntro A function to return to the intro screen.
  * @returns The (potentially new) state of the game world.
  */
 export const handleUIButtonClick = (
   button: ClickableUIButton,
   shift: boolean,
   gameState: GameWorldState,
+  returnToIntro: () => void,
 ): GameWorldState => {
   const updateContext = { gameState, deltaTime: 0 };
   const player = findPlayerEntity(gameState);
@@ -56,6 +58,18 @@ export const handleUIButtonClick = (
 
   switch (button.action) {
     // --- System Controls ---
+    case UIButtonActionType.ReturnToIntro:
+      gameState.exitConfirmation = 'pending';
+      gameState.isPaused = true;
+      break;
+    case UIButtonActionType.ConfirmExitYes:
+      returnToIntro();
+      gameState.exitConfirmation = 'inactive';
+      break;
+    case UIButtonActionType.ConfirmExitNo:
+      gameState.exitConfirmation = 'inactive';
+      gameState.isPaused = false;
+      break;
     case UIButtonActionType.ToggleMute:
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);

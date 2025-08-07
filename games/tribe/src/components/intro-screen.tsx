@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { useGameContext } from '../context/game-context';
 import { useRafLoop } from 'react-use';
@@ -97,6 +97,24 @@ export const IntroScreen: React.FC = () => {
   const lastUpdateTimeRef = useRef<number>();
   const viewportCenterRef = useRef<Vector2D>(gameStateRef.current.viewportCenter);
   const focusedHumanIdRef = useRef<EntityId | undefined>();
+
+  const handleStartGame = useCallback(() => {
+    stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds
+    setAppState('game');
+  }, [setAppState]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        handleStartGame();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleStartGame]);
 
   useEffect(() => {
     playSound(SoundType.SoundTrack1, { loop: true, trackId: INTRO_SOUNDTRACK_ID });
@@ -211,11 +229,6 @@ export const IntroScreen: React.FC = () => {
     startLoop();
     return stopLoop;
   }, [startLoop, stopLoop]);
-
-  const handleStartGame = () => {
-    stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds
-    setAppState('game');
-  };
 
   return (
     <IntroContainer>

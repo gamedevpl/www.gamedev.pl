@@ -10,6 +10,7 @@ interface GameOverDetails {
 interface GameContextType {
   appState: AppState;
   setAppState: (state: AppState, details?: GameOverDetails) => void;
+  returnToIntro: () => void;
   gameOverDetails?: GameOverDetails;
 }
 
@@ -32,7 +33,16 @@ export const GameProvider: React.FC<{
     }
   };
 
-  return <GameContext.Provider value={{ appState, setAppState, gameOverDetails }}>{children}</GameContext.Provider>;
+  const returnToIntro = () => {
+    setAppStateValue('intro');
+    setGameOverDetails(undefined);
+  };
+
+  return (
+    <GameContext.Provider value={{ appState, setAppState, returnToIntro, gameOverDetails }}>
+      {children}
+    </GameContext.Provider>
+  );
 };
 
 export const useGameContext = () => {

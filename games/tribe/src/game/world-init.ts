@@ -100,6 +100,15 @@ export function initWorld(): GameWorldState {
       backgroundColor: '',
       textColor: UI_BUTTON_TEXT_COLOR,
     },
+    {
+      id: 'returnToIntroButton',
+      action: UIButtonActionType.ReturnToIntro,
+      currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: 'EXIT',
+      backgroundColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
   ];
 
   const tutorial = createTutorial();
@@ -118,6 +127,7 @@ export function initWorld(): GameWorldState {
     nextVisualEffectId: 0,
     viewportCenter: { ...player.position },
     isPaused: false,
+    exitConfirmation: 'inactive',
     autopilotControls: {
       behaviors: {
         procreation: false,
@@ -252,6 +262,7 @@ export function initIntroWorld(): GameWorldState {
     nextVisualEffectId: 0,
     viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
     isPaused: false,
+    exitConfirmation: 'inactive',
     autopilotControls: {
       behaviors: {
         procreation: false,

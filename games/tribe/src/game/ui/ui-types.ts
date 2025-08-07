@@ -113,6 +113,9 @@ export enum UIButtonActionType {
   TogglePause = 'TogglePause',
   FastForward = 'FastForward',
   DismissTutorial = 'DismissTutorial',
+  ReturnToIntro = 'ReturnToIntro',
+  ConfirmExitYes = 'ConfirmExitYes',
+  ConfirmExitNo = 'ConfirmExitNo',
 
   // --- Player Commands (One-Time Actions) ---
   CommandEat = 'CommandEat',

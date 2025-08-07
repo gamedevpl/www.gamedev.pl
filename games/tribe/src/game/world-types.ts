@@ -81,6 +81,7 @@ export interface GameWorldState {
   causeOfGameOver?: string; // Optional cause of game over
   viewportCenter: Vector2D;
   isPaused: boolean;
+  exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;

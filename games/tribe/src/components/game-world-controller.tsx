@@ -10,7 +10,7 @@ import { Vector2D } from '../game/utils/math-types';
 import { PlayerActionHint } from '../game/ui/ui-types';
 import { GameInputController } from './game-input-controller';
 import { updateViewportCenter } from '../game/utils/camera-utils';
-import { AppState } from '../context/game-context';
+import { AppState, useGameContext } from '../context/game-context';
 import { PERFORMANCE_METRICS_BUFFER_SIZE } from '../game/game-consts';
 
 interface GameWorldControllerProps {
@@ -37,6 +37,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
   appState,
 }) => {
   const lastUpdateTimeRef = useRef<number>();
+  const { returnToIntro } = useGameContext();
 
   const [stopLoop, startLoop, isActive] = useRafLoop((time) => {
     if (!ctxRef.current || !lastUpdateTimeRef.current) {
@@ -114,6 +115,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
       playerActionHintsRef={playerActionHintsRef}
       debugPanelTypeRef={debugPanelTypeRef}
       keysPressed={keysPressed}
+      returnToIntro={returnToIntro}
     />
   );
 };

@@ -20,7 +20,7 @@ import {
   UI_TOOLTIP_FONT_SIZE,
   UI_TOOLTIP_OFFSET_Y,
   UI_TOOLTIP_PADDING,
-  UI_TOOLTIP_TEXT_COLOR
+  UI_TOOLTIP_TEXT_COLOR,
 } from '../../ui-consts.ts';
 import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
@@ -145,6 +145,7 @@ export function renderUIButtons(
   const player = findPlayerEntity(gameState);
 
   // --- Update Button State & Definitions ---
+  gameState.uiButtons = []; // Clear previous buttons
 
   // 1. Define Top-Right System Buttons
   const systemButtons: ClickableUIButton[] = [
@@ -175,6 +176,16 @@ export function renderUIButtons(
       backgroundColor: gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
       tooltip: `Toggle Sound (${gameState.isMuted ? 'Muted' : 'Enabled'})`,
       currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+    {
+      id: 'returnToIntroButton',
+      action: UIButtonActionType.ReturnToIntro,
+      text: 'EXIT',
+      backgroundColor: UI_BUTTON_BACKGROUND_COLOR,
+      tooltip: 'Return to Main Menu [ESC]',
+      currentWidth: UI_BUTTON_WIDTH * 0.9,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       textColor: UI_BUTTON_TEXT_COLOR,
     },

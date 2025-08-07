@@ -22,6 +22,7 @@ interface GameInputControllerProps {
   playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
   debugPanelTypeRef: React.MutableRefObject<DebugPanelType>;
   keysPressed: React.MutableRefObject<Set<string>>;
+  returnToIntro: () => void;
 }
 
 export const GameInputController: React.FC<GameInputControllerProps> = ({
@@ -31,6 +32,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   viewportCenterRef,
   playerActionHintsRef,
   keysPressed,
+  returnToIntro,
 }) => {
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -57,7 +59,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       );
 
       if (clickedButton) {
-        gameStateRef.current = handleUIButtonClick(clickedButton, event.shiftKey, gameStateRef.current);
+        gameStateRef.current = handleUIButtonClick(clickedButton, event.shiftKey, gameStateRef.current, returnToIntro);
         return;
       }
 
@@ -75,7 +77,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
     };
-  }, [isActive, canvasRef, gameStateRef, viewportCenterRef]);
+  }, [isActive, canvasRef, gameStateRef, viewportCenterRef, returnToIntro]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -178,12 +180,6 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         event.preventDefault();
       }
 
-      if (key === 'escape') {
-        // Cancel active autopilot command
-        gameStateRef.current.autopilotControls.activeAutopilotAction = undefined;
-        return;
-      }
-
       // Handle game-wide controls first
       const controlResult = handleGameControlKeyDown(key, gameStateRef.current);
       gameStateRef.current = controlResult.newState;
@@ -216,7 +212,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isActive, gameStateRef, playerActionHintsRef, keysPressed]);
+  }, [isActive, gameStateRef, playerActionHintsRef, keysPressed, returnToIntro]);
 
   return null;
 };

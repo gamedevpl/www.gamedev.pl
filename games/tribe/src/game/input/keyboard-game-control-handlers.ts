@@ -12,6 +12,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
  *
  * @param key The key that was pressed (lowercase).
  * @param gameState The current game state.
+ * @param returnToIntro A function to return to the intro screen.
  * @returns An object containing the potentially new game state and a boolean indicating if the key was handled.
  */
 export const handleGameControlKeyDown = (
@@ -22,6 +23,27 @@ export const handleGameControlKeyDown = (
   let newState = gameState;
 
   switch (key) {
+    case 'escape':
+      const { autopilotControls } = gameState;
+      if (
+        autopilotControls.activeAutopilotAction ||
+        autopilotControls.isManuallyMoving ||
+        autopilotControls.isManuallyPlanting
+      ) {
+        autopilotControls.activeAutopilotAction = undefined;
+        autopilotControls.isManuallyMoving = false;
+        autopilotControls.isManuallyPlanting = false;
+      } else {
+        // Otherwise, handle exit confirmation.
+        if (newState.exitConfirmation === 'pending') {
+          newState.exitConfirmation = 'inactive';
+          newState.isPaused = false;
+        } else {
+          newState.exitConfirmation = 'pending';
+          newState.isPaused = true;
+        }
+      }
+      break;
     case 'm':
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);
