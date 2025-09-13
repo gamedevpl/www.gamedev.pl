@@ -7,6 +7,7 @@ import monsterStepsHighlight from '../assets/monster-steps-highlight.png';
 import masterplanHighlight from '../assets/masterplan-highlight.png';
 import xmasHighlight from '../assets/xmas-highlight.png';
 import hungryLionHighlight from '../assets/hungry-lion-highlights.png';
+import tribeGameHighlight from '../assets/tribe-game-highlight.png';
 
 export default function OurGames() {
   const { t } = useTranslation();
@@ -51,6 +52,14 @@ export default function OurGames() {
         highlight={hungryLionHighlight}
         href={'/games/hungry-lion/'}
         githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/hungry-lion'}
+        inProgress={false}
+      />
+      <GameBox
+        title={t('Tribe Game')}
+        description={t('A game about managing a tribe.')}
+        highlight={tribeGameHighlight}
+        href={'/games/tribe/'}
+        githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/tribe'}
         inProgress={false}
       />
     </Section>

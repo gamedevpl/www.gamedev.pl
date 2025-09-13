@@ -8,11 +8,5 @@
     "build",
     "node_modules",
     "package-lock.json"
-  ],
-  "modelOverrides": {
-    "aiStudio": {
-      "default": "gemini-2.5-pro-preview-05-06",
-      "cheap": "gemini-2.5-flash-preview-05-20"
-    }
-  }
+  ]
 }
