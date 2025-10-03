@@ -1,0 +1,6 @@
+{
+  "name": "tribe2",
+  "devDependencies": {
+    "genaicode": "^0.13.0"
+  }
+}
