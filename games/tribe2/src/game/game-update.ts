@@ -3,22 +3,25 @@
  */
 
 import { GameState, Entity } from './game-types';
+import { vectorAdd, vectorScale } from './utils/math-utils';
 
 /**
  * Update a single entity - simple physics with wrapping boundaries
  */
 function updateEntity(entity: Entity, deltaTime: number, worldWidth: number, worldHeight: number): Entity {
-  // Update position based on velocity
-  let newX = entity.position.x + entity.velocity.x * deltaTime;
-  let newY = entity.position.y + entity.velocity.y * deltaTime;
+  // Update position based on velocity using vector math
+  const velocityDelta = vectorScale(entity.velocity, deltaTime);
+  const newPosition = vectorAdd(entity.position, velocityDelta);
 
   // Wrap around world boundaries (toroidal world)
-  newX = ((newX % worldWidth) + worldWidth) % worldWidth;
-  newY = ((newY % worldHeight) + worldHeight) % worldHeight;
+  const wrappedPosition = {
+    x: ((newPosition.x % worldWidth) + worldWidth) % worldWidth,
+    y: ((newPosition.y % worldHeight) + worldHeight) % worldHeight,
+  };
 
   return {
     ...entity,
-    position: { x: newX, y: newY },
+    position: wrappedPosition,
   };
 }
 

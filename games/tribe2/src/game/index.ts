@@ -8,3 +8,4 @@ export * from './game-update';
 export * from './render/render-game';
 export * from './sound/sound-manager';
 export * from './input/input-handler';
+export * from './utils';
