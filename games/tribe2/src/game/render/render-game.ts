@@ -5,7 +5,7 @@
 import { GameState, Entity, Vector2D } from '../game-types';
 
 /**
- * Render a single entity
+ * Render a single entity at its current position
  */
 function renderEntity(ctx: CanvasRenderingContext2D, entity: Entity): void {
   ctx.fillStyle = entity.color;
@@ -17,6 +17,65 @@ function renderEntity(ctx: CanvasRenderingContext2D, entity: Entity): void {
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.lineWidth = 2;
   ctx.stroke();
+}
+
+/**
+ * Check if an entity is visible in the viewport
+ */
+function isEntityInView(
+  entity: Entity,
+  viewportCenter: Vector2D,
+  canvasWidth: number,
+  canvasHeight: number,
+  worldWidth: number,
+  worldHeight: number,
+): boolean {
+  // Calculate shortest distance considering wrapping
+  let dx = entity.position.x - viewportCenter.x;
+  let dy = entity.position.y - viewportCenter.y;
+
+  // Handle horizontal wrapping
+  if (Math.abs(dx) > worldWidth / 2) {
+    dx = dx - Math.sign(dx) * worldWidth;
+  }
+
+  // Handle vertical wrapping
+  if (Math.abs(dy) > worldHeight / 2) {
+    dy = dy - Math.sign(dy) * worldHeight;
+  }
+
+  const margin = entity.radius + 50;
+  return (
+    Math.abs(dx) <= canvasWidth / 2 + margin &&
+    Math.abs(dy) <= canvasHeight / 2 + margin
+  );
+}
+
+/**
+ * Render entity with toroidal world wrapping
+ * Entities near boundaries appear on both sides
+ */
+function renderEntityWithWrapping(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  worldWidth: number,
+  worldHeight: number,
+): void {
+  const originalPosition = { ...entity.position };
+
+  // Render the entity at all wrapped positions (up to 9 copies for corners)
+  for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
+    for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
+      entity.position = {
+        x: originalPosition.x + dx,
+        y: originalPosition.y + dy,
+      };
+      renderEntity(ctx, entity);
+    }
+  }
+
+  // Restore original position
+  entity.position = originalPosition;
 }
 
 /**
@@ -36,7 +95,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState): void {
 
 /**
  * Main render function
- * Draws the entire game world to the canvas
+ * Draws the entire game world to the canvas with proper toroidal wrapping
  */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -58,9 +117,14 @@ export function renderGame(
   // Translate to center viewport
   ctx.translate(canvasWidth / 2 - viewportCenter.x, canvasHeight / 2 - viewportCenter.y);
 
-  // Render all entities
-  for (const entity of state.entities) {
-    renderEntity(ctx, entity);
+  // Filter visible entities for frustum culling
+  const visibleEntities = state.entities.filter((entity) =>
+    isEntityInView(entity, viewportCenter, canvasWidth, canvasHeight, state.worldWidth, state.worldHeight)
+  );
+
+  // Render all visible entities with wrapping
+  for (const entity of visibleEntities) {
+    renderEntityWithWrapping(ctx, entity, state.worldWidth, state.worldHeight);
   }
 
   // Restore context
