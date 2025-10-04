@@ -1,6 +1,25 @@
 {
   "name": "tribe2",
+  "version": "0.0.1",
   "devDependencies": {
-    "genaicode": "^0.13.0"
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.37.0",
+    "genaicode": "^0.13.0",
+    "jsdom": "^27.0.0",
+    "jsx": "^0.9.89",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "vite-plugin-checker": "^0.11.0",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "vite",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
+    "test": "YEARS_TO_SIMULATE=10 vitest --ui",
+    "test:run": "YEARS_TO_SIMULATE=10 vitest run"
   }
 }
