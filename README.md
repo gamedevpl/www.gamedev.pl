@@ -12,6 +12,7 @@ On Gamedev.pl, we create indie games which are open source.
 - [nukes](./games/nukes): A thermonuclear simulation game.
 - [xmas](./games/xmas): Being Santa Claus is serious business! A fast-paced arcade game combining strategic gift delivery with Dragon Ball-inspired combat mechanics.
 - [tribe](./games/tribe): You start as Adam and Eve!
+- [tribe2][./games/tribe2]: In this game you grow your village.
 
 ## Website
 

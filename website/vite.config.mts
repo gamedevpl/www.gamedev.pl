@@ -50,6 +50,11 @@ export default defineConfig({
           dest: 'games/',
           rename: 'tribe',
         },
+        {
+          src: '../games/tribe2/dist',
+          dest: 'games/',
+          rename: 'tribe2',
+        },
       ],
     }),
   ],
