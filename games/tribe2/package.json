@@ -1,25 +1,35 @@
 {
   "name": "tribe2",
   "version": "0.0.1",
+  "type": "module",
+  "description": "Tribe2 game",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "styled-components": "^6.1.13"
+  },
   "devDependencies": {
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^5.0.4",
-    "eslint": "^9.37.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.3",
+    "eslint": "^8.54.0",
     "genaicode": "^0.13.0",
-    "jsdom": "^27.0.0",
-    "jsx": "^0.9.89",
-    "typescript": "^5.9.3",
-    "vite": "^7.1.9",
-    "vite-plugin-checker": "^0.11.0",
-    "vitest": "^3.2.4"
+    "jsdom": "^24.1.1",
+    "typescript": "^5.6.2",
+    "vite": "^6.3.5",
+    "vite-plugin-checker": "^0.8.0",
+    "vitest": "^3.2.3"
   },
   "scripts": {
     "build": "vite build",
     "start": "vite",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
-    "test": "YEARS_TO_SIMULATE=10 vitest --ui",
-    "test:run": "YEARS_TO_SIMULATE=10 vitest run"
-  }
+    "test": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "author": "gtanczyk",
+  "license": "ISC"
 }
