@@ -18,10 +18,11 @@ export async function initSoundLoader(): Promise<void> {
   try {
     // Create AudioContext
     audioContext = new (window.AudioContext ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).webkitAudioContext)();
     masterGainNode = audioContext.createGain();
     masterGainNode.connect(audioContext.destination);
-  } catch (e) {
+  } catch {
     console.error("Web Audio API is not supported in this browser");
   }
 }

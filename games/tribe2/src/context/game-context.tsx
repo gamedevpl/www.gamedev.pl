@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 export type AppState = 'intro' | 'game' | 'gameOver';
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface GameOverDetails {}
 
 interface GameContextType {
