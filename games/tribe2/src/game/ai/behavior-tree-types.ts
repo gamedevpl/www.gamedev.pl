@@ -7,12 +7,14 @@ export enum BTStatus {
 
 // Represents a node in the behavior tree.
 export interface BTNode {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute(context: any): BTStatus;
 }
 
 // Represents a behavior tree.
 export interface BehaviorTree {
   root: BTNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   context: any;
 }
 
