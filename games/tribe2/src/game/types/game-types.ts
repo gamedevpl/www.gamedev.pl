@@ -49,7 +49,7 @@ export interface PerformanceMetrics {
  * This will be extended by the specific game with its own state.
  */
 export interface GameWorldState {
-  time: number; // Game time in hours
+  time: number; // Elapsed time in seconds (real-world time)
   entities: Entities;
   mapDimensions: {
     width: number;

@@ -1,5 +1,4 @@
 import { updateEntity } from './ecs/entity-updater';
-import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from './game-consts';
 import { GameWorldState } from './types/game-types';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps (e.g., on tab-out)
@@ -21,9 +20,8 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
   while (realDeltaTimeSeconds > 0) {
     const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
 
-    // Convert real-world delta time to in-game hours
-    const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
-    currentState.time += gameHoursDelta;
+    // Accumulate real-world time in seconds
+    currentState.time += deltaTime;
 
     // --- Core System Updates ---
 
