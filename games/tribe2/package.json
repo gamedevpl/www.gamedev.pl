@@ -6,7 +6,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
     "eslint": "^9.37.0",
-    "genaicode": "^0.13.1",
+    "genaicode": "^0.13.2",
     "jsdom": "^27.0.0",
     "jsx": "^0.9.89",
     "react": "^19.2.0",
