@@ -126,7 +126,7 @@ export const IntroScreen: React.FC = () => {
     viewportCenterRef.current = center;
     viewportZoomRef.current = zoom;
 
-    renderWebGPUTerrain(gpuStateRef.current, center, zoom, lightDir);
+    renderWebGPUTerrain(gpuStateRef.current, center, zoom, animState.lightTime, lightDir);
   });
 
   return (

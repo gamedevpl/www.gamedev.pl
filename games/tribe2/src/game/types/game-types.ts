@@ -74,6 +74,9 @@ export interface WebGPUTerrainState {
   lightDir: Vector3D;
   heightScale: number;
   ambient: number;
+  // Water parameters
+  waterLevel: number;
+  time: number; // For water animation
 }
 
 /**

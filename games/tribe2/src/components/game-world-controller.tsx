@@ -53,7 +53,12 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
 
     // Render terrain (WebGPU) first
     if (gameStateRef.current.webgpu) {
-      renderWebGPUTerrain(gameStateRef.current.webgpu, viewportCenterRef.current, viewportZoomRef.current);
+      renderWebGPUTerrain(
+        gameStateRef.current.webgpu,
+        viewportCenterRef.current,
+        viewportZoomRef.current,
+        gameStateRef.current.time,
+      );
     }
 
     // Render entities/UI (Canvas 2D)

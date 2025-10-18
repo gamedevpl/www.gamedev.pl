@@ -1,6 +1,7 @@
 import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
 import { Vector2D } from '../../game/types/math-types';
 import { WebGPUTerrainState, Vector3D } from '../../game/types/game-types';
+import { WATER_LEVEL } from '../game-consts';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -112,6 +113,8 @@ export async function initWebGPUTerrain(
     lightDir: lighting?.lightDir ?? { x: 0.3, y: 0.5, z: 0.8 },
     heightScale: lighting?.heightScale ?? 120,
     ambient: lighting?.ambient ?? 0.35,
+    waterLevel: WATER_LEVEL,
+    time: 0,
   };
 
   return state;
@@ -121,9 +124,10 @@ export function renderWebGPUTerrain(
   state: WebGPUTerrainState,
   center: Vector2D,
   zoom: number,
+  time: number,
   lightDir?: Vector3D,
 ) {
-  const { device, context, pipeline, uniformBuffer, mapDimensions, cellSize, heightScale, ambient, canvas } = state;
+  const { device, context, pipeline, uniformBuffer, mapDimensions, cellSize, heightScale, ambient, canvas, waterLevel } = state;
 
   // Use provided lightDir or fall back to state's lightDir
   const currentLightDir = lightDir ?? state.lightDir;
@@ -144,8 +148,8 @@ export function renderWebGPUTerrain(
   // c2: lightDir.x, lightDir.y, lightDir.z, heightScale
   const invLen = 1.0 / Math.hypot(currentLightDir.x, currentLightDir.y, currentLightDir.z);
   u[8] = currentLightDir.x * invLen; u[9] = currentLightDir.y * invLen; u[10] = currentLightDir.z * invLen; u[11] = heightScale;
-  // c3: ambient, padding
-  u[12] = ambient; u[13] = 0; u[14] = 0; u[15] = 0;
+  // c3: ambient, waterLevel, time, padding
+  u[12] = ambient; u[13] = waterLevel; u[14] = time; u[15] = 0;
 
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 

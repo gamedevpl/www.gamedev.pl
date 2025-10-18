@@ -6,7 +6,8 @@ export const MAP_HEIGHT = 3000; // pixels
 export const HEIGHT_MAP_RESOLUTION = 50; // pixels per height map cell
 
 // Rendering Constants
-export const BACKGROUND_COLOR = "#2c5234";
+export const BACKGROUND_COLOR = '#2c5234';
+export const WATER_LEVEL = 0.4; // Water level, normalized (0-1)
 
 // Viewport and Camera Constants
 export const ZOOM_SPEED = 0.1; // How much the zoom changes per scroll event
