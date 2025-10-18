@@ -10,6 +10,7 @@ interface GameWorldControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
   ctxRef: React.RefObject<CanvasRenderingContext2D | null>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
+  viewportZoomRef: React.MutableRefObject<number>;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
@@ -17,6 +18,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
   gameStateRef,
   ctxRef,
   viewportCenterRef,
+  viewportZoomRef,
   canvasRef,
 }) => {
   const lastUpdateTimeRef = useRef<number>(null);
@@ -51,7 +53,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
 
     // --- Render World ---
     const renderGameStart = performance.now();
-    renderGame(ctx, gameStateRef.current, viewportCenterRef.current, {
+    renderGame(ctx, gameStateRef.current, viewportCenterRef.current, viewportZoomRef.current, {
       width: canvas.width,
       height: canvas.height,
     });

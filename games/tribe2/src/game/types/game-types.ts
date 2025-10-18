@@ -57,6 +57,7 @@ export interface GameWorldState {
   };
   heightMap: number[][];
   viewportCenter: Vector2D;
+  viewportZoom: number; // Zoom level (1.0 = normal, 2.0 = 2x zoom in, 0.5 = 2x zoom out)
   isPaused: boolean;
   gameOver: boolean;
   performanceMetrics: PerformanceMetrics;

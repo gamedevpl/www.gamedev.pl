@@ -9,12 +9,14 @@ import { isEntityInView } from './render-utils';
  * @param ctx The canvas rendering context.
  * @param gameState The current state of the game world.
  * @param viewportCenter The center of the camera in world coordinates.
+ * @param viewportZoom The current zoom level.
  * @param canvasDimensions The width and height of the canvas.
  */
 export function renderHeightMap(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   viewportCenter: Vector2D,
+  viewportZoom: number,
   canvasDimensions: { width: number; height: number },
 ) {
   const { heightMap, mapDimensions } = gameState;
@@ -23,11 +25,11 @@ export function renderHeightMap(
   const gridHeight = heightMap.length;
   const gridWidth = heightMap[0].length;
 
-  // Calculate the world coordinates of the viewport edges
-  const viewLeft = viewportCenter.x - canvasDimensions.width / 2;
-  const viewRight = viewportCenter.x + canvasDimensions.width / 2;
-  const viewTop = viewportCenter.y - canvasDimensions.height / 2;
-  const viewBottom = viewportCenter.y + canvasDimensions.height / 2;
+  // Calculate the world coordinates of the viewport edges, adjusted for zoom
+  const viewLeft = viewportCenter.x - canvasDimensions.width / 2 / viewportZoom;
+  const viewRight = viewportCenter.x + canvasDimensions.width / 2 / viewportZoom;
+  const viewTop = viewportCenter.y - canvasDimensions.height / 2 / viewportZoom;
+  const viewBottom = viewportCenter.y + canvasDimensions.height / 2 / viewportZoom;
 
   // Render the height map in a 3x3 grid to handle wrapping
   for (let offsetY = -1; offsetY <= 1; offsetY++) {
@@ -66,12 +68,14 @@ export function renderHeightMap(
  * @param ctx The canvas rendering context.
  * @param gameState The current state of the game world.
  * @param viewportCenter The center of the camera in world coordinates.
+ * @param viewportZoom The current zoom level.
  * @param canvasDimensions The width and height of the canvas.
  */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   viewportCenter: Vector2D,
+  viewportZoom: number,
   canvasDimensions: { width: number; height: number },
 ): void {
   ctx.save();
@@ -80,16 +84,21 @@ export function renderGame(
   ctx.fillStyle = BACKGROUND_COLOR;
   ctx.fillRect(0, 0, canvasDimensions.width, canvasDimensions.height);
 
-  // Translate the canvas to center the viewport
-  ctx.translate(canvasDimensions.width / 2 - viewportCenter.x, canvasDimensions.height / 2 - viewportCenter.y);
-
   // --- World Rendering ---
 
+  // Set up the camera transform:
+  // 1. Move the origin to the center of the canvas.
+  ctx.translate(canvasDimensions.width / 2, canvasDimensions.height / 2);
+  // 2. Apply the zoom.
+  ctx.scale(viewportZoom, viewportZoom);
+  // 3. Move the canvas to center the viewport on the player.
+  ctx.translate(-viewportCenter.x, -viewportCenter.y);
+
   // Render the height map first as the background
-  renderHeightMap(ctx, gameState, viewportCenter, canvasDimensions);
+  renderHeightMap(ctx, gameState, viewportCenter, viewportZoom, canvasDimensions);
 
   const visibleEntities = Array.from(gameState.entities.entities.values()).filter((entity) =>
-    isEntityInView(entity, viewportCenter, canvasDimensions, gameState.mapDimensions),
+    isEntityInView(entity, viewportCenter, viewportZoom, canvasDimensions, gameState.mapDimensions),
   );
 
   // Render simple debug markers for visible entities

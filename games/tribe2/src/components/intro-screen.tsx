@@ -4,8 +4,14 @@ import { useGameContext } from '../context/game-context';
 import { generateHeightMap } from '../game/game-factory';
 import { renderHeightMap } from '../game/renderer/renderer';
 import { GameWorldState } from '../game/types/game-types';
-import { BACKGROUND_COLOR, HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/game-consts';
+import {
+  BACKGROUND_COLOR,
+  HEIGHT_MAP_RESOLUTION,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+} from '../game/game-consts';
 import { Vector2D } from '../game/types/math-types';
+import { initIntroAnimation, updateIntroAnimation, IntroAnimState } from './intro-animation';
 
 // --- Styles (copied from app.tsx for consistency) ---
 
@@ -72,6 +78,9 @@ export const IntroScreen: React.FC = () => {
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const heightMapRef = useRef<number[][] | null>(null);
   const viewportCenterRef = useRef<Vector2D>({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
+  const viewportZoomRef = useRef<number>(1.0);
+  const animStateRef = useRef<IntroAnimState | null>(null);
+  const lastTimeRef = useRef<number | null>(null);
 
   // Initialize canvas and generate height map on mount
   useEffect(() => {
@@ -80,13 +89,24 @@ export const IntroScreen: React.FC = () => {
       ctxRef.current = canvas.getContext('2d');
       heightMapRef.current = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
 
+      // Initialize the intro animation
+      animStateRef.current = initIntroAnimation(
+        heightMapRef.current,
+        { width: MAP_WIDTH, height: MAP_HEIGHT },
+        { baseZoom: 0.8, focusZoom: 2.0, poiCount: 8 },
+      );
+
       const handleResize = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
       };
       handleResize();
+
       window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+      };
     }
   }, []);
 
@@ -95,20 +115,23 @@ export const IntroScreen: React.FC = () => {
     const ctx = ctxRef.current;
     const heightMap = heightMapRef.current;
     const canvas = canvasRef.current;
-    if (!ctx || !heightMap || !canvas) return;
+    const animState = animStateRef.current;
+    if (!ctx || !heightMap || !canvas || !animState) return;
 
-    // Create a gentle, looping wander effect for the viewport
-    const wanderSpeed = 0.00005;
-    const wanderRadius = MAP_WIDTH / 4;
-    viewportCenterRef.current = {
-      x: MAP_WIDTH / 2 + Math.cos(time * wanderSpeed) * wanderRadius,
-      y: MAP_HEIGHT / 2 + Math.sin(time * wanderSpeed * 1.5) * wanderRadius,
-    };
+    // Calculate delta time in seconds
+    const dtSeconds = lastTimeRef.current !== null ? (time - lastTimeRef.current) / 1000 : 0;
+    lastTimeRef.current = time;
+
+    // Update animation and get current camera state
+    const { center, zoom } = updateIntroAnimation(animState, dtSeconds);
+    viewportCenterRef.current = center;
+    viewportZoomRef.current = zoom;
 
     // Construct a minimal game state object for the renderer
-    const pseudoGameState: Pick<GameWorldState, 'heightMap' | 'mapDimensions'> = {
+    const pseudoGameState: Pick<GameWorldState, 'heightMap' | 'mapDimensions' | 'viewportZoom'> = {
       heightMap,
       mapDimensions: { width: MAP_WIDTH, height: MAP_HEIGHT },
+      viewportZoom: zoom,
     };
 
     // Clear canvas before rendering
@@ -116,15 +139,23 @@ export const IntroScreen: React.FC = () => {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    // Translate canvas to center the viewport
-    ctx.translate(
-      canvas.width / 2 - viewportCenterRef.current.x,
-      canvas.height / 2 - viewportCenterRef.current.y,
+    // Move origin to the center of the canvas
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    // Apply zoom
+    ctx.scale(zoom, zoom);
+    // Translate to the viewport's position (inverted)
+    ctx.translate(-center.x, -center.y);
+
+    renderHeightMap(
+      ctx,
+      pseudoGameState as GameWorldState,
+      center,
+      zoom,
+      {
+        width: canvas.width,
+        height: canvas.height,
+      },
     );
-    renderHeightMap(ctx, pseudoGameState as GameWorldState, viewportCenterRef.current, {
-      width: canvas.width,
-      height: canvas.height,
-    });
     ctx.restore();
   });
 

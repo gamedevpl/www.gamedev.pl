@@ -9,6 +9,7 @@ interface GameRendererProps {
   ctxRef: React.MutableRefObject<CanvasRenderingContext2D | null>;
   gameStateRef: React.RefObject<GameWorldState>;
   viewportCenterRef: React.MutableRefObject<Vector2D>;
+  viewportZoomRef: React.MutableRefObject<number>;
 }
 
 export const GameRenderer: React.FC<GameRendererProps> = ({
@@ -16,6 +17,7 @@ export const GameRenderer: React.FC<GameRendererProps> = ({
   ctxRef,
   gameStateRef,
   viewportCenterRef,
+  viewportZoomRef,
 }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,6 +32,7 @@ export const GameRenderer: React.FC<GameRendererProps> = ({
           ctxRef.current,
           gameStateRef.current,
           viewportCenterRef.current,
+          viewportZoomRef.current,
           { width: canvas.width, height: canvas.height },
         );
       }

@@ -15,6 +15,7 @@ export const GameScreen: React.FC = () => {
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const gameStateRef = useRef<GameWorldState>(initialState);
   const viewportCenterRef = useRef<Vector2D>(initialState.viewportCenter);
+  const viewportZoomRef = useRef<number>(initialState.viewportZoom);
 
   return (
     <>
@@ -24,12 +25,14 @@ export const GameScreen: React.FC = () => {
         ctxRef={ctxRef}
         gameStateRef={gameStateRef}
         viewportCenterRef={viewportCenterRef}
+        viewportZoomRef={viewportZoomRef}
       />
       {/* The GameWorldController component is responsible for the game loop and input. */}
       <GameWorldController
         gameStateRef={gameStateRef}
         ctxRef={ctxRef}
         viewportCenterRef={viewportCenterRef}
+        viewportZoomRef={viewportZoomRef}
         canvasRef={canvasRef}
       />
     </>

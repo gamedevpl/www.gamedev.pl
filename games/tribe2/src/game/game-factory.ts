@@ -56,6 +56,7 @@ export function initWorld(): GameWorldState {
       x: MAP_WIDTH / 2,
       y: MAP_HEIGHT / 2,
     },
+    viewportZoom: 1.0,
     isPaused: false,
     gameOver: false,
     performanceMetrics: {

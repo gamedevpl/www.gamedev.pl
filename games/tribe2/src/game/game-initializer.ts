@@ -39,6 +39,7 @@ export function initWorld(): GameWorldState {
     },
     heightMap,
     viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+    viewportZoom: 1.0, // Initialize zoom at a neutral level
     isPaused: false,
     gameOver: false,
     performanceMetrics: {
