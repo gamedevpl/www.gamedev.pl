@@ -11,6 +11,7 @@ export default defineConfig({
     'result-chain.cache.json',
     'simulate.cache.json',
   ],
+  extensions: ['.ts', '.mts', '.tsx', '.js', '.jsx', '.json', '.mp3', '.wav', '.ogg', '.wgsl', '.md', '.txt', '.html'],
   projectCommands: {
     install: {
       command: 'npm install',

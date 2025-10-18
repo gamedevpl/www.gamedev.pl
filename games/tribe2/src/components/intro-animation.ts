@@ -1,12 +1,16 @@
 import { Vector2D } from '../game/types/math-types';
+import { Vector3D } from '../game/types/game-types';
 import { HEIGHT_MAP_RESOLUTION } from '../game/game-consts';
 import { clamp, lerp, easeInOutCubic } from '../game/utils/animation-utils';
 
 // Animation phase durations in seconds
 const ZOOM_OUT_DURATION = 2;
-const PAN_DURATION = 3;
+const PAN_DURATION = 4;
 const ZOOM_IN_DURATION = 2;
 const HOLD_DURATION = 2;
+
+// Light animation period (full rotation in seconds)
+const LIGHT_ROTATION_PERIOD = 20;
 
 export type IntroAnimState = {
   phase: 'zoomOut' | 'pan' | 'zoomIn' | 'hold';
@@ -21,6 +25,7 @@ export type IntroAnimState = {
   baseZoom: number;
   focusZoom: number;
   mapDimensions: { width: number; height: number };
+  lightTime: number; // Accumulated time for light rotation
 };
 
 /**
@@ -83,6 +88,21 @@ function computePOIs(
 }
 
 /**
+ * Computes the light direction based on elapsed time.
+ * The light rotates in a circular pattern around the scene.
+ */
+function computeLightDirection(time: number): Vector3D {
+  const angle = (time / LIGHT_ROTATION_PERIOD) * Math.PI * 2;
+  const elevation = 0.6; // Keep light at a consistent elevation angle
+
+  return {
+    x: Math.cos(angle) * Math.cos(elevation),
+    y: Math.sin(angle) * Math.cos(elevation),
+    z: Math.sin(elevation),
+  };
+}
+
+/**
  * Initializes the intro animation state.
  */
 export function initIntroAnimation(
@@ -110,18 +130,20 @@ export function initIntroAnimation(
     baseZoom,
     focusZoom,
     mapDimensions,
+    lightTime: 0,
   };
 }
 
 /**
- * Updates the intro animation state and returns the current camera position and zoom.
+ * Updates the intro animation state and returns the current camera position, zoom, and light direction.
  */
 export function updateIntroAnimation(
   state: IntroAnimState,
   dtSeconds: number,
-): { center: Vector2D; zoom: number } {
+): { center: Vector2D; zoom: number; lightDir: Vector3D } {
   // Advance time
   state.t += dtSeconds;
+  state.lightTime += dtSeconds;
 
   // Check if we need to transition to the next phase
   while (state.t >= state.duration) {
@@ -161,7 +183,6 @@ export function updateIntroAnimation(
         state.phase = 'zoomOut';
         state.duration = ZOOM_OUT_DURATION;
         state.startCenter = state.targetCenter;
-        state.targetCenter = state.targetCenter; // Stay centered during zoom out
         state.startZoom = state.focusZoom;
         state.targetZoom = state.baseZoom;
         break;
@@ -181,5 +202,8 @@ export function updateIntroAnimation(
   // Interpolate zoom level
   const zoom = lerp(state.startZoom, state.targetZoom, easedProgress);
 
-  return { center, zoom };
+  // Compute animated light direction
+  const lightDir = computeLightDirection(state.lightTime);
+
+  return { center, zoom, lightDir };
 }

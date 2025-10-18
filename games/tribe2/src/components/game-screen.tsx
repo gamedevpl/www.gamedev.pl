@@ -6,11 +6,9 @@ import { GameRenderer } from './game-renderer';
 import { GameWorldController } from './game-world-controller';
 
 export const GameScreen: React.FC = () => {
-  // Use useState with a function initializer to ensure initWorld is called only once.
   const [initialState] = useState(() => initWorld());
 
-  // Refs are used to hold mutable game state that can be updated by the game loop
-  // without causing React to re-render the entire component tree.
+  const webgpuCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const gameStateRef = useRef<GameWorldState>(initialState);
@@ -19,15 +17,14 @@ export const GameScreen: React.FC = () => {
 
   return (
     <>
-      {/* The GameRenderer component is responsible for the <canvas> element and drawing. */}
       <GameRenderer
+        webgpuCanvasRef={webgpuCanvasRef}
         canvasRef={canvasRef}
         ctxRef={ctxRef}
         gameStateRef={gameStateRef}
         viewportCenterRef={viewportCenterRef}
         viewportZoomRef={viewportZoomRef}
       />
-      {/* The GameWorldController component is responsible for the game loop and input. */}
       <GameWorldController
         gameStateRef={gameStateRef}
         ctxRef={ctxRef}

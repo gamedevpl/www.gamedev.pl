@@ -45,6 +45,38 @@ export interface PerformanceMetrics {
 }
 
 /**
+ * 3D vector type for light direction and other 3D calculations.
+ */
+export interface Vector3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * WebGPU renderer state for terrain rendering.
+ */
+export interface WebGPUTerrainState {
+  canvas: HTMLCanvasElement;
+  device: GPUDevice;
+  context: GPUCanvasContext;
+  format: GPUTextureFormat;
+  pipeline: GPURenderPipeline;
+  uniformBuffer: GPUBuffer;
+  bindGroup: GPUBindGroup;
+  sampler: GPUSampler;
+  heightTexture: GPUTexture;
+  heightTextureView: GPUTextureView;
+  gridSize: { width: number; height: number };
+  mapDimensions: { width: number; height: number };
+  cellSize: number; // world units per height texel (HEIGHT_MAP_RESOLUTION)
+  // Lighting parameters
+  lightDir: Vector3D;
+  heightScale: number;
+  ambient: number;
+}
+
+/**
  * The main state object for the entire game world.
  * This will be extended by the specific game with its own state.
  */
@@ -61,6 +93,8 @@ export interface GameWorldState {
   isPaused: boolean;
   gameOver: boolean;
   performanceMetrics: PerformanceMetrics;
+  // Optional GPU terrain renderer state (present when WebGPU is initialized)
+  webgpu?: WebGPUTerrainState;
 }
 
 /**

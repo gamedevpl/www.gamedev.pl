@@ -5,6 +5,7 @@ import { GameWorldState } from '../game/types/game-types';
 import { renderGame } from '../game/renderer/renderer';
 import { Vector2D } from '../game/types/math-types';
 import { GameInputController } from './game-input-controller';
+import { renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
 
 interface GameWorldControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
@@ -23,13 +24,12 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
 }) => {
   const lastUpdateTimeRef = useRef<number>(null);
 
-  // Isolate the callback to help TypeScript's type inference.
   const gameLoopCallback: FrameRequestCallback = (time) => {
     const { current: ctx } = ctxRef;
     const { current: gameState } = gameStateRef;
     const { current: canvas } = canvasRef;
 
-    if (!ctx || !canvas) {
+    if (!canvas) {
       lastUpdateTimeRef.current = time;
       return;
     }
@@ -40,31 +40,40 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
     }
 
     if (gameState.isPaused || gameState.gameOver) {
-      lastUpdateTimeRef.current = time; // Keep updating time to prevent a large jump when unpausing
+      lastUpdateTimeRef.current = time;
       return;
     }
 
-    const deltaTime = Math.min(time - lastUpdateTimeRef.current, 1000) / 1000; // Seconds (clamped)
+    const deltaTime = Math.min(time - lastUpdateTimeRef.current, 1000) / 1000;
 
-    // --- Update World ---
+    // Update world
     const worldUpdateStart = performance.now();
     gameStateRef.current = updateWorld(gameState, deltaTime);
     const worldUpdateTime = performance.now() - worldUpdateStart;
 
-    // --- Render World ---
-    const renderGameStart = performance.now();
-    renderGame(ctx, gameStateRef.current, viewportCenterRef.current, viewportZoomRef.current, {
-      width: canvas.width,
-      height: canvas.height,
-    });
-    const renderTime = performance.now() - renderGameStart;
+    // Render terrain (WebGPU) first
+    if (gameStateRef.current.webgpu) {
+      renderWebGPUTerrain(gameStateRef.current.webgpu, viewportCenterRef.current, viewportZoomRef.current);
+    }
 
-    // --- Performance Metrics ---
-    gameStateRef.current.performanceMetrics.currentBucket = {
-      worldUpdateTime,
-      renderTime,
-      aiUpdateTime: 0, // AI is not yet implemented in the core loop
-    };
+    // Render entities/UI (Canvas 2D)
+    if (ctx) {
+      // Clear to transparent so the WebGPU canvas shows through
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const renderGameStart = performance.now();
+      renderGame(ctx, gameStateRef.current, viewportCenterRef.current, viewportZoomRef.current, {
+        width: canvas.width,
+        height: canvas.height,
+      });
+      const renderTime = performance.now() - renderGameStart;
+
+      gameStateRef.current.performanceMetrics.currentBucket = {
+        worldUpdateTime,
+        renderTime,
+        aiUpdateTime: 0,
+      };
+    }
 
     lastUpdateTimeRef.current = time;
   };
