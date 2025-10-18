@@ -38,44 +38,62 @@ fn base_color(h: f32) -> vec3f {
   return mix(low, high, clamp(h, 0.0, 1.0));
 }
 
-// Simple 2D noise function for water animation
-fn noise2d(p: vec2f) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
+// Cartoon water effect - slow, peaceful, zoom-dependent
+fn cartoon_water(worldPos: vec2f, depth: f32, time: f32, zoom: f32) -> vec4f {
+  // Water colors - cartoon style with clear distinction
+  let shallowColor = vec3f(0.4, 0.7, 0.9);  // Light blue
+  let deepColor = vec3f(0.1, 0.3, 0.6);     // Dark blue
+  let foamColor = vec3f(0.9, 0.95, 1.0);    // White foam
   
-  let a = sin(dot(i, vec2f(127.1, 311.7)));
-  let b = sin(dot(i + vec2f(1.0, 0.0), vec2f(127.1, 311.7)));
-  let c = sin(dot(i + vec2f(0.0, 1.0), vec2f(127.1, 311.7)));
-  let d = sin(dot(i + vec2f(1.0, 1.0), vec2f(127.1, 311.7)));
+  // Animation speed - slow and peaceful
+  let animSpeed = 0.3;
+  let slowTime = time * animSpeed;
   
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
-fn water_color(depth: f32, worldPos: vec2f, time: f32) -> vec4f {
-  // Base water colors
-  let shallowColor = vec3f(0.2, 0.5, 0.7);  // Light blue
-  let deepColor = vec3f(0.05, 0.2, 0.4);    // Dark blue
+  // Base color based on depth
+  let depthFactor = clamp(depth * 8.0, 0.0, 1.0);
+  var waterColor = mix(shallowColor, deepColor, depthFactor);
   
-  // Animate water surface with multiple noise octaves
-  let wave1 = noise2d(worldPos * 0.01 + vec2f(time * 0.1, time * 0.05));
-  let wave2 = noise2d(worldPos * 0.02 - vec2f(time * 0.07, time * 0.08));
-  let wave3 = noise2d(worldPos * 0.04 + vec2f(time * 0.12, -time * 0.06));
+  // Zoom-dependent detail level
+  // At low zoom (zoomed out), water is flat and simple
+  // At high zoom (zoomed in), water shows wave patterns
+  let detailLevel = clamp((zoom - 0.5) / 2.5, 0.0, 1.0); // 0 at zoom=0.5, 1 at zoom=3.0
   
-  let wavePattern = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2) * 0.15;
+  if (detailLevel > 0.01) {
+    // Slow, gentle wave patterns using simple sine waves
+    let wave1 = sin(worldPos.x * 0.005 + slowTime * 0.5) * cos(worldPos.y * 0.004 + slowTime * 0.3);
+    let wave2 = sin(worldPos.x * 0.008 - slowTime * 0.4) * sin(worldPos.y * 0.007 + slowTime * 0.6);
+    let wave3 = cos(worldPos.x * 0.003 + worldPos.y * 0.003 + slowTime * 0.7);
+    
+    // Combine waves with varying amplitudes
+    let wavePattern = (wave1 * 0.4 + wave2 * 0.3 + wave3 * 0.3);
+    
+    // Apply wave pattern as subtle color variation (scaled by detail level)
+    let waveInfluence = wavePattern * 0.25 * detailLevel; // Increased influence
+    waterColor += vec3f(waveInfluence);
+    
+    // Add gentle highlights in wave peaks
+    let highlight = smoothstep(0.3, 0.6, wavePattern) * 0.3 * detailLevel; // Increased influence
+    waterColor += vec3f(highlight);
+  }
   
-  // Color varies with depth
-  let depthFactor = clamp(depth * 5.0, 0.0, 1.0);
-  var color = mix(shallowColor, deepColor, depthFactor);
+  // Stylized foam at shoreline
+  let foamWidth = 0.03;
+  let foamFactor = smoothstep(foamWidth, 0.0, depth);
   
-  // Add subtle wave highlights
-  color += vec3f(wavePattern * 0.3);
+  // Animate foam with slow pulsing
+  let foamPulse = 0.5 + 0.5 * sin(slowTime * 2.0);
+  let animatedFoam = foamFactor * (0.7 + 0.3 * foamPulse);
+  
+  // Blend foam into water color
+  waterColor = mix(waterColor, foamColor, animatedFoam * 0.8);
+  
+  // Clamp color to valid range
+  waterColor = clamp(waterColor, vec3f(0.0), vec3f(1.0));
   
   // Alpha varies with depth - shallow water is more transparent
-  // Deep water (depth > 0.2) becomes nearly opaque
-  let alpha = clamp(0.4 + depthFactor * 0.6, 0.4, 0.95);
+  let alpha = clamp(0.3 + depthFactor * 0.5, 0.3, 0.8); // More transparent
   
-  return vec4f(color, alpha);
+  return vec4f(waterColor, alpha);
 }
 
 @fragment
@@ -144,29 +162,46 @@ fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
   let shoreColor = vec3f(0.4, 0.3, 0.2); // Brown/muddy shore color
   
   if (waterDepth > 0.0) {
-    // This fragment is underwater
-    let terrainColor = base_color(h) * lighting;
+    // --- Refraction Effect ---
+    let animSpeed = 0.3;
+    let slowTime = time * animSpeed;
+    let wave_deriv_x = cos(wrapped.x * 0.005 + slowTime * 0.5) * 0.005;
+    let wave_deriv_y = -sin(wrapped.y * 0.004 + slowTime * 0.3) * 0.004;
+    let refractionStrength = 40.0 * waterDepth * clamp(zoom, 0.5, 2.0);
+    let refractionOffset = vec2f(wave_deriv_x, wave_deriv_y) * refractionStrength;
+    let refracted_uv = uv + refractionOffset / gridSize;
     
-    // Calculate shore factor (0 = deep water, 1 = at water's edge)
+    // Sample underlying terrain with refraction
+    let h_refracted = textureSampleLevel(heightTex, heightSampler, refracted_uv, 0.0).x;
+    let hx1_r = textureSampleLevel(heightTex, heightSampler, fract(refracted_uv + du), 0.0).x;
+    let hx0_r = textureSampleLevel(heightTex, heightSampler, fract(refracted_uv - du), 0.0).x;
+    let hy1_r = textureSampleLevel(heightTex, heightSampler, fract(refracted_uv + dv), 0.0).x;
+    let hy0_r = textureSampleLevel(heightTex, heightSampler, fract(refracted_uv - dv), 0.0).x;
+    let dzdx_r = (hx1_r - hx0_r) * heightScale / (2.0 * cellSize);
+    let dzdy_r = (hy1_r - hy0_r) * heightScale / (2.0 * cellSize);
+    let n_r = normalize(vec3f(-dzdx_r, -dzdy_r, 1.0));
+    let ndl_r = max(dot(n_r, lightDir), 0.0);
+    let lighting_r = ambient + (1.0 - ambient) * ndl_r;
+    let terrainColor = base_color(h_refracted) * lighting_r;
+    
+    // Get cartoon water color
+    let waterCol = cartoon_water(wrapped, waterDepth, time, zoom);
+    
+    // Calculate shore factor for wet sand effect
     let shoreFactor = clamp(1.0 - (waterDepth / shorelineWidth), 0.0, 1.0);
     
-    // Get water color
-    let waterCol = water_color(waterDepth, wrapped, time);
+    // Blend shore color near the water's edge
+    let shoreBlend = mix(waterCol.rgb, shoreColor, shoreFactor * 0.4);
     
-    // Blend shore color into the mix near the water's edge
-    let shoreBlend = mix(waterCol.rgb, shoreColor, shoreFactor * 0.6);
+    // Final blend: terrain -> water
+    let finalColor = mix(terrainColor, shoreBlend, waterCol.a);
     
-    // Adjust water alpha based on shore proximity (more transparent near shore)
-    let adjustedAlpha = waterCol.a * (1.0 - shoreFactor * 0.3);
-    
-    // Final blend: terrain -> shore -> water
-    let finalColor = mix(terrainColor, shoreBlend, adjustedAlpha);
     return vec4f(finalColor, 1.0);
   } else if (waterDepth > -shorelineWidth) {
     // This fragment is just above water (wet shore)
     let terrainColor = base_color(h) * lighting;
     
-    // Calculate how close we are to water level (0 = far from water, 1 = at water's edge)
+    // Calculate how close we are to water level
     let wetFactor = clamp(1.0 + (waterDepth / shorelineWidth), 0.0, 1.0);
     
     // Darken and add brown tint to create wet sand/mud effect
