@@ -73,6 +73,7 @@ export interface WebGPUTerrainState {
   // Lighting parameters
   lightDir: Vector3D;
   heightScale: number;
+  displacementFactor: number;
   ambient: number;
   // Water parameters
   waterLevel: number;

@@ -7,7 +7,7 @@ struct Uniforms {
   c1: vec4f,
   // c2: lightDir.x, lightDir.y, lightDir.z, heightScale
   c2: vec4f,
-  // c3: ambient, waterLevel, time, padding
+  // c3: ambient, waterLevel, time, displacementFactor
   c3: vec4f,
 };
 
@@ -111,22 +111,38 @@ fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
   let ambient = uniforms.c3.x;
   let waterLevel = uniforms.c3.y;
   let time = uniforms.c3.z;
-
+  let displacementFactor = uniforms.c3.w;
+  
   // Convert screen pixel to world coordinate
   let screen = fragCoord.xy;
-  let world = vec2f(
+  let world_initial = vec2f(
     center.x + (screen.x - 0.5 * canvasSize.x) / max(zoom, 0.0001),
     center.y + (screen.y - 0.5 * canvasSize.y) / max(zoom, 0.0001)
   );
+  
+  let gridSize = vec2f(textureDimensions(heightTex));
+  
+  // --- START PSEUDO-3D DISPLACEMENT ---
+  // To create the parallax effect, we first sample the height at the original 2D position.
+  let wrapped_initial = vec2f(
+    world_initial.x - floor(world_initial.x / mapSize.x) * mapSize.x,
+    world_initial.y - floor(world_initial.y / mapSize.y) * mapSize.y
+  );
+  let uv_initial = fract((wrapped_initial / max(cellSize, 0.0001)) / gridSize);
+  let h_initial = textureSampleLevel(heightTex, heightSampler, uv_initial, 0.0).x;
 
+  // Calculate displacement based on height and screen Y position.
+  // The (0.5 - screen.y / canvasSize.y) term makes things at the "top" of the screen move up more.
+  let displacement = h_initial * heightScale * displacementFactor * (0.5 - screen.y / canvasSize.y);
+  let world = world_initial + vec2f(0.0, displacement); // The final world coordinate to use for rendering
+  // --- END PSEUDO-3D DISPLACEMENT ---
+  
   // Wrap world coordinates to map dimensions (torus)
   let wrapped = vec2f(
     world.x - floor(world.x / mapSize.x) * mapSize.x,
     world.y - floor(world.y / mapSize.y) * mapSize.y
   );
 
-  // Convert world position to grid UV
-  let gridSize = vec2f(textureDimensions(heightTex));
   let gridPos = wrapped / max(cellSize, 0.0001);
   let uv = fract(gridPos / gridSize);
 

@@ -1,7 +1,7 @@
 import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
 import { Vector2D } from '../../game/types/math-types';
 import { WebGPUTerrainState, Vector3D } from '../../game/types/game-types';
-import { WATER_LEVEL } from '../game-consts';
+import { WATER_LEVEL, TERRAIN_DISPLACEMENT_FACTOR } from '../game-consts';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -27,7 +27,7 @@ export async function initWebGPUTerrain(
   heightMap: number[][],
   mapDimensions: { width: number; height: number },
   cellSize: number,
-  lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number },
+  lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
 ): Promise<WebGPUTerrainState | null> {
   if (!isWebGPUSupported()) {
     console.warn('WebGPU not supported in this browser. Terrain will not render.');
@@ -85,7 +85,12 @@ export async function initWebGPUTerrain(
   );
   const heightTextureView = heightTexture.createView();
 
-  const sampler = device.createSampler({ addressModeU: 'repeat', addressModeV: 'repeat', magFilter: 'linear', minFilter: 'linear' });
+  const sampler = device.createSampler({
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
 
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
@@ -112,6 +117,7 @@ export async function initWebGPUTerrain(
     cellSize,
     lightDir: lighting?.lightDir ?? { x: 0.3, y: 0.5, z: 0.8 },
     heightScale: lighting?.heightScale ?? 120,
+    displacementFactor: lighting?.displacementFactor ?? TERRAIN_DISPLACEMENT_FACTOR,
     ambient: lighting?.ambient ?? 0.35,
     waterLevel: WATER_LEVEL,
     time: 0,
@@ -127,7 +133,18 @@ export function renderWebGPUTerrain(
   time: number,
   lightDir?: Vector3D,
 ) {
-  const { device, context, pipeline, uniformBuffer, mapDimensions, cellSize, heightScale, ambient, canvas, waterLevel } = state;
+  const {
+    device,
+    context,
+    pipeline,
+    uniformBuffer,
+    mapDimensions,
+    cellSize,
+    ambient,
+    canvas,
+    waterLevel,
+    displacementFactor,
+  } = state;
 
   // Use provided lightDir or fall back to state's lightDir
   const currentLightDir = lightDir ?? state.lightDir;
@@ -142,14 +159,26 @@ export function renderWebGPUTerrain(
 
   const u = new Float32Array(16);
   // c0: center.x, center.y, zoom, cellSize
-  u[0] = center.x; u[1] = center.y; u[2] = zoom; u[3] = cellSize;
+  u[0] = center.x;
+  u[1] = center.y;
+  u[2] = zoom;
+  u[3] = cellSize;
   // c1: canvasSize.x, canvasSize.y, mapSize.x, mapSize.y
-  u[4] = canvasWidth; u[5] = canvasHeight; u[6] = mapDimensions.width; u[7] = mapDimensions.height;
+  u[4] = canvasWidth;
+  u[5] = canvasHeight;
+  u[6] = mapDimensions.width;
+  u[7] = mapDimensions.height;
   // c2: lightDir.x, lightDir.y, lightDir.z, heightScale
   const invLen = 1.0 / Math.hypot(currentLightDir.x, currentLightDir.y, currentLightDir.z);
-  u[8] = currentLightDir.x * invLen; u[9] = currentLightDir.y * invLen; u[10] = currentLightDir.z * invLen; u[11] = heightScale;
-  // c3: ambient, waterLevel, time, padding
-  u[12] = ambient; u[13] = waterLevel; u[14] = time; u[15] = 0;
+  u[8] = currentLightDir.x * invLen;
+  u[9] = currentLightDir.y * invLen;
+  u[10] = currentLightDir.z * invLen;
+  u[11] = state.heightScale;
+  // c3: ambient, waterLevel, time, displacementFactor
+  u[12] = ambient;
+  u[13] = waterLevel;
+  u[14] = time;
+  u[15] = displacementFactor;
 
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 
