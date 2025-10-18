@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2-beta
         with:
-          node-version: '18'
+          node-version: '20'
       - run: npm install --prefix=../games/monster-steps
       - run: npm install --prefix=../games/nukes
       - run: npm install --prefix=../games/masterplan
