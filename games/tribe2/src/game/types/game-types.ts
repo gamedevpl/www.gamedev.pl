@@ -55,6 +55,7 @@ export interface GameWorldState {
     width: number;
     height: number;
   };
+  heightMap: number[][];
   viewportCenter: Vector2D;
   isPaused: boolean;
   gameOver: boolean;
