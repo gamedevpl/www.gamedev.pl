@@ -16,12 +16,18 @@ export async function initSoundLoader(): Promise<void> {
   }
 
   try {
-    // Create AudioContext
-    audioContext = new (window.AudioContext ||
-      (window as any).webkitAudioContext)();
+    // Create AudioContext, handling vendor prefix for older browsers.
+    // The global.d.ts file provides the type definition for webkitAudioContext.
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextClass) {
+      console.error("Web Audio API is not supported in this browser");
+      return;
+    }
+    audioContext = new AudioContextClass();
     masterGainNode = audioContext.createGain();
     masterGainNode.connect(audioContext.destination);
-  } catch (e) {
-    console.error("Web Audio API is not supported in this browser");
+  } catch {
+    console.error("An error occurred while initializing the Web Audio API.");
   }
 }

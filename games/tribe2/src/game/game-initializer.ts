@@ -1,8 +1,7 @@
 import { createEntities, createEntity } from './ecs/entity-manager';
+import { generateHeightMap } from './game-factory';
 import { GameWorldState } from './types/game-types';
-
-const MAP_WIDTH = 800;
-const MAP_HEIGHT = 600;
+import { HEIGHT_MAP_RESOLUTION, MAP_WIDTH, MAP_HEIGHT } from './game-consts';
 
 /**
  * Initializes the game world with its starting state.
@@ -11,6 +10,7 @@ const MAP_HEIGHT = 600;
 export function initWorld(): GameWorldState {
   // 1. Initialize the entity manager
   const entities = createEntities();
+  const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
 
   // 2. Create a player entity
   createEntity(entities, 'player', {
@@ -37,6 +37,7 @@ export function initWorld(): GameWorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    heightMap,
     viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
     isPaused: false,
     gameOver: false,

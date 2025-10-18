@@ -11,7 +11,7 @@ import { isEntityInView } from './render-utils';
  * @param viewportCenter The center of the camera in world coordinates.
  * @param canvasDimensions The width and height of the canvas.
  */
-function renderHeightMap(
+export function renderHeightMap(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   viewportCenter: Vector2D,

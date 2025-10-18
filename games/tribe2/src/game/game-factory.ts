@@ -10,7 +10,7 @@ import { createNoise2D } from './utils/noise-utils';
  * @param resolution The size of each height map cell in pixels.
  * @returns A 2D array of numbers representing the height map.
  */
-function generateHeightMap(width: number, height: number, resolution: number): number[][] {
+export function generateHeightMap(width: number, height: number, resolution: number): number[][] {
   const gridWidth = Math.ceil(width / resolution);
   const gridHeight = Math.ceil(height / resolution);
   const heightMap: number[][] = Array.from({ length: gridHeight }, () => new Array(gridWidth).fill(0));

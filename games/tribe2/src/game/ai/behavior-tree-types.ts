@@ -5,19 +5,22 @@ export enum BTStatus {
   RUNNING,
 }
 
+// A generic context for the behavior tree. Using a Record is safer than `any`.
+export type BTContext = Record<string, unknown>;
+
 // Represents a node in the behavior tree.
 export interface BTNode {
-  execute(context: any): BTStatus;
+  execute(context: BTContext): BTStatus;
 }
 
 // Represents a behavior tree.
 export interface BehaviorTree {
   root: BTNode;
-  context: any;
+  context: BTContext;
 }
 
 // Component to be attached to an entity
 export interface BehaviorTreeComponent {
-    tree: BehaviorTree;
-    lastStatus?: BTStatus;
+  tree: BehaviorTree;
+  lastStatus?: BTStatus;
 }
