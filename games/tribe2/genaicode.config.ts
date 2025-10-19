@@ -10,6 +10,7 @@ export default defineConfig({
     'tfmodel/model.json',
     'result-chain.cache.json',
     'simulate.cache.json',
+    '.puppeteer-cache',
   ],
   extensions: ['.ts', '.mts', '.tsx', '.js', '.jsx', '.json', '.mp3', '.wav', '.ogg', '.wgsl', '.md', '.txt', '.html'],
   projectCommands: {
@@ -36,6 +37,11 @@ export default defineConfig({
     test: {
       command: 'npm run test',
       description: 'Run unit tests',
+      autoApprove: true,
+    },
+    'validate-shaders': {
+      command: 'npm run validate-shaders',
+      description: 'Validate WGSL shaders using Puppeteer',
       autoApprove: true,
     },
   },
