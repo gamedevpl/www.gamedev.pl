@@ -79,7 +79,7 @@ async function main() {
     });
 
     const page = await browser.newPage();
-    await page.goto('https://webgpureport.org/');
+    await page.goto('https://www.google.com/');
     let hasErrors = false;
 
     for (const shaderFile of shaderFiles) {
