@@ -4,13 +4,24 @@ import { Vector2D } from './math-types';
 
 export type EntityId = number;
 
+export enum EntityType {
+  PLAYER = 'player',
+  BOID = 'boid',
+  DEMO = 'demo',
+  TREE = 'tree',
+}
+
+export enum BiomeType {
+  TREE = 'tree',
+}
+
 /**
  * A generic base entity for any object in the game world.
  * This can be extended with components for specific game objects.
  */
 export interface Entity {
   id: EntityId;
-  type: string;
+  type: EntityType;
   position: Vector2D;
   radius: number;
   velocity: Vector2D;
@@ -20,6 +31,8 @@ export interface Entity {
   // AI and State Machine components
   stateMachine?: StateMachineComponent;
   behaviorTree?: BehaviorTreeComponent;
+  // Biome-specific properties
+  biomeType?: BiomeType;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Entity, EntityId, Entities } from '../types/game-types';
+import { Entity, EntityId, Entities, EntityType } from '../types/game-types';
 
 /**
  * Creates and initializes an empty container for entities.
@@ -15,13 +15,13 @@ export function createEntities(): Entities {
 /**
  * Creates a new generic entity and adds it to the entity manager.
  * @param state The Entities container.
- * @param type A string identifier for the entity's type (e.g., 'player', 'rock').
+ * @param type The entity type from the EntityType enum.
  * @param initial A partial object of initial properties for the entity.
  * @returns The newly created entity.
  */
 export function createEntity<T extends Entity>(
   state: Entities,
-  type: string,
+  type: EntityType,
   initial: Partial<Entity> & Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'acceleration'>,
 ): T {
   const entity: Entity = {

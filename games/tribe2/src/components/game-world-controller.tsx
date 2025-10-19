@@ -1,94 +1,164 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
 import { GameWorldState } from '../game/types/game-types';
 import { renderGame } from '../game/renderer/renderer';
-import { Vector2D } from '../game/types/math-types';
 import { GameInputController } from './game-input-controller';
-import { renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
+import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
+import { BACKGROUND_COLOR, HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/game-consts';
+import { generateHeightMap, generateTrees, initWorld } from '../game/game-factory';
+import { createEntities } from '../game/ecs/entity-manager';
+import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';
+
+const containerStyle: React.CSSProperties = {
+  position: 'relative',
+  width: '100vw',
+  height: '100vh',
+  backgroundColor: BACKGROUND_COLOR,
+  overflow: 'hidden',
+};
+
+const canvasStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  display: 'block',
+  width: '100%',
+  height: '100%',
+};
 
 interface GameWorldControllerProps {
-  gameStateRef: React.MutableRefObject<GameWorldState>;
-  ctxRef: React.RefObject<CanvasRenderingContext2D | null>;
-  viewportCenterRef: React.MutableRefObject<Vector2D>;
-  viewportZoomRef: React.MutableRefObject<number>;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  mode: 'intro' | 'game';
+  initialState?: GameWorldState;
+  children?: ReactNode;
 }
 
-export const GameWorldController: React.FC<GameWorldControllerProps> = ({
-  gameStateRef,
-  ctxRef,
-  viewportCenterRef,
-  viewportZoomRef,
-  canvasRef,
-}) => {
-  const lastUpdateTimeRef = useRef<number>(null);
+export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, initialState, children }) => {
+  const webgpuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const gameStateRef = useRef<GameWorldState | null>(null);
+  const animStateRef = useRef<IntroAnimState | null>(null);
+  const lastUpdateTimeRef = useRef<number | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const gameLoopCallback: FrameRequestCallback = (time) => {
-    const { current: ctx } = ctxRef;
-    const { current: gameState } = gameStateRef;
-    const { current: canvas } = canvasRef;
-
-    if (!canvas) {
-      lastUpdateTimeRef.current = time;
-      return;
-    }
-
-    if (!lastUpdateTimeRef.current) {
-      lastUpdateTimeRef.current = time;
-      return;
-    }
-
-    if (gameState.isPaused || gameState.gameOver) {
-      lastUpdateTimeRef.current = time;
-      return;
-    }
-
-    const deltaTime = Math.min(time - lastUpdateTimeRef.current, 1000) / 1000;
-
-    // Update world
-    const worldUpdateStart = performance.now();
-    gameStateRef.current = updateWorld(gameState, deltaTime);
-    const worldUpdateTime = performance.now() - worldUpdateStart;
-
-    // Render terrain (WebGPU) first
-    if (gameStateRef.current.webgpu) {
-      renderWebGPUTerrain(
-        gameStateRef.current.webgpu,
-        viewportCenterRef.current,
-        viewportZoomRef.current,
-        gameStateRef.current.time,
-      );
-    }
-
-    // Render entities/UI (Canvas 2D)
-    if (ctx) {
-      // Clear to transparent so the WebGPU canvas shows through
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const renderGameStart = performance.now();
-      renderGame(ctx, gameStateRef.current, viewportCenterRef.current, viewportZoomRef.current, {
-        width: canvas.width,
-        height: canvas.height,
-      });
-      const renderTime = performance.now() - renderGameStart;
-
-      gameStateRef.current.performanceMetrics.currentBucket = {
-        worldUpdateTime,
-        renderTime,
-        aiUpdateTime: 0,
-      };
-    }
-
-    lastUpdateTimeRef.current = time;
-  };
-
-  const [stopLoop, startLoop, isActive] = useRafLoop(gameLoopCallback, false);
-
+  // Initialization Effect
   useEffect(() => {
-    startLoop();
-    return stopLoop;
-  }, [startLoop, stopLoop]);
+    const webgpuCanvas = webgpuCanvasRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas || !webgpuCanvas) return;
 
-  return <GameInputController isActive={isActive} gameStateRef={gameStateRef} />;
+    ctxRef.current = canvas.getContext('2d');
+    if (!ctxRef.current) return;
+
+    const handleResize = () => {
+      webgpuCanvas.width = window.innerWidth;
+      webgpuCanvas.height = window.innerHeight;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    // Initialize game state based on mode
+    let worldState: GameWorldState;
+    if (mode === 'intro') {
+      const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+      const entities = createEntities();
+      generateTrees(entities, heightMap, HEIGHT_MAP_RESOLUTION);
+      worldState = {
+        time: 0,
+        entities: entities,
+        mapDimensions: { width: MAP_WIDTH, height: MAP_HEIGHT },
+        heightMap,
+        viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+        viewportZoom: 1.0,
+        isPaused: false,
+        gameOver: false,
+        performanceMetrics: { currentBucket: { renderTime: 0, worldUpdateTime: 0, aiUpdateTime: 0 }, history: [] },
+      };
+      animStateRef.current = initIntroAnimation(
+        heightMap,
+        { width: MAP_WIDTH, height: MAP_HEIGHT },
+        { baseZoom: 0.8, focusZoom: 2.0, poiCount: 8 },
+      );
+    } else {
+      worldState = initialState || initWorld();
+    }
+    gameStateRef.current = worldState;
+
+    // Initialize WebGPU terrain
+    (async () => {
+      if (gameStateRef.current) {
+        const gpuState = await initWebGPUTerrain(
+          webgpuCanvas,
+          gameStateRef.current.heightMap,
+          gameStateRef.current.mapDimensions,
+          HEIGHT_MAP_RESOLUTION,
+        );
+        if (gpuState) {
+          gameStateRef.current.webgpu = gpuState;
+          setIsInitialized(true); // Signal that we are ready to render
+        }
+      }
+    })();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [mode, initialState]);
+
+  // Main Render Loop
+  useRafLoop((time) => {
+    const gameState = gameStateRef.current;
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+
+    if (!isInitialized || !gameState || !ctx || !canvas) {
+      return;
+    }
+
+    const deltaTime = lastUpdateTimeRef.current ? Math.min(time - lastUpdateTimeRef.current, 1000) / 1000 : 1 / 60;
+    lastUpdateTimeRef.current = time;
+
+    let viewportCenter = gameState.viewportCenter;
+    let viewportZoom = gameState.viewportZoom;
+    let lightDir = undefined;
+
+    // Update world state based on mode
+    if (mode === 'intro' && animStateRef.current) {
+      const anim = updateIntroAnimation(animStateRef.current, deltaTime);
+      viewportCenter = anim.center;
+      viewportZoom = anim.zoom;
+      lightDir = anim.lightDir;
+      gameState.time = animStateRef.current.lightTime; // Use animation time for water
+    } else if (mode === 'game') {
+      if (!gameState.isPaused && !gameState.gameOver) {
+        gameStateRef.current = updateWorld(gameState, deltaTime);
+      }
+    }
+
+    // --- RENDER -- -
+    // 1. Render terrain (WebGPU)
+    if (gameState.webgpu) {
+      renderWebGPUTerrain(gameState.webgpu, viewportCenter, viewportZoom, gameState.time, lightDir);
+    }
+
+    // 2. Render entities (Canvas 2D)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    renderGame(ctx, gameState, viewportCenter, viewportZoom, {
+      width: canvas.width,
+      height: canvas.height,
+    });
+  });
+
+  return (
+    <div style={containerStyle}>
+      <canvas ref={webgpuCanvasRef} style={{ ...canvasStyle, zIndex: 0 }} />
+      <canvas ref={canvasRef} style={{ ...canvasStyle, zIndex: 1 }} />
+      {/* Render UI overlays */}
+      {children}
+      {/* Conditionally render input controller */}
+      {mode === 'game' && <GameInputController isActive={() => isInitialized} gameStateRef={gameStateRef as React.MutableRefObject<GameWorldState>} />}
+    </div>
+  );
 };

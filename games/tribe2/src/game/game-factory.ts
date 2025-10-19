@@ -1,6 +1,6 @@
 import { createEntities, createEntity } from './ecs/entity-manager';
-import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from './game-consts';
-import { GameWorldState } from './types/game-types';
+import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH, TREE_RADIUS, TREE_SPAWN_THRESHOLD, TREE_SPAWN_DENSITY } from './game-consts';
+import { Entities, EntityType, BiomeType, GameWorldState } from './types/game-types';
 import { createNoise2D } from './utils/noise-utils';
 
 /**
@@ -37,12 +37,52 @@ export function generateHeightMap(width: number, height: number, resolution: num
 }
 
 /**
+ * Generates tree entities based on the heightmap.
+ * Trees spawn on land (above TREE_SPAWN_THRESHOLD) with a probability of TREE_SPAWN_DENSITY.
+ * @param entities The entity manager to add trees to.
+ * @param heightMap The heightmap of the world.
+ * @param resolution The size of each height map cell in pixels.
+ */
+export function generateTrees(
+  entities: Entities,
+  heightMap: number[][],
+  resolution: number,
+): void {
+  const gridHeight = heightMap.length;
+  const gridWidth = heightMap[0]?.length ?? 0;
+
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      const height = heightMap[y][x];
+      
+      // Only spawn trees on land (above water level threshold)
+      if (height > TREE_SPAWN_THRESHOLD) {
+        // Random chance to spawn a tree
+        if (Math.random() < TREE_SPAWN_DENSITY) {
+          const worldX = x * resolution + Math.random() * resolution;
+          const worldY = y * resolution + Math.random() * resolution;
+          
+          createEntity(entities, EntityType.TREE, {
+            position: { x: worldX, y: worldY },
+            radius: TREE_RADIUS,
+            biomeType: BiomeType.TREE,
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
  * Initializes and returns a new, empty game world state.
  * This serves as the factory for creating a new game instance.
  */
 export function initWorld(): GameWorldState {
   const entities = createEntities();
   const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+
+  // Generate trees based on heightmap
+  generateTrees(entities, heightMap, HEIGHT_MAP_RESOLUTION);
 
   const initialWorldState: GameWorldState = {
     time: 0,
@@ -70,7 +110,7 @@ export function initWorld(): GameWorldState {
   };
 
   // Create a single demo entity at the center to validate the rendering pipeline
-  createEntity(initialWorldState.entities, 'demo', {
+  createEntity(initialWorldState.entities, EntityType.DEMO, {
     position: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
     radius: 30,
   });

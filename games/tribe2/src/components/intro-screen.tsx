@@ -1,34 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { useRafLoop } from 'react-use';
+import React, { useState } from 'react';
 import { useGameContext } from '../context/game-context';
-import { generateHeightMap } from '../game/game-factory';
-import { GameWorldState } from '../game/types/game-types';
-import {
-  BACKGROUND_COLOR,
-  HEIGHT_MAP_RESOLUTION,
-  MAP_HEIGHT,
-  MAP_WIDTH,
-} from '../game/game-consts';
-import { Vector2D } from '../game/types/math-types';
-import { initIntroAnimation, updateIntroAnimation, IntroAnimState } from './intro-animation';
-import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
+import { GameWorldController } from './game-world-controller';
 
-const introContainerStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '100vw',
-  height: '100vh',
-  overflow: 'hidden',
-  backgroundColor: BACKGROUND_COLOR,
-};
-
-const canvasStyle: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  display: 'block',
-  width: '100%',
-  height: '100%',
-};
-
+// Styles for the UI overlay, which will be passed as a child to the controller.
 const overlayStyle: React.CSSProperties = {
   position: 'absolute',
   top: 0,
@@ -41,10 +15,10 @@ const overlayStyle: React.CSSProperties = {
   justifyContent: 'center',
   color: 'white',
   textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+  zIndex: 10, // Ensure UI is on top of the canvas layers
 };
 
 const titleStyle: React.CSSProperties = {
-  fontFamily: "'Press Start 2P', cursive",
   fontSize: '4rem',
   color: 'white',
   textShadow: '2px 2px 0px red, -2px -2px 0px red, 2px -2px 0px red, -2px 2px 0px red',
@@ -72,66 +46,9 @@ const buttonHoverStyle: React.CSSProperties = {
 export const IntroScreen: React.FC = () => {
   const { setAppState } = useGameContext();
   const [isHovered, setIsHovered] = useState(false);
-  const webgpuCanvasRef = useRef<HTMLCanvasElement>(null);
-  const heightMapRef = useRef<number[][] | null>(null);
-  const gpuStateRef = useRef<GameWorldState['webgpu'] | null>(null);
-  const viewportCenterRef = useRef<Vector2D>({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
-  const viewportZoomRef = useRef<number>(1.0);
-  const animStateRef = useRef<IntroAnimState | null>(null);
-  const lastTimeRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const canvas = webgpuCanvasRef.current;
-    if (!canvas) return;
-
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    // Generate height map and init GPU
-    heightMapRef.current = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
-
-    animStateRef.current = initIntroAnimation(
-      heightMapRef.current,
-      { width: MAP_WIDTH, height: MAP_HEIGHT },
-      { baseZoom: 0.8, focusZoom: 2.0, poiCount: 8 },
-    );
-
-    (async () => {
-      gpuStateRef.current = await initWebGPUTerrain(
-        canvas,
-        heightMapRef.current!,
-        { width: MAP_WIDTH, height: MAP_HEIGHT },
-        HEIGHT_MAP_RESOLUTION,
-      );
-    })();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  useRafLoop((time) => {
-    const canvas = webgpuCanvasRef.current;
-    const animState = animStateRef.current;
-    if (!canvas || !animState || !gpuStateRef.current) return;
-
-    const dtSeconds = lastTimeRef.current !== null ? (time - lastTimeRef.current) / 1000 : 0;
-    lastTimeRef.current = time;
-
-    const { center, zoom, lightDir } = updateIntroAnimation(animState, dtSeconds);
-    viewportCenterRef.current = center;
-    viewportZoomRef.current = zoom;
-
-    renderWebGPUTerrain(gpuStateRef.current, center, zoom, animState.lightTime, lightDir);
-  });
 
   return (
-    <div style={introContainerStyle}>
-      <canvas ref={webgpuCanvasRef} style={canvasStyle} />
+    <GameWorldController mode="intro">
       <div style={overlayStyle}>
         <h1 style={titleStyle}>Tribe2</h1>
         <button
@@ -143,6 +60,6 @@ export const IntroScreen: React.FC = () => {
           Start Game
         </button>
       </div>
-    </div>
+    </GameWorldController>
   );
 };

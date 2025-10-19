@@ -1,5 +1,5 @@
 import { updateEntity } from './ecs/entity-updater';
-import { GameWorldState } from './types/game-types';
+import { EntityType, GameWorldState } from './types/game-types';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps (e.g., on tab-out)
 
@@ -27,6 +27,10 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // 1. Update all entities (physics, state machines, AI)
     for (const entity of currentState.entities.entities.values()) {
+      // Skip static entities like trees
+      if (entity.type === EntityType.TREE) {
+        continue;
+      }
       updateEntity(entity, currentState, deltaTime);
     }
 
