@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
-import { GameWorldState } from '../game/types/game-types';
+import { GameWorldState } from '../game/types/world-types';
 import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
-import { BACKGROUND_COLOR, HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/game-consts';
+import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
+import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/constants/world-constants';
 import { generateHeightMap, generateTrees, initWorld } from '../game/game-factory';
 import { createEntities } from '../game/ecs/entity-manager';
 import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';

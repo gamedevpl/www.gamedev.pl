@@ -1,4 +1,4 @@
-import { Entity, EntityId, Entities, EntityType } from '../types/game-types';
+import { Entity, EntityId, Entities, EntityType } from '../types/world-types';
 
 /**
  * Creates and initializes an empty container for entities.

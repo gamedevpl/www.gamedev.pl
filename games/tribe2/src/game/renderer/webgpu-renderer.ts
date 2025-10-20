@@ -1,7 +1,8 @@
 import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
 import { Vector2D } from '../../game/types/math-types';
-import { WebGPUTerrainState, Vector3D } from '../../game/types/game-types';
-import { WATER_LEVEL, TERRAIN_DISPLACEMENT_FACTOR } from '../game-consts';
+import { WebGPUTerrainState, Vector3D } from '../types/rendering-types';
+import { WATER_LEVEL } from '../constants/world-constants';
+import { TERRAIN_DISPLACEMENT_FACTOR } from '../constants/rendering-constants';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;

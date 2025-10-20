@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { handleKeyDown } from '../game/input/input-handler';
-import { GameWorldState } from '../game/types/game-types';
-import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/game-consts';
+import { GameWorldState } from '../game/types/world-types';
+import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
 
 interface GameInputControllerProps {
   isActive: () => boolean;

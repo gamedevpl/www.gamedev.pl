@@ -1,4 +1,4 @@
-import { GameWorldState } from '../types/game-types';
+import { GameWorldState } from '../types/world-types';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.

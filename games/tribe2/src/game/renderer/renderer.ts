@@ -1,4 +1,4 @@
-import { GameWorldState, Entity, EntityType } from '../types/game-types';
+import { GameWorldState, Entity, EntityType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
 import {
   isEntityInView,
@@ -6,7 +6,7 @@ import {
   getHeightAtWorldPos,
   computeScreenSpaceDisplacement,
 } from './render-utils';
-import { HEIGHT_MAP_RESOLUTION } from '../game-consts';
+import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
 
 /**
  * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy).

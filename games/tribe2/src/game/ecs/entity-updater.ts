@@ -1,6 +1,6 @@
 import { updateBehaviorTree } from './behavior-tree-update';
 import { updateStateMachine } from '../state-machine/state-machine-update';
-import { Entity, GameWorldState } from '../types/game-types';
+import { Entity, GameWorldState } from '../types/world-types';
 import { vectorAdd, vectorLength, vectorNormalize, vectorScale } from '../utils/math-utils';
 
 /**

@@ -1,6 +1,7 @@
 import { BehaviorTreeComponent } from '../ai/behavior-tree-types';
 import { StateMachineComponent } from '../state-machine/state-machine-types';
 import { Vector2D } from './math-types';
+import { PerformanceMetrics } from './performance-types';
 
 export type EntityId = number;
 
@@ -41,56 +42,6 @@ export interface Entity {
 export interface Entities {
   entities: Map<EntityId, Entity>;
   nextEntityId: EntityId;
-}
-
-/**
- * Performance tracking structures.
- */
-export type PerformanceMetricsBucket = {
-  renderTime: number;
-  worldUpdateTime: number;
-  aiUpdateTime: number;
-};
-
-export interface PerformanceMetrics {
-  currentBucket: PerformanceMetricsBucket;
-  history: (PerformanceMetricsBucket & { bucketTime: number })[];
-}
-
-/**
- * 3D vector type for light direction and other 3D calculations.
- */
-export interface Vector3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/**
- * WebGPU renderer state for terrain rendering.
- */
-export interface WebGPUTerrainState {
-  canvas: HTMLCanvasElement;
-  device: GPUDevice;
-  context: GPUCanvasContext;
-  format: GPUTextureFormat;
-  pipeline: GPURenderPipeline;
-  uniformBuffer: GPUBuffer;
-  bindGroup: GPUBindGroup;
-  sampler: GPUSampler;
-  heightTexture: GPUTexture;
-  heightTextureView: GPUTextureView;
-  gridSize: { width: number; height: number };
-  mapDimensions: { width: number; height: number };
-  cellSize: number; // world units per height texel (HEIGHT_MAP_RESOLUTION)
-  // Lighting parameters
-  lightDir: Vector3D;
-  heightScale: number;
-  displacementFactor: number;
-  ambient: number;
-  // Water parameters
-  waterLevel: number;
-  time: number; // For water animation
 }
 
 /**

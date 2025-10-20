@@ -1,7 +1,6 @@
 import { updateEntity } from './ecs/entity-updater';
-import { EntityType, GameWorldState } from './types/game-types';
-
-const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps (e.g., on tab-out)
+import { EntityType, GameWorldState } from './types/world-types';
+import { MAX_REAL_TIME_DELTA } from './constants/world-constants';
 
 /**
  * The main update function for the entire game world.

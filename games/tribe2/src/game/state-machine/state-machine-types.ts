@@ -1,4 +1,4 @@
-import { Entity } from '../types/game-types';
+import { Entity } from '../types/world-types';
 
 /**
  * Represents a single state in a state machine.

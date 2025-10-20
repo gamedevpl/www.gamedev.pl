@@ -1,8 +1,8 @@
 import React, { createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { Vector2D } from '../game/types/math-types';
-import { Vector3D, WebGPUTerrainState } from '../game/types/game-types';
+import { Vector3D, WebGPUTerrainState } from '../game/types/rendering-types';
 import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
-import { HEIGHT_SCALE, TERRAIN_DISPLACEMENT_FACTOR } from '../game/game-consts';
+import { HEIGHT_SCALE, TERRAIN_DISPLACEMENT_FACTOR } from '../game/constants/rendering-constants';
 
 interface WebGpuRendererContextType {
   initTerrain: (

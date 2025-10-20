@@ -1,6 +1,6 @@
 import { Vector2D } from '../game/types/math-types';
-import { Vector3D } from '../game/types/game-types';
-import { HEIGHT_MAP_RESOLUTION } from '../game/game-consts';
+import { Vector3D } from '../game/types/rendering-types';
+import { HEIGHT_MAP_RESOLUTION } from '../game/constants/world-constants';
 import { clamp, lerp, easeInOutCubic } from '../game/utils/animation-utils';
 
 // Animation phase durations in seconds

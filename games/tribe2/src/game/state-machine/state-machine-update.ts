@@ -1,4 +1,4 @@
-import { Entity } from '../types/game-types';
+import { Entity } from '../types/world-types';
 
 /**
  * Updates the state machine for a given entity.

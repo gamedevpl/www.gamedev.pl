@@ -1,4 +1,4 @@
-import { UpdateContext } from '../types/game-types';
+import { UpdateContext } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
 import { getAudioContext, getMasterGainNode, soundBuffers } from './sound-loader';
 import { SoundOptions, SoundType } from './sound-types';

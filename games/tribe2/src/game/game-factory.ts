@@ -1,6 +1,6 @@
 import { createEntities, createEntity } from './ecs/entity-manager';
-import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH, TREE_RADIUS, TREE_SPAWN_THRESHOLD, TREE_SPAWN_DENSITY } from './game-consts';
-import { Entities, EntityType, BiomeType, GameWorldState } from './types/game-types';
+import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH, TREE_RADIUS, TREE_SPAWN_THRESHOLD, TREE_SPAWN_DENSITY } from './constants/world-constants';
+import { Entities, EntityType, BiomeType, GameWorldState } from './types/world-types';
 import { createNoise2D } from './utils/noise-utils';
 
 /**

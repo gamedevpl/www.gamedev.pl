@@ -1,4 +1,4 @@
-import { Entity, GameWorldState } from '../types/game-types';
+import { Entity, GameWorldState } from '../types/world-types';
 
 /**
  * Placeholder for behavior tree update logic.
