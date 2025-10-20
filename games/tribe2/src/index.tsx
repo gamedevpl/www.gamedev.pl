@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './components/app';
 import { GameProvider } from './context/game-context';
+import { WebGpuRendererProvider } from './context/webgpu-renderer-context';
 import { initSoundLoader } from './game/sound/sound-loader';
 
 const rootElement = document.getElementById('root');
@@ -10,7 +11,9 @@ if (rootElement) {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <GameProvider initialAppState={document.location.hash === '#game' ? 'game' : 'intro'}>
-          <App />
+          <WebGpuRendererProvider>
+            <App />
+          </WebGpuRendererProvider>
         </GameProvider>
       </React.StrictMode>,
     );

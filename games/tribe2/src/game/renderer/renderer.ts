@@ -6,7 +6,7 @@ import {
   getHeightAtWorldPos,
   computeScreenSpaceDisplacement,
 } from './render-utils';
-import { HEIGHT_MAP_RESOLUTION, TERRAIN_DISPLACEMENT_FACTOR, HEIGHT_SCALE } from '../game-consts';
+import { HEIGHT_MAP_RESOLUTION } from '../game-consts';
 
 /**
  * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy).
@@ -115,6 +115,7 @@ function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vect
  * @param viewportCenter The center of the camera in world coordinates.
  * @param viewportZoom The current zoom level.
  * @param canvasDimensions The width and height of the canvas.
+ * @param params Rendering parameters like heightScale and displacementFactor.
  */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -122,6 +123,7 @@ export function renderGame(
   viewportCenter: Vector2D,
   viewportZoom: number,
   canvasDimensions: { width: number; height: number },
+  params: { heightScale: number; displacementFactor: number },
 ): void {
   ctx.save();
 
@@ -130,9 +132,8 @@ export function renderGame(
   ctx.scale(viewportZoom, viewportZoom);
   ctx.translate(-viewportCenter.x, -viewportCenter.y);
 
-  // Get rendering parameters (prefer from webgpu state, fallback to constants)
-  const heightScale = gameState.webgpu?.heightScale ?? HEIGHT_SCALE;
-  const displacementFactor = gameState.webgpu?.displacementFactor ?? TERRAIN_DISPLACEMENT_FACTOR;
+  // Get rendering parameters
+  const { heightScale, displacementFactor } = params;
 
   const visibleEntities = Array.from(gameState.entities.entities.values()).filter((entity) =>
     isEntityInView(entity, viewportCenter, viewportZoom, canvasDimensions, gameState.mapDimensions),

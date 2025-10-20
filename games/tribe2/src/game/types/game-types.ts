@@ -110,8 +110,6 @@ export interface GameWorldState {
   isPaused: boolean;
   gameOver: boolean;
   performanceMetrics: PerformanceMetrics;
-  // Optional GPU terrain renderer state (present when WebGPU is initialized)
-  webgpu?: WebGPUTerrainState;
 }
 
 /**

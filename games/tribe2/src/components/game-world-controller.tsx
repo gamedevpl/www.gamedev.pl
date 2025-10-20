@@ -4,11 +4,11 @@ import { updateWorld } from '../game/main-loop';
 import { GameWorldState } from '../game/types/game-types';
 import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
-import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
 import { BACKGROUND_COLOR, HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/game-consts';
 import { generateHeightMap, generateTrees, initWorld } from '../game/game-factory';
 import { createEntities } from '../game/ecs/entity-manager';
 import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';
+import { useWebGpuRenderer } from '../context/webgpu-renderer-context';
 
 const containerStyle: React.CSSProperties = {
   position: 'relative',
@@ -40,6 +40,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
   const animStateRef = useRef<IntroAnimState | null>(null);
   const lastUpdateTimeRef = useRef<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const renderer = useWebGpuRenderer();
 
   // Initialization Effect
   useEffect(() => {
@@ -86,26 +87,23 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     }
     gameStateRef.current = worldState;
 
-    // Initialize WebGPU terrain
+    // Initialize WebGPU terrain using the context
     (async () => {
       if (gameStateRef.current) {
-        const gpuState = await initWebGPUTerrain(
+        await renderer.initTerrain(
           webgpuCanvas,
           gameStateRef.current.heightMap,
           gameStateRef.current.mapDimensions,
           HEIGHT_MAP_RESOLUTION,
         );
-        if (gpuState) {
-          gameStateRef.current.webgpu = gpuState;
-          setIsInitialized(true); // Signal that we are ready to render
-        }
+        setIsInitialized(true); // Signal that we are ready to render
       }
     })();
 
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [mode, initialState]);
+  }, [mode, initialState, renderer]);
 
   // Main Render Loop
   useRafLoop((time) => {
@@ -139,16 +137,22 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
 
     // --- RENDER -- -
     // 1. Render terrain (WebGPU)
-    if (gameState.webgpu) {
-      renderWebGPUTerrain(gameState.webgpu, viewportCenter, viewportZoom, gameState.time, lightDir);
-    }
+    renderer.renderTerrain(viewportCenter, viewportZoom, gameState.time, lightDir);
 
     // 2. Render entities (Canvas 2D)
+    const { heightScale, displacementFactor } = renderer.getParams();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    renderGame(ctx, gameState, viewportCenter, viewportZoom, {
-      width: canvas.width,
-      height: canvas.height,
-    });
+    renderGame(
+      ctx,
+      gameState,
+      viewportCenter,
+      viewportZoom,
+      {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      { heightScale, displacementFactor },
+    );
   });
 
   return (
