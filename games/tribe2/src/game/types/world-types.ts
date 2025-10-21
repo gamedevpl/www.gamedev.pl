@@ -14,6 +14,11 @@ export enum EntityType {
 
 export enum BiomeType {
   TREE = 'tree',
+  ROCK = 'rock',
+  SNOW = 'snow',
+  SAND = 'sand',
+  GRASS = 'grass',
+  GROUND = 'ground',
 }
 
 /**
@@ -32,8 +37,6 @@ export interface Entity {
   // AI and State Machine components
   stateMachine?: StateMachineComponent;
   behaviorTree?: BehaviorTreeComponent;
-  // Biome-specific properties
-  biomeType?: BiomeType;
 }
 
 /**
@@ -56,6 +59,7 @@ export interface GameWorldState {
     height: number;
   };
   heightMap: number[][];
+  biomeMap: BiomeType[][];
   viewportCenter: Vector2D;
   viewportZoom: number; // Zoom level (1.0 = normal, 2.0 = 2x zoom in, 0.5 = 2x zoom out)
   isPaused: boolean;

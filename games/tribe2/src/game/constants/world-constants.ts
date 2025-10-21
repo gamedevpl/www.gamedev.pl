@@ -14,6 +14,18 @@ export const HEIGHT_MAP_RESOLUTION = 50;
 export const WATER_LEVEL = 0.45;
 
 // Biome Constants
+/** The normalized height value (0-1) above which snow appears. */
+export const SNOW_LEVEL = 0.8;
+
+/** The normalized height value (0-1) above which rock appears. */
+export const ROCK_LEVEL = 0.65;
+
+/** The normalized height value (0-1) above which grass appears. */
+export const GRASS_LEVEL = 0.5;
+
+/** The normalized height value (0-1) above which sand appears. */
+export const SAND_LEVEL = 0.46;
+
 /** The radius of tree entities in pixels. */
 export const TREE_RADIUS = 8;
 

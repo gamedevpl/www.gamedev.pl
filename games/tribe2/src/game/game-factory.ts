@@ -1,5 +1,16 @@
 import { createEntities, createEntity } from './ecs/entity-manager';
-import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH, TREE_RADIUS, TREE_SPAWN_THRESHOLD, TREE_SPAWN_DENSITY } from './constants/world-constants';
+import {
+  HEIGHT_MAP_RESOLUTION,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  TREE_RADIUS,
+  TREE_SPAWN_DENSITY,
+  WATER_LEVEL,
+  SNOW_LEVEL,
+  ROCK_LEVEL,
+  GRASS_LEVEL,
+  SAND_LEVEL,
+} from './constants/world-constants';
 import { Entities, EntityType, BiomeType, GameWorldState } from './types/world-types';
 import { createNoise2D } from './utils/noise-utils';
 
@@ -37,35 +48,63 @@ export function generateHeightMap(width: number, height: number, resolution: num
 }
 
 /**
- * Generates tree entities based on the heightmap.
- * Trees spawn on land (above TREE_SPAWN_THRESHOLD) with a probability of TREE_SPAWN_DENSITY.
- * @param entities The entity manager to add trees to.
+ * Generates a biome map based on the height map.
  * @param heightMap The heightmap of the world.
- * @param resolution The size of each height map cell in pixels.
+ * @returns A 2D array of BiomeType enums.
  */
-export function generateTrees(
-  entities: Entities,
-  heightMap: number[][],
-  resolution: number,
-): void {
+export function generateBiomeMap(heightMap: number[][]): BiomeType[][] {
   const gridHeight = heightMap.length;
   const gridWidth = heightMap[0]?.length ?? 0;
+  const biomeMap: BiomeType[][] = Array.from({ length: gridHeight }, () => new Array(gridWidth));
 
   for (let y = 0; y < gridHeight; y++) {
     for (let x = 0; x < gridWidth; x++) {
       const height = heightMap[y][x];
-      
-      // Only spawn trees on land (above water level threshold)
-      if (height > TREE_SPAWN_THRESHOLD) {
+      if (height > SNOW_LEVEL) {
+        biomeMap[y][x] = BiomeType.SNOW;
+      } else if (height > ROCK_LEVEL) {
+        biomeMap[y][x] = BiomeType.ROCK;
+      } else if (height > GRASS_LEVEL) {
+        biomeMap[y][x] = BiomeType.GRASS;
+      } else if (height > SAND_LEVEL) {
+        biomeMap[y][x] = BiomeType.SAND;
+      } else if (height > WATER_LEVEL) {
+        biomeMap[y][x] = BiomeType.GROUND;
+      } else {
+        // Water is not a biome type, but could be handled here if needed
+        biomeMap[y][x] = BiomeType.GROUND; // Default to ground for below-water cells
+      }
+    }
+  }
+
+  return biomeMap;
+}
+
+/**
+ * Generates tree entities based on the biome map.
+ * Trees spawn on GRASS biome cells with a probability of TREE_SPAWN_DENSITY.
+ * @param entities The entity manager to add trees to.
+ * @param biomeMap The biome map of the world.
+ * @param resolution The size of each map cell in pixels.
+ */
+export function generateTrees(entities: Entities, biomeMap: BiomeType[][], resolution: number): void {
+  const gridHeight = biomeMap.length;
+  const gridWidth = biomeMap[0]?.length ?? 0;
+
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      const biome = biomeMap[y][x];
+
+      // Only spawn trees on grass
+      if (biome === BiomeType.GRASS) {
         // Random chance to spawn a tree
         if (Math.random() < TREE_SPAWN_DENSITY) {
           const worldX = x * resolution + Math.random() * resolution;
           const worldY = y * resolution + Math.random() * resolution;
-          
+
           createEntity(entities, EntityType.TREE, {
             position: { x: worldX, y: worldY },
             radius: TREE_RADIUS,
-            biomeType: BiomeType.TREE,
           });
         }
       }
@@ -80,9 +119,10 @@ export function generateTrees(
 export function initWorld(): GameWorldState {
   const entities = createEntities();
   const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+  const biomeMap = generateBiomeMap(heightMap);
 
-  // Generate trees based on heightmap
-  generateTrees(entities, heightMap, HEIGHT_MAP_RESOLUTION);
+  // Generate trees based on the biome map
+  generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
 
   const initialWorldState: GameWorldState = {
     time: 0,
@@ -92,6 +132,7 @@ export function initWorld(): GameWorldState {
       height: MAP_HEIGHT,
     },
     heightMap,
+    biomeMap,
     viewportCenter: {
       x: MAP_WIDTH / 2,
       y: MAP_HEIGHT / 2,

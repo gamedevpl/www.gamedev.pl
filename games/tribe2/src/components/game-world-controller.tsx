@@ -6,7 +6,7 @@ import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
 import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/constants/world-constants';
-import { generateHeightMap, generateTrees, initWorld } from '../game/game-factory';
+import { generateBiomeMap, generateHeightMap, generateTrees, initWorld } from '../game/game-factory';
 import { createEntities } from '../game/ecs/entity-manager';
 import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';
 import { useWebGpuRenderer } from '../context/webgpu-renderer-context';
@@ -65,13 +65,15 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     let worldState: GameWorldState;
     if (mode === 'intro') {
       const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+      const biomeMap = generateBiomeMap(heightMap);
       const entities = createEntities();
-      generateTrees(entities, heightMap, HEIGHT_MAP_RESOLUTION);
+      generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
       worldState = {
         time: 0,
         entities: entities,
         mapDimensions: { width: MAP_WIDTH, height: MAP_HEIGHT },
         heightMap,
+        biomeMap,
         viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
         viewportZoom: 1.0,
         isPaused: false,
