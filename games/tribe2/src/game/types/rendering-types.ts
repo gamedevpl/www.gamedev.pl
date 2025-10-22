@@ -21,6 +21,8 @@ export interface WebGPUTerrainState {
   sampler: GPUSampler;
   heightTexture: GPUTexture;
   heightTextureView: GPUTextureView;
+  biomeTexture: GPUTexture;
+  biomeTextureView: GPUTextureView;
   gridSize: { width: number; height: number };
   mapDimensions: { width: number; height: number };
   cellSize: number; // world units per height texel (HEIGHT_MAP_RESOLUTION)

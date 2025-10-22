@@ -24,6 +24,21 @@ export const WATER_FOAM_COLOR = { r: 0.9, g: 0.95, b: 1.0 };
 /** The width of the foam at the shoreline, as a normalized value (0-1). */
 export const WATER_FOAM_WIDTH = 0.03;
 
+/** The color of ground terrain. */
+export const GROUND_COLOR = { r: 0.4, g: 0.3, b: 0.2 };
+
+/** The color of sand terrain. */
+export const SAND_COLOR = { r: 0.8, g: 0.7, b: 0.5 };
+
+/** The color of grass terrain. */
+export const GRASS_COLOR = { r: 0.25, g: 0.6, b: 0.3 };
+
+/** The color of rock terrain. */
+export const ROCK_COLOR = { r: 0.5, g: 0.5, b: 0.5 };
+
+/** The color of snow terrain. */
+export const SNOW_COLOR = { r: 0.95, g: 0.98, b: 1.0 };
+
 // Viewport and Camera Constants
 /** The amount the zoom level changes per mouse scroll event. */
 export const ZOOM_SPEED = 0.1;

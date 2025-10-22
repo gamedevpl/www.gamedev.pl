@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { Vector2D } from '../game/types/math-types';
+import { BiomeType } from '../game/types/world-types';
 import { Vector3D, WebGPUTerrainState } from '../game/types/rendering-types';
 import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
 import { HEIGHT_SCALE, TERRAIN_DISPLACEMENT_FACTOR } from '../game/constants/rendering-constants';
@@ -8,6 +9,7 @@ interface WebGpuRendererContextType {
   initTerrain: (
     canvas: HTMLCanvasElement,
     heightMap: number[][],
+    biomeMap: BiomeType[][],
     mapDimensions: { width: number; height: number },
     cellSize: number,
     lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
@@ -25,11 +27,12 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     async (
       canvas: HTMLCanvasElement,
       heightMap: number[][],
+      biomeMap: BiomeType[][],
       mapDimensions: { width: number; height: number },
       cellSize: number,
       lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
     ) => {
-      const gpuState = await initWebGPUTerrain(canvas, heightMap, mapDimensions, cellSize, lighting);
+      const gpuState = await initWebGPUTerrain(canvas, heightMap, biomeMap, mapDimensions, cellSize, lighting);
       webGpuStateRef.current = gpuState;
     },
     [],

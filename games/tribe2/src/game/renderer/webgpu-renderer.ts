@@ -2,7 +2,15 @@ import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
 import { Vector2D } from '../../game/types/math-types';
 import { WebGPUTerrainState, Vector3D } from '../types/rendering-types';
 import { WATER_LEVEL } from '../constants/world-constants';
-import { TERRAIN_DISPLACEMENT_FACTOR } from '../constants/rendering-constants';
+import {
+  TERRAIN_DISPLACEMENT_FACTOR,
+  GROUND_COLOR,
+  SAND_COLOR,
+  GRASS_COLOR,
+  ROCK_COLOR,
+  SNOW_COLOR,
+} from '../constants/rendering-constants';
+import { BiomeType } from '../types/world-types';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -23,9 +31,46 @@ function flattenHeightMapToR8(heightMap: number[][]): { data: Uint8Array; width:
   return { data, width: w, height: h };
 }
 
+// Flattens the biome map to a Uint8Array where each biome ID [0-4] is
+// normalized to the [0-255] range for use in an r8unorm texture.
+function flattenBiomeMapToR8Unorm(biomeMap: BiomeType[][]): { data: Uint8Array; width: number; height: number } {
+  const h = biomeMap.length;
+  const w = biomeMap[0]?.length ?? 0;
+  const data = new Uint8Array(w * h);
+  let i = 0;
+  for (let y = 0; y < h; y++) {
+    const row = biomeMap[y];
+    for (let x = 0; x < w; x++) {
+      let biomeValue = 0; // Default to GROUND
+      switch (row[x]) {
+        case BiomeType.GROUND:
+          biomeValue = 0;
+          break;
+        case BiomeType.SAND:
+          biomeValue = 1;
+          break;
+        case BiomeType.GRASS:
+          biomeValue = 2;
+          break;
+        case BiomeType.ROCK:
+          biomeValue = 3;
+          break;
+        case BiomeType.SNOW:
+          biomeValue = 4;
+          break;
+      }
+      // Normalize the value from [0, 4] to [0, 255] for r8unorm texture.
+      // The shader will receive this as a float in [0.0, 1.0].
+      data[i++] = Math.round((biomeValue / 4.0) * 255);
+    }
+  }
+  return { data, width: w, height: h };
+}
+
 export async function initWebGPUTerrain(
   canvas: HTMLCanvasElement,
   heightMap: number[][],
+  biomeMap: BiomeType[][],
   mapDimensions: { width: number; height: number },
   cellSize: number,
   lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
@@ -52,6 +97,7 @@ export async function initWebGPUTerrain(
       { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     ],
   });
 
@@ -64,15 +110,15 @@ export async function initWebGPUTerrain(
     primitive: { topology: 'triangle-list' },
   });
 
-  // Uniform buffer (4 vec4 = 64 bytes)
-  const uniformBufferSize = 4 * 4 * 4;
+  // Uniform buffer (8 vec4 = 128 bytes)
+  const uniformBufferSize = 8 * 4 * 4;
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
   // Height map texture
-  const { data, width: gridW, height: gridH } = flattenHeightMapToR8(heightMap);
+  const { data: heightData, width: gridW, height: gridH } = flattenHeightMapToR8(heightMap);
   const heightTexture = device.createTexture({
     size: { width: gridW, height: gridH },
     format: 'r8unorm',
@@ -80,11 +126,26 @@ export async function initWebGPUTerrain(
   });
   device.queue.writeTexture(
     { texture: heightTexture },
-    data.buffer,
-    { offset: data.byteOffset, bytesPerRow: gridW, rowsPerImage: gridH },
+    heightData.buffer,
+    { offset: heightData.byteOffset, bytesPerRow: gridW, rowsPerImage: gridH },
     { width: gridW, height: gridH },
   );
   const heightTextureView = heightTexture.createView();
+
+  // Biome map texture
+  const { data: biomeData } = flattenBiomeMapToR8Unorm(biomeMap);
+  const biomeTexture = device.createTexture({
+    size: { width: gridW, height: gridH },
+    format: 'r8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture: biomeTexture },
+    biomeData.buffer,
+    { offset: biomeData.byteOffset, bytesPerRow: gridW, rowsPerImage: gridH },
+    { width: gridW, height: gridH },
+  );
+  const biomeTextureView = biomeTexture.createView();
 
   const sampler = device.createSampler({
     addressModeU: 'repeat',
@@ -99,6 +160,7 @@ export async function initWebGPUTerrain(
       { binding: 0, resource: { buffer: uniformBuffer } },
       { binding: 1, resource: heightTextureView },
       { binding: 2, resource: sampler },
+      { binding: 3, resource: biomeTextureView },
     ],
   });
 
@@ -113,6 +175,8 @@ export async function initWebGPUTerrain(
     sampler,
     heightTexture,
     heightTextureView,
+    biomeTexture,
+    biomeTextureView,
     gridSize: { width: gridW, height: gridH },
     mapDimensions,
     cellSize,
@@ -158,7 +222,7 @@ export function renderWebGPUTerrain(
   const canvasWidth = canvas.width;
   const canvasHeight = canvas.height;
 
-  const u = new Float32Array(16);
+  const u = new Float32Array(32);
   // c0: center.x, center.y, zoom, cellSize
   u[0] = center.x;
   u[1] = center.y;
@@ -180,6 +244,28 @@ export function renderWebGPUTerrain(
   u[13] = waterLevel;
   u[14] = time;
   u[15] = displacementFactor;
+
+  // c4-c7: Biome colors
+  // c4: GROUND.rgb, SAND.r
+  u[16] = GROUND_COLOR.r;
+  u[17] = GROUND_COLOR.g;
+  u[18] = GROUND_COLOR.b;
+  u[19] = SAND_COLOR.r;
+  // c5: SAND.gb, GRASS.rg
+  u[20] = SAND_COLOR.g;
+  u[21] = SAND_COLOR.b;
+  u[22] = GRASS_COLOR.r;
+  u[23] = GRASS_COLOR.g;
+  // c6: GRASS.b, ROCK.rgb
+  u[24] = GRASS_COLOR.b;
+  u[25] = ROCK_COLOR.r;
+  u[26] = ROCK_COLOR.g;
+  u[27] = ROCK_COLOR.b;
+  // c7: SNOW.rgb, padding
+  u[28] = SNOW_COLOR.r;
+  u[29] = SNOW_COLOR.g;
+  u[30] = SNOW_COLOR.b;
+  u[31] = 0.0;
 
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 

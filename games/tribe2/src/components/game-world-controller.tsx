@@ -96,6 +96,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         await renderer.initTerrain(
           webgpuCanvas,
           gameStateRef.current.heightMap,
+          gameStateRef.current.biomeMap,
           gameStateRef.current.mapDimensions,
           HEIGHT_MAP_RESOLUTION,
         );

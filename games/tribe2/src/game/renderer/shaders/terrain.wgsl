@@ -9,11 +9,20 @@ struct Uniforms {
   c2: vec4f,
   // c3: ambient, waterLevel, time, displacementFactor
   c3: vec4f,
+  // c4: GROUND.rgb, SAND.r
+  c4: vec4f,
+  // c5: SAND.gb, GRASS.rg
+  c5: vec4f,
+  // c6: GRASS.b, ROCK.rgb
+  c6: vec4f,
+  // c7: SNOW.rgb, padding
+  c7: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var heightTex: texture_2d<f32>;
 @group(0) @binding(2) var heightSampler: sampler;
+@group(0) @binding(3) var biomeTex: texture_2d<f32>;
 
 struct VSOut {
   @builtin(position) position: vec4f,
@@ -31,11 +40,47 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
   return out;
 }
 
-fn base_color(h: f32) -> vec3f {
-  // Simple green gradient by height
-  let low = vec3f(0.05, 0.2, 0.08);
-  let high = vec3f(0.25, 0.6, 0.3);
-  return mix(low, high, clamp(h, 0.0, 1.0));
+// Decodes biome colors from the uniform buffer with interpolation
+// biomeValue is a normalized float [0, 1] from the biome texture
+fn getBiomeColor(biomeValue: f32) -> vec3f {
+  // Scale back to biome ID range [0, 4]
+  let scaledValue = biomeValue * 4.0;
+  
+  // Get integer biome IDs for interpolation
+  let biomeId0 = u32(floor(scaledValue));
+  let biomeId1 = u32(ceil(scaledValue));
+  let t = fract(scaledValue); // Interpolation factor
+  
+  // Get colors for both biomes
+  var color0: vec3f;
+  var color1: vec3f;
+  
+  if (biomeId0 == 0u) {
+    color0 = uniforms.c4.xyz; // Ground
+  } else if (biomeId0 == 1u) {
+    color0 = vec3f(uniforms.c4.w, uniforms.c5.x, uniforms.c5.y); // Sand
+  } else if (biomeId0 == 2u) {
+    color0 = vec3f(uniforms.c5.z, uniforms.c5.w, uniforms.c6.x); // Grass
+  } else if (biomeId0 == 3u) {
+    color0 = uniforms.c6.yzw; // Rock
+  } else {
+    color0 = uniforms.c7.xyz; // Snow
+  }
+  
+  if (biomeId1 == 0u) {
+    color1 = uniforms.c4.xyz; // Ground
+  } else if (biomeId1 == 1u) {
+    color1 = vec3f(uniforms.c4.w, uniforms.c5.x, uniforms.c5.y); // Sand
+  } else if (biomeId1 == 2u) {
+    color1 = vec3f(uniforms.c5.z, uniforms.c5.w, uniforms.c6.x); // Grass
+  } else if (biomeId1 == 3u) {
+    color1 = uniforms.c6.yzw; // Rock
+  } else {
+    color1 = uniforms.c7.xyz; // Snow
+  }
+  
+  // Interpolate between the two biome colors
+  return mix(color0, color1, t);
 }
 
 // Cartoon water effect - slow, peaceful, zoom-dependent
@@ -54,8 +99,6 @@ fn cartoon_water(worldPos: vec2f, depth: f32, time: f32, zoom: f32) -> vec4f {
   var waterColor = mix(shallowColor, deepColor, depthFactor);
   
   // Zoom-dependent detail level
-  // At low zoom (zoomed out), water is flat and simple
-  // At high zoom (zoomed in), water shows wave patterns
   let detailLevel = clamp((zoom - 0.5) / 2.5, 0.0, 1.0); // 0 at zoom=0.5, 1 at zoom=3.0
   
   if (detailLevel > 0.01) {
@@ -198,7 +241,10 @@ fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     let n_r = normalize(vec3f(-dzdx_r, -dzdy_r, 1.0));
     let ndl_r = max(dot(n_r, lightDir), 0.0);
     let lighting_r = ambient + (1.0 - ambient) * ndl_r;
-    let terrainColor = base_color(h_refracted) * lighting_r;
+
+    // Get biome color for refracted terrain with interpolation
+    let biomeValue_r = textureSampleLevel(biomeTex, heightSampler, refracted_uv, 0.0).x;
+    let terrainColor = getBiomeColor(biomeValue_r) * lighting_r;
     
     // Get cartoon water color
     let waterCol = cartoon_water(wrapped, waterDepth, time, zoom);
@@ -215,7 +261,8 @@ fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     return vec4f(finalColor, 1.0);
   } else if (waterDepth > -shorelineWidth) {
     // This fragment is just above water (wet shore)
-    let terrainColor = base_color(h) * lighting;
+    let biomeValue = textureSampleLevel(biomeTex, heightSampler, uv, 0.0).x;
+    let terrainColor = getBiomeColor(biomeValue) * lighting;
     
     // Calculate how close we are to water level
     let wetFactor = clamp(1.0 + (waterDepth / shorelineWidth), 0.0, 1.0);
@@ -227,7 +274,8 @@ fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     return vec4f(darkenedColor, 1.0);
   } else {
     // Above water - render terrain normally
-    let color = base_color(h) * lighting;
+    let biomeValue = textureSampleLevel(biomeTex, heightSampler, uv, 0.0).x;
+    let color = getBiomeColor(biomeValue) * lighting;
     return vec4f(color, 1.0);
   }
 }
