@@ -2,7 +2,12 @@ import React, { createContext, useContext, ReactNode, useCallback, useRef } from
 import { Vector2D } from '../game/types/math-types';
 import { BiomeType } from '../game/types/world-types';
 import { Vector3D, WebGPUTerrainState } from '../game/types/rendering-types';
-import { initWebGPUTerrain, renderWebGPUTerrain } from '../game/renderer/webgpu-renderer';
+import {
+  initWebGPUTerrain,
+  renderWebGPUTerrain,
+  updateTerrainHeightMap as updateGpuHeightMap,
+  updateBiomeMap as updateGpuBiomeMap,
+} from '../game/renderer/webgpu-renderer';
 import { HEIGHT_SCALE, TERRAIN_DISPLACEMENT_FACTOR } from '../game/constants/rendering-constants';
 
 interface WebGpuRendererContextType {
@@ -16,6 +21,8 @@ interface WebGpuRendererContextType {
   ) => Promise<void>;
   renderTerrain: (center: Vector2D, zoom: number, time: number, lightDir?: Vector3D) => void;
   getParams: () => { heightScale: number; displacementFactor: number };
+  updateTerrainHeightMap: (modifiedGridCells: Map<number, number>) => void;
+  updateBiomeMap: (modifiedGridCells: Map<number, number>) => void;
 }
 
 const WebGpuRendererContext = createContext<WebGpuRendererContextType | undefined>(undefined);
@@ -44,6 +51,18 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     }
   }, []);
 
+  const updateTerrainHeightMap = useCallback((modifiedGridCells: Map<number, number>) => {
+    if (webGpuStateRef.current) {
+      updateGpuHeightMap(webGpuStateRef.current, modifiedGridCells);
+    }
+  }, []);
+
+  const updateBiomeMap = useCallback((modifiedGridCells: Map<number, number>) => {
+    if (webGpuStateRef.current) {
+      updateGpuBiomeMap(webGpuStateRef.current, modifiedGridCells);
+    }
+  }, []);
+
   const getParams = useCallback(() => {
     if (webGpuStateRef.current) {
       return {
@@ -61,6 +80,8 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     initTerrain,
     renderTerrain,
     getParams,
+    updateTerrainHeightMap,
+    updateBiomeMap,
   };
 
   return <WebGpuRendererContext.Provider value={value}>{children}</WebGpuRendererContext.Provider>;

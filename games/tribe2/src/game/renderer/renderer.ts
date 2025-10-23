@@ -1,4 +1,4 @@
-import { GameWorldState, Entity, EntityType } from '../types/world-types';
+import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
 import {
   isEntityInView,
@@ -7,6 +7,7 @@ import {
   computeScreenSpaceDisplacement,
 } from './render-utils';
 import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
+import { GROUND_COLOR, GRASS_COLOR, ROCK_COLOR, SAND_COLOR, SNOW_COLOR } from '../constants/rendering-constants';
 
 /**
  * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy).
@@ -167,7 +168,7 @@ export function renderGame(
 
     const dispWorld = dispPx / viewportZoom;
 
-    // Create displaced draw position
+    // Create displaced draw position (ADD to move entities with terrain parallax)
     const drawPos: Vector2D = {
       x: entity.position.x,
       y: entity.position.y + dispWorld,
@@ -189,6 +190,40 @@ export function renderGame(
         break;
     }
   });
+
+  // Render editor brush cursor if active
+  if (gameState.terrainEditingMode || gameState.biomeEditingMode) {
+    const { position, radius } = gameState.editorBrush;
+    let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
+
+    if (gameState.biomeEditingMode) {
+      let biomeRgb = { r: 1, g: 1, b: 1 };
+      switch (gameState.selectedBiome) {
+        case BiomeType.GROUND:
+          biomeRgb = GROUND_COLOR;
+          break;
+        case BiomeType.SAND:
+          biomeRgb = SAND_COLOR;
+          break;
+        case BiomeType.GRASS:
+          biomeRgb = GRASS_COLOR;
+          break;
+        case BiomeType.ROCK:
+          biomeRgb = ROCK_COLOR;
+          break;
+        case BiomeType.SNOW:
+          biomeRgb = SNOW_COLOR;
+          break;
+      }
+      brushColor = `rgba(${biomeRgb.r * 255}, ${biomeRgb.g * 255}, ${biomeRgb.b * 255}, 0.8)`;
+    }
+
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = brushColor;
+    ctx.lineWidth = 2 / viewportZoom; // Fixed screen-space width
+    ctx.stroke();
+  }
 
   ctx.restore();
 }

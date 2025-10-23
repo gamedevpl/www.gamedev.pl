@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
-import { GameWorldState } from '../game/types/world-types';
+import { BiomeType, GameWorldState } from '../game/types/world-types';
 import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
@@ -79,6 +79,10 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         isPaused: false,
         gameOver: false,
         performanceMetrics: { currentBucket: { renderTime: 0, worldUpdateTime: 0, aiUpdateTime: 0 }, history: [] },
+        terrainEditingMode: false,
+        biomeEditingMode: false,
+        selectedBiome: BiomeType.GRASS,
+        editorBrush: { position: { x: 0, y: 0 }, radius: 0 },
       };
       animStateRef.current = initIntroAnimation(
         heightMap,
@@ -166,7 +170,14 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
       {/* Render UI overlays */}
       {children}
       {/* Conditionally render input controller */}
-      {mode === 'game' && <GameInputController isActive={() => isInitialized} gameStateRef={gameStateRef as React.MutableRefObject<GameWorldState>} />}
+      {mode === 'game' && (
+        <GameInputController
+          isActive={() => isInitialized}
+          gameStateRef={gameStateRef as React.MutableRefObject<GameWorldState>}
+          updateTerrainHeightMap={renderer.updateTerrainHeightMap}
+          updateBiomeMap={renderer.updateBiomeMap}
+        />
+      )}
     </div>
   );
 };

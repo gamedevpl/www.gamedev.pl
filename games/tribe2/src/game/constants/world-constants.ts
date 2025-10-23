@@ -38,3 +38,9 @@ export const TREE_SPAWN_DENSITY = 0.15;
 // Simulation Constants
 /** The maximum delta time in seconds to process in a single frame, to prevent large simulation jumps. */
 export const MAX_REAL_TIME_DELTA = 1 / 60;
+
+// Terrain Editor Constants
+/** The radius of the terrain editing brush in world units. */
+export const TERRAIN_EDIT_BRUSH_RADIUS = 150;
+/** The intensity of the terrain editing effect (how much height is added/removed per frame). */
+export const TERRAIN_EDIT_INTENSITY = 0.01;

@@ -1,7 +1,7 @@
-import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
-import { Vector2D } from '../../game/types/math-types';
-import { WebGPUTerrainState, Vector3D } from '../types/rendering-types';
-import { WATER_LEVEL } from '../constants/world-constants';
+import terrainShaderWGSL from "./shaders/terrain.wgsl?raw";
+import { Vector2D } from "../../game/types/math-types";
+import { WebGPUTerrainState, Vector3D } from "../types/rendering-types";
+import { WATER_LEVEL } from "../constants/world-constants";
 import {
   TERRAIN_DISPLACEMENT_FACTOR,
   GROUND_COLOR,
@@ -9,11 +9,11 @@ import {
   GRASS_COLOR,
   ROCK_COLOR,
   SNOW_COLOR,
-} from '../constants/rendering-constants';
-import { BiomeType } from '../types/world-types';
+} from "../constants/rendering-constants";
+import { BiomeType } from "../types/world-types";
 
 function isWebGPUSupported() {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator;
+  return typeof navigator !== "undefined" && "gpu" in navigator;
 }
 
 function flattenHeightMapToR8(heightMap: number[][]): { data: Uint8Array; width: number; height: number } {
@@ -76,28 +76,28 @@ export async function initWebGPUTerrain(
   lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
 ): Promise<WebGPUTerrainState | null> {
   if (!isWebGPUSupported()) {
-    console.warn('WebGPU not supported in this browser. Terrain will not render.');
+    console.warn("WebGPU not supported in this browser. Terrain will not render.");
     return null;
   }
 
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) {
-    console.warn('WebGPU adapter not available.');
+    console.warn("WebGPU adapter not available.");
     return null;
   }
   const device = await adapter.requestDevice();
-  const context = canvas.getContext('webgpu') as unknown as GPUCanvasContext;
+  const context = canvas.getContext("webgpu") as unknown as GPUCanvasContext;
   const format = navigator.gpu.getPreferredCanvasFormat();
-  context.configure({ device, format, alphaMode: 'premultiplied' });
+  context.configure({ device, format, alphaMode: "premultiplied" });
 
   const module = device.createShaderModule({ code: terrainShaderWGSL });
 
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
-      { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
-      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
-      { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
     ],
   });
 
@@ -105,9 +105,9 @@ export async function initWebGPUTerrain(
 
   const pipeline = device.createRenderPipeline({
     layout: pipelineLayout,
-    vertex: { module, entryPoint: 'vs_main' },
-    fragment: { module, entryPoint: 'fs_main', targets: [{ format }] },
-    primitive: { topology: 'triangle-list' },
+    vertex: { module, entryPoint: "vs_main" },
+    fragment: { module, entryPoint: "fs_main", targets: [{ format }] },
+    primitive: { topology: "triangle-list" },
   });
 
   // Uniform buffer (8 vec4 = 128 bytes)
@@ -121,7 +121,7 @@ export async function initWebGPUTerrain(
   const { data: heightData, width: gridW, height: gridH } = flattenHeightMapToR8(heightMap);
   const heightTexture = device.createTexture({
     size: { width: gridW, height: gridH },
-    format: 'r8unorm',
+    format: "r8unorm",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
   device.queue.writeTexture(
@@ -136,7 +136,7 @@ export async function initWebGPUTerrain(
   const { data: biomeData } = flattenBiomeMapToR8Unorm(biomeMap);
   const biomeTexture = device.createTexture({
     size: { width: gridW, height: gridH },
-    format: 'r8unorm',
+    format: "r8unorm",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
   device.queue.writeTexture(
@@ -148,10 +148,10 @@ export async function initWebGPUTerrain(
   const biomeTextureView = biomeTexture.createView();
 
   const sampler = device.createSampler({
-    addressModeU: 'repeat',
-    addressModeV: 'repeat',
-    magFilter: 'linear',
-    minFilter: 'linear',
+    addressModeU: "repeat",
+    addressModeV: "repeat",
+    magFilter: "linear",
+    minFilter: "linear",
   });
 
   const bindGroup = device.createBindGroup({
@@ -186,6 +186,8 @@ export async function initWebGPUTerrain(
     ambient: lighting?.ambient ?? 0.35,
     waterLevel: WATER_LEVEL,
     time: 0,
+    heightData,
+    biomeData,
   };
 
   return state;
@@ -274,8 +276,8 @@ export function renderWebGPUTerrain(
       {
         view: textureView,
         clearValue: { r: 0.172, g: 0.322, b: 0.204, a: 1 },
-        loadOp: 'clear',
-        storeOp: 'store',
+        loadOp: "clear",
+        storeOp: "store",
       },
     ],
   });
@@ -285,4 +287,122 @@ export function renderWebGPUTerrain(
   pass.end();
 
   device.queue.submit([encoder.finish()]);
+}
+
+/**
+ * Updates a region of the heightmap texture on the GPU.
+ * @param state The WebGPU terrain state object.
+ * @param modifiedGridCells A map where keys are 1D indices of the grid and values are the new height (0-255).
+ */
+export function updateTerrainHeightMap(
+  state: WebGPUTerrainState,
+  modifiedGridCells: Map<number, number>,
+): void {
+  if (modifiedGridCells.size === 0) {
+    return;
+  }
+
+  const { device, heightTexture, heightData, gridSize } = state;
+  const gridW = gridSize.width;
+  const gridH = gridSize.height;
+
+  // 1. Update the CPU-side height data buffer
+  modifiedGridCells.forEach((value, index) => {
+    heightData[index] = value;
+  });
+
+  // 2. Calculate the minimal bounding box of the changed area
+  let minX = gridW;
+  let minY = gridH;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (const index of modifiedGridCells.keys()) {
+    const x = index % gridW;
+    const y = Math.floor(index / gridW);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  const updateWidth = maxX - minX + 1;
+  const updateHeight = maxY - minY + 1;
+
+  // 3. Create a compact buffer with only the data for the dirty rectangle
+  const updateData = new Uint8Array(updateWidth * updateHeight);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const sourceIndex = y * gridW + x;
+      const destIndex = (y - minY) * updateWidth + (x - minX);
+      updateData[destIndex] = heightData[sourceIndex];
+    }
+  }
+
+  // 4. Write the compact buffer to the appropriate region of the GPU texture
+  device.queue.writeTexture(
+    { texture: heightTexture, origin: { x: minX, y: minY, z: 0 } },
+    updateData.buffer,
+    { offset: updateData.byteOffset, bytesPerRow: updateWidth, rowsPerImage: updateHeight },
+    { width: updateWidth, height: updateHeight },
+  );
+}
+
+/**
+ * Updates a region of the biome map texture on the GPU.
+ * @param state The WebGPU terrain state object.
+ * @param modifiedGridCells A map where keys are 1D indices of the grid and values are the new biome value (0-255).
+ */
+export function updateBiomeMap(
+  state: WebGPUTerrainState,
+  modifiedGridCells: Map<number, number>,
+): void {
+  if (modifiedGridCells.size === 0) {
+    return;
+  }
+
+  const { device, biomeTexture, biomeData, gridSize } = state;
+  const gridW = gridSize.width;
+  const gridH = gridSize.height;
+
+  // 1. Update the CPU-side biome data buffer
+  modifiedGridCells.forEach((value, index) => {
+    biomeData[index] = value;
+  });
+
+  // 2. Calculate the minimal bounding box of the changed area
+  let minX = gridW;
+  let minY = gridH;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (const index of modifiedGridCells.keys()) {
+    const x = index % gridW;
+    const y = Math.floor(index / gridW);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  const updateWidth = maxX - minX + 1;
+  const updateHeight = maxY - minY + 1;
+
+  // 3. Create a compact buffer with only the data for the dirty rectangle
+  const updateData = new Uint8Array(updateWidth * updateHeight);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const sourceIndex = y * gridW + x;
+      const destIndex = (y - minY) * updateWidth + (x - minX);
+      updateData[destIndex] = biomeData[sourceIndex];
+    }
+  }
+
+  // 4. Write the compact buffer to the appropriate region of the GPU texture
+  device.queue.writeTexture(
+    { texture: biomeTexture, origin: { x: minX, y: minY, z: 0 } },
+    updateData.buffer,
+    { offset: updateData.byteOffset, bytesPerRow: updateWidth, rowsPerImage: updateHeight },
+    { width: updateWidth, height: updateHeight },
+  );
 }

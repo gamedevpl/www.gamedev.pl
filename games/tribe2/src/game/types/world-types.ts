@@ -65,6 +65,14 @@ export interface GameWorldState {
   isPaused: boolean;
   gameOver: boolean;
   performanceMetrics: PerformanceMetrics;
+  // Editor modes
+  terrainEditingMode: boolean;
+  biomeEditingMode: boolean;
+  selectedBiome: BiomeType;
+  editorBrush: {
+    position: Vector2D;
+    radius: number;
+  };
 }
 
 /**

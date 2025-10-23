@@ -34,4 +34,6 @@ export interface WebGPUTerrainState {
   // Water parameters
   waterLevel: number;
   time: number; // For water animation
+  heightData: Uint8Array;
+  biomeData: Uint8Array;
 }

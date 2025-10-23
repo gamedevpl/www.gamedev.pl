@@ -3,6 +3,7 @@ import {
   HEIGHT_MAP_RESOLUTION,
   MAP_HEIGHT,
   MAP_WIDTH,
+  TERRAIN_EDIT_BRUSH_RADIUS,
   TREE_RADIUS,
   TREE_SPAWN_DENSITY,
   WATER_LEVEL,
@@ -147,6 +148,13 @@ export function initWorld(): GameWorldState {
         aiUpdateTime: 0,
       },
       history: [],
+    },
+    terrainEditingMode: false,
+    biomeEditingMode: false,
+    selectedBiome: BiomeType.GRASS,
+    editorBrush: {
+      position: { x: 0, y: 0 },
+      radius: TERRAIN_EDIT_BRUSH_RADIUS,
     },
   };
 
