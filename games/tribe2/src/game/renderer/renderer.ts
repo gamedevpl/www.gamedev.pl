@@ -1,19 +1,55 @@
 import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import {
-  isEntityInView,
-  worldToScreenCoords,
-  getHeightAtWorldPos,
-  computeScreenSpaceDisplacement,
-} from './render-utils';
-import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
+import { isEntityInView, worldToScreenCoords } from './render-utils';
 import { GROUND_COLOR, GRASS_COLOR, ROCK_COLOR, SAND_COLOR, SNOW_COLOR } from '../constants/rendering-constants';
+
+/**
+ * Calculates all wrapped positions for an entity in a toroidal world using 3x3 instancing.
+ * This mirrors the WebGPU terrain shader's instancing approach.
+ * 
+ * @param entityPos The entity's canonical position in world coordinates [0, mapDimensions]
+ * @param viewportCenter The viewport center in world coordinates
+ * @param mapDimensions The dimensions of the game world
+ * @returns Array of up to 9 wrapped positions where the entity should be rendered
+ */
+function getWrappedEntityPositions(
+  entityPos: Vector2D,
+  viewportCenter: Vector2D,
+  mapDimensions: { width: number; height: number },
+): Vector2D[] {
+  // Calculate which tile the camera is in (using floor for precise integer division)
+  const cameraTileX = Math.floor(viewportCenter.x / mapDimensions.width);
+  const cameraTileY = Math.floor(viewportCenter.y / mapDimensions.height);
+
+  const positions: Vector2D[] = [];
+
+  // Generate 9 instances in a 3x3 grid centered on the camera tile
+  for (let instanceIdx = 0; instanceIdx < 9; instanceIdx++) {
+    // Calculate this instance's relative tile position in the 3x3 grid
+    const tileX = (instanceIdx % 3) - 1;
+    const tileY = Math.floor(instanceIdx / 3) - 1;
+
+    // Calculate this instance's absolute tile position
+    const instanceTileX = cameraTileX + tileX;
+    const instanceTileY = cameraTileY + tileY;
+
+    // Calculate the wrapped world position for this instance
+    const wrappedPos: Vector2D = {
+      x: entityPos.x + instanceTileX * mapDimensions.width,
+      y: entityPos.y + instanceTileY * mapDimensions.height,
+    };
+
+    positions.push(wrappedPos);
+  }
+
+  return positions;
+}
 
 /**
  * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy).
  * @param ctx The canvas rendering context.
  * @param entity The tree entity to render.
- * @param drawPos The displaced position to draw at (in world coordinates).
+ * @param drawPos The position to draw at (in world coordinates).
  * @param viewportZoom The current zoom level for scaling effects.
  */
 function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vector2D): void {
@@ -55,7 +91,7 @@ function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vect
   // Layer 1: Largest circle (back)
   ctx.save();
   const grad1 = ctx.createRadialGradient(
-    canopyBaseY - radius * 0.3,
+    baseX - radius * 0.3,
     canopyBaseY - radius * 0.3,
     0,
     baseX,
@@ -110,13 +146,15 @@ function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vect
 /**
  * Renders the entire game world entities over a pre-rendered terrain background.
  * The terrain is handled by the WebGPU renderer on a separate canvas layer.
+ * 
+ * This function uses 3x3 instanced rendering to handle toroidal world wrapping,
+ * mirroring the approach used in the WebGPU terrain shader.
  *
  * @param ctx The canvas rendering context.
  * @param gameState The current state of the game world.
  * @param viewportCenter The center of the camera in world coordinates.
  * @param viewportZoom The current zoom level.
  * @param canvasDimensions The width and height of the canvas.
- * @param params Rendering parameters like heightScale and displacementFactor.
  */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -124,76 +162,68 @@ export function renderGame(
   viewportCenter: Vector2D,
   viewportZoom: number,
   canvasDimensions: { width: number; height: number },
-  params: { heightScale: number; displacementFactor: number },
 ): void {
-  ctx.save();
+  // Clear the canvas
+  ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height);
 
-  // Set up the camera transform
-  ctx.translate(canvasDimensions.width / 2, canvasDimensions.height / 2);
-  ctx.scale(viewportZoom, viewportZoom);
-  ctx.translate(-viewportCenter.x, -viewportCenter.y);
+  // Get all entities (we'll check visibility per wrapped instance)
+  const entities = Array.from(gameState.entities.entities.values());
 
-  // Get rendering parameters
-  const { heightScale, displacementFactor } = params;
-
-  const visibleEntities = Array.from(gameState.entities.entities.values()).filter((entity) =>
-    isEntityInView(entity, viewportCenter, viewportZoom, canvasDimensions, gameState.mapDimensions),
-  );
-
-  // Render entities based on their type
-  visibleEntities.forEach((entity) => {
-    // Calculate terrain displacement for this entity
-    const baseScreen = worldToScreenCoords(
+  // Render each entity using 3x3 instanced approach
+  entities.forEach((entity) => {
+    // Get all 9 potential wrapped positions for this entity
+    const wrappedPositions = getWrappedEntityPositions(
       entity.position,
       viewportCenter,
-      viewportZoom,
-      canvasDimensions,
       gameState.mapDimensions,
     );
 
-    const height = getHeightAtWorldPos(
-      entity.position,
-      gameState.heightMap,
-      HEIGHT_MAP_RESOLUTION,
-      gameState.mapDimensions,
-    );
+    // Render each wrapped instance that is visible
+    wrappedPositions.forEach((wrappedPos) => {
+      // Create a temporary entity with the wrapped position for visibility check
+      const wrappedEntity = { ...entity, position: wrappedPos };
 
-    const dispPx = computeScreenSpaceDisplacement(
-      baseScreen.y,
-      height,
-      heightScale,
-      displacementFactor,
-      canvasDimensions.height,
-    );
+      // Only render if this wrapped instance is visible
+      if (isEntityInView(wrappedEntity, viewportCenter, viewportZoom, canvasDimensions, gameState.mapDimensions)) {
+        ctx.save();
 
-    const dispWorld = dispPx / viewportZoom;
+        // Set up camera transform for this specific instance
+        ctx.translate(canvasDimensions.width / 2, canvasDimensions.height / 2);
+        ctx.scale(viewportZoom, viewportZoom);
+        ctx.translate(-viewportCenter.x, -viewportCenter.y);
 
-    // Create displaced draw position (ADD to move entities with terrain parallax)
-    const drawPos: Vector2D = {
-      x: entity.position.x,
-      y: entity.position.y + dispWorld,
-    };
+        // Render based on entity type
+        switch (entity.type) {
+          case EntityType.TREE:
+            renderTree(ctx, entity, wrappedPos);
+            break;
+          // Default case for other entities (players, boids, etc.)
+          default:
+            ctx.beginPath();
+            ctx.arc(wrappedPos.x, wrappedPos.y, entity.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+            break;
+        }
 
-    // Render based on entity type
-    switch (entity.type) {
-      case EntityType.TREE:
-        renderTree(ctx, entity, drawPos);
-        break;
-      // Default case for other entities (players, boids, etc.)
-      default:
-        ctx.beginPath();
-        ctx.arc(drawPos.x, drawPos.y, entity.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fill();
-        ctx.strokeStyle = 'white';
-        ctx.stroke();
-        break;
-    }
+        ctx.restore();
+      }
+    });
   });
 
-  // Render editor brush cursor if active
+  // Render editor brush cursor if active (in screen space, outside camera transform)
   if (gameState.terrainEditingMode || gameState.biomeEditingMode) {
     const { position, radius } = gameState.editorBrush;
+
+    // Get all wrapped positions for the brush cursor
+    const wrappedBrushPositions = getWrappedEntityPositions(
+      position,
+      viewportCenter,
+      gameState.mapDimensions,
+    );
+
     let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
 
     if (gameState.biomeEditingMode) {
@@ -218,12 +248,32 @@ export function renderGame(
       brushColor = `rgba(${biomeRgb.r * 255}, ${biomeRgb.g * 255}, ${biomeRgb.b * 255}, 0.8)`;
     }
 
-    ctx.beginPath();
-    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = brushColor;
-    ctx.lineWidth = 2 / viewportZoom; // Fixed screen-space width
-    ctx.stroke();
-  }
+    // Render each wrapped instance of the brush cursor that is visible
+    wrappedBrushPositions.forEach((wrappedPos) => {
+      // Convert wrapped world position to screen coordinates
+      const screenPos = worldToScreenCoords(
+        wrappedPos,
+        viewportCenter,
+        viewportZoom,
+        canvasDimensions,
+        gameState.mapDimensions,
+      );
 
-  ctx.restore();
+      // Check if this wrapped instance is visible on screen
+      const margin = radius * viewportZoom + 20;
+      const isVisible =
+        screenPos.x >= -margin &&
+        screenPos.x <= canvasDimensions.width + margin &&
+        screenPos.y >= -margin &&
+        screenPos.y <= canvasDimensions.height + margin;
+
+      if (isVisible) {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, radius * viewportZoom, 0, Math.PI * 2);
+        ctx.strokeStyle = brushColor;
+        ctx.lineWidth = 2; // Fixed screen-space width
+        ctx.stroke();
+      }
+    });
+  }
 }

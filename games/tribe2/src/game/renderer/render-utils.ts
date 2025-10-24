@@ -3,6 +3,7 @@ import { Vector2D } from '../types/math-types';
 
 /**
  * Converts screen coordinates to world coordinates, taking into account viewport position, zoom, and map wrapping.
+ * This function implements the exact inverse of the vertex shader's coordinate transformation pipeline.
  * @param screenPos The position on the canvas.
  * @param viewportCenter The center of the viewport in world coordinates.
  * @param viewportZoom The current zoom level of the viewport.
@@ -17,19 +18,24 @@ export function screenToWorldCoords(
   canvasDimensions: { width: number; height: number },
   mapDimensions: { width: number; height: number },
 ): Vector2D {
-  // Calculate the top-left corner of the viewport in world coordinates, adjusted for zoom
-  const worldX = viewportCenter.x - canvasDimensions.width / 2 / viewportZoom;
-  const worldY = viewportCenter.y - canvasDimensions.height / 2 / viewportZoom;
+  // Step 1: Convert screen coordinates to NDC (Normalized Device Coordinates)
+  const canvasCenter = { x: canvasDimensions.width / 2, y: canvasDimensions.height / 2 };
+  const ndcX = (screenPos.x - canvasCenter.x) / canvasCenter.x;
+  // INVERT Y-AXIS: Screen Y (down) to NDC Y (up)
+  const ndcY = -((screenPos.y - canvasCenter.y) / canvasCenter.y);
 
-  // Scale the screen position by the zoom factor to convert it to world units
-  const absoluteWorldX = worldX + screenPos.x / viewportZoom;
-  const absoluteWorldY = worldY + screenPos.y / viewportZoom;
+  // Step 2: Convert NDC to screen space in world units (inverse of zoom)
+  const deltaX = (ndcX * canvasCenter.x) / viewportZoom;
+  const deltaY = (ndcY * canvasCenter.y) / viewportZoom;
 
-  // Wrap the coordinates to stay within the map boundaries
-  const wrappedX = ((absoluteWorldX % mapDimensions.width) + mapDimensions.width) % mapDimensions.width;
-  const wrappedY = ((absoluteWorldY % mapDimensions.height) + mapDimensions.height) % mapDimensions.height;
+  // Step 3: Add delta to viewport center and apply toroidal wrapping.
+  // This wrapping ensures coordinates are normalized to the canonical tile range [0, map_size],
+  // which is essential for the dynamic instanced rendering system where 9 copies of the terrain
+  // are visible simultaneously. The double modulo operation handles negative values correctly.
+  const worldX = ((viewportCenter.x + deltaX) % mapDimensions.width + mapDimensions.width) % mapDimensions.width;
+  const worldY = ((viewportCenter.y + deltaY) % mapDimensions.height + mapDimensions.height) % mapDimensions.height;
 
-  return { x: wrappedX, y: wrappedY };
+  return { x: worldX, y: worldY };
 }
 
 /**
@@ -64,7 +70,8 @@ export function worldToScreenCoords(
   // Scale the distance by the zoom factor and translate to the canvas center
   return {
     x: dx * viewportZoom + canvasDimensions.width / 2,
-    y: dy * viewportZoom + canvasDimensions.height / 2,
+    // INVERT Y-AXIS: World Y (up) to Screen Y (down)
+    y: -dy * viewportZoom + canvasDimensions.height / 2,
   };
 }
 
@@ -145,25 +152,4 @@ export function getHeightAtWorldPos(
   const height = h0 * (1 - fy) + h1 * fy;
 
   return height;
-}
-
-/**
- * Computes the screen-space vertical displacement for pseudo-3D terrain effect.
- * Uses the same formula as the terrain.wgsl shader to ensure visual consistency.
- * @param screenY The y-coordinate on screen (in pixels).
- * @param height The normalized height value [0, 1] from the heightmap.
- * @param heightScale The scale factor for height (world units).
- * @param displacementFactor The displacement multiplier (TERRAIN_DISPLACEMENT_FACTOR).
- * @param canvasHeight The height of the canvas in pixels.
- * @returns The vertical displacement in screen pixels.
- */
-export function computeScreenSpaceDisplacement(
-  screenY: number,
-  height: number,
-  heightScale: number,
-  displacementFactor: number,
-  canvasHeight: number,
-): number {
-  // Match the shader formula: displacement = h * heightScale * displacementFactor * (0.5 - screenY / canvasHeight)
-  return height * heightScale * displacementFactor * (0.5 - screenY / canvasHeight);
 }

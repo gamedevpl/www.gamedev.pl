@@ -23,34 +23,77 @@ export function worldToGridCoords(
 }
 
 /**
- * Modifies the heightmap based on a brush stroke.
- * This function mutates the input heightMap array.
- * @param heightMap The 2D heightmap array to modify.
+ * Calculates all positions where a brush effect should be applied in a toroidal world.
+ * If the brush spans world boundaries, multiple wrapped positions are returned.
+ * 
  * @param worldPos The center of the brush in world coordinates.
  * @param brushRadius The radius of the brush in world units.
- * @param intensity The amount of height to add (positive) or remove (negative).
  * @param mapDimensions The dimensions of the game world.
- * @param cellSize The size of each heightmap cell in world units.
- * @returns A map of modified grid cells, with the key being the 1D index and the value being the new height [0-255].
+ * @returns Array of positions where the brush effect should be applied (1, 2, or 4 positions).
  */
-export function applyTerrainEdit(
+function getWrappedBrushPositions(
+  worldPos: Vector2D,
+  brushRadius: number,
+  mapDimensions: { width: number; height: number },
+): Vector2D[] {
+  const positions: Vector2D[] = [worldPos];
+
+  // Check if brush extends beyond left/right boundaries
+  const crossesLeft = worldPos.x - brushRadius < 0;
+  const crossesRight = worldPos.x + brushRadius > mapDimensions.width;
+
+  // Check if brush extends beyond top/bottom boundaries
+  const crossesTop = worldPos.y - brushRadius < 0;
+  const crossesBottom = worldPos.y + brushRadius > mapDimensions.height;
+
+  // Add wrapped positions as needed
+  if (crossesLeft) {
+    // Brush extends past left edge, add wrapped position to the right
+    positions.push({ x: worldPos.x + mapDimensions.width, y: worldPos.y });
+  } else if (crossesRight) {
+    // Brush extends past right edge, add wrapped position to the left
+    positions.push({ x: worldPos.x - mapDimensions.width, y: worldPos.y });
+  }
+
+  if (crossesTop) {
+    // Brush extends past top edge, add wrapped position to the bottom
+    positions.push({ x: worldPos.x, y: worldPos.y + mapDimensions.height });
+  } else if (crossesBottom) {
+    // Brush extends past bottom edge, add wrapped position to the top
+    positions.push({ x: worldPos.x, y: worldPos.y - mapDimensions.height });
+  }
+
+  // Handle corner cases: if brush crosses both X and Y boundaries, add diagonal wrapped position
+  if ((crossesLeft || crossesRight) && (crossesTop || crossesBottom)) {
+    const wrappedX = crossesLeft ? worldPos.x + mapDimensions.width : worldPos.x - mapDimensions.width;
+    const wrappedY = crossesTop ? worldPos.y + mapDimensions.height : worldPos.y - mapDimensions.height;
+    positions.push({ x: wrappedX, y: wrappedY });
+  }
+
+  return positions;
+}
+
+/**
+ * Core logic for applying terrain edit at a single position.
+ * This is extracted to avoid code duplication when handling wrapped positions.
+ */
+function applyTerrainEditAtPosition(
   heightMap: number[][],
   worldPos: Vector2D,
   brushRadius: number,
   intensity: number,
   mapDimensions: { width: number; height: number },
   cellSize: number,
-): Map<number, number> {
+  modifiedCells: Map<number, number>,
+): void {
   const gridHeight = heightMap.length;
   const gridWidth = heightMap[0]?.length ?? 0;
   if (gridWidth === 0 || gridHeight === 0) {
-    return new Map();
+    return;
   }
 
   const center = worldToGridCoords(worldPos, cellSize, mapDimensions);
   const brushRadiusInCells = brushRadius / cellSize;
-
-  const modifiedCells = new Map<number, number>();
 
   // Iterate over a bounding box around the brush
   const startGx = Math.floor(center.gx - brushRadiusInCells);
@@ -89,6 +132,36 @@ export function applyTerrainEdit(
       }
     }
   }
+}
+
+/**
+ * Modifies the heightmap based on a brush stroke.
+ * This function mutates the input heightMap array and handles brush strokes that span world boundaries.
+ * @param heightMap The 2D heightmap array to modify.
+ * @param worldPos The center of the brush in world coordinates.
+ * @param brushRadius The radius of the brush in world units.
+ * @param intensity The amount of height to add (positive) or remove (negative).
+ * @param mapDimensions The dimensions of the game world.
+ * @param cellSize The size of each heightmap cell in world units.
+ * @returns A map of modified grid cells, with the key being the 1D index and the value being the new height [0-255].
+ */
+export function applyTerrainEdit(
+  heightMap: number[][],
+  worldPos: Vector2D,
+  brushRadius: number,
+  intensity: number,
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+): Map<number, number> {
+  const modifiedCells = new Map<number, number>();
+
+  // Get all positions where the brush effect should be applied (handles boundary wrapping)
+  const wrappedPositions = getWrappedBrushPositions(worldPos, brushRadius, mapDimensions);
+
+  // Apply terrain edit at each wrapped position
+  wrappedPositions.forEach((pos) => {
+    applyTerrainEditAtPosition(heightMap, pos, brushRadius, intensity, mapDimensions, cellSize, modifiedCells);
+  });
 
   return modifiedCells;
 }
@@ -130,33 +203,26 @@ function valueToBiome(value: number): BiomeType {
 }
 
 /**
- * Modifies the biome map based on a brush stroke with smooth falloff.
- * This function mutates the input biomeMap array.
- * @param biomeMap The 2D biome map array to modify.
- * @param worldPos The center of the brush in world coordinates.
- * @param brushRadius The radius of the brush in world units.
- * @param selectedBiome The biome to paint.
- * @param mapDimensions The dimensions of the game world.
- * @param cellSize The size of each map cell in world units.
- * @returns A map of modified grid cells, with the key being the 1D index and the value being the new interpolated biome value [0-255].
+ * Core logic for applying biome edit at a single position.
+ * This is extracted to avoid code duplication when handling wrapped positions.
  */
-export function applyBiomeEdit(
+function applyBiomeEditAtPosition(
   biomeMap: BiomeType[][],
   worldPos: Vector2D,
   brushRadius: number,
   selectedBiome: BiomeType,
   mapDimensions: { width: number; height: number },
   cellSize: number,
-): Map<number, number> {
+  modifiedCells: Map<number, number>,
+): void {
   const gridHeight = biomeMap.length;
   const gridWidth = biomeMap[0]?.length ?? 0;
   if (gridWidth === 0 || gridHeight === 0) {
-    return new Map();
+    return;
   }
 
   const center = worldToGridCoords(worldPos, cellSize, mapDimensions);
   const brushRadiusInCells = brushRadius / cellSize;
-  const modifiedCells = new Map<number, number>();
 
   const startGx = Math.floor(center.gx - brushRadiusInCells);
   const endGx = Math.ceil(center.gx + brushRadiusInCells);
@@ -189,6 +255,36 @@ export function applyBiomeEdit(
       }
     }
   }
+}
+
+/**
+ * Modifies the biome map based on a brush stroke with smooth falloff.
+ * This function mutates the input biomeMap array and handles brush strokes that span world boundaries.
+ * @param biomeMap The 2D biome map array to modify.
+ * @param worldPos The center of the brush in world coordinates.
+ * @param brushRadius The radius of the brush in world units.
+ * @param selectedBiome The biome to paint.
+ * @param mapDimensions The dimensions of the game world.
+ * @param cellSize The size of each map cell in world units.
+ * @returns A map of modified grid cells, with the key being the 1D index and the value being the new interpolated biome value [0-255].
+ */
+export function applyBiomeEdit(
+  biomeMap: BiomeType[][],
+  worldPos: Vector2D,
+  brushRadius: number,
+  selectedBiome: BiomeType,
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+): Map<number, number> {
+  const modifiedCells = new Map<number, number>();
+
+  // Get all positions where the brush effect should be applied (handles boundary wrapping)
+  const wrappedPositions = getWrappedBrushPositions(worldPos, brushRadius, mapDimensions);
+
+  // Apply biome edit at each wrapped position
+  wrappedPositions.forEach((pos) => {
+    applyBiomeEditAtPosition(biomeMap, pos, brushRadius, selectedBiome, mapDimensions, cellSize, modifiedCells);
+  });
 
   return modifiedCells;
 }

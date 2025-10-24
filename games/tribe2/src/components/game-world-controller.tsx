@@ -148,19 +148,11 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     renderer.renderTerrain(viewportCenter, viewportZoom, gameState.time, lightDir);
 
     // 2. Render entities (Canvas 2D)
-    const { heightScale, displacementFactor } = renderer.getParams();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    renderGame(
-      ctx,
-      gameState,
-      viewportCenter,
-      viewportZoom,
-      {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      { heightScale, displacementFactor },
-    );
+    renderGame(ctx, gameState, viewportCenter, viewportZoom, {
+      width: canvas.width,
+      height: canvas.height,
+    });
   });
 
   return (

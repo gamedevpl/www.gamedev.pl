@@ -1,3 +1,4 @@
+import { BiomeType } from './world-types';
 /**
  * 3D vector type for light direction and other 3D calculations.
  */
@@ -17,6 +18,8 @@ export interface WebGPUTerrainState {
   format: GPUTextureFormat;
   pipeline: GPURenderPipeline;
   uniformBuffer: GPUBuffer;
+  vertexBuffer: GPUBuffer;
+  vertexCount: number;
   bindGroup: GPUBindGroup;
   sampler: GPUSampler;
   heightTexture: GPUTexture;
@@ -35,5 +38,8 @@ export interface WebGPUTerrainState {
   waterLevel: number;
   time: number; // For water animation
   heightData: Uint8Array;
-  biomeData: Uint8Array;
+  // CPU-side data for mesh regeneration
+  heightMap: number[][];
+  biomeMap: BiomeType[][];
+  biomeValueGrid: Float32Array;
 }

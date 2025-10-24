@@ -4,9 +4,9 @@
 export const BACKGROUND_COLOR = '#2c5234';
 
 /** The vertical scaling factor for the heightmap, used in pseudo-3D displacement. */
-export const HEIGHT_SCALE = 120;
+export const HEIGHT_SCALE = 40000;
 
-/** The multiplier for the pseudo-3D terrain displacement effect. */
+/** The multiplier for the pseudo-3D terrain displacement effect. No longer used for 3D terrain rendering. */
 export const TERRAIN_DISPLACEMENT_FACTOR = 0.4;
 
 /** The color of shallow water in the terrain shader. */

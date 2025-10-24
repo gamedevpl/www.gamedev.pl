@@ -8,7 +8,7 @@ import {
   updateTerrainHeightMap as updateGpuHeightMap,
   updateBiomeMap as updateGpuBiomeMap,
 } from '../game/renderer/webgpu-renderer';
-import { HEIGHT_SCALE, TERRAIN_DISPLACEMENT_FACTOR } from '../game/constants/rendering-constants';
+import { HEIGHT_SCALE } from '../game/constants/rendering-constants';
 
 interface WebGpuRendererContextType {
   initTerrain: (
@@ -67,12 +67,12 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     if (webGpuStateRef.current) {
       return {
         heightScale: webGpuStateRef.current.heightScale,
-        displacementFactor: webGpuStateRef.current.displacementFactor,
+        displacementFactor: 0, // Deprecated after moving to 3D mesh
       };
     }
     return {
       heightScale: HEIGHT_SCALE,
-      displacementFactor: TERRAIN_DISPLACEMENT_FACTOR,
+      displacementFactor: 0, // Deprecated
     };
   }, []);
 
