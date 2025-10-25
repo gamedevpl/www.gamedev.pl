@@ -39,8 +39,9 @@ export function screenToWorldCoords(
 }
 
 /**
- * Converts world coordinates to screen coordinates, taking into account viewport position, zoom, and map wrapping.
- * @param worldPos The position in the game world.
+ * Converts world coordinates to screen coordinates.
+ * This function handles wrapped instances by normalizing distances to the shortest toroidal path.
+ * @param worldPos The position in the game world (can be outside the canonical [0, map_width] range for wrapped instances).
  * @param viewportCenter The center of the viewport in world coordinates.
  * @param viewportZoom The current zoom level of the viewport.
  * @param canvasDimensions The width and height of the canvas.
@@ -55,22 +56,22 @@ export function worldToScreenCoords(
   mapDimensions: { width: number; height: number },
 ): Vector2D {
   let dx = worldPos.x - viewportCenter.x;
-  let dy = worldPos.y + viewportCenter.y;
+  let dy = worldPos.y - viewportCenter.y;
 
-  // Handle horizontal wrapping to find the shortest path
-  if (Math.abs(dx) > mapDimensions.width / 2) {
-    dx = dx - Math.sign(dx) * mapDimensions.width;
-  }
-
-  // Handle vertical wrapping
-  if (Math.abs(dy) > mapDimensions.height / 2) {
-    dy = dy - Math.sign(dy) * mapDimensions.height;
-  }
+  // Normalize to shortest toroidal distance (range: [-mapWidth/2, mapWidth/2])
+  // This is critical for correct rendering of wrapped instances at world boundaries.
+  // Without this normalization, wrapped instances far outside the canonical range
+  // (e.g., x=-2900 or x=5950 for a 3000-wide map) would produce incorrect screen positions.
+  while (dx > mapDimensions.width / 2) dx -= mapDimensions.width;
+  while (dx < -mapDimensions.width / 2) dx += mapDimensions.width;
+  while (dy > mapDimensions.height / 2) dy -= mapDimensions.height;
+  while (dy < -mapDimensions.height / 2) dy += mapDimensions.height;
 
   // Scale the distance by the zoom factor and translate to the canvas center
   return {
     x: dx * viewportZoom + canvasDimensions.width / 2,
-    // INVERT Y-AXIS: World Y (up) to Screen Y (down)
+    // INVERT Y-AXIS: World Y (up) to Screen Y (down). The delta `dy` is already `world - camera`,
+    // so to make positive `dy` (up in world) move down on screen, we must negate it.
     y: -dy * viewportZoom + canvasDimensions.height / 2,
   };
 }

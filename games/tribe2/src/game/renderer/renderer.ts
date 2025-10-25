@@ -57,31 +57,39 @@ function getWrappedEntityPositions(
 }
 
 /**
- * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy).
+ * Renders a tree entity with pseudo-3D effect (shadow, trunk, layered canopy) in screen space.
  * @param ctx The canvas rendering context.
  * @param entity The tree entity to render.
- * @param drawPos The position to draw at (in world coordinates).
+ * @param screenPos The position to draw at (in screen coordinates).
+ * @param worldPos The position in world coordinates (for height sampling).
  * @param heightMap The heightmap for terrain elevation.
  * @param mapDimensions The dimensions of the game world.
  * @param cellSize The size of each heightmap cell.
+ * @param viewportZoom The current zoom level.
  */
 function renderTree(
   ctx: CanvasRenderingContext2D,
   entity: Entity,
-  drawPos: Vector2D,
+  screenPos: Vector2D,
+  worldPos: Vector2D,
   heightMap: number[][],
   mapDimensions: { width: number; height: number },
   cellSize: number,
+  viewportZoom: number,
 ): void {
   // Sample terrain height at tree position
-  const terrainHeight = getHeightAtWorldPos(drawPos, heightMap, cellSize, mapDimensions);
-  const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT;
+  const terrainHeight = getHeightAtWorldPos(worldPos, heightMap, cellSize, mapDimensions);
+  const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
-  const baseX = drawPos.x;
-  const baseY = drawPos.y - heightDisplacement; // Reverted to - for correct direction
-  const radius = entity.radius;
+  const baseX = screenPos.x;
+  const radius = entity.radius * viewportZoom;
+  // screenPos.y is the entity CENTER; convert to BASE (ground level)
+  // Tree trunk height is 2.2 * radius, so center is at trunk_height/2 above base
+  // Higher terrain (positive heightDisplacement) should move tree UP on screen (negative Y)
+  const treeHeight = radius * 2.2; // Trunk height
+  const baseY = screenPos.y + (treeHeight / 2) - heightDisplacement;
 
-  // Tree dimensions
+  // Tree dimensions (scaled by zoom)
   const trunkWidth = radius * 0.5;
   const trunkHeight = radius * 2.2;
   const shadowWidth = radius * 1.8;
@@ -200,35 +208,53 @@ export function renderGame(
 
     // Render each wrapped instance that is visible
     wrappedPositions.forEach((wrappedPos) => {
-      // Create a temporary entity with the wrapped position for visibility check
-      const wrappedEntity = { ...entity, position: wrappedPos };
+      // Convert wrapped world position to screen coordinates
+      const screenPos = worldToScreenCoords(
+        wrappedPos,
+        viewportCenter,
+        viewportZoom,
+        canvasDimensions,
+        gameState.mapDimensions,
+      );
 
-      // Only render if this wrapped instance is visible
-      if (isEntityInView(wrappedEntity, viewportCenter, viewportZoom, canvasDimensions, gameState.mapDimensions)) {
-        ctx.save();
+      // TEMPORARILY DISABLED: Frustum culling for debugging
+      // TODO: Fix frustum culling logic for toroidal world boundaries
+      // For now, do a simple screen bounds check with generous margin
+      // Account for full tree visual height (trunk 2.2 + canopy 1.1 ≈ 3.3 * radius)
+      // This ensures all 9 wrapped instances are properly evaluated at all zoom levels
+      const margin = (entity.radius * 3.3) * viewportZoom + 20;
+      const shouldRender =
+        screenPos.x >= -margin &&
+        screenPos.x <= canvasDimensions.width + margin &&
+        screenPos.y >= -margin &&
+        screenPos.y <= canvasDimensions.height + margin;
 
-        // Set up camera transform for this specific instance
-        ctx.translate(canvasDimensions.width / 2, canvasDimensions.height / 2);
-        ctx.scale(viewportZoom, viewportZoom);
-        ctx.translate(-viewportCenter.x, viewportCenter.y);
-
-        // Render based on entity type
+      if (shouldRender) {
+        // Render based on entity type (all in screen space now)
         switch (entity.type) {
           case EntityType.TREE:
-            renderTree(ctx, entity, wrappedPos, gameState.heightMap, gameState.mapDimensions, HEIGHT_MAP_RESOLUTION);
+            renderTree(
+              ctx,
+              entity,
+              screenPos,
+              wrappedPos,
+              gameState.heightMap,
+              gameState.mapDimensions,
+              HEIGHT_MAP_RESOLUTION,
+              viewportZoom,
+            );
             break;
           // Default case for other entities (players, boids, etc.)
           default:
             ctx.beginPath();
-            ctx.arc(wrappedPos.x, wrappedPos.y, entity.radius, 0, Math.PI * 2);
+            ctx.arc(screenPos.x, screenPos.y, entity.radius * viewportZoom, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.fill();
             ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
             ctx.stroke();
             break;
         }
-
-        ctx.restore();
       }
     });
   });

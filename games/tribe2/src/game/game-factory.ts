@@ -17,6 +17,7 @@ import { createNoise2D } from './utils/noise-utils';
 
 /**
  * Generates a height map using Perlin noise.
+ * The generated map is seamless, meaning the left/right and top/bottom edges connect smoothly.
  * @param width The width of the world in pixels.
  * @param height The height of the world in pixels.
  * @param resolution The size of each height map cell in pixels.
@@ -31,15 +32,58 @@ export function generateHeightMap(width: number, height: number, resolution: num
   // Controls the "zoom" level of the noise. Smaller values result in smoother, larger features.
   const noiseScale = 0.005;
 
+  // The periods for the base frequency, defining the seamless wrapping distance
+  const periodX = width * noiseScale;
+  const periodY = height * noiseScale;
+
+  // Helper functions for seamless noise generation
+  const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+  const lerp = (t: number, a: number, b: number) => a + t * (b - a);
+
+  /**
+   * Generates a single sample of 2D seamless noise by blending four noise samples.
+   * @param nx The x-coordinate in noise space.
+   * @param ny The y-coordinate in noise space.
+   * @param periodX The period over which the noise should tile on the x-axis.
+   * @param periodY The period over which the noise should tile on the y-axis.
+   * @returns A single seamless noise value.
+   */
+  const seamlessNoise = (nx: number, ny: number, periodX: number, periodY: number): number => {
+    // Fractional coordinates [0, 1] for blending
+    const s = nx / periodX;
+    const t = ny / periodY;
+
+    // Blend weights using the fade curve
+    const u = fade(s);
+    const v = fade(t);
+
+    // Sample noise at the four corners of the tile
+    const n1 = noise(nx, ny); // Top-left
+    const n2 = noise(nx - periodX, ny); // Top-right (wrapped)
+    const n3 = noise(nx, ny - periodY); // Bottom-left (wrapped)
+    const n4 = noise(nx - periodX, ny - periodY); // Bottom-right (wrapped)
+
+    // Bilinear interpolation using the blend weights
+    const p1 = lerp(u, n1, n2); // Interpolate along x for top edge
+    const p2 = lerp(u, n3, n4); // Interpolate along x for bottom edge
+    return lerp(v, p1, p2); // Interpolate along y
+  };
+
   for (let y = 0; y < gridHeight; y++) {
     for (let x = 0; x < gridWidth; x++) {
       const worldX = x * resolution;
       const worldY = y * resolution;
-      // Use multiple octaves for more detailed terrain
+
+      const nx = worldX * noiseScale;
+      const ny = worldY * noiseScale;
+
+      // Use multiple octaves for more detailed terrain.
+      // Each octave uses a higher frequency and a correspondingly larger period for seamless tiling.
       const noiseVal =
-        noise(worldX * noiseScale, worldY * noiseScale) +
-        0.5 * noise(worldX * noiseScale * 2, worldY * noiseScale * 2) +
-        0.25 * noise(worldX * noiseScale * 4, worldY * noiseScale * 4);
+        1.0 * seamlessNoise(nx, ny, periodX, periodY) +
+        0.5 * seamlessNoise(nx * 2, ny * 2, periodX * 2, periodY * 2) +
+        0.25 * seamlessNoise(nx * 4, ny * 4, periodX * 4, periodY * 4);
+
       // Normalize the value to be between 0 and 1
       heightMap[y][x] = noiseVal / (1 + 0.5 + 0.25);
     }
