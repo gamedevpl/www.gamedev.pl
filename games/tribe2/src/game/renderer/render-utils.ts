@@ -32,8 +32,8 @@ export function screenToWorldCoords(
   // This wrapping ensures coordinates are normalized to the canonical tile range [0, map_size],
   // which is essential for the dynamic instanced rendering system where 9 copies of the terrain
   // are visible simultaneously. The double modulo operation handles negative values correctly.
-  const worldX = ((viewportCenter.x + deltaX) % mapDimensions.width + mapDimensions.width) % mapDimensions.width;
-  const worldY = ((viewportCenter.y + deltaY) % mapDimensions.height + mapDimensions.height) % mapDimensions.height;
+  const worldX = (((viewportCenter.x + deltaX) % mapDimensions.width) + mapDimensions.width) % mapDimensions.width;
+  const worldY = (((viewportCenter.y + deltaY) % mapDimensions.height) + mapDimensions.height) % mapDimensions.height;
 
   return { x: worldX, y: worldY };
 }
@@ -55,7 +55,7 @@ export function worldToScreenCoords(
   mapDimensions: { width: number; height: number },
 ): Vector2D {
   let dx = worldPos.x - viewportCenter.x;
-  let dy = worldPos.y - viewportCenter.y;
+  let dy = worldPos.y + viewportCenter.y;
 
   // Handle horizontal wrapping to find the shortest path
   if (Math.abs(dx) > mapDimensions.width / 2) {

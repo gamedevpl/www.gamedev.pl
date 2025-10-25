@@ -1,12 +1,23 @@
 import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { isEntityInView, worldToScreenCoords } from './render-utils';
-import { GROUND_COLOR, GRASS_COLOR, ROCK_COLOR, SAND_COLOR, SNOW_COLOR } from '../constants/rendering-constants';
+import { isEntityInView, worldToScreenCoords, getHeightAtWorldPos } from './render-utils';
+import {
+  GROUND_COLOR,
+  GRASS_COLOR,
+  ROCK_COLOR,
+  SAND_COLOR,
+  SNOW_COLOR,
+  HEIGHT_SCALE,
+} from '../constants/rendering-constants';
+import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
+
+// Displacement factor for 2D canvas rendering (much smaller than 3D mesh HEIGHT_SCALE)
+const CANVAS_HEIGHT_DISPLACEMENT = HEIGHT_SCALE * 0.005; // ~200 pixels max
 
 /**
  * Calculates all wrapped positions for an entity in a toroidal world using 3x3 instancing.
  * This mirrors the WebGPU terrain shader's instancing approach.
- * 
+ *
  * @param entityPos The entity's canonical position in world coordinates [0, mapDimensions]
  * @param viewportCenter The viewport center in world coordinates
  * @param mapDimensions The dimensions of the game world
@@ -50,11 +61,24 @@ function getWrappedEntityPositions(
  * @param ctx The canvas rendering context.
  * @param entity The tree entity to render.
  * @param drawPos The position to draw at (in world coordinates).
- * @param viewportZoom The current zoom level for scaling effects.
+ * @param heightMap The heightmap for terrain elevation.
+ * @param mapDimensions The dimensions of the game world.
+ * @param cellSize The size of each heightmap cell.
  */
-function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vector2D): void {
+function renderTree(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  drawPos: Vector2D,
+  heightMap: number[][],
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+): void {
+  // Sample terrain height at tree position
+  const terrainHeight = getHeightAtWorldPos(drawPos, heightMap, cellSize, mapDimensions);
+  const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT;
+
   const baseX = drawPos.x;
-  const baseY = drawPos.y;
+  const baseY = drawPos.y - heightDisplacement; // Reverted to - for correct direction
   const radius = entity.radius;
 
   // Tree dimensions
@@ -146,7 +170,7 @@ function renderTree(ctx: CanvasRenderingContext2D, entity: Entity, drawPos: Vect
 /**
  * Renders the entire game world entities over a pre-rendered terrain background.
  * The terrain is handled by the WebGPU renderer on a separate canvas layer.
- * 
+ *
  * This function uses 3x3 instanced rendering to handle toroidal world wrapping,
  * mirroring the approach used in the WebGPU terrain shader.
  *
@@ -172,11 +196,7 @@ export function renderGame(
   // Render each entity using 3x3 instanced approach
   entities.forEach((entity) => {
     // Get all 9 potential wrapped positions for this entity
-    const wrappedPositions = getWrappedEntityPositions(
-      entity.position,
-      viewportCenter,
-      gameState.mapDimensions,
-    );
+    const wrappedPositions = getWrappedEntityPositions(entity.position, viewportCenter, gameState.mapDimensions);
 
     // Render each wrapped instance that is visible
     wrappedPositions.forEach((wrappedPos) => {
@@ -190,12 +210,12 @@ export function renderGame(
         // Set up camera transform for this specific instance
         ctx.translate(canvasDimensions.width / 2, canvasDimensions.height / 2);
         ctx.scale(viewportZoom, viewportZoom);
-        ctx.translate(-viewportCenter.x, -viewportCenter.y);
+        ctx.translate(-viewportCenter.x, viewportCenter.y);
 
         // Render based on entity type
         switch (entity.type) {
           case EntityType.TREE:
-            renderTree(ctx, entity, wrappedPos);
+            renderTree(ctx, entity, wrappedPos, gameState.heightMap, gameState.mapDimensions, HEIGHT_MAP_RESOLUTION);
             break;
           // Default case for other entities (players, boids, etc.)
           default:
@@ -218,11 +238,7 @@ export function renderGame(
     const { position, radius } = gameState.editorBrush;
 
     // Get all wrapped positions for the brush cursor
-    const wrappedBrushPositions = getWrappedEntityPositions(
-      position,
-      viewportCenter,
-      gameState.mapDimensions,
-    );
+    const wrappedBrushPositions = getWrappedEntityPositions(position, viewportCenter, gameState.mapDimensions);
 
     let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
 

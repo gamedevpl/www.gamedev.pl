@@ -7,6 +7,9 @@ import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-cons
 import { applyBiomeEdit, applyTerrainEdit } from '../game/utils/terrain-editor-utils';
 import { HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
 
+const PAN_EDGE_THRESHOLD = 50; // Pixels from edge to start panning
+const PAN_SPEED_FACTOR = 5.0; // Increased for visibility
+
 interface GameInputControllerProps {
   isActive: () => boolean;
   gameStateRef: React.MutableRefObject<GameWorldState>;
@@ -27,6 +30,41 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   const lastPanPosRef = useRef({ x: 0, y: 0 });
   const isEditingRef = useRef(false);
   const shiftKeyRef = useRef(false); // Track shift key state
+
+  // Refs for edge panning
+  const edgePanVelocityRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panAnimationIdRef = useRef<number | null>(null);
+  const lastEdgePanTimeRef = useRef<number | null>(null);
+
+  // Function to continuously pan when mouse is at the edge
+  const panLoop = (timestamp: DOMHighResTimeStamp) => {
+    if (!lastEdgePanTimeRef.current) {
+      lastEdgePanTimeRef.current = timestamp;
+    }
+    const deltaTime = (timestamp - lastEdgePanTimeRef.current) / 1000; // Delta time in seconds
+    lastEdgePanTimeRef.current = timestamp;
+
+    const gameState = gameStateRef.current;
+    const edgePanVelocity = edgePanVelocityRef.current;
+
+    if (gameState && edgePanVelocity && (edgePanVelocity.x !== 0 || edgePanVelocity.y !== 0)) {
+      const { width: mapWidth, height: mapHeight } = gameState.mapDimensions;
+      // Adjust pan speed by zoom level so it feels consistent regardless of zoom
+      const effectivePanSpeedX = edgePanVelocity.x * PAN_SPEED_FACTOR * deltaTime * 1000;
+      const effectivePanSpeedY = edgePanVelocity.y * PAN_SPEED_FACTOR * deltaTime * 1000;
+
+      console.log(`Panning loop: dX=${effectivePanSpeedX.toFixed(2)}, dY=${effectivePanSpeedY.toFixed(2)}`);
+
+      gameState.viewportCenter.x -= effectivePanSpeedX / gameState.viewportZoom;
+      gameState.viewportCenter.y -= effectivePanSpeedY / gameState.viewportZoom;
+
+      // Apply toroidal wrapping
+      gameState.viewportCenter.x = ((gameState.viewportCenter.x % mapWidth) + mapWidth) % mapWidth;
+      gameState.viewportCenter.y = ((gameState.viewportCenter.y % mapHeight) + mapHeight) % mapHeight;
+    }
+
+    panAnimationIdRef.current = requestAnimationFrame(panLoop);
+  };
 
   useEffect(() => {
     const handleEdit = (shiftKey: boolean) => {
@@ -65,24 +103,37 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       if (!isActive()) return;
       const gameState = gameStateRef.current;
 
-      if (e.button === 1) {
+      // Check if editing mode is active
+      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode;
+
+      if (e.button === 0) {
+        // Left click
+        if (isEditingActive) {
+          // If in editing mode, prioritize editing
+          isEditingRef.current = true;
+          shiftKeyRef.current = e.shiftKey;
+          handleEdit(e.shiftKey);
+        } else {
+          // Otherwise, allow panning with left click
+          isPanningRef.current = true;
+          lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+        }
+        e.preventDefault();
+      } else if (e.button === 1) {
+        // Middle click always pans
         isPanningRef.current = true;
         lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-        e.preventDefault();
-        return;
-      }
-
-      if (e.button === 0 && gameState && (gameState.terrainEditingMode || gameState.biomeEditingMode)) {
-        isEditingRef.current = true;
-        shiftKeyRef.current = e.shiftKey;
-        handleEdit(e.shiftKey);
         e.preventDefault();
       }
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 1) isPanningRef.current = false;
-      if (e.button === 0) isEditingRef.current = false;
+      if (e.button === 0 || e.button === 1) {
+        isPanningRef.current = false;
+      }
+      if (e.button === 0) {
+        isEditingRef.current = false;
+      }
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -94,10 +145,41 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         const dy = e.clientY - lastPanPosRef.current.y;
         lastPanPosRef.current = { x: e.clientX, y: e.clientY };
         gameState.viewportCenter.x -= dx / gameState.viewportZoom;
-        gameState.viewportCenter.y -= dy / gameState.viewportZoom;
+        gameState.viewportCenter.y += dy / gameState.viewportZoom;
         const { width: mapWidth, height: mapHeight } = gameState.mapDimensions;
         gameState.viewportCenter.x = ((gameState.viewportCenter.x % mapWidth) + mapWidth) % mapWidth;
         gameState.viewportCenter.y = ((gameState.viewportCenter.y % mapHeight) + mapHeight) % mapHeight;
+      } else {
+        // Handle edge panning only if not actively dragging
+        let panX = 0;
+        let panY = 0;
+
+        if (docX < PAN_EDGE_THRESHOLD) {
+          panX = (PAN_EDGE_THRESHOLD - docX) / PAN_EDGE_THRESHOLD; // Pan left, stronger closer to edge
+        } else if (docX > width - PAN_EDGE_THRESHOLD) {
+          panX = -(docX - (width - PAN_EDGE_THRESHOLD)) / PAN_EDGE_THRESHOLD; // Pan right
+        }
+
+        if (docY < PAN_EDGE_THRESHOLD) {
+          panY = (PAN_EDGE_THRESHOLD - docY) / PAN_EDGE_THRESHOLD; // Pan up
+        } else if (docY > height - PAN_EDGE_THRESHOLD) {
+          panY = -(docY - (height - PAN_EDGE_THRESHOLD)) / PAN_EDGE_THRESHOLD; // Pan down
+        }
+
+        edgePanVelocityRef.current = { x: panX, y: panY };
+
+        if ((panX !== 0 || panY !== 0) && !panAnimationIdRef.current) {
+          console.log(`Starting edge pan loop. Velocity: x=${panX.toFixed(2)}, y=${panY.toFixed(2)}`);
+          // Start pan loop if not already running and at edge
+          lastEdgePanTimeRef.current = null; // Reset time for smooth start
+          panAnimationIdRef.current = requestAnimationFrame(panLoop);
+        } else if (panX === 0 && panY === 0 && panAnimationIdRef.current) {
+          console.log('Stopping edge pan loop.');
+          // Stop pan loop if not at edge and running
+          cancelAnimationFrame(panAnimationIdRef.current);
+          panAnimationIdRef.current = null;
+          lastEdgePanTimeRef.current = null;
+        }
       }
 
       const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode;
@@ -152,6 +234,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       document.removeEventListener('wheel', onWheel);
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keyup', onKeyUp);
+      if (panAnimationIdRef.current) {
+        cancelAnimationFrame(panAnimationIdRef.current);
+      }
     };
   }, [isActive, gameStateRef, docX, docY, width, height, updateTerrainHeightMap, updateBiomeMap]);
 

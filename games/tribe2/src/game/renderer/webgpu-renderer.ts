@@ -38,7 +38,7 @@ function getBiomeValue(biome: BiomeType): number {
 function generateTerrainMesh(
   heightMap: number[][],
   biomeMap: BiomeType[][],
-  cellSize: number,
+  _cellSize: number,
   heightScale: number,
   mapDimensions: { width: number; height: number },
 ): { vertexData: Float32Array; vertexCount: number; biomeValueGrid: Float32Array } {
@@ -247,7 +247,13 @@ export async function initWebGPUTerrain(
   return state;
 }
 
-export function renderWebGPUTerrain(state: WebGPUTerrainState, center: Vector2D, zoom: number, time: number, lightDir?: Vector3D) {
+export function renderWebGPUTerrain(
+  state: WebGPUTerrainState,
+  center: Vector2D,
+  zoom: number,
+  time: number,
+  lightDir?: Vector3D,
+) {
   const { device, context, pipeline, uniformBuffer, mapDimensions, canvas, waterLevel } = state;
 
   const currentLightDir = lightDir ?? state.lightDir;
@@ -314,7 +320,13 @@ function regenerateMeshAndUpdateBuffer(state: WebGPUTerrainState) {
     state.heightScale,
     state.mapDimensions,
   );
-  state.device.queue.writeBuffer(state.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+  state.device.queue.writeBuffer(
+    state.vertexBuffer,
+    0,
+    vertexData.buffer,
+    vertexData.byteOffset,
+    vertexData.byteLength,
+  );
 }
 
 export function updateTerrainHeightMap(state: WebGPUTerrainState, modifiedGridCells: Map<number, number>): void {
