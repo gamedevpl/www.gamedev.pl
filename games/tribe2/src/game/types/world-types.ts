@@ -73,6 +73,7 @@ export interface GameWorldState {
     position: Vector2D;
     radius: number;
   };
+  wireframeMode: boolean;
 }
 
 /**

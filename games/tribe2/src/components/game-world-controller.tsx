@@ -83,6 +83,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         biomeEditingMode: false,
         selectedBiome: BiomeType.GRASS,
         editorBrush: { position: { x: 0, y: 0 }, radius: 0 },
+        wireframeMode: false,
       };
       animStateRef.current = initIntroAnimation(
         heightMap,

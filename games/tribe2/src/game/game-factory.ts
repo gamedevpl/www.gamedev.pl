@@ -200,6 +200,7 @@ export function initWorld(): GameWorldState {
       position: { x: 0, y: 0 },
       radius: TERRAIN_EDIT_BRUSH_RADIUS,
     },
+    wireframeMode: false,
   };
 
   // Create a single demo entity at the center to validate the rendering pipeline

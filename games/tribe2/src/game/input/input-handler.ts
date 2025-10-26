@@ -46,6 +46,9 @@ export const handleKeyDown = (
     case '7':
       gameState.selectedBiome = BiomeType.SNOW;
       break;
+    case 'w':
+      gameState.wireframeMode = !gameState.wireframeMode;
+      break;
     default:
       handled = false;
       break;

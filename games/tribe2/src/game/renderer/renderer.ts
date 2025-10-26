@@ -176,6 +176,114 @@ function renderTree(
 }
 
 /**
+ * Renders a wireframe of the terrain mesh on the 2D canvas.
+ * This function uses 3x3 instancing to handle the toroidal world.
+ *
+ * @param ctx The canvas rendering context.
+ * @param gameState The current state of the game world.
+ * @param viewportCenter The center of the camera in world coordinates.
+ * @param viewportZoom The current zoom level.
+ * @param canvasDimensions The width and height of the canvas.
+ */
+function renderWireframe(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  viewportCenter: Vector2D,
+  viewportZoom: number,
+  canvasDimensions: { width: number; height: number },
+): void {
+  const { heightMap, mapDimensions } = gameState;
+  const gridH = heightMap.length;
+  const gridW = heightMap[0]?.length ?? 0;
+  if (gridW === 0 || gridH === 0) return;
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const currentWorldPos = {
+        x: x * HEIGHT_MAP_RESOLUTION,
+        y: y * HEIGHT_MAP_RESOLUTION,
+      };
+      const currentHeight = heightMap[y][x];
+
+      // Get 9 wrapped positions for the current grid point
+      const wrappedCurrentPositions = getWrappedEntityPositions(currentWorldPos, viewportCenter, mapDimensions);
+
+      // Connect to right neighbor
+      if (x < gridW - 1) {
+        const rightWorldPos = {
+          x: (x + 1) * HEIGHT_MAP_RESOLUTION,
+          y: y * HEIGHT_MAP_RESOLUTION,
+        };
+        const rightHeight = heightMap[y][x + 1];
+        const wrappedRightPositions = getWrappedEntityPositions(rightWorldPos, viewportCenter, mapDimensions);
+
+        // Draw lines between corresponding wrapped instances
+        for (let i = 0; i < 9; i++) {
+          const screenPos1 = worldToScreenCoords(
+            wrappedCurrentPositions[i],
+            viewportCenter,
+            viewportZoom,
+            canvasDimensions,
+            mapDimensions,
+          );
+          screenPos1.y -= currentHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+          const screenPos2 = worldToScreenCoords(
+            wrappedRightPositions[i],
+            viewportCenter,
+            viewportZoom,
+            canvasDimensions,
+            mapDimensions,
+          );
+          screenPos2.y -= rightHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+          ctx.moveTo(screenPos1.x, screenPos1.y);
+          ctx.lineTo(screenPos2.x, screenPos2.y);
+        }
+      }
+
+      // Connect to bottom neighbor
+      if (y < gridH - 1) {
+        const bottomWorldPos = {
+          x: x * HEIGHT_MAP_RESOLUTION,
+          y: (y + 1) * HEIGHT_MAP_RESOLUTION,
+        };
+        const bottomHeight = heightMap[y + 1][x];
+        const wrappedBottomPositions = getWrappedEntityPositions(bottomWorldPos, viewportCenter, mapDimensions);
+
+        for (let i = 0; i < 9; i++) {
+          const screenPos1 = worldToScreenCoords(
+            wrappedCurrentPositions[i],
+            viewportCenter,
+            viewportZoom,
+            canvasDimensions,
+            mapDimensions,
+          );
+          screenPos1.y -= currentHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+          const screenPos2 = worldToScreenCoords(
+            wrappedBottomPositions[i],
+            viewportCenter,
+            viewportZoom,
+            canvasDimensions,
+            mapDimensions,
+          );
+          screenPos2.y -= bottomHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+          ctx.moveTo(screenPos1.x, screenPos1.y);
+          ctx.lineTo(screenPos2.x, screenPos2.y);
+        }
+      }
+    }
+  }
+  ctx.stroke();
+}
+
+/**
  * Renders the entire game world entities over a pre-rendered terrain background.
  * The terrain is handled by the WebGPU renderer on a separate canvas layer.
  *
@@ -197,6 +305,11 @@ export function renderGame(
 ): void {
   // Clear the canvas
   ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height);
+
+  // Render wireframe if mode is active
+  if (gameState.wireframeMode) {
+    renderWireframe(ctx, gameState, viewportCenter, viewportZoom, canvasDimensions);
+  }
 
   // Get all entities (we'll check visibility per wrapped instance)
   const entities = Array.from(gameState.entities.entities.values());
