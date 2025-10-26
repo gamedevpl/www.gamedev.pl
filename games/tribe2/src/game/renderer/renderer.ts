@@ -1,6 +1,6 @@
 import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { isEntityInView, worldToScreenCoords, getHeightAtWorldPos } from './render-utils';
+import { worldToScreenCoords, getHeightAtWorldPos } from './render-utils';
 import {
   GROUND_COLOR,
   GRASS_COLOR,
@@ -87,7 +87,7 @@ function renderTree(
   // Tree trunk height is 2.2 * radius, so center is at trunk_height/2 above base
   // Higher terrain (positive heightDisplacement) should move tree UP on screen (negative Y)
   const treeHeight = radius * 2.2; // Trunk height
-  const baseY = screenPos.y + (treeHeight / 2) - heightDisplacement;
+  const baseY = screenPos.y + treeHeight / 2 - heightDisplacement;
 
   // Tree dimensions (scaled by zoom)
   const trunkWidth = radius * 0.5;
@@ -222,7 +222,7 @@ export function renderGame(
       // For now, do a simple screen bounds check with generous margin
       // Account for full tree visual height (trunk 2.2 + canopy 1.1 ≈ 3.3 * radius)
       // This ensures all 9 wrapped instances are properly evaluated at all zoom levels
-      const margin = (entity.radius * 3.3) * viewportZoom + 20;
+      const margin = entity.radius * 3.3 * viewportZoom + 20;
       const shouldRender =
         screenPos.x >= -margin &&
         screenPos.x <= canvasDimensions.width + margin &&

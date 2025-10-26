@@ -38,80 +38,75 @@ function getBiomeValue(biome: BiomeType): number {
 function generateTerrainMesh(
   heightMap: number[][],
   biomeMap: BiomeType[][],
-  _cellSize: number,
+  cellSize: number,
   heightScale: number,
-  mapDimensions: { width: number; height: number },
+  _mapDimensions: { width: number; height: number },
 ): { vertexData: Float32Array; vertexCount: number; biomeValueGrid: Float32Array } {
   const gridH = heightMap.length;
   const gridW = heightMap[0]?.length ?? 0;
-  const biomeValueGrid = new Float32Array(gridW * gridH);
 
   // 7 floats per vertex: 3 for position (x,y,z), 3 for normal (nx,ny,nz), 1 for biome
   const floatsPerVertex = 7;
-  const vertexData = new Float32Array((gridW - 1) * (gridH - 1) * 6 * floatsPerVertex);
+  const vertexData = new Float32Array(gridW * gridH * 6 * floatsPerVertex);
   let vertexCount = 0;
   let offset = 0;
 
+  // Helper to get height with toroidal wrapping
   const getHeight = (x: number, y: number) => {
-    const clampedX = Math.max(0, Math.min(gridW - 1, x));
-    const clampedY = Math.max(0, Math.min(gridH - 1, y));
-    return heightMap[clampedY]?.[clampedX] ?? 0;
+    const wrappedX = ((x % gridW) + gridW) % gridW;
+    const wrappedY = ((y % gridH) + gridH) % gridH;
+    return heightMap[wrappedY]?.[wrappedX] ?? 0;
   };
 
+  // Helper to get biome with toroidal wrapping
+  const getBiome = (x: number, y: number) => {
+    const wrappedX = ((x % gridW) + gridW) % gridW;
+    const wrappedY = ((y % gridH) + gridH) % gridH;
+    return biomeMap[wrappedY]?.[wrappedX] ?? BiomeType.GROUND;
+  };
+
+  // Loop over every cell to create a quad, ensuring the mesh wraps around.
   for (let y = 0; y < gridH; y++) {
     for (let x = 0; x < gridW; x++) {
-      biomeValueGrid[y * gridW + x] = getBiomeValue(biomeMap[y][x]) / 4.0;
-    }
-  }
-
-  for (let y = 0; y < gridH - 1; y++) {
-    for (let x = 0; x < gridW - 1; x++) {
-      // Define 4 corner vertices of a quad
+      // Define 4 corner vertices of a quad. The coordinates for sampling
+      // can exceed gridW/gridH because our helpers handle wrapping.
       const corners = [
-        { x: x, y: y },
-        { x: x + 1, y: y },
-        { x: x, y: y + 1 },
-        { x: x + 1, y: y + 1 },
+        { x: x, y: y }, // Top-left of quad
+        { x: x + 1, y: y }, // Top-right
+        { x: x, y: y + 1 }, // Bottom-left
+        { x: x + 1, y: y + 1 }, // Bottom-right
       ];
 
       const vertices = corners.map((c) => {
-        // Position - scale to exact map dimensions
+        // 1. Position
         const h = getHeight(c.x, c.y);
-        const scaledGridX = c.x / (gridW - 1);
-        const scaledGridY = c.y / (gridH - 1);
-        const px = scaledGridX * mapDimensions.width;
-        const py = scaledGridY * mapDimensions.height;
+        const px = c.x * cellSize;
+        const py = c.y * cellSize;
         const pz = h * heightScale;
 
-        // Normal (using central differences with effective cell sizes)
+        // 2. Normal (using central differences)
         const hx1 = getHeight(c.x + 1, c.y);
         const hx0 = getHeight(c.x - 1, c.y);
         const hy1 = getHeight(c.x, c.y + 1);
         const hy0 = getHeight(c.x, c.y - 1);
-        const effectiveCellSizeX = mapDimensions.width / (gridW - 1);
-        const effectiveCellSizeY = mapDimensions.height / (gridH - 1);
-        const dzdx = ((hx1 - hx0) * heightScale) / (2.0 * effectiveCellSizeX);
-        const dzdy = ((hy1 - hy0) * heightScale) / (2.0 * effectiveCellSizeY);
+        const dzdx = ((hx1 - hx0) * heightScale) / (2.0 * cellSize);
+        const dzdy = ((hy1 - hy0) * heightScale) / (2.0 * cellSize);
         const n = { x: -dzdx, y: -dzdy, z: 1.0 };
         const len = Math.hypot(n.x, n.y, n.z);
         const nx = n.x / len;
         const ny = n.y / len;
         const nz = n.z / len;
 
-        // Biome
-        const biomeValue = biomeValueGrid[c.y * gridW + c.x];
+        // 3. Biome
+        const biomeType = getBiome(c.x, c.y);
+        const biomeValue = getBiomeValue(biomeType) / 4.0;
 
         return [px, py, pz, nx, ny, nz, biomeValue];
       });
 
-      // Triangle 1: (0,0) -> (1,0) -> (0,1)
-      const v00 = vertices[0];
-      const v10 = vertices[1];
-      const v01 = vertices[2];
-      // Triangle 2: (1,0) -> (1,1) -> (0,1)
-      const v11 = vertices[3];
+      const [v00, v10, v01, v11] = vertices;
 
-      // Add triangle 1 to vertex data
+      // Triangle 1: (0,0) -> (1,0) -> (0,1)
       vertexData.set(v00, offset);
       offset += floatsPerVertex;
       vertexData.set(v10, offset);
@@ -119,7 +114,7 @@ function generateTerrainMesh(
       vertexData.set(v01, offset);
       offset += floatsPerVertex;
 
-      // Add triangle 2 to vertex data
+      // Triangle 2: (1,0) -> (1,1) -> (0,1)
       vertexData.set(v10, offset);
       offset += floatsPerVertex;
       vertexData.set(v11, offset);
@@ -128,6 +123,14 @@ function generateTerrainMesh(
       offset += floatsPerVertex;
 
       vertexCount += 6;
+    }
+  }
+
+  // This is only needed for the editor, so we can compute it once here.
+  const biomeValueGrid = new Float32Array(gridW * gridH);
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      biomeValueGrid[y * gridW + x] = getBiomeValue(biomeMap[y][x]) / 4.0;
     }
   }
 

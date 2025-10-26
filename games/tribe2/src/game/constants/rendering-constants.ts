@@ -44,7 +44,7 @@ export const SNOW_COLOR = { r: 0.95, g: 0.98, b: 1.0 };
 export const ZOOM_SPEED = 0.1;
 
 /** The minimum zoom level (most zoomed out). */
-export const MIN_ZOOM = 0.5;
+export const MIN_ZOOM = 0.25;
 
 /** The maximum zoom level (most zoomed in). */
 export const MAX_ZOOM = 3.0;
