@@ -17,6 +17,8 @@ struct Uniforms {
   c6: vec4f,
   // c7: SNOW.rgb, padding
   c7: vec4f,
+  // c8: displacementFactor, unused, unused, unused
+  c8: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -66,7 +68,7 @@ fn vs_main(@builtin(instance_index) instance_idx: u32, in: VSInput) -> VSOutput 
   let screen_pos = delta * zoom;
   let ndc_pos = screen_pos / (canvas_size * 0.5);
 
-  out.clip_position = vec4f(ndc_pos.x, ndc_pos.y, instanced_world_pos.z / uniforms.c2.w, 1.0);
+  out.clip_position = vec4f(ndc_pos.x, ndc_pos.y, (instanced_world_pos.z / uniforms.c2.w) * uniforms.c8.x, 1.0);
   out.world_pos = instanced_world_pos;
   out.normal = in.normal;
   out.biome_value = in.biome;

@@ -179,7 +179,7 @@ export async function initWebGPUTerrain(
   new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
   vertexBuffer.unmap();
 
-  const uniformBufferSize = 8 * 4 * 4; // 8 vec4s
+  const uniformBufferSize = 9 * 4 * 4; // 9 vec4s
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -263,7 +263,7 @@ export function renderWebGPUTerrain(
   const encoder = device.createCommandEncoder();
   const textureView = context.getCurrentTexture().createView();
 
-  const u = new Float32Array(32);
+  const u = new Float32Array(36);
   u[0] = center.x;
   u[1] = center.y;
   u[2] = zoom;
@@ -294,6 +294,7 @@ export function renderWebGPUTerrain(
   u[28] = SNOW_COLOR.r;
   u[29] = SNOW_COLOR.g;
   u[30] = SNOW_COLOR.b;
+  u[32] = state.displacementFactor;
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 
   const pass = encoder.beginRenderPass({

@@ -7,12 +7,12 @@ import {
   ROCK_COLOR,
   SAND_COLOR,
   SNOW_COLOR,
-  HEIGHT_SCALE,
+  TERRAIN_DISPLACEMENT_FACTOR,
 } from '../constants/rendering-constants';
 import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
 
-// Displacement factor for 2D canvas rendering (much smaller than 3D mesh HEIGHT_SCALE)
-const CANVAS_HEIGHT_DISPLACEMENT = HEIGHT_SCALE * 0.005; // ~200 pixels max
+// Displacement factor for 2D canvas rendering (aligned with 3D WebGPU terrain)
+const CANVAS_HEIGHT_DISPLACEMENT = TERRAIN_DISPLACEMENT_FACTOR * 50; // ~20 pixels max
 
 /**
  * Calculates all wrapped positions for an entity in a toroidal world using 3x3 instancing.
