@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { useMouse, useWindowSize } from 'react-use';
-import { GameWorldState } from '../game/types/world-types';
+import { GameWorldState, RoadPiece } from '../game/types/world-types';
 import { screenToWorldCoords } from '../game/renderer/render-utils';
 import { handleKeyDown } from '../game/input/input-handler';
 import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
-import { applyBiomeEdit, applyTerrainEdit } from '../game/utils/terrain-editor-utils';
+import { applyBiomeEdit, applyRoadEdit, applyTerrainEdit } from '../game/utils/terrain-editor-utils';
 import { HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
 
 const PAN_EDGE_THRESHOLD = 50; // Pixels from edge to start panning
@@ -15,6 +15,7 @@ interface GameInputControllerProps {
   gameStateRef: React.MutableRefObject<GameWorldState>;
   updateTerrainHeightMap: (modifiedGridCells: Map<number, number>) => void;
   updateBiomeMap: (modifiedGridCells: Map<number, number>) => void;
+  updateRoadMap: (modifiedGridCells: Map<number, RoadPiece | null>) => void;
 }
 
 export const GameInputController: React.FC<GameInputControllerProps> = ({
@@ -22,6 +23,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   gameStateRef,
   updateTerrainHeightMap,
   updateBiomeMap,
+  updateRoadMap,
 }) => {
   const { width, height } = useWindowSize();
   const ref = useRef(document.body); // Attach mouse listener to the body
@@ -96,6 +98,23 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         if (modifiedCells.size > 0) {
           updateBiomeMap(modifiedCells);
         }
+      } else if (gameState.roadEditingMode) {
+        const result = applyRoadEdit(
+          gameState.roadMap,
+          gameState.heightMap,
+          gameState.editorBrush.position,
+          gameState.lastRoadPosition,
+          gameState.mapDimensions,
+          HEIGHT_MAP_RESOLUTION,
+        );
+        if (result.modifiedHeightCells.size > 0) {
+          updateTerrainHeightMap(result.modifiedHeightCells);
+        }
+        if (result.modifiedRoadCells.size > 0) {
+          updateRoadMap(result.modifiedRoadCells);
+          // Update last position to chain roads
+          gameState.lastRoadPosition = { ...gameState.editorBrush.position };
+        }
       }
     };
 
@@ -104,12 +123,24 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const gameState = gameStateRef.current;
 
       // Check if editing mode is active
-      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode;
+      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode || gameState.roadEditingMode;
 
       if (e.button === 0) {
         // Left click
         if (isEditingActive) {
-          // If in editing mode, prioritize editing
+          if (gameState.roadEditingMode) {
+            // Start of a new road segment
+            const worldPos = screenToWorldCoords(
+              { x: e.clientX, y: e.clientY },
+              gameState.viewportCenter,
+              gameState.viewportZoom,
+              { width, height },
+              gameState.mapDimensions,
+            );
+            gameState.editorBrush.position = worldPos;
+            gameState.lastRoadPosition = worldPos;
+          }
+
           isEditingRef.current = true;
           shiftKeyRef.current = e.shiftKey;
           handleEdit(e.shiftKey);
@@ -182,7 +213,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         }
       }
 
-      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode;
+      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode || gameState.roadEditingMode;
       if (isEditingActive) {
         gameState.editorBrush.position = screenToWorldCoords(
           { x: docX, y: docY },
@@ -191,6 +222,14 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
           { width, height },
           gameState.mapDimensions,
         );
+        // Update road preview position
+        if (gameState.roadEditingMode) {
+          gameState.previewRoadPosition = { ...gameState.editorBrush.position };
+        } else {
+          gameState.previewRoadPosition = null;
+        }
+      } else {
+        gameState.previewRoadPosition = null;
       }
 
       if (isEditingRef.current) {
@@ -238,7 +277,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         cancelAnimationFrame(panAnimationIdRef.current);
       }
     };
-  }, [isActive, gameStateRef, docX, docY, width, height, updateTerrainHeightMap, updateBiomeMap]);
+  }, [isActive, gameStateRef, docX, docY, width, height, updateTerrainHeightMap, updateBiomeMap, updateRoadMap]);
 
   return null;
 };

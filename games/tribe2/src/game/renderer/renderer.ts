@@ -284,6 +284,66 @@ function renderWireframe(
 }
 
 /**
+ * Renders the road network on the 2D canvas.
+ * This function uses 3x3 instancing to handle the toroidal world.
+ */
+function renderRoads(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  viewportCenter: Vector2D,
+  viewportZoom: number,
+  canvasDimensions: { width: number; height: number },
+): void {
+  const { roadMap, heightMap, mapDimensions } = gameState;
+  const gridH = roadMap.length;
+  const gridW = roadMap[0]?.length ?? 0;
+  if (gridW === 0 || gridH === 0) return;
+
+  const roadCellSize = HEIGHT_MAP_RESOLUTION * viewportZoom;
+  const roadMargin = roadCellSize * 1.5;
+
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const roadPiece = roadMap[y][x];
+      if (!roadPiece) continue;
+
+      const roadWorldPos = {
+        x: x * HEIGHT_MAP_RESOLUTION + HEIGHT_MAP_RESOLUTION / 2,
+        y: y * HEIGHT_MAP_RESOLUTION + HEIGHT_MAP_RESOLUTION / 2,
+      };
+
+      const wrappedPositions = getWrappedEntityPositions(roadWorldPos, viewportCenter, mapDimensions);
+
+      wrappedPositions.forEach((wrappedPos) => {
+        const screenPos = worldToScreenCoords(wrappedPos, viewportCenter, viewportZoom, canvasDimensions, mapDimensions);
+
+        if (
+          screenPos.x >= -roadMargin &&
+          screenPos.x <= canvasDimensions.width + roadMargin &&
+          screenPos.y >= -roadMargin &&
+          screenPos.y <= canvasDimensions.height + roadMargin
+        ) {
+          // Sample terrain height at road position
+          const terrainHeight = getHeightAtWorldPos(wrappedPos, heightMap, HEIGHT_MAP_RESOLUTION, mapDimensions);
+          const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+          // Draw road tile as a dirt path
+          ctx.fillStyle = '#8a745f'; // Dirt path color
+          ctx.globalAlpha = 0.8; // Slightly transparent
+          ctx.fillRect(
+            screenPos.x - roadCellSize / 2,
+            screenPos.y - roadCellSize / 2 - heightDisplacement, // Apply height displacement
+            roadCellSize,
+            roadCellSize,
+          );
+          ctx.globalAlpha = 1.0;
+        }
+      });
+    }
+  }
+}
+
+/**
  * Renders the entire game world entities over a pre-rendered terrain background.
  * The terrain is handled by the WebGPU renderer on a separate canvas layer.
  *
@@ -311,6 +371,10 @@ export function renderGame(
     renderWireframe(ctx, gameState, viewportCenter, viewportZoom, canvasDimensions);
   }
 
+  // Render roads if not in wireframe mode
+  if (!gameState.wireframeMode) {
+    renderRoads(ctx, gameState, viewportCenter, viewportZoom, canvasDimensions);
+  }
   // Get all entities (we'll check visibility per wrapped instance)
   const entities = Array.from(gameState.entities.entities.values());
 
@@ -371,6 +435,97 @@ export function renderGame(
       }
     });
   });
+
+  // Render road editing preview if active
+  if (gameState.roadEditingMode) {
+    const { lastRoadPosition, previewRoadPosition } = gameState;
+
+    // 1. Render the preview piece at the cursor
+    if (previewRoadPosition) {
+      const wrappedPreviewPositions = getWrappedEntityPositions(
+        previewRoadPosition,
+        viewportCenter,
+        gameState.mapDimensions,
+      );
+      wrappedPreviewPositions.forEach((wrappedPos) => {
+        const screenPos = worldToScreenCoords(
+          wrappedPos,
+          viewportCenter,
+          viewportZoom,
+          canvasDimensions,
+          gameState.mapDimensions,
+        );
+        const terrainHeight = getHeightAtWorldPos(
+          wrappedPos,
+          gameState.heightMap,
+          HEIGHT_MAP_RESOLUTION,
+          gameState.mapDimensions,
+        );
+        const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+        const roadCellSize = HEIGHT_MAP_RESOLUTION * viewportZoom;
+
+        // Check if preview is on screen before drawing
+        const margin = roadCellSize;
+        if (
+          screenPos.x >= -margin &&
+          screenPos.x <= canvasDimensions.width + margin &&
+          screenPos.y >= -margin &&
+          screenPos.y <= canvasDimensions.height + margin
+        ) {
+          ctx.fillStyle = 'rgba(138, 116, 95, 0.5)'; // Semi-transparent path color
+          ctx.fillRect(
+            screenPos.x - roadCellSize / 2,
+            screenPos.y - roadCellSize / 2 - heightDisplacement,
+            roadCellSize,
+            roadCellSize,
+          );
+        }
+      });
+    }
+
+    // 2. Render the connecting line from the last piece
+    if (lastRoadPosition && previewRoadPosition) {
+      // Note: This line doesn't perfectly handle world wrapping, but gives a good indication.
+      const screenLastPos = worldToScreenCoords(
+        lastRoadPosition,
+        viewportCenter,
+        viewportZoom,
+        canvasDimensions,
+        gameState.mapDimensions,
+      );
+      const lastPosHeight = getHeightAtWorldPos(
+        lastRoadPosition,
+        gameState.heightMap,
+        HEIGHT_MAP_RESOLUTION,
+        gameState.mapDimensions,
+      );
+      screenLastPos.y -= lastPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+      const screenPreviewPos = worldToScreenCoords(
+        previewRoadPosition,
+        viewportCenter,
+        viewportZoom,
+        canvasDimensions,
+        gameState.mapDimensions,
+      );
+      const previewPosHeight = getHeightAtWorldPos(
+        previewRoadPosition,
+        gameState.heightMap,
+        HEIGHT_MAP_RESOLUTION,
+        gameState.mapDimensions,
+      );
+      screenPreviewPos.y -= previewPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+      ctx.beginPath();
+      ctx.moveTo(screenLastPos.x, screenLastPos.y);
+      ctx.lineTo(screenPreviewPos.x, screenPreviewPos.y);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 10]);
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset line dash
+    }
+  }
 
   // Render editor brush cursor if active (in screen space, outside camera transform)
   if (gameState.terrainEditingMode || gameState.biomeEditingMode) {

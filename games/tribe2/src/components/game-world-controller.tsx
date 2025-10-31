@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
-import { BiomeType, GameWorldState } from '../game/types/world-types';
+import { BiomeType, GameWorldState, RoadPiece } from '../game/types/world-types';
 import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
@@ -66,6 +66,11 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     if (mode === 'intro') {
       const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
       const biomeMap = generateBiomeMap(heightMap);
+      const gridHeight = heightMap.length;
+      const gridWidth = heightMap[0]?.length ?? 0;
+      const roadMap: (RoadPiece | null)[][] = Array.from({ length: gridHeight }, () =>
+        new Array(gridWidth).fill(null),
+      );
       const entities = createEntities();
       generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
       worldState = {
@@ -74,6 +79,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         mapDimensions: { width: MAP_WIDTH, height: MAP_HEIGHT },
         heightMap,
         biomeMap,
+        roadMap,
         viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
         viewportZoom: 1.0,
         isPaused: false,
@@ -84,6 +90,8 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         selectedBiome: BiomeType.GRASS,
         editorBrush: { position: { x: 0, y: 0 }, radius: 0 },
         wireframeMode: false,
+        roadEditingMode: false,
+        lastRoadPosition: null,
       };
       animStateRef.current = initIntroAnimation(
         heightMap,
@@ -102,6 +110,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
           webgpuCanvas,
           gameStateRef.current.heightMap,
           gameStateRef.current.biomeMap,
+          gameStateRef.current.roadMap,
           gameStateRef.current.mapDimensions,
           HEIGHT_MAP_RESOLUTION,
         );
@@ -169,6 +178,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
           gameStateRef={gameStateRef as React.MutableRefObject<GameWorldState>}
           updateTerrainHeightMap={renderer.updateTerrainHeightMap}
           updateBiomeMap={renderer.updateBiomeMap}
+          updateRoadMap={renderer.updateRoadMap}
         />
       )}
     </div>

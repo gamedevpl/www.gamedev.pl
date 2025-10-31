@@ -23,12 +23,14 @@ export const handleKeyDown = (
       gameState.terrainEditingMode = !gameState.terrainEditingMode;
       if (gameState.terrainEditingMode) {
         gameState.biomeEditingMode = false; // Disable biome editing
+        gameState.roadEditingMode = false;
       }
       break;
     case '2':
       gameState.biomeEditingMode = !gameState.biomeEditingMode;
       if (gameState.biomeEditingMode) {
         gameState.terrainEditingMode = false; // Disable terrain editing
+        gameState.roadEditingMode = false;
       }
       break;
     case '3':
@@ -45,6 +47,13 @@ export const handleKeyDown = (
       break;
     case '7':
       gameState.selectedBiome = BiomeType.SNOW;
+      break;
+    case 'r':
+      gameState.roadEditingMode = !gameState.roadEditingMode;
+      if (gameState.roadEditingMode) {
+        gameState.terrainEditingMode = false; // Disable terrain editing
+        gameState.biomeEditingMode = false; // Disable biome editing
+      }
       break;
     case 'w':
       gameState.wireframeMode = !gameState.wireframeMode;

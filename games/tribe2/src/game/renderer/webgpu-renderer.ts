@@ -11,7 +11,7 @@ import {
   SNOW_COLOR,
   HEIGHT_SCALE,
 } from '../constants/rendering-constants';
-import { BiomeType } from '../types/world-types';
+import { BiomeType, RoadPiece } from '../types/world-types';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -38,6 +38,7 @@ function getBiomeValue(biome: BiomeType): number {
 function generateTerrainMesh(
   heightMap: number[][],
   biomeMap: BiomeType[][],
+  roadMap: (RoadPiece | null)[][],
   cellSize: number,
   heightScale: number,
   _mapDimensions: { width: number; height: number },
@@ -45,8 +46,8 @@ function generateTerrainMesh(
   const gridH = heightMap.length;
   const gridW = heightMap[0]?.length ?? 0;
 
-  // 7 floats per vertex: 3 for position (x,y,z), 3 for normal (nx,ny,nz), 1 for biome
-  const floatsPerVertex = 7;
+  // 8 floats per vertex: 3 pos, 3 normal, 1 biome, 1 isRoad
+  const floatsPerVertex = 8;
   const vertexData = new Float32Array(gridW * gridH * 6 * floatsPerVertex);
   let vertexCount = 0;
   let offset = 0;
@@ -63,6 +64,12 @@ function generateTerrainMesh(
     const wrappedX = ((x % gridW) + gridW) % gridW;
     const wrappedY = ((y % gridH) + gridH) % gridH;
     return biomeMap[wrappedY]?.[wrappedX] ?? BiomeType.GROUND;
+  };
+
+  const getIsRoad = (x: number, y: number) => {
+    const wrappedX = ((x % gridW) + gridW) % gridW;
+    const wrappedY = ((y % gridH) + gridH) % gridH;
+    return roadMap[wrappedY]?.[wrappedX] ? 1.0 : 0.0;
   };
 
   // Loop over every cell to create a quad, ensuring the mesh wraps around.
@@ -101,7 +108,10 @@ function generateTerrainMesh(
         const biomeType = getBiome(c.x, c.y);
         const biomeValue = getBiomeValue(biomeType) / 4.0;
 
-        return [px, py, pz, nx, ny, nz, biomeValue];
+        // 4. isRoad flag
+        const isRoad = getIsRoad(c.x, c.y);
+
+        return [px, py, pz, nx, ny, nz, biomeValue, isRoad];
       });
 
       const [v00, v10, v01, v11] = vertices;
@@ -141,6 +151,7 @@ export async function initWebGPUTerrain(
   canvas: HTMLCanvasElement,
   heightMap: number[][],
   biomeMap: BiomeType[][],
+  roadMap: (RoadPiece | null)[][],
   mapDimensions: { width: number; height: number },
   cellSize: number,
   lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
@@ -166,6 +177,7 @@ export async function initWebGPUTerrain(
   const { vertexData, vertexCount, biomeValueGrid } = generateTerrainMesh(
     heightMap,
     biomeMap,
+    roadMap,
     cellSize,
     heightScale,
     mapDimensions,
@@ -198,11 +210,12 @@ export async function initWebGPUTerrain(
       entryPoint: 'vs_main',
       buffers: [
         {
-          arrayStride: 7 * 4, // 7 floats * 4 bytes/float
+          arrayStride: 8 * 4, // 8 floats * 4 bytes/float
           attributes: [
             { shaderLocation: 0, offset: 0, format: 'float32x3' }, // position
             { shaderLocation: 1, offset: 12, format: 'float32x3' }, // normal
             { shaderLocation: 2, offset: 24, format: 'float32' }, // biome
+            { shaderLocation: 3, offset: 28, format: 'float32' }, // isRoad
           ],
         },
       ],
@@ -237,6 +250,7 @@ export async function initWebGPUTerrain(
     time: 0,
     heightMap,
     biomeMap,
+    roadMap,
     biomeValueGrid,
     heightData: new Uint8Array(),
     // Deprecated fields, kept for type compatibility
@@ -320,6 +334,7 @@ function regenerateMeshAndUpdateBuffer(state: WebGPUTerrainState) {
   const { vertexData } = generateTerrainMesh(
     state.heightMap,
     state.biomeMap,
+    state.roadMap,
     state.cellSize,
     state.heightScale,
     state.mapDimensions,
@@ -357,6 +372,17 @@ export function updateBiomeMap(state: WebGPUTerrainState, modifiedGridCells: Map
     else if (biomeId === 3) biomeType = BiomeType.ROCK;
     else if (biomeId === 4) biomeType = BiomeType.SNOW;
     state.biomeMap[y][x] = biomeType;
+  });
+  regenerateMeshAndUpdateBuffer(state);
+}
+
+export function updateRoadMap(state: WebGPUTerrainState, modifiedGridCells: Map<number, RoadPiece | null>): void {
+  if (modifiedGridCells.size === 0) return;
+  const gridW = state.gridSize.width;
+  modifiedGridCells.forEach((value, index) => {
+    const x = index % gridW;
+    const y = Math.floor(index / gridW);
+    state.roadMap[y][x] = value;
   });
   regenerateMeshAndUpdateBuffer(state);
 }

@@ -44,3 +44,9 @@ export const MAX_REAL_TIME_DELTA = 1 / 60;
 export const TERRAIN_EDIT_BRUSH_RADIUS = 150;
 /** The intensity of the terrain editing effect (how much height is added/removed per frame). */
 export const TERRAIN_EDIT_INTENSITY = 0.01;
+
+// Road Constants
+/** The width of roads in world units. */
+export const ROAD_WIDTH = 100;
+/** The intensity of the terrain leveling effect when placing roads. */
+export const ROAD_LEVEL_INTENSITY = 0.3;

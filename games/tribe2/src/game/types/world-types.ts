@@ -21,6 +21,23 @@ export enum BiomeType {
   GROUND = 'ground',
 }
 
+export enum RoadDirection {
+  N,
+  NE,
+  E,
+  SE,
+  S,
+  SW,
+  W,
+  NW,
+  NONE,
+}
+
+export interface RoadPiece {
+  direction: RoadDirection;
+  level: number; // normalized height 0-1
+}
+
 /**
  * A generic base entity for any object in the game world.
  * This can be extended with components for specific game objects.
@@ -60,6 +77,7 @@ export interface GameWorldState {
   };
   heightMap: number[][];
   biomeMap: BiomeType[][];
+  roadMap: (RoadPiece | null)[][];
   viewportCenter: Vector2D;
   viewportZoom: number; // Zoom level (1.0 = normal, 2.0 = 2x zoom in, 0.5 = 2x zoom out)
   isPaused: boolean;
@@ -74,6 +92,10 @@ export interface GameWorldState {
     radius: number;
   };
   wireframeMode: boolean;
+  // Road Editor
+  roadEditingMode: boolean;
+  lastRoadPosition: Vector2D | null;
+  previewRoadPosition: Vector2D | null;
 }
 
 /**

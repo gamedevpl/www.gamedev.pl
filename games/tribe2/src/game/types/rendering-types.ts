@@ -1,4 +1,4 @@
-import { BiomeType } from './world-types';
+import { BiomeType, RoadPiece } from './world-types';
 /**
  * 3D vector type for light direction and other 3D calculations.
  */
@@ -41,5 +41,7 @@ export interface WebGPUTerrainState {
   // CPU-side data for mesh regeneration
   heightMap: number[][];
   biomeMap: BiomeType[][];
+  /** Stores road piece information for mesh generation. */
+  roadMap: (RoadPiece | null)[][];
   biomeValueGrid: Float32Array;
 }

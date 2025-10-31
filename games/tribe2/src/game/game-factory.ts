@@ -12,7 +12,7 @@ import {
   GRASS_LEVEL,
   SAND_LEVEL,
 } from './constants/world-constants';
-import { Entities, EntityType, BiomeType, GameWorldState } from './types/world-types';
+import { Entities, EntityType, BiomeType, GameWorldState, RoadPiece } from './types/world-types';
 import { createNoise2D } from './utils/noise-utils';
 
 /**
@@ -165,6 +165,9 @@ export function initWorld(): GameWorldState {
   const entities = createEntities();
   const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
   const biomeMap = generateBiomeMap(heightMap);
+  const gridHeight = heightMap.length;
+  const gridWidth = heightMap[0]?.length ?? 0;
+  const roadMap: (RoadPiece | null)[][] = Array.from({ length: gridHeight }, () => new Array(gridWidth).fill(null));
 
   // Generate trees based on the biome map
   generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
@@ -178,6 +181,7 @@ export function initWorld(): GameWorldState {
     },
     heightMap,
     biomeMap,
+    roadMap,
     viewportCenter: {
       x: MAP_WIDTH / 2,
       y: MAP_HEIGHT / 2,
@@ -201,6 +205,9 @@ export function initWorld(): GameWorldState {
       radius: TERRAIN_EDIT_BRUSH_RADIUS,
     },
     wireframeMode: false,
+    roadEditingMode: false,
+    lastRoadPosition: null,
+    previewRoadPosition: null,
   };
 
   // Create a single demo entity at the center to validate the rendering pipeline

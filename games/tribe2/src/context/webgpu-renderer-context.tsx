@@ -1,12 +1,13 @@
 import React, { createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { Vector2D } from '../game/types/math-types';
-import { BiomeType } from '../game/types/world-types';
+import { BiomeType, RoadPiece } from '../game/types/world-types';
 import { Vector3D, WebGPUTerrainState } from '../game/types/rendering-types';
 import {
   initWebGPUTerrain,
   renderWebGPUTerrain,
   updateTerrainHeightMap as updateGpuHeightMap,
   updateBiomeMap as updateGpuBiomeMap,
+  updateRoadMap as updateGpuRoadMap,
 } from '../game/renderer/webgpu-renderer';
 import { HEIGHT_SCALE } from '../game/constants/rendering-constants';
 
@@ -15,6 +16,7 @@ interface WebGpuRendererContextType {
     canvas: HTMLCanvasElement,
     heightMap: number[][],
     biomeMap: BiomeType[][],
+    roadMap: (RoadPiece | null)[][],
     mapDimensions: { width: number; height: number },
     cellSize: number,
     lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
@@ -23,6 +25,7 @@ interface WebGpuRendererContextType {
   getParams: () => { heightScale: number; displacementFactor: number };
   updateTerrainHeightMap: (modifiedGridCells: Map<number, number>) => void;
   updateBiomeMap: (modifiedGridCells: Map<number, number>) => void;
+  updateRoadMap: (modifiedGridCells: Map<number, RoadPiece | null>) => void;
 }
 
 const WebGpuRendererContext = createContext<WebGpuRendererContextType | undefined>(undefined);
@@ -35,11 +38,20 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
       canvas: HTMLCanvasElement,
       heightMap: number[][],
       biomeMap: BiomeType[][],
+      roadMap: (RoadPiece | null)[][],
       mapDimensions: { width: number; height: number },
       cellSize: number,
       lighting?: { lightDir?: Vector3D; heightScale?: number; ambient?: number; displacementFactor?: number },
     ) => {
-      const gpuState = await initWebGPUTerrain(canvas, heightMap, biomeMap, mapDimensions, cellSize, lighting);
+      const gpuState = await initWebGPUTerrain(
+        canvas,
+        heightMap,
+        biomeMap,
+        roadMap,
+        mapDimensions,
+        cellSize,
+        lighting,
+      );
       webGpuStateRef.current = gpuState;
     },
     [],
@@ -63,6 +75,12 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     }
   }, []);
 
+  const updateRoadMap = useCallback((modifiedGridCells: Map<number, RoadPiece | null>) => {
+    if (webGpuStateRef.current) {
+      updateGpuRoadMap(webGpuStateRef.current, modifiedGridCells);
+    }
+  }, []);
+
   const getParams = useCallback(() => {
     if (webGpuStateRef.current) {
       return {
@@ -82,6 +100,7 @@ export const WebGpuRendererProvider: React.FC<{ children: ReactNode }> = ({ chil
     getParams,
     updateTerrainHeightMap,
     updateBiomeMap,
+    updateRoadMap,
   };
 
   return <WebGpuRendererContext.Provider value={value}>{children}</WebGpuRendererContext.Provider>;

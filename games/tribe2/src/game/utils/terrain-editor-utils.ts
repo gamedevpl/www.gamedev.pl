@@ -1,5 +1,6 @@
-import { BiomeType } from '../types/world-types';
+import { BiomeType, RoadDirection, RoadPiece } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
+import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH } from '../constants/world-constants';
 
 /**
  * Converts world coordinates to grid coordinates, handling map wrapping.
@@ -287,4 +288,177 @@ export function applyBiomeEdit(
   });
 
   return modifiedCells;
+}
+
+/**
+ * Calculates the primary 8-way direction from a starting to an ending position.
+ * @param from The starting grid position.
+ * @param to The ending grid position.
+ * @returns The calculated RoadDirection.
+ */
+export function calculateRoadDirection(from: Vector2D, to: Vector2D): RoadDirection {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (dx === 0 && dy === 0) {
+    return RoadDirection.NONE;
+  }
+
+  // In grid space, +y is down, so we use atan2(dy, dx)
+  const angle = Math.atan2(dy, dx); // Angle in radians
+  const piOver8 = Math.PI / 8;
+
+  if (angle >= -piOver8 && angle < piOver8) return RoadDirection.E;
+  if (angle >= piOver8 && angle < 3 * piOver8) return RoadDirection.SE;
+  if (angle >= 3 * piOver8 && angle < 5 * piOver8) return RoadDirection.S;
+  if (angle >= 5 * piOver8 && angle < 7 * piOver8) return RoadDirection.SW;
+  if (angle >= 7 * piOver8 || angle < -7 * piOver8) return RoadDirection.W;
+  if (angle >= -7 * piOver8 && angle < -5 * piOver8) return RoadDirection.NW;
+  if (angle >= -5 * piOver8 && angle < -3 * piOver8) return RoadDirection.N;
+  if (angle >= -3 * piOver8 && angle < -piOver8) return RoadDirection.NE;
+
+  return RoadDirection.NONE; // Should be unreachable
+}
+
+/**
+ * Levels the terrain orthogonally to a road's direction.
+ */
+function levelTerrainForRoad(
+  heightMap: number[][],
+  roadGridPos: { gx: number; gy: number },
+  direction: RoadDirection,
+  roadWidth: number,
+  intensity: number,
+  _mapDimensions: { width: number; height: number },
+  cellSize: number,
+  modifiedCells: Map<number, number>,
+  targetLevel: number,
+): void {
+  const gridHeight = heightMap.length;
+  const gridWidth = heightMap[0]?.length ?? 0;
+  if (gridWidth === 0) return;
+
+  const roadWidthInCells = roadWidth / cellSize;
+  const radius = roadWidthInCells / 2;
+
+  // Define road direction vector (y is down in grid space)
+  let dirVec = { x: 0, y: 0 };
+  switch (direction) {
+    case RoadDirection.N:
+      dirVec = { x: 0, y: -1 };
+      break;
+    case RoadDirection.NE:
+      dirVec = { x: 1, y: -1 };
+      break;
+    case RoadDirection.E:
+      dirVec = { x: 1, y: 0 };
+      break;
+    case RoadDirection.SE:
+      dirVec = { x: 1, y: 1 };
+      break;
+    case RoadDirection.S:
+      dirVec = { x: 0, y: 1 };
+      break;
+    case RoadDirection.SW:
+      dirVec = { x: -1, y: 1 };
+      break;
+    case RoadDirection.W:
+      dirVec = { x: -1, y: 0 };
+      break;
+    case RoadDirection.NW:
+      dirVec = { x: -1, y: -1 };
+      break;
+    case RoadDirection.NONE:
+      return;
+  }
+
+  const len = Math.hypot(dirVec.x, dirVec.y);
+  if (len > 0) {
+    dirVec.x /= len;
+    dirVec.y /= len;
+  }
+
+  const startGx = Math.floor(roadGridPos.gx - radius);
+  const endGx = Math.ceil(roadGridPos.gx + radius);
+  const startGy = Math.floor(roadGridPos.gy - radius);
+  const endGy = Math.ceil(roadGridPos.gy + radius);
+
+  for (let gy = startGy; gy <= endGy; gy++) {
+    for (let gx = startGx; gx <= endGx; gx++) {
+      const cellVec = { x: gx - roadGridPos.gx, y: gy - roadGridPos.gy };
+      const dot = cellVec.x * dirVec.x + cellVec.y * dirVec.y;
+      const parallelVec = { x: dot * dirVec.x, y: dot * dirVec.y };
+      const orthoVec = { x: cellVec.x - parallelVec.x, y: cellVec.y - parallelVec.y };
+      const orthoDist = Math.hypot(orthoVec.x, orthoVec.y);
+
+      if (orthoDist <= radius) {
+        const falloff = Math.pow(1 - orthoDist / radius, 2);
+        const wrappedGy = ((gy % gridHeight) + gridHeight) % gridHeight;
+        const wrappedGx = ((gx % gridWidth) + gridWidth) % gridWidth;
+
+        const currentHeight = heightMap[wrappedGy][wrappedGx];
+        const newHeight = currentHeight + (targetLevel - currentHeight) * intensity * falloff;
+        const clampedHeight = Math.max(0, Math.min(1, newHeight));
+
+        heightMap[wrappedGy][wrappedGx] = clampedHeight;
+
+        const index1D = wrappedGy * gridWidth + wrappedGx;
+        const valueR8 = Math.round(clampedHeight * 255);
+        modifiedCells.set(index1D, valueR8);
+      }
+    }
+  }
+}
+
+/**
+ * Creates a new road piece, connects it to the previous one, and levels the terrain.
+ * @returns A map of modified road cells and a map of modified height cells.
+ */
+export function applyRoadEdit(
+  roadMap: (RoadPiece | null)[][],
+  heightMap: number[][],
+  worldPos: Vector2D,
+  lastRoadPos: Vector2D | null,
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+): { modifiedRoadCells: Map<number, RoadPiece | null>; modifiedHeightCells: Map<number, number> } {
+  const modifiedRoadCells = new Map<number, RoadPiece | null>();
+  const modifiedHeightCells = new Map<number, number>();
+  const gridWidth = roadMap[0]?.length ?? 0;
+
+  const currentGridPos = worldToGridCoords(worldPos, cellSize, mapDimensions);
+
+  if (!lastRoadPos) return { modifiedRoadCells, modifiedHeightCells };
+
+  const lastGridPos = worldToGridCoords(lastRoadPos, cellSize, mapDimensions);
+
+  if (currentGridPos.gx === lastGridPos.gx && currentGridPos.gy === lastGridPos.gy) {
+    return { modifiedRoadCells, modifiedHeightCells };
+  }
+
+  const direction = calculateRoadDirection(
+    { x: lastGridPos.gx, y: lastGridPos.gy },
+    { x: currentGridPos.gx, y: currentGridPos.gy },
+  );
+  if (direction === RoadDirection.NONE) return { modifiedRoadCells, modifiedHeightCells };
+
+  const targetLevel = heightMap[currentGridPos.gy][currentGridPos.gx];
+  const newRoadPiece: RoadPiece = { direction, level: targetLevel };
+  roadMap[currentGridPos.gy][currentGridPos.gx] = newRoadPiece;
+  const currentIndex = currentGridPos.gy * gridWidth + currentGridPos.gx;
+  modifiedRoadCells.set(currentIndex, newRoadPiece);
+
+  levelTerrainForRoad(
+    heightMap,
+    currentGridPos,
+    direction,
+    ROAD_WIDTH,
+    ROAD_LEVEL_INTENSITY,
+    mapDimensions,
+    cellSize,
+    modifiedHeightCells,
+    targetLevel,
+  );
+
+  return { modifiedRoadCells, modifiedHeightCells };
 }
