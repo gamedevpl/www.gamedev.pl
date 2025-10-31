@@ -92,6 +92,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         wireframeMode: false,
         roadEditingMode: false,
         lastRoadPosition: null,
+        previewRoadPosition: null,
       };
       animStateRef.current = initIntroAnimation(
         heightMap,
