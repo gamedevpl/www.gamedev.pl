@@ -1,7 +1,7 @@
 import terrainShaderWGSL from './shaders/terrain.wgsl?raw';
 import { Vector2D } from '../../game/types/math-types';
 import { WebGPUTerrainState, Vector3D } from '../types/rendering-types';
-import { WATER_LEVEL } from '../constants/world-constants';
+import { WATER_LEVEL, ROAD_WIDTH } from '../constants/world-constants';
 import {
   TERRAIN_DISPLACEMENT_FACTOR,
   GROUND_COLOR,
@@ -10,6 +10,9 @@ import {
   ROCK_COLOR,
   SNOW_COLOR,
   HEIGHT_SCALE,
+  ROAD_COLOR,
+  ROAD_COAST_COLOR,
+  ROAD_COAST_WIDTH,
 } from '../constants/rendering-constants';
 import { BiomeType, RoadPiece } from '../types/world-types';
 
@@ -32,6 +35,20 @@ function getBiomeValue(biome: BiomeType): number {
     default:
       return 0.0;
   }
+}
+
+/**
+ * Encodes a RoadPiece into a 4-byte RGBA value for the road texture.
+ * R: Direction (0-8, where 8=NONE)
+ * G: Level (normalized height 0-1, scaled to 0-255)
+ * B: Unused
+ * A: Has Road flag (255 if road exists, 0 otherwise)
+ * @param roadPiece The road piece to encode, or null.
+ * @returns A tuple of four numbers [R, G, B, A].
+ */
+function encodeRoadData(roadPiece: RoadPiece | null): [number, number, number, number] {
+  if (!roadPiece) return [0, 0, 0, 0];
+  return [roadPiece.direction, Math.round(roadPiece.level * 255), 0, 255];
 }
 
 // Generates a non-indexed triangle list mesh for the terrain
@@ -191,14 +208,50 @@ export async function initWebGPUTerrain(
   new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
   vertexBuffer.unmap();
 
-  const uniformBufferSize = 9 * 4 * 4; // 9 vec4s
+  const uniformBufferSize = 11 * 4 * 4; // 11 vec4s
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
+  // Create Road Texture
+  const gridW = heightMap[0]?.length ?? 0;
+  const gridH = heightMap.length;
+  const roadTexture = device.createTexture({
+    size: [gridW, gridH],
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const roadTextureView = roadTexture.createView();
+
+  // Create initial road texture data
+  const roadTextureData = new Uint8Array(gridW * gridH * 4);
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const roadPiece = roadMap[y][x];
+      const encoded = encodeRoadData(roadPiece);
+      const idx = (y * gridW + x) * 4;
+      roadTextureData.set(encoded, idx);
+    }
+  }
+  device.queue.writeTexture(
+    { texture: roadTexture },
+    roadTextureData,
+    { offset: 0, bytesPerRow: gridW * 4 },
+    { width: gridW, height: gridH },
+  );
+
+  const sampler = device.createSampler({
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
+
   const bindGroupLayout = device.createBindGroupLayout({
-    entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+    ],
   });
 
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
@@ -226,7 +279,11 @@ export async function initWebGPUTerrain(
 
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
-    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+    entries: [
+      { binding: 0, resource: { buffer: uniformBuffer } },
+      { binding: 1, resource: roadTextureView },
+      { binding: 2, resource: sampler },
+    ],
   });
 
   const state: WebGPUTerrainState = {
@@ -239,7 +296,10 @@ export async function initWebGPUTerrain(
     vertexBuffer,
     vertexCount,
     bindGroup,
-    gridSize: { width: heightMap[0]?.length ?? 0, height: heightMap.length },
+    sampler,
+    roadTexture,
+    roadTextureView,
+    gridSize: { width: gridW, height: gridH },
     mapDimensions,
     cellSize,
     lightDir: lighting?.lightDir ?? { x: 0.3, y: 0.5, z: 0.8 },
@@ -254,7 +314,6 @@ export async function initWebGPUTerrain(
     biomeValueGrid,
     heightData: new Uint8Array(),
     // Deprecated fields, kept for type compatibility
-    sampler: device.createSampler(),
     heightTexture: device.createTexture({ size: [1, 1], format: 'r8unorm', usage: 0 }),
     heightTextureView: device.createTexture({ size: [1, 1], format: 'r8unorm', usage: 0 }).createView(),
     biomeTexture: device.createTexture({ size: [1, 1], format: 'r8unorm', usage: 0 }),
@@ -277,7 +336,7 @@ export function renderWebGPUTerrain(
   const encoder = device.createCommandEncoder();
   const textureView = context.getCurrentTexture().createView();
 
-  const u = new Float32Array(36);
+  const u = new Float32Array(44); // 11 vec4s
   u[0] = center.x;
   u[1] = center.y;
   u[2] = zoom;
@@ -309,6 +368,17 @@ export function renderWebGPUTerrain(
   u[29] = SNOW_COLOR.g;
   u[30] = SNOW_COLOR.b;
   u[32] = state.displacementFactor;
+  u[33] = state.cellSize;
+  // Road uniforms
+  u[36] = ROAD_COLOR.r;
+  u[37] = ROAD_COLOR.g;
+  u[38] = ROAD_COLOR.b;
+  u[39] = ROAD_COAST_COLOR.r;
+  u[40] = ROAD_COAST_COLOR.g;
+  u[41] = ROAD_COAST_COLOR.b;
+  u[42] = ROAD_COAST_WIDTH;
+  u[43] = ROAD_WIDTH;
+
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 
   const pass = encoder.beginRenderPass({
@@ -379,10 +449,25 @@ export function updateBiomeMap(state: WebGPUTerrainState, modifiedGridCells: Map
 export function updateRoadMap(state: WebGPUTerrainState, modifiedGridCells: Map<number, RoadPiece | null>): void {
   if (modifiedGridCells.size === 0) return;
   const gridW = state.gridSize.width;
+
+  // Update CPU-side map first
   modifiedGridCells.forEach((value, index) => {
     const x = index % gridW;
     const y = Math.floor(index / gridW);
     state.roadMap[y][x] = value;
   });
-  regenerateMeshAndUpdateBuffer(state);
+
+  // Update GPU texture for each modified cell
+  modifiedGridCells.forEach((roadPiece, index) => {
+    const x = index % gridW;
+    const y = Math.floor(index / gridW);
+    const roadPixelData = new Uint8Array(encodeRoadData(roadPiece));
+
+    state.device.queue.writeTexture(
+      { texture: state.roadTexture, origin: [x, y, 0] },
+      roadPixelData,
+      { offset: 0, bytesPerRow: 4 }, // Layout for a single pixel
+      { width: 1, height: 1, depthOrArrayLayers: 1 }, // Size of the update
+    );
+  });
 }

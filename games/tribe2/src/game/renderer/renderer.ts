@@ -284,66 +284,6 @@ function renderWireframe(
 }
 
 /**
- * Renders the road network on the 2D canvas.
- * This function uses 3x3 instancing to handle the toroidal world.
- */
-function renderRoads(
-  ctx: CanvasRenderingContext2D,
-  gameState: GameWorldState,
-  viewportCenter: Vector2D,
-  viewportZoom: number,
-  canvasDimensions: { width: number; height: number },
-): void {
-  const { roadMap, heightMap, mapDimensions } = gameState;
-  const gridH = roadMap.length;
-  const gridW = roadMap[0]?.length ?? 0;
-  if (gridW === 0 || gridH === 0) return;
-
-  const roadCellSize = HEIGHT_MAP_RESOLUTION * viewportZoom;
-  const roadMargin = roadCellSize * 1.5;
-
-  for (let y = 0; y < gridH; y++) {
-    for (let x = 0; x < gridW; x++) {
-      const roadPiece = roadMap[y][x];
-      if (!roadPiece) continue;
-
-      const roadWorldPos = {
-        x: x * HEIGHT_MAP_RESOLUTION + HEIGHT_MAP_RESOLUTION / 2,
-        y: y * HEIGHT_MAP_RESOLUTION + HEIGHT_MAP_RESOLUTION / 2,
-      };
-
-      const wrappedPositions = getWrappedEntityPositions(roadWorldPos, viewportCenter, mapDimensions);
-
-      wrappedPositions.forEach((wrappedPos) => {
-        const screenPos = worldToScreenCoords(wrappedPos, viewportCenter, viewportZoom, canvasDimensions, mapDimensions);
-
-        if (
-          screenPos.x >= -roadMargin &&
-          screenPos.x <= canvasDimensions.width + roadMargin &&
-          screenPos.y >= -roadMargin &&
-          screenPos.y <= canvasDimensions.height + roadMargin
-        ) {
-          // Sample terrain height at road position
-          const terrainHeight = getHeightAtWorldPos(wrappedPos, heightMap, HEIGHT_MAP_RESOLUTION, mapDimensions);
-          const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
-
-          // Draw road tile as a dirt path
-          ctx.fillStyle = '#8a745f'; // Dirt path color
-          ctx.globalAlpha = 0.8; // Slightly transparent
-          ctx.fillRect(
-            screenPos.x - roadCellSize / 2,
-            screenPos.y - roadCellSize / 2 - heightDisplacement, // Apply height displacement
-            roadCellSize,
-            roadCellSize,
-          );
-          ctx.globalAlpha = 1.0;
-        }
-      });
-    }
-  }
-}
-
-/**
  * Renders the entire game world entities over a pre-rendered terrain background.
  * The terrain is handled by the WebGPU renderer on a separate canvas layer.
  *
@@ -373,81 +313,16 @@ export function renderGame(
 
   // Render roads if not in wireframe mode
   if (!gameState.wireframeMode) {
-    renderRoads(ctx, gameState, viewportCenter, viewportZoom, canvasDimensions);
-  }
-  // Get all entities (we'll check visibility per wrapped instance)
-  const entities = Array.from(gameState.entities.entities.values());
+    // Roads are now rendered in the WebGPU terrain shader
 
-  // Render each entity using 3x3 instanced approach
-  entities.forEach((entity) => {
-    // Get all 9 potential wrapped positions for this entity
-    const wrappedPositions = getWrappedEntityPositions(entity.position, viewportCenter, gameState.mapDimensions);
+    // Render each entity using 3x3 instanced approach
+    gameState.entities.entities.forEach((entity) => {
+      // Get all 9 potential wrapped positions for this entity
+      const wrappedPositions = getWrappedEntityPositions(entity.position, viewportCenter, gameState.mapDimensions);
 
-    // Render each wrapped instance that is visible
-    wrappedPositions.forEach((wrappedPos) => {
-      // Convert wrapped world position to screen coordinates
-      const screenPos = worldToScreenCoords(
-        wrappedPos,
-        viewportCenter,
-        viewportZoom,
-        canvasDimensions,
-        gameState.mapDimensions,
-      );
-
-      // TEMPORARILY DISABLED: Frustum culling for debugging
-      // TODO: Fix frustum culling logic for toroidal world boundaries
-      // For now, do a simple screen bounds check with generous margin
-      // Account for full tree visual height (trunk 2.2 + canopy 1.1 ≈ 3.3 * radius)
-      // This ensures all 9 wrapped instances are properly evaluated at all zoom levels
-      const margin = entity.radius * 3.3 * viewportZoom + 20;
-      const shouldRender =
-        screenPos.x >= -margin &&
-        screenPos.x <= canvasDimensions.width + margin &&
-        screenPos.y >= -margin &&
-        screenPos.y <= canvasDimensions.height + margin;
-
-      if (shouldRender) {
-        // Render based on entity type (all in screen space now)
-        switch (entity.type) {
-          case EntityType.TREE:
-            renderTree(
-              ctx,
-              entity,
-              screenPos,
-              wrappedPos,
-              gameState.heightMap,
-              gameState.mapDimensions,
-              HEIGHT_MAP_RESOLUTION,
-              viewportZoom,
-            );
-            break;
-          // Default case for other entities (players, boids, etc.)
-          default:
-            ctx.beginPath();
-            ctx.arc(screenPos.x, screenPos.y, entity.radius * viewportZoom, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.fill();
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            break;
-        }
-      }
-    });
-  });
-
-  // Render road editing preview if active
-  if (gameState.roadEditingMode) {
-    const { lastRoadPosition, previewRoadPosition } = gameState;
-
-    // 1. Render the preview piece at the cursor
-    if (previewRoadPosition) {
-      const wrappedPreviewPositions = getWrappedEntityPositions(
-        previewRoadPosition,
-        viewportCenter,
-        gameState.mapDimensions,
-      );
-      wrappedPreviewPositions.forEach((wrappedPos) => {
+      // Render each wrapped instance that is visible
+      wrappedPositions.forEach((wrappedPos) => {
+        // Convert wrapped world position to screen coordinates
         const screenPos = worldToScreenCoords(
           wrappedPos,
           viewportCenter,
@@ -455,135 +330,198 @@ export function renderGame(
           canvasDimensions,
           gameState.mapDimensions,
         );
-        const terrainHeight = getHeightAtWorldPos(
-          wrappedPos,
+
+        // TEMPORARILY DISABLED: Frustum culling for debugging
+        // TODO: Fix frustum culling logic for toroidal world boundaries
+        // For now, do a simple screen bounds check with generous margin
+        // Account for full tree visual height (trunk 2.2 + canopy 1.1 ≈ 3.3 * radius)
+        // This ensures all 9 wrapped instances are properly evaluated at all zoom levels
+        const margin = entity.radius * 3.3 * viewportZoom + 20;
+        const shouldRender =
+          screenPos.x >= -margin &&
+          screenPos.x <= canvasDimensions.width + margin &&
+          screenPos.y >= -margin &&
+          screenPos.y <= canvasDimensions.height + margin;
+
+        if (shouldRender) {
+          // Render based on entity type (all in screen space now)
+          switch (entity.type) {
+            case EntityType.TREE:
+              renderTree(
+                ctx,
+                entity,
+                screenPos,
+                wrappedPos,
+                gameState.heightMap,
+                gameState.mapDimensions,
+                HEIGHT_MAP_RESOLUTION,
+                viewportZoom,
+              );
+              break;
+            // Default case for other entities (players, boids, etc.)
+            default:
+              ctx.beginPath();
+              ctx.arc(screenPos.x, screenPos.y, entity.radius * viewportZoom, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+              ctx.fill();
+              ctx.strokeStyle = 'white';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              break;
+          }
+        }
+      });
+    });
+
+    // Render road editing preview if active
+    if (gameState.roadEditingMode) {
+      const { lastRoadPosition, previewRoadPosition } = gameState;
+
+      // 1. Render the preview piece at the cursor
+      if (previewRoadPosition) {
+        const wrappedPreviewPositions = getWrappedEntityPositions(
+          previewRoadPosition,
+          viewportCenter,
+          gameState.mapDimensions,
+        );
+        wrappedPreviewPositions.forEach((wrappedPos) => {
+          const screenPos = worldToScreenCoords(
+            wrappedPos,
+            viewportCenter,
+            viewportZoom,
+            canvasDimensions,
+            gameState.mapDimensions,
+          );
+          const terrainHeight = getHeightAtWorldPos(
+            wrappedPos,
+            gameState.heightMap,
+            HEIGHT_MAP_RESOLUTION,
+            gameState.mapDimensions,
+          );
+          const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+          const roadCellSize = HEIGHT_MAP_RESOLUTION * viewportZoom;
+
+          // Check if preview is on screen before drawing
+          const margin = roadCellSize;
+          if (
+            screenPos.x >= -margin &&
+            screenPos.x <= canvasDimensions.width + margin &&
+            screenPos.y >= -margin &&
+            screenPos.y <= canvasDimensions.height + margin
+          ) {
+            ctx.fillStyle = 'rgba(138, 116, 95, 0.5)'; // Semi-transparent path color
+            ctx.fillRect(
+              screenPos.x - roadCellSize / 2,
+              screenPos.y - roadCellSize / 2 - heightDisplacement,
+              roadCellSize,
+              roadCellSize,
+            );
+          }
+        });
+      }
+
+      // 2. Render the connecting line from the last piece
+      if (lastRoadPosition && previewRoadPosition) {
+        // Note: This line doesn't perfectly handle world wrapping, but gives a good indication.
+        const screenLastPos = worldToScreenCoords(
+          lastRoadPosition,
+          viewportCenter,
+          viewportZoom,
+          canvasDimensions,
+          gameState.mapDimensions,
+        );
+        const lastPosHeight = getHeightAtWorldPos(
+          lastRoadPosition,
           gameState.heightMap,
           HEIGHT_MAP_RESOLUTION,
           gameState.mapDimensions,
         );
-        const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
-        const roadCellSize = HEIGHT_MAP_RESOLUTION * viewportZoom;
+        screenLastPos.y -= lastPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
-        // Check if preview is on screen before drawing
-        const margin = roadCellSize;
-        if (
+        const screenPreviewPos = worldToScreenCoords(
+          previewRoadPosition,
+          viewportCenter,
+          viewportZoom,
+          canvasDimensions,
+          gameState.mapDimensions,
+        );
+        const previewPosHeight = getHeightAtWorldPos(
+          previewRoadPosition,
+          gameState.heightMap,
+          HEIGHT_MAP_RESOLUTION,
+          gameState.mapDimensions,
+        );
+        screenPreviewPos.y -= previewPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+        ctx.beginPath();
+        ctx.moveTo(screenLastPos.x, screenLastPos.y);
+        ctx.lineTo(screenPreviewPos.x, screenPreviewPos.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 10]);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line dash
+      }
+    }
+
+    // Render editor brush cursor if active (in screen space, outside camera transform)
+    if (gameState.terrainEditingMode || gameState.biomeEditingMode) {
+      const { position, radius } = gameState.editorBrush;
+
+      // Get all wrapped positions for the brush cursor
+      const wrappedBrushPositions = getWrappedEntityPositions(position, viewportCenter, gameState.mapDimensions);
+
+      let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
+
+      if (gameState.biomeEditingMode) {
+        let biomeRgb = { r: 1, g: 1, b: 1 };
+        switch (gameState.selectedBiome) {
+          case BiomeType.GROUND:
+            biomeRgb = GROUND_COLOR;
+            break;
+          case BiomeType.SAND:
+            biomeRgb = SAND_COLOR;
+            break;
+          case BiomeType.GRASS:
+            biomeRgb = GRASS_COLOR;
+            break;
+          case BiomeType.ROCK:
+            biomeRgb = ROCK_COLOR;
+            break;
+          case BiomeType.SNOW:
+            biomeRgb = SNOW_COLOR;
+            break;
+        }
+        brushColor = `rgba(${biomeRgb.r * 255}, ${biomeRgb.g * 255}, ${biomeRgb.b * 255}, 0.8)`;
+      }
+
+      // Render each wrapped instance of the brush cursor that is visible
+      wrappedBrushPositions.forEach((wrappedPos) => {
+        // Convert wrapped world position to screen coordinates
+        const screenPos = worldToScreenCoords(
+          wrappedPos,
+          viewportCenter,
+          viewportZoom,
+          canvasDimensions,
+          gameState.mapDimensions,
+        );
+
+        // Check if this wrapped instance is visible on screen
+        const margin = radius * viewportZoom + 20;
+        const isVisible =
           screenPos.x >= -margin &&
           screenPos.x <= canvasDimensions.width + margin &&
           screenPos.y >= -margin &&
-          screenPos.y <= canvasDimensions.height + margin
-        ) {
-          ctx.fillStyle = 'rgba(138, 116, 95, 0.5)'; // Semi-transparent path color
-          ctx.fillRect(
-            screenPos.x - roadCellSize / 2,
-            screenPos.y - roadCellSize / 2 - heightDisplacement,
-            roadCellSize,
-            roadCellSize,
-          );
+          screenPos.y <= canvasDimensions.height + margin;
+
+        if (isVisible) {
+          ctx.beginPath();
+          ctx.arc(screenPos.x, screenPos.y, radius * viewportZoom, 0, Math.PI * 2);
+          ctx.strokeStyle = brushColor;
+          ctx.lineWidth = 2; // Fixed screen-space width
+          ctx.stroke();
         }
       });
     }
-
-    // 2. Render the connecting line from the last piece
-    if (lastRoadPosition && previewRoadPosition) {
-      // Note: This line doesn't perfectly handle world wrapping, but gives a good indication.
-      const screenLastPos = worldToScreenCoords(
-        lastRoadPosition,
-        viewportCenter,
-        viewportZoom,
-        canvasDimensions,
-        gameState.mapDimensions,
-      );
-      const lastPosHeight = getHeightAtWorldPos(
-        lastRoadPosition,
-        gameState.heightMap,
-        HEIGHT_MAP_RESOLUTION,
-        gameState.mapDimensions,
-      );
-      screenLastPos.y -= lastPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
-
-      const screenPreviewPos = worldToScreenCoords(
-        previewRoadPosition,
-        viewportCenter,
-        viewportZoom,
-        canvasDimensions,
-        gameState.mapDimensions,
-      );
-      const previewPosHeight = getHeightAtWorldPos(
-        previewRoadPosition,
-        gameState.heightMap,
-        HEIGHT_MAP_RESOLUTION,
-        gameState.mapDimensions,
-      );
-      screenPreviewPos.y -= previewPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
-
-      ctx.beginPath();
-      ctx.moveTo(screenLastPos.x, screenLastPos.y);
-      ctx.lineTo(screenPreviewPos.x, screenPreviewPos.y);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 10]);
-      ctx.stroke();
-      ctx.setLineDash([]); // Reset line dash
-    }
-  }
-
-  // Render editor brush cursor if active (in screen space, outside camera transform)
-  if (gameState.terrainEditingMode || gameState.biomeEditingMode) {
-    const { position, radius } = gameState.editorBrush;
-
-    // Get all wrapped positions for the brush cursor
-    const wrappedBrushPositions = getWrappedEntityPositions(position, viewportCenter, gameState.mapDimensions);
-
-    let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
-
-    if (gameState.biomeEditingMode) {
-      let biomeRgb = { r: 1, g: 1, b: 1 };
-      switch (gameState.selectedBiome) {
-        case BiomeType.GROUND:
-          biomeRgb = GROUND_COLOR;
-          break;
-        case BiomeType.SAND:
-          biomeRgb = SAND_COLOR;
-          break;
-        case BiomeType.GRASS:
-          biomeRgb = GRASS_COLOR;
-          break;
-        case BiomeType.ROCK:
-          biomeRgb = ROCK_COLOR;
-          break;
-        case BiomeType.SNOW:
-          biomeRgb = SNOW_COLOR;
-          break;
-      }
-      brushColor = `rgba(${biomeRgb.r * 255}, ${biomeRgb.g * 255}, ${biomeRgb.b * 255}, 0.8)`;
-    }
-
-    // Render each wrapped instance of the brush cursor that is visible
-    wrappedBrushPositions.forEach((wrappedPos) => {
-      // Convert wrapped world position to screen coordinates
-      const screenPos = worldToScreenCoords(
-        wrappedPos,
-        viewportCenter,
-        viewportZoom,
-        canvasDimensions,
-        gameState.mapDimensions,
-      );
-
-      // Check if this wrapped instance is visible on screen
-      const margin = radius * viewportZoom + 20;
-      const isVisible =
-        screenPos.x >= -margin &&
-        screenPos.x <= canvasDimensions.width + margin &&
-        screenPos.y >= -margin &&
-        screenPos.y <= canvasDimensions.height + margin;
-
-      if (isVisible) {
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, radius * viewportZoom, 0, Math.PI * 2);
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = 2; // Fixed screen-space width
-        ctx.stroke();
-      }
-    });
   }
 }

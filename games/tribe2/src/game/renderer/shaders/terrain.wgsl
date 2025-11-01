@@ -17,11 +17,17 @@ struct Uniforms {
   c6: vec4f,
   // c7: SNOW.rgb, padding
   c7: vec4f,
-  // c8: displacementFactor, unused, unused, unused
+  // c8: displacementFactor, cellSize, unused, unused
   c8: vec4f,
+  // c9: ROAD_COLOR.rgb, ROAD_COAST_COLOR.r
+  c9: vec4f,
+  // c10: ROAD_COAST_COLOR.gb, ROAD_COAST_WIDTH, ROAD_WIDTH
+  c10: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(1) var roadTexture: texture_2d<f32>;
+@group(0) @binding(2) var linearSampler: sampler;
 
 struct VSInput {
   @location(0) position: vec3f,
@@ -148,6 +154,7 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
   let waterLevel = uniforms.c3.y;
   let time = uniforms.c3.z;
   let zoom = uniforms.c0.z;
+  let map_size = uniforms.c1.zw;
 
   // Lambertian lighting using interpolated normal
   let ndl = max(dot(in.normal, lightDir), 0.0);
@@ -156,6 +163,7 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
   // Get base color from interpolated biome value
   let baseColor = getBiomeColor(in.biome_value);
   let terrainColor = baseColor * lighting;
+  var finalColor = terrainColor;
 
   // Check if this fragment is underwater
   let height = in.world_pos.z / heightScale;
@@ -167,16 +175,41 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
     let waterCol = cartoon_water(in.world_pos.xy, waterDepth, time, zoom);
     let shoreFactor = clamp(1.0 - (waterDepth / shorelineWidth), 0.0, 1.0);
     let shoreBlend = mix(waterCol.rgb, shoreColor, shoreFactor * 0.4);
-    let finalColor = mix(terrainColor, shoreBlend, waterCol.a);
-    return vec4f(finalColor, 1.0);
+    finalColor = mix(terrainColor, shoreBlend, waterCol.a);
   } else if (waterDepth > -shorelineWidth) {
     // Wet shore effect
     let wetFactor = clamp(1.0 + (waterDepth / shorelineWidth), 0.0, 1.0);
     let wetShoreColor = mix(terrainColor, shoreColor, wetFactor * 0.5);
-    let darkenedColor = wetShoreColor * (1.0 - wetFactor * 0.2);
-    return vec4f(darkenedColor, 1.0);
-  } else {
-    // Above water
-    return vec4f(terrainColor, 1.0);
+    finalColor = wetShoreColor * (1.0 - wetFactor * 0.2);
   }
+
+  // --- Road Rendering ---
+  let texCoord = in.world_pos.xy / map_size;
+  let roadData = textureSample(roadTexture, linearSampler, texCoord);
+
+  if (roadData.a > 0.01) {
+      // roadData.a is the interpolated "has_road" flag. Due to linear sampling,
+      // it acts as a smooth field representing proximity to road centers.
+      // We can use this as a proxy for distance without complex geometric calculations.
+      let roadStrength = roadData.a;
+      
+      let roadColor = uniforms.c9.xyz;
+      let roadCoastColor = vec3f(uniforms.c9.w, uniforms.c10.x, uniforms.c10.y);
+      let roadCoastWidth = uniforms.c10.z;
+      let roadWidth = uniforms.c10.w;
+
+      // The transition from terrain to coast
+      let coastFactor = smoothstep(0.1, 0.5, roadStrength);
+      // The transition from coast to full road
+      let roadFactor = smoothstep(0.5, 0.8, roadStrength);
+
+      // Blend the road and coast colors first, then blend with terrain
+      let litRoad = roadColor * lighting;
+      let litCoast = roadCoastColor * lighting;
+      
+      let roadSurface = mix(litCoast, litRoad, roadFactor);
+      finalColor = mix(finalColor, roadSurface, coastFactor);
+  }
+  
+  return vec4f(finalColor, 1.0);
 }

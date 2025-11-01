@@ -39,6 +39,15 @@ export const ROCK_COLOR = { r: 0.5, g: 0.5, b: 0.5 };
 /** The color of snow terrain. */
 export const SNOW_COLOR = { r: 0.95, g: 0.98, b: 1.0 };
 
+/** The color of the road surface. */
+export const ROAD_COLOR = { r: 0.35, g: 0.3, b: 0.25 };
+
+/** The color of the road coast (transition zone). */
+export const ROAD_COAST_COLOR = { r: 0.45, g: 0.4, b: 0.3 };
+
+/** The width of the coast effect on road sides in world units. */
+export const ROAD_COAST_WIDTH = 80;
+
 // Viewport and Camera Constants
 /** The amount the zoom level changes per mouse scroll event. */
 export const ZOOM_SPEED = 0.1;

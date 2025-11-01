@@ -26,6 +26,8 @@ export interface WebGPUTerrainState {
   heightTextureView: GPUTextureView;
   biomeTexture: GPUTexture;
   biomeTextureView: GPUTextureView;
+  roadTexture: GPUTexture;
+  roadTextureView: GPUTextureView;
   gridSize: { width: number; height: number };
   mapDimensions: { width: number; height: number };
   cellSize: number; // world units per height texel (HEIGHT_MAP_RESOLUTION)
