@@ -1,6 +1,6 @@
 import { BiomeType, RoadDirection, RoadPiece } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH } from '../constants/world-constants';
+import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH, WATER_LEVEL } from '../constants/world-constants';
 
 /**
  * Converts world coordinates to grid coordinates, handling map wrapping.
@@ -427,6 +427,12 @@ export function applyRoadEdit(
   const gridWidth = roadMap[0]?.length ?? 0;
 
   const currentGridPos = worldToGridCoords(worldPos, cellSize, mapDimensions);
+
+  // Prevent road placement on water
+  const terrainHeight = heightMap[currentGridPos.gy][currentGridPos.gx];
+  if (terrainHeight < WATER_LEVEL) {
+    return { modifiedRoadCells, modifiedHeightCells };
+  }
 
   if (!lastRoadPos) return { modifiedRoadCells, modifiedHeightCells };
 
