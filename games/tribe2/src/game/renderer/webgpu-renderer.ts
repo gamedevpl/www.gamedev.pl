@@ -13,6 +13,10 @@ import {
   ROAD_COLOR,
   ROAD_COAST_COLOR,
   ROAD_COAST_WIDTH,
+  WIND_NOISE_SCALE,
+  WIND_TIME_SCALE,
+  WIND_STRENGTH_GRASS,
+  WIND_STRENGTH_WATER,
 } from '../constants/rendering-constants';
 import { BiomeType, RoadPiece } from '../types/world-types';
 
@@ -208,7 +212,7 @@ export async function initWebGPUTerrain(
   new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
   vertexBuffer.unmap();
 
-  const uniformBufferSize = 11 * 4 * 4; // 11 vec4s
+  const uniformBufferSize = 12 * 4 * 4; // 12 vec4s
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -308,6 +312,10 @@ export async function initWebGPUTerrain(
     ambient: lighting?.ambient ?? 0.35,
     waterLevel: WATER_LEVEL,
     time: 0,
+    windNoiseScale: WIND_NOISE_SCALE,
+    windTimeScale: WIND_TIME_SCALE,
+    windStrengthGrass: WIND_STRENGTH_GRASS,
+    windStrengthWater: WIND_STRENGTH_WATER,
     heightMap,
     biomeMap,
     roadMap,
@@ -336,7 +344,7 @@ export function renderWebGPUTerrain(
   const encoder = device.createCommandEncoder();
   const textureView = context.getCurrentTexture().createView();
 
-  const u = new Float32Array(44); // 11 vec4s
+  const u = new Float32Array(48); // 12 vec4s
   u[0] = center.x;
   u[1] = center.y;
   u[2] = zoom;
@@ -378,6 +386,11 @@ export function renderWebGPUTerrain(
   u[41] = ROAD_COAST_COLOR.b;
   u[42] = ROAD_COAST_WIDTH;
   u[43] = ROAD_WIDTH;
+  // Wind uniforms
+  u[44] = state.windNoiseScale;
+  u[45] = state.windTimeScale;
+  u[46] = state.windStrengthGrass;
+  u[47] = state.windStrengthWater;
 
   device.queue.writeBuffer(uniformBuffer, 0, u.buffer);
 

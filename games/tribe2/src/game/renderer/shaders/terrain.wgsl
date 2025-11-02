@@ -23,6 +23,8 @@ struct Uniforms {
   c9: vec4f,
   // c10: ROAD_COAST_COLOR.gb, ROAD_COAST_WIDTH, ROAD_WIDTH
   c10: vec4f,
+  // c11: windNoiseScale, windTimeScale, windStrengthGrass, windStrengthWater
+  c11: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -112,13 +114,99 @@ fn getBiomeColor(biomeValue: f32) -> vec3f {
   return mix(color0, color1, t);
 }
 
-// Cartoon water effect - slow, peaceful, zoom-dependent
-fn cartoon_water(worldPos: vec2f, depth: f32, time: f32, zoom: f32) -> vec4f {
+// Hash function for pseudo-random number generation
+fn hash(p: vec2f) -> f32 {
+  var p3 = fract(vec3f(p.xyx) * 0.13);
+  p3 += dot(p3, p3.yzx + 3.333);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+// 2D Simplex-like noise function (optimized for performance)
+fn snoise(v: vec2f) -> f32 {
+  let C = vec4f(
+    0.211324865405187,  // (3.0-sqrt(3.0))/6.0
+    0.366025403784439,  // 0.5*(sqrt(3.0)-1.0)
+    -0.577350269189626, // -1.0 + 2.0 * C.x
+    0.024390243902439   // 1.0 / 41.0
+  );
+
+  // First corner
+  var i = floor(v + dot(v, C.yy));
+  let x0 = v - i + dot(i, C.xx);
+
+  // Other corners
+  var i1 = select(vec2f(0.0, 1.0), vec2f(1.0, 0.0), x0.x > x0.y);
+  var x12 = x0.xyxy + C.xxzz;
+  x12 = vec4f(x12.xy - i1, x12.zw);
+
+  // Permutations
+  i = i - floor(i * (1.0 / 289.0)) * 289.0; // mod(i, 289.0)
+  let p = vec3f(
+    hash(i),
+    hash(i + i1),
+    hash(i + vec2f(1.0, 1.0))
+  );
+
+  var m = max(0.5 - vec3f(
+    dot(x0, x0),
+    dot(x12.xy, x12.xy),
+    dot(x12.zw, x12.zw)
+  ), vec3f(0.0));
+  m = m * m;
+  m = m * m;
+
+  // Gradients
+  let x = 2.0 * fract(p * C.www) - 1.0;
+  let h = abs(x) - 0.5;
+  let ox = floor(x + 0.5);
+  let a0 = x - ox;
+
+  // Normalize gradients
+  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+
+  // Compute final noise value
+  let g = vec3f(
+    a0.x * x0.x + h.x * x0.y,
+    a0.y * x12.x + h.y * x12.y,
+    a0.z * x12.z + h.z * x12.w
+  );
+  
+  return 130.0 * dot(m, g);
+}
+
+// Generate wind vector at a given world position and time
+// Returns vec2f with wind direction and strength encoded as a 2D vector
+fn getWindVector(worldPos: vec2f, time: f32, windNoiseScale: f32, windTimeScale: f32) -> vec2f {
+  let windTime = time * windTimeScale;
+  
+  // First octave - large scale wind patterns
+  let p1 = worldPos * windNoiseScale;
+  let n1x = snoise(p1 + vec2f(windTime, 0.0));
+  let n1y = snoise(p1 + vec2f(0.0, windTime));
+  
+  // Second octave - smaller detail
+  let p2 = worldPos * windNoiseScale * 2.5;
+  let n2x = snoise(p2 + vec2f(windTime * 1.3, windTime * 0.7));
+  let n2y = snoise(p2 + vec2f(windTime * 0.7, windTime * 1.3));
+  
+  // Combine octaves with different weights
+  let windX = n1x * 0.7 + n2x * 0.3;
+  let windY = n1y * 0.7 + n2y * 0.3;
+  
+  return vec2f(windX, windY);
+}
+
+// Cartoon water effect with wind influence
+fn cartoon_water(worldPos: vec2f, depth: f32, time: f32, zoom: f32, windVec: vec2f, windStrength: f32) -> vec4f {
   let shallowColor = vec3f(0.4, 0.7, 0.9);
   let deepColor = vec3f(0.1, 0.3, 0.6);
   let foamColor = vec3f(0.9, 0.95, 1.0);
   let animSpeed = 0.3;
   let slowTime = time * animSpeed;
+  
+  // Apply wind displacement to the water position
+  let windOffset = windVec * windStrength;
+  let windWorldPos = worldPos + windOffset;
   
   let depthFactor = clamp(depth * 8.0, 0.0, 1.0);
   var waterColor = mix(shallowColor, deepColor, depthFactor);
@@ -126,9 +214,16 @@ fn cartoon_water(worldPos: vec2f, depth: f32, time: f32, zoom: f32) -> vec4f {
   let detailLevel = clamp((zoom - 0.5) / 2.5, 0.0, 1.0);
   
   if (detailLevel > 0.01) {
-    let wave1 = sin(worldPos.x * 0.005 + slowTime * 0.5) * cos(worldPos.y * 0.004 + slowTime * 0.3);
-    let wave2 = sin(worldPos.x * 0.008 - slowTime * 0.4) * sin(worldPos.y * 0.007 + slowTime * 0.6);
-    let wavePattern = (wave1 * 0.5 + wave2 * 0.5);
+    // Use wind-displaced position for wave calculations
+    let wave1 = sin(windWorldPos.x * 0.005 + slowTime * 0.5) * cos(windWorldPos.y * 0.004 + slowTime * 0.3);
+    let wave2 = sin(windWorldPos.x * 0.008 - slowTime * 0.4) * sin(windWorldPos.y * 0.007 + slowTime * 0.6);
+    
+    // Add directional wave component based on wind
+    let windDir = normalize(windVec);
+    let windAlignedCoord = dot(windWorldPos, windDir);
+    let windWave = sin(windAlignedCoord * 0.003 + slowTime * 0.8) * length(windVec) * 0.5;
+    
+    let wavePattern = (wave1 * 0.4 + wave2 * 0.4 + windWave * 0.2);
     waterColor += vec3f(wavePattern * 0.15 * detailLevel);
     let highlight = smoothstep(0.4, 0.6, wavePattern) * 0.2 * detailLevel;
     waterColor += vec3f(highlight);
@@ -155,6 +250,15 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
   let time = uniforms.c3.z;
   let zoom = uniforms.c0.z;
   let map_size = uniforms.c1.zw;
+  
+  // Wind parameters
+  let windNoiseScale = uniforms.c11.x;
+  let windTimeScale = uniforms.c11.y;
+  let windStrengthGrass = uniforms.c11.z;
+  let windStrengthWater = uniforms.c11.w;
+
+  // Calculate wind vector for this fragment
+  let windVec = getWindVector(in.world_pos.xy, time, windNoiseScale, windTimeScale);
 
   // Lambertian lighting using interpolated normal
   let ndl = max(dot(in.normal, lightDir), 0.0);
@@ -164,26 +268,37 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
   let baseColor = getBiomeColor(in.biome_value);
   let terrainColor = baseColor * lighting;
   var finalColor = terrainColor;
+  
+  // Apply wind effect to grass (biome value around 0.5, which is grass)
+  let grassBiomeValue = 0.5; // Grass is biome ID 2, normalized to 0.5
+  let grassFactor = 1.0 - clamp(abs(in.biome_value - grassBiomeValue) * 8.0, 0.0, 1.0);
+  
+  if (grassFactor > 0.1) {
+    // Calculate wind strength and direction for grass effect
+    let windStrength = length(windVec);
+    let windDir = normalize(windVec);
+    
+    // Create subtle color variation based on wind
+    let grassWindEffect = sin(dot(in.world_pos.xy, windDir) * 0.02 + time * windTimeScale * 10.0) * windStrength;
+    let grassModulation = grassWindEffect * windStrengthGrass * grassFactor;
+    
+    // Apply subtle darkening/lightening to simulate grass bending
+    finalColor = finalColor * (1.0 + grassModulation);
+  }
 
   // --- Road Rendering ---
   let texCoord = in.world_pos.xy / map_size;
   let roadData = textureSample(roadTexture, linearSampler, texCoord);
 
   if (roadData.a > 0.01) {
-      // roadData.a is the interpolated "has_road" flag. Due to linear sampling,
-      // it acts as a smooth field representing proximity to road centers.
-      // We can use this as a proxy for distance without complex geometric calculations.
       let roadStrength = roadData.a;
       
       let roadColor = uniforms.c9.xyz;
       let roadCoastColor = vec3f(uniforms.c9.w, uniforms.c10.x, uniforms.c10.y);
 
-      // The transition from terrain to coast
       let coastFactor = smoothstep(0.1, 0.5, roadStrength);
-      // The transition from coast to full road
       let roadFactor = smoothstep(0.5, 0.8, roadStrength);
 
-      // Blend the road and coast colors first, then blend with terrain
       let litRoad = roadColor * lighting;
       let litCoast = roadCoastColor * lighting;
       
@@ -195,10 +310,10 @@ fn fs_main(in: VSOutput) -> @location(0) vec4f {
   let height = in.world_pos.z / heightScale;
   let waterDepth = waterLevel - height;
   let shorelineWidth = 0.02;
-  let shoreColor = vec3f(0.4, 0.3, 0.2); // Brown/muddy shore color
+  let shoreColor = vec3f(0.4, 0.3, 0.2);
 
   if (waterDepth > 0.0) {
-    let waterCol = cartoon_water(in.world_pos.xy, waterDepth, time, zoom);
+    let waterCol = cartoon_water(in.world_pos.xy, waterDepth, time, zoom, windVec, windStrengthWater);
     let shoreFactor = clamp(1.0 - (waterDepth / shorelineWidth), 0.0, 1.0);
     let shoreBlend = mix(waterCol.rgb, shoreColor, shoreFactor * 0.4);
     finalColor = mix(terrainColor, shoreBlend, waterCol.a);

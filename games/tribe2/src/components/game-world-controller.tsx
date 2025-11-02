@@ -10,6 +10,7 @@ import { generateBiomeMap, generateHeightMap, generateTrees, initWorld } from '.
 import { createEntities } from '../game/ecs/entity-manager';
 import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';
 import { useWebGpuRenderer } from '../context/webgpu-renderer-context';
+import { computeLightDirection } from '../game/utils/light-utils';
 
 const containerStyle: React.CSSProperties = {
   position: 'relative',
@@ -126,7 +127,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
 
   // Main Render Loop
   useRafLoop((time) => {
-    const gameState = gameStateRef.current;
+    let gameState = gameStateRef.current;
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
 
@@ -134,7 +135,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
       return;
     }
 
-    const deltaTime = lastUpdateTimeRef.current ? Math.min(time - lastUpdateTimeRef.current, 1000) / 1000 : 1 / 60;
+    const deltaTime = lastUpdateTimeRef.current ? (time - lastUpdateTimeRef.current) / 1000 : 1 / 60;
     lastUpdateTimeRef.current = time;
 
     let viewportCenter = gameState.viewportCenter;
@@ -143,15 +144,18 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
 
     // Update world state based on mode
     if (mode === 'intro' && animStateRef.current) {
-      const anim = updateIntroAnimation(animStateRef.current, deltaTime);
+      const anim = updateIntroAnimation(animStateRef.current, deltaTime, 0.5);
       viewportCenter = anim.center;
       viewportZoom = anim.zoom;
       lightDir = anim.lightDir;
       gameState.time = animStateRef.current.lightTime; // Use animation time for water
     } else if (mode === 'game') {
       if (!gameState.isPaused && !gameState.gameOver) {
-        gameStateRef.current = updateWorld(gameState, deltaTime);
+        const updatedState = updateWorld(gameState, deltaTime);
+        gameStateRef.current = updatedState;
+        gameState = updatedState; // Use the updated state for rendering this frame
       }
+      lightDir = computeLightDirection(gameState.time);
     }
 
     // --- RENDER -- -

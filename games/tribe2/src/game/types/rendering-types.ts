@@ -39,6 +39,11 @@ export interface WebGPUTerrainState {
   // Water parameters
   waterLevel: number;
   time: number; // For water animation
+  // Wind parameters
+  windNoiseScale: number;
+  windTimeScale: number;
+  windStrengthGrass: number;
+  windStrengthWater: number;
   heightData: Uint8Array;
   // CPU-side data for mesh regeneration
   heightMap: number[][];

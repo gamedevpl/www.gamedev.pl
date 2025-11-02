@@ -2,15 +2,13 @@ import { Vector2D } from '../game/types/math-types';
 import { Vector3D } from '../game/types/rendering-types';
 import { HEIGHT_MAP_RESOLUTION } from '../game/constants/world-constants';
 import { clamp, lerp, easeInOutCubic } from '../game/utils/animation-utils';
+import { computeLightDirection } from '../game/utils/light-utils';
 
 // Animation phase durations in seconds
 const ZOOM_OUT_DURATION = 2;
 const PAN_DURATION = 4;
 const ZOOM_IN_DURATION = 2;
 const HOLD_DURATION = 2;
-
-// Light animation period (full rotation in seconds)
-const LIGHT_ROTATION_PERIOD = 20;
 
 export type IntroAnimState = {
   phase: 'zoomOut' | 'pan' | 'zoomIn' | 'hold';
@@ -88,21 +86,6 @@ function computePOIs(
 }
 
 /**
- * Computes the light direction based on elapsed time.
- * The light rotates in a circular pattern around the scene.
- */
-function computeLightDirection(time: number): Vector3D {
-  const angle = (time / LIGHT_ROTATION_PERIOD) * Math.PI * 2;
-  const elevation = 0.6; // Keep light at a consistent elevation angle
-
-  return {
-    x: Math.cos(angle) * Math.cos(elevation),
-    y: Math.sin(angle) * Math.cos(elevation),
-    z: Math.sin(elevation),
-  };
-}
-
-/**
  * Initializes the intro animation state.
  */
 export function initIntroAnimation(
@@ -140,10 +123,12 @@ export function initIntroAnimation(
 export function updateIntroAnimation(
   state: IntroAnimState,
   dtSeconds: number,
+  timeScale = 1.0,
 ): { center: Vector2D; zoom: number; lightDir: Vector3D } {
+  const scaledDt = dtSeconds * timeScale;
   // Advance time
-  state.t += dtSeconds;
-  state.lightTime += dtSeconds;
+  state.t += scaledDt;
+  state.lightTime += scaledDt;
 
   // Check if we need to transition to the next phase
   while (state.t >= state.duration) {

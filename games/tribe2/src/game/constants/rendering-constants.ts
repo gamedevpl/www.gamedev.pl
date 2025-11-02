@@ -57,3 +57,16 @@ export const MIN_ZOOM = 0.25;
 
 /** The maximum zoom level (most zoomed in). */
 export const MAX_ZOOM = 3.0;
+
+// Wind Effect Constants
+/** The spatial scale of the wind noise pattern. Smaller values create larger, smoother gusts. */
+export const WIND_NOISE_SCALE = 0.0005;
+
+/** The speed at which the wind pattern evolves over time. */
+export const WIND_TIME_SCALE = 0.05;
+
+/** The maximum strength of the wind's effect on grass color modulation. */
+export const WIND_STRENGTH_GRASS = 0.08;
+
+/** The maximum strength of the wind's effect on water surface displacement. */
+export const WIND_STRENGTH_WATER = 250.0;
