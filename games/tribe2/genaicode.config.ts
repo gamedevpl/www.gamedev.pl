@@ -45,4 +45,9 @@ export default defineConfig({
       autoApprove: true,
     },
   },
+  modelOverrides: {
+    aiStudio: {
+      default: 'gemini-3-pro-preview',
+    },
+  },
 });
