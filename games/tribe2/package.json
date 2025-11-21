@@ -8,7 +8,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "@webgpu/types": "^0.1.50",
     "eslint": "^9.37.0",
-    "genaicode": "^0.13.2",
+    "genaicode": "^0.14.0",
     "jsdom": "^27.0.0",
     "jsx": "^0.9.89",
     "puppeteer": "^22.13.0",
