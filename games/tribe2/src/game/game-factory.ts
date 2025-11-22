@@ -11,9 +11,12 @@ import {
   ROCK_LEVEL,
   GRASS_LEVEL,
   SAND_LEVEL,
+  RABBIT_RADIUS,
+  RABBIT_SPAWN_DENSITY,
 } from './constants/world-constants';
 import { Entities, EntityType, BiomeType, GameWorldState, RoadPiece } from './types/world-types';
 import { createNoise2D } from './utils/noise-utils';
+import { createRabbitBehaviorTree } from './ai/rabbit-ai';
 
 /**
  * Generates a height map using Perlin noise.
@@ -158,6 +161,45 @@ export function generateTrees(entities: Entities, biomeMap: BiomeType[][], resol
 }
 
 /**
+ * Generates rabbit entities based on the biome map.
+ * Rabbits spawn on GRASS biome cells with a probability of RABBIT_SPAWN_DENSITY.
+ * @param entities The entity manager to add rabbits to.
+ * @param biomeMap The biome map of the world.
+ * @param resolution The size of each map cell in pixels.
+ */
+export function generateRabbits(entities: Entities, biomeMap: BiomeType[][], resolution: number): void {
+  const gridHeight = biomeMap.length;
+  const gridWidth = biomeMap[0]?.length ?? 0;
+
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      const biome = biomeMap[y][x];
+
+      // Only spawn rabbits on grass
+      if (biome === BiomeType.GRASS) {
+        // Random chance to spawn a rabbit
+        if (Math.random() < RABBIT_SPAWN_DENSITY) {
+          const worldX = x * resolution + Math.random() * resolution;
+          const worldY = y * resolution + Math.random() * resolution;
+
+          createEntity(entities, EntityType.RABBIT, {
+            position: { x: worldX, y: worldY },
+            radius: RABBIT_RADIUS,
+            behaviorTree: createRabbitBehaviorTree(),
+            needs: {
+              hunger: 0,
+              thirst: 0,
+              maxHunger: 100,
+              maxThirst: 100,
+            },
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
  * Initializes and returns a new, empty game world state.
  * This serves as the factory for creating a new game instance.
  */
@@ -171,6 +213,9 @@ export function initWorld(): GameWorldState {
 
   // Generate trees based on the biome map
   generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
+
+  // Generate rabbits based on the biome map
+  generateRabbits(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
 
   const initialWorldState: GameWorldState = {
     time: 0,

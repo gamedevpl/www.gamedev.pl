@@ -10,6 +10,7 @@ export enum EntityType {
   BOID = 'boid',
   DEMO = 'demo',
   TREE = 'tree',
+  RABBIT = 'rabbit',
 }
 
 export enum BiomeType {
@@ -54,6 +55,12 @@ export interface Entity {
   // AI and State Machine components
   stateMachine?: StateMachineComponent;
   behaviorTree?: BehaviorTreeComponent;
+  needs?: {
+    hunger: number;
+    thirst: number;
+    maxHunger: number;
+    maxThirst: number;
+  };
 }
 
 /**

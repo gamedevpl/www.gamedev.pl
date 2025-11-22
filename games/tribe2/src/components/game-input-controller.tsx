@@ -50,19 +50,12 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
     const edgePanVelocity = edgePanVelocityRef.current;
 
     if (gameState && edgePanVelocity && (edgePanVelocity.x !== 0 || edgePanVelocity.y !== 0)) {
-      const { width: mapWidth, height: mapHeight } = gameState.mapDimensions;
       // Adjust pan speed by zoom level so it feels consistent regardless of zoom
       const effectivePanSpeedX = edgePanVelocity.x * PAN_SPEED_FACTOR * deltaTime * 1000;
       const effectivePanSpeedY = edgePanVelocity.y * PAN_SPEED_FACTOR * deltaTime * 1000;
 
-      console.log(`Panning loop: dX=${effectivePanSpeedX.toFixed(2)}, dY=${effectivePanSpeedY.toFixed(2)}`);
-
       gameState.viewportCenter.x -= effectivePanSpeedX / gameState.viewportZoom;
       gameState.viewportCenter.y -= effectivePanSpeedY / gameState.viewportZoom;
-
-      // Apply toroidal wrapping
-      gameState.viewportCenter.x = ((gameState.viewportCenter.x % mapWidth) + mapWidth) % mapWidth;
-      gameState.viewportCenter.y = ((gameState.viewportCenter.y % mapHeight) + mapHeight) % mapHeight;
     }
 
     panAnimationIdRef.current = requestAnimationFrame(panLoop);
@@ -177,9 +170,6 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         lastPanPosRef.current = { x: e.clientX, y: e.clientY };
         gameState.viewportCenter.x -= dx / gameState.viewportZoom;
         gameState.viewportCenter.y += dy / gameState.viewportZoom;
-        const { width: mapWidth, height: mapHeight } = gameState.mapDimensions;
-        gameState.viewportCenter.x = ((gameState.viewportCenter.x % mapWidth) + mapWidth) % mapWidth;
-        gameState.viewportCenter.y = ((gameState.viewportCenter.y % mapHeight) + mapHeight) % mapHeight;
       } else {
         // Handle edge panning only if not actively dragging
         let panX = 0;
@@ -200,12 +190,10 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         edgePanVelocityRef.current = { x: panX, y: panY };
 
         if ((panX !== 0 || panY !== 0) && !panAnimationIdRef.current) {
-          console.log(`Starting edge pan loop. Velocity: x=${panX.toFixed(2)}, y=${panY.toFixed(2)}`);
           // Start pan loop if not already running and at edge
           lastEdgePanTimeRef.current = null; // Reset time for smooth start
           panAnimationIdRef.current = requestAnimationFrame(panLoop);
         } else if (panX === 0 && panY === 0 && panAnimationIdRef.current) {
-          console.log('Stopping edge pan loop.');
           // Stop pan loop if not at edge and running
           cancelAnimationFrame(panAnimationIdRef.current);
           panAnimationIdRef.current = null;

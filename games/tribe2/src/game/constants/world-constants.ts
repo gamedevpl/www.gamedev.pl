@@ -35,6 +35,19 @@ export const TREE_SPAWN_THRESHOLD = 0.48;
 /** The probability (0-1) of a tree spawning in a valid location. */
 export const TREE_SPAWN_DENSITY = 0.15;
 
+// Rabbit Constants
+/** The radius of rabbit entities in pixels. */
+export const RABBIT_RADIUS = 6;
+
+/** The movement speed of rabbits in pixels per second. */
+export const RABBIT_SPEED = 40;
+
+/** The vision range of rabbits in pixels. */
+export const RABBIT_VISION_RANGE = 300;
+
+/** The probability (0-1) of a rabbit spawning in a valid location. */
+export const RABBIT_SPAWN_DENSITY = 0.02;
+
 // Simulation Constants
 /** The maximum delta time in seconds to process in a single frame, to prevent large simulation jumps. */
 export const MAX_REAL_TIME_DELTA = 1 / 60;

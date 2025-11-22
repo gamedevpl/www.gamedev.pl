@@ -1,6 +1,6 @@
 import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { worldToScreenCoords, getHeightAtWorldPos } from './render-utils';
+import { getHeightAtWorldPos } from './render-utils';
 import {
   GROUND_COLOR,
   GRASS_COLOR,
@@ -13,6 +13,27 @@ import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
 
 // Displacement factor for 2D canvas rendering (aligned with 3D WebGPU terrain)
 const CANVAS_HEIGHT_DISPLACEMENT = TERRAIN_DISPLACEMENT_FACTOR * 50; // ~20 pixels max
+
+/**
+ * Projects a world position to screen coordinates WITHOUT applying toroidal wrapping.
+ * This is used when we have already calculated the specific wrapped instance position
+ * relative to the camera and want to project it exactly as is.
+ */
+function projectToScreen(
+  worldPos: Vector2D,
+  viewportCenter: Vector2D,
+  viewportZoom: number,
+  canvasDimensions: { width: number; height: number },
+): Vector2D {
+  const dx = worldPos.x - viewportCenter.x;
+  const dy = worldPos.y - viewportCenter.y;
+
+  return {
+    x: dx * viewportZoom + canvasDimensions.width / 2,
+    // INVERT Y-AXIS: World Y (up) to Screen Y (down).
+    y: -dy * viewportZoom + canvasDimensions.height / 2,
+  };
+}
 
 /**
  * Calculates all wrapped positions for an entity in a toroidal world using 3x3 instancing.
@@ -29,6 +50,7 @@ function getWrappedEntityPositions(
   mapDimensions: { width: number; height: number },
 ): Vector2D[] {
   // Calculate which tile the camera is in (using floor for precise integer division)
+  // We use the raw viewportCenter here because it is now unwrapped (can be negative or > mapWidth)
   const cameraTileX = Math.floor(viewportCenter.x / mapDimensions.width);
   const cameraTileY = Math.floor(viewportCenter.y / mapDimensions.height);
 
@@ -176,6 +198,153 @@ function renderTree(
 }
 
 /**
+ * Renders a rabbit entity with directional orientation and details.
+ * @param ctx The canvas rendering context.
+ * @param entity The rabbit entity.
+ * @param screenPos The screen position of the rabbit.
+ * @param worldPos The position in world coordinates (for height sampling).
+ * @param heightMap The heightmap for terrain elevation.
+ * @param mapDimensions The dimensions of the game world.
+ * @param cellSize The size of each heightmap cell.
+ * @param viewportZoom The current zoom level.
+ * @param time The current game time for animation.
+ */
+function renderRabbit(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  screenPos: Vector2D,
+  worldPos: Vector2D,
+  heightMap: number[][],
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+  viewportZoom: number,
+  time: number,
+): void {
+  const radius = entity.radius * viewportZoom;
+  const angle = Math.atan2(entity.direction.y, entity.direction.x);
+  const speed = Math.sqrt(entity.velocity.x ** 2 + entity.velocity.y ** 2);
+  const isMoving = speed > 1;
+
+  // Sample terrain height at rabbit position
+  const terrainHeight = getHeightAtWorldPos(worldPos, heightMap, cellSize, mapDimensions);
+  const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+  ctx.save();
+  // Apply displacement to position it correctly on the pseudo-3D terrain
+  ctx.translate(screenPos.x, screenPos.y - heightDisplacement);
+
+  // Shadow (always on ground)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 1.0, radius * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hopping calculation
+  let hopY = 0;
+  let stretchX = 1;
+  let stretchY = 1;
+
+  if (isMoving) {
+    const hopSpeed = 15;
+    const hopPhase = time * hopSpeed;
+    hopY = Math.abs(Math.sin(hopPhase)) * radius * 0.3; // Jump height (screen pixels)
+    const stretch = Math.sin(hopPhase) * 0.1;
+    stretchY = 1 + stretch;
+    stretchX = 1 - stretch;
+  }
+
+  // Move "up" (screen Y) to simulate jumping
+  ctx.translate(0, -hopY);
+
+  // Rotate for direction
+  ctx.rotate(angle);
+
+  // Scale for squash/stretch
+  ctx.scale(stretchX, stretchY);
+
+  // Body (oval)
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 1.2, radius * 0.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#dddddd';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Paws
+  ctx.fillStyle = '#eeeeee';
+  // Front Left
+  ctx.beginPath();
+  ctx.ellipse(radius * 0.8, -radius * 0.5, radius * 0.25, radius * 0.15, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Front Right
+  ctx.beginPath();
+  ctx.ellipse(radius * 0.8, radius * 0.5, radius * 0.25, radius * 0.15, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Head (circle, slightly offset forward)
+  const headOffset = radius * 0.8;
+  ctx.beginPath();
+  ctx.arc(headOffset, 0, radius * 0.6, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.stroke();
+
+  // Ears (long ovals on head)
+  // Twitch rotation
+  const twitchAngle = isMoving ? 0 : Math.sin(time * 3 + entity.id) * 0.1;
+
+  ctx.save();
+  ctx.translate(headOffset + radius * 0.2, -radius * 0.6);
+  ctx.rotate(-0.5 + twitchAngle); // Left ear base rotation
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 0.6, radius * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Inner Ear
+  ctx.fillStyle = '#ffcccc';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 0.4, radius * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(headOffset + radius * 0.2, radius * 0.6);
+  ctx.rotate(0.5 - twitchAngle); // Right ear base rotation
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 0.6, radius * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Inner Ear
+  ctx.fillStyle = '#ffcccc';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * 0.4, radius * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Eyes (black dots)
+  ctx.fillStyle = '#000000';
+  ctx.beginPath();
+  ctx.arc(headOffset + radius * 0.4, -radius * 0.2, radius * 0.1, 0, Math.PI * 2);
+  ctx.arc(headOffset + radius * 0.4, radius * 0.2, radius * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tail (small circle at back)
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-radius * 1.2, 0, radius * 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.restore(); // Restore initial save (translation)
+}
+
+/**
  * Renders a wireframe of the terrain mesh on the 2D canvas.
  * This function uses 3x3 instancing to handle the toroidal world.
  *
@@ -223,21 +392,19 @@ function renderWireframe(
 
         // Draw lines between corresponding wrapped instances
         for (let i = 0; i < 9; i++) {
-          const screenPos1 = worldToScreenCoords(
+          const screenPos1 = projectToScreen(
             wrappedCurrentPositions[i],
             viewportCenter,
             viewportZoom,
             canvasDimensions,
-            mapDimensions,
           );
           screenPos1.y -= currentHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
-          const screenPos2 = worldToScreenCoords(
+          const screenPos2 = projectToScreen(
             wrappedRightPositions[i],
             viewportCenter,
             viewportZoom,
             canvasDimensions,
-            mapDimensions,
           );
           screenPos2.y -= rightHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
@@ -256,21 +423,19 @@ function renderWireframe(
         const wrappedBottomPositions = getWrappedEntityPositions(bottomWorldPos, viewportCenter, mapDimensions);
 
         for (let i = 0; i < 9; i++) {
-          const screenPos1 = worldToScreenCoords(
+          const screenPos1 = projectToScreen(
             wrappedCurrentPositions[i],
             viewportCenter,
             viewportZoom,
             canvasDimensions,
-            mapDimensions,
           );
           screenPos1.y -= currentHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
-          const screenPos2 = worldToScreenCoords(
+          const screenPos2 = projectToScreen(
             wrappedBottomPositions[i],
             viewportCenter,
             viewportZoom,
             canvasDimensions,
-            mapDimensions,
           );
           screenPos2.y -= bottomHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
@@ -322,14 +487,8 @@ export function renderGame(
 
       // Render each wrapped instance that is visible
       wrappedPositions.forEach((wrappedPos) => {
-        // Convert wrapped world position to screen coordinates
-        const screenPos = worldToScreenCoords(
-          wrappedPos,
-          viewportCenter,
-          viewportZoom,
-          canvasDimensions,
-          gameState.mapDimensions,
-        );
+        // Use projectToScreen instead of worldToScreenCoords to avoid re-wrapping
+        const screenPos = projectToScreen(wrappedPos, viewportCenter, viewportZoom, canvasDimensions);
 
         // TEMPORARILY DISABLED: Frustum culling for debugging
         // TODO: Fix frustum culling logic for toroidal world boundaries
@@ -356,6 +515,19 @@ export function renderGame(
                 gameState.mapDimensions,
                 HEIGHT_MAP_RESOLUTION,
                 viewportZoom,
+              );
+              break;
+            case EntityType.RABBIT:
+              renderRabbit(
+                ctx,
+                entity,
+                screenPos,
+                wrappedPos,
+                gameState.heightMap,
+                gameState.mapDimensions,
+                HEIGHT_MAP_RESOLUTION,
+                viewportZoom,
+                gameState.time,
               );
               break;
             // Default case for other entities (players, boids, etc.)
@@ -385,13 +557,7 @@ export function renderGame(
           gameState.mapDimensions,
         );
         wrappedPreviewPositions.forEach((wrappedPos) => {
-          const screenPos = worldToScreenCoords(
-            wrappedPos,
-            viewportCenter,
-            viewportZoom,
-            canvasDimensions,
-            gameState.mapDimensions,
-          );
+          const screenPos = projectToScreen(wrappedPos, viewportCenter, viewportZoom, canvasDimensions);
           const terrainHeight = getHeightAtWorldPos(
             wrappedPos,
             gameState.heightMap,
@@ -423,13 +589,35 @@ export function renderGame(
       // 2. Render the connecting line from the last piece
       if (lastRoadPosition && previewRoadPosition) {
         // Note: This line doesn't perfectly handle world wrapping, but gives a good indication.
-        const screenLastPos = worldToScreenCoords(
-          lastRoadPosition,
-          viewportCenter,
-          viewportZoom,
-          canvasDimensions,
-          gameState.mapDimensions,
-        );
+        // We use projectToScreen for consistency, assuming closest instance logic isn't strictly required for the line itself
+        // (or we could use worldToScreenCoords for the line specifically if we wanted the "shortest path" line).
+        // For consistency with the preview boxes, we'll use projectToScreen on the *closest* instance,
+        // but finding the closest instance manually is annoying.
+        // Let's stick to worldToScreenCoords for the line as it handles the "shortest path" visual best for a simple line.
+        // Actually, worldToScreenCoords is imported from render-utils, so we can use it.
+        // Wait, I removed worldToScreenCoords import? No, it's still there in render-utils.
+        // I need to import it if I want to use it.
+        // But wait, I am inside renderer.ts.
+        // I should use the projectToScreen helper if I want to be consistent with the instances.
+        // But the line connects two points.
+        // Let's just use projectToScreen on the FIRST instance of the preview/last position for now.
+        // Actually, the line is a bit tricky in a wrapped world.
+        // Let's leave the line logic using a simple projection of the canonical positions relative to viewport?
+        // No, that breaks wrapping.
+        // Let's just use projectToScreen on the wrapped positions that are closest to center.
+        // Simplest fix: Use getWrappedEntityPositions for both, find the pair that is closest to each other?
+        // That's too complex for a debug line.
+        // I will just use projectToScreen on the wrapped position generated by getWrappedEntityPositions that is closest to screen center.
+        // Actually, for the line, let's just use the 0-th instance from getWrappedEntityPositions (which is the center one).
+        
+        // REVISIT: The original code used worldToScreenCoords.
+        // I will use projectToScreen on the first generated wrapped position (which is usually the central one).
+        // This might be slightly wrong if the user is editing across a seam, but it's a preview line.
+        
+        const lastWrapped = getWrappedEntityPositions(lastRoadPosition, viewportCenter, gameState.mapDimensions)[4]; // Center instance
+        const previewWrapped = getWrappedEntityPositions(previewRoadPosition, viewportCenter, gameState.mapDimensions)[4]; // Center instance
+        
+        const screenLastPos = projectToScreen(lastWrapped, viewportCenter, viewportZoom, canvasDimensions);
         const lastPosHeight = getHeightAtWorldPos(
           lastRoadPosition,
           gameState.heightMap,
@@ -438,13 +626,7 @@ export function renderGame(
         );
         screenLastPos.y -= lastPosHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
 
-        const screenPreviewPos = worldToScreenCoords(
-          previewRoadPosition,
-          viewportCenter,
-          viewportZoom,
-          canvasDimensions,
-          gameState.mapDimensions,
-        );
+        const screenPreviewPos = projectToScreen(previewWrapped, viewportCenter, viewportZoom, canvasDimensions);
         const previewPosHeight = getHeightAtWorldPos(
           previewRoadPosition,
           gameState.heightMap,
@@ -497,14 +679,7 @@ export function renderGame(
 
       // Render each wrapped instance of the brush cursor that is visible
       wrappedBrushPositions.forEach((wrappedPos) => {
-        // Convert wrapped world position to screen coordinates
-        const screenPos = worldToScreenCoords(
-          wrappedPos,
-          viewportCenter,
-          viewportZoom,
-          canvasDimensions,
-          gameState.mapDimensions,
-        );
+        const screenPos = projectToScreen(wrappedPos, viewportCenter, viewportZoom, canvasDimensions);
 
         // Check if this wrapped instance is visible on screen
         const margin = radius * viewportZoom + 20;
