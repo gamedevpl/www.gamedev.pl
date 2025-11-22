@@ -248,6 +248,8 @@ export async function initWebGPUTerrain(
   const sampler = device.createSampler({
     magFilter: 'linear',
     minFilter: 'linear',
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
   });
 
   const bindGroupLayout = device.createBindGroupLayout({
@@ -483,4 +485,7 @@ export function updateRoadMap(state: WebGPUTerrainState, modifiedGridCells: Map<
       { width: 1, height: 1, depthOrArrayLayers: 1 }, // Size of the update
     );
   });
+  
+  // Regenerate mesh to update isRoad vertex attribute
+  regenerateMeshAndUpdateBuffer(state);
 }
