@@ -3,6 +3,7 @@ import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
 import { BiomeType, BuildingType, GameWorldState, RoadPiece } from '../game/types/world-types';
 import { renderGame } from '../game/renderer/renderer';
+import { renderDebugGame } from '../game/renderer/debug-renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
 import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/constants/world-constants';
@@ -105,6 +106,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         selectedBuilding: BuildingType.HOUSE,
         previewBuildingPosition: null,
         isValidBuildingPlacement: false,
+        debugMode: true,
       };
       animStateRef.current = initIntroAnimation(
         heightMap,
@@ -113,6 +115,10 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
       );
     } else {
       worldState = initialState || initWorld();
+      // Ensure debugMode is initialized if not present
+      if (worldState.debugMode === undefined) {
+        worldState.debugMode = true;
+      }
     }
     gameStateRef.current = worldState;
 
@@ -141,8 +147,9 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     let gameState = gameStateRef.current;
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
+    const webgpuCanvas = webgpuCanvasRef.current;
 
-    if (!isInitialized || !gameState || !ctx || !canvas) {
+    if (!isInitialized || !gameState || !ctx || !canvas || !webgpuCanvas) {
       return;
     }
 
@@ -169,23 +176,45 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
       lightDir = computeLightDirection(gameState.time);
     }
 
-    // --- RENDER -- -
-    // 1. Render terrain (WebGPU)
-    renderer.renderTerrain(viewportCenter, viewportZoom, gameState.time, lightDir);
+    // --- RENDER ---
+    if (gameState.debugMode) {
+      // Debug Mode: Render simplified view
+      // Clear WebGPU canvas (or just hide it via CSS if we wanted, but clearing is fine)
+      // Actually, we can just not call renderTerrain. The canvas will keep its last frame unless cleared.
+      // Let's clear the 2D canvas and draw debug info.
+      // Ideally we should clear the WebGPU canvas too or cover it.
+      // Since debug renderer fills background, we just need to make sure it covers everything.
+      // But wait, debug renderer draws to `ctx` (2D canvas). The WebGPU canvas is behind it (zIndex 0).
+      // If debug renderer fills the 2D canvas with opaque color, it will hide the WebGPU canvas.
+      
+      renderDebugGame(
+        ctx,
+        gameState,
+        viewportCenter,
+        viewportZoom,
+        { width: canvas.width, height: canvas.height },
+        deltaTime
+      );
+    } else {
+      // Standard Mode: Render full visuals
+      
+      // 1. Render terrain (WebGPU)
+      renderer.renderTerrain(viewportCenter, viewportZoom, gameState.time, lightDir);
 
-    // 2. Render entities (Canvas 2D)
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    renderGame(
-      ctx,
-      gameState,
-      viewportCenter,
-      viewportZoom,
-      {
-        width: canvas.width,
-        height: canvas.height,
-      },
-      lightDir,
-    );
+      // 2. Render entities (Canvas 2D)
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      renderGame(
+        ctx,
+        gameState,
+        viewportCenter,
+        viewportZoom,
+        {
+          width: canvas.width,
+          height: canvas.height,
+        },
+        lightDir,
+      );
+    }
   });
 
   return (

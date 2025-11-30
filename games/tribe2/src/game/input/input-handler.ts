@@ -5,11 +5,13 @@ import { BiomeType, BuildingType, GameWorldState } from '../types/world-types';
  *
  * @param key The key that was pressed (lowercase).
  * @param gameState The current game state.
+ * @param modifiers Optional modifier keys state.
  * @returns An object containing the potentially new game state and a boolean indicating if the key was handled.
  */
 export const handleKeyDown = (
   key: string,
   gameState: GameWorldState,
+  modifiers?: { shift: boolean },
 ): { newState: GameWorldState; handled: boolean } => {
   let handled = true;
 
@@ -77,6 +79,13 @@ export const handleKeyDown = (
       break;
     case 'w':
       gameState.wireframeMode = !gameState.wireframeMode;
+      break;
+    case 'd':
+      if (modifiers?.shift) {
+        gameState.debugMode = !gameState.debugMode;
+      } else {
+        handled = false;
+      }
       break;
     default:
       handled = false;

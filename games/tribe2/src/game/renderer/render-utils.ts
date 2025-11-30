@@ -198,3 +198,67 @@ export function adjustColorBrightness(hex: string, factor: number): string {
 
   return `#${rr}${gg}${bb}`;
 }
+
+/**
+ * Projects a world position to screen coordinates WITHOUT applying toroidal wrapping.
+ * This is used when we have already calculated the specific wrapped instance position
+ * relative to the camera and want to project it exactly as is.
+ */
+export function projectToScreen(
+  worldPos: Vector2D,
+  viewportCenter: Vector2D,
+  viewportZoom: number,
+  canvasDimensions: { width: number; height: number },
+): Vector2D {
+  const dx = worldPos.x - viewportCenter.x;
+  const dy = worldPos.y - viewportCenter.y;
+
+  return {
+    x: dx * viewportZoom + canvasDimensions.width / 2,
+    // INVERT Y-AXIS: World Y (up) to Screen Y (down).
+    y: -dy * viewportZoom + canvasDimensions.height / 2,
+  };
+}
+
+/**
+ * Calculates all wrapped positions for an entity in a toroidal world using 3x3 instancing.
+ * This mirrors the WebGPU terrain shader's instancing approach.
+ *
+ * @param entityPos The entity's canonical position in world coordinates [0, mapDimensions]
+ * @param viewportCenter The viewport center in world coordinates
+ * @param mapDimensions The dimensions of the game world
+ * @returns Array of up to 9 wrapped positions where the entity should be rendered
+ */
+export function getWrappedEntityPositions(
+  entityPos: Vector2D,
+  viewportCenter: Vector2D,
+  mapDimensions: { width: number; height: number },
+): Vector2D[] {
+  // Calculate which tile the camera is in (using floor for precise integer division)
+  // We use the raw viewportCenter here because it is now unwrapped (can be negative or > mapWidth)
+  const cameraTileX = Math.floor(viewportCenter.x / mapDimensions.width);
+  const cameraTileY = Math.floor(viewportCenter.y / mapDimensions.height);
+
+  const positions: Vector2D[] = [];
+
+  // Generate 9 instances in a 3x3 grid centered on the camera tile
+  for (let instanceIdx = 0; instanceIdx < 9; instanceIdx++) {
+    // Calculate this instance's relative tile position in the 3x3 grid
+    const tileX = (instanceIdx % 3) - 1;
+    const tileY = Math.floor(instanceIdx / 3) - 1;
+
+    // Calculate this instance's absolute tile position
+    const instanceTileX = cameraTileX + tileX;
+    const instanceTileY = cameraTileY + tileY;
+
+    // Calculate the wrapped world position for this instance
+    const wrappedPos: Vector2D = {
+      x: entityPos.x + instanceTileX * mapDimensions.width,
+      y: entityPos.y + instanceTileY * mapDimensions.height,
+    };
+
+    positions.push(wrappedPos);
+  }
+
+  return positions;
+}

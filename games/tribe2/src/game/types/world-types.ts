@@ -119,6 +119,7 @@ export interface GameWorldState {
   selectedBuilding: BuildingType;
   previewBuildingPosition: Vector2D | null;
   isValidBuildingPlacement?: boolean;
+  debugMode?: boolean;
 }
 
 /**

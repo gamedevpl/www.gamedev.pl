@@ -283,7 +283,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (!isActive()) return;
       shiftKeyRef.current = e.shiftKey;
-      const { newState, handled } = handleKeyDown(e.key.toLowerCase(), gameStateRef.current);
+      const { newState, handled } = handleKeyDown(e.key.toLowerCase(), gameStateRef.current, { shift: e.shiftKey });
       if (handled) {
         gameStateRef.current = newState;
         e.preventDefault();
