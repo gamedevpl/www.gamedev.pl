@@ -1,6 +1,7 @@
 import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { getHeightAtWorldPos } from './render-utils';
+import { Vector3D } from '../types/rendering-types';
+import { getHeightAtWorldPos, adjustColorBrightness } from './render-utils';
 import {
   GROUND_COLOR,
   GRASS_COLOR,
@@ -9,7 +10,7 @@ import {
   SNOW_COLOR,
   TERRAIN_DISPLACEMENT_FACTOR,
 } from '../constants/rendering-constants';
-import { HEIGHT_MAP_RESOLUTION } from '../constants/world-constants';
+import { HEIGHT_MAP_RESOLUTION, BUILDING_SPECS } from '../constants/world-constants';
 
 // Displacement factor for 2D canvas rendering (aligned with 3D WebGPU terrain)
 const CANVAS_HEIGHT_DISPLACEMENT = TERRAIN_DISPLACEMENT_FACTOR * 50; // ~20 pixels max
@@ -198,6 +199,168 @@ function renderTree(
 }
 
 /**
+ * Calculates the lighting intensity for a surface based on its normal and the global light direction.
+ * @param normal The surface normal vector (normalized).
+ * @param lightDir The global light direction vector (normalized).
+ * @returns A brightness multiplier (0.5 to 1.5).
+ */
+function calculateLighting(normal: Vector3D, lightDir: Vector3D): number {
+  // Dot product of normal and light direction
+  // We assume lightDir points TOWARDS the light source
+  const dot = normal.x * lightDir.x + normal.y * lightDir.y + normal.z * lightDir.z;
+  
+  // Map dot product [-1, 1] to brightness multiplier [0.5, 1.5]
+  // 0.5 = dark shadow, 1.0 = neutral, 1.5 = bright highlight
+  return 0.8 + dot * 0.4;
+}
+
+/**
+ * Renders a building entity with enhanced pseudo-3D effect, dynamic lighting, and shadows.
+ */
+function renderBuilding(
+  ctx: CanvasRenderingContext2D,
+  entity: Entity,
+  screenPos: Vector2D,
+  worldPos: Vector2D,
+  heightMap: number[][],
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+  viewportZoom: number,
+  lightDir: Vector3D,
+  overrideColor?: string,
+): void {
+  if (!entity.buildingType || !entity.width || !entity.height) return;
+
+  const specs = BUILDING_SPECS[entity.buildingType];
+  const width = entity.width * viewportZoom;
+  const height = entity.height * viewportZoom; // This is the footprint height (depth)
+  const baseColor = overrideColor || specs.color;
+
+  // Sample terrain height
+  const terrainHeight = getHeightAtWorldPos(worldPos, heightMap, cellSize, mapDimensions);
+  const heightDisplacement = terrainHeight * CANVAS_HEIGHT_DISPLACEMENT * viewportZoom;
+
+  // Base position (center of the building's footprint on the ground)
+  const baseX = screenPos.x;
+  const baseY = screenPos.y - heightDisplacement;
+
+  // Visual dimensions
+  const wallHeight = height * 0.8; // Vertical height of walls
+  const roofHeight = height * 0.5; // Vertical height of roof peak
+
+  // 1. Foundation / Brink (Grounding)
+  // Draw a dark patch under the building to simulate contact with terrain
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.beginPath();
+  // Draw a slightly larger oval/rect for the foundation
+  ctx.ellipse(baseX, baseY, width / 1.8, height / 1.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 2. Projected Shadow
+  // Calculate shadow offset based on light direction
+  // Light coming from (lightDir.x, lightDir.y) means shadow goes to (-lightDir.x, -lightDir.y)
+  // We project the shadow on the ground plane (screen X/Y)
+  const shadowLen = wallHeight * 0.6; // Length of shadow depends on wall height
+  const shadowOffsetX = -lightDir.x * shadowLen;
+  const shadowOffsetY = -lightDir.y * shadowLen; // In screen space, -y is up, but lightDir.y is world space
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.beginPath();
+  // Simple skewed rect for shadow
+  ctx.moveTo(baseX - width / 2, baseY);
+  ctx.lineTo(baseX + width / 2, baseY);
+  ctx.lineTo(baseX + width / 2 + shadowOffsetX, baseY + shadowOffsetY);
+  ctx.lineTo(baseX - width / 2 + shadowOffsetX, baseY + shadowOffsetY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // 3. Building Geometry (Pseudo-3D)
+  // We model the building as a box with a pitched roof.
+  // Since the camera is top-down but we want pseudo-3D, we show the Front face and the Roof.
+  // We can also show a Side face if we want a slight perspective shift, but for now let's stick to Front + Roof
+  // to match the "RPG" style often seen.
+  
+  // However, to make it look 3D, we can offset the roof based on the "up" vector in screen space.
+  // Screen Y is down. "Up" in 3D world is -Screen Y.
+  
+  const roofBaseY = baseY - wallHeight;
+  const roofPeakY = roofBaseY - roofHeight;
+
+  // --- Walls ---
+  // Front Face Normal: (0, -1, 0) in world space (facing "south" / camera)
+  // Actually, camera looks down Z. Let's assume standard isometric-ish normals.
+  // Front face faces +Y (South). Side faces +X (East). Top faces +Z (Up).
+  
+  // Let's define normals for lighting calculation
+  const frontNormal: Vector3D = { x: 0, y: 1, z: 0 }; // Facing South
+  const roofLeftNormal: Vector3D = { x: -0.7, y: 0, z: 0.7 }; // Facing West-ish Up
+  const roofRightNormal: Vector3D = { x: 0.7, y: 0, z: 0.7 }; // Facing East-ish Up
+  
+  // Calculate lighting factors
+  const frontLight = calculateLighting(frontNormal, lightDir);
+  const roofLeftLight = calculateLighting(roofLeftNormal, lightDir);
+  const roofRightLight = calculateLighting(roofRightNormal, lightDir);
+
+  // Draw Front Wall
+  ctx.save();
+  ctx.fillStyle = adjustColorBrightness(baseColor, frontLight);
+  ctx.fillRect(baseX - width / 2, roofBaseY, width, wallHeight);
+  
+  // Add some texture/detail to the wall (e.g., vertical planks or bricks)
+  ctx.strokeStyle = adjustColorBrightness(baseColor, frontLight * 0.8);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(baseX - width / 2, roofBaseY, width, wallHeight);
+  
+  // Door
+  const doorWidth = width * 0.25;
+  const doorHeight = wallHeight * 0.6;
+  ctx.fillStyle = '#3d2b1f'; // Dark wood
+  ctx.fillRect(baseX - doorWidth / 2, baseY - doorHeight, doorWidth, doorHeight);
+  ctx.restore();
+
+  // --- Roof ---
+  // Draw a pitched roof (triangle prism)
+  // Left Slope
+  ctx.save();
+  ctx.fillStyle = adjustColorBrightness('#8B4513', roofLeftLight); // SaddleBrown base
+  ctx.beginPath();
+  ctx.moveTo(baseX - width / 2 - width * 0.1, roofBaseY); // Bottom Left (overhang)
+  ctx.lineTo(baseX, roofPeakY); // Peak
+  ctx.lineTo(baseX, roofBaseY); // Bottom Center
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Right Slope
+  ctx.save();
+  ctx.fillStyle = adjustColorBrightness('#8B4513', roofRightLight);
+  ctx.beginPath();
+  ctx.moveTo(baseX + width / 2 + width * 0.1, roofBaseY); // Bottom Right (overhang)
+  ctx.lineTo(baseX, roofPeakY); // Peak
+  ctx.lineTo(baseX, roofBaseY); // Bottom Center
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  
+  // Roof Trim / Edge
+  ctx.save();
+  ctx.strokeStyle = '#5c3a21';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(baseX - width / 2 - width * 0.1, roofBaseY);
+  ctx.lineTo(baseX, roofPeakY);
+  ctx.lineTo(baseX + width / 2 + width * 0.1, roofBaseY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
  * Renders a rabbit entity with directional orientation and details.
  * @param ctx The canvas rendering context.
  * @param entity The rabbit entity.
@@ -253,7 +416,7 @@ function renderRabbit(
     stretchX = 1 - stretch;
   }
 
-  // Move "up" (screen Y) to simulate jumping
+  // Move \"up\" (screen Y) to simulate jumping
   ctx.translate(0, -hopY);
 
   // Rotate for direction
@@ -460,6 +623,7 @@ function renderWireframe(
  * @param viewportCenter The center of the camera in world coordinates.
  * @param viewportZoom The current zoom level.
  * @param canvasDimensions The width and height of the canvas.
+ * @param lightDir The global light direction for dynamic lighting.
  */
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -467,6 +631,7 @@ export function renderGame(
   viewportCenter: Vector2D,
   viewportZoom: number,
   canvasDimensions: { width: number; height: number },
+  lightDir: Vector3D = { x: 0.5, y: 0.5, z: 0.7 }, // Default light direction if not provided
 ): void {
   // Clear the canvas
   ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height);
@@ -493,7 +658,7 @@ export function renderGame(
         // TEMPORARILY DISABLED: Frustum culling for debugging
         // TODO: Fix frustum culling logic for toroidal world boundaries
         // For now, do a simple screen bounds check with generous margin
-        // Account for full tree visual height (trunk 2.2 + canopy 1.1 ≈ 3.3 * radius)
+        // Account for full tree visual height (trunk 2.2 + canopy 1.1 \u2248 3.3 * radius)
         // This ensures all 9 wrapped instances are properly evaluated at all zoom levels
         const margin = entity.radius * 3.3 * viewportZoom + 20;
         const shouldRender =
@@ -528,6 +693,19 @@ export function renderGame(
                 HEIGHT_MAP_RESOLUTION,
                 viewportZoom,
                 gameState.time,
+              );
+              break;
+            case EntityType.BUILDING:
+              renderBuilding(
+                ctx,
+                entity,
+                screenPos,
+                wrappedPos,
+                gameState.heightMap,
+                gameState.mapDimensions,
+                HEIGHT_MAP_RESOLUTION,
+                viewportZoom,
+                lightDir,
               );
               break;
             // Default case for other entities (players, boids, etc.)
@@ -638,6 +816,57 @@ export function renderGame(
         ctx.stroke();
         ctx.setLineDash([]); // Reset line dash
       }
+    }
+
+    // Render building placement preview
+    if (gameState.buildingPlacementMode && gameState.previewBuildingPosition) {
+      const { previewBuildingPosition, selectedBuilding, isValidBuildingPlacement } = gameState;
+      const specs = BUILDING_SPECS[selectedBuilding];
+
+      const wrappedPreviewPositions = getWrappedEntityPositions(
+        previewBuildingPosition,
+        viewportCenter,
+        gameState.mapDimensions,
+      );
+
+      wrappedPreviewPositions.forEach((wrappedPos) => {
+        const screenPos = projectToScreen(wrappedPos, viewportCenter, viewportZoom, canvasDimensions);
+        
+        // Create a temporary entity for rendering the preview
+        const previewEntity: Entity = {
+          id: -1,
+          type: EntityType.BUILDING,
+          position: wrappedPos,
+          radius: Math.max(specs.width, specs.height) / 2,
+          velocity: { x: 0, y: 0 },
+          direction: { x: 0, y: 0 },
+          acceleration: 0,
+          forces: [],
+          buildingType: selectedBuilding,
+          width: specs.width,
+          height: specs.height,
+        };
+
+        // Render with transparency and color indication
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        const color = isValidBuildingPlacement ? '#00ff00' : '#ff0000';
+        
+        renderBuilding(
+          ctx,
+          previewEntity,
+          screenPos,
+          wrappedPos,
+          gameState.heightMap,
+          gameState.mapDimensions,
+          HEIGHT_MAP_RESOLUTION,
+          viewportZoom,
+          lightDir,
+          color
+        );
+        
+        ctx.restore();
+      });
     }
 
     // Render editor brush cursor if active (in screen space, outside camera transform)

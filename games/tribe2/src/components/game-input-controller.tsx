@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { useMouse, useWindowSize } from 'react-use';
-import { GameWorldState, RoadPiece } from '../game/types/world-types';
+import { EntityType, GameWorldState, RoadPiece } from '../game/types/world-types';
 import { screenToWorldCoords } from '../game/renderer/render-utils';
 import { handleKeyDown } from '../game/input/input-handler';
 import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
-import { applyBiomeEdit, applyRoadEdit, applyTerrainEdit } from '../game/utils/terrain-editor-utils';
-import { HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
+import { applyBiomeEdit, applyRoadEdit, applyTerrainEdit, canPlaceBuilding } from '../game/utils/terrain-editor-utils';
+import { BUILDING_SPECS, HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
+import { createEntity } from '../game/ecs/entity-manager';
 
 const PAN_EDGE_THRESHOLD = 50; // Pixels from edge to start panning
 const PAN_SPEED_FACTOR = 5.0; // Increased for visibility
@@ -116,7 +117,11 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const gameState = gameStateRef.current;
 
       // Check if editing mode is active
-      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode || gameState.roadEditingMode;
+      const isEditingActive =
+        gameState.terrainEditingMode ||
+        gameState.biomeEditingMode ||
+        gameState.roadEditingMode ||
+        gameState.buildingPlacementMode;
 
       if (e.button === 0) {
         // Left click
@@ -132,6 +137,25 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
             );
             gameState.editorBrush.position = worldPos;
             gameState.lastRoadPosition = worldPos;
+          } else if (gameState.buildingPlacementMode) {
+            // Place building
+            if (gameState.isValidBuildingPlacement) {
+              const worldPos = screenToWorldCoords(
+                { x: e.clientX, y: e.clientY },
+                gameState.viewportCenter,
+                gameState.viewportZoom,
+                { width, height },
+                gameState.mapDimensions,
+              );
+              const specs = BUILDING_SPECS[gameState.selectedBuilding];
+              createEntity(gameState.entities, EntityType.BUILDING, {
+                position: worldPos,
+                radius: Math.max(specs.width, specs.height) / 2,
+                buildingType: gameState.selectedBuilding,
+                width: specs.width,
+                height: specs.height,
+              });
+            }
           }
 
           isEditingRef.current = true;
@@ -201,23 +225,46 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         }
       }
 
-      const isEditingActive = gameState.terrainEditingMode || gameState.biomeEditingMode || gameState.roadEditingMode;
+      const isEditingActive =
+        gameState.terrainEditingMode ||
+        gameState.biomeEditingMode ||
+        gameState.roadEditingMode ||
+        gameState.buildingPlacementMode;
+
       if (isEditingActive) {
-        gameState.editorBrush.position = screenToWorldCoords(
+        const worldPos = screenToWorldCoords(
           { x: docX, y: docY },
           gameState.viewportCenter,
           gameState.viewportZoom,
           { width, height },
           gameState.mapDimensions,
         );
+        gameState.editorBrush.position = worldPos;
+
         // Update road preview position
         if (gameState.roadEditingMode) {
           gameState.previewRoadPosition = { ...gameState.editorBrush.position };
         } else {
           gameState.previewRoadPosition = null;
         }
+
+        // Update building preview position
+        if (gameState.buildingPlacementMode) {
+          gameState.previewBuildingPosition = { ...gameState.editorBrush.position };
+          gameState.isValidBuildingPlacement = canPlaceBuilding(
+            worldPos,
+            gameState.selectedBuilding,
+            gameState.entities,
+            gameState.heightMap,
+            gameState.mapDimensions,
+            HEIGHT_MAP_RESOLUTION,
+          );
+        } else {
+          gameState.previewBuildingPosition = null;
+        }
       } else {
         gameState.previewRoadPosition = null;
+        gameState.previewBuildingPosition = null;
       }
 
       if (isEditingRef.current) {

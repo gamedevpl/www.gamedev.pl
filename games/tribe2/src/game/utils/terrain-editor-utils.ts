@@ -1,6 +1,6 @@
-import { BiomeType, RoadDirection, RoadPiece } from '../types/world-types';
+import { BiomeType, RoadDirection, RoadPiece, BuildingType, Entities, EntityType } from '../types/world-types';
 import { Vector2D } from '../types/math-types';
-import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH, WATER_LEVEL } from '../constants/world-constants';
+import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH, WATER_LEVEL, BUILDING_SPECS, BUILDING_MIN_SPACING } from '../constants/world-constants';
 
 /**
  * Converts world coordinates to grid coordinates, handling map wrapping.
@@ -467,4 +467,99 @@ export function applyRoadEdit(
   );
 
   return { modifiedRoadCells, modifiedHeightCells };
+}
+
+/**
+ * Checks if a building overlaps with any existing buildings, accounting for world wrapping.
+ */
+function checkBuildingOverlap(
+  pos: Vector2D,
+  width: number,
+  height: number,
+  entities: Entities,
+  mapDimensions: { width: number; height: number },
+): boolean {
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+
+  // Simple bounding box check against all other buildings
+  for (const entity of entities.entities.values()) {
+    if (entity.type === EntityType.BUILDING && entity.width && entity.height) {
+      const otherHalfWidth = entity.width / 2;
+      const otherHalfHeight = entity.height / 2;
+      const minSpacing = BUILDING_MIN_SPACING;
+
+      // Check distance with wrapping
+      let dx = Math.abs(pos.x - entity.position.x);
+      let dy = Math.abs(pos.y - entity.position.y);
+
+      // Handle wrapping
+      if (dx > mapDimensions.width / 2) dx = mapDimensions.width - dx;
+      if (dy > mapDimensions.height / 2) dy = mapDimensions.height - dy;
+
+      // Check if bounding boxes overlap (including spacing)
+      if (
+        dx < halfWidth + otherHalfWidth + minSpacing &&
+        dy < halfHeight + otherHalfHeight + minSpacing
+      ) {
+        return true; // Overlap detected
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Validates if a building can be placed at the specified position.
+ * Checks for water and overlaps with existing buildings.
+ * 
+ * @param worldPos The center position for the building.
+ * @param buildingType The type of building to place.
+ * @param entities The collection of existing entities.
+ * @param heightMap The terrain heightmap.
+ * @param mapDimensions The dimensions of the game world.
+ * @param cellSize The size of each heightmap cell.
+ * @returns True if the building can be placed, false otherwise.
+ */
+export function canPlaceBuilding(
+  worldPos: Vector2D,
+  buildingType: BuildingType,
+  entities: Entities,
+  heightMap: number[][],
+  mapDimensions: { width: number; height: number },
+  cellSize: number,
+): boolean {
+  const specs = BUILDING_SPECS[buildingType];
+  
+  // 1. Check if on water
+  // We check the center and corners to ensure the whole building is on land
+  const checkPoints = [
+    worldPos,
+    { x: worldPos.x - specs.width / 2, y: worldPos.y - specs.height / 2 },
+    { x: worldPos.x + specs.width / 2, y: worldPos.y - specs.height / 2 },
+    { x: worldPos.x - specs.width / 2, y: worldPos.y + specs.height / 2 },
+    { x: worldPos.x + specs.width / 2, y: worldPos.y + specs.height / 2 },
+  ];
+
+  for (const point of checkPoints) {
+    // Handle wrapping for point checks
+    const wrappedPoint = {
+      x: ((point.x % mapDimensions.width) + mapDimensions.width) % mapDimensions.width,
+      y: ((point.y % mapDimensions.height) + mapDimensions.height) % mapDimensions.height,
+    };
+    
+    const gridPos = worldToGridCoords(wrappedPoint, cellSize, mapDimensions);
+    const height = heightMap[gridPos.gy][gridPos.gx];
+    
+    if (height < WATER_LEVEL) {
+      return false; // Cannot place on water
+    }
+  }
+
+  // 2. Check for overlaps with existing buildings
+  if (checkBuildingOverlap(worldPos, specs.width, specs.height, entities, mapDimensions)) {
+    return false;
+  }
+
+  return true;
 }

@@ -22,12 +22,11 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     // Accumulate real-world time in seconds
     currentState.time += deltaTime;
 
-    // --- Core System Updates ---
-
+    // --- Core System Updates ---\n
     // 1. Update all entities (physics, state machines, AI)
     for (const entity of currentState.entities.entities.values()) {
-      // Skip static entities like trees
-      if (entity.type === EntityType.TREE) {
+      // Skip static entities like trees and buildings
+      if (entity.type === EntityType.TREE || entity.type === EntityType.BUILDING) {
         continue;
       }
       updateEntity(entity, currentState, deltaTime);

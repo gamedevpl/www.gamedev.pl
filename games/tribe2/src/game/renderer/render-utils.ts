@@ -154,3 +154,47 @@ export function getHeightAtWorldPos(
 
   return height;
 }
+
+/**
+ * Computes the vertical displacement in screen pixels for a given terrain height.
+ * This ensures 2D entities align visually with the pseudo-3D WebGPU terrain.
+ * @param height The normalized terrain height [0, 1].
+ * @param displacementFactor The global displacement factor (TERRAIN_DISPLACEMENT_FACTOR).
+ * @param viewportZoom The current zoom level.
+ * @returns The vertical offset in screen pixels (positive = up on screen).
+ */
+export function computeScreenSpaceDisplacement(
+  height: number,
+  displacementFactor: number,
+  viewportZoom: number,
+): number {
+  return height * displacementFactor * 50 * viewportZoom;
+}
+
+/**
+ * Adjusts the brightness of a hex color.
+ * @param hex The hex color string (e.g., "#RRGGBB").
+ * @param factor The brightness factor (0.0 to 2.0+).
+ * @returns The adjusted hex color string.
+ */
+export function adjustColorBrightness(hex: string, factor: number): string {
+  // Remove hash if present
+  hex = hex.replace(/^#/, '');
+
+  // Parse RGB
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  // Apply factor
+  r = Math.min(255, Math.max(0, Math.round(r * factor)));
+  g = Math.min(255, Math.max(0, Math.round(g * factor)));
+  b = Math.min(255, Math.max(0, Math.round(b * factor)));
+
+  // Convert back to hex
+  const rr = r.toString(16).padStart(2, '0');
+  const gg = g.toString(16).padStart(2, '0');
+  const bb = b.toString(16).padStart(2, '0');
+
+  return `#${rr}${gg}${bb}`;
+}

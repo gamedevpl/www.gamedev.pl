@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
-import { BiomeType, GameWorldState, RoadPiece } from '../game/types/world-types';
+import { BiomeType, BuildingType, GameWorldState, RoadPiece } from '../game/types/world-types';
 import { renderGame } from '../game/renderer/renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
@@ -101,6 +101,10 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
         roadEditingMode: false,
         lastRoadPosition: null,
         previewRoadPosition: null,
+        buildingPlacementMode: false,
+        selectedBuilding: BuildingType.HOUSE,
+        previewBuildingPosition: null,
+        isValidBuildingPlacement: false,
       };
       animStateRef.current = initIntroAnimation(
         heightMap,
@@ -171,10 +175,17 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
 
     // 2. Render entities (Canvas 2D)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    renderGame(ctx, gameState, viewportCenter, viewportZoom, {
-      width: canvas.width,
-      height: canvas.height,
-    });
+    renderGame(
+      ctx,
+      gameState,
+      viewportCenter,
+      viewportZoom,
+      {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      lightDir,
+    );
   });
 
   return (

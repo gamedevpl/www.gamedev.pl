@@ -14,7 +14,7 @@ import {
   RABBIT_RADIUS,
   RABBIT_SPAWN_DENSITY,
 } from './constants/world-constants';
-import { Entities, EntityType, BiomeType, GameWorldState, RoadPiece } from './types/world-types';
+import { Entities, EntityType, BiomeType, GameWorldState, RoadPiece, BuildingType } from './types/world-types';
 import { createNoise2D } from './utils/noise-utils';
 import { createRabbitBehaviorTree } from './ai/rabbit-ai';
 
@@ -253,6 +253,10 @@ export function initWorld(): GameWorldState {
     roadEditingMode: false,
     lastRoadPosition: null,
     previewRoadPosition: null,
+    buildingPlacementMode: false,
+    selectedBuilding: BuildingType.HOUSE,
+    previewBuildingPosition: null,
+    isValidBuildingPlacement: false,
   };
 
   // Create a single demo entity at the center to validate the rendering pipeline

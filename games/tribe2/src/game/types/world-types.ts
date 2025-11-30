@@ -11,6 +11,13 @@ export enum EntityType {
   DEMO = 'demo',
   TREE = 'tree',
   RABBIT = 'rabbit',
+  BUILDING = 'building',
+}
+
+export enum BuildingType {
+  HOUSE = 'house',
+  BARN = 'barn',
+  WORKSHOP = 'workshop',
 }
 
 export enum BiomeType {
@@ -52,6 +59,10 @@ export interface Entity {
   direction: Vector2D;
   acceleration: number;
   forces: Vector2D[];
+  // Building properties
+  buildingType?: BuildingType;
+  width?: number;
+  height?: number;
   // AI and State Machine components
   stateMachine?: StateMachineComponent;
   behaviorTree?: BehaviorTreeComponent;
@@ -103,6 +114,11 @@ export interface GameWorldState {
   roadEditingMode: boolean;
   lastRoadPosition: Vector2D | null;
   previewRoadPosition: Vector2D | null;
+  // Building Editor
+  buildingPlacementMode: boolean;
+  selectedBuilding: BuildingType;
+  previewBuildingPosition: Vector2D | null;
+  isValidBuildingPlacement?: boolean;
 }
 
 /**

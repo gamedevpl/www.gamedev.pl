@@ -1,4 +1,4 @@
-import { BiomeType, GameWorldState } from '../types/world-types';
+import { BiomeType, BuildingType, GameWorldState } from '../types/world-types';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -24,6 +24,7 @@ export const handleKeyDown = (
       if (gameState.terrainEditingMode) {
         gameState.biomeEditingMode = false; // Disable biome editing
         gameState.roadEditingMode = false;
+        gameState.buildingPlacementMode = false;
       }
       break;
     case '2':
@@ -31,6 +32,7 @@ export const handleKeyDown = (
       if (gameState.biomeEditingMode) {
         gameState.terrainEditingMode = false; // Disable terrain editing
         gameState.roadEditingMode = false;
+        gameState.buildingPlacementMode = false;
       }
       break;
     case '3':
@@ -48,11 +50,29 @@ export const handleKeyDown = (
     case '7':
       gameState.selectedBiome = BiomeType.SNOW;
       break;
+    case '8':
+      gameState.selectedBuilding = BuildingType.HOUSE;
+      break;
+    case '9':
+      gameState.selectedBuilding = BuildingType.BARN;
+      break;
+    case '0':
+      gameState.selectedBuilding = BuildingType.WORKSHOP;
+      break;
     case 'r':
       gameState.roadEditingMode = !gameState.roadEditingMode;
       if (gameState.roadEditingMode) {
         gameState.terrainEditingMode = false; // Disable terrain editing
         gameState.biomeEditingMode = false; // Disable biome editing
+        gameState.buildingPlacementMode = false;
+      }
+      break;
+    case 'b':
+      gameState.buildingPlacementMode = !gameState.buildingPlacementMode;
+      if (gameState.buildingPlacementMode) {
+        gameState.terrainEditingMode = false;
+        gameState.biomeEditingMode = false;
+        gameState.roadEditingMode = false;
       }
       break;
     case 'w':

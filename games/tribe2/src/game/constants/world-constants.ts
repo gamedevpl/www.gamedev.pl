@@ -1,3 +1,5 @@
+import { BuildingType } from '../types/world-types';
+
 // Core Game Constants
 
 // World and Movement Constants
@@ -63,3 +65,14 @@ export const TERRAIN_EDIT_INTENSITY = 0.01;
 export const ROAD_WIDTH = 100;
 /** The intensity of the terrain leveling effect when placing roads. */
 export const ROAD_LEVEL_INTENSITY = 0.3;
+
+// Building Constants
+/** Specifications for each building type. */
+export const BUILDING_SPECS: Record<BuildingType, { width: number; height: number; color: string }> = {
+  [BuildingType.HOUSE]: { width: 60, height: 60, color: '#8B4513' },
+  [BuildingType.BARN]: { width: 80, height: 100, color: '#A52A2A' },
+  [BuildingType.WORKSHOP]: { width: 70, height: 70, color: '#556B2F' },
+};
+
+/** The minimum distance required between buildings. */
+export const BUILDING_MIN_SPACING = 20;
