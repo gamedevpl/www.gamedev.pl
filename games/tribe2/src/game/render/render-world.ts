@@ -122,8 +122,11 @@ export function renderWorld(
         gameState.debugCharacterId,
       );
     } else if (entity.type === 'building') {
-      renderBuilding(
+      renderWithWrapping(
         ctx,
+        worldWidth,
+        worldHeight,
+        renderBuilding,
         entity as BuildingEntity,
         viewportCenter,
         canvasDimensions,

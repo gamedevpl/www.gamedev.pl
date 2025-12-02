@@ -9,11 +9,10 @@ import { Vector2D } from '../utils/math-types';
 import { getBuildingDefinition } from '../buildings/building-definitions';
 import { BuildingEntity } from '../entities/buildings/building-entity';
 import { BuildingState } from '../buildings/building-types';
-import { worldToScreenCoords } from './render-utils';
 
 /**
  * Renders a building entity
- * This function is called by renderWithWrapping, so it receives wrapped positions
+ * This function is called by renderWithWrapping in the translated world context
  */
 export function renderBuilding(
   ctx: CanvasRenderingContext2D,
@@ -24,8 +23,8 @@ export function renderBuilding(
 ): void {
   const definition = getBuildingDefinition(building.buildingType);
   
-  // Calculate screen position using proper coordinate conversion
-  const screenPos = worldToScreenCoords(building.position, viewportCenter, canvasDimensions, mapDimensions);
+  // We're in the translated context, so use world coordinates directly
+  const screenPos = building.position;
   
   ctx.save();
   
@@ -85,6 +84,7 @@ export function renderBuilding(
 
 /**
  * Renders building preview when in placement mode
+ * This is called in the translated world context, so we calculate position directly
  */
 export function renderBuildingPreview(
   ctx: CanvasRenderingContext2D,
@@ -100,8 +100,9 @@ export function renderBuildingPreview(
   const definition = getBuildingDefinition(gameState.selectedBuildingType);
   const previewPos = gameState.buildingPreviewPosition;
   
-  // Calculate screen position using proper coordinate conversion
-  const screenPos = worldToScreenCoords(previewPos, viewportCenter, canvasDimensions, mapDimensions);
+  // Since we're in the translated context, we just use world coordinates directly
+  // The context is already translated by (canvas.width/2 - viewportCenter.x, canvas.height/2 - viewportCenter.y)
+  const screenPos = previewPos;
   
   ctx.save();
   
