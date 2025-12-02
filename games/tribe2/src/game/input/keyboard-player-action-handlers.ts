@@ -21,6 +21,7 @@ import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { toggleBuildingPlacementMode, toggleDemolishMode } from './building-input-handlers';
 
 /**
  * Handles keyboard events that correspond to direct player actions.
@@ -201,6 +202,16 @@ export const handlePlayerActionKeyDown = (
     playSoundAt(updateContext, SoundType.CallToFollow, playerEntity.position);
   } else if (key === 'k') {
     performTribeSplit(playerEntity, gameState);
+  } else if (key === 'z') {
+    // Toggle building placement mode (only for leaders)
+    if (playerEntity.isAdult && playerEntity.leaderId === playerEntity.id) {
+      toggleBuildingPlacementMode(gameState);
+    }
+  } else if (key === 'x') {
+    // Toggle demolish mode (only for leaders)
+    if (playerEntity.isAdult && playerEntity.leaderId === playerEntity.id) {
+      toggleDemolishMode(gameState);
+    }
   }
 };
 

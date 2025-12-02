@@ -268,6 +268,21 @@ export function renderUIButtons(
         name: 'Split Tribe',
         condition: () => player.leaderId !== undefined && player.leaderId !== player.id && player.isAdult === true,
       },
+      // Building system buttons
+      {
+        playerAction: PlayerActionType.PlaceBuilding,
+        buttonAction: UIButtonActionType.ToggleBuildingMode,
+        shortcut: 'Z',
+        name: 'Build',
+        condition: () => player.isAdult === true && player.leaderId === player.id, // Only leaders can build
+      },
+      {
+        playerAction: PlayerActionType.DemolishBuilding,
+        buttonAction: UIButtonActionType.ToggleDemolishMode,
+        shortcut: 'X',
+        name: 'Demolish',
+        condition: () => player.isAdult === true && player.leaderId === player.id, // Only leaders can demolish
+      },
     ];
 
     playerCommandButtons = playerCommandButtons.filter((b) => (b.condition ? b.condition() : true));
@@ -287,6 +302,11 @@ export function renderUIButtons(
 
       const isToggleButton = !!behavior.toggleKey;
       const isBehaviorActive = isToggleButton && gameState.autopilotControls.behaviors[behavior.toggleKey!];
+      
+      // Check if building mode buttons are active
+      const isBuildingModeActive = behavior.buttonAction === UIButtonActionType.ToggleBuildingMode && gameState.buildingPlacementMode;
+      const isDemolishModeActive = behavior.buttonAction === UIButtonActionType.ToggleDemolishMode && gameState.demolishMode;
+      
       const isDisabled = !availableActionTypes.has(behavior.playerAction);
 
       const shiftTooltip =
@@ -295,7 +315,9 @@ export function renderUIButtons(
           : '';
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
-      const backgroundColor = isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+      const backgroundColor = (isBehaviorActive || isBuildingModeActive || isDemolishModeActive) 
+        ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR 
+        : UI_BUTTON_BACKGROUND_COLOR;
 
       const button: ClickableUIButton = {
         id: `commandButton_${behavior.name}`,
@@ -308,7 +330,7 @@ export function renderUIButtons(
         currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
         tooltip: tooltipText,
         isDisabled,
-        activated: isBehaviorActive,
+        activated: isBehaviorActive || isBuildingModeActive || isDemolishModeActive,
       };
       gameState.uiButtons.push(button);
     });
