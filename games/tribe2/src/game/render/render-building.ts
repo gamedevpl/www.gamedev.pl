@@ -60,17 +60,38 @@ export function renderBuilding(
   ctx.fillText(icon, screenPos.x, screenPos.y);
   
   // Draw construction/demolition progress if applicable
-  if (building.state === BuildingState.UnderConstruction && building.constructionProgress > 0) {
-    const progressBarWidth = size * 0.8;
-    const progressBarHeight = 4;
+  if (building.state === BuildingState.UnderConstruction && building.constructionProgress >= 0) {
+    const progressBarWidth = size * 0.9;
+    const progressBarHeight = 6;
     const progressBarX = screenPos.x - progressBarWidth / 2;
-    const progressBarY = screenPos.y + building.radius + 5;
+    const progressBarY = screenPos.y + building.radius + 8;
     
+    // Background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(progressBarX - 1, progressBarY - 1, progressBarWidth + 2, progressBarHeight + 2);
+    
+    // Empty bar
     ctx.fillStyle = '#333333';
     ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
     
+    // Progress fill
     ctx.fillStyle = '#00FF00';
     ctx.fillRect(progressBarX, progressBarY, (progressBarWidth * building.constructionProgress) / 100, progressBarHeight);
+    
+    // Progress text
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.floor(building.constructionProgress)}%`, screenPos.x, progressBarY + progressBarHeight + 2);
+    
+    // Worker count indicator
+    const workerCount = building.assignedWorkerIds.length;
+    if (workerCount > 0) {
+      ctx.fillStyle = '#FFD700';
+      ctx.font = '9px Arial';
+      ctx.fillText(`👷 ${workerCount}`, screenPos.x, progressBarY - 12);
+    }
   }
   
   ctx.restore();
