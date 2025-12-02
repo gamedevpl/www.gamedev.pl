@@ -26,7 +26,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces.push(accelerationForce);
 
   // Process each active debuff
-  entity.debuffs.forEach((debuff) => {
+  entity.debuffs?.forEach((debuff) => {
     const debuffElapsed = updateContext.gameState.time - debuff.startTime;
 
     if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
@@ -37,7 +37,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   });
 
   // Clean up expired debuffs
-  entity.debuffs = entity.debuffs.filter((debuff) => {
+  entity.debuffs = entity.debuffs?.filter((debuff) => {
     const debuffElapsed = updateContext.gameState.time - debuff.startTime;
     return debuffElapsed < debuff.duration;
   });

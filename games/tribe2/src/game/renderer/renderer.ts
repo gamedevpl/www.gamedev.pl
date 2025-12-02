@@ -1,4 +1,4 @@
-import { GameWorldState, Entity, EntityType, BiomeType } from '../world-types';
+import { GameWorldState, Entity, BiomeType } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { Vector3D } from '../types/rendering-types';
 import { getHeightAtWorldPos, adjustColorBrightness, projectToScreen, getWrappedEntityPositions } from './render-utils';
@@ -167,7 +167,7 @@ function renderBuilding(
 ): void {
   if (!entity.buildingType || !entity.width || !entity.height) return;
 
-  const specs = BUILDING_SPECS[entity.buildingType];
+  const specs = BUILDING_SPECS[entity.buildingType as keyof typeof BUILDING_SPECS];
   const width = entity.width * viewportZoom;
   const height = entity.height * viewportZoom; // This is the footprint height (depth)
   const baseColor = overrideColor || specs.color;
@@ -660,8 +660,9 @@ export function renderGame(
     });
 
     // Render road editing preview if active - DISABLED FOR BASELINE
-    if (false && gameState.roadEditingMode) {
-      const { lastRoadPosition, previewRoadPosition } = gameState;
+    if (false) { // gameState.roadEditingMode
+      const lastRoadPosition: any = null;
+      const previewRoadPosition: any = null;
 
       // 1. Render the preview piece at the cursor
       if (previewRoadPosition) {
@@ -755,9 +756,11 @@ export function renderGame(
     }
 
     // Render building placement preview - DISABLED FOR BASELINE
-    if (false && gameState.buildingPlacementMode) {
-      const { previewBuildingPosition, selectedBuilding, isValidBuildingPlacement } = gameState;
-      const specs = BUILDING_SPECS[selectedBuilding];
+    if (false) { // gameState.buildingPlacementMode
+      const previewBuildingPosition: any = null;
+      const selectedBuilding: any = null;
+      const isValidBuildingPlacement: any = false;
+      const specs = BUILDING_SPECS[selectedBuilding as keyof typeof BUILDING_SPECS];
 
       const wrappedPreviewPositions = getWrappedEntityPositions(
         previewBuildingPosition,
@@ -806,17 +809,19 @@ export function renderGame(
     }
 
     // Render editor brush cursor if active - DISABLED FOR BASELINE
-    if (false && (gameState.terrainEditingMode || gameState.biomeEditingMode)) {
-      const { position, radius } = gameState.editorBrush;
+    if (false) { // (gameState.terrainEditingMode || gameState.biomeEditingMode) && gameState.editorBrush
+      const position: any = null;
+      const radius: any = 0;
+      const selectedBiome: any = null;
 
       // Get all wrapped positions for the brush cursor
       const wrappedBrushPositions = getWrappedEntityPositions(position, viewportCenter, gameState.mapDimensions);
 
       let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
 
-      if (gameState.biomeEditingMode && gameState.selectedBiome) {
+      if (gameState.biomeEditingMode && selectedBiome) {
         let biomeRgb = { r: 1, g: 1, b: 1 };
-        switch (gameState.selectedBiome) {
+        switch (selectedBiome) {
           case BiomeType.GROUND:
             biomeRgb = GROUND_COLOR;
             break;

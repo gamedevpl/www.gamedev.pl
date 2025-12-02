@@ -17,7 +17,7 @@ export interface Entity {
   forces: Vector2D[];
   velocity: Vector2D;
   stateMachine?: [StateType, StateData];
-  debuffs: ActiveDebuff[];
+  debuffs?: ActiveDebuff[];
   gatheringCooldownTime?: number;
   eatingCooldownTime?: number;
   isHighlighted?: boolean;

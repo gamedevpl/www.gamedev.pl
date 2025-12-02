@@ -36,15 +36,15 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
 
     // Apply slow debuff if hunger is high
     if (entity.hunger >= HUMAN_HUNGER_THRESHOLD_SLOW) {
-      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== 'slow');
-      entity.debuffs.push({
+      entity.debuffs = entity.debuffs?.filter((debuff) => debuff.type !== 'slow');
+      entity.debuffs?.push({
         type: 'slow',
         startTime: updateContext.gameState.time,
         duration: 0.1, // Very short duration, will be reapplied each update cycle while condition met
       });
     } else {
       // Remove slow debuff if hunger is not high
-      entity.debuffs = entity.debuffs.filter((debuff) => debuff.type !== 'slow');
+      entity.debuffs = entity.debuffs?.filter((debuff) => debuff.type !== 'slow');
     }
 
     if (entity.activeAction === 'moving') {

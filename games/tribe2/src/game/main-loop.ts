@@ -1,5 +1,5 @@
 import { updateEntity } from './ecs/entity-updater';
-import { EntityType, GameWorldState } from './world-types';
+import { GameWorldState } from './world-types';
 import { MAX_REAL_TIME_DELTA } from './constants/world-constants';
 
 /**

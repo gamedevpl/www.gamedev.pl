@@ -1,5 +1,5 @@
 import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
-import { DebugPanelType, GameWorldState, BiomeType, RoadPiece } from './world-types';
+import { DebugPanelType, GameWorldState, RoadPiece } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS } from './game-consts.ts';
 import { HEIGHT_MAP_RESOLUTION } from './constants/world-constants';
 import { INITIAL_BERRY_BUSH_COUNT, MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';

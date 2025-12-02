@@ -14,7 +14,7 @@ import {
   RABBIT_RADIUS,
   RABBIT_SPAWN_DENSITY,
 } from './constants/world-constants';
-import { BiomeType, EntityType, RoadPiece } from './world-types';
+import { BiomeType, RoadPiece } from './world-types';
 import { Entities } from './world-types';
 import { createNoise2D } from './utils/noise-utils';
 import { createRabbitBehaviorTree } from './ai/rabbit-ai';

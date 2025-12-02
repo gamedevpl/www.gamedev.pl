@@ -1,4 +1,4 @@
-import { BiomeType, RoadDirection, RoadPiece, BuildingType, Entities, EntityType } from '../world-types';
+import { BiomeType, RoadDirection, RoadPiece, BuildingType, Entities } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH, WATER_LEVEL, BUILDING_SPECS, BUILDING_MIN_SPACING } from '../constants/world-constants';
 
@@ -484,7 +484,7 @@ function checkBuildingOverlap(
 
   // Simple bounding box check against all other buildings
   for (const entity of entities.entities.values()) {
-    if (entity.type === EntityType.BUILDING && entity.width && entity.height) {
+    if (entity.type === 'building' && entity.width && entity.height) {
       const otherHalfWidth = entity.width / 2;
       const otherHalfHeight = entity.height / 2;
       const minSpacing = BUILDING_MIN_SPACING;

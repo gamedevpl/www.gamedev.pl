@@ -14,10 +14,15 @@ export function interactionsUpdate(context: UpdateContext): void {
         continue;
       }
 
-      const potentialTargets = indexedState.search[interaction.targetType].byRadius(
-        sourceEntity.position,
-        interaction.maxDistance,
-      );
+      // Handle new entity types not in index
+      const hasIndex = interaction.targetType in indexedState.search;
+      const potentialTargets = hasIndex
+        ? indexedState.search[interaction.targetType as keyof typeof indexedState.search].byRadius(
+            sourceEntity.position,
+            interaction.maxDistance,
+          )
+        : allEntities.filter(e => e.type === interaction.targetType &&
+            calculateWrappedDistance(sourceEntity.position, e.position, gameState.mapDimensions.width, gameState.mapDimensions.height) <= interaction.maxDistance);
 
       for (const targetEntity of potentialTargets) {
         if (sourceEntity.id === targetEntity.id) {

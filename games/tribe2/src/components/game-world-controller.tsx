@@ -90,7 +90,7 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
           webgpuCanvas,
           gameStateRef.current.heightMap,
           gameStateRef.current.biomeMap,
-          gameStateRef.current.roadMap,
+          gameStateRef.current.roadMap || [],
           gameStateRef.current.mapDimensions,
           HEIGHT_MAP_RESOLUTION,
         );

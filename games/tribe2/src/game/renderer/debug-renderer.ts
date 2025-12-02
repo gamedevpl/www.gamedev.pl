@@ -1,4 +1,4 @@
-import { GameWorldState, EntityType } from '../world-types';
+import { GameWorldState } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { projectToScreen, getWrappedEntityPositions } from './render-utils';
 import {

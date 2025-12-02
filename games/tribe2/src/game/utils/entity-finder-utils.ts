@@ -18,7 +18,11 @@ export function findClosestEntity<T extends Entity>(
     'position' in sourceEntityOrPosition && sourceEntityOrPosition.id ? sourceEntityOrPosition : null;
   const sourcePosition = sourceEntity ? sourceEntity.position : (sourceEntityOrPosition as Vector2D);
 
-  const candidates = indexedState.search[targetType].byRadius(sourcePosition, searchRadius) as unknown as T[];
+  // For new entity types not in the index (tree, rabbit, building), fall back to manual search
+  const hasIndex = targetType in indexedState.search;
+  const candidates = hasIndex
+    ? (indexedState.search[targetType as keyof typeof indexedState.search].byRadius(sourcePosition, searchRadius) as unknown as T[])
+    : Array.from(gameState.entities.entities.values()).filter(e => e.type === targetType) as T[];
 
   let closestEntity: T | null = null;
   let minDistance = searchRadius;
@@ -51,7 +55,10 @@ export function findEntitiesOfTypeInRadius<T extends Entity>(
   radius: number,
 ): T[] {
   const indexedState = gameState as IndexedWorldState;
-  return indexedState.search[targetType].byRadius(sourcePosition, radius) as unknown as T[];
+  const hasIndex = targetType in indexedState.search;
+  return hasIndex
+    ? (indexedState.search[targetType as keyof typeof indexedState.search].byRadius(sourcePosition, radius) as unknown as T[])
+    : Array.from(gameState.entities.entities.values()).filter(e => e.type === targetType) as T[];
 }
 
 export function countEntitiesOfTypeInRadius(

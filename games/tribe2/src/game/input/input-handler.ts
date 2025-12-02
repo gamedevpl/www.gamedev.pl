@@ -1,4 +1,4 @@
-import { BiomeType, BuildingType, GameWorldState } from '../world-types';
+import { GameWorldState } from '../world-types';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
