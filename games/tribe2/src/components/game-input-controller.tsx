@@ -1,12 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { useMouse, useWindowSize } from 'react-use';
-import { EntityType, GameWorldState, RoadPiece } from '../game/world-types';
-import { screenToWorldCoords } from '../game/renderer/render-utils';
+import { GameWorldState, RoadPiece } from '../game/world-types';
 import { handleKeyDown } from '../game/input/input-handler';
 import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
-import { applyBiomeEdit, applyRoadEdit, applyTerrainEdit, canPlaceBuilding } from '../game/utils/terrain-editor-utils';
-import { BUILDING_SPECS, HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
-import { createEntity } from '../game/ecs/entity-manager';
 
 const PAN_EDGE_THRESHOLD = 50; // Pixels from edge to start panning
 const PAN_SPEED_FACTOR = 5.0; // Increased for visibility
@@ -63,20 +59,13 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   };
 
   useEffect(() => {
-    const handleEdit = (shiftKey: boolean) => {
+    const handleEdit = () => {
       // Editor disabled for baseline - will be re-implemented with building system
     };
 
     const onMouseDown = (e: MouseEvent) => {
       if (!isActive()) return;
-      const gameState = gameStateRef.current;
-
-      // Check if editing mode is active
-      const isEditingActive =
-        gameState.terrainEditingMode ||
-        gameState.biomeEditingMode ||
-        gameState.roadEditingMode ||
-        gameState.buildingPlacementMode;
+      // Editor mode disabled for baseline
 
       if (e.button === 0) {
         // Left click - allow panning
@@ -141,52 +130,16 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         }
       }
 
-      const isEditingActive =
-        gameState.terrainEditingMode ||
-        gameState.biomeEditingMode ||
-        gameState.roadEditingMode ||
-        gameState.buildingPlacementMode;
 
+      // Editor code disabled for baseline
+      /*
       if (isEditingActive) {
-        const worldPos = screenToWorldCoords(
-          { x: docX, y: docY },
-          gameState.viewportCenter,
-          gameState.viewportZoom,
-          { width, height },
-          gameState.mapDimensions,
-        );
-        if (gameState.editorBrush) {
-          gameState.editorBrush.position = worldPos;
-
-          // Update road preview position
-          if (gameState.roadEditingMode) {
-            gameState.previewRoadPosition = { ...gameState.editorBrush.position };
-          } else {
-            gameState.previewRoadPosition = null;
-          }
-
-          // Update building preview position
-          if (gameState.buildingPlacementMode && gameState.selectedBuilding) {
-            gameState.previewBuildingPosition = { ...gameState.editorBrush.position };
-            gameState.isValidBuildingPlacement = canPlaceBuilding(
-              worldPos,
-              gameState.selectedBuilding,
-              gameState.entities,
-              gameState.heightMap,
-              gameState.mapDimensions,
-              HEIGHT_MAP_RESOLUTION,
-            );
-          } else {
-            gameState.previewBuildingPosition = null;
-          }
-        }
-      } else {
-        gameState.previewRoadPosition = null;
-        gameState.previewBuildingPosition = null;
+        // ... editor code removed
       }
+      */
 
       if (isEditingRef.current) {
-        handleEdit(shiftKeyRef.current);
+        handleEdit();
       }
     };
 

@@ -159,8 +159,8 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     } else {
       // Standard Mode: Render full visuals
       
-      // 1. Render terrain (WebGPU)
-      renderer.renderTerrain(viewportCenter, viewportZoom, gameState.time, lightDir);
+      // 1. Render terrain (WebGPU) - DISABLED, using Canvas 2D only
+      renderer.renderTerrain(); // No-op stub
 
       // 2. Render entities (Canvas 2D)
       ctx.clearRect(0, 0, canvas.width, canvas.height);
