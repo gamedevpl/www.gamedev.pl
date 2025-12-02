@@ -6,12 +6,13 @@
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { BuildingType } from '../buildings/building-types';
+import { BuildingType, ResourceType } from '../buildings/building-types';
 import { validateBuildingPlacement, calculateBuildingPreviewPosition } from '../buildings/building-placement';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { getBuildingDefinition } from '../buildings/building-definitions';
 import { BuildingEntity } from '../entities/buildings/building-entity';
 import { BuildingState } from '../buildings/building-types';
+import { addResourcesToBuilding } from '../resources/resource-management';
 
 /**
  * Toggles building placement mode on/off
@@ -168,6 +169,13 @@ export function placeBuilding(gameState: GameWorldState): boolean {
   // Add to entities and buildings
   gameState.entities.entities.set(buildingId, building);
   gameState.buildings.set(buildingId, building);
+  
+  // Give starter resources for construction
+  // This is a simplified implementation - in full version, carriers would transport these
+  const constructionCosts = definition.constructionCost;
+  for (const [resource, amount] of Object.entries(constructionCosts)) {
+    addResourcesToBuilding(building, resource as ResourceType, amount, true);
+  }
   
   // Keep placement mode active but clear preview
   // This allows continuous building placement
