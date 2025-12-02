@@ -15,6 +15,12 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import {
+  toggleBuildingPlacementMode,
+  toggleDemolishMode,
+  selectBuildingType,
+} from './building-input-handlers';
+import { BuildingType } from '../buildings/building-types';
 
 /**
  * Handles the logic for a UI button click event.
@@ -165,6 +171,21 @@ export const handleUIButtonClick = (
           playerDiplomacy.set(otherTribeId, newStatus);
           otherDiplomacy.set(playerTribeId, newStatus);
         }
+      }
+      break;
+      
+    // --- Building System ---
+    case UIButtonActionType.ToggleBuildingMode:
+      toggleBuildingPlacementMode(gameState);
+      break;
+      
+    case UIButtonActionType.ToggleDemolishMode:
+      toggleDemolishMode(gameState);
+      break;
+      
+    case UIButtonActionType.SelectBuildingType:
+      if (button.buildingType) {
+        selectBuildingType(gameState, button.buildingType as BuildingType);
       }
       break;
   }

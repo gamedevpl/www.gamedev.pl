@@ -186,6 +186,10 @@ export function initWorld(): GameWorldState {
     buildings: new Map(),
     selectedBuildingType: undefined,
     hoveredBuildingId: undefined,
+    buildingPlacementMode: false,
+    demolishMode: false,
+    buildingPreviewPosition: undefined,
+    buildingPreviewValid: undefined,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -313,6 +317,10 @@ export function initIntroWorld(): GameWorldState {
     buildings: new Map(),
     selectedBuildingType: undefined,
     hoveredBuildingId: undefined,
+    buildingPlacementMode: false,
+    demolishMode: false,
+    buildingPreviewPosition: undefined,
+    buildingPreviewValid: undefined,
   };
 
   return indexWorldState(initialWorldState);

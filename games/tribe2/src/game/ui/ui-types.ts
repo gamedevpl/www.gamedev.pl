@@ -22,6 +22,9 @@ export enum PlayerActionType {
   AutopilotPlant = 'AutopilotPlant',
   AutopilotFeedChild = 'AutopilotFeedChild',
   AutopilotFollowMe = 'AutopilotFollowMe',
+  // Building system
+  PlaceBuilding = 'PlaceBuilding',
+  DemolishBuilding = 'DemolishBuilding',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -43,6 +46,8 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: '🌱',
   [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotFollowMe]: '➡️',
+  [PlayerActionType.PlaceBuilding]: '🏗️',
+  [PlayerActionType.DemolishBuilding]: '💥',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -64,6 +69,8 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: 'Plant',
   [PlayerActionType.AutopilotFeedChild]: 'Feed',
   [PlayerActionType.AutopilotFollowMe]: 'Follow',
+  [PlayerActionType.PlaceBuilding]: 'Build',
+  [PlayerActionType.DemolishBuilding]: 'Demolish',
 };
 
 export interface PlayerActionHint {
@@ -136,6 +143,11 @@ export enum UIButtonActionType {
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',
+  
+  // --- Building System ---
+  ToggleBuildingMode = 'ToggleBuildingMode',
+  ToggleDemolishMode = 'ToggleDemolishMode',
+  SelectBuildingType = 'SelectBuildingType',
 }
 
 export interface ClickableUIButton {
@@ -152,4 +164,5 @@ export interface ClickableUIButton {
   lastActivated?: number;
   activated?: boolean;
   targetTribeId?: EntityId;
+  buildingType?: string; // For SelectBuildingType action
 }

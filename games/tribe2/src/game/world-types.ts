@@ -110,6 +110,10 @@ export interface GameWorldState {
   buildings: Map<EntityId, BuildingEntity>;
   selectedBuildingType?: BuildingType; // Currently selected building type for placement
   hoveredBuildingId?: EntityId; // Building currently being hovered over
+  buildingPlacementMode: boolean; // Whether in building placement mode
+  demolishMode: boolean; // Whether in demolish mode
+  buildingPreviewPosition?: Vector2D; // Position of building preview
+  buildingPreviewValid?: boolean; // Whether current preview position is valid
 }
 
 export type UpdateContext = {

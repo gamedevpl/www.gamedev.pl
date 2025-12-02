@@ -11,8 +11,13 @@ import {
   handlePlayerActionKeyDown,
   handlePlayerActionKeyUp,
   handleNotificationClick,
+  placeBuilding,
+  updateBuildingPreview,
+  findBuildingAtPosition,
+  markBuildingForDemolition,
 } from '../game/input';
 import { screenToWorldCoords } from '../game/render/render-utils';
+import { IndexedWorldState } from '../game/world-index/world-index-types';
 
 interface GameInputControllerProps {
   isActive: () => boolean;
@@ -63,13 +68,30 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         return;
       }
 
-      // If not a UI element, handle as an autopilot/world click
+      // If not a UI element, handle as world click (building placement, demolition, or autopilot)
       const worldPos = screenToWorldCoords(
         { x: mouseX, y: mouseY },
         viewportCenterRef.current,
         { width: canvasRef.current.width, height: canvasRef.current.height },
         gameStateRef.current.mapDimensions,
       );
+      
+      // Handle building placement
+      if (gameStateRef.current.buildingPlacementMode && gameStateRef.current.selectedBuildingType) {
+        placeBuilding(gameStateRef.current);
+        return;
+      }
+      
+      // Handle building demolition
+      if (gameStateRef.current.demolishMode) {
+        const building = findBuildingAtPosition(gameStateRef.current as IndexedWorldState, worldPos);
+        if (building) {
+          markBuildingForDemolition(gameStateRef.current, building.id);
+        }
+        return;
+      }
+      
+      // Otherwise, handle as autopilot click
       handleAutopilotClick(gameStateRef.current, worldPos);
     };
 
@@ -153,6 +175,12 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
           { width: canvasRef.current.width, height: canvasRef.current.height },
           gameStateRef.current.mapDimensions,
         );
+        
+        // Update building preview if in building mode
+        if (gameStateRef.current.buildingPlacementMode && gameStateRef.current.selectedBuildingType) {
+          updateBuildingPreview(gameStateRef.current as IndexedWorldState, worldPos);
+        }
+        
         gameStateRef.current.autopilotControls.hoveredAutopilotAction = determineHoveredAutopilotAction(
           worldPos,
           player,
