@@ -30,6 +30,7 @@ export interface BuildingEntity extends Entity {
   // Production
   inputStorage: Map<ResourceType, number>;
   outputStorage: Map<ResourceType, number>;
+  productionProgress?: number; // 0-100, for production buildings
   
   // Ownership
   ownerId?: EntityId; // Tribe leader who owns this building
