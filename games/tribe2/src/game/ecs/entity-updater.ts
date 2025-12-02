@@ -1,5 +1,5 @@
 import { updateBehaviorTree } from './behavior-tree-update';
-import { updateStateMachine } from '../state-machine/state-machine-update';
+import { stateUpdate } from '../state-machine/state-machine-update';
 import { Entity, GameWorldState } from '../types/world-types';
 import { vectorAdd, vectorLength, vectorNormalize, vectorScale } from '../utils/math-utils';
 
@@ -14,7 +14,13 @@ export function updateEntity(entity: Entity, state: GameWorldState, deltaTime: n
   // --- State Machine and AI Updates ---
   // These should run before physics to allow AI to set forces/direction for the current frame.
   if (entity.stateMachine) {
-    updateStateMachine(entity, deltaTime);
+    const [nextStateType, nextStateData] = stateUpdate(
+      entity.stateMachine.currentState,
+      entity.stateMachine.stateData,
+      { entity, deltaTime, gameState: state }
+    );
+    entity.stateMachine.currentState = nextStateType;
+    entity.stateMachine.stateData = nextStateData;
   }
   if (entity.behaviorTree) {
     updateBehaviorTree(entity, state, deltaTime);

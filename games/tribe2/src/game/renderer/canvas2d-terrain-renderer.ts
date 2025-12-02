@@ -10,9 +10,6 @@ import {
 import {
   HEIGHT_MAP_RESOLUTION,
   SAND_LEVEL,
-  GRASS_LEVEL,
-  ROCK_LEVEL,
-  SNOW_LEVEL,
 } from '../constants/world-constants';
 import { projectToScreen, getWrappedEntityPositions } from './render-utils';
 
