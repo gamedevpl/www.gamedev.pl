@@ -1,25 +1,30 @@
 {
   "name": "tribe2",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Tribe game",
+  "dependencies": {
+    "flatbush": "^4.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-use": "^17.5.1",
+    "styled-components": "^6.1.13"
+  },
   "devDependencies": {
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^5.0.4",
-    "@webgpu/types": "^0.1.50",
-    "eslint": "^9.37.0",
-    "genaicode": "^0.14.0",
-    "jsdom": "^27.0.0",
-    "jsx": "^0.9.89",
-    "puppeteer": "^22.13.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-use": "^17.5.0",
-    "tsx": "^4.16.2",
-    "typescript": "^5.9.3",
-    "vite": "^7.1.11",
-    "vite-plugin-checker": "^0.11.0",
-    "vitest": "^3.2.4"
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.3",
+    "canvas": "^2.11.2",
+    "eslint": "^8.54.0",
+    "genaicode": "^0.13.0",
+    "jsdom": "^24.1.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.6.2",
+    "vite": "^6.3.5",
+    "vite-plugin-checker": "^0.8.0",
+    "vitest": "^3.2.3"
   },
   "scripts": {
     "build": "vite build",
@@ -27,12 +32,8 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "YEARS_TO_SIMULATE=10 vitest --ui",
-    "test:run": "YEARS_TO_SIMULATE=10 vitest run",
-    "validate-shaders": "tsx scripts/validate-shaders.mts"
+    "test:run": "YEARS_TO_SIMULATE=10 vitest run"
   },
-  "dependencies": {
-    "@eslint/js": "^9.38.0",
-    "globals": "^16.4.0",
-    "typescript-eslint": "^8.46.1"
-  }
+  "author": "gtanczyk",
+  "license": "ISC"
 }

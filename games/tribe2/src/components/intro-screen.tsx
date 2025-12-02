@@ -1,65 +1,248 @@
-import React, { useState } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
+import styled from 'styled-components';
 import { useGameContext } from '../context/game-context';
-import { GameWorldController } from './game-world-controller';
+import { useRafLoop } from 'react-use';
+import { initIntroWorld } from '../game/world-init';
+import { updateWorld } from '../game/world-update';
+import { renderGame } from '../game/render';
+import { GameWorldState } from '../game/world-types';
+import { findAllHumans } from '../game/utils/world-utils';
+import { vectorLerp } from '../game/utils/math-utils';
+import { Vector2D } from '../game/utils/math-types';
+import { INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS, VIEWPORT_FOLLOW_SPEED } from '../game/game-consts';
+import { EntityId } from '../game/entities/entities-types';
+import { playSound, stopSound } from '../game/sound/sound-utils';
+import { SoundType } from '../game/sound/sound-types';
 
-// Styles for the UI overlay, which will be passed as a child to the controller.
-const overlayStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'white',
-  textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
-  zIndex: 10, // Ensure UI is on top of the canvas layers
-};
+const IntroContainer = styled.div`
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+`;
 
-const titleStyle: React.CSSProperties = {
-  fontSize: '4rem',
-  color: 'white',
-  textShadow: '2px 2px 0px red, -2px -2px 0px red, 2px -2px 0px red, -2px 2px 0px red',
-  marginBottom: '2rem',
-};
+const StyledCanvas = styled.canvas`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #2c5234;
+`;
 
-const buttonStyle: React.CSSProperties = {
-  backgroundColor: 'red',
-  color: 'white',
-  border: '3px solid white',
-  fontFamily: "'Press Start 2P', cursive",
-  fontSize: '1.5rem',
-  padding: '1rem 2rem',
-  cursor: 'pointer',
-  borderRadius: 0,
-  boxShadow: '5px 5px 0px #8B0000',
-  transition: 'all 0.1s ease-in-out',
-};
+const Overlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.7) 100%);
+`;
 
-const buttonHoverStyle: React.CSSProperties = {
-  transform: 'translate(5px, 5px)',
-  boxShadow: '0px 0px 0px #8B0000',
-};
+const Title = styled.h1`
+  font-family: 'Press Start 2P', cursive;
+  font-size: 4rem;
+  color: #fff;
+  text-shadow: 4px 4px 0px #ff0000;
+  margin-bottom: 2rem;
+`;
+
+const StartButton = styled.button`
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.5rem;
+  padding: 1rem 2rem;
+  color: #fff;
+  background-color: #ff0000;
+  border: 2px solid #fff;
+  box-shadow: 4px 4px 0px #fff;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background-color: #fff;
+    color: #ff0000;
+    box-shadow: 4px 4px 0px #ff0000;
+  }
+`;
+
+const AuthorInfo = styled.div`
+  position: absolute;
+  bottom: 1rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 2px 2px 0px #000;
+  a {
+    color: #fff;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const INTRO_SOUNDTRACK_ID = 'intro-soundtrack';
 
 export const IntroScreen: React.FC = () => {
   const { setAppState } = useGameContext();
-  const [isHovered, setIsHovered] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const gameStateRef = useRef<GameWorldState>(initIntroWorld());
+  const lastUpdateTimeRef = useRef<number>();
+  const viewportCenterRef = useRef<Vector2D>(gameStateRef.current.viewportCenter);
+  const focusedHumanIdRef = useRef<EntityId | undefined>();
+
+  const handleStartGame = useCallback(() => {
+    stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds
+    setAppState('game');
+  }, [setAppState]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        handleStartGame();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleStartGame]);
+
+  useEffect(() => {
+    playSound(SoundType.SoundTrack1, { loop: true, trackId: INTRO_SOUNDTRACK_ID });
+
+    return () => {
+      stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds on component unmount
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    ctxRef.current = canvas.getContext('2d');
+
+    const handleResize = () => {
+      if (canvas && ctxRef.current) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        renderGame(
+          ctxRef.current,
+          gameStateRef.current,
+          viewportCenterRef.current,
+          [], // playerActionHints
+          { width: canvas.width, height: canvas.height }, // canvasDimensions
+          true, // isIntro
+        );
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Viewport switching logic
+  useEffect(() => {
+    const switchFocus = () => {
+      const humans = findAllHumans(gameStateRef.current);
+      if (humans.length > 0) {
+        const randomIndex = Math.floor(Math.random() * humans.length);
+        focusedHumanIdRef.current = humans[randomIndex].id;
+      }
+    };
+
+    switchFocus(); // Initial focus
+    const intervalId = setInterval(switchFocus, INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const [stopLoop, startLoop] = useRafLoop((time) => {
+    if (!ctxRef.current) return;
+    if (lastUpdateTimeRef.current === undefined) {
+      lastUpdateTimeRef.current = time;
+      return;
+    }
+    const deltaTime = Math.min((time - lastUpdateTimeRef.current) / 1000, 1); // Seconds (clamped to 1 second max)
+
+    // Update game state
+    gameStateRef.current = updateWorld(gameStateRef.current, deltaTime);
+
+    // Update viewport
+    const focusedHuman = focusedHumanIdRef.current
+      ? gameStateRef.current.entities.entities.get(focusedHumanIdRef.current)
+      : undefined;
+
+    if (focusedHuman) {
+      const { mapDimensions } = gameStateRef.current;
+      const { width, height } = mapDimensions;
+      let targetPosition = { ...focusedHuman.position };
+
+      const dx = targetPosition.x - viewportCenterRef.current.x;
+      if (Math.abs(dx) > width / 2) {
+        if (dx > 0) {
+          targetPosition.x -= width;
+        } else {
+          targetPosition.x += width;
+        }
+      }
+
+      const dy = targetPosition.y - viewportCenterRef.current.y;
+      if (Math.abs(dy) > height / 2) {
+        if (dy > 0) {
+          targetPosition.y -= height;
+        } else {
+          targetPosition.y += height;
+        }
+      }
+      let newViewportCenter = vectorLerp(viewportCenterRef.current, targetPosition, VIEWPORT_FOLLOW_SPEED * deltaTime);
+
+      newViewportCenter = {
+        x: ((newViewportCenter.x % width) + width) % width,
+        y: ((newViewportCenter.y % height) + height) % height,
+      };
+
+      viewportCenterRef.current = newViewportCenter;
+    }
+
+    // Render game
+    renderGame(
+      ctxRef.current,
+      gameStateRef.current,
+      viewportCenterRef.current,
+      [], // playerActionHints
+      { width: canvasRef.current?.width || 800, height: canvasRef.current?.height || 600 }, // canvasDimensions
+      true, // isIntro
+    );
+
+    lastUpdateTimeRef.current = time;
+  }, false);
+
+  useEffect(() => {
+    startLoop();
+    return stopLoop;
+  }, [startLoop, stopLoop]);
 
   return (
-    <GameWorldController mode="intro">
-      <div style={overlayStyle}>
-        <h1 style={titleStyle}>Tribe2</h1>
-        <button
-          style={{ ...buttonStyle, ...(isHovered ? buttonHoverStyle : {}) }}
-          onClick={() => setAppState('game')}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          Start Game
-        </button>
-      </div>
-    </GameWorldController>
+    <IntroContainer>
+      <StyledCanvas ref={canvasRef} />
+      <Overlay>
+        <Title>Tribe2</Title>
+        <StartButton onClick={handleStartGame}>Start Game</StartButton>
+        <AuthorInfo>
+          by{' '}
+          <a href="https://github.com/gtanczyk" target="_blank" rel="noopener noreferrer">
+            gtanczyk
+          </a>
+        </AuthorInfo>
+      </Overlay>
+    </IntroContainer>
   );
 };

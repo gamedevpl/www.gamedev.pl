@@ -1,10 +1,15 @@
 import React from 'react';
 import { useGameContext } from '../context/game-context';
-import { GameScreen } from './game-screen';
 import { IntroScreen } from './intro-screen';
+import { GameScreen } from './game-screen';
+import { GameOverScreen } from './game-over-screen';
+import { GlobalStyle } from '../styles/global';
+import { usePersistState } from '../hooks/persist-state';
 
 export const App: React.FC = () => {
-  const { appState } = useGameContext();
+  const { appState, setAppState } = useGameContext();
+
+  usePersistState(appState, setAppState);
 
   const renderContent = () => {
     switch (appState) {
@@ -12,11 +17,22 @@ export const App: React.FC = () => {
         return <IntroScreen />;
       case 'game':
         return <GameScreen />;
-      // The default case also returns to the intro screen.
+      case 'gameOver':
+        return (
+          <>
+            <GameScreen />
+            <GameOverScreen />
+          </>
+        );
       default:
-        return <IntroScreen />;
+        return <IntroScreen />; // Fallback to intro screen
     }
   };
 
-  return <>{renderContent()}</>;
+  return (
+    <>
+      <GlobalStyle />
+      {renderContent()}
+    </>
+  );
 };

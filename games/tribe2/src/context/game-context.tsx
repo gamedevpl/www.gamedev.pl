@@ -2,9 +2,10 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 export type AppState = 'intro' | 'game' | 'gameOver';
 
-// Using `unknown` is a type-safe way to represent a value whose type is not yet known.
-// This resolves the `no-empty-object-type` linting error.
-export type GameOverDetails = unknown;
+interface GameOverDetails {
+  generations: number;
+  cause: string;
+}
 
 interface GameContextType {
   appState: AppState;

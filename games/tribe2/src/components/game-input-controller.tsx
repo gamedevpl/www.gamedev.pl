@@ -1,318 +1,218 @@
-import React, { useEffect, useRef } from 'react';
-import { useMouse, useWindowSize } from 'react-use';
-import { EntityType, GameWorldState, RoadPiece } from '../game/types/world-types';
-import { screenToWorldCoords } from '../game/renderer/render-utils';
-import { handleKeyDown } from '../game/input/input-handler';
-import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
-import { applyBiomeEdit, applyRoadEdit, applyTerrainEdit, canPlaceBuilding } from '../game/utils/terrain-editor-utils';
-import { BUILDING_SPECS, HEIGHT_MAP_RESOLUTION, TERRAIN_EDIT_INTENSITY } from '../game/constants/world-constants';
-import { createEntity } from '../game/ecs/entity-manager';
-
-const PAN_EDGE_THRESHOLD = 50; // Pixels from edge to start panning
-const PAN_SPEED_FACTOR = 5.0; // Increased for visibility
+import React, { useEffect } from 'react';
+import { DebugPanelType, GameWorldState } from '../game/world-types';
+import { Vector2D } from '../game/utils/math-types';
+import { PlayerActionHint } from '../game/ui/ui-types';
+import { findPlayerEntity } from '../game/utils/world-utils';
+import {
+  handleUIButtonClick,
+  determineHoveredAutopilotAction,
+  handleAutopilotClick,
+  handleGameControlKeyDown,
+  handlePlayerActionKeyDown,
+  handlePlayerActionKeyUp,
+  handleNotificationClick,
+} from '../game/input';
+import { screenToWorldCoords } from '../game/render/render-utils';
 
 interface GameInputControllerProps {
   isActive: () => boolean;
   gameStateRef: React.MutableRefObject<GameWorldState>;
-  updateTerrainHeightMap: (modifiedGridCells: Map<number, number>) => void;
-  updateBiomeMap: (modifiedGridCells: Map<number, number>) => void;
-  updateRoadMap: (modifiedGridCells: Map<number, RoadPiece | null>) => void;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  viewportCenterRef: React.MutableRefObject<Vector2D>;
+  playerActionHintsRef: React.MutableRefObject<PlayerActionHint[]>;
+  debugPanelTypeRef: React.MutableRefObject<DebugPanelType>;
+  keysPressed: React.MutableRefObject<Set<string>>;
+  returnToIntro: () => void;
 }
 
 export const GameInputController: React.FC<GameInputControllerProps> = ({
   isActive,
   gameStateRef,
-  updateTerrainHeightMap,
-  updateBiomeMap,
-  updateRoadMap,
+  canvasRef,
+  viewportCenterRef,
+  playerActionHintsRef,
+  keysPressed,
+  returnToIntro,
 }) => {
-  const { width, height } = useWindowSize();
-  const ref = useRef(document.body); // Attach mouse listener to the body
-  const { docX, docY } = useMouse(ref);
-  const isPanningRef = useRef(false);
-  const lastPanPosRef = useRef({ x: 0, y: 0 });
-  const isEditingRef = useRef(false);
-  const shiftKeyRef = useRef(false); // Track shift key state
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
+      if (!event.target || event.target !== canvasRef.current) return;
 
-  // Refs for edge panning
-  const edgePanVelocityRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const panAnimationIdRef = useRef<number | null>(null);
-  const lastEdgePanTimeRef = useRef<number | null>(null);
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
 
-  // Function to continuously pan when mouse is at the edge
-  const panLoop = (timestamp: DOMHighResTimeStamp) => {
-    if (!lastEdgePanTimeRef.current) {
-      lastEdgePanTimeRef.current = timestamp;
-    }
-    const deltaTime = (timestamp - lastEdgePanTimeRef.current) / 1000; // Delta time in seconds
-    lastEdgePanTimeRef.current = timestamp;
+      // Check for notification click first, as they overlay other UI
+      const notificationClicked = handleNotificationClick(gameStateRef.current, mouseX, mouseY);
+      if (notificationClicked) {
+        return; // Event handled by notification system
+      }
 
-    const gameState = gameStateRef.current;
-    const edgePanVelocity = edgePanVelocityRef.current;
+      // Check for general UI button click
+      const clickedButton = gameStateRef.current.uiButtons.find(
+        (button) =>
+          mouseX >= button.rect.x &&
+          mouseX <= button.rect.x + button.rect.width &&
+          mouseY >= button.rect.y &&
+          mouseY <= button.rect.y + button.rect.height,
+      );
 
-    if (gameState && edgePanVelocity && (edgePanVelocity.x !== 0 || edgePanVelocity.y !== 0)) {
-      // Adjust pan speed by zoom level so it feels consistent regardless of zoom
-      const effectivePanSpeedX = edgePanVelocity.x * PAN_SPEED_FACTOR * deltaTime * 1000;
-      const effectivePanSpeedY = edgePanVelocity.y * PAN_SPEED_FACTOR * deltaTime * 1000;
+      if (clickedButton) {
+        gameStateRef.current = handleUIButtonClick(clickedButton, event.shiftKey, gameStateRef.current, returnToIntro);
+        return;
+      }
 
-      gameState.viewportCenter.x -= effectivePanSpeedX / gameState.viewportZoom;
-      gameState.viewportCenter.y -= effectivePanSpeedY / gameState.viewportZoom;
-    }
+      // If not a UI element, handle as an autopilot/world click
+      const worldPos = screenToWorldCoords(
+        { x: mouseX, y: mouseY },
+        viewportCenterRef.current,
+        { width: canvasRef.current.width, height: canvasRef.current.height },
+        gameStateRef.current.mapDimensions,
+      );
+      handleAutopilotClick(gameStateRef.current, worldPos);
+    };
 
-    panAnimationIdRef.current = requestAnimationFrame(panLoop);
-  };
+    window.addEventListener('mousedown', handleMouseDown);
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [isActive, canvasRef, gameStateRef, viewportCenterRef, returnToIntro]);
 
   useEffect(() => {
-    const handleEdit = (shiftKey: boolean) => {
-      const gameState = gameStateRef.current;
-      if (!gameState) return;
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isActive() || !canvasRef.current) return;
 
-      if (gameState.terrainEditingMode) {
-        const intensity = TERRAIN_EDIT_INTENSITY * (shiftKey ? -1 : 1);
-        const modifiedCells = applyTerrainEdit(
-          gameState.heightMap,
-          gameState.editorBrush.position,
-          gameState.editorBrush.radius,
-          intensity,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (modifiedCells.size > 0) {
-          updateTerrainHeightMap(modifiedCells);
-        }
-      } else if (gameState.biomeEditingMode) {
-        const modifiedCells = applyBiomeEdit(
-          gameState.biomeMap,
-          gameState.editorBrush.position,
-          gameState.editorBrush.radius,
-          gameState.selectedBiome,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (modifiedCells.size > 0) {
-          updateBiomeMap(modifiedCells);
-        }
-      } else if (gameState.roadEditingMode) {
-        const result = applyRoadEdit(
-          gameState.roadMap,
-          gameState.heightMap,
-          gameState.editorBrush.position,
-          gameState.lastRoadPosition,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (result.modifiedHeightCells.size > 0) {
-          updateTerrainHeightMap(result.modifiedHeightCells);
-        }
-        if (result.modifiedRoadCells.size > 0) {
-          updateRoadMap(result.modifiedRoadCells);
-          // Update last position to chain roads
-          gameState.lastRoadPosition = { ...gameState.editorBrush.position };
-        }
-      }
-    };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
 
-    const onMouseDown = (e: MouseEvent) => {
-      if (!isActive()) return;
-      const gameState = gameStateRef.current;
+      gameStateRef.current.mousePosition = { x: mouseX, y: mouseY };
 
-      // Check if editing mode is active
-      const isEditingActive =
-        gameState.terrainEditingMode ||
-        gameState.biomeEditingMode ||
-        gameState.roadEditingMode ||
-        gameState.buildingPlacementMode;
+      let hoveredButtonId: string | undefined = undefined;
 
-      if (e.button === 0) {
-        // Left click
-        if (isEditingActive) {
-          if (gameState.roadEditingMode) {
-            // Start of a new road segment
-            const worldPos = screenToWorldCoords(
-              { x: e.clientX, y: e.clientY },
-              gameState.viewportCenter,
-              gameState.viewportZoom,
-              { width, height },
-              gameState.mapDimensions,
-            );
-            gameState.editorBrush.position = worldPos;
-            gameState.lastRoadPosition = worldPos;
-          } else if (gameState.buildingPlacementMode) {
-            // Place building
-            if (gameState.isValidBuildingPlacement) {
-              const worldPos = screenToWorldCoords(
-                { x: e.clientX, y: e.clientY },
-                gameState.viewportCenter,
-                gameState.viewportZoom,
-                { width, height },
-                gameState.mapDimensions,
-              );
-              const specs = BUILDING_SPECS[gameState.selectedBuilding];
-              createEntity(gameState.entities, EntityType.BUILDING, {
-                position: worldPos,
-                radius: Math.max(specs.width, specs.height) / 2,
-                buildingType: gameState.selectedBuilding,
-                width: specs.width,
-                height: specs.height,
-              });
+      // Check for hovered notification buttons first
+      if (gameStateRef.current.notificationButtonRects) {
+        for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.dismiss.entries()) {
+          if (
+            mouseX >= buttonRect.x &&
+            mouseX <= buttonRect.x + buttonRect.width &&
+            mouseY >= buttonRect.y &&
+            mouseY <= buttonRect.y + buttonRect.height
+          ) {
+            hoveredButtonId = `notification-dismiss-${id}`;
+            break;
+          }
+        }
+        if (!hoveredButtonId) {
+          for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.view.entries()) {
+            if (
+              mouseX >= buttonRect.x &&
+              mouseX <= buttonRect.x + buttonRect.width &&
+              mouseY >= buttonRect.y &&
+              mouseY <= buttonRect.y + buttonRect.height
+            ) {
+              hoveredButtonId = `notification-view-${id}`;
+              break;
             }
           }
-
-          isEditingRef.current = true;
-          shiftKeyRef.current = e.shiftKey;
-          handleEdit(e.shiftKey);
-        } else {
-          // Otherwise, allow panning with left click
-          isPanningRef.current = true;
-          lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-        }
-        e.preventDefault();
-      } else if (e.button === 1) {
-        // Middle click always pans
-        isPanningRef.current = true;
-        lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-        e.preventDefault();
-      }
-    };
-
-    const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 0 || e.button === 1) {
-        isPanningRef.current = false;
-      }
-      if (e.button === 0) {
-        isEditingRef.current = false;
-      }
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      const gameState = gameStateRef.current;
-      if (!isActive() || !gameState) return;
-
-      if (isPanningRef.current) {
-        const dx = e.clientX - lastPanPosRef.current.x;
-        const dy = e.clientY - lastPanPosRef.current.y;
-        lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-        gameState.viewportCenter.x -= dx / gameState.viewportZoom;
-        gameState.viewportCenter.y += dy / gameState.viewportZoom;
-      } else {
-        // Handle edge panning only if not actively dragging
-        let panX = 0;
-        let panY = 0;
-
-        if (docX < PAN_EDGE_THRESHOLD) {
-          panX = (PAN_EDGE_THRESHOLD - docX) / PAN_EDGE_THRESHOLD; // Pan left, stronger closer to edge
-        } else if (docX > width - PAN_EDGE_THRESHOLD) {
-          panX = -(docX - (width - PAN_EDGE_THRESHOLD)) / PAN_EDGE_THRESHOLD; // Pan right
-        }
-
-        if (docY < PAN_EDGE_THRESHOLD) {
-          panY = (PAN_EDGE_THRESHOLD - docY) / PAN_EDGE_THRESHOLD; // Pan up
-        } else if (docY > height - PAN_EDGE_THRESHOLD) {
-          panY = -(docY - (height - PAN_EDGE_THRESHOLD)) / PAN_EDGE_THRESHOLD; // Pan down
-        }
-
-        edgePanVelocityRef.current = { x: panX, y: panY };
-
-        if ((panX !== 0 || panY !== 0) && !panAnimationIdRef.current) {
-          // Start pan loop if not already running and at edge
-          lastEdgePanTimeRef.current = null; // Reset time for smooth start
-          panAnimationIdRef.current = requestAnimationFrame(panLoop);
-        } else if (panX === 0 && panY === 0 && panAnimationIdRef.current) {
-          // Stop pan loop if not at edge and running
-          cancelAnimationFrame(panAnimationIdRef.current);
-          panAnimationIdRef.current = null;
-          lastEdgePanTimeRef.current = null;
         }
       }
 
-      const isEditingActive =
-        gameState.terrainEditingMode ||
-        gameState.biomeEditingMode ||
-        gameState.roadEditingMode ||
-        gameState.buildingPlacementMode;
+      // If not hovering a notification button, check general UI buttons
+      if (!hoveredButtonId) {
+        // Iterate in reverse to find the topmost button first
+        for (let i = gameStateRef.current.uiButtons.length - 1; i >= 0; i--) {
+          const button = gameStateRef.current.uiButtons[i];
+          if (
+            mouseX >= button.rect.x &&
+            mouseX <= button.rect.x + button.rect.width &&
+            mouseY >= button.rect.y &&
+            mouseY <= button.rect.y + button.rect.height
+          ) {
+            hoveredButtonId = button.id;
+            break;
+          }
+        }
+      }
 
-      if (isEditingActive) {
+      gameStateRef.current.hoveredButtonId = hoveredButtonId;
+
+      // If hovering over any button, don't determine world actions
+      if (hoveredButtonId) {
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
+        return;
+      }
+
+      // Determine hovered autopilot action in the world
+      const player = findPlayerEntity(gameStateRef.current);
+      if (player) {
         const worldPos = screenToWorldCoords(
-          { x: docX, y: docY },
-          gameState.viewportCenter,
-          gameState.viewportZoom,
-          { width, height },
-          gameState.mapDimensions,
+          { x: mouseX, y: mouseY },
+          viewportCenterRef.current,
+          { width: canvasRef.current.width, height: canvasRef.current.height },
+          gameStateRef.current.mapDimensions,
         );
-        gameState.editorBrush.position = worldPos;
-
-        // Update road preview position
-        if (gameState.roadEditingMode) {
-          gameState.previewRoadPosition = { ...gameState.editorBrush.position };
-        } else {
-          gameState.previewRoadPosition = null;
-        }
-
-        // Update building preview position
-        if (gameState.buildingPlacementMode) {
-          gameState.previewBuildingPosition = { ...gameState.editorBrush.position };
-          gameState.isValidBuildingPlacement = canPlaceBuilding(
-            worldPos,
-            gameState.selectedBuilding,
-            gameState.entities,
-            gameState.heightMap,
-            gameState.mapDimensions,
-            HEIGHT_MAP_RESOLUTION,
-          );
-        } else {
-          gameState.previewBuildingPosition = null;
-        }
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = determineHoveredAutopilotAction(
+          worldPos,
+          player,
+          gameStateRef.current,
+        );
       } else {
-        gameState.previewRoadPosition = null;
-        gameState.previewBuildingPosition = null;
-      }
-
-      if (isEditingRef.current) {
-        handleEdit(shiftKeyRef.current);
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
       }
     };
 
-    const onWheel = (e: WheelEvent) => {
-      if (!isActive()) return;
-      e.preventDefault();
-      const gameState = gameStateRef.current;
-      const zoomFactor = 1 - Math.sign(e.deltaY) * ZOOM_SPEED;
-      gameState.viewportZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, gameState.viewportZoom * zoomFactor));
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!isActive()) return;
-      shiftKeyRef.current = e.shiftKey;
-      const { newState, handled } = handleKeyDown(e.key.toLowerCase(), gameStateRef.current, { shift: e.shiftKey });
-      if (handled) {
-        gameStateRef.current = newState;
-        e.preventDefault();
-      }
-    };
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      shiftKeyRef.current = e.shiftKey;
-    };
-
-    document.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mouseup', onMouseUp);
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('wheel', onWheel, { passive: false });
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-
+    window.addEventListener('mousemove', handleMouseMove);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('wheel', onWheel);
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('keyup', onKeyUp);
-      if (panAnimationIdRef.current) {
-        cancelAnimationFrame(panAnimationIdRef.current);
-      }
+      window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [isActive, gameStateRef, docX, docY, width, height, updateTerrainHeightMap, updateBiomeMap, updateRoadMap]);
+  }, [isActive, canvasRef, gameStateRef, viewportCenterRef]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver) return;
+
+      const key = event.key.toLowerCase();
+
+      // Prevent default browser actions for certain keys that we handle
+      if (key === ' ' || key === 'p' || key === 'tab') {
+        event.preventDefault();
+      }
+
+      // Handle game-wide controls first
+      const controlResult = handleGameControlKeyDown(key, gameStateRef.current);
+      gameStateRef.current = controlResult.newState;
+      if (controlResult.handled) {
+        return;
+      }
+
+      // If not a game control, handle as a player action
+      const playerEntity = findPlayerEntity(gameStateRef.current);
+      if (!playerEntity) return;
+
+      keysPressed.current.add(key);
+      handlePlayerActionKeyDown(key, event.shiftKey, gameStateRef.current, playerEntity, playerActionHintsRef.current);
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver) return;
+      const key = event.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const playerEntity = findPlayerEntity(gameStateRef.current);
+      if (!playerEntity) return;
+
+      handlePlayerActionKeyUp(key, playerEntity, gameStateRef.current, keysPressed);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isActive, gameStateRef, playerActionHintsRef, keysPressed, returnToIntro]);
 
   return null;
 };
