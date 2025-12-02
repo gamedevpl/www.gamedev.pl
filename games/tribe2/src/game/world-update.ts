@@ -9,6 +9,7 @@ import { updateTutorial } from './tutorial/tutorial-utils';
 import { updateNotifications } from './notifications/notification-utils';
 import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
+import { updateConstruction } from './buildings/construction-system';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -70,6 +71,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);
+
+    // Update construction system
+    updateConstruction(indexedState, deltaTime);
 
     // Entities update
     entitiesUpdate({
