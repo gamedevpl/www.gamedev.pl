@@ -14,19 +14,34 @@ export function updateEntity(entity: Entity, state: GameWorldState, deltaTime: n
   // --- State Machine and AI Updates ---
   // These should run before physics to allow AI to set forces/direction for the current frame.
   if (entity.stateMachine) {
+    const [currentState, stateData] = entity.stateMachine;
     const [nextStateType, nextStateData] = stateUpdate(
-      entity.stateMachine.currentState,
-      entity.stateMachine.stateData,
+      currentState,
+      stateData,
       { entity, deltaTime, gameState: state }
     );
-    entity.stateMachine.currentState = nextStateType;
-    entity.stateMachine.stateData = nextStateData;
+    entity.stateMachine = [nextStateType, nextStateData];
   }
   if (entity.behaviorTree) {
     updateBehaviorTree(entity, state, deltaTime);
   }
 
   // --- Physics Update ---
+  // Handle debuffs if present
+  if (entity.debuffs) {
+    entity.debuffs.forEach((debuff) => {
+      if (debuff.type === 'slow') {
+        // Apply debuff effect - reduce velocity by 50%
+        entity.velocity = vectorScale(entity.velocity, 0.5);
+      }
+    });
+    // Clean up expired debuffs
+    entity.debuffs = entity.debuffs.filter((debuff) => {
+      const elapsedTime = state.time * 1000 - debuff.startTime;
+      return elapsedTime < debuff.duration;
+    });
+  }
+
   // Apply friction/damping
   entity.forces.push(vectorScale(entity.velocity, -0.1));
 

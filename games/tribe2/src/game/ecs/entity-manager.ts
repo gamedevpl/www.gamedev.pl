@@ -34,6 +34,8 @@ export function createEntity<T extends Entity>(
     forces: [],
     // Spread the initial properties
     ...initial,
+    // Only set debuffs if not already provided
+    debuffs: initial.debuffs ?? [],
   };
   state.entities.set(entity.id, entity);
   return entity as T;
