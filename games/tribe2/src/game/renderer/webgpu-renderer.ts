@@ -18,7 +18,7 @@ import {
   WIND_STRENGTH_GRASS,
   WIND_STRENGTH_WATER,
 } from '../constants/rendering-constants';
-import { BiomeType, RoadPiece } from '../types/world-types';
+import { BiomeType, RoadPiece } from '../world-types';
 
 function isWebGPUSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;

@@ -1,4 +1,4 @@
-import { Entity, GameWorldState } from '../types/world-types';
+import { Entity, GameWorldState } from '../world-types';
 import { BTContext } from '../ai/behavior-tree-types';
 
 /**

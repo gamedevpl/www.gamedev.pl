@@ -1,4 +1,4 @@
-import { BiomeType, RoadDirection, RoadPiece, BuildingType, Entities, EntityType } from '../types/world-types';
+import { BiomeType, RoadDirection, RoadPiece, BuildingType, Entities, EntityType } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { ROAD_LEVEL_INTENSITY, ROAD_WIDTH, WATER_LEVEL, BUILDING_SPECS, BUILDING_MIN_SPACING } from '../constants/world-constants';
 

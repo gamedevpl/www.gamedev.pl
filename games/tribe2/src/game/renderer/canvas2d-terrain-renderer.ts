@@ -1,4 +1,4 @@
-import { BiomeType } from '../types/world-types';
+import { BiomeType } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import {
   GROUND_COLOR,

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useMouse, useWindowSize } from 'react-use';
-import { EntityType, GameWorldState, RoadPiece } from '../game/types/world-types';
+import { EntityType, GameWorldState, RoadPiece } from '../game/world-types';
 import { screenToWorldCoords } from '../game/renderer/render-utils';
 import { handleKeyDown } from '../game/input/input-handler';
 import { MAX_ZOOM, MIN_ZOOM, ZOOM_SPEED } from '../game/constants/rendering-constants';
@@ -64,52 +64,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
 
   useEffect(() => {
     const handleEdit = (shiftKey: boolean) => {
-      const gameState = gameStateRef.current;
-      if (!gameState) return;
-
-      if (gameState.terrainEditingMode && gameState.editorBrush) {
-        const intensity = TERRAIN_EDIT_INTENSITY * (shiftKey ? -1 : 1);
-        const modifiedCells = applyTerrainEdit(
-          gameState.heightMap,
-          gameState.editorBrush.position,
-          gameState.editorBrush.radius,
-          intensity,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (modifiedCells.size > 0) {
-          updateTerrainHeightMap(modifiedCells);
-        }
-      } else if (gameState.biomeEditingMode && gameState.editorBrush && gameState.selectedBiome) {
-        const modifiedCells = applyBiomeEdit(
-          gameState.biomeMap,
-          gameState.editorBrush.position,
-          gameState.editorBrush.radius,
-          gameState.selectedBiome,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (modifiedCells.size > 0) {
-          updateBiomeMap(modifiedCells);
-        }
-      } else if (gameState.roadEditingMode && gameState.editorBrush) {
-        const result = applyRoadEdit(
-          gameState.roadMap,
-          gameState.heightMap,
-          gameState.editorBrush.position,
-          gameState.lastRoadPosition ?? null,
-          gameState.mapDimensions,
-          HEIGHT_MAP_RESOLUTION,
-        );
-        if (result.modifiedHeightCells.size > 0) {
-          updateTerrainHeightMap(result.modifiedHeightCells);
-        }
-        if (result.modifiedRoadCells.size > 0) {
-          updateRoadMap(result.modifiedRoadCells);
-          // Update last position to chain roads
-          gameState.lastRoadPosition = { ...gameState.editorBrush.position };
-        }
-      }
+      // Editor disabled for baseline - will be re-implemented with building system
     };
 
     const onMouseDown = (e: MouseEvent) => {
@@ -124,50 +79,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         gameState.buildingPlacementMode;
 
       if (e.button === 0) {
-        // Left click
-        if (isEditingActive) {
-          if (gameState.roadEditingMode) {
-            // Start of a new road segment
-            const worldPos = screenToWorldCoords(
-              { x: e.clientX, y: e.clientY },
-              gameState.viewportCenter,
-              gameState.viewportZoom,
-              { width, height },
-              gameState.mapDimensions,
-            );
-            if (gameState.editorBrush) {
-              gameState.editorBrush.position = worldPos;
-            }
-            gameState.lastRoadPosition = worldPos;
-          } else if (gameState.buildingPlacementMode && gameState.selectedBuilding) {
-            // Place building
-            if (gameState.isValidBuildingPlacement) {
-              const worldPos = screenToWorldCoords(
-                { x: e.clientX, y: e.clientY },
-                gameState.viewportCenter,
-                gameState.viewportZoom,
-                { width, height },
-                gameState.mapDimensions,
-              );
-              const specs = BUILDING_SPECS[gameState.selectedBuilding];
-              createEntity(gameState.entities, EntityType.BUILDING, {
-                position: worldPos,
-                radius: Math.max(specs.width, specs.height) / 2,
-                buildingType: gameState.selectedBuilding,
-                width: specs.width,
-                height: specs.height,
-              });
-            }
-          }
-
-          isEditingRef.current = true;
-          shiftKeyRef.current = e.shiftKey;
-          handleEdit(e.shiftKey);
-        } else {
-          // Otherwise, allow panning with left click
-          isPanningRef.current = true;
-          lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-        }
+        // Left click - allow panning
+        isPanningRef.current = true;
+        lastPanPosRef.current = { x: e.clientX, y: e.clientY };
         e.preventDefault();
       } else if (e.button === 1) {
         // Middle click always pans

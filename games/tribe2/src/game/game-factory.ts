@@ -14,8 +14,8 @@ import {
   RABBIT_RADIUS,
   RABBIT_SPAWN_DENSITY,
 } from './constants/world-constants';
-import { BiomeType, EntityType, RoadPiece } from './types/world-types';
-import { Entities } from './types/world-types';
+import { BiomeType, EntityType, RoadPiece } from './world-types';
+import { Entities } from './world-types';
 import { createNoise2D } from './utils/noise-utils';
 import { createRabbitBehaviorTree } from './ai/rabbit-ai';
 import { DebugPanelType, GameWorldState } from './world-types';
@@ -171,7 +171,7 @@ export function generateTrees(entities: Entities, biomeMap: BiomeType[][], resol
           const worldX = x * resolution + Math.random() * resolution;
           const worldY = y * resolution + Math.random() * resolution;
 
-          createEntity(entities, EntityType.TREE, {
+          createEntity(entities, 'tree', {
             position: { x: worldX, y: worldY },
             radius: TREE_RADIUS,
           });
@@ -203,7 +203,7 @@ export function generateRabbits(entities: Entities, biomeMap: BiomeType[][], res
           const worldX = x * resolution + Math.random() * resolution;
           const worldY = y * resolution + Math.random() * resolution;
 
-          createEntity(entities, EntityType.RABBIT, {
+          createEntity(entities, 'rabbit', {
             position: { x: worldX, y: worldY },
             radius: RABBIT_RADIUS,
             behaviorTree: createRabbitBehaviorTree(),

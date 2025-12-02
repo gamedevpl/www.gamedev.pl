@@ -1,6 +1,6 @@
 import { BTNode, BTStatus, BTContext, BehaviorTreeComponent } from './behavior-tree-types';
 import { Sequence, Selector } from './behavior-tree-nodes';
-import { Entity, BiomeType, GameWorldState } from '../types/world-types';
+import { Entity, BiomeType, GameWorldState } from '../world-types';
 import {
   RABBIT_SPEED,
   RABBIT_VISION_RANGE,

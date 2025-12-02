@@ -1,4 +1,4 @@
-import { GameWorldState, EntityType } from '../types/world-types';
+import { GameWorldState, EntityType } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { projectToScreen, getWrappedEntityPositions } from './render-utils';
 import {
@@ -123,9 +123,9 @@ export function renderDebugGame(
       
       let color = DEBUG_COLORS.ENTITY_DEFAULT;
       switch (entity.type) {
-        case EntityType.TREE: color = DEBUG_COLORS.ENTITY_TREE; break;
-        case EntityType.RABBIT: color = DEBUG_COLORS.ENTITY_RABBIT; break;
-        case EntityType.BUILDING: color = DEBUG_COLORS.ENTITY_BUILDING; break;
+        case 'tree': color = DEBUG_COLORS.ENTITY_TREE; break;
+        case 'rabbit': color = DEBUG_COLORS.ENTITY_RABBIT; break;
+        case 'building': color = DEBUG_COLORS.ENTITY_BUILDING; break;
       }
       
       ctx.fillStyle = color;

@@ -1,4 +1,4 @@
-import { GameWorldState, Entity, EntityType, BiomeType } from '../types/world-types';
+import { GameWorldState, Entity, EntityType, BiomeType } from '../world-types';
 import { Vector2D } from '../types/math-types';
 import { Vector3D } from '../types/rendering-types';
 import { getHeightAtWorldPos, adjustColorBrightness, projectToScreen, getWrappedEntityPositions } from './render-utils';
@@ -606,7 +606,7 @@ export function renderGame(
         if (shouldRender) {
           // Render based on entity type (all in screen space now)
           switch (entity.type) {
-            case EntityType.TREE:
+            case 'tree':
               renderTree(
                 ctx,
                 entity,
@@ -618,7 +618,7 @@ export function renderGame(
                 viewportZoom,
               );
               break;
-            case EntityType.RABBIT:
+            case 'rabbit':
               renderRabbit(
                 ctx,
                 entity,
@@ -631,7 +631,7 @@ export function renderGame(
                 gameState.time,
               );
               break;
-            case EntityType.BUILDING:
+            case 'building':
               renderBuilding(
                 ctx,
                 entity,
@@ -659,8 +659,8 @@ export function renderGame(
       });
     });
 
-    // Render road editing preview if active
-    if (gameState.roadEditingMode) {
+    // Render road editing preview if active - DISABLED FOR BASELINE
+    if (false && gameState.roadEditingMode) {
       const { lastRoadPosition, previewRoadPosition } = gameState;
 
       // 1. Render the preview piece at the cursor
@@ -754,8 +754,8 @@ export function renderGame(
       }
     }
 
-    // Render building placement preview
-    if (gameState.buildingPlacementMode && gameState.previewBuildingPosition && gameState.selectedBuilding) {
+    // Render building placement preview - DISABLED FOR BASELINE
+    if (false && gameState.buildingPlacementMode) {
       const { previewBuildingPosition, selectedBuilding, isValidBuildingPlacement } = gameState;
       const specs = BUILDING_SPECS[selectedBuilding];
 
@@ -771,7 +771,7 @@ export function renderGame(
         // Create a temporary entity for rendering the preview
         const previewEntity: Entity = {
           id: -1,
-          type: EntityType.BUILDING,
+          type: 'building',
           position: wrappedPos,
           radius: Math.max(specs.width, specs.height) / 2,
           velocity: { x: 0, y: 0 },
@@ -805,8 +805,8 @@ export function renderGame(
       });
     }
 
-    // Render editor brush cursor if active (in screen space, outside camera transform)
-    if ((gameState.terrainEditingMode || gameState.biomeEditingMode) && gameState.editorBrush) {
+    // Render editor brush cursor if active - DISABLED FOR BASELINE
+    if (false && (gameState.terrainEditingMode || gameState.biomeEditingMode)) {
       const { position, radius } = gameState.editorBrush;
 
       // Get all wrapped positions for the brush cursor

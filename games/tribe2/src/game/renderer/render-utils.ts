@@ -1,4 +1,4 @@
-import { Entity } from '../types/world-types';
+import { Entity } from '../world-types';
 import { Vector2D } from '../types/math-types';
 
 /**

@@ -3,7 +3,7 @@ import { Vector2D } from '../utils/math-types';
 
 export type EntityId = number;
 
-export type EntityType = 'berryBush' | 'human' | 'corpse' | 'prey' | 'predator';
+export type EntityType = 'berryBush' | 'human' | 'corpse' | 'prey' | 'predator' | 'tree' | 'rabbit' | 'building' | 'demo';
 
 // Base Entity interface, now extended by more specific types
 export interface Entity {
@@ -21,6 +21,17 @@ export interface Entity {
   gatheringCooldownTime?: number;
   eatingCooldownTime?: number;
   isHighlighted?: boolean;
+  // Fields for Tribe2 entities (trees, rabbits, buildings)
+  behaviorTree?: any; // BehaviorTreeComponent from Tribe2
+  needs?: {
+    hunger: number;
+    thirst: number;
+    maxHunger: number;
+    maxThirst: number;
+  };
+  buildingType?: any; // BuildingType from Tribe2
+  width?: number;
+  height?: number;
 }
 
 /**

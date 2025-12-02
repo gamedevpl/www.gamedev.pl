@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { Vector2D } from '../game/types/math-types';
-import { BiomeType, RoadPiece } from '../game/types/world-types';
+import { BiomeType, RoadPiece } from '../game/world-types';
 import { Vector3D, WebGPUTerrainState } from '../game/types/rendering-types';
 import {
   initWebGPUTerrain,

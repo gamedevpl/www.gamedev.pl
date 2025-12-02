@@ -1,4 +1,4 @@
-import { BiomeType, BuildingType, GameWorldState } from '../types/world-types';
+import { BiomeType, BuildingType, GameWorldState } from '../world-types';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -38,28 +38,14 @@ export const handleKeyDown = (
       }
       break;
     case '3':
-      gameState.selectedBiome = BiomeType.GROUND;
-      break;
     case '4':
-      gameState.selectedBiome = BiomeType.SAND;
-      break;
     case '5':
-      gameState.selectedBiome = BiomeType.GRASS;
-      break;
     case '6':
-      gameState.selectedBiome = BiomeType.ROCK;
-      break;
     case '7':
-      gameState.selectedBiome = BiomeType.SNOW;
-      break;
     case '8':
-      gameState.selectedBuilding = BuildingType.HOUSE;
-      break;
     case '9':
-      gameState.selectedBuilding = BuildingType.BARN;
-      break;
     case '0':
-      gameState.selectedBuilding = BuildingType.WORKSHOP;
+      // Editor biome/building selection disabled for baseline
       break;
     case 'r':
       gameState.roadEditingMode = !gameState.roadEditingMode;

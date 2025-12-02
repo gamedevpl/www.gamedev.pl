@@ -1,5 +1,5 @@
 import { updateEntity } from './ecs/entity-updater';
-import { EntityType, GameWorldState } from './types/world-types';
+import { EntityType, GameWorldState } from './world-types';
 import { MAX_REAL_TIME_DELTA } from './constants/world-constants';
 
 /**
@@ -26,7 +26,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     // 1. Update all entities (physics, state machines, AI)
     for (const entity of currentState.entities.entities.values()) {
       // Skip static entities like trees and buildings
-      if (entity.type === EntityType.TREE || entity.type === EntityType.BUILDING) {
+      if (entity.type === 'tree' || entity.type === 'building') {
         continue;
       }
       updateEntity(entity, currentState, deltaTime);

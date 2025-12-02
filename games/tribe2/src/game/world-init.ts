@@ -1,6 +1,7 @@
 import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
-import { DebugPanelType, GameWorldState } from './world-types';
+import { DebugPanelType, GameWorldState, BiomeType, RoadPiece } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS } from './game-consts.ts';
+import { HEIGHT_MAP_RESOLUTION } from './constants/world-constants';
 import { INITIAL_BERRY_BUSH_COUNT, MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';
 import { INITIAL_MASTER_VOLUME } from './sound-consts.ts';
 import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from './ui-consts.ts';
@@ -19,10 +20,22 @@ import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
+import { generateHeightMap, generateBiomeMap, generateTrees, generateRabbits } from './game-factory';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0; // Game starts at time 0
+
+  // Generate terrain
+  const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+  const biomeMap = generateBiomeMap(heightMap);
+  const gridHeight = heightMap.length;
+  const gridWidth = heightMap[0]?.length ?? 0;
+  const roadMap: (RoadPiece | null)[][] = Array.from({ length: gridHeight }, () => new Array(gridWidth).fill(null));
+
+  // Generate Tribe2 entities (trees, rabbits)
+  generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
+  generateRabbits(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
 
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
@@ -121,6 +134,10 @@ export function initWorld(): GameWorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    heightMap,
+    biomeMap,
+    roadMap,
+    viewportZoom: 1.0,
     generationCount: 1, // Start with generation 1 as per GDD context for player
     gameOver: false,
     visualEffects: [],
@@ -195,6 +212,17 @@ export function initIntroWorld(): GameWorldState {
   const entities = createEntities();
   const initialTime = 0;
 
+  // Generate terrain
+  const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
+  const biomeMap = generateBiomeMap(heightMap);
+  const gridHeight = heightMap.length;
+  const gridWidth = heightMap[0]?.length ?? 0;
+  const roadMap: (RoadPiece | null)[][] = Array.from({ length: gridHeight }, () => new Array(gridWidth).fill(null));
+
+  // Generate Tribe2 entities (trees, rabbits)
+  generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
+  generateRabbits(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
+
   // Spawn initial berry bushes
   for (let i = 0; i < INITIAL_BERRY_BUSH_COUNT; i++) {
     const randomPosition = {
@@ -256,6 +284,10 @@ export function initIntroWorld(): GameWorldState {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
     },
+    heightMap,
+    biomeMap,
+    roadMap,
+    viewportZoom: 1.0,
     generationCount: 0,
     gameOver: false,
     visualEffects: [],

@@ -4,12 +4,52 @@
  */
 
 import { EntityId, Entities } from './entities/entities-types';
+import type { Entity } from './entities/entities-types';
 import { ClickableUIButton, PlayerActionType } from './ui/ui-types';
 import { Tutorial, TutorialState } from './tutorial';
 import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
+
+// Re-export Entity and Entities for convenience
+export type { Entity, EntityId, Entities };
+
+// Terrain types for resource management (from Tribe2)
+export enum BiomeType {
+  TREE = 'tree',
+  ROCK = 'rock',
+  SNOW = 'snow',
+  SAND = 'sand',
+  GRASS = 'grass',
+  GROUND = 'ground',
+}
+
+export enum BuildingType {
+  HOUSE = 'house',
+  BARN = 'barn',
+  WORKSHOP = 'workshop',
+}
+
+export enum RoadDirection {
+  N,
+  NE,
+  E,
+  SE,
+  S,
+  SW,
+  W,
+  NW,
+  NONE,
+}
+
+export interface RoadPiece {
+  direction: RoadDirection;
+  level: number; // normalized height 0-1
+}
+
+// Entity types - using string literals for Tribe1 compatibility
+export type EntityType = 'berryBush' | 'human' | 'corpse' | 'prey' | 'predator' | 'tree' | 'rabbit' | 'building';
 
 export enum DiplomacyStatus {
   Friendly = 'Friendly',
@@ -77,10 +117,10 @@ export interface GameWorldState {
     height: number;
   };
   // Terrain data - needed for resource management (farming, fishing, mining)
-  heightMap?: number[][];
-  biomeMap?: any[][];  // BiomeType from tribe2
-  roadMap?: (any | null)[][]; // RoadPiece from tribe2
-  viewportZoom?: number; // Zoom level for rendering
+  heightMap: number[][];
+  biomeMap: BiomeType[][];
+  roadMap?: (RoadPiece | null)[][];
+  viewportZoom: number; // Zoom level for rendering
   generationCount: number; // Number of generations that have passed
   gameOver: boolean; // Flag to indicate if the game is over
   causeOfGameOver?: string; // Optional cause of game over

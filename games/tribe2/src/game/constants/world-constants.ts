@@ -1,4 +1,4 @@
-import { BuildingType } from '../types/world-types';
+import { BuildingType } from '../world-types';
 
 // Core Game Constants
 
