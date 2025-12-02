@@ -14,7 +14,6 @@ import { getBuildingDefinition } from './building-definitions';
 
 // Construction constants
 const MAX_CONSTRUCTORS_PER_BUILDING = 3;
-const CONSTRUCTION_WORK_RATE = 5; // Progress points per hour per worker
 const CONSTRUCTION_ASSIGNMENT_RANGE = 100; // How close workers need to be to be assigned
 
 /**
@@ -118,6 +117,7 @@ function assignConstructorsToBuilding(gameState: IndexedWorldState, building: Bu
     worker.jobAssignment = {
       profession: ProfessionType.BuildingConstructor,
       buildingId: building.id,
+      assignedTime: gameState.time,
       jobState: JobState.Idle,
     };
     
@@ -187,6 +187,7 @@ function completeConstruction(gameState: IndexedWorldState, building: BuildingEn
     if (worker && worker.jobAssignment?.profession === ProfessionType.BuildingConstructor) {
       worker.jobAssignment = {
         profession: ProfessionType.None,
+        assignedTime: gameState.time,
         jobState: JobState.Idle,
       };
     }

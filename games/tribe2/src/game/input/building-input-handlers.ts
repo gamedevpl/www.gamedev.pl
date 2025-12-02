@@ -6,7 +6,7 @@
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { BuildingType, ResourceType } from '../buildings/building-types';
+import { BuildingType } from '../buildings/building-types';
 import { validateBuildingPlacement, calculateBuildingPreviewPosition } from '../buildings/building-placement';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { getBuildingDefinition } from '../buildings/building-definitions';
@@ -172,9 +172,9 @@ export function placeBuilding(gameState: GameWorldState): boolean {
   
   // Give starter resources for construction
   // This is a simplified implementation - in full version, carriers would transport these
-  const constructionCosts = definition.constructionCost;
-  for (const [resource, amount] of Object.entries(constructionCosts)) {
-    addResourcesToBuilding(building, resource as ResourceType, amount, true);
+  const constructionCosts = definition.constructionCosts;
+  for (const cost of constructionCosts) {
+    addResourcesToBuilding(building, cost.resourceType, cost.amount, true);
   }
   
   // Keep placement mode active but clear preview

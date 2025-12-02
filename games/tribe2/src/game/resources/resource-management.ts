@@ -6,7 +6,6 @@
 
 import { BuildingEntity } from '../entities/buildings/building-entity';
 import { ResourceType } from '../buildings/building-types';
-import { getBuildingDefinition } from '../buildings/building-definitions';
 
 // Resource capacity constants
 const DEFAULT_STORAGE_CAPACITY = 100;
@@ -15,20 +14,15 @@ const WAREHOUSE_STORAGE_CAPACITY = 1000;
 /**
  * Gets the storage capacity for a building's resource type
  */
-export function getStorageCapacity(building: BuildingEntity, resourceType: ResourceType): number {
-  const definition = getBuildingDefinition(building.buildingType);
-  
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getStorageCapacity(building: BuildingEntity, _resourceType: ResourceType): number {
   // Warehouse has special high capacity
   if (building.buildingType === 'Warehouse') {
     return WAREHOUSE_STORAGE_CAPACITY;
   }
   
-  // Check if this resource is an output of this building
-  const isOutput = definition.production?.outputs?.some(output => output.resource === resourceType);
-  if (isOutput) {
-    return DEFAULT_STORAGE_CAPACITY * 2; // Production buildings have more output storage
-  }
-  
+  // For now, use default capacity for all resources
+  // TODO: Add production outputs to building definitions and check if resource is output
   return DEFAULT_STORAGE_CAPACITY;
 }
 

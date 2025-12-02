@@ -24,7 +24,6 @@ export function validateBuildingPlacement(
     worldState,
     position,
     definition.terrainRequirement,
-    definition.radius,
   );
   
   if (!terrainValid.isValid) {
@@ -64,7 +63,6 @@ function validateTerrainRequirement(
   _worldState: IndexedWorldState,
   _position: Vector2D,
   requirement: TerrainRequirement,
-  _radius: number,
 ): PlacementValidation {
   // For now, we'll implement basic validation
   // TODO: Implement actual terrain checking when terrain system is available

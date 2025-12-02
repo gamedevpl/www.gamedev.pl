@@ -123,16 +123,16 @@ export enum JobState {
 }
 
 /**
- * Job assignment data for a human
+ * Job assignment for a tribe member
+ * Tracks which job they're doing and their current state
  */
 export interface JobAssignment {
   profession: ProfessionType;
-  buildingId?: EntityId; // The building where this person works (if applicable)
-  assignedTime: number; // Game time when assigned
-  
-  // Job state for AI
-  currentState?: JobState;
-  stateData?: Record<string, any>; // State-specific data
+  buildingId?: EntityId; // Building they're assigned to (if applicable)
+  assignedTime: number; // Game time when assigned to this job
+  jobState?: JobState; // Current job state
+  targetEntityId?: EntityId; // Target entity for job actions (e.g., tree to chop, prey to hunt)
+  resourcesCarrying?: Map<string, number>; // Resources being carried (for carriers, constructors)
 }
 
 /**
@@ -171,16 +171,4 @@ export enum JobPriority {
 export interface FamilyTradition {
   professionType: ProfessionType;
   generations: number; // How many generations have followed this profession
-}
-
-/**
- * Job assignment for a tribe member
- * Tracks which job they're doing and their current state
- */
-export interface JobAssignment {
-  profession: ProfessionType;
-  buildingId?: EntityId; // Building they're assigned to (if applicable)
-  jobState?: JobState; // Current job state
-  targetEntityId?: EntityId; // Target entity for job actions (e.g., tree to chop, prey to hunt)
-  resourcesCarrying?: Map<string, number>; // Resources being carried (for carriers, constructors)
 }
