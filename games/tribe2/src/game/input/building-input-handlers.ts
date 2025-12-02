@@ -61,6 +61,44 @@ export function selectBuildingType(gameState: GameWorldState, buildingType: Buil
 }
 
 /**
+ * Cycles to the next building type
+ */
+export function cycleNextBuildingType(gameState: GameWorldState): void {
+  if (!gameState.buildingPlacementMode) {
+    gameState.buildingPlacementMode = true;
+    gameState.selectedBuildingType = BuildingType.HQ;
+    return;
+  }
+  
+  const buildingTypes = Object.values(BuildingType);
+  const currentIndex = gameState.selectedBuildingType 
+    ? buildingTypes.indexOf(gameState.selectedBuildingType)
+    : -1;
+  
+  const nextIndex = (currentIndex + 1) % buildingTypes.length;
+  gameState.selectedBuildingType = buildingTypes[nextIndex];
+}
+
+/**
+ * Cycles to the previous building type
+ */
+export function cyclePreviousBuildingType(gameState: GameWorldState): void {
+  if (!gameState.buildingPlacementMode) {
+    gameState.buildingPlacementMode = true;
+    gameState.selectedBuildingType = BuildingType.HQ;
+    return;
+  }
+  
+  const buildingTypes = Object.values(BuildingType);
+  const currentIndex = gameState.selectedBuildingType 
+    ? buildingTypes.indexOf(gameState.selectedBuildingType)
+    : -1;
+  
+  const prevIndex = currentIndex <= 0 ? buildingTypes.length - 1 : currentIndex - 1;
+  gameState.selectedBuildingType = buildingTypes[prevIndex];
+}
+
+/**
  * Updates building preview position based on mouse position
  */
 export function updateBuildingPreview(

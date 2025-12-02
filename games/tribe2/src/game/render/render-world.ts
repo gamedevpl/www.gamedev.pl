@@ -128,9 +128,6 @@ export function renderWorld(
         worldHeight,
         renderBuilding,
         entity as BuildingEntity,
-        viewportCenter,
-        canvasDimensions,
-        gameState.mapDimensions,
       );
     }
   });

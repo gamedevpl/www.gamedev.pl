@@ -21,7 +21,7 @@ import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
-import { toggleBuildingPlacementMode, toggleDemolishMode } from './building-input-handlers';
+import { toggleBuildingPlacementMode, toggleDemolishMode, cycleNextBuildingType, cyclePreviousBuildingType } from './building-input-handlers';
 
 /**
  * Handles keyboard events that correspond to direct player actions.
@@ -211,6 +211,16 @@ export const handlePlayerActionKeyDown = (
     // Toggle demolish mode (only for leaders)
     if (playerEntity.isAdult && playerEntity.leaderId === playerEntity.id) {
       toggleDemolishMode(gameState);
+    }
+  } else if (key === '[' || key === '{') {
+    // Cycle to previous building type (only for leaders)
+    if (playerEntity.isAdult && playerEntity.leaderId === playerEntity.id) {
+      cyclePreviousBuildingType(gameState);
+    }
+  } else if (key === ']' || key === '}') {
+    // Cycle to next building type (only for leaders)
+    if (playerEntity.isAdult && playerEntity.leaderId === playerEntity.id) {
+      cycleNextBuildingType(gameState);
     }
   }
 };

@@ -5,7 +5,6 @@
  */
 
 import { GameWorldState } from '../world-types';
-import { Vector2D } from '../utils/math-types';
 import { getBuildingDefinition } from '../buildings/building-definitions';
 import { BuildingEntity } from '../entities/buildings/building-entity';
 import { BuildingState } from '../buildings/building-types';
@@ -17,16 +16,11 @@ import { BuildingState } from '../buildings/building-types';
 export function renderBuilding(
   ctx: CanvasRenderingContext2D,
   building: BuildingEntity,
-  viewportCenter: Vector2D,
-  canvasDimensions: { width: number; height: number },
-  mapDimensions: { width: number; height: number },
 ): void {
-  const definition = getBuildingDefinition(building.buildingType);
+  ctx.save();
   
   // We're in the translated context, so use world coordinates directly
   const screenPos = building.position;
-  
-  ctx.save();
   
   // Determine color based on state
   let fillColor = '#8B4513'; // Brown for operational
@@ -57,7 +51,7 @@ export function renderBuilding(
   
   // Draw building type emoji/icon in center
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = `${building.radius}px Arial`;
+  ctx.font = `${building.radius * 1.2}px Arial`; // Make emoji 1.2x the radius for better visibility
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
@@ -89,9 +83,6 @@ export function renderBuilding(
 export function renderBuildingPreview(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
-  viewportCenter: Vector2D,
-  canvasDimensions: { width: number; height: number },
-  mapDimensions: { width: number; height: number },
 ): void {
   if (!gameState.buildingPlacementMode || !gameState.selectedBuildingType || !gameState.buildingPreviewPosition) {
     return;
@@ -123,16 +114,28 @@ export function renderBuildingPreview(
   
   // Draw building icon
   ctx.fillStyle = isValid ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 200, 200, 0.8)';
-  ctx.font = `${definition.radius}px Arial`;
+  ctx.font = `${definition.radius * 1.2}px Arial`; // Make emoji 1.2x the radius for better visibility
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const icon = getBuildingIcon(gameState.selectedBuildingType);
   ctx.fillText(icon, screenPos.x, screenPos.y);
   
-  // Draw building name below preview
+  // Draw building name below preview with better visibility
   ctx.fillStyle = strokeColor;
+  ctx.font = 'bold 16px Arial';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(definition.name, screenPos.x, screenPos.y + definition.radius + 20);
+  ctx.fillText(definition.name, screenPos.x, screenPos.y + definition.radius + 20);
+  
+  // Draw hint text for cycling
   ctx.font = '12px Arial';
-  ctx.fillText(definition.name, screenPos.x, screenPos.y + definition.radius + 15);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.lineWidth = 2;
+  const hintText = '[  ] to cycle buildings';
+  ctx.strokeText(hintText, screenPos.x, screenPos.y + definition.radius + 38);
+  ctx.fillText(hintText, screenPos.x, screenPos.y + definition.radius + 38);
   
   ctx.restore();
 }

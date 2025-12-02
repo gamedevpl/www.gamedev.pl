@@ -33,7 +33,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 24, // 24 game hours
     maxWorkers: 0, // No workers needed
-    radius: 25,
+    radius: 40,
     maxHealth: 1000,
     demolitionRecoveryRate: 0, // Cannot be demolished
   },
@@ -51,7 +51,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 16,
     maxWorkers: 0,
-    radius: 18,
+    radius: 32,
     maxHealth: 500,
     demolitionRecoveryRate: 0.5,
   },
@@ -69,7 +69,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 8,
     maxWorkers: 0,
-    radius: 12,
+    radius: 24,
     maxHealth: 200,
     demolitionRecoveryRate: 0.6,
   },
@@ -87,7 +87,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 6,
     maxWorkers: 2,
-    radius: 15,
+    radius: 30,
     maxHealth: 150,
     demolitionRecoveryRate: 0.6,
   },
@@ -107,7 +107,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 12,
     maxWorkers: 2, // Warehouse keepers
-    radius: 20,
+    radius: 35,
     maxHealth: 300,
     demolitionRecoveryRate: 0.7,
   },
@@ -125,7 +125,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 10,
     maxWorkers: 2,
-    radius: 18,
+    radius: 32,
     maxHealth: 200,
     demolitionRecoveryRate: 0.6,
   },
@@ -145,7 +145,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 6,
     maxWorkers: 2,
-    radius: 12,
+    radius: 24,
     maxHealth: 150,
     demolitionRecoveryRate: 0.5,
   },
@@ -163,7 +163,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 6,
     maxWorkers: 3,
-    radius: 12,
+    radius: 24,
     produces: [ResourceType.Wood],
     productionRate: 2, // 2 wood per hour per worker
     maxHealth: 150,
@@ -184,7 +184,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 10,
     maxWorkers: 2,
-    radius: 16,
+    radius: 32,
     consumes: [ResourceType.Wood],
     produces: [ResourceType.WoodPlanks],
     productionRate: 1.5, // 1.5 planks per hour per worker
@@ -208,7 +208,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 8,
     maxWorkers: 4,
-    radius: 14,
+    radius: 28,
     produces: [ResourceType.Stone, ResourceType.IronOre, ResourceType.GoldOre, ResourceType.Coal, ResourceType.Granite],
     productionRate: 1.5, // 1.5 units per hour per worker
     maxHealth: 200,
@@ -230,7 +230,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 6,
     maxWorkers: 2,
-    radius: 12,
+    radius: 24,
     produces: [ResourceType.Fish],
     productionRate: 3, // 3 fish per hour per worker
     maxHealth: 150,
@@ -250,7 +250,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 6,
     maxWorkers: 3,
-    radius: 12,
+    radius: 24,
     produces: [ResourceType.Meat],
     productionRate: 2, // 2 meat per hour per worker
     maxHealth: 150,
@@ -271,7 +271,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 8,
     maxWorkers: 3,
-    radius: 20,
+    radius: 35,
     produces: [ResourceType.Wheat],
     productionRate: 2.5, // 2.5 wheat per hour per worker
     maxHealth: 150,
@@ -292,7 +292,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 14,
     maxWorkers: 2,
-    radius: 18,
+    radius: 32,
     consumes: [ResourceType.Wheat],
     produces: [ResourceType.Flour],
     productionRate: 2, // 2 flour per hour per worker
@@ -314,7 +314,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 10,
     maxWorkers: 2,
-    radius: 14,
+    radius: 28,
     consumes: [ResourceType.Flour],
     produces: [ResourceType.Bread],
     productionRate: 2.5, // 2.5 bread per hour per worker
@@ -335,7 +335,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 10,
     maxWorkers: 2,
-    radius: 18,
+    radius: 32,
     produces: [ResourceType.Pigs],
     productionRate: 1, // 1 pig per hour per worker
     maxHealth: 180,
@@ -356,7 +356,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 8,
     maxWorkers: 2,
-    radius: 14,
+    radius: 28,
     consumes: [ResourceType.Pigs, ResourceType.Meat],
     produces: [ResourceType.Sausage],
     productionRate: 2, // 2 sausages per hour per worker
@@ -380,7 +380,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 16,
     maxWorkers: 2,
-    radius: 16,
+    radius: 32,
     consumes: [ResourceType.IronOre, ResourceType.Coal],
     produces: [ResourceType.Iron],
     productionRate: 1, // 1 iron per hour per worker
@@ -402,7 +402,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 16,
     maxWorkers: 2,
-    radius: 16,
+    radius: 32,
     consumes: [ResourceType.GoldOre, ResourceType.Coal],
     produces: [ResourceType.Gold],
     productionRate: 0.5, // 0.5 gold per hour per worker (more valuable)
@@ -424,7 +424,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 12,
     maxWorkers: 2,
-    radius: 15,
+    radius: 30,
     consumes: [ResourceType.Iron, ResourceType.Coal],
     produces: [ResourceType.Weapons],
     productionRate: 0.8, // 0.8 weapons per hour per worker
@@ -446,7 +446,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 12,
     maxWorkers: 2,
-    radius: 14,
+    radius: 28,
     consumes: [ResourceType.Iron, ResourceType.Wood],
     produces: [ResourceType.Tools],
     productionRate: 1, // 1 tool per hour per worker
@@ -470,7 +470,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 18,
     maxWorkers: 3,
-    radius: 20,
+    radius: 35,
     consumes: [ResourceType.WoodPlanks, ResourceType.Iron],
     productionRate: 0.2, // 0.2 ships per hour (very slow, ships are valuable)
     maxHealth: 300,
@@ -492,7 +492,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 10,
     maxWorkers: 2,
-    radius: 15,
+    radius: 30,
     maxHealth: 400,
     demolitionRecoveryRate: 0.5,
   },
@@ -530,7 +530,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
     ],
     constructionTime: 14,
     maxWorkers: 4,
-    radius: 18,
+    radius: 32,
     maxHealth: 350,
     demolitionRecoveryRate: 0.6,
   },

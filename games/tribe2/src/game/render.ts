@@ -20,6 +20,7 @@ import { renderTutorialPanel, renderUIElementHighlight } from './render/ui/rende
 import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
 import { renderBuildingPreview } from './render/render-building';
+import { getBuildingDefinition } from './buildings/building-definitions';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
@@ -53,7 +54,7 @@ export function renderGame(
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
 
   // Render building preview if in placement mode
-  renderBuildingPreview(ctx, gameState, viewportCenter, canvasDimensions, gameState.mapDimensions);
+  renderBuildingPreview(ctx, gameState);
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
@@ -90,6 +91,48 @@ export function renderGame(
   ctx.restore(); // Restore context to draw UI in fixed positions
 
   if (!isIntro) {
+    // --- Building Mode Info Panel ---
+    if (gameState.buildingPlacementMode && gameState.selectedBuildingType) {
+      ctx.save();
+      const definition = getBuildingDefinition(gameState.selectedBuildingType);
+      
+      // Draw info panel in top-right corner
+      const panelX = ctx.canvas.width - 250;
+      const panelY = 80;
+      const panelWidth = 240;
+      const panelHeight = 100;
+      
+      // Panel background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+      
+      // Title
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('🏗️ Building Mode', panelX + 10, panelY + 20);
+      
+      // Building name
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText(definition.name, panelX + 10, panelY + 45);
+      
+      // Category
+      ctx.fillStyle = '#AAAAAA';
+      ctx.font = '12px Arial';
+      ctx.fillText(`Category: ${definition.category}`, panelX + 10, panelY + 65);
+      
+      // Controls hint
+      ctx.fillStyle = '#90EE90';
+      ctx.font = '11px Arial';
+      ctx.fillText('[ ] to cycle | Z to exit', panelX + 10, panelY + 85);
+      
+      ctx.restore();
+    }
+    
     // --- UI Rendering ---
     ctx.fillStyle = UI_TEXT_COLOR;
     ctx.font = `${UI_FONT_SIZE}px "Press Start 2P", Arial`;
