@@ -94,9 +94,10 @@ export function renderBuilding(
     }
   }
   
-  // For operational buildings, show resource storage
+  // For operational buildings, show resource storage and production progress
   if (building.state === BuildingState.Operational) {
     renderBuildingResources(ctx, building, screenPos);
+    renderProductionProgress(ctx, building, screenPos);
   }
   
   ctx.restore();
@@ -297,4 +298,50 @@ function formatResourceStorage(storage: Map<ResourceType, number>, prefix: strin
   }).join(' ');
   
   return `${prefix} ${formatted}`;
+}
+
+/**
+ * Renders production progress for a building
+ * Shows production progress bar and active worker count
+ */
+function renderProductionProgress(
+  ctx: CanvasRenderingContext2D,
+  building: BuildingEntity,
+  screenPos: { x: number; y: number },
+): void {
+  // Only show for buildings with active production
+  if (!building.productionProgress || building.productionProgress <= 0) {
+    return;
+  }
+  
+  const workerCount = building.assignedWorkerIds.length;
+  if (workerCount === 0) {
+    return; // No workers, no production
+  }
+  
+  const size = building.radius * 2;
+  const progressBarWidth = size * 0.7; // Smaller than construction bar
+  const progressBarHeight = 4;
+  const progressBarX = screenPos.x - progressBarWidth / 2;
+  const progressBarY = screenPos.y - building.radius - 12; // Above the building
+  
+  // Background border
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(progressBarX - 1, progressBarY - 1, progressBarWidth + 2, progressBarHeight + 2);
+  
+  // Empty bar
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(progressBarX, progressBarY, progressBarWidth, progressBarHeight);
+  
+  // Progress fill - use yellow/orange for production (different from construction green)
+  ctx.fillStyle = '#FFA500'; // Orange for production
+  const fillWidth = (progressBarWidth * Math.min(building.productionProgress, 100)) / 100;
+  ctx.fillRect(progressBarX, progressBarY, fillWidth, progressBarHeight);
+  
+  // Production icon with worker count
+  ctx.fillStyle = '#FFA500';
+  ctx.font = '9px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`⚙️ ${workerCount}`, screenPos.x, progressBarY - 2);
 }
