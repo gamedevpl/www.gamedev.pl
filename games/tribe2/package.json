@@ -7,7 +7,6 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
     "@webgpu/types": "^0.1.50",
-    "canvas": "^2.11.2",
     "eslint": "^9.37.0",
     "genaicode": "^0.14.0",
     "jsdom": "^27.0.0",

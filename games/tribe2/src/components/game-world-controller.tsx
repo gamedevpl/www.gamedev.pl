@@ -1,20 +1,16 @@
 import React, { useRef, useEffect, useState, ReactNode } from 'react';
 import { useRafLoop } from 'react-use';
 import { updateWorld } from '../game/main-loop';
-import { BiomeType, BuildingType, GameWorldState, RoadPiece } from '../game/types/world-types';
+import { GameWorldState } from '../game/world-types';
 import { renderGame } from '../game/renderer/renderer';
 import { renderDebugGame } from '../game/renderer/debug-renderer';
 import { GameInputController } from './game-input-controller';
 import { BACKGROUND_COLOR } from '../game/constants/rendering-constants';
 import { HEIGHT_MAP_RESOLUTION, MAP_HEIGHT, MAP_WIDTH } from '../game/constants/world-constants';
 import {
-  generateBiomeMap,
-  generateHeightMap,
-  generateRabbits,
-  generateTrees,
   initWorld,
+  initIntroWorld,
 } from '../game/game-factory';
-import { createEntities } from '../game/ecs/entity-manager';
 import { IntroAnimState, initIntroAnimation, updateIntroAnimation } from './intro-animation';
 import { useWebGpuRenderer } from '../context/webgpu-renderer-context';
 import { computeLightDirection } from '../game/utils/light-utils';
@@ -72,44 +68,9 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({ mode, 
     // Initialize game state based on mode
     let worldState: GameWorldState;
     if (mode === 'intro') {
-      const heightMap = generateHeightMap(MAP_WIDTH, MAP_HEIGHT, HEIGHT_MAP_RESOLUTION);
-      const biomeMap = generateBiomeMap(heightMap);
-      const gridHeight = heightMap.length;
-      const gridWidth = heightMap[0]?.length ?? 0;
-      const roadMap: (RoadPiece | null)[][] = Array.from({ length: gridHeight }, () =>
-        new Array(gridWidth).fill(null),
-      );
-      const entities = createEntities();
-      generateTrees(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
-      generateRabbits(entities, biomeMap, HEIGHT_MAP_RESOLUTION);
-      worldState = {
-        time: 0,
-        entities: entities,
-        mapDimensions: { width: MAP_WIDTH, height: MAP_HEIGHT },
-        heightMap,
-        biomeMap,
-        roadMap,
-        viewportCenter: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
-        viewportZoom: 1.0,
-        isPaused: false,
-        gameOver: false,
-        performanceMetrics: { currentBucket: { renderTime: 0, worldUpdateTime: 0, aiUpdateTime: 0 }, history: [] },
-        terrainEditingMode: false,
-        biomeEditingMode: false,
-        selectedBiome: BiomeType.GRASS,
-        editorBrush: { position: { x: 0, y: 0 }, radius: 0 },
-        wireframeMode: false,
-        roadEditingMode: false,
-        lastRoadPosition: null,
-        previewRoadPosition: null,
-        buildingPlacementMode: false,
-        selectedBuilding: BuildingType.HOUSE,
-        previewBuildingPosition: null,
-        isValidBuildingPlacement: false,
-        debugMode: true,
-      };
+      worldState = initIntroWorld();
       animStateRef.current = initIntroAnimation(
-        heightMap,
+        worldState.heightMap!,
         { width: MAP_WIDTH, height: MAP_HEIGHT },
         { baseZoom: 0.8, focusZoom: 2.0, poiCount: 8 },
       );
