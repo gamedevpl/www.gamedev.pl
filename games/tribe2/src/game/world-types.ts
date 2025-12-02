@@ -10,6 +10,8 @@ import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
+import { BuildingEntity } from './entities/buildings/building-entity';
+import { BuildingType } from './buildings/building-types';
 
 export enum DiplomacyStatus {
   Friendly = 'Friendly',
@@ -103,6 +105,11 @@ export interface GameWorldState {
   ecosystem: EcosystemState;
   debugPanel: DebugPanelType;
   performanceMetrics: PerformanceMetrics;
+  
+  // Building system for Tribe2
+  buildings: Map<EntityId, BuildingEntity>;
+  selectedBuildingType?: BuildingType; // Currently selected building type for placement
+  hoveredBuildingId?: EntityId; // Building currently being hovered over
 }
 
 export type UpdateContext = {

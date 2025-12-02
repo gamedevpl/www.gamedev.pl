@@ -182,6 +182,10 @@ export function initWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
+    // Building system for Tribe2
+    buildings: new Map(),
+    selectedBuildingType: undefined,
+    hoveredBuildingId: undefined,
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -305,6 +309,10 @@ export function initIntroWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
+    // Building system for Tribe2
+    buildings: new Map(),
+    selectedBuildingType: undefined,
+    hoveredBuildingId: undefined,
   };
 
   return indexWorldState(initialWorldState);

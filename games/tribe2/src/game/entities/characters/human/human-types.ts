@@ -2,6 +2,7 @@ import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
 import { DiplomacyStatus } from '../../../world-types';
 import { CharacterEntity } from '../character-types';
+import { JobAssignment } from '../../../jobs/job-types';
 
 /**
  * Represents a human entity in the game.
@@ -110,6 +111,9 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The current state machine of the human, if any. */
   diplomacy?: Map<EntityId, DiplomacyStatus>; // LeaderId -> Status
+
+  /** Job assignment for tribe2 building system */
+  jobAssignment?: JobAssignment;
 }
 
 export type HumanAction =
