@@ -1,6 +1,7 @@
 import { updateBehaviorTree } from './behavior-tree-update';
 import { stateUpdate } from '../state-machine/state-machine-update';
-import { Entity, GameWorldState } from '../types/world-types';
+import { Entity as WorldEntity, GameWorldState } from '../types/world-types';
+import { Entity as StateEntity } from '../entities/entities-types';
 import { vectorAdd, vectorLength, vectorNormalize, vectorScale } from '../utils/math-utils';
 
 /**
@@ -10,7 +11,7 @@ import { vectorAdd, vectorLength, vectorNormalize, vectorScale } from '../utils/
  * @param state The current game world state.
  * @param deltaTime The time elapsed since the last frame in seconds.
  */
-export function updateEntity(entity: Entity, state: GameWorldState, deltaTime: number): void {
+export function updateEntity(entity: WorldEntity, state: GameWorldState, deltaTime: number): void {
   // --- State Machine and AI Updates ---
   // These should run before physics to allow AI to set forces/direction for the current frame.
   if (entity.stateMachine) {
@@ -18,7 +19,10 @@ export function updateEntity(entity: Entity, state: GameWorldState, deltaTime: n
     const [nextStateType, nextStateData] = stateUpdate(
       currentState,
       stateData,
-      { entity, deltaTime, gameState: state }
+      { 
+        entity: entity as unknown as StateEntity, 
+        updateContext: { gameState: state as any, deltaTime } 
+      }
     );
     entity.stateMachine = [nextStateType, nextStateData];
   }

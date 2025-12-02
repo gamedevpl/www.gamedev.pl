@@ -755,7 +755,7 @@ export function renderGame(
     }
 
     // Render building placement preview
-    if (gameState.buildingPlacementMode && gameState.previewBuildingPosition) {
+    if (gameState.buildingPlacementMode && gameState.previewBuildingPosition && gameState.selectedBuilding) {
       const { previewBuildingPosition, selectedBuilding, isValidBuildingPlacement } = gameState;
       const specs = BUILDING_SPECS[selectedBuilding];
 
@@ -806,7 +806,7 @@ export function renderGame(
     }
 
     // Render editor brush cursor if active (in screen space, outside camera transform)
-    if (gameState.terrainEditingMode || gameState.biomeEditingMode) {
+    if ((gameState.terrainEditingMode || gameState.biomeEditingMode) && gameState.editorBrush) {
       const { position, radius } = gameState.editorBrush;
 
       // Get all wrapped positions for the brush cursor
@@ -814,7 +814,7 @@ export function renderGame(
 
       let brushColor = 'rgba(255, 255, 255, 0.8)'; // Default for terrain editing
 
-      if (gameState.biomeEditingMode) {
+      if (gameState.biomeEditingMode && gameState.selectedBiome) {
         let biomeRgb = { r: 1, g: 1, b: 1 };
         switch (gameState.selectedBiome) {
           case BiomeType.GROUND:

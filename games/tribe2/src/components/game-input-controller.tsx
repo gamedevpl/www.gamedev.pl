@@ -67,7 +67,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const gameState = gameStateRef.current;
       if (!gameState) return;
 
-      if (gameState.terrainEditingMode) {
+      if (gameState.terrainEditingMode && gameState.editorBrush) {
         const intensity = TERRAIN_EDIT_INTENSITY * (shiftKey ? -1 : 1);
         const modifiedCells = applyTerrainEdit(
           gameState.heightMap,
@@ -80,7 +80,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         if (modifiedCells.size > 0) {
           updateTerrainHeightMap(modifiedCells);
         }
-      } else if (gameState.biomeEditingMode) {
+      } else if (gameState.biomeEditingMode && gameState.editorBrush && gameState.selectedBiome) {
         const modifiedCells = applyBiomeEdit(
           gameState.biomeMap,
           gameState.editorBrush.position,
@@ -92,12 +92,12 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         if (modifiedCells.size > 0) {
           updateBiomeMap(modifiedCells);
         }
-      } else if (gameState.roadEditingMode) {
+      } else if (gameState.roadEditingMode && gameState.editorBrush) {
         const result = applyRoadEdit(
           gameState.roadMap,
           gameState.heightMap,
           gameState.editorBrush.position,
-          gameState.lastRoadPosition,
+          gameState.lastRoadPosition ?? null,
           gameState.mapDimensions,
           HEIGHT_MAP_RESOLUTION,
         );
@@ -135,9 +135,11 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
               { width, height },
               gameState.mapDimensions,
             );
-            gameState.editorBrush.position = worldPos;
+            if (gameState.editorBrush) {
+              gameState.editorBrush.position = worldPos;
+            }
             gameState.lastRoadPosition = worldPos;
-          } else if (gameState.buildingPlacementMode) {
+          } else if (gameState.buildingPlacementMode && gameState.selectedBuilding) {
             // Place building
             if (gameState.isValidBuildingPlacement) {
               const worldPos = screenToWorldCoords(
@@ -239,28 +241,30 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
           { width, height },
           gameState.mapDimensions,
         );
-        gameState.editorBrush.position = worldPos;
+        if (gameState.editorBrush) {
+          gameState.editorBrush.position = worldPos;
 
-        // Update road preview position
-        if (gameState.roadEditingMode) {
-          gameState.previewRoadPosition = { ...gameState.editorBrush.position };
-        } else {
-          gameState.previewRoadPosition = null;
-        }
+          // Update road preview position
+          if (gameState.roadEditingMode) {
+            gameState.previewRoadPosition = { ...gameState.editorBrush.position };
+          } else {
+            gameState.previewRoadPosition = null;
+          }
 
-        // Update building preview position
-        if (gameState.buildingPlacementMode) {
-          gameState.previewBuildingPosition = { ...gameState.editorBrush.position };
-          gameState.isValidBuildingPlacement = canPlaceBuilding(
-            worldPos,
-            gameState.selectedBuilding,
-            gameState.entities,
-            gameState.heightMap,
-            gameState.mapDimensions,
-            HEIGHT_MAP_RESOLUTION,
-          );
-        } else {
-          gameState.previewBuildingPosition = null;
+          // Update building preview position
+          if (gameState.buildingPlacementMode && gameState.selectedBuilding) {
+            gameState.previewBuildingPosition = { ...gameState.editorBrush.position };
+            gameState.isValidBuildingPlacement = canPlaceBuilding(
+              worldPos,
+              gameState.selectedBuilding,
+              gameState.entities,
+              gameState.heightMap,
+              gameState.mapDimensions,
+              HEIGHT_MAP_RESOLUTION,
+            );
+          } else {
+            gameState.previewBuildingPosition = null;
+          }
         }
       } else {
         gameState.previewRoadPosition = null;
