@@ -7,6 +7,8 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { renderCharacter } from './render-character';
 import { renderPrey } from './render-prey';
 import { renderPredator } from './render-predator';
+import { renderBuilding } from './render-building';
+import { BuildingEntity } from '../entities/buildings/building-entity';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
@@ -118,6 +120,14 @@ export function renderWorld(
         isDebugOn,
         gameState.time,
         gameState.debugCharacterId,
+      );
+    } else if (entity.type === 'building') {
+      renderBuilding(
+        ctx,
+        entity as BuildingEntity,
+        viewportCenter,
+        canvasDimensions,
+        gameState.mapDimensions,
       );
     }
   });

@@ -22,6 +22,10 @@ export function toggleBuildingPlacementMode(gameState: GameWorldState): void {
   // Exit demolish mode if entering building mode
   if (gameState.buildingPlacementMode) {
     gameState.demolishMode = false;
+    // Select HQ as default building type if none selected
+    if (!gameState.selectedBuildingType) {
+      gameState.selectedBuildingType = BuildingType.HQ;
+    }
   }
   
   // Clear preview if exiting building mode

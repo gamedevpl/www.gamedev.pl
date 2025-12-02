@@ -19,6 +19,7 @@ import { renderTribeList } from './render/ui/render-tribe-list';
 import { renderTutorialPanel, renderUIElementHighlight } from './render/ui/render-tutorial';
 import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
+import { renderBuildingPreview } from './render/render-building';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
@@ -50,6 +51,9 @@ export function renderGame(
   }
 
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
+
+  // Render building preview if in placement mode
+  renderBuildingPreview(ctx, gameState, viewportCenter, canvasDimensions, gameState.mapDimensions);
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
