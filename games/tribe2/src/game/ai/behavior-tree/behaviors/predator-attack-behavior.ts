@@ -1,6 +1,4 @@
-import {
-  PREDATOR_ATTACK_RANGE
-} from '../../../animal-consts.ts';
+import { PREDATOR_ATTACK_RANGE } from '../../../animal-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
@@ -8,6 +6,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for predators attacking humans.
@@ -49,12 +49,12 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode<Predat
             );
 
             if (distance <= PREDATOR_ATTACK_RANGE) {
-              blackboard.set('attackTarget', closestHuman);
+              Blackboard.set(blackboard, 'attackTarget', closestHuman.id);
               return true;
             } else if (isVeryHungry && distance <= PREDATOR_ATTACK_RANGE * 2) {
               // Very hungry predators will approach humans more aggressively
-              blackboard.set('attackTarget', closestHuman);
-              blackboard.set('needToApproach', true);
+              Blackboard.set(blackboard, 'attackTarget', closestHuman.id);
+              Blackboard.set(blackboard, 'needToApproach', true);
               return true;
             }
           }
@@ -67,8 +67,9 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode<Predat
       // Action: Attack or approach human
       new ActionNode(
         (predator, context: UpdateContext, blackboard) => {
-          const target = blackboard.get<HumanEntity>('attackTarget');
-          const needToApproach = blackboard.get<boolean>('needToApproach');
+          const targetId = Blackboard.get(blackboard, 'attackTarget') as EntityId | undefined;
+          const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
+          const needToApproach = Blackboard.get(blackboard, 'needToApproach') as boolean | undefined;
 
           if (!target || target.hitpoints <= 0) {
             return NodeStatus.FAILURE;
@@ -87,7 +88,7 @@ export function createPredatorAttackBehavior(depth: number): BehaviorNode<Predat
             predator.attackTargetId = target.id;
             predator.target = target.id;
             predator.direction = { x: 0, y: 0 };
-            blackboard.delete('needToApproach');
+            Blackboard.delete(blackboard, 'needToApproach');
             return NodeStatus.RUNNING;
           } else if (needToApproach || distance > PREDATOR_ATTACK_RANGE) {
             // Need to move closer to the human

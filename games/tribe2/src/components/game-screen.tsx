@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DebugPanelType, GameWorldState } from '../game/world-types';
 import { useGameContext } from '../context/game-context';
 import { Vector2D } from '../game/utils/math-types';
@@ -8,7 +8,29 @@ import { GameRender } from './game-render';
 import { GameWorldController } from './game-world-controller';
 
 export const GameScreen: React.FC = () => {
-  const [initialState] = useState(() => initGame());
+  const { savedGameState, contextReady } = useGameContext();
+
+  // We use a state here to ensure initGame() is only called once if no save exists,
+  // preventing re-initialization on re-renders of the wrapper.
+  const [initialState, setInitialState] = useState<GameWorldState | null>(null);
+
+  useEffect(() => {
+    if (!contextReady) {
+      return;
+    }
+
+    if (savedGameState) {
+      console.log('Loading saved game state...');
+      setInitialState(savedGameState);
+    } else {
+      console.log('Initializing new game state...');
+      setInitialState(initGame());
+    }
+  }, [contextReady, savedGameState]);
+
+  if (!contextReady || !initialState) {
+    return <div>Loading...</div>;
+  }
 
   return <GameScreenInitialised initialState={initialState} />;
 };

@@ -4,14 +4,12 @@ import {
   PREDATOR_ATTACK_RANGE,
   PREDATOR_ATTACK_DAMAGE,
   PREDATOR_ATTACK_COOLDOWN_HOURS,
-  PREDATOR_MEAT_HUNGER_REDUCTION
+  PREDATOR_MEAT_HUNGER_REDUCTION,
 } from '../animal-consts.ts';
-import {
-  EFFECT_DURATION_SHORT_HOURS
-} from '../effect-consts.ts';
+import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
 import {
   HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
-  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS
+  HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
 } from '../human-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
@@ -36,7 +34,7 @@ export const predatorAttackRivalInteraction: InteractionDefinition<PredatorEntit
         rival.hitpoints > 0 && // Target must be alive
         (predator.hunger > 100 || // Very hungry predators attack rivals
           rival.attackTargetId === predator.id || // Retaliate if rival is attacking this predator
-          (rival.attackTargetId && context.gameState.entities.entities.get(rival.attackTargetId)?.type === 'predator'))
+          (rival.attackTargetId && context.gameState.entities.entities[rival.attackTargetId]?.type === 'predator'))
       ) // Defend other predators
     );
   },

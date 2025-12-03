@@ -4,10 +4,7 @@ import {
   AI_GATHERING_AVOID_OWNER_PROXIMITY,
   AI_GATHERING_SEARCH_RADIUS,
 } from '../../../ai-consts';
-import {
-  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  HUMAN_INTERACTION_PROXIMITY,
-} from '../../../human-consts';
+import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts';
 import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils';
@@ -16,6 +13,7 @@ import { CorpseEntity } from '../../../entities/characters/corpse-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
+import { Blackboard } from '../behavior-tree-blackboard';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -49,7 +47,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           }
 
           // Bush is claimed. Get the owner.
-          const owner = context.gameState.entities.entities.get(bush.ownerId) as HumanEntity | undefined;
+          const owner = context.gameState.entities.entities[bush.ownerId] as HumanEntity | undefined;
           if (!owner) {
             return true; // Owner doesn't exist, so it's fair game.
           }
@@ -103,7 +101,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       }
 
       if (foodSource) {
-        blackboard.set(BLACKBOARD_KEY, foodSource);
+        Blackboard.set(blackboard, BLACKBOARD_KEY, foodSource.id);
         return [
           NodeStatus.SUCCESS,
           `Found food: ${foodSource.type} at ${foodSource.position.x.toFixed(0)},${foodSource.position.y.toFixed(0)}`,
@@ -118,11 +116,12 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
   // Action to move towards the food source and gather from it.
   const moveAndGatherAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      const target = blackboard.get<FoodSource>(BLACKBOARD_KEY);
+      const targetId = Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY);
+      const target = targetId && (context.gameState.entities.entities[targetId] as FoodSource | undefined);
 
       // Guard: If no target, fail. This shouldn't happen if the sequence is structured correctly.
       if (!target || target.food.length === 0) {
-        blackboard.delete(BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Food source is invalid or depleted'];
       }
 
@@ -138,7 +137,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         human.activeAction = 'gathering';
         human.direction = { x: 0, y: 0 };
         human.target = target.id; // Set target for interaction system
-        blackboard.delete(BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
       } else {
         // Not close enough, so move towards the target.
@@ -176,7 +175,11 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           // Branch A: Continue with an existing target.
           new Sequence(
             [
-              new ConditionNode((_, __, blackboard) => blackboard.has(BLACKBOARD_KEY), 'Has Food Source?', depth + 2),
+              new ConditionNode(
+                (_, __, blackboard) => Blackboard.has(blackboard, BLACKBOARD_KEY),
+                'Has Food Source?',
+                depth + 2,
+              ),
               moveAndGatherAction,
             ],
             'Continue Gathering Action',

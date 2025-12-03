@@ -3,13 +3,9 @@ import { UpdateContext } from '../../../world-types';
 import { ActionNode, CachingNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findOptimalMigrationTarget } from '../../../utils';
-import {
-  AI_MIGRATION_CHECK_INTERVAL_HOURS,
-  BT_EXPENSIVE_OPERATION_CACHE_HOURS
-} from '../../../ai-consts.ts';
-import {
-  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS
-} from '../../../tribe-consts.ts';
+import { AI_MIGRATION_CHECK_INTERVAL_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../../ai-consts.ts';
+import { PLAYER_CALL_TO_FOLLOW_DURATION_HOURS } from '../../../tribe-consts.ts';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 const MIGRATION_CHECK_COOLDOWN_KEY = 'tribeMigrationCheckCooldown';
 
@@ -30,7 +26,7 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode<HumanE
       // 2. Condition: Has enough time passed since the last migration check?
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          const lastCheckTime = human.aiBlackboard?.get(MIGRATION_CHECK_COOLDOWN_KEY) as number | undefined;
+          const lastCheckTime = Blackboard.get(human.aiBlackboard, MIGRATION_CHECK_COOLDOWN_KEY) as number | undefined;
           if (!lastCheckTime) {
             return true; // First time checking
           }
@@ -44,7 +40,9 @@ export function createTribeMigrationBehavior(depth: number): BehaviorNode<HumanE
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
           // Update the cooldown time first, so we don't check again immediately if we fail.
-          human.aiBlackboard?.set(MIGRATION_CHECK_COOLDOWN_KEY, context.gameState.time);
+          if (human.aiBlackboard) {
+            Blackboard.set(human.aiBlackboard, MIGRATION_CHECK_COOLDOWN_KEY, context.gameState.time);
+          }
 
           const migrationTarget = findOptimalMigrationTarget(human, context.gameState);
 

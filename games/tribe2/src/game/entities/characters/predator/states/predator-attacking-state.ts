@@ -1,8 +1,6 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
-import {
-  PREDATOR_ATTACK_RANGE
-} from '../../../../animal-consts.ts';
+import { PREDATOR_ATTACK_RANGE } from '../../../../animal-consts.ts';
 import { PredatorEntity } from '../predator-types';
 import { PreyEntity } from '../../prey/prey-types';
 import { HumanEntity } from '../../human/human-types';
@@ -50,7 +48,7 @@ export const predatorAttackingState: State<PredatorEntity, PredatorStateData> = 
     }
 
     // Get target entity for direction and velocity calculation
-    const targetEntity = updateContext.gameState.entities.entities.get(entity.attackTargetId);
+    const targetEntity = updateContext.gameState.entities.entities[entity.attackTargetId];
     if (!targetEntity) {
       entity.activeAction = 'idle';
       return {
@@ -64,12 +62,11 @@ export const predatorAttackingState: State<PredatorEntity, PredatorStateData> = 
     }
 
     // Check if target is dead (has hitpoints property and hitpoints <= 0)
-    const isTargetDead = (
+    const isTargetDead =
       (targetEntity.type === 'prey' && (targetEntity as PreyEntity).hitpoints <= 0) ||
       (targetEntity.type === 'predator' && (targetEntity as PredatorEntity).hitpoints <= 0) ||
-      (targetEntity.type === 'human' && (targetEntity as HumanEntity).hitpoints <= 0)
-    );
-    
+      (targetEntity.type === 'human' && (targetEntity as HumanEntity).hitpoints <= 0);
+
     if (isTargetDead) {
       entity.activeAction = 'idle';
       return {

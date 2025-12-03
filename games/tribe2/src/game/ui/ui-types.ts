@@ -116,6 +116,8 @@ export enum UIButtonActionType {
   ReturnToIntro = 'ReturnToIntro',
   ConfirmExitYes = 'ConfirmExitYes',
   ConfirmExitNo = 'ConfirmExitNo',
+  SaveGame = 'SaveGame',
+  ToggleAutosave = 'ToggleAutosave',
 
   // --- Player Commands (One-Time Actions) ---
   CommandEat = 'CommandEat',

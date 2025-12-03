@@ -2,13 +2,12 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { Blackboard } from '../behavior-tree-blackboard';
-import {
-  ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER
-} from '../../../ai-consts.ts';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
+import { ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER } from '../../../ai-consts.ts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity, getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const ATTACK_TARGET_KEY = 'attackTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -23,7 +22,7 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
     [
       // 1. Condition: Is there a valid enemy to attack?
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
           if (!human.isAdult) {
             return [false, 'Not an adult'];
           }
@@ -31,7 +30,7 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
           // If already attacking a valid target, continue with that target.
           const { gameState } = context;
           if (human.activeAction === 'attacking' && human.attackTargetId) {
-            const currentTarget = gameState.entities.entities.get(human.attackTargetId) as HumanEntity;
+            const currentTarget = gameState.entities.entities[human.attackTargetId] as HumanEntity;
             if (
               currentTarget &&
               currentTarget.hitpoints > 0 &&
@@ -42,15 +41,15 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
                 gameState.mapDimensions.height,
               ) <= ATTACK_RANGE
             ) {
-              blackboard.set(ATTACK_TARGET_KEY, currentTarget);
+              Blackboard.set(blackboard, ATTACK_TARGET_KEY, currentTarget.id);
               // Ensure home center is set
-              if (!blackboard.get(HOME_CENTER_KEY)) {
+              if (!Blackboard.get(blackboard, HOME_CENTER_KEY)) {
                 const homeCenter = human.leaderId
                   ? getTribeCenter(human.leaderId, gameState)
                   : getFamilyMembers(human, gameState).length > 0
                   ? getFamilyCenter(human, gameState)
                   : human.position;
-                blackboard.set(HOME_CENTER_KEY, homeCenter);
+                Blackboard.set(blackboard, HOME_CENTER_KEY, homeCenter);
               }
               return true;
             }
@@ -65,19 +64,19 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
             (entity) => entity.hitpoints > 0 && isHostile(human, entity, gameState),
           );
           if (enemy) {
-            blackboard.set(ATTACK_TARGET_KEY, enemy);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, enemy.id);
             const homeCenter = human.leaderId
               ? getTribeCenter(human.leaderId, gameState)
               : getFamilyMembers(human, gameState).length > 0
               ? getFamilyCenter(human, gameState)
               : human.position;
-            blackboard.set(HOME_CENTER_KEY, homeCenter);
+            Blackboard.set(blackboard, HOME_CENTER_KEY, homeCenter);
             return true;
           }
 
           // No target found.
-          blackboard.set(ATTACK_TARGET_KEY, undefined);
-          blackboard.set(HOME_CENTER_KEY, undefined);
+          Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
+          Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
           return false;
         },
         'Find Attack Target',
@@ -85,9 +84,10 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
       ),
       // 2. Action: Execute the attack, ensuring not too far from home.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const target = blackboard.get<HumanEntity>(ATTACK_TARGET_KEY);
-          const homeCenter = blackboard.get<Vector2D>(HOME_CENTER_KEY);
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const targetId = Blackboard.get<EntityId>(blackboard, ATTACK_TARGET_KEY);
+          const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
+          const homeCenter = Blackboard.get<Vector2D>(blackboard, HOME_CENTER_KEY);
 
           if (!target || !homeCenter) {
             return NodeStatus.FAILURE; // Should not happen if condition passed
@@ -105,8 +105,8 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
           if (distanceFromHome > ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER) {
             human.activeAction = 'idle';
             human.attackTargetId = undefined;
-            blackboard.set(ATTACK_TARGET_KEY, undefined);
-            blackboard.set(HOME_CENTER_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
             return NodeStatus.FAILURE;
           }
 
@@ -124,8 +124,8 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
               human.activeAction = 'idle';
               human.attackTargetId = undefined;
             }
-            blackboard.set(ATTACK_TARGET_KEY, undefined);
-            blackboard.set(HOME_CENTER_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
             return NodeStatus.SUCCESS;
           }
 

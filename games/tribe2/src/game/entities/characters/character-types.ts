@@ -1,7 +1,6 @@
 import { Entity } from '../entities-types';
 import { AIType } from '../../ai/ai-types';
-import { BehaviorNode } from '../../ai/behavior-tree/behavior-tree-types';
-import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
+import { BlackboardData } from '../../ai/behavior-tree/behavior-tree-blackboard';
 
 /**
  * Base interface for character-like entities in the game.
@@ -16,10 +15,8 @@ export interface CharacterEntity extends Entity {
   hunger: number;
   /** The type of AI used by this character. */
   aiType?: AIType;
-  /** The root node of the behavior tree for this AI. */
-  aiBehaviorTree?: BehaviorNode<CharacterEntity>;
   /** The blackboard for the behavior tree AI. */
-  aiBlackboard?: Blackboard;
+  aiBlackboard?: BlackboardData;
   /** Current active action. Set by player input or AI decision. */
   activeAction?: string;
 }

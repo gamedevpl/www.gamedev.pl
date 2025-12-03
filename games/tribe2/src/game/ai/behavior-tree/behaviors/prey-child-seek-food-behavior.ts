@@ -1,13 +1,14 @@
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import {
   ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  ANIMAL_PARENT_FEEDING_RANGE
+  ANIMAL_PARENT_FEEDING_RANGE,
 } from '../../../animal-consts.ts';
 import { UpdateContext } from '../../../world-types';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior tree branch that makes a prey child seek food from a female parent.
@@ -29,14 +30,14 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
 
       // 2. Action: Find a suitable female parent nearby.
       new ActionNode(
-        (prey, context: UpdateContext, blackboard: Blackboard) => {
+        (prey, context: UpdateContext, blackboard: BlackboardData) => {
           if (!prey.motherId) {
             return NodeStatus.FAILURE;
           }
 
-          const femaleParent = context.gameState.entities.entities.get(prey.motherId) as PreyEntity | undefined;
+          const femaleParent = context.gameState.entities.entities[prey.motherId] as PreyEntity | undefined;
           if (femaleParent) {
-            blackboard.set('targetParent', femaleParent);
+            Blackboard.set(blackboard, 'targetParent', femaleParent.id);
             return NodeStatus.SUCCESS;
           }
 
@@ -48,8 +49,9 @@ export function createPreySeekingFoodFromParentBehavior(depth: number): Behavior
 
       // 3. Action: Move towards the found parent.
       new ActionNode(
-        (prey, context: UpdateContext, blackboard: Blackboard) => {
-          const parent = blackboard.get<PreyEntity>('targetParent');
+        (prey, context: UpdateContext, blackboard: BlackboardData) => {
+          const parentId = Blackboard.get<EntityId>(blackboard, 'targetParent');
+          const parent = parentId && (context.gameState.entities.entities[parentId] as PreyEntity | undefined);
           if (!parent) {
             return NodeStatus.FAILURE;
           }

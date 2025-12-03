@@ -1,6 +1,6 @@
 import { CharacterEntity } from '../../entities/characters/character-types';
 import { UpdateContext } from '../../world-types';
-import { Blackboard } from './behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from './behavior-tree-blackboard';
 
 /**
  * The status of a behavior tree node after execution.
@@ -22,13 +22,11 @@ export enum NodeStatus {
  * - TimeoutNode:
  *   - `timeout_{nodeName}_startTime`: Stores the time the child started running.
  */
-export interface BehaviorNode<T extends CharacterEntity> {
+export abstract class BehaviorNode<T extends CharacterEntity> {
   name?: string;
-  lastStatus?: NodeStatus;
   depth?: number;
   children?: BehaviorNode<T>[];
   child?: BehaviorNode<T>;
-  runningChildIndex?: number;
   /**
    * Executes the node's logic.
    * @param human The human entity executing the behavior.
@@ -36,5 +34,19 @@ export interface BehaviorNode<T extends CharacterEntity> {
    * @param blackboard The blackboard for sharing data between nodes.
    * @returns The status of the node after execution.
    */
-  execute(entity: T, context: UpdateContext, blackboard: Blackboard): [NodeStatus, string] | NodeStatus;
+  abstract execute(entity: T, context: UpdateContext, blackboard: BlackboardData): [NodeStatus, string] | NodeStatus;
+
+  getLastStatus(entity: T): NodeStatus {
+    return Blackboard.get(entity.aiBlackboard!, `${this.name}_lastStatus`) ?? NodeStatus.NOT_EVALUATED;
+  }
+  setLastStatus(entity: T, status: NodeStatus): void {
+    Blackboard.set(entity.aiBlackboard!, `${this.name}_lastStatus`, status);
+  }
+
+  getRunningChildIndex(entity: T): number | undefined {
+    return Blackboard.get(entity.aiBlackboard!, `${this.name}_runningChildIndex`);
+  }
+  setRunningChildIndex(entity: T, index: number | undefined): void {
+    Blackboard.set(entity.aiBlackboard!, `${this.name}_runningChildIndex`, index);
+  }
 }

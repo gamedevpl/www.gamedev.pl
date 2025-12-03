@@ -9,6 +9,7 @@ import { updateTutorial } from './tutorial/tutorial-utils';
 import { updateNotifications } from './notifications/notification-utils';
 import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
+import { saveGame } from './persistence/persistence-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -25,7 +26,7 @@ function updateViewport(state: GameWorldState, deltaTime: number): void {
  */
 function updateNotificationEffects(state: GameWorldState): void {
   // Reset all highlights first
-  for (const entity of state.entities.entities.values()) {
+  for (const entity of Object.values(state.entities.entities)) {
     entity.isHighlighted = false;
   }
 
@@ -34,7 +35,7 @@ function updateNotificationEffects(state: GameWorldState): void {
   for (const notification of activeNotifications) {
     if (notification.highlightedEntityIds) {
       for (const entityId of notification.highlightedEntityIds) {
-        const entity = state.entities.entities.get(entityId);
+        const entity = state.entities.entities[entityId];
         if (entity) {
           entity.isHighlighted = true;
         }
@@ -46,6 +47,16 @@ function updateNotificationEffects(state: GameWorldState): void {
 export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: number): GameWorldState {
   if (currentState.isPaused) {
     return currentState;
+  }
+
+  // Autosave logic
+  if (currentState.autosaveEnabled) {
+    const now = Date.now();
+    const timeSinceLastAutosave = now - currentState.lastAutosaveTime;
+    if (timeSinceLastAutosave > currentState.autosaveIntervalSeconds * 1000) {
+      saveGame(currentState);
+      currentState.lastAutosaveTime = now;
+    }
   }
 
   while (realDeltaTimeSeconds > 0) {

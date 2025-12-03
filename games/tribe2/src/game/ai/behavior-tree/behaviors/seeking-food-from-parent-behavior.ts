@@ -2,14 +2,15 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
   CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS,
   CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  PARENT_FEEDING_RANGE
+  PARENT_FEEDING_RANGE,
 } from '../../../human-consts.ts';
 import { UpdateContext } from '../../../world-types';
 import { findClosestEntity, findParents } from '../../../utils';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior tree branch that makes a child seek food from a parent.
@@ -31,7 +32,7 @@ export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode
 
       // 2. Action: Find a suitable parent with food nearby.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
           const parents = findParents(human, context.gameState);
           if (parents.length === 0) {
             return NodeStatus.FAILURE;
@@ -49,7 +50,7 @@ export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode
           );
 
           if (parentWithFood) {
-            blackboard.set('targetParent', parentWithFood);
+            Blackboard.set(blackboard, 'targetParent', parentWithFood.id);
             return NodeStatus.SUCCESS;
           }
 
@@ -61,8 +62,9 @@ export function createSeekingFoodFromParentBehavior(depth: number): BehaviorNode
 
       // 3. Action: Move towards the found parent.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const parent = blackboard.get<HumanEntity>('targetParent');
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const parentId = Blackboard.get<EntityId>(blackboard, 'targetParent');
+          const parent = parentId && (context.gameState.entities.entities[parentId] as HumanEntity | undefined);
           if (!parent) {
             return NodeStatus.FAILURE;
           }

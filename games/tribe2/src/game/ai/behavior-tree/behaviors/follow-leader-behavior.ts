@@ -3,10 +3,7 @@ import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
-import {
-  FOLLOW_LEADER_MIN_HUNGER_THRESHOLD,
-  LEADER_FOLLOW_RADIUS
-} from '../../../ai-consts.ts';
+import { FOLLOW_LEADER_MIN_HUNGER_THRESHOLD, LEADER_FOLLOW_RADIUS } from '../../../ai-consts.ts';
 
 /**
  * Creates a behavior for a non-leader human to follow their leader if the leader
@@ -26,7 +23,7 @@ export function createFollowLeaderBehavior(depth: number): BehaviorNode<HumanEnt
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
           if (!human.leaderId) return false;
-          const leader = context.gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined;
+          const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
           return !!leader && leader.isCallingToFollow === true;
         },
         'Is Leader Calling To Follow',
@@ -46,7 +43,7 @@ export function createFollowLeaderBehavior(depth: number): BehaviorNode<HumanEnt
           if (!human.leaderId) {
             return NodeStatus.FAILURE; // Should not happen due to conditions, but safe guard.
           }
-          const leader = context.gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined;
+          const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
 
           if (!leader) {
             return NodeStatus.FAILURE; // Leader is gone.

@@ -3,9 +3,10 @@ import { PredatorEntity } from '../../../entities/characters/predator/predator-t
 import { UpdateContext } from '../../../world-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { Blackboard } from '../behavior-tree-blackboard';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils';
+import { Blackboard } from '../behavior-tree-blackboard';
+import { EntityId } from '../../../entities/entities-types';
 
 const DEFEND_TARGET_KEY = 'defendTarget';
 const PREDATOR_THREAT_RANGE = 150; // Range to detect predator threats
@@ -19,7 +20,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
     [
       // 1. Condition: Is there a predator threat?
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard) => {
           if (!human.isAdult) {
             return [false, 'Not an adult - children flee instead'];
           }
@@ -28,7 +29,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
 
           // If already defending against a valid target, continue
           if (human.activeAction === 'attacking' && human.attackTargetId) {
-            const currentTarget = gameState.entities.entities.get(human.attackTargetId) as PredatorEntity;
+            const currentTarget = gameState.entities.entities[human.attackTargetId] as PredatorEntity;
             if (
               currentTarget &&
               currentTarget.type === 'predator' &&
@@ -40,7 +41,7 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
                 gameState.mapDimensions.height,
               ) <= PREDATOR_THREAT_RANGE
             ) {
-              blackboard.set(DEFEND_TARGET_KEY, currentTarget);
+              Blackboard.set(blackboard, DEFEND_TARGET_KEY, currentTarget.id);
               return [true, 'Continuing defense'];
             }
           }
@@ -68,12 +69,12 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
             const isClose = distance < 80; // Close proximity triggers defense
 
             if (isTargetingHuman || isClose) {
-              blackboard.set(DEFEND_TARGET_KEY, predator);
+              Blackboard.set(blackboard, DEFEND_TARGET_KEY, predator.id);
               return [true, 'Predator threat detected'];
             }
           }
 
-          blackboard.set(DEFEND_TARGET_KEY, undefined);
+          Blackboard.set(blackboard, DEFEND_TARGET_KEY, undefined);
           return [false, 'No predator threat'];
         },
         'Detect Predator Threat',
@@ -82,8 +83,9 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
 
       // 2. Action: Defend against the predator
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const target = blackboard.get<PredatorEntity>(DEFEND_TARGET_KEY);
+        (human: HumanEntity, context: UpdateContext, blackboard) => {
+          const targetId = Blackboard.get<EntityId>(blackboard, DEFEND_TARGET_KEY);
+          const target = targetId && (context.gameState.entities.entities[targetId] as PredatorEntity | undefined);
 
           if (!target) {
             return NodeStatus.FAILURE;

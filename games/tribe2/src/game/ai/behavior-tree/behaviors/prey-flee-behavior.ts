@@ -1,7 +1,4 @@
-import {
-  PREY_FLEE_DISTANCE,
-  PREY_INTERACTION_RANGE
-} from '../../../animal-consts.ts';
+import { PREY_FLEE_DISTANCE, PREY_INTERACTION_RANGE } from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import {
@@ -16,6 +13,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for prey fleeing from threats (predators and humans).
@@ -74,8 +73,8 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode<PreyEntit
 
           if (closestThreat && closestDistance < PREY_INTERACTION_RANGE * 1.5) {
             // Store the threat for the action node
-            blackboard.set('fleeThreat', closestThreat);
-            blackboard.set('fleeDistance', closestDistance);
+            Blackboard.set(blackboard, 'fleeThreat', closestThreat.id);
+            Blackboard.set(blackboard, 'fleeDistance', closestDistance);
             return true;
           }
           return false;
@@ -86,7 +85,9 @@ export function createPreyFleeingBehavior(depth: number): BehaviorNode<PreyEntit
       // Action: Flee from the threat
       new ActionNode(
         (prey, context: UpdateContext, blackboard) => {
-          const threat = blackboard.get<PredatorEntity | HumanEntity>('fleeThreat');
+          const threatId = Blackboard.get<EntityId>(blackboard, 'fleeThreat');
+          const threat =
+            threatId && (context.gameState.entities.entities[threatId] as PredatorEntity | HumanEntity | undefined);
           if (!threat) {
             return NodeStatus.FAILURE;
           }

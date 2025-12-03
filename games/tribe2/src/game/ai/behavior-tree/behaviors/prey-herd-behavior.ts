@@ -4,6 +4,7 @@ import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } 
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 /**
  * Creates a behavior sub-tree for prey herding behavior.
@@ -26,7 +27,7 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode<PreyEntity> 
           }
 
           // Find nearby prey to form/join herd
-          const nearbyPrey = context.gameState.entities.entities.values();
+          const nearbyPrey = Object.values(context.gameState.entities.entities);
           const herdMembers: PreyEntity[] = [];
 
           for (const entity of nearbyPrey) {
@@ -70,8 +71,8 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode<PreyEntity> 
 
             // Join herd if too far from the group
             if (distanceToHerd > PREY_INTERACTION_RANGE * 2) {
-              blackboard.set('herdCenter', herdCenter);
-              blackboard.set('herdSize', herdMembers.length);
+              Blackboard.set(blackboard, 'herdCenter', herdCenter);
+              Blackboard.set(blackboard, 'herdSize', herdMembers.length);
               return true;
             }
           }
@@ -84,7 +85,7 @@ export function createPreyHerdBehavior(depth: number): BehaviorNode<PreyEntity> 
       // Action: Move towards herd center
       new ActionNode(
         (prey, context: UpdateContext, blackboard) => {
-          const herdCenter = blackboard.get<{ x: number; y: number }>('herdCenter');
+          const herdCenter = Blackboard.get(blackboard, 'herdCenter') as { x: number; y: number } | undefined;
 
           if (!herdCenter) {
             return NodeStatus.FAILURE;

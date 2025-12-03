@@ -9,7 +9,7 @@ import {
   BERRY_BUSH_INITIAL_FOOD,
   BERRY_BUSH_MAX_FOOD,
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
-  BERRY_BUSH_SPREAD_RADIUS
+  BERRY_BUSH_SPREAD_RADIUS,
 } from '../berry-bush-consts.ts';
 import {
   HUMAN_INITIAL_AGE,
@@ -20,12 +20,9 @@ import {
   HUMAN_CORPSE_INITIAL_FOOD,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_MAX_HITPOINTS,
-  MAX_ANCESTORS_TO_TRACK
+  MAX_ANCESTORS_TO_TRACK,
 } from '../human-consts.ts';
-import {
-  CHARACTER_RADIUS,
-  CHARACTER_CHILD_RADIUS
-} from '../ui-consts.ts';
+import { CHARACTER_RADIUS, CHARACTER_CHILD_RADIUS } from '../ui-consts.ts';
 import {
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
@@ -36,7 +33,7 @@ import {
   PREDATOR_INITIAL_HUNGER,
   PREDATOR_INITIAL_AGE,
   PREDATOR_MAX_HITPOINTS,
-  PREDATOR_MIN_PROCREATION_AGE
+  PREDATOR_MIN_PROCREATION_AGE,
 } from '../animal-consts.ts';
 import { CorpseEntity } from './characters/corpse-types';
 import { HumanEntity } from './characters/human/human-types';
@@ -49,22 +46,19 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
 import { AIType } from '../ai/ai-types';
-import { buildHumanBehaviorTree } from '../ai/behavior-tree/human-behavior-tree';
-import { buildPreyBehaviorTree } from '../ai/behavior-tree/prey-behavior-tree';
-import { buildPredatorBehaviorTree } from '../ai/behavior-tree/predator-behavior-tree';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
   // First handle prey-to-carrion conversion
-  state.entities.forEach((entity) => {
+  Object.values(state.entities).forEach((entity) => {
     entityUpdate(entity, updateContext);
   });
 }
 
 export function createEntities(): Entities {
   const state = {
-    entities: new Map<EntityId, Entity>(),
+    entities: {} as Record<EntityId, Entity>,
     nextEntityId: 1,
   };
   return state;
@@ -86,7 +80,7 @@ function createEntity<T extends Entity>(
     debuffs: [],
     ...initialState,
   };
-  state.entities.set(entity.id, entity);
+  state.entities[entity.id] = entity;
   return entity as T;
 }
 
@@ -150,8 +144,7 @@ export function createHuman(
     leaderId,
     tribeBadge,
     aiType: AIType.BehaviorTreeBased,
-    aiBehaviorTree: buildHumanBehaviorTree(),
-    aiBlackboard: new Blackboard(),
+    aiBlackboard: Blackboard.create(),
   });
 
   return human;
@@ -283,7 +276,7 @@ export function giveBirth(
   fatherId: EntityId | undefined,
   updateContext: UpdateContext,
 ): HumanEntity | undefined {
-  const father = fatherId ? (updateContext.gameState.entities.entities.get(fatherId) as HumanEntity) : undefined;
+  const father = fatherId ? (updateContext.gameState.entities.entities[fatherId] as HumanEntity) : undefined;
 
   // Combine ancestor lists from both parents
   const motherAncestors = [...(mother.ancestorIds || []), mother.id];
@@ -323,8 +316,8 @@ export function giveBirth(
 }
 
 export function removeEntity(state: Entities, entityId: EntityId): boolean {
-  if (!state.entities.get(entityId)) return false;
-  state.entities.delete(entityId);
+  if (!state.entities[entityId]) return false;
+  delete state.entities[entityId];
   return true;
 }
 
@@ -359,8 +352,7 @@ export function createPrey(
     fatherId,
     stateMachine: [PREY_IDLE, { enteredAt: currentTime, previousState: undefined }],
     aiType: AIType.BehaviorTreeBased,
-    aiBehaviorTree: buildPreyBehaviorTree(),
-    aiBlackboard: new Blackboard(),
+    aiBlackboard: Blackboard.create(),
   });
 
   return prey;
@@ -397,8 +389,7 @@ export function createPredator(
     fatherId,
     stateMachine: [PREDATOR_IDLE, { enteredAt: currentTime, previousState: undefined }],
     aiType: AIType.BehaviorTreeBased,
-    aiBehaviorTree: buildPredatorBehaviorTree(),
-    aiBlackboard: new Blackboard(),
+    aiBlackboard: Blackboard.create(),
   });
 
   return predator;

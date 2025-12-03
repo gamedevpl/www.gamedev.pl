@@ -12,7 +12,7 @@ export default defineConfig({
     'simulate.cache.json',
     '.puppeteer-cache',
   ],
-  extensions: ['.ts', '.mts', '.tsx', '.js', '.jsx', '.json', '.mp3', '.wav', '.ogg', '.wgsl', '.md', '.txt', '.html'],
+  extensions: ['.ts', '.mts', '.tsx', '.js', '.jsx', '.json', '.wgsl', '.md', '.txt', '.html'],
   projectCommands: {
     install: {
       command: 'npm install',

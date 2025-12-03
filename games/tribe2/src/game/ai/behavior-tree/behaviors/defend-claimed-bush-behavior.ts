@@ -1,12 +1,11 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findIntruderOnClaimedBush } from '../../../utils';
-import {
-  AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS
-} from '../../../ai-consts.ts';
+import { AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS } from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const INTRUDER_KEY = 'bushIntruder';
 
@@ -19,7 +18,7 @@ export function createDefendClaimedBushBehavior(depth: number): BehaviorNode<Hum
     [
       // 1. Condition: Is an outsider stealing from our bushes?
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
           if (!human.isAdult) {
             return [false, 'Not an adult'];
           }
@@ -27,11 +26,11 @@ export function createDefendClaimedBushBehavior(depth: number): BehaviorNode<Hum
           const intruder = findIntruderOnClaimedBush(human, context.gameState, AI_DEFEND_CLAIMED_BUSH_TRIGGER_RADIUS);
 
           if (intruder) {
-            blackboard.set(INTRUDER_KEY, intruder);
+            Blackboard.set(blackboard, INTRUDER_KEY, intruder.id);
             return [true, `Intruder ${intruder.id} stealing berries`];
           }
 
-          blackboard.delete(INTRUDER_KEY);
+          Blackboard.delete(blackboard, INTRUDER_KEY);
           return false;
         },
         'Check For Intruders on Bushes',
@@ -40,11 +39,12 @@ export function createDefendClaimedBushBehavior(depth: number): BehaviorNode<Hum
 
       // 2. Action: Attack the intruder.
       new ActionNode(
-        (human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-          const target = blackboard.get<HumanEntity>(INTRUDER_KEY);
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const targetId = Blackboard.get<EntityId>(blackboard, INTRUDER_KEY);
+          const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
 
           if (!target || target.hitpoints <= 0) {
-            blackboard.delete(INTRUDER_KEY);
+            Blackboard.delete(blackboard, INTRUDER_KEY);
             return [NodeStatus.FAILURE, 'Intruder is invalid or dead'];
           }
 

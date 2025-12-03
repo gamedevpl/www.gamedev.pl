@@ -6,7 +6,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 export function interactionsUpdate(context: UpdateContext): void {
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
-  const allEntities = Array.from(gameState.entities.entities.values());
+  const allEntities = Object.values(gameState.entities.entities);
 
   for (const interaction of interactionsDefinitions) {
     for (const sourceEntity of allEntities) {

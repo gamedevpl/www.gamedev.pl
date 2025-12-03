@@ -104,7 +104,7 @@ export function renderGame(
       const playerHeir = findHeir(playerChildren);
       const playerPartners =
         player.partnerIds
-          ?.map((id) => gameState.entities.entities.get(id) as HumanEntity | undefined)
+          ?.map((id) => gameState.entities.entities[id] as HumanEntity | undefined)
           .filter((p): p is HumanEntity => p !== undefined) || [];
 
       const panelRects = renderTopLeftPanel(ctx, gameState, player, playerHeir, playerPartners, playerChildren);
@@ -139,18 +139,18 @@ export function renderGame(
     }
 
     // --- UI Highlights ---
-    if (gameState.tutorialState.activeUIHighlights.size > 0) {
+    if (gameState.tutorialState.activeUIHighlights.length > 0) {
       const { activeUIHighlights } = gameState.tutorialState;
 
-      if (activeUIHighlights.has(TutorialUIHighlightKey.HUNGER_BAR) && hungerBarRect) {
+      if (activeUIHighlights.includes(TutorialUIHighlightKey.HUNGER_BAR) && hungerBarRect) {
         renderUIElementHighlight(ctx, hungerBarRect, gameState.time);
       }
 
-      if (activeUIHighlights.has(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
+      if (activeUIHighlights.includes(TutorialUIHighlightKey.FOOD_BAR) && foodBarRect) {
         renderUIElementHighlight(ctx, foodBarRect, gameState.time);
       }
 
-      if (activeUIHighlights.has(TutorialUIHighlightKey.COMMAND_BUTTONS) && commandButtonsRect) {
+      if (activeUIHighlights.includes(TutorialUIHighlightKey.COMMAND_BUTTONS) && commandButtonsRect) {
         renderUIElementHighlight(ctx, commandButtonsRect, gameState.time);
       }
     }

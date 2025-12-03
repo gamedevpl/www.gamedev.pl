@@ -1,13 +1,12 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findPartnerProcreatingWithStranger } from '../../../utils';
-import {
-  AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS
-} from '../../../ai-consts.ts';
+import { AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS } from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const JEALOUSY_TARGET_KEY = 'jealousyAttackTarget';
 
@@ -20,7 +19,7 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
     [
       // 1. Condition: Is my primary partner procreating with a stranger nearby?
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
           if (!human.isAdult) {
             return [false, 'Not an adult'];
           }
@@ -32,11 +31,11 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
           );
 
           if (stranger) {
-            blackboard.set(JEALOUSY_TARGET_KEY, stranger);
+            Blackboard.set(blackboard, JEALOUSY_TARGET_KEY, stranger.id);
             return [true, `Partner cheating with ${stranger.id}`];
           }
 
-          blackboard.delete(JEALOUSY_TARGET_KEY);
+          Blackboard.delete(blackboard, JEALOUSY_TARGET_KEY);
           return false;
         },
         'Check for Infidelity',
@@ -45,11 +44,12 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
 
       // 2. Action: Attack the stranger.
       new ActionNode(
-        (human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-          const target = blackboard.get<HumanEntity>(JEALOUSY_TARGET_KEY);
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const targetId = Blackboard.get<EntityId>(blackboard, JEALOUSY_TARGET_KEY);
+          const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
 
           if (!target || target.hitpoints <= 0) {
-            blackboard.delete(JEALOUSY_TARGET_KEY);
+            Blackboard.delete(blackboard, JEALOUSY_TARGET_KEY);
             return [NodeStatus.FAILURE, 'Target is invalid or dead'];
           }
 

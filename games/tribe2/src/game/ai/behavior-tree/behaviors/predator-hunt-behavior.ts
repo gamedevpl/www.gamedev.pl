@@ -6,6 +6,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, TimeoutNode } from '../nodes';
 import { UpdateContext } from '../../../world-types';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for predators hunting prey.
@@ -44,12 +46,12 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
 
             if (distance <= PREDATOR_HUNT_RANGE) {
               // Prey is within hunting range
-              blackboard.set('huntTarget', closestPrey);
+              Blackboard.set(blackboard, 'huntTarget', closestPrey.id);
               return true;
             } else if (distance <= PREDATOR_HUNT_RANGE * 10) {
               // Prey found but need to get closer
-              blackboard.set('huntTarget', closestPrey);
-              blackboard.set('needToApproach', true);
+              Blackboard.set(blackboard, 'huntTarget', closestPrey.id);
+              Blackboard.set(blackboard, 'needToApproach', true);
               return true;
             }
           }
@@ -63,8 +65,9 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
       new TimeoutNode(
         new ActionNode(
           (predator, context: UpdateContext, blackboard) => {
-            const target = blackboard.get<PreyEntity>('huntTarget');
-            const needToApproach = blackboard.get<boolean>('needToApproach');
+            const targetId = Blackboard.get(blackboard, 'huntTarget') as EntityId | undefined;
+            const target = targetId && (context.gameState.entities.entities[targetId] as PreyEntity | undefined);
+            const needToApproach = Blackboard.get(blackboard, 'needToApproach') as boolean | undefined;
 
             if (!target || target.hitpoints <= 0) {
               return NodeStatus.FAILURE;
@@ -83,7 +86,7 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
               predator.attackTargetId = target.id;
               predator.target = target.id;
               predator.direction = { x: 0, y: 0 };
-              blackboard.delete('needToApproach');
+              Blackboard.delete(blackboard, 'needToApproach');
               return NodeStatus.RUNNING;
             } else if (needToApproach || distance > PREDATOR_HUNT_RANGE) {
               // Need to move closer to the prey

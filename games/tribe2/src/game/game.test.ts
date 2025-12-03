@@ -4,15 +4,9 @@ import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
 
-import {
-  GAME_DAY_IN_REAL_SECONDS
-} from './game-consts.ts';
-import {
-  HUMAN_PLANTING_DURATION_HOURS
-} from './berry-bush-consts.ts';
-import {
-  HUMAN_YEAR_IN_REAL_SECONDS
-} from './human-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS } from './game-consts.ts';
+import { HUMAN_PLANTING_DURATION_HOURS } from './berry-bush-consts.ts';
+import { HUMAN_YEAR_IN_REAL_SECONDS } from './human-consts.ts';
 import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
@@ -21,7 +15,7 @@ import { btProfiler } from './ai/behavior-tree/bt-profiler';
 
 // Helper to find a human by ID, with proper type assertion
 const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | undefined => {
-  return gameState.entities.entities.get(id) as HumanEntity | undefined;
+  return gameState.entities.entities[id] as HumanEntity | undefined;
 };
 
 describe('Game Mechanics', () => {
@@ -29,7 +23,7 @@ describe('Game Mechanics', () => {
     let gameState: GameWorldState = initGame();
 
     // Find the player and disable player control
-    const playerEntity = Array.from(gameState.entities.entities.values()).find(
+    const playerEntity = Object.values(gameState.entities.entities).find(
       (e) => e.isPlayer && e.type === 'human',
     ) as HumanEntity;
     if (playerEntity) {
@@ -45,19 +39,15 @@ describe('Game Mechanics', () => {
       gameState = updateWorld(gameState, timeStepSeconds);
       if (gameState.time >= (yearsSimulated + 1) * HUMAN_YEAR_IN_REAL_SECONDS) {
         yearsSimulated++;
-        const humans = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'human',
-        ) as HumanEntity[];
+        const humans = Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[];
         const humanCount = humans.length;
-        const bushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
+        const bushCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'berryBush').length;
         const avgHumanAge = humans.reduce((sum, e) => sum + e.age, 0) / humanCount || 0;
         const childCount = humans.filter((e) => e.age < 18).length;
         const maleCount = humans.filter((e) => e.gender === 'male').length;
         const maxHumanAge = Math.max(...humans.map((e) => e.age));
         const averageHunger = humans.reduce((sum, e) => sum + e.hunger, 0) / humanCount || 0;
-        const corpsesCount = Array.from(gameState.entities.entities.values()).filter(
-          (e) => e.type === 'corpse',
-        ).length;
+        const corpsesCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'corpse').length;
         const foodBerries = humans
           .filter((e) => e.food.length > 0)
           .reduce((sum, e) => sum + e.food.filter((f) => f.type === 'berry').length, 0);
@@ -111,8 +101,8 @@ describe('Game Mechanics', () => {
       }
     }
 
-    const bushCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'berryBush').length;
-    const humanCount = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human').length;
+    const bushCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'berryBush').length;
+    const humanCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'human').length;
 
     expect(bushCount).toBeGreaterThan(0);
     expect(humanCount).toBeGreaterThan(0);
@@ -217,9 +207,7 @@ describe('Planting bushes', () => {
     const human = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'female', true, 25);
     human.food = Array.from({ length: 10 }, () => ({ type: FoodType.Berry, id: Math.random() }));
 
-    const initialBushCount = Array.from(gameState.entities.entities.values()).filter(
-      (e) => e.type === 'berryBush',
-    ).length;
+    const initialBushCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'berryBush').length;
 
     human.activeAction = 'planting';
     human.target = { x: 150, y: 150 };
@@ -228,9 +216,7 @@ describe('Planting bushes', () => {
     const timeStep = HUMAN_PLANTING_DURATION_HOURS + 0.1;
     gameState = updateWorld(gameState, timeStep);
 
-    const finalBushCount = Array.from(gameState.entities.entities.values()).filter(
-      (e) => e.type === 'berryBush',
-    ).length;
+    const finalBushCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'berryBush').length;
 
     const updatedHuman = findHumanById(gameState, human.id);
 

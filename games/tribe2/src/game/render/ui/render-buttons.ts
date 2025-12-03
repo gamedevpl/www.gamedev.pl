@@ -145,7 +145,9 @@ export function renderUIButtons(
   const player = findPlayerEntity(gameState);
 
   // --- Update Button State & Definitions ---
-  gameState.uiButtons = []; // Clear previous buttons
+  // NOTE: We do NOT clear gameState.uiButtons here because renderTribeList (called before this)
+  // adds buttons to the list. Clearing it here would remove them.
+  // gameState.uiButtons = []; 
 
   // 1. Define Top-Right System Buttons
   const systemButtons: ClickableUIButton[] = [
@@ -176,6 +178,26 @@ export function renderUIButtons(
       backgroundColor: gameState.isMuted ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
       tooltip: `Toggle Sound (${gameState.isMuted ? 'Muted' : 'Enabled'})`,
       currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+    {
+      id: 'saveGameButton',
+      action: UIButtonActionType.SaveGame,
+      text: 'SAVE',
+      backgroundColor: UI_BUTTON_BACKGROUND_COLOR,
+      tooltip: 'Save Game State',
+      currentWidth: UI_BUTTON_WIDTH * 0.9,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+    {
+      id: 'toggleAutosaveButton',
+      action: UIButtonActionType.ToggleAutosave,
+      text: gameState.autosaveEnabled ? 'AUTO[ON]' : 'AUTO[OFF]',
+      backgroundColor: gameState.autosaveEnabled ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
+      tooltip: `Toggle Autosave (${gameState.autosaveEnabled ? 'Enabled' : 'Disabled'})`,
+      currentWidth: UI_BUTTON_WIDTH * 1.1,
       rect: { x: 0, y: 0, width: 0, height: 0 },
       textColor: UI_BUTTON_TEXT_COLOR,
     },

@@ -1,13 +1,11 @@
-import {
-  AI_ATTACK_HUNGER_THRESHOLD,
-  AI_FLEE_DISTANCE,
-  AI_FLEE_HEALTH_THRESHOLD
-} from '../../../ai-consts.ts';
+import { AI_ATTACK_HUNGER_THRESHOLD, AI_FLEE_DISTANCE, AI_FLEE_HEALTH_THRESHOLD } from '../../../ai-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { findClosestAggressor } from '../../../utils/world-utils';
 import { getDirectionVectorOnTorus, vectorAdd, vectorNormalize, vectorScale } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for fleeing from a threat.
@@ -32,7 +30,7 @@ export function createFleeingBehavior(depth: number): BehaviorNode<HumanEntity> 
           const threat = findClosestAggressor(human.id, context.gameState);
           if (threat) {
             // Store the threat in the blackboard for the action node to use
-            blackboard.set('fleeThreat', threat);
+            Blackboard.set(blackboard, 'fleeThreat', threat.id);
             return true;
           }
           return false;
@@ -43,7 +41,8 @@ export function createFleeingBehavior(depth: number): BehaviorNode<HumanEntity> 
       // Action: Flee!
       new ActionNode(
         (human, context, blackboard) => {
-          const threat = blackboard.get<HumanEntity>('fleeThreat');
+          const threatId = Blackboard.get<EntityId>(blackboard, 'fleeThreat');
+          const threat = threatId && (context.gameState.entities.entities[threatId] as HumanEntity | undefined);
           if (!threat) {
             return NodeStatus.FAILURE; // Should not happen if condition passed
           }

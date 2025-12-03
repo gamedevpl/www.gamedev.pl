@@ -3,14 +3,14 @@ import {
   PROCREATION_FOOD_SEARCH_RADIUS,
   PROCREATION_MIN_NEARBY_BERRY_BUSHES,
   PROCREATION_PARTNER_SEARCH_RADIUS_LONG,
-  AI_PROCREATION_AVOID_PARTNER_PROXIMITY
+  AI_PROCREATION_AVOID_PARTNER_PROXIMITY,
 } from '../../../ai-consts.ts';
 import {
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_PROXIMITY,
   HUMAN_MIN_PROCREATION_AGE,
-  PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS
+  PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS,
 } from '../../../human-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
@@ -24,7 +24,8 @@ import {
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const PROCREATION_WANDER_START_TIME_KEY = 'procreationWanderStartTime';
 
@@ -39,11 +40,11 @@ const findValidPartner = (
 
 export function createProcreationBehavior(depth: number): BehaviorNode<HumanEntity> {
   const findImmediatePartner = new ConditionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
       const potentialPartners = findPotentialNewPartners(human, context.gameState, HUMAN_INTERACTION_PROXIMITY);
       const partner = findValidPartner(human, potentialPartners, context.gameState);
       if (partner) {
-        blackboard.set('procreationPartner', partner);
+        Blackboard.set(blackboard, 'procreationPartner', partner.id);
         return true;
       }
       return false;
@@ -51,16 +52,17 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
     'Find Immediate Partner',
   );
 
-  const startProcreating = new ActionNode((human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-    const partner = blackboard.get<HumanEntity>('procreationPartner');
+  const startProcreating = new ActionNode((human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
+    const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
+    const partner = partnerId && (_context.gameState.entities.entities[partnerId] as HumanEntity | undefined);
     if (!partner) {
       return NodeStatus.FAILURE;
     }
     human.activeAction = 'procreating';
     human.target = undefined;
     // Cleanup blackboard state
-    blackboard.delete('procreationPartner');
-    blackboard.delete(PROCREATION_WANDER_START_TIME_KEY);
+    Blackboard.delete(blackboard, 'procreationPartner');
+    Blackboard.delete(blackboard, PROCREATION_WANDER_START_TIME_KEY);
 
     if (!human.partnerIds?.includes(partner.id)) {
       human.partnerIds = human.partnerIds ? [...human.partnerIds, partner.id] : [partner.id];
@@ -69,7 +71,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
   }, 'Start Procreating');
 
   const locateDistantPartner = new ConditionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
       const potentialPartners = findPotentialNewPartners(
         human,
         context.gameState,
@@ -77,7 +79,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       );
       const partner = findValidPartner(human, potentialPartners, context.gameState);
       if (partner) {
-        blackboard.set('procreationPartner', partner);
+        Blackboard.set(blackboard, 'procreationPartner', partner.id);
         return true;
       }
       return false;
@@ -85,31 +87,35 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
     'Locate Distant Partner',
   );
 
-  const moveTowardsPartner = new ActionNode((human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-    const partner = blackboard.get<HumanEntity>('procreationPartner');
-    if (!partner) {
-      return NodeStatus.FAILURE;
-    }
-    const distance = calculateWrappedDistance(
-      human.position,
-      partner.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
-    );
-    if (distance < HUMAN_INTERACTION_PROXIMITY) {
-      return NodeStatus.SUCCESS;
-    }
-    human.activeAction = 'moving';
-    human.target = partner.id;
-    const dirToTarget = getDirectionVectorOnTorus(
-      human.position,
-      partner.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
-    );
-    human.direction = vectorNormalize(dirToTarget);
-    return NodeStatus.RUNNING;
-  }, 'Move Towards Partner');
+  const moveTowardsPartner = new ActionNode(
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+      const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
+      const partner = partnerId && (context.gameState.entities.entities[partnerId] as HumanEntity | undefined);
+      if (!partner) {
+        return NodeStatus.FAILURE;
+      }
+      const distance = calculateWrappedDistance(
+        human.position,
+        partner.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      if (distance < HUMAN_INTERACTION_PROXIMITY) {
+        return NodeStatus.SUCCESS;
+      }
+      human.activeAction = 'moving';
+      human.target = partner.id;
+      const dirToTarget = getDirectionVectorOnTorus(
+        human.position,
+        partner.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      human.direction = vectorNormalize(dirToTarget);
+      return NodeStatus.RUNNING;
+    },
+    'Move Towards Partner',
+  );
 
   return new Sequence(
     [
@@ -161,7 +167,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
               ),
               new ActionNode(
                 (_human, _context, blackboard) => {
-                  blackboard.delete(PROCREATION_WANDER_START_TIME_KEY);
+                  Blackboard.delete(blackboard, PROCREATION_WANDER_START_TIME_KEY);
                   return NodeStatus.SUCCESS;
                 },
                 'Clear Wander Timer',
@@ -188,9 +194,11 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
               ),
               new ActionNode(
                 (_human, context, blackboard) => {
-                  const wanderStartTime = blackboard.get<number>(PROCREATION_WANDER_START_TIME_KEY);
+                  const wanderStartTime = Blackboard.get(blackboard, PROCREATION_WANDER_START_TIME_KEY) as
+                    | number
+                    | undefined;
                   if (wanderStartTime === undefined) {
-                    blackboard.set(PROCREATION_WANDER_START_TIME_KEY, context.gameState.time);
+                    Blackboard.set(blackboard, PROCREATION_WANDER_START_TIME_KEY, context.gameState.time);
                     return [NodeStatus.FAILURE, 'Starting heirless wander timer'];
                   }
                   const elapsed = context.gameState.time - wanderStartTime;
@@ -213,8 +221,8 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
 
       // New condition: Avoid procreating if the potential partner's primary partner is nearby
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const potentialPartner = blackboard.get<HumanEntity>('procreationPartner');
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const potentialPartner = Blackboard.get(blackboard, 'procreationPartner') as HumanEntity | undefined;
           if (
             potentialPartner &&
             potentialPartner.partnerIds?.length &&
@@ -222,7 +230,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
           ) {
             if (
               potentialPartner.partnerIds
-                .map((pid) => context.gameState.entities.entities.get(pid))
+                .map((pid) => context.gameState.entities.entities[pid])
                 .filter((p) => !!p)
                 .some(
                   (p) =>

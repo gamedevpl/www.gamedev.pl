@@ -1,16 +1,17 @@
 import {
   ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  ANIMAL_PARENT_FEEDING_RANGE
+  ANIMAL_PARENT_FEEDING_RANGE,
 } from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { UpdateContext } from '../../../world-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
+import { EntityId } from '../../../entities/entities-types.ts';
 
-const findHungriestChild = (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
+const findHungriestChild = (predator: PredatorEntity, context: UpdateContext, blackboard: BlackboardData) => {
   const children = (context.gameState as IndexedWorldState).search.predator
     .byProperty('motherId', predator.id)
     .filter((child) => !child.isAdult && child.type === 'predator') as unknown as PredatorEntity[];
@@ -29,15 +30,16 @@ const findHungriestChild = (predator: PredatorEntity, context: UpdateContext, bl
   }
 
   if (hungriestChild) {
-    blackboard.set<PredatorEntity>('targetChild', hungriestChild);
+    Blackboard.set(blackboard, 'targetChild', hungriestChild.id);
     return NodeStatus.SUCCESS;
   }
 
   return NodeStatus.FAILURE;
 };
 
-const moveToChildAndFeed = (predator: PredatorEntity, context: UpdateContext, blackboard: Blackboard) => {
-  const child = blackboard.get<PredatorEntity>('targetChild');
+const moveToChildAndFeed = (predator: PredatorEntity, context: UpdateContext, blackboard: BlackboardData) => {
+  const childId = Blackboard.get(blackboard, 'targetChild') as EntityId | undefined;
+  const child = childId && (context.gameState.entities.entities[childId] as PredatorEntity | undefined);
   if (!child) {
     return NodeStatus.FAILURE;
   }
@@ -59,7 +61,7 @@ const moveToChildAndFeed = (predator: PredatorEntity, context: UpdateContext, bl
   // Parent is in range, interaction system will handle the feeding.
   predator.activeAction = 'feeding';
   predator.target = undefined;
-  blackboard.set('targetChild', undefined);
+  Blackboard.set(blackboard, 'targetChild', undefined);
   return NodeStatus.SUCCESS;
 };
 

@@ -1,10 +1,8 @@
-import {
-  NOTIFICATION_DURATION_LONG_HOURS
-} from '../notification-consts.ts';
+import { NOTIFICATION_DURATION_LONG_HOURS } from '../notification-consts.ts';
 import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
-  TRIBE_SPLIT_MOVE_AWAY_DISTANCE
+  TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
 } from '../tribe-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { NotificationType } from '../notifications/notification-types';
@@ -58,7 +56,7 @@ export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { 
     return { canSplit: false }; // Not in a tribe, can't split
   }
 
-  const leader = gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined;
+  const leader = gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
   if (!leader || leader.type !== 'human') {
     return { canSplit: false }; // Leader is not a human or doesn't exist
   }
@@ -90,7 +88,7 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
   }
 
   const previousLeader = human.leaderId
-    ? (gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined)
+    ? (gameState.entities.entities[human.leaderId] as HumanEntity | undefined)
     : undefined;
 
   const newTribeBadge = generateTribeBadge();
@@ -99,9 +97,9 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
   // The founder becomes the new leader
   human.leaderId = human.id;
   human.tribeBadge = newTribeBadge;
-  human.diplomacy = new Map();
-  if (previousLeader) {
-    previousLeader.diplomacy?.set(human.id, DiplomacyStatus.Hostile);
+  human.diplomacy = {};
+  if (previousLeader && previousLeader.diplomacy) {
+    previousLeader.diplomacy[human.id] = DiplomacyStatus.Hostile;
   }
 
   // Update all descendants
@@ -138,7 +136,7 @@ export function propagateNewLeaderToDescendants(
       propagateNewLeaderToDescendants(newLeader, child, gameState);
       if (child.motherId && human.partnerIds?.includes(child.motherId)) {
         // If the child is from the same family, propagate to the mother as long as she is currently partnered with the father
-        const mother = gameState.entities.entities.get(child.motherId) as HumanEntity | undefined;
+        const mother = gameState.entities.entities[child.motherId] as HumanEntity | undefined;
         if (mother) {
           mother.leaderId = newLeader.id; // Set the new leader for the mother
           mother.tribeBadge = newLeader.tribeBadge; // Update tribe badge to match new leader

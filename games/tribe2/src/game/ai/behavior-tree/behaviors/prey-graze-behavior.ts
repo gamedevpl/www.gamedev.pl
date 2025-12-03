@@ -1,6 +1,4 @@
-import {
-  PREY_INTERACTION_RANGE
-} from '../../../animal-consts.ts';
+import { PREY_INTERACTION_RANGE } from '../../../animal-consts.ts';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
@@ -8,6 +6,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for prey grazing on berry bushes.
@@ -46,12 +46,12 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode<PreyEntit
 
             if (distance <= PREY_INTERACTION_RANGE) {
               // Berry bush is within interaction range
-              blackboard.set('grazingTarget', closestBush);
+              Blackboard.set(blackboard, 'grazingTarget', closestBush.id);
               return true;
             } else {
               // Berry bush found but need to move closer
-              blackboard.set('grazingTarget', closestBush);
-              blackboard.set('needToMoveToTarget', true);
+              Blackboard.set(blackboard, 'grazingTarget', closestBush.id);
+              Blackboard.set(blackboard, 'needToMoveToTarget', true);
               return true;
             }
           }
@@ -64,8 +64,9 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode<PreyEntit
       // Action: Move to bush or graze directly
       new ActionNode(
         (prey, context: UpdateContext, blackboard) => {
-          const target = blackboard.get<BerryBushEntity>('grazingTarget');
-          const needToMove = blackboard.get<boolean>('needToMoveToTarget');
+          const targetId = Blackboard.get<EntityId>(blackboard, 'grazingTarget');
+          const target = targetId && (context.gameState.entities.entities[targetId] as BerryBushEntity | undefined);
+          const needToMove = Blackboard.get(blackboard, 'needToMoveToTarget') as boolean | undefined;
 
           if (!target) {
             return NodeStatus.FAILURE;
@@ -83,7 +84,7 @@ export function createPreyGrazingBehavior(depth: number): BehaviorNode<PreyEntit
             prey.activeAction = 'grazing';
             prey.target = target.id;
             prey.direction = { x: 0, y: 0 };
-            blackboard.delete('needToMoveToTarget');
+            Blackboard.delete(blackboard, 'needToMoveToTarget');
             return NodeStatus.RUNNING;
           } else if (needToMove || distance > PREY_INTERACTION_RANGE) {
             // Need to move closer to the bush

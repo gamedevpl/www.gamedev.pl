@@ -10,18 +10,14 @@ import {
 import {
   AI_PLANTING_CHECK_RADIUS,
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  BERRY_COST_FOR_PLANTING
+  BERRY_COST_FOR_PLANTING,
 } from '../../../berry-bush-consts.ts';
-import {
-  BT_PLANTING_SEARCH_COOLDOWN_HOURS,
-  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING
-} from '../../../ai-consts.ts';
-import {
-  HUMAN_INTERACTION_PROXIMITY
-} from '../../../human-consts.ts';
+import { BT_PLANTING_SEARCH_COOLDOWN_HOURS, HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING } from '../../../ai-consts.ts';
+import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 
@@ -37,7 +33,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to move to the spot and plant. Assumes 'plantingSpot' is in the blackboard.
   const moveAndPlantAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      const plantingSpot = blackboard.get<Vector2D>(BLACKBOARD_KEY);
+      const plantingSpot = Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY);
 
       // Guard & Cleanup: If the spot is gone or now occupied (by something other than the human itself),
       // fail and clear the blackboard. The human itself should not block its own planting spot.
@@ -45,7 +41,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
         !plantingSpot ||
         isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)
       ) {
-        blackboard.delete(BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is invalid or now occupied'];
       }
 
@@ -84,7 +80,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
     (human, context, blackboard) => {
       const spot = findOptimalBushPlantingSpot(human, context.gameState);
       if (spot) {
-        blackboard.set(BLACKBOARD_KEY, spot);
+        Blackboard.set(blackboard, BLACKBOARD_KEY, spot);
         return [NodeStatus.SUCCESS, `Found new spot at ${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}`];
       }
       return [NodeStatus.FAILURE, 'No suitable planting spot found'];
@@ -131,7 +127,11 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
           // Branch A: A spot is already chosen. Move to it and plant.
           new Sequence(
             [
-              new ConditionNode((_, __, blackboard) => blackboard.has(BLACKBOARD_KEY), 'Has Planting Spot?', depth + 2),
+              new ConditionNode(
+                (_, __, blackboard) => Blackboard.has(blackboard, BLACKBOARD_KEY),
+                'Has Planting Spot?',
+                depth + 2,
+              ),
               moveAndPlantAction,
             ],
             'Continue Planting Action',

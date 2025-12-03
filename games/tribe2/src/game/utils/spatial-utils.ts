@@ -108,7 +108,7 @@ export function findValidPlantingSpot(
 export function getTribeCenter(leaderId: EntityId, gameState: GameWorldState): Vector2D {
   const tribeMembers = findTribeMembers(leaderId, gameState);
   if (tribeMembers.length === 0) {
-    const leader = gameState.entities.entities.get(leaderId);
+    const leader = gameState.entities.entities[leaderId];
     return leader ? leader.position : { x: 0, y: 0 };
   }
   const positions = tribeMembers.map((member) => member.position);

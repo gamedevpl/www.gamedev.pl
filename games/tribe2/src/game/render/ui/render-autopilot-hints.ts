@@ -4,7 +4,7 @@ import {
   PLAYER_ACTION_OUTLINE_COLOR,
   PLAYER_ACTION_OUTLINE_DASH_PATTERN,
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
-  CHARACTER_RADIUS
+  CHARACTER_RADIUS,
 } from '../../ui-consts.ts';
 import { drawDottedOutline } from './render-player-hints';
 import { PLAYER_ACTION_EMOJIS, PLAYER_ACTION_NAMES } from '../../ui/ui-types';
@@ -30,7 +30,7 @@ export function renderAutopilotHints(
   const text = `${emoji} ${name}`;
 
   if ('targetEntityId' in action) {
-    const entity = gameState.entities.entities.get(action.targetEntityId);
+    const entity = gameState.entities.entities[action.targetEntityId];
     if (entity) {
       targetPosition = entity.position;
       targetRadius = entity.radius;

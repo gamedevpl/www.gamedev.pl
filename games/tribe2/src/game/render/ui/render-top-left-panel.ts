@@ -1,13 +1,6 @@
 import { HumanEntity } from '../../entities/characters/human/human-types';
-import {
-  GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY
-} from '../../game-consts.ts';
-import {
-  HUMAN_HUNGER_DEATH,
-  HUMAN_MAX_AGE_YEARS,
-  HUMAN_YEAR_IN_REAL_SECONDS
-} from '../../human-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts.ts';
+import { HUMAN_HUNGER_DEATH, HUMAN_MAX_AGE_YEARS, HUMAN_YEAR_IN_REAL_SECONDS } from '../../human-consts.ts';
 import {
   UI_AGE_BAR_COLOR,
   UI_BAR_BACKGROUND_COLOR,
@@ -21,7 +14,7 @@ import {
   UI_HUNGER_BAR_COLOR,
   UI_MINIATURE_CHARACTER_SIZE,
   UI_PADDING,
-  UI_TIME_BAR_COLOR
+  UI_TIME_BAR_COLOR,
 } from '../../ui-consts.ts';
 import { GameWorldState } from '../../world-types';
 import { UIStatusType, UI_STATUS_EMOJIS } from '../../ui/ui-types';
@@ -153,7 +146,7 @@ export function renderTopLeftPanel(
 
   // 5. Add parents
   if (player.motherId && !displayedIds.has(player.motherId)) {
-    const mother = gameState.entities.entities.get(player.motherId) as HumanEntity | undefined;
+    const mother = gameState.entities.entities[player.motherId] as HumanEntity | undefined;
     if (mother) {
       familyMembersToDisplay.push({
         member: mother,
@@ -166,7 +159,7 @@ export function renderTopLeftPanel(
     }
   }
   if (player.fatherId && !displayedIds.has(player.fatherId)) {
-    const father = gameState.entities.entities.get(player.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[player.fatherId] as HumanEntity | undefined;
     if (father) {
       familyMembersToDisplay.push({
         member: father,

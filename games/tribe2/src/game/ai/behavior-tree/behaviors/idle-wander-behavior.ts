@@ -1,4 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
 
@@ -14,7 +15,7 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntit
       human.direction = { x: 0, y: 0 };
       human.target = undefined;
       // Clear any potential leftover data from previous behaviors
-      blackboard.set('wanderTarget', undefined);
+      Blackboard.set(blackboard, 'wanderTarget', undefined);
       return NodeStatus.SUCCESS; // Always succeeds as it's the final fallback.
     },
     'Idle', // Renamed from 'Idle/Wander'

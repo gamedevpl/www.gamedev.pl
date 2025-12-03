@@ -3,14 +3,14 @@ import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { UpdateContext } from '../../../world-types';
 import { ActionNode, CachingNode, ConditionNode, Sequence, TimeoutNode } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { getTribeCenter, findClosestEntity, findEntitiesOfTypeInRadius } from '../../../utils';
 import {
   AI_HUNTING_FOOD_SEARCH_RADIUS,
   AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER,
   BT_ACTION_TIMEOUT_HOURS,
-  BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS
+  BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS,
 } from '../../../ai-consts.ts';
 
 const HUNT_TARGET_KEY = 'huntTarget';
@@ -53,7 +53,7 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
             );
 
             if (nearbyPrey) {
-              blackboard.set(HUNT_TARGET_KEY, nearbyPrey.id);
+              Blackboard.set(blackboard, HUNT_TARGET_KEY, nearbyPrey.id);
               return true;
             }
 
@@ -70,18 +70,18 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
       // 3. Action: Hunt the prey (with a timeout to prevent getting stuck)
       new TimeoutNode<HumanEntity>(
         new ActionNode(
-          (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+          (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
             if (!human.leaderId) {
               return NodeStatus.FAILURE;
             }
 
-            const targetId = blackboard.get<number>(HUNT_TARGET_KEY);
+            const targetId = Blackboard.get<number>(blackboard, HUNT_TARGET_KEY);
             if (!targetId) {
               return NodeStatus.FAILURE;
             }
-            const target = context.gameState.entities.entities.get(targetId) as PreyEntity | undefined;
+            const target = context.gameState.entities.entities[targetId] as PreyEntity | undefined;
             if (!target || target.hitpoints <= 0) {
-              blackboard.delete(HUNT_TARGET_KEY);
+              Blackboard.delete(blackboard, HUNT_TARGET_KEY);
               human.activeAction = 'idle';
               human.attackTargetId = undefined;
               return NodeStatus.SUCCESS; // Target is dead or gone
@@ -98,7 +98,7 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
 
             // Fail if chasing too far from home
             if (distanceFromCenter > AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER) {
-              blackboard.delete(HUNT_TARGET_KEY);
+              Blackboard.delete(blackboard, HUNT_TARGET_KEY);
               human.activeAction = 'idle';
               human.attackTargetId = undefined;
               return NodeStatus.FAILURE;

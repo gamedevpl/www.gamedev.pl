@@ -1,10 +1,5 @@
-import {
-  AI_UPDATE_INTERVAL
-} from '../ai-consts.ts';
-import {
-  GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY
-} from '../game-consts.ts';
+import { AI_UPDATE_INTERVAL } from '../ai-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../game-consts.ts';
 import {
   UI_BT_DEBUG_BACKGROUND_COLOR,
   UI_BT_DEBUG_FONT_SIZE,
@@ -22,11 +17,13 @@ import {
   UI_BT_DEBUG_STATUS_RUNNING_COLOR,
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
   UI_BT_DEBUG_X_OFFSET,
-  UI_BT_DEBUG_Y_OFFSET
+  UI_BT_DEBUG_Y_OFFSET,
 } from '../ui-consts.ts';
 import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
 import { lerpColor } from '../utils/math-utils';
 import { CharacterEntity } from '../entities/characters/character-types';
+import { humanBehaviorTree } from '../ai/human-ai-update.ts';
+import { predatorBehaviorTree, preyBehaviorTree } from '../ai/animal-ai-update.ts';
 
 /**
  * Renders a debug visualization of a character's behavior tree.
@@ -43,13 +40,24 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
   character: CharacterEntity,
   currentTime: number,
 ): void {
-  if (!character.aiBehaviorTree || !character.aiBlackboard) {
+  if (!character.aiBlackboard) {
     return;
   }
-  const executionData = character.aiBlackboard.getNodeExecutionData();
+  const executionData = character.aiBlackboard.nodeExecutionData;
   // We cast the tree to BehaviorNode<any> because the specific character type (Human, Predator, Prey)
   // doesn't matter for rendering, only the node structure and blackboard data.
-  const tree = character.aiBehaviorTree as BehaviorNode<T>;
+  const tree = (
+    character.type === 'human'
+      ? humanBehaviorTree
+      : character.type === 'predator'
+      ? predatorBehaviorTree
+      : character.type === 'prey'
+      ? preyBehaviorTree
+      : null
+  ) as BehaviorNode<T> | null;
+  if (!tree) {
+    return;
+  }
 
   ctx.save();
   ctx.font = `${UI_BT_DEBUG_FONT_SIZE}px Arial`;
@@ -73,14 +81,14 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
 
   // Helper to calculate the required panel dimensions by traversing the static tree
   const calculateDimensions = (node: BehaviorNode<T>): { width: number; height: number } => {
-    if (!node.name || !executionData.has(node.name)) {
+    if (!node.name || !executionData[node.name]) {
       return { width: 0, height: 0 };
     }
 
     let maxWidth = 0;
     let height = 0;
 
-    const nodeExecutionInfo = executionData.get(node.name);
+    const nodeExecutionInfo = executionData[node.name];
     const debugText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
     const textWidth = ctx.measureText(debugText).width;
     const indentedWidth =
@@ -110,12 +118,12 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
 
   // Helper to recursively render each node of the tree
   const renderNode = (node: BehaviorNode<T>, yPos: number, panelX: number, panelWidth: number): number => {
-    if (!node.name || !executionData.has(node.name)) {
+    if (!node.name || !executionData[node.name]) {
       return yPos;
     }
     let currentY = yPos;
 
-    const nodeExecutionInfo = executionData.get(node.name);
+    const nodeExecutionInfo = executionData[node.name];
     const xPos = panelX + 2 + (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
 
     let status = NodeStatus.NOT_EVALUATED;

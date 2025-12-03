@@ -1,13 +1,12 @@
-import {
-  PREDATOR_ATTACK_RANGE,
-  PREDATOR_TERRITORIAL_RANGE
-} from '../../../animal-consts.ts';
+import { PREDATOR_ATTACK_RANGE, PREDATOR_TERRITORIAL_RANGE } from '../../../animal-consts.ts';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for predator territorial fighting.
@@ -60,12 +59,12 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode<P
 
             if (distance <= PREDATOR_ATTACK_RANGE) {
               // Close enough to engage in territorial combat
-              blackboard.set('territorialTarget', rivalPredator);
+              Blackboard.set(blackboard, 'territorialTarget', rivalPredator.id);
               return true;
             } else if (distance <= PREDATOR_TERRITORIAL_RANGE) {
               // Need to approach the rival predator
-              blackboard.set('territorialTarget', rivalPredator);
-              blackboard.set('needToApproach', true);
+              Blackboard.set(blackboard, 'territorialTarget', rivalPredator.id);
+              Blackboard.set(blackboard, 'needToApproach', true);
               return true;
             }
           }
@@ -78,8 +77,9 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode<P
       // Action: Fight or approach rival predator
       new ActionNode(
         (predator, context: UpdateContext, blackboard) => {
-          const target = blackboard.get<PredatorEntity>('territorialTarget');
-          const needToApproach = blackboard.get<boolean>('needToApproach');
+          const targetId = Blackboard.get(blackboard, 'territorialTarget') as EntityId | undefined;
+          const target = targetId && (context.gameState.entities.entities[targetId] as PredatorEntity | undefined);
+          const needToApproach = Blackboard.get(blackboard, 'needToApproach') as boolean | undefined;
 
           if (!target || target.hitpoints <= 0) {
             return NodeStatus.FAILURE;
@@ -98,7 +98,7 @@ export function createPredatorTerritorialBehavior(depth: number): BehaviorNode<P
             predator.attackTargetId = target.id;
             predator.target = target.id;
             predator.direction = { x: 0, y: 0 };
-            blackboard.delete('needToApproach');
+            Blackboard.delete(blackboard, 'needToApproach');
             return NodeStatus.RUNNING;
           } else if (needToApproach || distance > PREDATOR_ATTACK_RANGE) {
             // Need to move closer to the rival

@@ -78,11 +78,12 @@ export function renderTribeList(
     if (!tribe.isPlayerTribe) {
       const diplomacyIcon = tribe.diplomacyStatus === DiplomacyStatus.Friendly ? '🤝' : '⚔️';
       const buttonId = `diplomacyButton_${tribe.leaderId}`;
+      // Make the hit area slightly larger than the icon for better usability
       const buttonRect = {
-        x: currentX,
-        y: centerY - UI_TRIBE_LIST_BADGE_SIZE / 2,
-        width: UI_TRIBE_LIST_BADGE_SIZE,
-        height: UI_TRIBE_LIST_BADGE_SIZE,
+        x: currentX - 2,
+        y: centerY - UI_TRIBE_LIST_BADGE_SIZE / 2 - 2,
+        width: UI_TRIBE_LIST_BADGE_SIZE + 4,
+        height: UI_TRIBE_LIST_BADGE_SIZE + 4,
       };
 
       // Create and add the button to the game state for interaction handling

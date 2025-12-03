@@ -97,12 +97,16 @@ export interface GameWorldState {
   notifications: Notification[];
   // Holds the screen-space rectangles for notification buttons, updated each frame by the renderer.
   notificationButtonRects?: {
-    dismiss: Map<string, Rect>;
-    view: Map<string, Rect>;
+    dismiss: Record<string, Rect>;
+    view: Record<string, Rect>;
   };
   ecosystem: EcosystemState;
   debugPanel: DebugPanelType;
   performanceMetrics: PerformanceMetrics;
+  // Save/Autosave properties
+  autosaveEnabled: boolean; // Whether autosave is enabled (default: true)
+  autosaveIntervalSeconds: number; // How often to autosave in real seconds (default: 30)
+  lastAutosaveTime: number; // Timestamp of the last autosave (Date.now())
 }
 
 export type UpdateContext = {

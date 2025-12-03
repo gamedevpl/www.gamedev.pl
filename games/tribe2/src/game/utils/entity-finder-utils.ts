@@ -80,7 +80,7 @@ export function findClosestAggressor(targetId: EntityId, gameState: GameWorldSta
     }
     const distance = calculateWrappedDistance(
       human.position,
-      gameState.entities.entities.get(targetId)?.position || { x: 0, y: 0 },
+      gameState.entities.entities[targetId]?.position || { x: 0, y: 0 },
       gameState.mapDimensions.width,
       gameState.mapDimensions.height,
     );
@@ -93,7 +93,7 @@ export function findClosestAggressor(targetId: EntityId, gameState: GameWorldSta
 }
 
 export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
-  return Array.from(gameState.entities.entities.values()).filter((entity) => entity.type === 'human') as HumanEntity[];
+  return Object.values(gameState.entities.entities).filter((entity) => entity.type === 'human') as HumanEntity[];
 }
 
 export function getClosestEntityFromList<T extends Entity>(
@@ -136,7 +136,7 @@ export function findEntityAtPosition(
   entityType?: EntityType,
 ): Entity | undefined {
   // Iterate in reverse to find the top-most entity first (assuming entities are sorted by y-pos for rendering)
-  const entities = Array.from(gameState.entities.entities.values()).reverse();
+  const entities = Object.values(gameState.entities.entities).reverse();
 
   for (const entity of entities) {
     if (entityType && entity.type !== entityType) {

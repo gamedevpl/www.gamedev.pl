@@ -15,6 +15,7 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { saveGame } from '../persistence/persistence-utils';
 
 /**
  * Handles the logic for a UI button click event.
@@ -81,6 +82,12 @@ export const handleUIButtonClick = (
       return updateWorld(gameState, FAST_FORWARD_AMOUNT_SECONDS);
     case UIButtonActionType.DismissTutorial:
       gameState.tutorialState.isActive = false;
+      break;
+    case UIButtonActionType.SaveGame:
+      saveGame(gameState);
+      break;
+    case UIButtonActionType.ToggleAutosave:
+      gameState.autosaveEnabled = !gameState.autosaveEnabled;
       break;
 
     // --- Player Commands & Autopilot Toggles ---
@@ -152,18 +159,18 @@ export const handleUIButtonClick = (
       if (player && player.leaderId && button.targetTribeId) {
         const playerTribeId = player.leaderId;
         const otherTribeId = button.targetTribeId;
-        const otherTribe = gameState.entities.entities.get(otherTribeId) as HumanEntity | undefined;
+        const otherTribe = gameState.entities.entities[otherTribeId] as HumanEntity | undefined;
 
         const playerDiplomacy = player.diplomacy;
         const otherDiplomacy = otherTribe?.diplomacy;
 
         if (playerDiplomacy && otherDiplomacy) {
-          const currentStatus = playerDiplomacy.get(otherTribeId) || DiplomacyStatus.Friendly;
+          const currentStatus = playerDiplomacy[otherTribeId] || DiplomacyStatus.Friendly;
           const newStatus =
             currentStatus === DiplomacyStatus.Friendly ? DiplomacyStatus.Hostile : DiplomacyStatus.Friendly;
 
-          playerDiplomacy.set(otherTribeId, newStatus);
-          otherDiplomacy.set(playerTribeId, newStatus);
+          playerDiplomacy[otherTribeId] = newStatus;
+          otherDiplomacy[playerTribeId] = newStatus;
         }
       }
       break;
@@ -188,7 +195,7 @@ export function handleNotificationClick(gameState: GameWorldState, mouseX: numbe
   const player = findPlayerEntity(gameState);
 
   // Check dismiss buttons
-  for (const [notificationId, rect] of gameState.notificationButtonRects.dismiss.entries()) {
+  for (const [notificationId, rect] of Object.entries(gameState.notificationButtonRects.dismiss)) {
     if (mouseX >= rect.x && mouseX <= rect.x + rect.width && mouseY >= rect.y && mouseY <= rect.y + rect.height) {
       dismissNotification(gameState, notificationId);
       if (player) {
@@ -199,13 +206,13 @@ export function handleNotificationClick(gameState: GameWorldState, mouseX: numbe
   }
 
   // Check view buttons
-  for (const [notificationId, rect] of gameState.notificationButtonRects.view.entries()) {
+  for (const [notificationId, rect] of Object.entries(gameState.notificationButtonRects.view)) {
     if (mouseX >= rect.x && mouseX <= rect.x + rect.width && mouseY >= rect.y && mouseY <= rect.y + rect.height) {
       const notification = gameState.notifications.find((n) => n.id === notificationId);
       if (notification) {
         let targetPos = notification.targetPosition;
         if (!targetPos && notification.targetEntityIds && notification.targetEntityIds.length > 0) {
-          const targetEntity = gameState.entities.entities.get(notification.targetEntityIds[0]);
+          const targetEntity = gameState.entities.entities[notification.targetEntityIds[0]];
           if (targetEntity) {
             targetPos = targetEntity.position;
           }

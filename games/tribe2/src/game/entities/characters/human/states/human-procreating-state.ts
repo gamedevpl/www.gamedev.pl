@@ -5,7 +5,7 @@ import { EntityId } from '../../../entities-types';
 import {
   HUMAN_GESTATION_PERIOD_HOURS,
   HUMAN_PROCREATION_COOLDOWN_HOURS,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL
+  HUMAN_HUNGER_THRESHOLD_CRITICAL,
 } from '../../../../human-consts.ts';
 import { playSoundAt } from '../../../../sound/sound-manager';
 import { SoundType } from '../../../../sound/sound-types';
@@ -32,7 +32,7 @@ const update = (data: HumanProcreatingStateData, context: StateContext<HumanEnti
   }
 
   // Process is complete, check if procreation is successful
-  const partner = gameState.entities.entities.get(data.partnerId as EntityId) as HumanEntity | undefined;
+  const partner = gameState.entities.entities[data.partnerId as EntityId] as HumanEntity | undefined;
 
   if (
     partner &&

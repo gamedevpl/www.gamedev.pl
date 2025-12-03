@@ -39,7 +39,7 @@ export function renderWorld(
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
-  const sortedEntities = Array.from(gameState.entities.entities.values()).sort(
+  const sortedEntities = Object.values(gameState.entities.entities).sort(
     (a, b) => a.position.y - b.position.y || a.id - b.id,
   );
 
@@ -69,7 +69,7 @@ export function renderWorld(
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
       const isPlayerAttackTarget = player?.attackTargetId === human.id;
       const leader = human.leaderId
-        ? (gameState.entities.entities.get(human.leaderId) as HumanEntity | undefined)
+        ? (gameState.entities.entities[human.leaderId] as HumanEntity | undefined)
         : undefined;
       const isFollower = player
         ? human.leaderId === player.id &&
@@ -135,7 +135,7 @@ export function renderWorld(
   for (const notification of activeNotifications) {
     if (notification.highlightedEntityIds && notification.renderHighlights) {
       for (const highlightedEntityId of notification.highlightedEntityIds) {
-        const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
+        const highlightedEntity = gameState.entities.entities[highlightedEntityId];
         if (
           highlightedEntity &&
           isEntityInView(highlightedEntity, viewportCenter, canvasDimensions, gameState.mapDimensions)
@@ -158,9 +158,9 @@ export function renderWorld(
   }
 
   // Render tutorial highlights if active
-  if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityIds.size > 0) {
+  if (gameState.tutorialState.isActive && gameState.tutorialState.highlightedEntityIds.length > 0) {
     for (const highlightedEntityId of gameState.tutorialState.highlightedEntityIds) {
-      const highlightedEntity = gameState.entities.entities.get(highlightedEntityId);
+      const highlightedEntity = gameState.entities.entities[highlightedEntityId];
       if (
         highlightedEntity &&
         isEntityInView(highlightedEntity, viewportCenter, canvasDimensions, gameState.mapDimensions)

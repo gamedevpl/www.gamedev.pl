@@ -13,7 +13,7 @@ import { IndexedWorldState } from './world-index-types';
  * @returns An IndexedWorldState object with searchable entity collections.
  */
 export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
-  const allEntities = Array.from(worldState.entities.entities.values());
+  const allEntities = Object.values(worldState.entities.entities);
 
   const humans = allEntities.filter((e) => e.type === 'human') as HumanEntity[];
   const berryBushes = allEntities.filter((e) => e.type === 'berryBush') as BerryBushEntity[];

@@ -4,6 +4,7 @@ import { UpdateContext } from '../../../world-types';
 import { vectorAdd, vectorScale, vectorNormalize } from '../../../utils/math-utils';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
+import { Blackboard } from '../behavior-tree-blackboard';
 
 /**
  * Creates a behavior for animals to wander around when idle.
@@ -15,8 +16,8 @@ export function createAnimalWanderBehavior(depth: number): BehaviorNode<PreyEnti
       animal.activeAction = 'idle';
 
       // Get or create wander target
-      let wanderTarget = blackboard.get<{ x: number; y: number }>('wanderTarget');
-      let wanderStartTime = blackboard.get<number>('wanderStartTime');
+      let wanderTarget = Blackboard.get<{ x: number; y: number }>(blackboard, 'wanderTarget');
+      let wanderStartTime = Blackboard.get<number>(blackboard, 'wanderStartTime');
 
       const currentTime = context.gameState.time;
 
@@ -44,8 +45,8 @@ export function createAnimalWanderBehavior(depth: number): BehaviorNode<PreyEnti
             context.gameState.mapDimensions.height,
         };
 
-        blackboard.set('wanderTarget', wanderTarget);
-        blackboard.set('wanderStartTime', currentTime);
+        Blackboard.set(blackboard, 'wanderTarget', wanderTarget);
+        Blackboard.set(blackboard, 'wanderStartTime', currentTime);
       }
 
       // Move towards wander target

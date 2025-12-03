@@ -3,11 +3,7 @@ import { Vector2D } from '../../../../utils/math-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
 import { PreyEntity } from '../prey-types';
 import { getEffectivePreySpeed } from '../prey-utils';
-import {
-  PreyStateData,
-  PREY_IDLE,
-  PREY_MOVING,
-} from './prey-state-types';
+import { PreyStateData, PREY_IDLE, PREY_MOVING } from './prey-state-types';
 
 const MOVEMENT_THRESHOLD = 10; // Distance to consider "close enough" to target for prey
 
@@ -34,7 +30,7 @@ class PreyMovingState implements State<PreyEntity, PreyStateData> {
     if (typeof entity.target === 'object') {
       targetPosition = entity.target;
     } else if (typeof entity.target === 'number') {
-      targetPosition = context.updateContext.gameState.entities.entities.get(entity.target)?.position;
+      targetPosition = context.updateContext.gameState.entities.entities[entity.target]?.position;
     }
 
     if (!targetPosition && (entity.direction.x !== 0 || entity.direction.y !== 0)) {

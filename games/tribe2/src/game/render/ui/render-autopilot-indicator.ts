@@ -6,7 +6,7 @@ import {
   PLAYER_ACTION_OUTLINE_COLOR,
   PLAYER_ACTION_OUTLINE_DASH_PATTERN,
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
-  UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED
+  UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
 } from '../../ui-consts.ts';
 import { GameWorldState } from '../../world-types';
 import { findPlayerEntity } from '../../utils';
@@ -113,7 +113,7 @@ export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameStat
     if ('position' in activeAction) {
       targetPosition = activeAction.position;
     } else if ('targetEntityId' in activeAction) {
-      const targetEntity = gameState.entities.entities.get(activeAction.targetEntityId);
+      const targetEntity = gameState.entities.entities[activeAction.targetEntityId];
       if (targetEntity) {
         targetPosition = targetEntity.position;
         targetRadius = (targetEntity as Entity).radius || 30;

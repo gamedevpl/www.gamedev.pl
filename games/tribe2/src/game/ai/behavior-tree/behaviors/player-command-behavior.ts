@@ -8,14 +8,10 @@ import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils
 import {
   AUTOPILOT_ACTION_PROXIMITY,
   AUTOPILOT_MOVE_DISTANCE_THRESHOLD,
-  FATHER_FOLLOW_STOP_DISTANCE
+  FATHER_FOLLOW_STOP_DISTANCE,
 } from '../../../ai-consts.ts';
-import {
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS
-} from '../../../berry-bush-consts.ts';
-import {
-  HUMAN_INTERACTION_PROXIMITY
-} from '../../../human-consts.ts';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../berry-bush-consts.ts';
+import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { canProcreate, isPositionOccupied } from '../../../utils';
@@ -31,7 +27,7 @@ function handleAutopilotAttack(
   activeAction: { targetEntityId: number },
   targetValidator?: (target: Entity) => boolean,
 ): NodeStatus {
-  const target = gameState.entities.entities.get(activeAction.targetEntityId);
+  const target = gameState.entities.entities[activeAction.targetEntityId];
 
   // Validate target existence, hitpoints, and optional type-specific validation
   if (!target || !('hitpoints' in target) || (target as { hitpoints: number }).hitpoints <= 0) {
@@ -122,7 +118,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- GATHER ---
             case PlayerActionType.AutopilotGather: {
-              const targetBush = gameState.entities.entities.get(activeAction.targetEntityId) as
+              const targetBush = gameState.entities.entities[activeAction.targetEntityId] as
                 | BerryBushEntity
                 | undefined;
 
@@ -159,7 +155,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- PROCREATE ---
             case PlayerActionType.AutopilotProcreate: {
-              const target = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
+              const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
               if (!target || target.type !== 'human' || !canProcreate(human, target, context.gameState)) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
@@ -220,7 +216,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- FEED CHILD ---
             case PlayerActionType.AutopilotFeedChild: {
-              const target = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
+              const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
               if (!target || target.type !== 'human' || target.isAdult || human.food.length === 0) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
@@ -248,7 +244,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- FOLLOW LEADER ---
             case PlayerActionType.AutopilotFollowMe: {
-              const leader = gameState.entities.entities.get(activeAction.targetEntityId) as HumanEntity | undefined;
+              const leader = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
               if (!leader || leader.type !== 'human' || leader.id !== leader.leaderId) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;

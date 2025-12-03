@@ -2,13 +2,8 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { EntityType } from '../entities/entities-types';
-import {
-  HUMAN_INTERACTION_RANGE
-} from '../human-consts.ts';
-import {
-  EFFECT_DURATION_MEDIUM_HOURS,
-  EFFECT_DURATION_SHORT_HOURS
-} from '../effect-consts.ts';
+import { HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import { EFFECT_DURATION_MEDIUM_HOURS, EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
 import { HUMAN_PROCREATING, HumanProcreatingStateData } from '../entities/characters/human/states/human-state-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
@@ -90,7 +85,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
 
   // --- New Tribe Formation ---
   if (isFirstPartnershipForMale && male.leaderId && male.leaderId !== male.id) {
-    const leader = gameState.entities.entities.get(male.leaderId) as HumanEntity | undefined;
+    const leader = gameState.entities.entities[male.leaderId] as HumanEntity | undefined;
     if (leader) {
       const maleHasCommonAncestors = isLineage(male, leader);
       const femaleHasCommonAncestors = isLineage(female, leader);
@@ -100,7 +95,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         const newTribeBadge = generateTribeBadge();
         male.leaderId = male.id; // The male becomes the leader of a new tribe
         male.tribeBadge = newTribeBadge;
-        male.diplomacy = new Map();
+        male.diplomacy = {};
         female.leaderId = male.id; // The female joins the new tribe
         female.tribeBadge = newTribeBadge;
       }
@@ -111,7 +106,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       const newTribeBadge = generateTribeBadge();
       male.leaderId = male.id; // The male becomes the leader
       male.tribeBadge = newTribeBadge;
-      male.diplomacy = new Map();
+      male.diplomacy = {};
       female.leaderId = male.id; // The female joins the new tribe
       female.tribeBadge = newTribeBadge;
     }

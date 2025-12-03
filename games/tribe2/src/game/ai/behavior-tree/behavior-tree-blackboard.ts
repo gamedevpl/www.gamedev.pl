@@ -1,15 +1,8 @@
 import { NodeStatus } from './behavior-tree-types';
-import {
-  AI_UPDATE_INTERVAL,
-  BLACKBOARD_ENTRY_MAX_AGE_HOURS
-} from '../../ai-consts.ts';
-import {
-  GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY
-} from '../../game-consts.ts';
-import {
-  UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS
-} from '../../ui-consts.ts';
+import { AI_UPDATE_INTERVAL, BLACKBOARD_ENTRY_MAX_AGE_HOURS } from '../../ai-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts.ts';
+import { UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS } from '../../ui-consts.ts';
+import { Vector2D } from '../../utils/math-types.ts';
 
 type NodeExecutionEntry = {
   lastExecuted: number;
@@ -19,48 +12,67 @@ type NodeExecutionEntry = {
   executionHistory: { time: number; status: NodeStatus }[];
 };
 
+export type BlackboardValueType =
+  | Vector2D
+  | number
+  | string
+  | boolean
+  | undefined
+  | null
+  | BlackboardValueType[]
+  | { [key: string]: BlackboardValueType };
+
+export type BlackboardData = {
+  data: Record<string, BlackboardValueType>;
+  nodeExecutionData: Record<string, NodeExecutionEntry>;
+};
+
 /**
  * A generic key-value store for AI behavior trees.
  * Used to share data between different nodes in the tree.
  */
-export class Blackboard {
-  private data = new Map<string, unknown>();
-  private nodeExecutionData = new Map<string, NodeExecutionEntry>();
+export const Blackboard = {
+  create(): BlackboardData {
+    return {
+      data: {},
+      nodeExecutionData: {},
+    };
+  },
 
   /**
    * Stores a value in the blackboard.
    * @param key The key to store the value under.
    * @param value The value to store.
    */
-  set<T>(key: string, value: T): void {
-    this.data.set(key, value);
-  }
+  set<T extends BlackboardValueType>({ data }: BlackboardData, key: string, value: T): void {
+    data[key] = value;
+  },
 
   /**
    * Retrieves a value from the blackboard.
    * @param key The key of the value to retrieve.
    * @returns The value, or undefined if the key doesn't exist.
    */
-  get<T>(key: string): T | undefined {
-    return this.data.get(key) as T | undefined;
-  }
+  get<T extends BlackboardValueType>(blackboard: BlackboardData | undefined, key: string): T | undefined {
+    return blackboard?.data[key] as T | undefined;
+  },
 
   /**
    * Deletes a value from the blackboard.
    * @param key The key to delete.
    */
-  delete(key: string): void {
-    this.data.delete(key);
-  }
+  delete({ data }: BlackboardData, key: string): void {
+    delete data[key];
+  },
 
   /**
    * Checks if a key exists in the blackboard.
    * @param key The key to check.
    * @returns True if the key exists, false otherwise.
    */
-  has(key: string): boolean {
-    return this.data.has(key);
-  }
+  has({ data }: BlackboardData, key: string): boolean {
+    return key in data;
+  },
 
   /**
    * Records the execution details of a behavior tree node.
@@ -70,8 +82,15 @@ export class Blackboard {
    * @param depth The depth of the node in the tree.
    * @param debugInfo Additional debug info string for the node.
    */
-  recordNodeExecution(name: string, status: NodeStatus, time: number, depth: number, debugInfo: string): void {
-    const existingEntry = this.nodeExecutionData.get(name) || {
+  recordNodeExecution(
+    { nodeExecutionData }: BlackboardData,
+    name: string,
+    status: NodeStatus,
+    time: number,
+    depth: number,
+    debugInfo: string,
+  ): void {
+    const existingEntry = nodeExecutionData[name] || {
       lastExecuted: 0,
       status: NodeStatus.FAILURE, // Default
       depth: 0,
@@ -107,32 +126,32 @@ export class Blackboard {
       debugInfo,
     };
 
-    this.nodeExecutionData.set(name, updatedEntry);
-  }
+    nodeExecutionData[name] = updatedEntry;
+  },
 
   /**
    * Retrieves the execution data for all nodes.
    * @returns A map of node names to their execution data.
    */
-  getNodeExecutionData(): Map<string, NodeExecutionEntry> {
-    return this.nodeExecutionData;
-  }
+  getNodeExecutionData({ nodeExecutionData }: BlackboardData): Record<string, NodeExecutionEntry> {
+    return nodeExecutionData;
+  },
 
   /**
    * Cleans up old entries from the node execution data to prevent memory leaks.
    * This is called periodically from the main AI update loop.
    * @param currentTime The current game time in hours.
    */
-  cleanupOldEntries(currentTime: number): void {
+  cleanupOldEntries({ nodeExecutionData }: BlackboardData, currentTime: number): void {
     const maxAge = BLACKBOARD_ENTRY_MAX_AGE_HOURS;
     const entriesToDelete: string[] = [];
-    for (const [key, entry] of this.nodeExecutionData.entries()) {
+    for (const [key, entry] of Object.entries(nodeExecutionData)) {
       if (currentTime - entry.lastExecuted > maxAge) {
         entriesToDelete.push(key);
       }
     }
     for (const key of entriesToDelete) {
-      this.nodeExecutionData.delete(key);
+      delete nodeExecutionData[key];
     }
-  }
-}
+  },
+};

@@ -3,14 +3,11 @@ import { UpdateContext } from '../../../world-types';
 import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation, getTribeCenter } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
-import {
-  TRIBE_SPLIT_CHECK_INTERVAL_HOURS
-} from '../../../tribe-consts.ts';
-import {
-  HUMAN_INTERACTION_PROXIMITY
-} from '../../../human-consts.ts';
+import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../tribe-consts.ts';
+import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { Vector2D } from '../../../utils/math-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 const MIGRATION_TARGET_KEY = 'tribeSplitMigrationTarget';
 
@@ -46,7 +43,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       new ActionNode<HumanEntity>(
         (human, context, aiBlackboard) => {
           const { gameState } = context;
-          let migrationTarget = aiBlackboard.get<Vector2D>(MIGRATION_TARGET_KEY);
+          let migrationTarget = Blackboard.get<Vector2D>(aiBlackboard, MIGRATION_TARGET_KEY);
 
           // Step 1: Find and set the target if it doesn't exist
           if (!migrationTarget) {
@@ -56,7 +53,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
             const newLocation = findSafeTribeSplitLocation(originalTribeCenter, human, gameState);
 
             if (newLocation) {
-              aiBlackboard.set(MIGRATION_TARGET_KEY, newLocation);
+              Blackboard.set(aiBlackboard, MIGRATION_TARGET_KEY, newLocation);
               migrationTarget = newLocation;
             } else {
               // Cannot find a safe location, fail for now
@@ -74,7 +71,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
 
           if (distance < HUMAN_INTERACTION_PROXIMITY) {
             // Arrived at destination
-            aiBlackboard.delete(MIGRATION_TARGET_KEY);
+            Blackboard.delete(aiBlackboard, MIGRATION_TARGET_KEY);
             human.activeAction = 'idle'; // Stop moving
             human.target = undefined;
             return NodeStatus.SUCCESS;

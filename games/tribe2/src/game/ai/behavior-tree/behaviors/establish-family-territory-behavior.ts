@@ -5,14 +5,12 @@ import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../
 import {
   ADULT_MALE_FAMILY_DISTANCE_RADIUS,
   BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
-  ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS
+  ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS,
 } from '../../../ai-consts.ts';
-import {
-  HUMAN_INTERACTION_PROXIMITY
-} from '../../../human-consts.ts';
+import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';
 
 /**
@@ -48,7 +46,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
         return false;
       }
 
-      const father = context.gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+      const father = context.gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
       if (!father) {
         return false; // No parents to be close to.
       }
@@ -75,8 +73,8 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   // --- Decomposed Nodes ---\\n\\n  // Node to check if a move is already in progress
   const isMovingToTerritory = new ConditionNode(
-    (_human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-      return blackboard.get('territoryMoveTarget') !== undefined;
+    (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
+      return Blackboard.get(blackboard, 'territoryMoveTarget') !== undefined;
     },
     'Is Moving To Territory?',
     depth + 3,
@@ -84,9 +82,9 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   // Node to handle timeout and arrival checks for an in-progress move
   const checkTimeoutAndArrival = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-      const moveTarget = blackboard.get<Vector2D>('territoryMoveTarget');
-      const moveStartTime = blackboard.get<number>('territoryMoveStartTime');
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+      const moveTarget = Blackboard.get<Vector2D>(blackboard, 'territoryMoveTarget');
+      const moveStartTime = Blackboard.get<number>(blackboard, 'territoryMoveStartTime');
 
       // This node should only run if target and time exist, but we check to be safe
       if (!moveTarget || !moveStartTime) {
@@ -96,8 +94,8 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       // Condition 1: Check for timeout
       const elapsed = context.gameState.time - moveStartTime;
       if (elapsed > ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS) {
-        blackboard.delete('territoryMoveTarget');
-        blackboard.delete('territoryMoveStartTime');
+        Blackboard.delete(blackboard, 'territoryMoveTarget');
+        Blackboard.delete(blackboard, 'territoryMoveStartTime');
         return [NodeStatus.FAILURE, 'Territory move timed out'];
       }
 
@@ -110,8 +108,8 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       );
 
       if (distanceToTarget < HUMAN_INTERACTION_PROXIMITY) {
-        blackboard.delete('territoryMoveTarget');
-        blackboard.delete('territoryMoveStartTime');
+        Blackboard.delete(blackboard, 'territoryMoveTarget');
+        Blackboard.delete(blackboard, 'territoryMoveStartTime');
         return [NodeStatus.SUCCESS, 'Arrived at new territory'];
       }
 
@@ -141,8 +139,8 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   // Condition to check if we should start a new move
   const shouldStartNewMove = new ConditionNode(
-    (_human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-      return blackboard.get('territoryMoveTarget') === undefined;
+    (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
+      return Blackboard.get(blackboard, 'territoryMoveTarget') === undefined;
     },
     'Should Start New Move?',
     depth + 4,
@@ -150,7 +148,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
   // Node to start a new move
   const startNewTerritoryMove = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
       // Start a new move action
       const newTerritorySpot = getRandomNearbyPosition(
         human.position,
@@ -159,8 +157,8 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
         context.gameState.mapDimensions.height,
       );
 
-      blackboard.set('territoryMoveTarget', newTerritorySpot);
-      blackboard.set('territoryMoveStartTime', context.gameState.time);
+      Blackboard.set(blackboard, 'territoryMoveTarget', newTerritorySpot);
+      Blackboard.set(blackboard, 'territoryMoveStartTime', context.gameState.time);
 
       human.activeAction = 'moving';
       human.target = newTerritorySpot;

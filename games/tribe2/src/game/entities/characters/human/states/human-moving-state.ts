@@ -49,7 +49,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     if (typeof entity.target === 'object') {
       targetPosition = entity.target;
     } else if (typeof entity.target === 'number') {
-      targetPosition = context.updateContext.gameState.entities.entities.get(entity.target)?.position;
+      targetPosition = context.updateContext.gameState.entities.entities[entity.target]?.position;
     }
 
     if (!targetPosition && (entity.direction.x !== 0 || entity.direction.y !== 0)) {

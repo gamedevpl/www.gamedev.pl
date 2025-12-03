@@ -1,17 +1,14 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findWeakCannibalismTarget, findClosestEntity } from '../../../utils';
-import {
-  AI_DESPERATE_ATTACK_HUNGER_THRESHOLD
-} from '../../../ai-consts.ts';
-import {
-  HUMAN_INTERACTION_RANGE
-} from '../../../human-consts.ts';
+import { AI_DESPERATE_ATTACK_HUNGER_THRESHOLD } from '../../../ai-consts.ts';
+import { HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { CorpseEntity } from '../../../entities/characters/corpse-types';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const DESPERATE_TARGET_KEY = 'desperateAttackTarget';
 
@@ -58,13 +55,13 @@ export function createDesperateAttackBehavior(depth: number): BehaviorNode<Human
 
       // 3. Condition: Can I find a suitable weak target?
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
           const target = findWeakCannibalismTarget(human, context.gameState);
           if (target) {
-            blackboard.set(DESPERATE_TARGET_KEY, target);
+            Blackboard.set(blackboard, DESPERATE_TARGET_KEY, target.id);
             return [true, `Found weak target ${target.id}`];
           }
-          blackboard.delete(DESPERATE_TARGET_KEY);
+          Blackboard.delete(blackboard, DESPERATE_TARGET_KEY);
           return false;
         },
         'Find Weak Target',
@@ -73,11 +70,12 @@ export function createDesperateAttackBehavior(depth: number): BehaviorNode<Human
 
       // 4. Action: Attack the target.
       new ActionNode(
-        (human: HumanEntity, _context: UpdateContext, blackboard: Blackboard) => {
-          const target = blackboard.get<HumanEntity>(DESPERATE_TARGET_KEY);
+        (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+          const targetId = Blackboard.get<EntityId>(blackboard, DESPERATE_TARGET_KEY);
+          const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
 
           if (!target || target.hitpoints <= 0) {
-            blackboard.delete(DESPERATE_TARGET_KEY);
+            Blackboard.delete(blackboard, DESPERATE_TARGET_KEY);
             return [NodeStatus.FAILURE, 'Target is invalid or dead'];
           }
 

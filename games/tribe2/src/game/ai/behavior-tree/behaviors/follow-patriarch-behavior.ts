@@ -1,13 +1,12 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import {
-  FATHER_FOLLOW_STOP_DISTANCE
-} from '../../../ai-consts.ts';
+import { FATHER_FOLLOW_STOP_DISTANCE } from '../../../ai-consts.ts';
 import { UpdateContext } from '../../../world-types';
 import { findFamilyPatriarch } from '../../../utils';
-import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, Sequence } from '../nodes';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior that makes a human (child or female partner) follow their family's patriarch.
@@ -20,13 +19,13 @@ export function createFollowPatriarchBehavior(depth: number): BehaviorNode<Human
     [
       // 1. Find the patriarch (father or male partner).
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+        (human: HumanEntity, context: UpdateContext, blackboard) => {
           const patriarch = findFamilyPatriarch(human, context.gameState);
           if (patriarch) {
-            blackboard.set('patriarchTarget', patriarch);
+            Blackboard.set(blackboard, 'patriarchTarget', patriarch.id);
             return [NodeStatus.SUCCESS, `Found patriarch: ${patriarch.id}`];
           }
-          blackboard.delete('patriarchTarget');
+          Blackboard.delete(blackboard, 'patriarchTarget');
           return [NodeStatus.FAILURE, 'No patriarch found'];
         },
         'Find Patriarch',
@@ -35,8 +34,10 @@ export function createFollowPatriarchBehavior(depth: number): BehaviorNode<Human
 
       // 2. Move towards the patriarch if found.
       new ActionNode(
-        (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-          const patriarch = blackboard.get<HumanEntity>('patriarchTarget');
+        (human: HumanEntity, context: UpdateContext, blackboard) => {
+          const patriarchId = Blackboard.get<EntityId>(blackboard, 'patriarchTarget');
+          const patriarch =
+            patriarchId && (context.gameState.entities.entities[patriarchId] as HumanEntity | undefined);
           if (!patriarch) {
             return [NodeStatus.FAILURE, 'Patriarch target missing from blackboard'];
           }

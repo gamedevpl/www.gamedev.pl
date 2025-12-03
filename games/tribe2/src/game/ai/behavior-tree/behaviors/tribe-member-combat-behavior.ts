@@ -5,11 +5,9 @@ import {
   AI_TRIBE_BATTLE_RADIUS,
   ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING,
-  MAX_TRIBE_ATTACKERS_PER_TARGET
+  MAX_TRIBE_ATTACKERS_PER_TARGET,
 } from '../../../ai-consts.ts';
-import {
-  EFFECT_DURATION_SHORT_HOURS
-} from '../../../effect-consts.ts';
+import { EFFECT_DURATION_SHORT_HOURS } from '../../../effect-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
@@ -17,6 +15,8 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { Vector2D } from '../../../utils/math-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const COMBAT_TARGET_KEY = 'combatTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -42,7 +42,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
 
   const isLeaderCallingToAttack = new ConditionNode<HumanEntity>(
     (human, context) => {
-      const leader = context.gameState.entities.entities.get(human.leaderId as number) as HumanEntity | undefined;
+      const leader = context.gameState.entities.entities[human.leaderId as number] as HumanEntity | undefined;
       return !!leader?.isCallingToAttack;
     },
     'Is Leader Calling to Attack?',
@@ -52,7 +52,7 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
   const findBestTarget = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const { gameState } = context;
-      const leader = gameState.entities.entities.get(human.leaderId as number) as HumanEntity | undefined;
+      const leader = gameState.entities.entities[human.leaderId as number] as HumanEntity | undefined;
       if (!leader) {
         return NodeStatus.FAILURE;
       }
@@ -82,9 +82,9 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
       for (const enemy of enemies) {
         const attackersCount = countTribeAttackersOnTarget(leader.id, enemy.id, gameState as IndexedWorldState);
         if (attackersCount < MAX_TRIBE_ATTACKERS_PER_TARGET) {
-          blackboard.set(COMBAT_TARGET_KEY, enemy);
+          Blackboard.set(blackboard, COMBAT_TARGET_KEY, enemy.id);
           const homeCenter = getTribeCenter(leader.id, gameState);
-          blackboard.set(HOME_CENTER_KEY, homeCenter);
+          Blackboard.set(blackboard, HOME_CENTER_KEY, homeCenter);
           return NodeStatus.SUCCESS;
         }
       }
@@ -97,8 +97,9 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
 
   const attackTarget = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      const target = blackboard.get(COMBAT_TARGET_KEY) as HumanEntity | undefined;
-      const homeCenter = blackboard.get(HOME_CENTER_KEY) as Vector2D | undefined;
+      const targetId = Blackboard.get<EntityId>(blackboard, COMBAT_TARGET_KEY);
+      const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
+      const homeCenter = Blackboard.get(blackboard, HOME_CENTER_KEY) as Vector2D | undefined;
 
       if (!target || !homeCenter) {
         return NodeStatus.FAILURE;
@@ -118,8 +119,8 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
           human.activeAction = 'idle';
           human.attackTargetId = undefined;
         }
-        blackboard.set(COMBAT_TARGET_KEY, undefined);
-        blackboard.set(HOME_CENTER_KEY, undefined);
+        Blackboard.set(blackboard, COMBAT_TARGET_KEY, undefined);
+        Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
         return NodeStatus.FAILURE;
       }
 

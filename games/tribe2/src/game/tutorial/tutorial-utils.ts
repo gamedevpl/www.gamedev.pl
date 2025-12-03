@@ -7,19 +7,21 @@ import {
   TutorialStepKey,
   TransitionState,
   TutorialUIHighlightKey,
+  ConditionType,
+  Condition,
+  GetTargets,
+  GetTargetsType,
 } from './tutorial-types';
-import {
-  HUMAN_HUNGER_THRESHOLD_TUTORIAL,
-  HUMAN_INTERACTION_RANGE
-} from '../human-consts.ts';
-import {
-  UI_TUTORIAL_TRANSITION_DURATION_SECONDS,
-  UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS
-} from '../ui-consts.ts';
+import { HUMAN_HUNGER_THRESHOLD_TUTORIAL, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import { UI_TUTORIAL_TRANSITION_DURATION_SECONDS, UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS } from '../ui-consts.ts';
 import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions, canProcreate } from '../utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
+
+const conditionTypes: Record<ConditionType, Condition> = {};
+
+const getTargetTypes: Record<GetTargetsType, GetTargets> = {};
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -54,7 +56,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     },
     getTargets: (world: GameWorldState, player: HumanEntity) => {
       const visibleBushes: BerryBushEntity[] = [];
-      for (const entity of world.entities.entities.values()) {
+      for (const entity of Object.values(world.entities.entities)) {
         if (
           entity.type === 'berryBush' &&
           (entity as BerryBushEntity).food.length > 0 &&
@@ -135,7 +137,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     text: 'Your world now has wild animals! Prey provide meat when hunted, but beware of predators that may attack.',
     condition: (world: GameWorldState) => {
       // Show when there are animals in the world
-      const hasAnimals = Array.from(world.entities.entities.values()).some(
+      const hasAnimals = Object.values(world.entities.entities).some(
         (entity) => entity.type === 'prey' || entity.type === 'predator',
       );
       return hasAnimals;
@@ -175,7 +177,14 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     isCompleted: false,
     dependsOn: TutorialStepKey.HUNT_PREY,
   },
-];
+].map(
+  (step) =>
+    ({
+      ...step,
+      condition: step.condition ? makeConditionType(step.condition) : undefined,
+      getTargets: step.getTargets ? makeGetTargetsType(step.getTargets) : undefined,
+    } as TutorialStep),
+);
 
 export function createTutorial(): Tutorial {
   return {
@@ -186,13 +195,13 @@ export function createTutorial(): Tutorial {
 export function createTutorialState(): TutorialState {
   return {
     currentStepIndex: 0,
-    completedSteps: new Set(),
+    completedSteps: [],
     isActive: true,
     transitionState: TransitionState.FADING_IN,
     transitionAlpha: 0,
-    highlightedEntityIds: new Set(),
+    highlightedEntityIds: [],
     stepStartTime: null,
-    activeUIHighlights: new Set(),
+    activeUIHighlights: [],
   };
 }
 
@@ -201,7 +210,7 @@ function findNextTutorialStep(world: GameWorldState): number | null {
     const step = world.tutorial.steps[i];
     if (!step.isCompleted) {
       if (step.dependsOn) {
-        if (world.tutorialState.completedSteps.has(step.dependsOn)) {
+        if (world.tutorialState.completedSteps.includes(step.dependsOn)) {
           return i;
         }
       } else {
@@ -217,8 +226,8 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
 
   if (!state.isActive) {
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityIds.clear();
-    state.activeUIHighlights.clear();
+    state.highlightedEntityIds = [];
+    state.activeUIHighlights = [];
     return;
   }
 
@@ -226,8 +235,8 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!player) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityIds.clear();
-    state.activeUIHighlights.clear();
+    state.highlightedEntityIds = [];
+    state.activeUIHighlights = [];
     return;
   }
 
@@ -235,8 +244,8 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
   if (!currentStep) {
     state.isActive = false;
     state.transitionState = TransitionState.INACTIVE;
-    state.highlightedEntityIds.clear();
-    state.activeUIHighlights.clear();
+    state.highlightedEntityIds = [];
+    state.activeUIHighlights = [];
     return;
   }
 
@@ -258,9 +267,12 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
       const timeElapsed = world.time - (state.stepStartTime || world.time);
       const minTimePassed = timeElapsed >= (currentStep.minDisplayTime || 0);
 
-      if (minTimePassed && currentStep.condition(world, player)) {
+      const condition = conditionTypes[currentStep.condition];
+      if (condition && minTimePassed && condition(world, player)) {
         currentStep.isCompleted = true;
-        state.completedSteps.add(currentStep.key);
+        if (!state.completedSteps.includes(currentStep.key)) {
+          state.completedSteps.push(currentStep.key);
+        }
         state.transitionState = TransitionState.FADING_OUT;
       }
       break;
@@ -291,21 +303,34 @@ export function updateTutorial(world: GameWorldState, deltaTime: number): void {
 
   if (shouldHighlightsBeActive) {
     // Handle entity highlighting
-    if (currentStep.getTargets) {
-      state.highlightedEntityIds = new Set(currentStep.getTargets(world, player));
+    const getTargets = getTargetTypes[currentStep.getTargets || ''];
+    if (getTargets) {
+      state.highlightedEntityIds = [...getTargets(world, player)];
     } else {
-      state.highlightedEntityIds.clear();
+      state.highlightedEntityIds = [];
     }
 
     // Handle UI element highlighting
     if (currentStep.highlightedUIElements) {
-      state.activeUIHighlights = new Set(currentStep.highlightedUIElements);
+      state.activeUIHighlights = [...currentStep.highlightedUIElements];
     } else {
-      state.activeUIHighlights.clear();
+      state.activeUIHighlights = [];
     }
   } else {
     // Clear all highlights when fading out or inactive
-    state.highlightedEntityIds.clear();
-    state.activeUIHighlights.clear();
+    state.highlightedEntityIds = [];
+    state.activeUIHighlights = [];
   }
+}
+
+function makeConditionType(condition: Condition): ConditionType {
+  const key = `condition_${Object.keys(conditionTypes).length + 1}`;
+  conditionTypes[key] = condition;
+  return key;
+}
+
+function makeGetTargetsType(getTargets: GetTargets): GetTargetsType {
+  const key = `getTargets_${Object.keys(getTargetTypes).length + 1}`;
+  getTargetTypes[key] = getTargets;
+  return key;
 }

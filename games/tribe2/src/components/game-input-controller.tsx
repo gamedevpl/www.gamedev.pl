@@ -93,7 +93,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
 
       // Check for hovered notification buttons first
       if (gameStateRef.current.notificationButtonRects) {
-        for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.dismiss.entries()) {
+        for (const [id, buttonRect] of Object.entries(gameStateRef.current.notificationButtonRects.dismiss)) {
           if (
             mouseX >= buttonRect.x &&
             mouseX <= buttonRect.x + buttonRect.width &&
@@ -105,7 +105,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
           }
         }
         if (!hoveredButtonId) {
-          for (const [id, buttonRect] of gameStateRef.current.notificationButtonRects.view.entries()) {
+          for (const [id, buttonRect] of Object.entries(gameStateRef.current.notificationButtonRects.view)) {
             if (
               mouseX >= buttonRect.x &&
               mouseX <= buttonRect.x + buttonRect.width &&
@@ -176,12 +176,17 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const key = event.key.toLowerCase();
 
       // Prevent default browser actions for certain keys that we handle
-      if (key === ' ' || key === 'p' || key === 'tab') {
+      if (
+        key === ' ' ||
+        key === 'p' ||
+        key === 'tab' ||
+        ((event.ctrlKey || event.metaKey) && (key === 's' || key === 'a'))
+      ) {
         event.preventDefault();
       }
 
       // Handle game-wide controls first
-      const controlResult = handleGameControlKeyDown(key, gameStateRef.current);
+      const controlResult = handleGameControlKeyDown(event, gameStateRef.current);
       gameStateRef.current = controlResult.newState;
       if (controlResult.handled) {
         return;

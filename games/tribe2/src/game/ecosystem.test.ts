@@ -6,11 +6,9 @@ import {
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY
+  HOURS_PER_GAME_DAY,
 } from './game-consts.ts';
-import {
-  HUMAN_YEAR_IN_REAL_SECONDS
-} from './human-consts.ts';
+import { HUMAN_YEAR_IN_REAL_SECONDS } from './human-consts.ts';
 import { describe, it, expect } from 'vitest';
 import { IndexedWorldState } from './world-index/world-index-types';
 import { resetEcosystemBalancer } from './ecosystem';
@@ -104,12 +102,12 @@ describe('Enhanced Ecosystem Balance', () => {
     let gameState: GameWorldState = initGame();
 
     // Remove all humans to test pure ecosystem balance
-    const humanIds = Array.from(gameState.entities.entities.values())
+    const humanIds = Object.values(gameState.entities.entities)
       .filter((e) => e.type === 'human')
       .map((e) => e.id);
 
     for (const id of humanIds) {
-      gameState.entities.entities.delete(id);
+      delete gameState.entities.entities[id];
     }
 
     const stats = simulateEcosystem(gameState, 50, 'Pure Ecosystem');

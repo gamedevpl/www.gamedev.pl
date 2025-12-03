@@ -4,18 +4,11 @@ import {
   PREDATOR_HUNGER_DEATH,
   PREDATOR_MAX_AGE_YEARS,
   PREDATOR_INITIAL_HUNGER,
-  PREDATOR_MIN_PROCREATION_AGE
+  PREDATOR_MIN_PROCREATION_AGE,
 } from '../../../animal-consts.ts';
-import {
-  EFFECT_DURATION_MEDIUM_HOURS
-} from '../../../effect-consts.ts';
-import {
-  HOURS_PER_GAME_DAY,
-  GAME_DAY_IN_REAL_SECONDS
-} from '../../../game-consts.ts';
-import {
-  HUMAN_YEAR_IN_REAL_SECONDS
-} from '../../../human-consts.ts';
+import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../game-consts.ts';
+import { HUMAN_YEAR_IN_REAL_SECONDS } from '../../../human-consts.ts';
 import { removeEntity, createPredator, createPredatorCorpse } from '../../entities-update';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
@@ -64,7 +57,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
       // Get parents for genetic combination
       const mother = predator;
       const father = predator.pregnancyFatherId
-        ? (updateContext.gameState.entities.entities.get(predator.pregnancyFatherId) as PredatorEntity)
+        ? (updateContext.gameState.entities.entities[predator.pregnancyFatherId] as PredatorEntity)
         : undefined;
 
       // Generate child gene code by combining parents or using mother's genes with mutation

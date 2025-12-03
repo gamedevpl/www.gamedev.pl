@@ -1,7 +1,11 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { AIType } from './ai-types';
+import { Blackboard } from './behavior-tree/behavior-tree-blackboard';
 import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
+import { buildHumanBehaviorTree } from './behavior-tree/human-behavior-tree';
+
+export const humanBehaviorTree = buildHumanBehaviorTree();
 
 /**
  * Updates the AI decision-making for a human entity.
@@ -10,7 +14,7 @@ import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 export function humanAIUpdate(human: HumanEntity, context: UpdateContext): void {
   // Cleanup old blackboard entries to prevent memory leaks
   if (human.aiBlackboard) {
-    human.aiBlackboard.cleanupOldEntries(context.gameState.time);
+    Blackboard.cleanupOldEntries(human.aiBlackboard, context.gameState.time);
   }
 
   const startTime = performance.now();
@@ -18,7 +22,7 @@ export function humanAIUpdate(human: HumanEntity, context: UpdateContext): void 
   switch (human.aiType) {
     case AIType.BehaviorTreeBased:
     default:
-      updateBehaviorTreeAI(human, context);
+      updateBehaviorTreeAI(human, context, humanBehaviorTree);
       break;
   }
 

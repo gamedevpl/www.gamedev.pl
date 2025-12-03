@@ -3,7 +3,7 @@ import { Selector, Sequence } from './nodes/composite-nodes';
 import { NodeStatus } from './behavior-tree-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { UpdateContext } from '../../world-types';
-import { Blackboard } from './behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from './behavior-tree-blackboard';
 import { ActionNode, ConditionNode } from './nodes/leaf-nodes';
 import { GameWorldState } from '../../world-types';
 import { CachingNode, TimeoutNode } from './nodes';
@@ -22,17 +22,13 @@ const advanceTime = (hours: number) => {
   mockContext.gameState.time += hours;
 };
 
-class TestBlackboard extends Blackboard {
-  constructor() {
-    super();
-    this.recordNodeExecution = vi.fn();
-  }
-}
+const TestBlackboard = { ...Blackboard };
+TestBlackboard.recordNodeExecution = vi.fn();
 
-let blackboard: TestBlackboard;
+let blackboard: BlackboardData;
 
 beforeEach(() => {
-  blackboard = new TestBlackboard();
+  blackboard = TestBlackboard.create();
   mockContext.gameState.time = 0;
 });
 
@@ -102,7 +98,7 @@ describe('Behavior Tree Composite Nodes', () => {
       const status = selector.execute(mockHuman, mockContext, blackboard);
 
       expect(status).toBe(NodeStatus.RUNNING);
-      expect(selector.runningChildIndex).toBe(1);
+      expect(selector.getRunningChildIndex(mockHuman)).toBe(1);
     });
 
     it('should resume execution from the running child on the next tick', () => {
@@ -113,13 +109,13 @@ describe('Behavior Tree Composite Nodes', () => {
       // First tick: node starts running
       let status = selector.execute(mockHuman, mockContext, blackboard);
       expect(status).toBe(NodeStatus.RUNNING);
-      expect(selector.runningChildIndex).toBe(1);
+      expect(selector.getRunningChildIndex(mockHuman)).toBe(1);
       expect(runningNode.runCount).toBe(1);
 
       // Second tick: node finishes
       status = selector.execute(mockHuman, mockContext, blackboard);
       expect(status).toBe(NodeStatus.SUCCESS);
-      expect(selector.runningChildIndex).toBeUndefined();
+      expect(selector.getRunningChildIndex(mockHuman)).toBeUndefined();
       expect(runningNode.runCount).toBe(2);
     });
   });
@@ -224,7 +220,7 @@ describe('Behavior Tree Composite Nodes', () => {
       // Expect: RootSelector -> RUNNING, InnerSequence -> RUNNING, RunningAction -> RUNNING
       let status = rootSelector.execute(mockHuman, mockContext, blackboard);
       expect(status).toBe(NodeStatus.RUNNING);
-      expect(rootSelector.runningChildIndex).toBe(1); // innerSequence is running
+      expect(rootSelector.getRunningChildIndex(mockHuman)).toBe(1); // innerSequence is running
       expect(conditionASpy).toHaveBeenCalledTimes(1);
       expect(runningActionSpy).toHaveBeenCalledTimes(1);
       expect(actionBSpy).not.toHaveBeenCalled(); // Not yet reached
@@ -233,7 +229,7 @@ describe('Behavior Tree Composite Nodes', () => {
       // Expect: Still running. Selector resumes from innerSequence. Sequence restarts.
       status = rootSelector.execute(mockHuman, mockContext, blackboard);
       expect(status).toBe(NodeStatus.RUNNING);
-      expect(rootSelector.runningChildIndex).toBe(1);
+      expect(rootSelector.getRunningChildIndex(mockHuman)).toBe(1);
       // Sequence re-evaluates preceding nodes
       expect(conditionASpy).toHaveBeenCalledTimes(2);
       expect(runningActionSpy).toHaveBeenCalledTimes(2);
@@ -243,7 +239,7 @@ describe('Behavior Tree Composite Nodes', () => {
       // Expect: runningAction succeeds, so the whole sequence and selector succeed.
       status = rootSelector.execute(mockHuman, mockContext, blackboard);
       expect(status).toBe(NodeStatus.SUCCESS);
-      expect(rootSelector.runningChildIndex).toBeUndefined();
+      expect(rootSelector.getRunningChildIndex(mockHuman)).toBeUndefined();
       expect(conditionASpy).toHaveBeenCalledTimes(3);
       expect(runningActionSpy).toHaveBeenCalledTimes(3); // Final call returns SUCCESS
       expect(actionBSpy).toHaveBeenCalledTimes(1); // Now this is executed
@@ -384,12 +380,12 @@ describe('Decorator Nodes', () => {
     it('should clear the timer from blackboard on SUCCESS', () => {
       const timerKey = `timeout_${timeoutNode.name}_startTime`;
       timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
-      expect(blackboard.get(timerKey)).toBeDefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeDefined();
 
       timeoutNode.execute(mockHuman, mockContext, blackboard); // Still RUNNING
       timeoutNode.execute(mockHuman, mockContext, blackboard); // SUCCEEDS
 
-      expect(blackboard.get(timerKey)).toBeUndefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeUndefined();
     });
 
     it('should clear the timer from blackboard on FAILURE', () => {
@@ -399,20 +395,20 @@ describe('Decorator Nodes', () => {
       timeoutNode = new TimeoutNode(childNode, TIMEOUT_DURATION, 'TestTimeout');
 
       timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
-      expect(blackboard.get(timerKey)).toBeDefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeDefined();
 
       timeoutNode.execute(mockHuman, mockContext, blackboard); // FAILS
-      expect(blackboard.get(timerKey)).toBeUndefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeUndefined();
     });
 
     it('should clear the timer from blackboard on TIMEOUT', () => {
       const timerKey = `timeout_${timeoutNode.name}_startTime`;
       timeoutNode.execute(mockHuman, mockContext, blackboard); // Enters RUNNING, sets timer
-      expect(blackboard.get(timerKey)).toBeDefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeDefined();
 
       advanceTime(TIMEOUT_DURATION + 1);
       timeoutNode.execute(mockHuman, mockContext, blackboard); // Times out
-      expect(blackboard.get(timerKey)).toBeUndefined();
+      expect(TestBlackboard.get(blackboard, timerKey)).toBeUndefined();
     });
   });
 });

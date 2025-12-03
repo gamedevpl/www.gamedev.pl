@@ -4,23 +4,42 @@ import { updateWorld } from '../world-update';
 import { FAST_FORWARD_AMOUNT_SECONDS } from '../tribe-consts.ts';
 import { findPlayerEntity } from '../utils/world-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { saveGame } from '../persistence/persistence-utils';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
  * NOTE: Functions that need to call `event.preventDefault()` (like for 'tab' or 'space')
  * should be checked for in the calling component, as this utility does not have access to the event object.
  *
- * @param key The key that was pressed (lowercase).
+ * @param event The keyboard event object.
  * @param gameState The current game state.
- * @param returnToIntro A function to return to the intro screen.
  * @returns An object containing the potentially new game state and a boolean indicating if the key was handled.
  */
 export const handleGameControlKeyDown = (
-  key: string,
+  event: KeyboardEvent,
   gameState: GameWorldState,
 ): { newState: GameWorldState; handled: boolean } => {
+  const key = event.key.toLowerCase();
+  const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+
   let handled = true;
   let newState = gameState;
+
+  // Handle Ctrl/Cmd shortcuts first
+  if (isCtrlOrCmd) {
+    switch (key) {
+      case 's':
+        saveGame(gameState);
+        break;
+      case 'a':
+        gameState.autosaveEnabled = !gameState.autosaveEnabled;
+        break;
+      default:
+        handled = false;
+        break;
+    }
+    return { newState, handled };
+  }
 
   switch (key) {
     case 'escape':
@@ -76,7 +95,7 @@ export const handleGameControlKeyDown = (
         if (!newState.debugCharacterId) {
           newState.debugCharacterId =
             findPlayerEntity(newState)?.id ??
-            Array.from(newState.entities.entities.values()).find(
+            Object.values(newState.entities.entities).find(
               (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
             )?.id;
         }
@@ -87,7 +106,7 @@ export const handleGameControlKeyDown = (
       if (!newState.debugCharacterId) {
         newState.debugCharacterId =
           findPlayerEntity(newState)?.id ??
-          Array.from(newState.entities.entities.values()).find(
+          Object.values(newState.entities.entities).find(
             (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
           )?.id;
       }
@@ -101,7 +120,7 @@ export const handleGameControlKeyDown = (
     case 'tab':
       newState.debugPanel = DebugPanelType.General; // Always turn on debug if cycling
 
-      const allCharacters = Array.from(newState.entities.entities.values()).filter(
+      const allCharacters = Object.values(newState.entities.entities).filter(
         (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
       );
 

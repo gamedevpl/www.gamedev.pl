@@ -1,16 +1,14 @@
-import {
-  CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
-  PARENT_FEEDING_RANGE
-} from '../../../human-consts.ts';
+import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, PARENT_FEEDING_RANGE } from '../../../human-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findChildren } from '../../../utils/world-utils';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
-import { Blackboard } from '../behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
+import { EntityId } from '../../../entities/entities-types.ts';
 
-const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
+const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
   const children = findChildren(context.gameState, human).filter((h) => !h.isAdult);
   if (children.length === 0) {
     return NodeStatus.FAILURE;
@@ -27,15 +25,16 @@ const findHungriestChild = (human: HumanEntity, context: UpdateContext, blackboa
   }
 
   if (hungriestChild) {
-    blackboard.set<HumanEntity>('targetChild', hungriestChild);
+    Blackboard.set(blackboard, 'targetChild', hungriestChild.id);
     return NodeStatus.SUCCESS;
   }
 
   return NodeStatus.FAILURE;
 };
 
-const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboard: Blackboard) => {
-  const child = blackboard.get<HumanEntity>('targetChild');
+const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+  const childId = Blackboard.get<EntityId>(blackboard, 'targetChild');
+  const child = childId && (context.gameState.entities.entities[childId] as HumanEntity | undefined);
   if (!child) {
     return NodeStatus.FAILURE;
   }
@@ -58,7 +57,7 @@ const moveToChildAndFeed = (human: HumanEntity, context: UpdateContext, blackboa
   // We can clear the target and succeed.
   human.activeAction = 'feeding';
   human.target = undefined;
-  blackboard.set('targetChild', undefined);
+  Blackboard.set(blackboard, 'targetChild', undefined);
   return NodeStatus.SUCCESS;
 };
 

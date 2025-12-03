@@ -1,12 +1,9 @@
 import {
   LEADER_BT_CALL_TO_ATTACK_COOLDOWN_HOURS,
   AI_FLEE_DISTANCE,
-  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD
+  LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD,
 } from '../../../ai-consts.ts';
-import {
-  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-  PLAYER_CALL_TO_ATTACK_RADIUS
-} from '../../../tribe-consts.ts';
+import { PLAYER_CALL_TO_ATTACK_DURATION_HOURS, PLAYER_CALL_TO_ATTACK_RADIUS } from '../../../tribe-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { findNearbyEnemiesOfTribe, calculateTribeStrength, findTribeMembers } from '../../../utils';
@@ -24,6 +21,8 @@ import {
   vectorNormalize,
   vectorScale,
 } from '../../../utils/math-utils';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 const ENEMIES_NEARBY_KEY = 'enemiesNearby';
 
@@ -50,7 +49,11 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode<
         PLAYER_CALL_TO_ATTACK_RADIUS,
       );
       if (enemies.length > 0) {
-        blackboard.set(ENEMIES_NEARBY_KEY, enemies);
+        Blackboard.set(
+          blackboard,
+          ENEMIES_NEARBY_KEY,
+          enemies.map((e) => e.id),
+        );
         return NodeStatus.SUCCESS;
       }
       return NodeStatus.FAILURE;
@@ -67,7 +70,10 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode<
         [
           new ConditionNode(
             (human, context, blackboard) => {
-              const enemies = blackboard.get<HumanEntity[]>(ENEMIES_NEARBY_KEY);
+              const enemiesIds = Blackboard.get<EntityId[]>(blackboard, ENEMIES_NEARBY_KEY);
+              const enemies = enemiesIds
+                ?.map((id) => context.gameState.entities.entities[id] as HumanEntity | undefined)
+                .filter((e): e is HumanEntity => !!e);
               if (!enemies || enemies.length === 0) {
                 return false;
               }
@@ -109,7 +115,10 @@ export function createLeaderCombatStrategyBehavior(depth: number): BehaviorNode<
       // Branch 2: Retreat, if not strong enough. This is the fallback.
       new ActionNode<HumanEntity>(
         (human, context, blackboard) => {
-          const enemies = blackboard.get<HumanEntity[]>(ENEMIES_NEARBY_KEY);
+          const enemiesIds = Blackboard.get<EntityId[]>(blackboard, ENEMIES_NEARBY_KEY);
+          const enemies = enemiesIds
+            ?.map((id) => context.gameState.entities.entities[id] as HumanEntity | undefined)
+            .filter((e): e is HumanEntity => !!e);
           if (!enemies || enemies.length === 0) {
             return NodeStatus.FAILURE; // Should not happen if findEnemies succeeded.
           }

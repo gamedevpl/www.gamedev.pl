@@ -1,3 +1,4 @@
+import { StrictJson } from '../persistence/persistence-types';
 import { StateData, StateType } from '../state-machine/state-machine-types';
 import { Vector2D } from '../utils/math-types';
 
@@ -36,6 +37,6 @@ interface ActiveDebuff {
 }
 
 export type Entities = {
-  entities: Map<EntityId, Entity>;
+  entities: Record<EntityId, StrictJson<Entity>>;
   nextEntityId: EntityId;
 };

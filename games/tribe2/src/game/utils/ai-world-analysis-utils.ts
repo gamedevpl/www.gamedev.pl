@@ -7,16 +7,10 @@ import {
   LEADER_HABITAT_SCORE_DANGER_WEIGHT,
   LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
   LEADER_WORLD_ANALYSIS_GRID_SIZE,
-  LEADER_WORLD_ANALYSIS_GRID_STEP
+  LEADER_WORLD_ANALYSIS_GRID_STEP,
 } from '../ai-consts.ts';
-import {
-  AI_PLANTING_SEARCH_RADIUS,
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS
-} from '../berry-bush-consts.ts';
-import {
-  HUMAN_INTERACTION_RANGE,
-  MAX_ATTACKERS_PER_TARGET
-} from '../human-consts.ts';
+import { AI_PLANTING_SEARCH_RADIUS, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts.ts';
+import { HUMAN_INTERACTION_RANGE, MAX_ATTACKERS_PER_TARGET } from '../human-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
@@ -212,7 +206,7 @@ export function findBestAttackTarget<T extends HumanEntity | PreyEntity>(
 
     // Count current attackers on this target
     let currentAttackers = 0;
-    for (const entity of gameState.entities.entities.values()) {
+    for (const entity of Object.values(gameState.entities.entities)) {
       if (entity.type === 'human' && (entity as HumanEntity).attackTargetId === target.id) {
         currentAttackers++;
       }

@@ -109,7 +109,7 @@ export interface HumanEntity extends CharacterEntity {
   movementSlowdown?: { modifier: number; endTime: number };
 
   /** The current state machine of the human, if any. */
-  diplomacy?: Map<EntityId, DiplomacyStatus>; // LeaderId -> Status
+  diplomacy?: Record<EntityId, DiplomacyStatus>; // LeaderId -> Status
 }
 
 export type HumanAction =

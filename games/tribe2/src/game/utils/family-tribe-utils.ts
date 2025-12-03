@@ -1,6 +1,4 @@
-import {
-  HUMAN_HUNGER_THRESHOLD_CRITICAL
-} from '../human-consts.ts';
+import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../human-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
@@ -94,19 +92,19 @@ export function areFamily(human1: HumanEntity, human2: HumanEntity, gameState: G
 
   // Check for grandparent/grandchild relationship (one is the parent of the other's parent)
   if (human1.motherId) {
-    const mother = gameState.entities.entities.get(human1.motherId) as HumanEntity | undefined;
+    const mother = gameState.entities.entities[human1.motherId] as HumanEntity | undefined;
     if (mother && (mother.motherId === human2.id || mother.fatherId === human2.id)) return true;
   }
   if (human1.fatherId) {
-    const father = gameState.entities.entities.get(human1.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human1.fatherId] as HumanEntity | undefined;
     if (father && (father.motherId === human2.id || father.fatherId === human2.id)) return true;
   }
   if (human2.motherId) {
-    const mother = gameState.entities.entities.get(human2.motherId) as HumanEntity | undefined;
+    const mother = gameState.entities.entities[human2.motherId] as HumanEntity | undefined;
     if (mother && (mother.motherId === human1.id || mother.fatherId === human1.id)) return true;
   }
   if (human2.fatherId) {
-    const father = gameState.entities.entities.get(human2.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human2.fatherId] as HumanEntity | undefined;
     if (father && (father.motherId === human1.id || father.fatherId === human1.id)) return true;
   }
 
@@ -137,13 +135,13 @@ export function isLineage(human1: HumanEntity, human2: HumanEntity): boolean {
 export function findParents(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
   const parents: HumanEntity[] = [];
   if (human.motherId) {
-    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
+    const mother = gameState.entities.entities[human.motherId] as HumanEntity | undefined;
     if (mother) {
       parents.push(mother);
     }
   }
   if (human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
     if (father) {
       parents.push(father);
     }
@@ -156,7 +154,7 @@ export function findMalePartner(human: HumanEntity, gameState: GameWorldState): 
     return null;
   }
   for (const partnerId of human.partnerIds) {
-    const partner = gameState.entities.entities.get(partnerId) as HumanEntity | undefined;
+    const partner = gameState.entities.entities[partnerId] as HumanEntity | undefined;
     if (partner && partner.gender === 'male') return partner;
   }
   return null;
@@ -165,7 +163,7 @@ export function findMalePartner(human: HumanEntity, gameState: GameWorldState): 
 export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
   // Children follow their father
   if (!human.isAdult && human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
     if (father && father.type === 'human') {
       return father;
     }
@@ -173,7 +171,7 @@ export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldStat
 
   // Heir follows their father
   if (human.isAdult && human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
 
     if (father && father.type === 'human' && findHeir(findChildren(gameState, father))?.id === human.id) {
       return father;
@@ -194,17 +192,17 @@ export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState):
 
   // Add parents
   if (human.motherId) {
-    const mother = gameState.entities.entities.get(human.motherId) as HumanEntity | undefined;
+    const mother = gameState.entities.entities[human.motherId] as HumanEntity | undefined;
     if (mother) family.add(mother);
   }
   if (human.fatherId) {
-    const father = gameState.entities.entities.get(human.fatherId) as HumanEntity | undefined;
+    const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
     if (father) family.add(father);
   }
 
   // Add partners
   human.partnerIds?.forEach((id) => {
-    const partner = gameState.entities.entities.get(id) as HumanEntity | undefined;
+    const partner = gameState.entities.entities[id] as HumanEntity | undefined;
     if (partner) family.add(partner);
   });
 
@@ -239,7 +237,7 @@ export function findTribeMembers(leaderId: EntityId, gameState: GameWorldState):
 export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
   const tribes: Map<EntityId, { leaderId: EntityId; tribeBadge: string; members: HumanEntity[] }> = new Map();
 
-  const humans = Array.from(gameState.entities.entities.values()).filter((e) => e.type === 'human') as HumanEntity[];
+  const humans = Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[];
 
   for (const human of humans) {
     if (human.leaderId) {
@@ -255,11 +253,11 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
   }
 
   const playerDiplomacy = playerLeaderId
-    ? (gameState.entities.entities.get(playerLeaderId) as HumanEntity | undefined)?.diplomacy
+    ? (gameState.entities.entities[playerLeaderId] as HumanEntity | undefined)?.diplomacy
     : undefined;
 
   const tribeInfoList: TribeInfo[] = Array.from(tribes.values()).map((tribe) => {
-    const leader = gameState.entities.entities.get(tribe.leaderId) as HumanEntity | undefined;
+    const leader = gameState.entities.entities[tribe.leaderId] as HumanEntity | undefined;
     const adultCount = tribe.members.filter((m) => m.isAdult).length;
     const childCount = tribe.members.length - adultCount;
 
@@ -271,7 +269,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       isPlayerTribe: tribe.leaderId === playerLeaderId,
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
-      diplomacyStatus: playerDiplomacy?.get(tribe.leaderId ?? -1) ?? DiplomacyStatus.Friendly,
+      diplomacyStatus: playerDiplomacy?.[tribe.leaderId ?? -1] ?? DiplomacyStatus.Friendly,
     };
   });
 
@@ -287,7 +285,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
 
 export function getTribeForLeader(leaderId: EntityId, gameState: IndexedWorldState): HumanEntity[] {
   const tribeMembers = gameState.search.human.byProperty('leaderId', leaderId);
-  const leader = gameState.entities.entities.get(leaderId) as HumanEntity | undefined;
+  const leader = gameState.entities.entities[leaderId] as HumanEntity | undefined;
   if (leader) {
     // Ensure the leader is included if they are managing their own tribe
     if (!tribeMembers.some((m) => m.id === leaderId)) {

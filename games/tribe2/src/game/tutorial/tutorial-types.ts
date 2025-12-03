@@ -29,13 +29,19 @@ export enum TransitionState {
   INACTIVE,
 }
 
+export type Condition = (world: GameWorldState, player: HumanEntity) => boolean;
+export type ConditionType = string;
+
+export type GetTargets = (world: GameWorldState, player: HumanEntity) => EntityId[];
+export type GetTargetsType = string;
+
 export interface TutorialStep {
   key: TutorialStepKey;
   title: string;
   text: string;
-  condition: (world: GameWorldState, player: HumanEntity) => boolean;
+  condition: ConditionType;
   isCompleted: boolean;
-  getTargets?: (world: GameWorldState, player: HumanEntity) => EntityId[];
+  getTargets?: GetTargetsType;
   minDisplayTime?: number;
   dependsOn?: TutorialStepKey;
   highlightedUIElements?: TutorialUIHighlightKey[];
@@ -47,11 +53,11 @@ export interface Tutorial {
 
 export interface TutorialState {
   currentStepIndex: number;
-  completedSteps: Set<TutorialStepKey>;
+  completedSteps: TutorialStepKey[];
   isActive: boolean;
   transitionState: TransitionState;
   transitionAlpha: number; // 0 (transparent) to 1 (opaque)
-  highlightedEntityIds: Set<EntityId>;
+  highlightedEntityIds: EntityId[];
   stepStartTime: number | null;
-  activeUIHighlights: Set<TutorialUIHighlightKey>;
+  activeUIHighlights: TutorialUIHighlightKey[];
 }

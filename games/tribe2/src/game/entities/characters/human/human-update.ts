@@ -1,7 +1,4 @@
-import {
-  GAME_DAY_IN_REAL_SECONDS,
-  HOURS_PER_GAME_DAY
-} from '../../../game-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../../game-consts.ts';
 import {
   HUMAN_HUNGER_INCREASE_PER_HOUR,
   HUMAN_HUNGER_DEATH,
@@ -15,19 +12,13 @@ import {
   ADULT_CHILD_FEED_PARENT_COOLDOWN_HOURS,
   HUMAN_YEAR_IN_REAL_SECONDS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
-  HITPOINT_REGEN_HUNGER_MODIFIER
+  HITPOINT_REGEN_HUNGER_MODIFIER,
 } from '../../../human-consts.ts';
-import {
-  HUNGER_EFFECT_THRESHOLD,
-  EFFECT_DURATION_MEDIUM_HOURS
-} from '../../../effect-consts.ts';
-import {
-  CHARACTER_CHILD_RADIUS,
-  CHARACTER_RADIUS
-} from '../../../ui-consts.ts';
+import { HUNGER_EFFECT_THRESHOLD, EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
+import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui-consts.ts';
 import {
   CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
-  NOTIFICATION_DURATION_MEDIUM_HOURS
+  NOTIFICATION_DURATION_MEDIUM_HOURS,
 } from '../../../notification-consts.ts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
@@ -166,11 +157,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   ) {
     const parentsToFeed = [];
     if (entity.motherId) {
-      const mother = gameState.entities.entities.get(entity.motherId) as HumanEntity | undefined;
+      const mother = gameState.entities.entities[entity.motherId] as HumanEntity | undefined;
       if (mother) parentsToFeed.push(mother);
     }
     if (entity.fatherId) {
-      const father = gameState.entities.entities.get(entity.fatherId) as HumanEntity | undefined;
+      const father = gameState.entities.entities[entity.fatherId] as HumanEntity | undefined;
       if (father) parentsToFeed.push(father);
     }
 
@@ -218,10 +209,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
         heir.tribeBadge = entity.tribeBadge;
-        heir.diplomacy = new Map(entity.diplomacy);
+        heir.diplomacy = { ...entity.diplomacy };
 
         // Update followers
-        gameState.entities.entities.forEach((e) => {
+        Object.values(gameState.entities.entities).forEach((e) => {
           if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
             const follower = e as HumanEntity;
             follower.leaderId = heir.id; // Follow the new leader
@@ -229,7 +220,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         });
       } else {
         // No heir, tribe dissolves
-        gameState.entities.entities.forEach((e) => {
+        Object.values(gameState.entities.entities).forEach((e) => {
           if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
             const follower = e as HumanEntity;
             follower.leaderId = undefined;

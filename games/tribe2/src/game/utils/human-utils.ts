@@ -1,8 +1,5 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
-import {
-  HUMAN_FEMALE_MAX_PROCREATION_AGE,
-  HUMAN_HUNGER_THRESHOLD_CRITICAL
-} from '../human-consts.ts';
+import { HUMAN_FEMALE_MAX_PROCREATION_AGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../human-consts.ts';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
 
 /**
@@ -31,12 +28,8 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
 
   // Check diplomacy status if they are in different tribes
   if (human1.leaderId && human2.leaderId) {
-    const tribe1Diplomacy = (gameState.entities.entities.get(human1.leaderId) as HumanEntity)?.diplomacy?.get(
-      human2.leaderId,
-    );
-    const tribe2Diplomacy = (gameState.entities.entities.get(human2.leaderId) as HumanEntity)?.diplomacy?.get(
-      human1.leaderId,
-    );
+    const tribe1Diplomacy = (gameState.entities.entities[human1.leaderId] as HumanEntity)?.diplomacy?.[human2.leaderId];
+    const tribe2Diplomacy = (gameState.entities.entities[human2.leaderId] as HumanEntity)?.diplomacy?.[human1.leaderId];
     return tribe1Diplomacy === DiplomacyStatus.Hostile || tribe2Diplomacy === DiplomacyStatus.Hostile;
   }
 

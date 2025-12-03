@@ -12,7 +12,7 @@ import {
   UI_NOTIFICATION_PANEL_BORDER_RADIUS,
   UI_NOTIFICATION_SLIDE_IN_DURATION_MS,
   UI_NOTIFICATION_AREA_PADDING_BOTTOM,
-  UI_NOTIFICATION_BUTTON_HOVER_COLOR
+  UI_NOTIFICATION_BUTTON_HOVER_COLOR,
 } from '../../ui-consts.ts';
 import { Rect } from '../../notifications/notification-types';
 
@@ -71,7 +71,7 @@ export function renderNotifications(
   canvasHeight: number,
 ): void {
   // Clear the button rects from the previous frame
-  gameState.notificationButtonRects = { dismiss: new Map(), view: new Map() };
+  gameState.notificationButtonRects = { dismiss: {}, view: {} };
 
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
   if (activeNotifications.length === 0) {
@@ -144,7 +144,9 @@ export function renderNotifications(
       width: UI_NOTIFICATION_DISMISS_BUTTON_SIZE,
       height: UI_NOTIFICATION_DISMISS_BUTTON_SIZE,
     };
-    gameState.notificationButtonRects.dismiss.set(notification.id, dismissRect);
+    if (gameState.notificationButtonRects) {
+      gameState.notificationButtonRects.dismiss[notification.id] = dismissRect;
+    }
 
     const isDismissHovered = gameState.hoveredButtonId === `notification-dismiss-${notification.id}`;
     ctx.fillStyle = isDismissHovered ? UI_NOTIFICATION_BUTTON_HOVER_COLOR : UI_NOTIFICATION_DISMISS_BUTTON_COLOR;
@@ -167,7 +169,9 @@ export function renderNotifications(
         width: UI_NOTIFICATION_DISMISS_BUTTON_SIZE,
         height: UI_NOTIFICATION_DISMISS_BUTTON_SIZE,
       };
-      gameState.notificationButtonRects.view.set(notification.id, viewRect);
+      if (gameState.notificationButtonRects) {
+        gameState.notificationButtonRects.view[notification.id] = viewRect;
+      }
 
       const isViewHovered = gameState.hoveredButtonId === `notification-view-${notification.id}`;
       ctx.fillStyle = isViewHovered ? UI_NOTIFICATION_BUTTON_HOVER_COLOR : UI_NOTIFICATION_VIEW_BUTTON_COLOR;

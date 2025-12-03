@@ -5,6 +5,8 @@ import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for predator pack following.
@@ -57,7 +59,7 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode<Predator
 
             // Follow if too far from pack leader
             if (distance > PREDATOR_INTERACTION_RANGE * 2) {
-              blackboard.set('packLeader', packLeader);
+              Blackboard.set(blackboard, 'packLeader', packLeader.id);
               return true;
             }
           }
@@ -70,7 +72,9 @@ export function createPredatorPackBehavior(depth: number): BehaviorNode<Predator
       // Action: Move towards pack leader
       new ActionNode(
         (predator, context: UpdateContext, blackboard) => {
-          const packLeader = blackboard.get<PredatorEntity>('packLeader');
+          const packLeaderId = Blackboard.get(blackboard, 'packLeader') as EntityId | undefined;
+          const packLeader =
+            packLeaderId && (context.gameState.entities.entities[packLeaderId] as PredatorEntity | undefined);
 
           if (!packLeader || packLeader.hitpoints <= 0) {
             return NodeStatus.FAILURE;

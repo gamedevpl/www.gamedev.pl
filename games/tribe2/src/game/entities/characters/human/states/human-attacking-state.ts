@@ -1,8 +1,6 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
-import {
-  HUMAN_ATTACK_RANGE
-} from '../../../../human-consts.ts';
+import { HUMAN_ATTACK_RANGE } from '../../../../human-consts.ts';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import { HUMAN_ATTACKING, HumanAttackingStateData, HUMAN_IDLE } from './human-state-types';
@@ -21,7 +19,7 @@ export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = 
       context.entity.activeAction = 'idle';
       return { nextState: HUMAN_IDLE, data: { ...data } };
     }
-    const targetEntity = context.updateContext.gameState.entities.entities.get(context.entity.attackTargetId);
+    const targetEntity = context.updateContext.gameState.entities.entities[context.entity.attackTargetId];
     if (!targetEntity) {
       context.entity.activeAction = 'idle';
       return { nextState: HUMAN_IDLE, data: { ...data } };

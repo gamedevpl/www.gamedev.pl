@@ -1,14 +1,12 @@
-import {
-  PREY_MIN_PROCREATION_AGE,
-  PREY_MAX_PROCREATION_AGE,
-  PREY_INTERACTION_RANGE
-} from '../../../animal-consts.ts';
+import { PREY_MIN_PROCREATION_AGE, PREY_MAX_PROCREATION_AGE, PREY_INTERACTION_RANGE } from '../../../animal-consts.ts';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { findClosestEntity } from '../../../utils/entity-finder-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, Selector } from '../nodes';
 import { UpdateContext } from '../../../world-types';
+import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types.ts';
 
 /**
  * Creates a behavior sub-tree for prey procreation.
@@ -37,7 +35,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyE
       );
 
       if (bestPartner) {
-        blackboard.set('procreationPartner', bestPartner);
+        Blackboard.set(blackboard, 'procreationPartner', bestPartner.id);
         return true;
       }
       return false;
@@ -48,7 +46,8 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyE
 
   const startProcreating = new ActionNode(
     (prey: PreyEntity, _context: UpdateContext, blackboard) => {
-      const partner = blackboard.get<PreyEntity>('procreationPartner');
+      const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
+      const partner = partnerId && (_context.gameState.entities.entities[partnerId] as PreyEntity | undefined);
       if (!partner) {
         return NodeStatus.FAILURE;
       }
@@ -58,7 +57,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyE
       prey.direction = { x: 0, y: 0 };
 
       // Clean up blackboard
-      blackboard.delete('procreationPartner');
+      Blackboard.delete(blackboard, 'procreationPartner');
 
       return NodeStatus.SUCCESS;
     },
@@ -89,7 +88,7 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyE
       );
 
       if (bestPartner) {
-        blackboard.set('procreationPartner', bestPartner);
+        Blackboard.set(blackboard, 'procreationPartner', bestPartner.id);
         return true;
       }
       return false;
@@ -100,7 +99,8 @@ export function createPreyProcreationBehavior(depth: number): BehaviorNode<PreyE
 
   const moveTowardsPartner = new ActionNode(
     (prey: PreyEntity, context: UpdateContext, blackboard) => {
-      const partner = blackboard.get<PreyEntity>('procreationPartner');
+      const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
+      const partner = partnerId && (context.gameState.entities.entities[partnerId] as PreyEntity | undefined);
       if (!partner) {
         return NodeStatus.FAILURE;
       }

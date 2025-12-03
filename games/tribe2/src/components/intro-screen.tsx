@@ -53,7 +53,7 @@ const Title = styled.h1`
   margin-bottom: 2rem;
 `;
 
-const StartButton = styled.button`
+const MenuButton = styled.button`
   font-family: 'Press Start 2P', cursive;
   font-size: 1.5rem;
   padding: 1rem 2rem;
@@ -69,6 +69,13 @@ const StartButton = styled.button`
     color: #ff0000;
     box-shadow: 4px 4px 0px #ff0000;
   }
+`;
+
+const ButtonContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
 `;
 
 const AuthorInfo = styled.div`
@@ -90,7 +97,7 @@ const AuthorInfo = styled.div`
 const INTRO_SOUNDTRACK_ID = 'intro-soundtrack';
 
 export const IntroScreen: React.FC = () => {
-  const { setAppState } = useGameContext();
+  const { setAppState, savedGameState, clearCurrentSave } = useGameContext();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const gameStateRef = useRef<GameWorldState>(initIntroWorld());
@@ -98,15 +105,28 @@ export const IntroScreen: React.FC = () => {
   const viewportCenterRef = useRef<Vector2D>(gameStateRef.current.viewportCenter);
   const focusedHumanIdRef = useRef<EntityId | undefined>();
 
-  const handleStartGame = useCallback(() => {
-    stopSound(INTRO_SOUNDTRACK_ID, 2); // Fade out over 2 seconds
+  const handleNewGame = useCallback(() => {
+    stopSound(INTRO_SOUNDTRACK_ID, 2);
+    clearCurrentSave();
     setAppState('game');
-  }, [setAppState]);
+  }, [setAppState, clearCurrentSave]);
+
+  const handleLoadGame = useCallback(() => {
+    if (savedGameState) {
+      stopSound(INTRO_SOUNDTRACK_ID, 2);
+      setAppState('game');
+    }
+  }, [setAppState, savedGameState]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter' || event.key === ' ') {
-        handleStartGame();
+        // Prioritize loading game if available, otherwise start new game.
+        if (savedGameState) {
+          handleLoadGame();
+        } else {
+          handleNewGame();
+        }
       }
     };
 
@@ -114,7 +134,7 @@ export const IntroScreen: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleStartGame]);
+  }, [handleNewGame, handleLoadGame, savedGameState]);
 
   useEffect(() => {
     playSound(SoundType.SoundTrack1, { loop: true, trackId: INTRO_SOUNDTRACK_ID });
@@ -177,7 +197,7 @@ export const IntroScreen: React.FC = () => {
 
     // Update viewport
     const focusedHuman = focusedHumanIdRef.current
-      ? gameStateRef.current.entities.entities.get(focusedHumanIdRef.current)
+      ? gameStateRef.current.entities.entities[focusedHumanIdRef.current]
       : undefined;
 
     if (focusedHuman) {
@@ -235,7 +255,10 @@ export const IntroScreen: React.FC = () => {
       <StyledCanvas ref={canvasRef} />
       <Overlay>
         <Title>Tribe2</Title>
-        <StartButton onClick={handleStartGame}>Start Game</StartButton>
+        <ButtonContainer>
+          <MenuButton onClick={handleNewGame}>New Game</MenuButton>
+          {savedGameState && <MenuButton onClick={handleLoadGame}>Load Game</MenuButton>}
+        </ButtonContainer>
         <AuthorInfo>
           by{' '}
           <a href="https://github.com/gtanczyk" target="_blank" rel="noopener noreferrer">
