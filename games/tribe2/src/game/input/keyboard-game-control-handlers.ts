@@ -31,9 +31,6 @@ export const handleGameControlKeyDown = (
       case 's':
         saveGame(gameState);
         break;
-      case 'a':
-        gameState.autosaveEnabled = !gameState.autosaveEnabled;
-        break;
       default:
         handled = false;
         break;

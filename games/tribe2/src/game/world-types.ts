@@ -103,9 +103,7 @@ export interface GameWorldState {
   ecosystem: EcosystemState;
   debugPanel: DebugPanelType;
   performanceMetrics: PerformanceMetrics;
-  // Save/Autosave properties
-  autosaveEnabled: boolean; // Whether autosave is enabled (default: true)
-  autosaveIntervalSeconds: number; // How often to autosave in real seconds (default: 30)
+  autosaveIntervalSeconds?: number; // How often to autosave in real seconds
   lastAutosaveTime: number; // Timestamp of the last autosave (Date.now())
 }
 

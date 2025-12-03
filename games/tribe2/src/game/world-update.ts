@@ -50,7 +50,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
   }
 
   // Autosave logic
-  if (currentState.autosaveEnabled) {
+  if (currentState.autosaveIntervalSeconds) {
     const now = Date.now();
     const timeSinceLastAutosave = now - currentState.lastAutosaveTime;
     if (timeSinceLastAutosave > currentState.autosaveIntervalSeconds * 1000) {

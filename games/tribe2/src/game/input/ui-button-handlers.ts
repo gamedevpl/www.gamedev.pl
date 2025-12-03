@@ -15,7 +15,6 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { saveGame } from '../persistence/persistence-utils';
 
 /**
  * Handles the logic for a UI button click event.
@@ -82,12 +81,6 @@ export const handleUIButtonClick = (
       return updateWorld(gameState, FAST_FORWARD_AMOUNT_SECONDS);
     case UIButtonActionType.DismissTutorial:
       gameState.tutorialState.isActive = false;
-      break;
-    case UIButtonActionType.SaveGame:
-      saveGame(gameState);
-      break;
-    case UIButtonActionType.ToggleAutosave:
-      gameState.autosaveEnabled = !gameState.autosaveEnabled;
       break;
 
     // --- Player Commands & Autopilot Toggles ---

@@ -182,8 +182,7 @@ export function initWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
-    autosaveEnabled: true,
-    autosaveIntervalSeconds: 30,
+    autosaveIntervalSeconds: 5,
     lastAutosaveTime: Date.now(),
   };
 
@@ -308,8 +307,6 @@ export function initIntroWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
-    autosaveEnabled: false,
-    autosaveIntervalSeconds: 30,
     lastAutosaveTime: 0,
   };
 
