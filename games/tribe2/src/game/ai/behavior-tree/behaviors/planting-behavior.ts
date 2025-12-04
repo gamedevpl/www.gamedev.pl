@@ -1,6 +1,6 @@
 import { FoodType } from '../../../food/food-types';
 import { Vector2D } from '../../../utils/math-types';
-import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { calculateWrappedDistance, dirToTarget, getDirectionVectorOnTorus, vectorAdd } from '../../../utils/math-utils';
 import {
   countEntitiesOfTypeInRadius,
   findChildren,
@@ -22,6 +22,21 @@ import { Blackboard } from '../behavior-tree-blackboard.ts';
 const BLACKBOARD_KEY = 'plantingSpot';
 
 /**
+ * Helper function to get the closest wrapped representation of a target position
+ * relative to the source position on a toroidal world.
+ * This ensures the entity moves along the shortest path.
+ */
+function getClosestWrappedTarget(
+  sourcePosition: Vector2D,
+  targetPosition: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+): Vector2D {
+  const direction = getDirectionVectorOnTorus(sourcePosition, targetPosition, worldWidth, worldHeight);
+  return vectorAdd(sourcePosition, direction);
+}
+
+/**
  * Creates a behavior tree branch for planting a new berry bush.
  *
  * This behavior is stateful and optimized. It uses a selector to either continue
@@ -35,20 +50,27 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
     (human, context, blackboard) => {
       const plantingSpot = Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY);
 
-      // Guard & Cleanup: If the spot is gone or now occupied (by something other than the human itself),
-      // fail and clear the blackboard. The human itself should not block its own planting spot.
+      // Guard: If the spot is gone, fail and clear the blackboard.
       if (
         !plantingSpot ||
         isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)
       ) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
-        return [NodeStatus.FAILURE, 'Planting spot is invalid or now occupied'];
+        return [NodeStatus.FAILURE, 'Planting spot is missing'];
       }
+
+      // Calculate the closest wrapped representation of the target
+      const closestTarget = getClosestWrappedTarget(
+        human.position,
+        plantingSpot,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
 
       // Check distance to the target spot
       const distance = calculateWrappedDistance(
         human.position,
-        plantingSpot,
+        closestTarget,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
@@ -56,17 +78,24 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       // If not close enough, keep moving.
       if (distance > HUMAN_INTERACTION_PROXIMITY) {
         human.activeAction = 'moving';
-        human.target = plantingSpot;
-        human.direction = dirToTarget(human.position, plantingSpot, context.gameState.mapDimensions);
-        return [NodeStatus.RUNNING, 'Moving to planting spot'];
+        human.target = closestTarget;
+        human.direction = dirToTarget(human.position, closestTarget, context.gameState.mapDimensions);
+        return [NodeStatus.RUNNING, 'Moving to planting spot: ' + distance.toFixed(2) + ' units away'];
       }
 
-      // Arrived at the spot, initiate the planting state.
+      // Arrived at the spot. Now check if it's still available.
+      if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        return [NodeStatus.FAILURE, 'Planting spot is now occupied'];
+      }
+
+      // Spot is available, initiate the planting state.
       // The Human state machine will handle the actual planting.
       // This node will return RUNNING. When the state machine finishes planting,
       // it should change the human's activeAction. The next time this behavior runs,
-      // isPositionOccupied will be true (because of the new bush), which will clear
-      // the blackboard key and cause this action to fail, allowing a new spot to be found later.
+      // the newly planted bush will cause isPositionOccupied to be true,
+      // which will clear the blackboard key and cause this action to fail,
+      // allowing a new spot to be found later.
       human.activeAction = 'planting';
       human.target = plantingSpot;
       return [NodeStatus.RUNNING, 'Planting state initiated'];
