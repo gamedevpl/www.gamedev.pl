@@ -63,10 +63,6 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     const indexedState = indexWorldState(currentState);
     const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
 
-    if (indexedState.gameOver) {
-      return indexedState;
-    }
-
     const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
     indexedState.time += gameHoursDelta;
 
