@@ -44,5 +44,21 @@ export default defineConfig({
     aiStudio: {
       default: 'gemini-3-pro-preview',
     },
+    openai: {
+      default: 'gpt-5.1-codex',
+      lite: 'gpt-5.1-codex-mini',
+      cheap: 'gpt-5.1-chat-latest',
+      modelSpecificSettings: {
+        'gpt-5.1-codex': {
+          temperatureUnsupported: true,
+        },
+        'gpt-5.1-codex-mini': {
+          temperatureUnsupported: true,
+        },
+        'gpt-5.1-chat-latest': {
+          temperatureUnsupported: true,
+        },
+      },
+    },
   },
 });
