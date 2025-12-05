@@ -43,6 +43,21 @@ export const handlePlayerActionKeyDown = (
     gameState.hasPlayerEnabledAutopilot++;
   }
 
+  // Handle build menu shortcuts when menu is open
+  if (gameState.buildMenuOpen) {
+    if (key === '1') {
+      gameState.selectedBuildingType = 'storageSpot';
+      gameState.buildMenuOpen = false;
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
+    } else if (key === '2') {
+      gameState.selectedBuildingType = 'plantingZone';
+      gameState.buildMenuOpen = false;
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
+    }
+  }
+
   if (key === 'e') {
     if (shiftKey) {
       gameState.autopilotControls.behaviors.gathering = !gameState.autopilotControls.behaviors.gathering;
@@ -201,6 +216,9 @@ export const handlePlayerActionKeyDown = (
     playSoundAt(updateContext, SoundType.CallToFollow, playerEntity.position);
   } else if (key === 'k') {
     performTribeSplit(playerEntity, gameState);
+  } else if (key === 'l') {
+    gameState.buildMenuOpen = !gameState.buildMenuOpen;
+    playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
   }
 };
 

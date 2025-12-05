@@ -83,6 +83,8 @@ export interface GameWorldState {
   isPaused: boolean;
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
+  buildMenuOpen: boolean;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;
   hasPlayerEnabledAutopilot: number;

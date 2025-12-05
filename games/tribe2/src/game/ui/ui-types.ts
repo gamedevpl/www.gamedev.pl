@@ -14,6 +14,7 @@ export enum PlayerActionType {
   FeedChild = 'FeedChild',
   HuntPrey = 'HuntPrey',
   DefendAgainstPredator = 'DefendAgainstPredator',
+  Build = 'Build',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -36,6 +37,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.FeedChild]: '👨‍👧',
   [PlayerActionType.HuntPrey]: '🏹',
   [PlayerActionType.DefendAgainstPredator]: '🛡️',
+  [PlayerActionType.Build]: '🏗️',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -57,6 +59,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.FeedChild]: 'Feed Child',
   [PlayerActionType.HuntPrey]: 'Hunt Prey',
   [PlayerActionType.DefendAgainstPredator]: 'Defend',
+  [PlayerActionType.Build]: 'Build',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -124,6 +127,9 @@ export enum UIButtonActionType {
   CommandFollowMe = 'CommandFollowMe',
   CommandGather = 'CommandGather',
   CommandTribeSplit = 'CommandTribeSplit',
+  CommandBuild = 'CommandBuild',
+  SelectStorageSpot = 'SelectStorageSpot',
+  SelectPlantingZone = 'SelectPlantingZone',
 
   // --- Autopilot Behavior Toggles ---
   // These are behaviors that can be toggled on/off for the AI

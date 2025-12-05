@@ -148,6 +148,17 @@ export const handleUIButtonClick = (
         performTribeSplit(player, gameState);
       }
       break;
+    case UIButtonActionType.CommandBuild:
+      gameState.buildMenuOpen = !gameState.buildMenuOpen;
+      break;
+    case UIButtonActionType.SelectStorageSpot:
+      gameState.selectedBuildingType = 'storageSpot';
+      gameState.buildMenuOpen = false;
+      break;
+    case UIButtonActionType.SelectPlantingZone:
+      gameState.selectedBuildingType = 'plantingZone';
+      gameState.buildMenuOpen = false;
+      break;
     case UIButtonActionType.ToggleDiplomacy:
       if (player && player.leaderId && button.targetTribeId) {
         const playerTribeId = player.leaderId;

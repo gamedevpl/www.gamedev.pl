@@ -98,18 +98,36 @@ export const handleGameControlKeyDown = (
         }
       }
       break;
-    case '1':
-      newState.debugPanel = DebugPanelType.Ecosystem;
-      if (!newState.debugCharacterId) {
-        newState.debugCharacterId =
-          findPlayerEntity(newState)?.id ??
-          Object.values(newState.entities.entities).find(
-            (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
-          )?.id;
+    case '!':
+      if (event.shiftKey) {
+        if (newState.debugPanel === DebugPanelType.Ecosystem) {
+          newState.debugPanel = DebugPanelType.None;
+          break;
+        }
+
+        newState.debugPanel = DebugPanelType.Ecosystem;
+        if (!newState.debugCharacterId) {
+          newState.debugCharacterId =
+            findPlayerEntity(newState)?.id ??
+            Object.values(newState.entities.entities).find(
+              (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
+            )?.id;
+        }
+      } else {
+        handled = false;
       }
       break;
-    case '2':
-      newState.debugPanel = DebugPanelType.Performance;
+    case '@':
+      if (event.shiftKey) {
+        if (newState.debugPanel === DebugPanelType.Performance) {
+          newState.debugPanel = DebugPanelType.None;
+          break;
+        }
+
+        newState.debugPanel = DebugPanelType.Performance;
+      } else {
+        handled = false;
+      }
       break;
     case '3':
       newState.debugPanel = DebugPanelType.Ecosystem;

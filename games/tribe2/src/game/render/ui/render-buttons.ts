@@ -147,7 +147,7 @@ export function renderUIButtons(
   // --- Update Button State & Definitions ---
   // NOTE: We do NOT clear gameState.uiButtons here because renderTribeList (called before this)
   // adds buttons to the list. Clearing it here would remove them.
-  // gameState.uiButtons = []; 
+  // gameState.uiButtons = [];
 
   // 1. Define Top-Right System Buttons
   const systemButtons: ClickableUIButton[] = [
@@ -240,13 +240,14 @@ export function renderUIButtons(
         toggleKey: 'feedChildren',
         condition: () => player.isAdult === true,
       },
+      // only for adult tribe leaders
       {
         playerAction: PlayerActionType.Attack,
         buttonAction: UIButtonActionType.ToggleAttackBehavior,
         shortcut: 'Q',
         name: 'Attack',
         toggleKey: 'attack',
-        condition: () => player.isAdult === true,
+        condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {
         playerAction: PlayerActionType.FollowMe,
@@ -254,14 +255,14 @@ export function renderUIButtons(
         shortcut: 'C',
         name: 'Follow Me',
         toggleKey: 'followLeader',
-        condition: () => player.isAdult === true,
+        condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {
         playerAction: PlayerActionType.CallToAttack,
         buttonAction: UIButtonActionType.CommandCallToAttack,
         shortcut: 'V',
         name: 'Call to Attack',
-        condition: () => player.isAdult === true,
+        condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {
         playerAction: PlayerActionType.TribeSplit,
@@ -269,6 +270,13 @@ export function renderUIButtons(
         shortcut: 'K',
         name: 'Split Tribe',
         condition: () => player.leaderId !== undefined && player.leaderId !== player.id && player.isAdult === true,
+      },
+      {
+        playerAction: PlayerActionType.Build,
+        buttonAction: UIButtonActionType.CommandBuild,
+        shortcut: 'L',
+        name: 'Build',
+        condition: () => player.isAdult === true && player.leaderId === player.id,
       },
     ];
 
@@ -291,13 +299,18 @@ export function renderUIButtons(
       const isBehaviorActive = isToggleButton && gameState.autopilotControls.behaviors[behavior.toggleKey!];
       const isDisabled = !availableActionTypes.has(behavior.playerAction);
 
+      // Special handling for Build button
+      const isBuildButton = behavior.playerAction === PlayerActionType.Build;
+      const isBuildMenuOpen = isBuildButton && gameState.buildMenuOpen;
+
       const shiftTooltip =
         !gameState.hasPlayerEnabledAutopilot || gameState.hasPlayerEnabledAutopilot < 3
           ? ' (Press Shift to toggle Auto)'
           : '';
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
-      const backgroundColor = isBehaviorActive ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+      const backgroundColor =
+        isBehaviorActive || isBuildMenuOpen ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
 
       const button: ClickableUIButton = {
         id: `commandButton_${behavior.name}`,
@@ -310,10 +323,62 @@ export function renderUIButtons(
         currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
         tooltip: tooltipText,
         isDisabled,
-        activated: isBehaviorActive,
+        activated: isBehaviorActive || isBuildMenuOpen,
       };
       gameState.uiButtons.push(button);
     });
+
+    // 3. Render Build Menu if open
+    if (gameState.buildMenuOpen) {
+      const buildMenuButtons = [
+        {
+          id: 'buildMenu_storageSpot',
+          action: UIButtonActionType.SelectStorageSpot,
+          icon: '🏠',
+          shortcut: '1',
+          name: 'Storage Spot',
+        },
+        {
+          id: 'buildMenu_plantingZone',
+          action: UIButtonActionType.SelectPlantingZone,
+          icon: '🌾',
+          shortcut: '2',
+          name: 'Planting Zone',
+        },
+      ];
+
+      const buildMenuCols = buildMenuButtons.length;
+      const buildMenuTotalWidth =
+        buildMenuCols * UI_AUTOPILOT_BUTTON_SIZE + (buildMenuCols - 1) * UI_AUTOPILOT_BUTTON_SPACING;
+      const buildMenuStartX = (canvasWidth - buildMenuTotalWidth) / 2;
+      const buildMenuStartY = startY - UI_AUTOPILOT_BUTTON_SIZE - UI_AUTOPILOT_BUTTON_SPACING;
+
+      buildMenuButtons.forEach((buildButton, i) => {
+        const buttonX = buildMenuStartX + i * (UI_AUTOPILOT_BUTTON_SIZE + UI_AUTOPILOT_BUTTON_SPACING);
+        const buttonY = buildMenuStartY;
+
+        const isSelected =
+          (buildButton.action === UIButtonActionType.SelectStorageSpot &&
+            gameState.selectedBuildingType === 'storageSpot') ||
+          (buildButton.action === UIButtonActionType.SelectPlantingZone &&
+            gameState.selectedBuildingType === 'plantingZone');
+
+        const button: ClickableUIButton = {
+          id: buildButton.id,
+          action: buildButton.action,
+          rect: { x: buttonX, y: buttonY, width: UI_AUTOPILOT_BUTTON_SIZE, height: UI_AUTOPILOT_BUTTON_SIZE },
+          icon: buildButton.icon,
+          text: buildButton.shortcut,
+          backgroundColor: isSelected ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR,
+          textColor: UI_BUTTON_TEXT_COLOR,
+          currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
+          tooltip: buildButton.name,
+          activated: isSelected,
+        };
+        gameState.uiButtons.push(button);
+        drawButton(ctx, button, gameState.hoveredButtonId === button.id);
+      });
+    }
   }
 
   // --- Position and Draw All Buttons ---
@@ -327,7 +392,9 @@ export function renderUIButtons(
   });
 
   let commandButtonsRect: Rect2D | null = null;
-  const commandButtons = gameState.uiButtons.filter((b) => b.id.startsWith('commandButton_'));
+  const commandButtons = gameState.uiButtons.filter(
+    (b) => b.id.startsWith('commandButton_') || b.id.startsWith('buildMenu_'),
+  );
   commandButtons.forEach((button) => {
     if (!commandButtonsRect) {
       commandButtonsRect = { x: button.rect.x, y: button.rect.y, width: button.rect.width, height: button.rect.height };
@@ -342,7 +409,11 @@ export function renderUIButtons(
       commandButtonsRect.height,
       button.rect.y + button.rect.height - commandButtonsRect.y,
     );
-    drawButton(ctx, button, gameState.hoveredButtonId === button.id);
+
+    // Only draw command buttons here (build menu buttons are drawn separately above)
+    if (button.id.startsWith('commandButton_')) {
+      drawButton(ctx, button, gameState.hoveredButtonId === button.id);
+    }
   });
 
   // --- Render Tooltip ---
