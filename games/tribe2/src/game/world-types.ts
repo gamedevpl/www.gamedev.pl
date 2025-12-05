@@ -64,6 +64,10 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotMove;
       position: Vector2D;
+    }
+  | {
+      action: PlayerActionType.Removal;
+      position: Vector2D;
     };
 
 // Game State Interface
@@ -84,7 +88,8 @@ export interface GameWorldState {
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | null;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'removal' | null;
+  selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;
   hasPlayerEnabledAutopilot: number;

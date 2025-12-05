@@ -5,6 +5,7 @@ import {
   countEntitiesOfTypeInRadius,
   findChildren,
   findOptimalBushPlantingSpot,
+  findOptimalPlantingZoneSpot,
   isPositionOccupied,
 } from '../../../utils';
 import {
@@ -107,7 +108,14 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      const spot = findOptimalBushPlantingSpot(human, context.gameState);
+      // First, try to find a spot in a planting zone
+      let spot = findOptimalPlantingZoneSpot(human, context.gameState);
+
+      // If no zones exist or all are full, fall back to the original behavior
+      if (!spot) {
+        spot = findOptimalBushPlantingSpot(human, context.gameState);
+      }
+
       if (spot) {
         Blackboard.set(blackboard, BLACKBOARD_KEY, spot);
         return [NodeStatus.SUCCESS, `Found new spot at ${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}`];

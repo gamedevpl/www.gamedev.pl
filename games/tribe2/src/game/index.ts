@@ -52,3 +52,6 @@ export function initGame(): GameWorldState {
 
   return initialWorldState;
 }
+
+export * from './building-consts';
+export * from './entities/buildings/building-types';

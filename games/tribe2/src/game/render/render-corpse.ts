@@ -2,12 +2,8 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
-import {
-  CHARACTER_RADIUS
-} from '../ui-consts';
-import {
-  HUMAN_MAX_FOOD
-} from '../human-consts';
+import { CHARACTER_RADIUS } from '../ui/ui-consts.js';
+import { HUMAN_MAX_FOOD } from '../human-consts';
 import { FOOD_TYPE_EMOJIS } from '../food/food-types';
 
 const CORPSE_MEAT_ICON_SIZE = 9;
@@ -48,14 +44,14 @@ export function renderCorpse(ctx: CanvasRenderingContext2D, corpse: CorpseEntity
       radius * 2,
       decayProgress,
       'dead', // Stance
-      { 
-        gender, 
-        age, 
+      {
+        gender,
+        age,
         direction: [0, 0], // No direction
-        isPregnant: false, 
+        isPregnant: false,
         hungryLevel: 0, // No hunger
-        geneCode: geneCode || 0x804020
-      }
+        geneCode: geneCode || 0x804020,
+      },
     );
   } else if (originalEntityType === 'predator') {
     TribePredator2D.render(
@@ -66,14 +62,14 @@ export function renderCorpse(ctx: CanvasRenderingContext2D, corpse: CorpseEntity
       radius * 2,
       decayProgress,
       'dead', // Stance
-      { 
-        gender, 
-        age, 
+      {
+        gender,
+        age,
         direction: [0, 0], // No direction
-        isPregnant: false, 
+        isPregnant: false,
         hungryLevel: 0, // No hunger
-        geneCode: geneCode || 0x804020
-      }
+        geneCode: geneCode || 0x804020,
+      },
     );
   }
 

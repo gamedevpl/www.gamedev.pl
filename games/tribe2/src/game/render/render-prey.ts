@@ -1,8 +1,6 @@
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
-import {
-  CHARACTER_RADIUS
-} from '../ui-consts.ts';
+import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
 

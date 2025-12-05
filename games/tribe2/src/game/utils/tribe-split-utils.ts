@@ -1,4 +1,4 @@
-import { NOTIFICATION_DURATION_LONG_HOURS } from '../notification-consts.ts';
+import { NOTIFICATION_DURATION_LONG_HOURS } from '../notifications/notification-consts.ts';
 import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,

@@ -15,8 +15,8 @@ import {
   UI_TUTORIAL_PANEL_TEXT_COLOR,
   UI_TUTORIAL_PANEL_WIDTH,
   UI_TUTORIAL_TEXT_FONT_SIZE,
-  UI_TUTORIAL_TITLE_FONT_SIZE
-} from '../../ui-consts.ts';
+  UI_TUTORIAL_TITLE_FONT_SIZE,
+} from '../../ui/ui-consts.ts';
 
 function renderDismissButton(
   ctx: CanvasRenderingContext2D,

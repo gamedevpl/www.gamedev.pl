@@ -6,6 +6,7 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { GameWorldState } from '../world-types';
 import { indexItems } from './world-index-utils';
 import { IndexedWorldState } from './world-index-types';
+import { BuildingEntity } from '../entities/buildings/building-types';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -20,6 +21,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   const corpses = allEntities.filter((e) => e.type === 'corpse') as CorpseEntity[];
   const prey = allEntities.filter((e) => e.type === 'prey') as PreyEntity[];
   const predators = allEntities.filter((e) => e.type === 'predator') as PredatorEntity[];
+  const buildings = allEntities.filter((e) => e.type === 'building') as BuildingEntity[];
 
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
@@ -29,6 +31,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       corpse: indexItems(corpses),
       prey: indexItems(prey),
       predator: indexItems(predators),
+      building: indexItems(buildings),
     },
   };
 

@@ -1,6 +1,4 @@
-import {
-  CHARACTER_RADIUS
-} from '../ui-consts.ts';
+import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { InteractionDefinition } from './interactions-types';
 import { calculateWrappedDistance, vectorNormalize, vectorScale, vectorSubtract } from '../utils/math-utils';

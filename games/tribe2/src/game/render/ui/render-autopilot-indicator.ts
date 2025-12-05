@@ -7,7 +7,7 @@ import {
   PLAYER_ACTION_OUTLINE_DASH_PATTERN,
   PLAYER_ACTION_OUTLINE_RADIUS_OFFSET,
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
-} from '../../ui-consts.ts';
+} from '../../ui/ui-consts.ts';
 import { GameWorldState } from '../../world-types';
 import { findPlayerEntity } from '../../utils';
 import { renderWithWrapping } from '../render-utils';

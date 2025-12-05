@@ -1,8 +1,6 @@
 import { GameWorldState } from '../world-types';
 import { Notification } from './notification-types';
-import {
-  NOTIFICATION_DISMISS_COOLDOWN_HOURS
-} from '../notification-consts.ts';
+import { NOTIFICATION_DISMISS_COOLDOWN_HOURS } from './notification-consts.ts';
 
 let nextNotificationId = 0;
 function generateNotificationId(): string {
@@ -87,4 +85,28 @@ export function updateNotifications(world: GameWorldState): void {
     const hasExpired = currentTime - notification.timestamp > notification.duration;
     return !hasExpired;
   });
+}
+
+/**
+ * Handles the visual effects of active notifications, such as highlighting entities.
+ * @param state The current game world state.
+ */
+export function updateNotificationEffects(state: GameWorldState): void {
+  // Reset all highlights first
+  for (const entity of Object.values(state.entities.entities)) {
+    entity.isHighlighted = false;
+  }
+
+  // Apply highlights from active, non-dismissed notifications
+  const activeNotifications = state.notifications.filter((n) => !n.isDismissed);
+  for (const notification of activeNotifications) {
+    if (notification.highlightedEntityIds) {
+      for (const entityId of notification.highlightedEntityIds) {
+        const entity = state.entities.entities[entityId];
+        if (entity) {
+          entity.isHighlighted = true;
+        }
+      }
+    }
+  }
 }

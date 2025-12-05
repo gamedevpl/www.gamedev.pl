@@ -6,7 +6,7 @@ import {
   UI_TEXT_COLOR,
   UI_NOTIFICATION_HIGHLIGHT_COLOR,
   UI_NOTIFICATION_HIGHLIGHT_PULSE_SPEED,
-} from './ui-consts.ts';
+} from './ui/ui-consts.ts';
 import { HumanEntity } from './entities/characters/human/human-types';
 import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils';
 import { Vector2D } from './utils/math-types';
@@ -26,6 +26,9 @@ import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
+import { renderGhostBuilding } from './render/render-building';
+import { canPlaceBuilding } from './utils/building-placement-utils';
+import { screenToWorldCoords } from './render/render-utils';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -50,6 +53,25 @@ export function renderGame(
   }
 
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
+
+  const player = findPlayerEntity(gameState);
+
+  // Render ghost building preview
+  if (
+    player &&
+    gameState.selectedBuildingType &&
+    gameState.selectedBuildingType !== 'removal' &&
+    gameState.mousePosition
+  ) {
+    const worldPos = screenToWorldCoords(
+      gameState.mousePosition,
+      viewportCenter,
+      canvasDimensions,
+      gameState.mapDimensions,
+    );
+    const isValid = canPlaceBuilding(worldPos, gameState.selectedBuildingType, player.leaderId, gameState);
+    renderGhostBuilding(ctx, worldPos, gameState.selectedBuildingType, isValid, gameState.mapDimensions);
+  }
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
@@ -95,7 +117,6 @@ export function renderGame(
     // Reset UI buttons for this frame
     gameState.uiButtons = [];
 
-    const player = findPlayerEntity(gameState);
     let hungerBarRect: { x: number; y: number; width: number; height: number } | null = null;
     let foodBarRect: { x: number; y: number; width: number; height: number } | null = null;
 

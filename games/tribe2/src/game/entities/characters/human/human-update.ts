@@ -15,11 +15,11 @@ import {
   HITPOINT_REGEN_HUNGER_MODIFIER,
 } from '../../../human-consts.ts';
 import { HUNGER_EFFECT_THRESHOLD, EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
-import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui-consts.ts';
+import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui/ui-consts.ts';
 import {
   CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
   NOTIFICATION_DURATION_MEDIUM_HOURS,
-} from '../../../notification-consts.ts';
+} from '../../../notifications/notification-consts.ts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
@@ -217,6 +217,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             const follower = e as HumanEntity;
             follower.leaderId = heir.id; // Follow the new leader
           }
+          if (e.type === 'building' && (e as any).ownerId === entity.id) {
+            const building = e as any;
+            building.ownerId = heir.id; // Transfer building ownership
+          }
         });
       } else {
         // No heir, tribe dissolves
@@ -225,6 +229,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             const follower = e as HumanEntity;
             follower.leaderId = undefined;
             follower.tribeBadge = undefined;
+          }
+          if (e.type === 'building' && (e as any).ownerId === entity.id) {
+            const building = e as any;
+            building.ownerId = undefined;
           }
         });
       }

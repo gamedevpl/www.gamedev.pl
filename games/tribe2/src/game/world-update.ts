@@ -6,10 +6,11 @@ import { visualEffectsUpdate } from './visual-effects/visual-effects-update';
 import { findPlayerEntity } from './utils';
 import { vectorLerp } from './utils/math-utils';
 import { updateTutorial } from './tutorial/tutorial-utils';
-import { updateNotifications } from './notifications/notification-utils';
+import { updateNotificationEffects, updateNotifications } from './notifications/notification-utils';
 import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
 import { saveGame } from './persistence/persistence-utils';
+import { updateUI } from './ui/ui-utils.ts';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -17,30 +18,6 @@ function updateViewport(state: GameWorldState, deltaTime: number): void {
   const player = findPlayerEntity(state);
   if (player) {
     state.viewportCenter = vectorLerp(state.viewportCenter, player.position, VIEWPORT_FOLLOW_SPEED * deltaTime);
-  }
-}
-
-/**
- * Handles the visual effects of active notifications, such as highlighting entities.
- * @param state The current game world state.
- */
-function updateNotificationEffects(state: GameWorldState): void {
-  // Reset all highlights first
-  for (const entity of Object.values(state.entities.entities)) {
-    entity.isHighlighted = false;
-  }
-
-  // Apply highlights from active, non-dismissed notifications
-  const activeNotifications = state.notifications.filter((n) => !n.isDismissed);
-  for (const notification of activeNotifications) {
-    if (notification.highlightedEntityIds) {
-      for (const entityId of notification.highlightedEntityIds) {
-        const entity = state.entities.entities[entityId];
-        if (entity) {
-          entity.isHighlighted = true;
-        }
-      }
-    }
   }
 }
 
@@ -92,6 +69,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update tutorial state
     updateTutorial(indexedState, deltaTime);
+
+    // Update UI state
+    updateUI(indexedState, deltaTime);
 
     currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;

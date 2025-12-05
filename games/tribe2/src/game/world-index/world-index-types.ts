@@ -5,6 +5,7 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
+import { BuildingEntity } from '../entities/buildings/building-types';
 
 /**
  * Defines a rectangle for spatial queries.
@@ -20,6 +21,11 @@ export interface Rect {
  * Defines the interface for querying a specific type of entity.
  */
 export interface IndexType<T> {
+  /**
+   * All entities of type T stored in this index.
+   */
+  all(): T[];
+
   /**
    * Spatial query for entities within a given rectangle.
    * @param rect The rectangle to search within.
@@ -65,5 +71,6 @@ export interface IndexedWorldState extends GameWorldState {
     corpse: IndexType<CorpseEntity>;
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
+    building: IndexType<BuildingEntity>;
   };
 }

@@ -18,6 +18,7 @@ export function indexItems<T extends Entity>(items: T[], cacheKey?: string): Ind
 
   if (items.length === 0) {
     return {
+      all: () => [],
       byRect: () => [],
       byRadius: () => [],
       byProperty: () => [],
@@ -35,6 +36,9 @@ export function indexItems<T extends Entity>(items: T[], cacheKey?: string): Ind
   index.finish();
 
   const result: IndexType<T> = {
+    all(): T[] {
+      return items;
+    },
     byRect(rect: Rect): T[] {
       const indices = index.search(rect.left, rect.top, rect.right, rect.bottom);
       return indices.map((i) => items[i]);

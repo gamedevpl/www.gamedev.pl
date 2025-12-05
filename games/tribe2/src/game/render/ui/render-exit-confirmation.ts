@@ -13,7 +13,7 @@ import {
   UI_BUTTON_WIDTH,
   UI_FONT_SIZE,
   UI_PADDING,
-} from '../../ui-consts';
+} from '../../ui/ui-consts';
 import { ClickableUIButton, UIButtonActionType } from '../../ui/ui-types';
 import { GameWorldState } from '../../world-types';
 

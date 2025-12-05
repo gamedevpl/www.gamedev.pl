@@ -153,11 +153,12 @@ export const handleUIButtonClick = (
       break;
     case UIButtonActionType.SelectStorageSpot:
       gameState.selectedBuildingType = 'storageSpot';
-      gameState.buildMenuOpen = false;
       break;
     case UIButtonActionType.SelectPlantingZone:
       gameState.selectedBuildingType = 'plantingZone';
-      gameState.buildMenuOpen = false;
+      break;
+    case UIButtonActionType.SelectRemovalTool:
+      gameState.selectedBuildingType = 'removal';
       break;
     case UIButtonActionType.ToggleDiplomacy:
       if (player && player.leaderId && button.targetTribeId) {

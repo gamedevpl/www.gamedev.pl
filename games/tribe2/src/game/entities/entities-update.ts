@@ -22,7 +22,7 @@ import {
   HUMAN_MAX_HITPOINTS,
   MAX_ANCESTORS_TO_TRACK,
 } from '../human-consts.ts';
-import { CHARACTER_RADIUS, CHARACTER_CHILD_RADIUS } from '../ui-consts.ts';
+import { CHARACTER_RADIUS, CHARACTER_CHILD_RADIUS } from '../ui/ui-consts.ts';
 import {
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
@@ -47,6 +47,8 @@ import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from '../food/food-types';
 import { AIType } from '../ai/ai-types';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
+import { BuildingEntity, BuildingType } from './buildings/building-types';
+import { getBuildingDimensions } from '../building-consts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -393,4 +395,26 @@ export function createPredator(
   });
 
   return predator;
+}
+
+export function createBuilding(
+  state: Entities,
+  position: Vector2D,
+  buildingType: BuildingType,
+  ownerId: EntityId,
+): BuildingEntity {
+  const dimensions = getBuildingDimensions(buildingType);
+  const building = createEntity<BuildingEntity>(state, 'building', {
+    position,
+    radius: Math.max(dimensions.width, dimensions.height) / 2,
+    buildingType,
+    ownerId,
+    width: dimensions.width,
+    height: dimensions.height,
+    constructionProgress: 0,
+    destructionProgress: 0,
+    isConstructed: false,
+    isBeingDestroyed: false,
+  });
+  return building;
 }

@@ -1,7 +1,7 @@
 import { NodeStatus } from './behavior-tree-types';
 import { AI_UPDATE_INTERVAL, BLACKBOARD_ENTRY_MAX_AGE_HOURS } from '../../ai-consts.ts';
 import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts.ts';
-import { UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS } from '../../ui-consts.ts';
+import { UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS } from '../../ui/ui-consts.ts';
 import { Vector2D } from '../../utils/math-types.ts';
 
 type NodeExecutionEntry = {

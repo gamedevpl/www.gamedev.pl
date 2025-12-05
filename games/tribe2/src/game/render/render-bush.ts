@@ -2,7 +2,7 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { GameWorldState } from '../world-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { areFamily } from '../utils/world-utils';
-import { PLAYER_HIGHLIGHT_COLOR, FAMILY_CLAIM_COLOR, NON_FAMILY_CLAIM_COLOR } from '../ui-consts.ts';
+import { PLAYER_HIGHLIGHT_COLOR, FAMILY_CLAIM_COLOR, NON_FAMILY_CLAIM_COLOR } from '../ui/ui-consts.ts';
 
 const BUSH_RADIUS = 10;
 const BERRY_RADIUS = 3;

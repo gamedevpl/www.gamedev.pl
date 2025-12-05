@@ -6,3 +6,4 @@ export * from './player-action-utils';
 export * from './spatial-utils';
 export * from './tribe-split-utils';
 export * from './human-utils';
+export * from './building-placement-utils';

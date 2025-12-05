@@ -1,5 +1,5 @@
 import { GameWorldState, PerformanceMetricsBucket } from '../../world-types';
-import { UI_FONT_SIZE, UI_PADDING } from '../../ui-consts';
+import { UI_FONT_SIZE, UI_PADDING } from '../../ui/ui-consts';
 import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts';
 
 function calculateAverage(numbers: number[]): number {

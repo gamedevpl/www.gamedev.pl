@@ -44,11 +44,15 @@ export const handleGameControlKeyDown = (
       if (
         autopilotControls.activeAutopilotAction ||
         autopilotControls.isManuallyMoving ||
-        autopilotControls.isManuallyPlanting
+        autopilotControls.isManuallyPlanting ||
+        gameState.buildMenuOpen ||
+        gameState.selectedBuildingType
       ) {
         autopilotControls.activeAutopilotAction = undefined;
         autopilotControls.isManuallyMoving = false;
         autopilotControls.isManuallyPlanting = false;
+        gameState.buildMenuOpen = false;
+        gameState.selectedBuildingType = null;
       } else {
         // Otherwise, handle exit confirmation.
         if (newState.exitConfirmation === 'pending') {
@@ -128,9 +132,6 @@ export const handleGameControlKeyDown = (
       } else {
         handled = false;
       }
-      break;
-    case '3':
-      newState.debugPanel = DebugPanelType.Ecosystem;
       break;
     case 'tab':
       newState.debugPanel = DebugPanelType.General; // Always turn on debug if cycling

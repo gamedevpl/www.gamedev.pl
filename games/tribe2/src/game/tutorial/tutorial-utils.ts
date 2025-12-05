@@ -13,7 +13,7 @@ import {
   GetTargetsType,
 } from './tutorial-types';
 import { HUMAN_HUNGER_THRESHOLD_TUTORIAL, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
-import { UI_TUTORIAL_TRANSITION_DURATION_SECONDS, UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS } from '../ui-consts.ts';
+import { UI_TUTORIAL_TRANSITION_DURATION_SECONDS, UI_TUTORIAL_MIN_DISPLAY_TIME_SECONDS } from '../ui/ui-consts.ts';
 import { findClosestEntity, findPlayerEntity, findChildren, getAvailablePlayerActions, canProcreate } from '../utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PlayerActionType } from '../ui/ui-types';

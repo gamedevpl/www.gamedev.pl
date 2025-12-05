@@ -2,13 +2,24 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
-import {
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  BERRY_COST_FOR_PLANTING
-} from '../berry-bush-consts.ts';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
 import { GameWorldState, HoveredAutopilotAction } from '../world-types';
-import { findEntityAtPosition, findPlayerEntity, findValidPlantingSpot, isHostile, canProcreate } from '../utils';
+import {
+  findEntityAtPosition,
+  findPlayerEntity,
+  isPositionInAnyPlantingZone,
+  isHostile,
+  canProcreate,
+  isPositionOccupied,
+} from '../utils';
 import { Vector2D } from '../utils/math-types';
+import {
+  createBuilding,
+  canPlaceBuilding,
+  findBuildingAtPosition,
+  startBuildingDestruction,
+} from '../utils/building-placement-utils';
+import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -32,11 +43,7 @@ export const determineHoveredAutopilotAction = (
         action: PlayerActionType.AutopilotGather,
         targetEntityId: hoveredEntity.id,
       };
-    } else if (
-      player.isAdult &&
-      hoveredEntity.type === 'corpse' &&
-      (hoveredEntity as HumanEntity).food.length > 0
-    ) {
+    } else if (player.isAdult && hoveredEntity.type === 'corpse' && (hoveredEntity as HumanEntity).food.length > 0) {
       determinedAction = {
         action: PlayerActionType.AutopilotGather,
         targetEntityId: hoveredEntity.id,
@@ -64,13 +71,25 @@ export const determineHoveredAutopilotAction = (
       determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: hoveredEntity.id };
     } else if (hoveredEntity.type === 'predator') {
       determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: hoveredEntity.id };
+    } else if (hoveredEntity.type === 'building') {
+      if (gameState.selectedBuildingType === 'removal') {
+        // No action when removal tool is selected
+        determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
+      } else if (
+        (hoveredEntity as BuildingEntity).buildingType === 'plantingZone' &&
+        player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
+        !isPositionOccupied(worldPos, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)
+      ) {
+        determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
+      } else {
+        determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+      }
     }
   } else {
     // --- POSITION-BASED ACTIONS ---
     if (
-      gameState.autopilotControls.isManuallyPlanting &&
       player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
-      findValidPlantingSpot(worldPos, gameState, 1, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, player.id)
+      (gameState.autopilotControls.isManuallyPlanting || isPositionInAnyPlantingZone(worldPos, player, gameState))
     ) {
       determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
     } else {
@@ -85,12 +104,33 @@ export const determineHoveredAutopilotAction = (
 /**
  * Handles a click in the game world for autopilot actions.
  * It sets the active autopilot action based on what was hovered, or defaults to a move command.
- * @param gameState The current game state, which will be mutated.\\\\n * @param worldPos The position of the click in world coordinates.\\\\n */
+ * @param gameState The current game state, which will be mutated.
+ * @param worldPos The position of the click in world coordinates.
+ */
 export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector2D): void => {
   if (gameState.isPaused) return;
 
   const player = findPlayerEntity(gameState);
   if (!player) return;
+
+  // Handle building placement
+  if (gameState.selectedBuildingType && gameState.selectedBuildingType !== 'removal') {
+    if (canPlaceBuilding(worldPos, gameState.selectedBuildingType as BuildingType, player.leaderId, gameState)) {
+      createBuilding(worldPos, gameState.selectedBuildingType as BuildingType, player.leaderId!, gameState);
+      // Clear selection after placement
+      gameState.selectedBuildingType = null;
+    }
+    return;
+  }
+
+  // Handle building removal
+  if (gameState.selectedBuildingType === 'removal') {
+    const building = findBuildingAtPosition(worldPos, gameState);
+    if (building) {
+      startBuildingDestruction(building.id, gameState);
+    }
+    return;
+  }
 
   const hoveredAction = gameState.autopilotControls.hoveredAutopilotAction;
 

@@ -21,7 +21,7 @@ import {
   UI_TOOLTIP_OFFSET_Y,
   UI_TOOLTIP_PADDING,
   UI_TOOLTIP_TEXT_COLOR,
-} from '../../ui-consts.ts';
+} from '../../ui/ui-consts.ts';
 import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
@@ -345,6 +345,13 @@ export function renderUIButtons(
           shortcut: '2',
           name: 'Planting Zone',
         },
+        {
+          id: 'buildMenu_removal',
+          action: UIButtonActionType.SelectRemovalTool,
+          icon: '🔨',
+          shortcut: '3',
+          name: 'Remove Building',
+        },
       ];
 
       const buildMenuCols = buildMenuButtons.length;
@@ -361,7 +368,8 @@ export function renderUIButtons(
           (buildButton.action === UIButtonActionType.SelectStorageSpot &&
             gameState.selectedBuildingType === 'storageSpot') ||
           (buildButton.action === UIButtonActionType.SelectPlantingZone &&
-            gameState.selectedBuildingType === 'plantingZone');
+            gameState.selectedBuildingType === 'plantingZone') ||
+          (buildButton.action === UIButtonActionType.SelectRemovalTool && gameState.selectedBuildingType === 'removal');
 
         const button: ClickableUIButton = {
           id: buildButton.id,

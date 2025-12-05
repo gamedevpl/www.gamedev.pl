@@ -21,10 +21,12 @@ import {
   UI_TUTORIAL_HIGHLIGHT_LINE_WIDTH,
   UI_TUTORIAL_HIGHLIGHT_PULSE_SPEED,
   UI_TUTORIAL_HIGHLIGHT_RADIUS,
-} from '../ui-consts.ts';
+} from '../ui/ui-consts.ts';
 import { renderEntityHighlight } from './render-highlights';
 import { isEntityInView, renderWithWrapping } from './render-utils';
 import { Vector2D } from '../utils/math-types';
+import { renderBuilding } from './render-building.ts';
+import { BuildingEntity } from '../entities/buildings/building-types.ts';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -39,8 +41,8 @@ export function renderWorld(
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
-  const sortedEntities = Object.values(gameState.entities.entities).sort(
-    (a, b) => a.position.y - b.position.y || a.id - b.id,
+  const sortedEntities = Object.values(gameState.entities.entities).sort((a, b) =>
+    a.position.y - b.position.y || a.id - b.id || a.type === 'building' ? -1 : 1,
   );
 
   const visibleEntities = sortedEntities.filter((entity) =>
@@ -48,7 +50,18 @@ export function renderWorld(
   );
 
   visibleEntities.forEach((entity: Entity) => {
-    if (entity.type === 'berryBush') {
+    if (entity.type === 'building') {
+      renderWithWrapping(
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderBuilding,
+        entity as BuildingEntity,
+        gameState,
+        player,
+        gameState.time,
+      );
+    } else if (entity.type === 'berryBush') {
       renderWithWrapping(
         ctx,
         worldWidth,

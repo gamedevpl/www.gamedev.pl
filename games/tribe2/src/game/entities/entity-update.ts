@@ -12,6 +12,8 @@ import { PreyEntity } from './characters/prey/prey-types';
 import { PredatorEntity } from './characters/predator/predator-types';
 import { humanAIUpdate } from '../ai/human-ai-update';
 import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
+import { buildingUpdate } from './buildings/building-update';
+import { BuildingEntity } from './buildings/building-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -77,6 +79,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'predator') {
     predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
+  } else if (entity.type === 'building') {
+    buildingUpdate(entity as BuildingEntity, updateContext);
   }
 
   // AI decision making for all humans (player and non-player)

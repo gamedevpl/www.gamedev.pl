@@ -15,7 +15,7 @@ import {
   UI_MINIATURE_CHARACTER_SIZE,
   UI_PADDING,
   UI_TIME_BAR_COLOR,
-} from '../../ui-consts.ts';
+} from '../../ui/ui-consts.ts';
 import { GameWorldState } from '../../world-types';
 import { UIStatusType, UI_STATUS_EMOJIS } from '../../ui/ui-types';
 import { drawFoodBar, drawProgressBar } from './render-bars';

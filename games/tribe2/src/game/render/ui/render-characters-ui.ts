@@ -1,6 +1,4 @@
-import {
-  CHILD_TO_ADULT_AGE
-} from '../../human-consts.ts';
+import { CHILD_TO_ADULT_AGE } from '../../human-consts.ts';
 import {
   PLAYER_HEIR_HIGHLIGHT_COLOR,
   PLAYER_HIGHLIGHT_COLOR,
@@ -9,8 +7,8 @@ import {
   UI_MINIATURE_HEIR_CROWN_SIZE,
   UI_MINIATURE_PARENT_CROWN_SIZE,
   UI_MINIATURE_PARTNER_CROWN_SIZE,
-  UI_MINIATURE_PLAYER_CROWN_SIZE
-} from '../../ui-consts.ts';
+  UI_MINIATURE_PLAYER_CROWN_SIZE,
+} from '../../ui/ui-consts.ts';
 import { Vector2D } from '../../utils/math-types';
 import { TribeHuman2D } from '../../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HumanEntity } from '../../entities/characters/human/human-types';

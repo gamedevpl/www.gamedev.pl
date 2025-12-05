@@ -3,7 +3,7 @@ import { DebugPanelType, GameWorldState } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS } from './game-consts.ts';
 import { INITIAL_BERRY_BUSH_COUNT, MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';
 import { INITIAL_MASTER_VOLUME } from './sound-consts.ts';
-import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from './ui-consts.ts';
+import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from './ui/ui-consts.ts';
 import {
   INITIAL_PREY_COUNT,
   MAX_PREY_GESTATION_PERIOD,
@@ -143,6 +143,7 @@ export function initWorld(): GameWorldState {
     },
     buildMenuOpen: false,
     selectedBuildingType: null,
+    selectedBuildingForRemoval: null,
     hasPlayerMovedEver: false,
     hasPlayerPlantedBush: false,
     hasPlayerEnabledAutopilot: 0,
@@ -282,6 +283,7 @@ export function initIntroWorld(): GameWorldState {
     },
     buildMenuOpen: false,
     selectedBuildingType: null,
+    selectedBuildingForRemoval: null,
     hasPlayerMovedEver: false,
     hasPlayerPlantedBush: false,
     hasPlayerEnabledAutopilot: 0,

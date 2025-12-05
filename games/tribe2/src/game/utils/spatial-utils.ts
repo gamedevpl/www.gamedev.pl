@@ -5,6 +5,8 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-utils';
 import { Vector2D } from './math-types';
 import { findTribeMembers, getFamilyMembers } from './family-tribe-utils';
+import { getTribePlantingZones, isPositionInZone } from './ai-world-analysis-utils';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts';
 
 export function getRandomNearbyPosition(
   center: Vector2D,
@@ -119,4 +121,29 @@ export function getFamilyCenter(human: HumanEntity, gameState: GameWorldState): 
   const familyMembers = getFamilyMembers(human, gameState);
   const positions = [...familyMembers, human].map((member) => member.position);
   return getAveragePosition(positions);
+}
+
+/**
+ * Checks if a position is inside any of the player's tribe's planting zones.
+ * Also validates that the position has sufficient clearance from existing bushes.
+ * @param position The position to check
+ * @param player The player entity
+ * @param gameState The current game state
+ * @returns true if the position is in any planting zone and has clearance, false otherwise
+ */
+export function isPositionInAnyPlantingZone(
+  position: Vector2D,
+  player: HumanEntity,
+  gameState: GameWorldState,
+): boolean {
+  const zones = getTribePlantingZones(player, gameState);
+  const isInZone = zones.some((zone) => isPositionInZone(position, zone, gameState));
+  
+  // If not in any zone, return false immediately
+  if (!isInZone) {
+    return false;
+  }
+  
+  // Check if the position has sufficient clearance from existing bushes
+  return !isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS);
 }

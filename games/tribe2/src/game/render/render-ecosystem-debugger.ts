@@ -8,7 +8,7 @@ import {
   MAP_HEIGHT,
 } from '../game-consts.ts';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { UI_FONT_SIZE, UI_PADDING } from '../ui-consts.ts';
+import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts.ts';
 
 interface PopulationHistory {
   time: number;

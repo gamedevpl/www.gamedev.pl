@@ -18,7 +18,7 @@ import {
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
   UI_BT_DEBUG_X_OFFSET,
   UI_BT_DEBUG_Y_OFFSET,
-} from '../ui-consts.ts';
+} from '../ui/ui-consts.ts';
 import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
 import { lerpColor } from '../utils/math-utils';
 import { CharacterEntity } from '../entities/characters/character-types';
