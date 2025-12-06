@@ -1,7 +1,5 @@
 import { State } from '../../../../state-machine/state-machine-types';
-import {
-  HUMAN_HUNGER_THRESHOLD_SLOW
-} from '../../../../human-consts.ts';
+import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../../human-consts.ts';
 import { HumanEntity } from '../human-types';
 import {
   HumanStateData,
@@ -13,6 +11,8 @@ import {
   HumanAttackingStateData,
   HUMAN_PLANTING,
   HumanPlantingStateData,
+  HUMAN_DEPOSITING,
+  HUMAN_RETRIEVING,
 } from './human-state-types';
 
 // Define the human idle state
@@ -91,6 +91,28 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           previousState: HUMAN_IDLE,
           plantingSpot: entity.target,
         } as HumanPlantingStateData,
+      };
+    }
+
+    if (entity.activeAction === 'depositing') {
+      return {
+        nextState: HUMAN_DEPOSITING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+        },
+      };
+    }
+
+    if (entity.activeAction === 'retrieving') {
+      return {
+        nextState: HUMAN_RETRIEVING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+        },
       };
     }
 

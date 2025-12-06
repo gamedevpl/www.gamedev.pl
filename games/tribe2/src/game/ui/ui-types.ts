@@ -16,6 +16,8 @@ export enum PlayerActionType {
   DefendAgainstPredator = 'DefendAgainstPredator',
   Build = 'Build',
   Removal = 'Removal',
+  Deposit = 'Deposit',
+  Retrieve = 'Retrieve',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -24,6 +26,8 @@ export enum PlayerActionType {
   AutopilotPlant = 'AutopilotPlant',
   AutopilotFeedChild = 'AutopilotFeedChild',
   AutopilotFollowMe = 'AutopilotFollowMe',
+  AutopilotDeposit = 'AutopilotDeposit',
+  AutopilotRetrieve = 'AutopilotRetrieve',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -40,6 +44,8 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.DefendAgainstPredator]: '🛡️',
   [PlayerActionType.Build]: '🏗️',
   [PlayerActionType.Removal]: '❌',
+  [PlayerActionType.Deposit]: '📦',
+  [PlayerActionType.Retrieve]: '🎁',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -47,6 +53,8 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: '🌱',
   [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotFollowMe]: '➡️',
+  [PlayerActionType.AutopilotDeposit]: '📦',
+  [PlayerActionType.AutopilotRetrieve]: '🎁',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -63,6 +71,8 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.DefendAgainstPredator]: 'Defend',
   [PlayerActionType.Build]: 'Build',
   [PlayerActionType.Removal]: 'Remove',
+  [PlayerActionType.Deposit]: 'Deposit',
+  [PlayerActionType.Retrieve]: 'Retrieve',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -70,6 +80,8 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotPlant]: 'Plant',
   [PlayerActionType.AutopilotFeedChild]: 'Feed',
   [PlayerActionType.AutopilotFollowMe]: 'Follow',
+  [PlayerActionType.AutopilotDeposit]: 'Deposit',
+  [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
 };
 
 export interface PlayerActionHint {

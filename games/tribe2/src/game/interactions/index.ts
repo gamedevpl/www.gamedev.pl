@@ -15,6 +15,9 @@ import { preyChildFeedingInteraction } from './prey-child-feeding-interaction';
 import { predatorChildFeedingInteraction } from './predator-child-feeding-interaction';
 import { predatorEatCorpseInteraction } from './predator-eat-corpse-interaction';
 import { predatorAttackRivalInteraction } from './predator-attack-rival-interaction';
+import { storageDepositInteraction } from './storage-deposit-interaction';
+import { storageRetrieveInteraction } from './storage-retrieve-interaction';
+import { storageStealInteraction } from './storage-steal-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -22,6 +25,9 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
   humanAttackInteraction,
+  storageDepositInteraction, // Storage interactions
+  storageRetrieveInteraction,
+  storageStealInteraction,
   // Animal interactions
   preyEatBerryBushInteraction,
   preyChildFeedingInteraction, // Prey parent-child feeding

@@ -173,6 +173,27 @@ export function renderBuilding(
       BUILDING_DESTRUCTION_BAR_COLOR,
     );
   }
+
+  // 4. Draw Storage Capacity (for storage spots)
+  if (building.buildingType === 'storageSpot' && building.storedFood !== undefined) {
+    const capacityText = `${building.storedFood.length}/${building.storageCapacity ?? 0}`;
+    const textY = position.y - height / 2 - 20;
+
+    ctx.save();
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Draw text with outline for better visibility
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(capacityText, position.x, textY);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(capacityText, position.x, textY);
+
+    ctx.restore();
+  }
 }
 
 /**

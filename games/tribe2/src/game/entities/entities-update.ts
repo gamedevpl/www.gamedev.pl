@@ -49,6 +49,7 @@ import { AIType } from '../ai/ai-types';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { BuildingEntity, BuildingType } from './buildings/building-types';
 import { getBuildingDimensions } from '../building-consts';
+import { STORAGE_SPOT_CAPACITY } from '../storage-spot-consts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -404,7 +405,7 @@ export function createBuilding(
   ownerId: EntityId,
 ): BuildingEntity {
   const dimensions = getBuildingDimensions(buildingType);
-  const building = createEntity<BuildingEntity>(state, 'building', {
+  const buildingBase = {
     position,
     radius: Math.max(dimensions.width, dimensions.height) / 2,
     buildingType,
@@ -415,6 +416,18 @@ export function createBuilding(
     destructionProgress: 0,
     isConstructed: false,
     isBeingDestroyed: false,
+  };
+
+  // Add storage-specific properties for storage spots
+  const building = createEntity<BuildingEntity>(state, 'building', {
+    ...buildingBase,
+    ...(buildingType === BuildingType.StorageSpot && {
+      storedFood: [],
+      storageCapacity: STORAGE_SPOT_CAPACITY,
+      lastDepositTime: 0,
+      lastRetrieveTime: 0,
+      lastStealTime: 0,
+    }),
   });
   return building;
 }

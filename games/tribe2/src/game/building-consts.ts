@@ -38,7 +38,7 @@ export const BUILDING_DEFINITIONS: Record<
   [BuildingType.StorageSpot]: {
     name: 'Storage Spot',
     description: 'A designated area for storing excess food.',
-    icon: '🏠',
+    icon: '📦',
     dimensions: { width: 40, height: 40 },
     constructionTimeHours: 0.1, // Near instant
     destructionTimeHours: 0.1,

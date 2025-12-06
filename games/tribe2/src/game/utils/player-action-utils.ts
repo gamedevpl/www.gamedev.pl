@@ -14,6 +14,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+import { BuildingEntity } from '../entities/buildings/building-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { GameWorldState } from '../world-types';
@@ -23,6 +24,7 @@ import { findNearbyEnemiesOfTribe } from './ai-world-analysis-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from './tribe-split-utils';
 import { canProcreate, isHostile } from '.';
+import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -123,6 +125,63 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   // Check for Planting
   if (player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING) {
     actions.push({ type: PlayerActionType.Plant, action: 'planting', key: 'b' });
+  }
+
+  // Check for Deposit (to storage)
+  if (player.food.length > 0 && player.isAdult) {
+    const storageSpot = findClosestEntity<BuildingEntity>(
+      player,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === 'storageSpot' &&
+          building.ownerId === player.leaderId &&
+          building.isConstructed &&
+          building.storedFood !== undefined &&
+          building.storageCapacity !== undefined &&
+          building.storedFood.length < building.storageCapacity
+        );
+      },
+    );
+    if (storageSpot) {
+      actions.push({
+        type: PlayerActionType.Deposit,
+        action: 'idle',
+        key: 'x',
+        targetEntity: storageSpot,
+      });
+    }
+  }
+
+  // Check for Retrieve (from storage)
+  if (player.food.length < player.maxFood && player.isAdult) {
+    const storageSpot = findClosestEntity<BuildingEntity>(
+      player,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === 'storageSpot' &&
+          building.ownerId === player.leaderId &&
+          building.isConstructed &&
+          building.storedFood !== undefined &&
+          building.storedFood.length > 0
+        );
+      },
+    );
+    if (storageSpot) {
+      actions.push({
+        type: PlayerActionType.Retrieve,
+        action: 'idle',
+        key: 'z',
+        targetEntity: storageSpot,
+      });
+    }
   }
 
   // Check for Call to Attack

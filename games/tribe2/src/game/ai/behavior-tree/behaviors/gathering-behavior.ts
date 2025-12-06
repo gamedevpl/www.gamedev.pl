@@ -14,6 +14,7 @@ import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
 import { Blackboard } from '../behavior-tree-blackboard';
+import { hasNearbyNonFullStorage } from '../../../utils/storage-utils';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -161,9 +162,14 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           const hungryChildren = findChildren(context.gameState, human).filter(
             (child) => child.hunger > CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
           );
+
+          // Check for nearby non-full storage spots
+          const hasNonFullStorage = hasNearbyNonFullStorage(human, context.gameState);
+
           return [
-            (human.isAdult && hasCapacity && (isHungryEnough || hungryChildren.length > 0)) ?? false,
-            `${isHungryEnough ? 'H' : ''}, ${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}`,
+            (human.isAdult && hasCapacity && (isHungryEnough || hungryChildren.length > 0 || hasNonFullStorage)) ??
+              false,
+            `${isHungryEnough ? 'H' : ''}${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}${hasNonFullStorage ? ' S' : ''}`,
           ];
         },
         'Should Gather Food',

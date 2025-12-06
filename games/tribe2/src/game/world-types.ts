@@ -68,6 +68,14 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.Removal;
       position: Vector2D;
+    }
+  | {
+      action: PlayerActionType.AutopilotDeposit;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotRetrieve;
+      targetEntityId: EntityId;
     };
 
 // Game State Interface

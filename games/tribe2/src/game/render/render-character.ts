@@ -40,6 +40,8 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   idle: 'idle',
   attacking: 'attacking',
   planting: 'gathering',
+  depositing: 'gathering',
+  retrieving: 'gathering',
 };
 
 /**

@@ -6,6 +6,8 @@ export const HUMAN_IDLE = 'humanIdle';
 export const HUMAN_MOVING = 'humanMoving';
 export const HUMAN_EATING = 'humanEating';
 export const HUMAN_GATHERING = 'humanGathering'; // When gathering resources
+export const HUMAN_DEPOSITING = 'humanDepositing'; // When depositing resources into storage
+export const HUMAN_RETRIEVING = 'humanRetrieving'; // When retrieving resources from storage
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_PLANTING = 'humanPlanting';
@@ -24,6 +26,14 @@ interface HumanEatingStateData extends StateData {
 
 export interface HumanGatheringStateData extends StateData {
   state: 'gathering';
+}
+
+export interface HumanDepositingStateData extends StateData {
+  state: 'depositing';
+}
+
+export interface HumanRetrievingStateData extends StateData {
+  state: 'retrieving';
 }
 
 export interface HumanProcreatingStateData extends StateData {
@@ -46,6 +56,8 @@ export type HumanStateData =
   | HumanMovingStateData
   | HumanEatingStateData
   | HumanGatheringStateData
+  | HumanDepositingStateData
+  | HumanRetrievingStateData
   | HumanProcreatingStateData
   | HumanAttackingStateData
   | HumanPlantingStateData;

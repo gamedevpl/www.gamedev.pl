@@ -1,7 +1,4 @@
-import {
-  BT_ACTION_TIMEOUT_HOURS,
-  BT_EXPENSIVE_OPERATION_CACHE_HOURS
-} from '../../ai-consts.ts';
+import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../ai-consts.ts';
 import { BehaviorNode } from './behavior-tree-types';
 import { AutopilotControlled, CachingNode, ManualControl, NonPlayerControlled, Selector, TimeoutNode } from './nodes';
 import {
@@ -29,6 +26,9 @@ import {
   createDiplomacyBehavior,
   createHumanHuntPreyBehavior,
   createHumanDefendAgainstPredatorBehavior,
+  createStorageDepositBehavior,
+  createStorageRetrieveBehavior,
+  createStorageStealBehavior,
 } from './behaviors';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
@@ -63,11 +63,17 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
 
+      // --- OPPORTUNISTIC STEALING ---
+      new AutopilotControlled(createStorageStealBehavior(3), 'attack', 'Gated Storage Steal', 2),
+
       // --- COMBAT BEHAVIORS (ATTACK) ---
       new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
 
       // --- PERSONAL NEEDS (EAT) ---
       createEatingBehavior(2),
+
+      // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
+      new AutopilotControlled(createStorageRetrieveBehavior(3), 'gathering', 'Gated Storage Retrieve', 2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new TimeoutNode(
@@ -76,6 +82,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         'Timeout Gathering',
         2,
       ),
+
+      // --- STORAGE DEPOSIT (EXCESS FOOD) ---
+      new AutopilotControlled(createStorageDepositBehavior(3), 'gathering', 'Gated Storage Deposit', 2),
 
       // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
       new AutopilotControlled(createFeedingChildBehavior(3), 'feedChildren', 'Gated Feed Child', 2),

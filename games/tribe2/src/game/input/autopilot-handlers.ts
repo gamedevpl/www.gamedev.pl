@@ -72,11 +72,40 @@ export const determineHoveredAutopilotAction = (
     } else if (hoveredEntity.type === 'predator') {
       determinedAction = { action: PlayerActionType.AutopilotAttack, targetEntityId: hoveredEntity.id };
     } else if (hoveredEntity.type === 'building') {
+      const building = hoveredEntity as BuildingEntity;
+
       if (gameState.selectedBuildingType === 'removal') {
         // No action when removal tool is selected
         determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
+      } else if (building.buildingType === 'storageSpot') {
+        // Handle storage spot interactions
+        if (building.ownerId === player.leaderId && building.isConstructed) {
+          // Player's tribe storage
+          if (
+            player.food.length > 0 &&
+            building.storedFood !== undefined &&
+            building.storageCapacity !== undefined &&
+            building.storedFood.length < building.storageCapacity
+          ) {
+            // Can deposit
+            determinedAction = { action: PlayerActionType.AutopilotDeposit, targetEntityId: hoveredEntity.id };
+          } else if (
+            player.food.length < player.maxFood &&
+            building.storedFood !== undefined &&
+            building.storedFood.length > 0
+          ) {
+            // Can retrieve
+            determinedAction = { action: PlayerActionType.AutopilotRetrieve, targetEntityId: hoveredEntity.id };
+          } else {
+            // Can't interact, just move
+            determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+          }
+        } else {
+          // Not player's tribe storage, just move
+          determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+        }
       } else if (
-        (hoveredEntity as BuildingEntity).buildingType === 'plantingZone' &&
+        building.buildingType === 'plantingZone' &&
         player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
         !isPositionOccupied(worldPos, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)
       ) {

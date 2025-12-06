@@ -113,11 +113,13 @@ export interface HumanEntity extends CharacterEntity {
 }
 
 export type HumanAction =
-  | 'gathering' // Collecting resources
+  | 'gathering' // Collecting resources from berry bushes
   | 'eating' // Consuming food
   | 'moving' // Changing position
   | 'idle' // Not performing any action
   | 'procreating' // Reproducing
   | 'feeding' // Giving food to a child
   | 'attacking' // Engaging in combat
-  | 'planting'; // Sowing seeds or placing plants
+  | 'planting' // Sowing seeds or placing plants
+  | 'depositing' // Depositing resources into storage
+  | 'retrieving'; // Retrieving resources from storage

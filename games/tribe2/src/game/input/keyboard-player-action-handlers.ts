@@ -13,6 +13,8 @@ import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { BuildingEntity } from '../entities/buildings/building-types';
+import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
 
 /**
  * Handles keyboard events that correspond to direct player actions.
@@ -194,6 +196,65 @@ export const handlePlayerActionKeyDown = (
         playerEntity.target = plantingSpot;
         gameState.hasPlayerPlantedBush = true;
       }
+    }
+  } else if (key === 'x') {
+    // Deposit to storage
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.gathering = !gameState.autopilotControls.behaviors.gathering;
+      return;
+    }
+
+    const storageSpot = findClosestEntity<BuildingEntity>(
+      playerEntity,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === 'storageSpot' &&
+          building.ownerId === playerEntity.leaderId &&
+          building.isConstructed &&
+          building.storedFood !== undefined &&
+          building.storageCapacity !== undefined &&
+          building.storedFood.length < building.storageCapacity
+        );
+      },
+    );
+
+    if (storageSpot) {
+      playerEntity.activeAction = 'idle';
+      playerEntity.target = storageSpot.id;
+      playSoundAt(updateContext, SoundType.StorageDeposit, playerEntity.position);
+    }
+  } else if (key === 'z') {
+    // Retrieve from storage
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.feedChildren = !gameState.autopilotControls.behaviors.feedChildren;
+      return;
+    }
+
+    const storageSpot = findClosestEntity<BuildingEntity>(
+      playerEntity,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === 'storageSpot' &&
+          building.ownerId === playerEntity.leaderId &&
+          building.isConstructed &&
+          building.storedFood !== undefined &&
+          building.storedFood.length > 0
+        );
+      },
+    );
+
+    if (storageSpot) {
+      playerEntity.activeAction = 'idle';
+      playerEntity.target = storageSpot.id;
+      playSoundAt(updateContext, SoundType.StorageRetrieve, playerEntity.position);
     }
   } else if (key === 'v') {
     playerEntity.isCallingToAttack = true;

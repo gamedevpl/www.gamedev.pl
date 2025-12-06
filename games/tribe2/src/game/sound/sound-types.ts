@@ -23,6 +23,9 @@ export enum SoundType {
   CallToAttack,
   TribeSplit,
   CallToFollow,
+  StorageDeposit,
+  StorageRetrieve,
+  StorageSteal,
 
   // UI/Game State
   GameOver,
@@ -46,6 +49,9 @@ export const SOUND_FILE_MAP = new Map<SoundType, string>([
   [SoundType.CallToAttack, attackSound],
   [SoundType.TribeSplit, procreateSound],
   [SoundType.CallToFollow, procreateSound],
+  [SoundType.StorageDeposit, gatherSound],
+  [SoundType.StorageRetrieve, gatherSound],
+  [SoundType.StorageSteal, attackSound],
   [SoundType.SoundTrack1, soundTrack1],
 ]);
 

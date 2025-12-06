@@ -1,7 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import {
-  HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING
-} from '../../../ai-consts.ts';
+import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 
@@ -22,7 +20,7 @@ export function createEatingBehavior(depth: number): BehaviorNode<HumanEntity> {
           const canEat = !human.eatingCooldownTime || context.gameState.time >= human.eatingCooldownTime;
 
           return [
-            human.isAdult && isHungry && hasFood && canEat ? true : false,
+            isHungry && hasFood && canEat ? true : false,
             `${Math.floor(human.hunger - HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING)}, ${human.food.length}, ${
               human.eatingCooldownTime ? Math.floor(human.eatingCooldownTime - context.gameState.time) : ''
             }`,

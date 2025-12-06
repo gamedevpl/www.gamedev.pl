@@ -1,5 +1,6 @@
 import { Entity, EntityId } from '../entities-types';
 import { BuildingType } from '../../building-consts';
+import { FoodItem } from '../../food/food-types';
 
 export { BuildingType };
 
@@ -31,4 +32,20 @@ export interface BuildingEntity extends Entity {
 
   /** Height of the building in pixels. */
   height: number;
+
+  // Storage-related properties (for StorageSpot buildings)
+  /** Array of food items stored in the building. */
+  storedFood?: FoodItem[];
+
+  /** Maximum capacity for stored food. */
+  storageCapacity?: number;
+
+  /** Game time of last deposit (for cooldown). */
+  lastDepositTime?: number;
+
+  /** Game time of last retrieve (for cooldown). */
+  lastRetrieveTime?: number;
+
+  /** Game time of last steal attempt (for cooldown). */
+  lastStealTime?: number;
 }

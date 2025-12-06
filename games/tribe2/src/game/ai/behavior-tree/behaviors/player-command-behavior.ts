@@ -12,9 +12,11 @@ import {
 } from '../../../ai-consts.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../berry-bush-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
+import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { canProcreate, isPositionOccupied } from '../../../utils';
+import { BuildingEntity } from '../../../entities/buildings/building-types.ts';
 
 /**
  * Shared autopilot attack behavior logic used by multiple action types.
@@ -239,6 +241,108 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = target.id;
               human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- DEPOSIT ---
+            case PlayerActionType.AutopilotDeposit: {
+              const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
+                | BuildingEntity
+                | undefined;
+
+              // Validate building exists and is a constructed storage spot
+              if (!targetBuilding || targetBuilding.buildingType !== 'storageSpot' || !targetBuilding.isConstructed) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Check if storage has capacity
+              const capacity = targetBuilding.storageCapacity ?? 0;
+              const currentStored = targetBuilding.storedFood?.length ?? 0;
+              if (currentStored >= capacity) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Check if human belongs to the same tribe
+              if (human.leaderId !== targetBuilding.ownerId) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Check if human has food to deposit
+              if (human.food.length === 0) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const depositDistance = calculateWrappedDistance(
+                human.position,
+                targetBuilding.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (depositDistance <= STORAGE_INTERACTION_RANGE) {
+                human.activeAction = 'depositing';
+                human.target = undefined;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = targetBuilding.id;
+              human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- RETRIEVE ---
+            case PlayerActionType.AutopilotRetrieve: {
+              const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
+                | BuildingEntity
+                | undefined;
+
+              // Validate building exists, is a constructed storage spot, and has food
+              if (
+                !targetBuilding ||
+                targetBuilding.buildingType !== 'storageSpot' ||
+                !targetBuilding.isConstructed ||
+                !targetBuilding.storedFood ||
+                targetBuilding.storedFood.length === 0
+              ) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Check if human belongs to the same tribe
+              if (human.leaderId !== targetBuilding.ownerId) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Check if human has inventory space
+              if (human.food.length >= human.maxFood) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const retrieveDistance = calculateWrappedDistance(
+                human.position,
+                targetBuilding.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (retrieveDistance <= STORAGE_INTERACTION_RANGE) {
+                human.activeAction = 'retrieving';
+                human.target = undefined;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = targetBuilding.id;
+              human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 
