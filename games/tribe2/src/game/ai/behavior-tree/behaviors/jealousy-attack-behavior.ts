@@ -31,6 +31,12 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
           );
 
           if (stranger) {
+            // Don't attack tribe members - this would weaken the tribe
+            // Only attack strangers from other tribes or independent humans
+            if (human.leaderId && stranger.leaderId === human.leaderId) {
+              return [false, 'Stranger is in same tribe - no attack'];
+            }
+            
             Blackboard.set(blackboard, JEALOUSY_TARGET_KEY, stranger.id);
             return [true, `Partner cheating with ${stranger.id}`];
           }
