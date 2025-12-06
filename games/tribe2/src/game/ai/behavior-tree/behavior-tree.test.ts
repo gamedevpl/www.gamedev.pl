@@ -9,8 +9,8 @@ import { GameWorldState } from '../../world-types';
 import { CachingNode, TimeoutNode } from './nodes';
 import { CharacterEntity } from '../../entities/characters/character-types';
 
-// --- Mocks and Helpers ---\n
-const mockHuman = {} as HumanEntity;
+// --- Mocks and Helpers ---
+let mockHuman: HumanEntity;
 const mockContext = {
   deltaTime: 1,
   gameState: {
@@ -30,6 +30,7 @@ let blackboard: BlackboardData;
 beforeEach(() => {
   blackboard = TestBlackboard.create();
   mockContext.gameState.time = 0;
+  mockHuman = { aiBlackboard: blackboard } as HumanEntity;
 });
 
 const createSuccessNode = (name = 'SuccessNode') => new ConditionNode(() => true, name);
