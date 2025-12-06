@@ -86,6 +86,7 @@ export function createPreyFeedingChildBehavior(depth: number): BehaviorNode<Prey
           return (
             (prey.isAdult &&
               prey.gender === 'female' &&
+              prey.food.length > 0 && // Must have food to feed children
               prey.hunger < 80 && // Parent must not be too hungry
               (!prey.feedChildCooldownTime || prey.feedChildCooldownTime <= 0)) ??
             false

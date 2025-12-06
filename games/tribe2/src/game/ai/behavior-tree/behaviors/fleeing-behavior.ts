@@ -22,10 +22,16 @@ export function createFleeingBehavior(depth: number): BehaviorNode<HumanEntity> 
           if (human.isAdult && human.hitpoints > human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD) {
             return false;
           }
-          // Don't flee if critically hungry
-          if (human.isAdult && human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
+          
+          // Critical health threshold - always flee if health is dangerously low (< 10%)
+          const isCriticalHealth = human.hitpoints < human.maxHitpoints * 0.1;
+          
+          // Don't flee if critically hungry, UNLESS health is critical
+          // This prevents the fleeing-hunger paradox where starving low-health humans attack instead of fleeing
+          if (!isCriticalHealth && human.isAdult && human.hunger > AI_ATTACK_HUNGER_THRESHOLD) {
             return false;
           }
+          
           // Find a threat
           const threat = findClosestAggressor(human.id, context.gameState);
           if (threat) {

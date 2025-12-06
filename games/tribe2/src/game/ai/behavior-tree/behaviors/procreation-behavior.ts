@@ -193,7 +193,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
                 depth + 3,
               ),
               new ActionNode(
-                (_human, context, blackboard) => {
+                (human, context, blackboard) => {
                   const wanderStartTime = Blackboard.get(blackboard, PROCREATION_WANDER_START_TIME_KEY) as
                     | number
                     | undefined;
@@ -203,7 +203,18 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
                   }
                   const elapsed = context.gameState.time - wanderStartTime;
                   if (elapsed >= PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS) {
-                    return [NodeStatus.SUCCESS, `Wandered for ${elapsed.toFixed(1)}h, proceeding without food`];
+                    // Even desperate males should check for minimum food availability
+                    // to avoid creating children that immediately starve
+                    const nearbyBushes = countEntitiesOfTypeInRadius(
+                      human.position,
+                      context.gameState,
+                      'berryBush',
+                      PROCREATION_FOOD_SEARCH_RADIUS,
+                    );
+                    if (nearbyBushes >= 1) {
+                      return [NodeStatus.SUCCESS, `Wandered for ${elapsed.toFixed(1)}h, minimum food found`];
+                    }
+                    return [NodeStatus.FAILURE, `Desperate but no food sources nearby`];
                   }
                   return [NodeStatus.FAILURE, `Wandering for heir, ${elapsed.toFixed(1)}h elapsed`];
                 },

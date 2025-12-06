@@ -386,8 +386,10 @@ export class CooldownNode<T extends CharacterEntity> extends BehaviorNode<T> {
       // Cooldown is not active. Execute the child.
       const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
 
-      // If the child succeeds or *starts* running for the first time, set the cooldown.
-      if (childStatus === NodeStatus.SUCCESS || childStatus === NodeStatus.RUNNING) {
+      // Only set the cooldown when the child completes successfully.
+      // Do NOT set it on RUNNING, as the child might still fail.
+      // This prevents the cooldown from blocking retries if the child fails after starting.
+      if (childStatus === NodeStatus.SUCCESS) {
         Blackboard.set(blackboard, this.cooldownKey, currentTime + this.cooldownDurationHours);
       }
 
