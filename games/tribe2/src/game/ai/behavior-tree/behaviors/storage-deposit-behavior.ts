@@ -20,6 +20,11 @@ import {
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
+import {
+  getTribeLeaderForCoordination,
+  canUseStorage,
+  registerTribalStorageTask,
+} from '../../../utils/tribe-task-utils';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
@@ -28,6 +33,7 @@ const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
  * Creates a behavior for depositing excess food into tribe storage spots.
  * NPCs will deposit food based on adaptive thresholds that respond to tribe storage utilization.
  * Includes cooldown to prevent constant trips and smart storage spot assignment.
+ * Now includes tribal task coordination to prevent storage crowding.
  */
 export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Selector<HumanEntity>(
@@ -80,6 +86,12 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 return [false, 'No available tribe storage nearby'];
               }
 
+              // Check if the storage spot is not too crowded (tribal coordination)
+              const leader = getTribeLeaderForCoordination(human, context.gameState);
+              if (leader && !canUseStorage(leader, assignedStorage.id, context.gameState.time)) {
+                return [false, 'Storage busy'];
+              }
+
               return [
                 true,
                 `Storage util: ${(storageUtil * 100).toFixed(0)}%, Personal: ${(personalFoodRatio * 100).toFixed(0)}%`,
@@ -107,6 +119,8 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
           // Navigate to storage and deposit
           new ActionNode<HumanEntity>(
             (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+              const leader = getTribeLeaderForCoordination(human, context.gameState);
+
               // Get or assign storage spot
               let storageId = Blackboard.get<EntityId>(blackboard, ASSIGNED_STORAGE_KEY);
               let assignedStorage: BuildingEntity | null = null;
@@ -134,6 +148,11 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
               // Check if within interaction range
               if (distance <= STORAGE_INTERACTION_RANGE) {
                 // Within range - set depositing action
+                // Register the task to hold the slot while depositing
+                if (leader) {
+                  registerTribalStorageTask(leader, assignedStorage.id, human.id, 'deposit', context.gameState.time);
+                }
+
                 human.activeAction = 'depositing';
                 human.target = undefined;
 
@@ -145,6 +164,11 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
               }
 
               // Navigate toward storage
+              // Register the task to reserve the slot while moving
+              if (leader) {
+                registerTribalStorageTask(leader, assignedStorage.id, human.id, 'deposit', context.gameState.time);
+              }
+
               human.activeAction = 'moving';
               human.target = assignedStorage.position;
               return [NodeStatus.RUNNING, `Moving to storage (${distance.toFixed(1)}px away)`];

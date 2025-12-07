@@ -4,6 +4,7 @@ import { EntityId } from '../entities/entities-types';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { TribeInfo } from '../ui/ui-types';
+import { getTribeLeaderForCoordination, isTribalProcreationTaskAssigned } from './tribe-task-utils.ts';
 
 export function countLivingOffspring(humanId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
@@ -19,6 +20,7 @@ export function findPotentialNewPartners(
 ): HumanEntity[] {
   const indexedState = gameState as IndexedWorldState;
   const candidates = indexedState.search.human.byRadius(sourceHuman.position, radius);
+  const leader = getTribeLeaderForCoordination(sourceHuman, gameState);
 
   return candidates.filter((partner) => {
     if (
@@ -27,7 +29,8 @@ export function findPotentialNewPartners(
       !partner.isAdult ||
       partner.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
       (partner.procreationCooldown || 0) > 0 ||
-      (partner.gender === 'female' && partner.isPregnant)
+      (partner.gender === 'female' && partner.isPregnant) ||
+      isTribalProcreationTaskAssigned(leader, sourceHuman.id, partner.id, gameState.time)
     ) {
       return false;
     }

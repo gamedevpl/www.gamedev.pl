@@ -13,10 +13,7 @@ import {
   assignPlantingZone,
   countTribeMembersWithAction,
 } from '../../../utils/tribe-food-utils';
-import {
-  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-  BERRY_COST_FOR_PLANTING,
-} from '../../../berry-bush-consts.ts';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../../../berry-bush-consts.ts';
 import {
   BT_PLANTING_SEARCH_COOLDOWN_HOURS,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
@@ -33,9 +30,16 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
+import {
+  getTribeLeaderForCoordination,
+  isTribalPlantTaskAssigned,
+  registerTribalPlantTask,
+  removeTribalPlantTask,
+} from '../../../utils/tribe-task-utils';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 const ASSIGNED_ZONE_KEY = 'assignedPlantingZone';
+const PLANTING_PROXIMITY_RADIUS = 50;
 
 /**
  * Helper function to get the closest wrapped representation of a target position
@@ -61,20 +65,33 @@ function getClosestWrappedTarget(
  * it from running on every tick, which improves performance.
  *
  * Enhanced with adaptive logic based on tribe food security and smart zone distribution.
+ * Now includes tribal task coordination to prevent multiple members from planting in the same spot.
  */
 export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to move to the spot and plant. Assumes 'plantingSpot' is in the blackboard.
   const moveAndPlantAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const plantingSpot = Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY);
+      const leader = getTribeLeaderForCoordination(human, context.gameState);
 
       // Guard: If the spot is gone, fail and clear the blackboard.
-      if (
-        !plantingSpot ||
-        isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)
-      ) {
+      if (!plantingSpot) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is missing'];
+      }
+
+      // Check if spot is occupied
+      if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
+        if (leader) {
+          removeTribalPlantTask(leader, plantingSpot);
+        }
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        return [NodeStatus.FAILURE, 'Planting spot is occupied'];
+      }
+
+      // Register/refresh the planting task to hold the spot
+      if (leader) {
+        registerTribalPlantTask(leader, plantingSpot, human.id, context.gameState.time);
       }
 
       // Calculate the closest wrapped representation of the target
@@ -101,19 +118,19 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
         return [NodeStatus.RUNNING, 'Moving to planting spot: ' + distance.toFixed(2) + ' units away'];
       }
 
-      // Arrived at the spot. Now check if it's still available.
+      // Arrived at the spot. Check one more time if it's still available.
       if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
+        if (leader) {
+          removeTribalPlantTask(leader, plantingSpot);
+        }
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is now occupied'];
       }
 
       // Spot is available, initiate the planting state.
       // The Human state machine will handle the actual planting.
-      // This node will return RUNNING. When the state machine finishes planting,
-      // it should change the human's activeAction. The next time this behavior runs,
-      // the newly planted bush will cause isPositionOccupied to be true,
-      // which will clear the blackboard key and cause this action to fail,
-      // allowing a new spot to be found later.
+      // Keep the task registered so no one else tries to plant here.
+      // The task will timeout after TRIBAL_TASK_TIMEOUT_HOURS or be cleaned up when the bush appears.
       human.activeAction = 'planting';
       human.target = plantingSpot;
       return [NodeStatus.RUNNING, 'Planting state initiated'];
@@ -125,6 +142,8 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
+      const leader = getTribeLeaderForCoordination(human, context.gameState);
+
       // First, try to find a spot in an assigned or available planting zone
       const assignedZone = assignPlantingZone(human, context.gameState);
       if (assignedZone) {
@@ -139,6 +158,11 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       }
 
       if (spot) {
+        // Check if this spot (or nearby area) is already assigned to another tribe member
+        if (leader && isTribalPlantTaskAssigned(leader, spot, context.gameState.time, PLANTING_PROXIMITY_RADIUS)) {
+          return [NodeStatus.FAILURE, 'Spot already assigned to another tribe member'];
+        }
+
         Blackboard.set(blackboard, BLACKBOARD_KEY, spot);
         return [NodeStatus.SUCCESS, `Found new spot at ${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}`];
       }
@@ -161,7 +185,9 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
             canPlant,
             canPlant
               ? 'Can plant'
-              : `Cannot plant: adult=${human.isAdult}, berries=${human.food.filter((f) => f.type === FoodType.Berry).length}/${BERRY_COST_FOR_PLANTING}, hunger=${human.hunger.toFixed(0)}`,
+              : `Cannot plant: adult=${human.isAdult}, berries=${
+                  human.food.filter((f) => f.type === FoodType.Berry).length
+                }/${BERRY_COST_FOR_PLANTING}, hunger=${human.hunger.toFixed(0)}`,
           ];
         },
         'Can Plant',
@@ -196,7 +222,9 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
 
           return [
             needsMoreBushes,
-            `Food security: ${(foodSecurity * 100).toFixed(0)}%, Bush density: ${bushDensity.toFixed(1)}/${requiredBushesPerMember}`,
+            `Food security: ${(foodSecurity * 100).toFixed(0)}%, Bush density: ${bushDensity.toFixed(
+              1,
+            )}/${requiredBushesPerMember}`,
           ];
         },
         'Needs More Bushes (Adaptive)',

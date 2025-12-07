@@ -8,6 +8,16 @@ import { UpdateContext } from '../../../world-types';
 import { PredatorEntity } from '../../../entities/characters/predator/predator-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types.ts';
+import {
+  getTribeLeaderForCoordination,
+  canJoinTribalHuntTask,
+  registerTribalHuntTask,
+  removeFromTribalHuntTask,
+  getTribalHuntTaskCount,
+} from '../../../utils/tribe-task-utils';
+
+const HUNT_TARGET_KEY = 'huntTarget';
+const HUNT_REGISTERED_KEY = 'huntRegistered';
 
 /**
  * Creates a behavior sub-tree for predators hunting prey.
@@ -33,7 +43,20 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
             context.gameState,
             'prey',
             PREDATOR_HUNT_RANGE * 10, // Search in wider range
-            (prey) => prey.hitpoints > 0, // Target must be alive
+            (prey) => {
+              if (prey.hitpoints <= 0) return false; // Target must be alive
+
+              // Check if this prey is already being hunted by too many predators
+              const leader = getTribeLeaderForCoordination(predator as any, context.gameState);
+              if (leader) {
+                const hunterCount = getTribalHuntTaskCount(leader, prey.id);
+                if (hunterCount >= 3) {
+                  return false; // Too many hunters already
+                }
+              }
+
+              return true;
+            },
           );
 
           if (closestPrey) {
@@ -44,15 +67,23 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
               context.gameState.mapDimensions.height,
             );
 
+            // Check if we can join this hunt
+            const leader = getTribeLeaderForCoordination(predator as any, context.gameState);
+            if (leader && !canJoinTribalHuntTask(leader, closestPrey.id, context.gameState.time)) {
+              return [false, 'Hunt is full'];
+            }
+
+            const hunterCount = leader ? getTribalHuntTaskCount(leader, closestPrey.id) : 0;
+
             if (distance <= PREDATOR_HUNT_RANGE) {
               // Prey is within hunting range
-              Blackboard.set(blackboard, 'huntTarget', closestPrey.id);
-              return true;
+              Blackboard.set(blackboard, HUNT_TARGET_KEY, closestPrey.id);
+              return [true, `Prey in range (${hunterCount ?? 0} hunters)`];
             } else if (distance <= PREDATOR_HUNT_RANGE * 10) {
               // Prey found but need to get closer
-              Blackboard.set(blackboard, 'huntTarget', closestPrey.id);
+              Blackboard.set(blackboard, HUNT_TARGET_KEY, closestPrey.id);
               Blackboard.set(blackboard, 'needToApproach', true);
-              return true;
+              return [true, `Approaching prey (${hunterCount ?? 0} hunters)`];
             }
           }
 
@@ -65,12 +96,34 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
       new TimeoutNode(
         new ActionNode(
           (predator, context: UpdateContext, blackboard) => {
-            const targetId = Blackboard.get(blackboard, 'huntTarget') as EntityId | undefined;
+            const targetId = Blackboard.get(blackboard, HUNT_TARGET_KEY) as EntityId | undefined;
             const target = targetId && (context.gameState.entities.entities[targetId] as PreyEntity | undefined);
             const needToApproach = Blackboard.get(blackboard, 'needToApproach') as boolean | undefined;
+            const isRegistered = Blackboard.get(blackboard, HUNT_REGISTERED_KEY) as boolean | undefined;
 
             if (!target || target.hitpoints <= 0) {
-              return NodeStatus.FAILURE;
+              // Target is dead or gone, cleanup
+              if (isRegistered && targetId) {
+                const leader = getTribeLeaderForCoordination(predator as any, context.gameState);
+                if (leader) {
+                  removeFromTribalHuntTask(leader, targetId, predator.id);
+                }
+                Blackboard.delete(blackboard, HUNT_REGISTERED_KEY);
+              }
+              return NodeStatus.SUCCESS; // Hunt completed or target lost
+            }
+
+            // Register this hunt if not already registered
+            if (!isRegistered) {
+              const leader = getTribeLeaderForCoordination(predator as any, context.gameState);
+              if (leader) {
+                const registered = registerTribalHuntTask(leader, target.id, predator.id, context.gameState.time);
+                if (!registered) {
+                  // Could not register (hunt is full)
+                  return NodeStatus.FAILURE;
+                }
+                Blackboard.set(blackboard, HUNT_REGISTERED_KEY, true);
+              }
             }
 
             const distance = calculateWrappedDistance(

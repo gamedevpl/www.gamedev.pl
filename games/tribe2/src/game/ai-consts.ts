@@ -8,8 +8,8 @@ export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 150 * 0.7; // AI decides t
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 150 * 0.8; // AI decides to attack if hunger >= this
 export const HUMAN_CRITICAL_HUNGER_FOR_STEALING: number = 80; // Hunger level that overrides some safeguards
 export const AI_HUNTING_HUNGER_THRESHOLD = 80; // Hunger level to consider hunting prey
-export const AI_HUNTING_FOOD_SEARCH_RADIUS = 300; // Radius to search for other food before hunting
-export const AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER = 600; // Max distance from tribe center to chase prey
+export const AI_HUNTING_FOOD_SEARCH_RADIUS = 400; // Radius to search for other food before hunting
+export const AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER = 800; // Max distance from tribe center to chase prey
 export const AI_DEFEND_BUSH_PREY_SEARCH_RADIUS = 150; // Radius to search for prey on claimed bushes
 export const HUMAN_AI_IDLE_WONDER_CHANCE: number = 0.1; // Chance (0-1) to wander when idle
 export const HUMAN_AI_IDle_WANDER_COOLDOWN = 10;

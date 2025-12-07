@@ -7,6 +7,7 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_RETRIEVING } from '../entities/characters/human/states/human-state-types';
 import { calculateStorageFoodPosition } from '../utils/storage-utils';
+import { getTribeLeaderForCoordination, removeTribalStorageTask } from '../utils/tribe-task-utils';
 
 /**
  * Interaction for retrieving food from a storage spot.
@@ -77,5 +78,16 @@ export const storageRetrieveInteraction: InteractionDefinition<HumanEntity, Buil
 
     // Play retrieve sound
     playSoundAt(context, SoundType.StorageRetrieve, target.position);
+
+    // Check if the retrieve sequence is complete for this agent
+    const isComplete = source.food.length >= source.maxFood || target.storedFood.length === 0;
+
+    if (isComplete) {
+      // Free up the storage task slot
+      const leader = getTribeLeaderForCoordination(source, context.gameState);
+      if (leader) {
+        removeTribalStorageTask(leader, target.id, source.id);
+      }
+    }
   },
 };

@@ -107,6 +107,13 @@ export function findValidPlantingSpot(
 }
 
 export function getTribeCenter(leaderId: EntityId, gameState: GameWorldState): Vector2D {
+  const buildings = (gameState as IndexedWorldState).search.building.byProperty('ownerId', leaderId);
+  if (buildings.length > 0) {
+    // buildings define the tribe center if any exist
+    const positions = buildings.map((building) => building.position);
+    return getAveragePosition(positions);
+  }
+
   const tribeMembers = findTribeMembers(leaderId, gameState);
   if (tribeMembers.length === 0) {
     const leader = gameState.entities.entities[leaderId];

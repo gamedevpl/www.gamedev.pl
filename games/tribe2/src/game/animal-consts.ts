@@ -52,17 +52,17 @@ export const ANIMAL_FEED_CHILD_COOLDOWN_HOURS: number = 2; // How long parent mu
 export const ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION: number = 30; // How much hunger is reduced when fed by parent
 
 // Ecosystem Animal Parameters
-export const MIN_PREY_GESTATION_PERIOD = 10; // in game hours
+export const MIN_PREY_GESTATION_PERIOD = 20; // in game hours
 export const MAX_PREY_GESTATION_PERIOD = 40; // in game hours
-export const MIN_PREY_PROCREATION_COOLDOWN = 12; // in game hours
+export const MIN_PREY_PROCREATION_COOLDOWN = 24; // in game hours
 export const MAX_PREY_PROCREATION_COOLDOWN = 48; // in game hours
 
 export const MIN_PREDATOR_GESTATION_PERIOD = 12; // in game hours
-export const MAX_PREDATOR_GESTATION_PERIOD = 50; // in game hours
-export const MIN_PREDATOR_PROCREATION_COOLDOWN = 18; // in game hours
+export const MAX_PREDATOR_GESTATION_PERIOD = 40; // in game hours
+export const MIN_PREDATOR_PROCREATION_COOLDOWN = 20; // in game hours
 export const MAX_PREDATOR_PROCREATION_COOLDOWN = 60; // in game hours
 
-export const MIN_PREY_HUNGER_INCREASE_PER_HOUR = 0.5;
+export const MIN_PREY_HUNGER_INCREASE_PER_HOUR = 0.75;
 export const MAX_PREY_HUNGER_INCREASE_PER_HOUR = 2.5;
 export const MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR = 0.25;
 export const MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR = 2.0;

@@ -15,6 +15,13 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { hasNearbyNonFullStorage } from '../../../utils/storage-utils';
+import {
+  getTribeLeaderForCoordination,
+  isTribalGatherTaskAssigned,
+  registerTribalGatherTask,
+  removeTribalGatherTask,
+  getTribalGatherTaskAssignee,
+} from '../../../utils/tribe-task-utils';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -26,12 +33,17 @@ const BLACKBOARD_KEY = 'foodSource';
  * moving towards an existing target or to find a new one. The search for a new
  * food source is computationally more expensive, so it's wrapped in a CachingNode
  * to prevent it from running on every single AI tick, improving performance.
+ *
+ * Now includes tribe coordination to prevent multiple members from gathering
+ * from the same bush simultaneously.
  */
 export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find the closest food source and store it in the blackboard.
   const findFoodSourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
+      const leader = getTribeLeaderForCoordination(human, context.gameState);
       const distanceToOwnerCache = new Map<EntityId, number>();
+
       const closestBush = findClosestEntity<BerryBushEntity>(
         human,
         context.gameState,
@@ -40,6 +52,15 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         (bush) => {
           if (bush.food.length === 0) {
             return false;
+          }
+
+          // Check if another tribe member is already gathering from this bush
+          if (leader && isTribalGatherTaskAssigned(leader, bush.id, context.gameState.time)) {
+            const assignee = getTribalGatherTaskAssignee(leader, bush.id);
+            // Allow if we're the one assigned to it
+            if (assignee !== human.id) {
+              return false;
+            }
           }
 
           // If bush is not claimed or claim has expired, it's fair game.
@@ -79,7 +100,19 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         context.gameState,
         'corpse',
         AI_GATHERING_SEARCH_RADIUS,
-        (c) => c.food.length > 0,
+        (c) => {
+          if (c.food.length === 0) {
+            return false;
+          }
+          if (leader && isTribalGatherTaskAssigned(leader, c.id, context.gameState.time)) {
+            const assignee = getTribalGatherTaskAssignee(leader, c.id);
+            // Allow if we're the one assigned to it
+            if (assignee !== human.id) {
+              return false;
+            }
+          }
+          return true;
+        },
       );
 
       let foodSource: FoodSource | null = null;
@@ -102,6 +135,11 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       }
 
       if (foodSource) {
+        // Register the gathering task
+        if (leader) {
+          registerTribalGatherTask(leader, foodSource.id, human.id, context.gameState.time);
+        }
+
         Blackboard.set(blackboard, BLACKBOARD_KEY, foodSource.id);
         return [
           NodeStatus.SUCCESS,
@@ -118,10 +156,18 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
   const moveAndGatherAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const targetId = Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY);
-      const target = targetId && (context.gameState.entities.entities[targetId] as FoodSource | undefined);
+      if (!targetId) {
+        return [NodeStatus.FAILURE, 'No target in blackboard'];
+      }
+      const target = context.gameState.entities.entities[targetId] as FoodSource | undefined;
 
       // Guard: If no target, fail. This shouldn't happen if the sequence is structured correctly.
       if (!target || target.food.length === 0) {
+        // Clean up tribal task if it was a bush
+        const leader = getTribeLeaderForCoordination(human, context.gameState);
+        if (leader && target) {
+          removeTribalGatherTask(leader, target.id);
+        }
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Food source is invalid or depleted'];
       }
@@ -138,6 +184,14 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         human.activeAction = 'gathering';
         human.direction = { x: 0, y: 0 };
         human.target = target.id; // Set target for interaction system
+
+        // Clean up tribal task when we start gathering
+        // The interaction system will handle the actual gathering
+        const leader = getTribeLeaderForCoordination(human, context.gameState);
+        if (leader) {
+          removeTribalGatherTask(leader, target.id);
+        }
+
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
       } else {
@@ -169,7 +223,9 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           return [
             (human.isAdult && hasCapacity && (isHungryEnough || hungryChildren.length > 0 || hasNonFullStorage)) ??
               false,
-            `${isHungryEnough ? 'H' : ''}${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}${hasNonFullStorage ? ' S' : ''}`,
+            `${isHungryEnough ? 'H' : ''}${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}${
+              hasNonFullStorage ? ' S' : ''
+            }`,
           ];
         },
         'Should Gather Food',

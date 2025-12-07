@@ -25,6 +25,10 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
             return [false, 'Not an adult - children flee instead'];
           }
 
+          if (human.hitpoints <= human.maxHitpoints * 0.3) {
+            return [false, 'Too injured to defend'];
+          }
+
           const { gameState } = context;
 
           // If already defending against a valid target, continue
@@ -98,6 +102,11 @@ export function createHumanDefendAgainstPredatorBehavior(depth: number): Behavio
             gameState.mapDimensions.width,
             gameState.mapDimensions.height,
           );
+
+          // Check if human should flee
+          if (human.hitpoints < human.maxHitpoints * 0.3) {
+            return NodeStatus.FAILURE; // Too injured to fight
+          }
 
           // Check if target is still valid and alive
           if (target.hitpoints <= 0) {

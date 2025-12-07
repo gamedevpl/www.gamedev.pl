@@ -45,10 +45,15 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(2),
       createDefendFamilyBehavior(2),
-      createHumanDefendAgainstPredatorBehavior(2), // Defend against predator attacks
-      createJealousyAttackBehavior(2),
-      createDefendClaimedBushBehavior(2),
-      createDesperateAttackBehavior(2),
+      new AutopilotControlled(
+        createHumanDefendAgainstPredatorBehavior(2),
+        'attack',
+        'Gated Defend Against Predator',
+        2,
+      ),
+      new AutopilotControlled(createJealousyAttackBehavior(2), 'attack', 'Gated Jealousy Attack', 2),
+      new AutopilotControlled(createDefendClaimedBushBehavior(2), 'attack', 'Gated Defend Claimed Bush', 2),
+      new AutopilotControlled(createDesperateAttackBehavior(2), 'attack', 'Gated Desperate Attack', 2),
 
       // --- PLAYER COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
       // These actions are triggered by direct player clicks and should always have high priority.
