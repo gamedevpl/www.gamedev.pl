@@ -23,7 +23,9 @@ npx tsx scripts/simulate.ts
 ```json
 {"command": "status"}
 ```
-Get current game state including player position, health, hunger, and population counts.
+Get current game state including player position, health, hunger, and population counts. The response includes all humans and their positions, which you can use to find potential partners or targets.
+
+**Note:** The simulation currently doesn't expose berry bush entities or prey/predator entities in the status response. To implement a complete strategy, you would need to enhance the status output to include these entities with their positions and IDs.
 
 ```json
 {"command": "move", "x": 100, "y": 200}

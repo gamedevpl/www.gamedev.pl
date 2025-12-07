@@ -40,6 +40,9 @@ function initialize() {
   console.error('Initializing game simulation...');
   gameState = initGame();
   
+  // Disable autosave in headless mode (no IndexedDB available)
+  gameState.autosaveIntervalSeconds = undefined;
+  
   // Disable player control initially - they're now AI controlled
   const playerEntity = Object.values(gameState.entities.entities).find(
     (e) => e.type === 'human' && e.isPlayer
@@ -101,6 +104,21 @@ function outputStatus() {
       isPlayer: h.isPlayer,
       activeAction: h.activeAction,
       tribeId: h.leaderId,
+    })),
+    berryBushes: bushes.map((b: any) => ({
+      id: b.id,
+      position: b.position,
+      foodCount: b.food?.length || 0,
+    })),
+    preyAnimals: prey.map((p: any) => ({
+      id: p.id,
+      position: p.position,
+      health: p.hitpoints,
+    })),
+    predatorAnimals: predators.map((p: any) => ({
+      id: p.id,
+      position: p.position,
+      health: p.hitpoints,
     })),
   };
   
