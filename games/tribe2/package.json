@@ -17,6 +17,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^3.2.3",
     "canvas": "^2.11.2",
+    "esbuild-register": "^3.6.0",
     "eslint": "^8.54.0",
     "genaicode": "^0.14.2",
     "jsdom": "^24.1.1",
@@ -32,7 +33,9 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
     "test": "YEARS_TO_SIMULATE=10 vitest --ui",
-    "test:run": "YEARS_TO_SIMULATE=10 vitest run"
+    "test:run": "YEARS_TO_SIMULATE=10 vitest run",
+    "simulate": "bash scripts/run-simulation.sh",
+    "play": "NODE_OPTIONS='--loader ./scripts/mp3-loader.mjs --no-warnings' npx tsx scripts/play.ts"
   },
   "author": "gtanczyk",
   "license": "ISC"
