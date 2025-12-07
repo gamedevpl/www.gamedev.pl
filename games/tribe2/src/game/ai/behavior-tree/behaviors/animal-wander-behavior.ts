@@ -22,7 +22,7 @@ export function createAnimalWanderBehavior(depth: number): BehaviorNode<PreyEnti
       const currentTime = context.gameState.time;
 
       // Create new wander target if none exists or if we've been wandering for too long
-      if (!wanderTarget || !wanderStartTime || currentTime - wanderStartTime > 2) {
+      if (!wanderTarget || wanderStartTime === undefined || currentTime - wanderStartTime > 2) {
         // Generate a random direction
         const angle = Math.random() * 2 * Math.PI;
         const distance = 50 + Math.random() * 100; // Random distance between 50-150 units
