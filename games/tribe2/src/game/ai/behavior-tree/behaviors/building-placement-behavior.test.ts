@@ -20,8 +20,7 @@ import { getTribeMembers } from '../../../utils/family-tribe-utils';
 import { getTribeStorageSpots, getTribePlantingZones } from '../../../utils/tribe-food-utils';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 
-const BUILDING_PLACEMENT_SEARCH_RADIUS = 300; // Search radius around tribe center
-const BUILDING_PLACEMENT_ATTEMPTS = 20; // Number of random positions to try
+// Test tolerance for building placement distance validation
 const BUILDING_PLACEMENT_TOLERANCE = 500; // Max distance for test validation (allows some variance)
 
 describe('Building Placement Behavior', () => {
