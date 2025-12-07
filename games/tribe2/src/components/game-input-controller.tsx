@@ -157,6 +157,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
           worldPos,
           player,
           gameStateRef.current,
+          event.shiftKey,
         );
       } else {
         gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;

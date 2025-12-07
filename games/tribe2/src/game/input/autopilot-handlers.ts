@@ -3,7 +3,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionType } from '../ui/ui-types';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
-import { GameWorldState, HoveredAutopilotAction } from '../world-types';
+import { GameWorldState, HoveredAutopilotAction, DiplomacyStatus } from '../world-types';
 import {
   findEntityAtPosition,
   findPlayerEntity,
@@ -26,12 +26,14 @@ import { BuildingEntity, BuildingType } from '../entities/buildings/building-typ
  * @param worldPos The mouse position in world coordinates.
  * @param player The player entity.
  * @param gameState The current game state.
+ * @param shiftKey Whether the shift key is currently pressed.
  * @returns A determined autopilot action or undefined if no specific action is available.
  */
 export const determineHoveredAutopilotAction = (
   worldPos: Vector2D,
   player: HumanEntity,
   gameState: GameWorldState,
+  shiftKey: boolean = false,
 ): HoveredAutopilotAction | undefined => {
   let determinedAction: HoveredAutopilotAction | undefined = undefined;
   const hoveredEntity = findEntityAtPosition(worldPos, gameState);
@@ -79,21 +81,45 @@ export const determineHoveredAutopilotAction = (
         determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
       } else if (building.buildingType === 'storageSpot') {
         // Handle storage spot interactions
-        if (building.ownerId === player.leaderId && building.isConstructed) {
-          // Player's tribe storage
-          if (
-            player.food.length > 0 &&
-            building.storedFood !== undefined &&
-            building.storageCapacity !== undefined &&
-            building.storedFood.length < building.storageCapacity
-          ) {
+        const isPlayerTribeStorage = building.ownerId === player.leaderId;
+        const hasStoredFood = building.storedFood !== undefined && building.storedFood.length > 0;
+        const hasStorageSpace =
+          building.storedFood !== undefined &&
+          building.storageCapacity !== undefined &&
+          building.storedFood.length < building.storageCapacity;
+
+        // SHIFT key pressed: prioritize RETRIEVE/STEAL if storage has food
+        if (shiftKey && building.isConstructed && hasStoredFood && player.food.length < player.maxFood) {
+          if (isPlayerTribeStorage) {
+            // Player's tribe storage - RETRIEVE
+            determinedAction = { action: PlayerActionType.AutopilotRetrieve, targetEntityId: hoveredEntity.id };
+          } else {
+            // Enemy storage - check if STEAL is possible
+            const playerLeader = player.leaderId
+              ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined)
+              : undefined;
+
+            if (playerLeader && playerLeader.diplomacy) {
+              const diplomacyStatus = playerLeader.diplomacy[building.ownerId];
+              if (diplomacyStatus === DiplomacyStatus.Hostile) {
+                // Hostile tribe - suggest STEAL (actual stealing will be validated by interaction checker)
+                determinedAction = { action: PlayerActionType.AutopilotGather, targetEntityId: hoveredEntity.id };
+              } else {
+                // Not hostile, just move
+                determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+              }
+            } else {
+              // No diplomacy info, just move
+              determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+            }
+          }
+        }
+        // Normal behavior (no SHIFT): deposit/retrieve based on player's inventory
+        else if (isPlayerTribeStorage && building.isConstructed) {
+          if (player.food.length > 0 && hasStorageSpace) {
             // Can deposit
             determinedAction = { action: PlayerActionType.AutopilotDeposit, targetEntityId: hoveredEntity.id };
-          } else if (
-            player.food.length < player.maxFood &&
-            building.storedFood !== undefined &&
-            building.storedFood.length > 0
-          ) {
+          } else if (player.food.length < player.maxFood && hasStoredFood) {
             // Can retrieve
             determinedAction = { action: PlayerActionType.AutopilotRetrieve, targetEntityId: hoveredEntity.id };
           } else {
