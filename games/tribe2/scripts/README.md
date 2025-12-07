@@ -2,6 +2,45 @@
 
 This directory contains scripts for running the Tribe2 game simulation in a headless mode, allowing automated gameplay and strategy development.
 
+## Quick Start
+
+### Running the Simulation
+
+```bash
+cd games/tribe2
+
+# Option 1: Using npm script
+npm run simulate
+
+# Option 2: Using the wrapper script directly
+bash scripts/run-simulation.sh
+
+# Option 3: Using Node with custom loader
+NODE_OPTIONS="--loader ./scripts/mp3-loader.mjs --no-warnings" npx tsx scripts/simulate.ts
+```
+
+### Interactive Player
+
+```bash
+npm run play
+```
+
+This starts an interactive session where you can type commands to control the game.
+
+### Running the Example AI Strategy
+
+```bash
+NODE_OPTIONS="--loader ./scripts/mp3-loader.mjs --no-warnings" npx tsx scripts/strategy-example.ts
+```
+
+This runs an automated AI that:
+- Gathers food when hungry
+- Plants bushes when it has excess food
+- Procreates when well-fed
+- Explores the map when idle
+
+Watch the stderr output to see the strategy's decision-making process!
+
 ## Scripts
 
 ### `simulate.ts` - Headless Game Simulation
@@ -92,7 +131,7 @@ This will start the simulation in the background and provide an interactive prom
 
 ## Game State Format
 
-The status response includes:
+The status response includes detailed information about all entities:
 
 ```typescript
 {
@@ -108,7 +147,7 @@ The status response includes:
     hunger: number,
     age: number,
     food: number,            // Number of food items
-    activeAction: string,
+    activeAction: string,    // Current activity (idle, moving, gathering, etc.)
     tribeId: number
   },
   population: {
@@ -127,24 +166,42 @@ The status response includes:
     isPlayer: boolean,
     activeAction: string,
     tribeId: number
+  }>,
+  berryBushes: Array<{
+    id: number,
+    position: {x: number, y: number},
+    foodCount: number        // Number of berries available
+  }>,
+  preyAnimals: Array<{
+    id: number,
+    position: {x: number, y: number},
+    health: number
+  }>,
+  predatorAnimals: Array<{
+    id: number,
+    position: {x: number, y: number},
+    health: number
   }>
 }
 ```
 
 ## Developing Game Strategies
 
-You can develop automated strategies by:
+You can develop automated strategies by creating scripts that:
+1. Spawn the simulation process
+2. Send commands via stdin
+3. Read game state from stdout
+4. Make decisions based on the state
 
-1. **Using the interactive player**: Run `play.ts` and use the `strategy` command to enable basic automation
-2. **Creating custom scripts**: Create your own script that spawns the simulation process and implements decision-making logic
-3. **Using external tools**: Any tool that can read/write to stdin/stdout can control the simulation
+### Example Strategy Implementation
 
-### Example Strategy Script
+See `scripts/strategy-example.ts` for a complete working example. Here's the core loop:
 
 ```typescript
 import { spawn } from 'child_process';
 
-const sim = spawn('npx', ['tsx', 'scripts/simulate.ts']);
+// Start simulation
+const sim = spawn('bash', ['scripts/run-simulation.sh']);
 
 // Send commands
 function send(cmd: any) {
@@ -156,17 +213,37 @@ sim.stdout.on('data', (data) => {
   const state = JSON.parse(data.toString());
   
   if (state.type === 'status' && state.player) {
-    // Implement your strategy here
-    if (state.player.hunger > 50) {
-      // Find nearest bush and gather
-      send({ command: 'gather', entityId: findNearestBush(state) });
+    // Example: Gather food when hungry
+    if (state.player.hunger > 60 && state.player.food < 3) {
+      const bushesWithFood = state.berryBushes.filter(b => b.foodCount > 0);
+      if (bushesWithFood.length > 0) {
+        // Find nearest bush
+        const nearest = bushesWithFood.reduce((closest, bush) => {
+          const distCurrent = distance(state.player.position, bush.position);
+          const distClosest = distance(state.player.position, closest.position);
+          return distCurrent < distClosest ? bush : closest;
+        });
+        // Gather from it
+        send({ command: 'gather', entityId: nearest.id });
+      }
     }
   }
 });
 
-// Request periodic updates
+// Request status updates
 setInterval(() => send({ command: 'status' }), 1000);
 ```
+
+### Key Strategy Considerations
+
+When developing strategies, keep in mind:
+
+1. **Hunger Management**: Hunger increases over time. Gather food before it's too late!
+2. **Berry Bush Locations**: Track which bushes have food and which are depleted
+3. **Movement Costs**: Moving takes time and increases hunger
+4. **Procreation Timing**: Requires low hunger and sufficient food reserves
+5. **Planting**: Requires 5 berries and creates sustainable food sources
+6. **Population Growth**: More humans means more food needs but also more workers
 
 ## Strategy Ideas
 
