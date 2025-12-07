@@ -1,8 +1,8 @@
-# Behavior Tree Testing - Final Report
+# Behavior Tree Testing - Progress Report
 
 ## Executive Summary
 
-Conducted systematic testing of behavior tree behaviors in the tribe2 game. **Successfully resolved the major blocker** preventing further testing by implementing search index mocking. Tested 4 behaviors (10% of total), wrote 57 comprehensive tests (all passing), found and fixed 1 bug, and **unblocked testing of ~30+ additional behaviors**.
+Conducted systematic testing of behavior tree behaviors in the tribe2 game with expanded focus on semantic and logic analysis. **Successfully resolved the major blocker** preventing further testing by implementing search index mocking. Tested **7 behaviors** (17% of total), wrote **110+ comprehensive tests** (all passing), found and fixed 1 bug, identified 5 semantic issues, and **unblocked testing of ~30+ additional behaviors**.
 
 ---
 
@@ -11,9 +11,10 @@ Conducted systematic testing of behavior tree behaviors in the tribe2 game. **Su
 ### Testing Infrastructure ✅
 - Created production-ready test utilities (`behavior-test-utils.ts`)
 - **Implemented search index mocking** (`search-index-mock.ts`) ⭐
-- Established clear testing patterns
+- Established clear testing patterns  
 - Set up organized test directory structure
 - Documented best practices for behavior testing
+- **Added semantic and logic analysis framework**
 
 ### Major Blocker Resolved ⭐
 **Search Index Dependency** - Previously blocked ~30 behaviors, **NOW RESOLVED**
@@ -45,9 +46,31 @@ Conducted systematic testing of behavior tree behaviors in the tribe2 game. **Su
    - Time-based expiration
    - **1 bug found and fixed**
 
-4. **prey-graze-behavior.ts** (15 tests) ⭐ NEW
+4. **prey-graze-behavior.ts** (15 tests)
    - Spatial queries using search index
    - Condition checks (hunger, cooldown, bush availability)
+   - Action execution (grazing vs moving)
+   - Multiple bush selection
+   - No bugs found
+
+5. **gathering-behavior.ts** (14 tests)
+   - Complex caching and adaptive thresholds
+   - Condition checks with children and storage
+   - Selector pattern with blackboard reuse
+   - **Semantic issue identified** (cache race condition)
+
+6. **prey-flee-behavior.ts** (20 tests)
+   - Threat detection (predators and humans)
+   - Flee direction and distance calculation
+   - Blackboard state management
+   - World wrapping
+   - No bugs found
+
+7. **predator-hunt-behavior.ts** (19 tests)
+   - Hunger and cooldown checks
+   - Target selection and pursuit
+   - TimeoutNode behavior
+   - **Semantic issue identified** (timeout logic)
    - Action execution (grazing vs moving)
    - Multiple bush selection
    - No bugs found
@@ -126,12 +149,14 @@ when importing `fleeing-behavior.ts`
 
 | Metric | Value |
 |--------|-------|
-| Behaviors Tested | 4 / ~40 (10%) |
-| Tests Written | 57 |
-| Tests Passing | 57 (100%) |
+| Behaviors Tested | 7 / ~41 (17%) |
+| Tests Written | 110 |
+| Tests Passing | 110 (100%) |
 | Bugs Found | 1 |
 | Bugs Fixed | 1 |
-| Test Code Lines | ~1,060 |
+| **Semantic Issues Found** | **5** ⭐ |
+| **Good Patterns Identified** | **2** |
+| Test Code Lines | ~2,100 |
 | Infrastructure Lines | ~420 |
 | **Blockers Resolved** | **1 (Search Index)** ⭐ |
 
@@ -252,8 +277,9 @@ For questions about this testing effort, see:
 
 ---
 
-*Report Updated*: December 7, 2024
-*Behaviors Tested*: 4 / ~40 (10%)
-*Tests Written*: 57 (100% passing)
-*Major Blocker*: ~~Search Index~~ **RESOLVED** ✅
+*Report Updated*: December 7, 2024  
+*Behaviors Tested*: 7 / ~41 (17%)  
+*Tests Written*: 110 (100% passing)  
+*Semantic Analysis*: 5 issues identified, 2 good patterns documented  
+*Major Blocker*: ~~Search Index~~ **RESOLVED** ✅  
 *Status*: **READY TO SCALE** 🚀
