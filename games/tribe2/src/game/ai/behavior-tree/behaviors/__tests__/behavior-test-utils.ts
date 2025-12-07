@@ -11,6 +11,8 @@ import { Blackboard, BlackboardData } from '../../behavior-tree-blackboard';
 import { EntityId } from '../../../../entities/entities-types';
 import { FoodItem } from '../../../../food/food-types';
 import { Vector2D } from '../../../../utils/math-types';
+import { createIndexedWorldState } from './search-index-mock';
+import { IndexedWorldState } from '../../../../world-index/world-index-types';
 
 /**
  * Creates a mock HumanEntity with sensible defaults for testing.
@@ -94,6 +96,8 @@ export function createMockPredator(overrides: Partial<PredatorEntity> = {}): Pre
 
 /**
  * Creates a mock UpdateContext with sensible defaults for testing.
+ * This creates a basic context without search indexes.
+ * For behaviors that need spatial queries, use createMockIndexedContext instead.
  */
 export function createMockContext(overrides: Partial<UpdateContext> = {}): UpdateContext {
   const entities: Record<EntityId, HumanEntity | PreyEntity | PredatorEntity> = {};
@@ -116,6 +120,22 @@ export function createMockContext(overrides: Partial<UpdateContext> = {}): Updat
 }
 
 /**
+ * Creates a mock UpdateContext with search indexes enabled.
+ * Use this for testing behaviors that use findClosestEntity or other spatial queries.
+ */
+export function createMockIndexedContext(overrides: Partial<UpdateContext> = {}): UpdateContext {
+  const context = createMockContext(overrides);
+  
+  // Convert the game state to an indexed world state
+  const indexedState = createIndexedWorldState(context.gameState);
+  
+  return {
+    ...context,
+    gameState: indexedState,
+  };
+}
+
+/**
  * Creates a food item for testing.
  */
 export function createMockFoodItem(overrides: Partial<FoodItem> = {}): FoodItem {
@@ -129,9 +149,16 @@ export function createMockFoodItem(overrides: Partial<FoodItem> = {}): FoodItem 
 
 /**
  * Adds an entity to a context's entity list.
+ * If the context is indexed, this will rebuild the search indexes.
  */
-export function addEntityToContext(context: UpdateContext, entity: HumanEntity | PreyEntity | PredatorEntity): void {
+export function addEntityToContext(context: UpdateContext, entity: HumanEntity | PreyEntity | PredatorEntity | any): void {
   context.gameState.entities.entities[entity.id] = entity;
+  
+  // If this is an indexed context, rebuild the indexes
+  if ('search' in context.gameState) {
+    const indexedState = createIndexedWorldState(context.gameState);
+    (context.gameState as any).search = indexedState.search;
+  }
 }
 
 /**
