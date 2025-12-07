@@ -37,7 +37,11 @@ function findBuildingPlacementPosition(
   // Try multiple random positions
   for (let attempt = 0; attempt < BUILDING_PLACEMENT_ATTEMPTS; attempt++) {
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * BUILDING_PLACEMENT_SEARCH_RADIUS;
+    // Use sqrt for uniform distribution within the circle.
+    // Linear random() would create clustering near the center because the area
+    // of a circle increases quadratically with radius. sqrt(random()) compensates
+    // for this and provides uniform area distribution.
+    const distance = Math.sqrt(Math.random()) * BUILDING_PLACEMENT_SEARCH_RADIUS;
     
     const position: Vector2D = {
       x: tribeCenter.x + Math.cos(angle) * distance,

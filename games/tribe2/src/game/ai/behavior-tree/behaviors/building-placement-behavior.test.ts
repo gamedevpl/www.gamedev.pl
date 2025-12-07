@@ -18,6 +18,11 @@ import { HUMAN_YEAR_IN_REAL_SECONDS } from '../../../human-consts';
 import { GAME_DAY_IN_REAL_SECONDS } from '../../../game-consts';
 import { getTribeMembers } from '../../../utils/family-tribe-utils';
 import { getTribeStorageSpots, getTribePlantingZones } from '../../../utils/tribe-food-utils';
+import { calculateWrappedDistance } from '../../../utils/math-utils';
+
+const BUILDING_PLACEMENT_SEARCH_RADIUS = 300; // Search radius around tribe center
+const BUILDING_PLACEMENT_ATTEMPTS = 20; // Number of random positions to try
+const BUILDING_PLACEMENT_TOLERANCE = 500; // Max distance for test validation (allows some variance)
 
 describe('Building Placement Behavior', () => {
   it('should place storage spots and planting zones as tribe grows', { timeout: 60000 }, () => {
@@ -182,10 +187,12 @@ describe('Building Placement Behavior', () => {
             y: tribeMembers.reduce((sum, m) => sum + m.position.y, 0) / tribeMembers.length,
           };
 
-          // Calculate distance (simple, not accounting for wrapping)
-          const distance = Math.sqrt(
-            Math.pow(building.position.x - tribeCenter.x, 2) +
-              Math.pow(building.position.y - tribeCenter.y, 2),
+          // Calculate distance using wrapped distance calculation
+          const distance = calculateWrappedDistance(
+            building.position,
+            tribeCenter,
+            gameState.mapDimensions.width,
+            gameState.mapDimensions.height,
           );
 
           console.log(
@@ -193,7 +200,8 @@ describe('Building Placement Behavior', () => {
           );
 
           // Buildings should be within 300px of tribe center (BUILDING_PLACEMENT_SEARCH_RADIUS)
-          expect(distance).toBeLessThan(500); // Allow some tolerance
+          // Allow some tolerance for edge cases and map wrapping
+          expect(distance).toBeLessThan(BUILDING_PLACEMENT_TOLERANCE);
         }
       });
     } else {
