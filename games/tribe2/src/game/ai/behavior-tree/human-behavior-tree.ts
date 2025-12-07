@@ -29,6 +29,7 @@ import {
   createStorageDepositBehavior,
   createStorageRetrieveBehavior,
   createStorageStealBehavior,
+  createBuildingPlacementBehavior,
 } from './behaviors';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
@@ -59,6 +60,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
+
+      // --- BUILDING PLACEMENT (LEADER) ---
+      new NonPlayerControlled(createBuildingPlacementBehavior(3), 'Gated Building Placement', 2),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),

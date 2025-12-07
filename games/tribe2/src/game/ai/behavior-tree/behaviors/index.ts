@@ -10,6 +10,7 @@ export * from './planting-behavior';
 export * from './storage-deposit-behavior';
 export * from './storage-retrieve-behavior';
 export * from './storage-steal-behavior';
+export * from './building-placement-behavior';
 export * from './leader-call-to-attack-behavior';
 export * from './tribe-member-combat-behavior';
 export * from './establish-family-territory-behavior';
