@@ -2,9 +2,11 @@
 
 ## Summary
 
-This document tracks all bugs, issues, and findings from systematic testing of behavior tree behaviors in the tribe2 game.
+This document tracks all bugs, issues, semantic problems, and logic issues from systematic testing of behavior tree behaviors in the tribe2 game.
 
-**Testing Progress**: 3 behaviors fully tested, 1 bug found and fixed, 42 tests written, all passing.
+**Testing Progress**: 7 behaviors fully tested, 1 bug fixed, 110 tests written, all passing.
+
+**Focus**: Not just bugs, but also semantic correctness and logic problems.
 
 ---
 
@@ -15,6 +17,8 @@ This document tracks all bugs, issues, and findings from systematic testing of b
 **Location**: `animal-wander-behavior.ts:25`
 
 **Severity**: Medium
+
+**Type**: Logic Error (falsy check)
 
 **Description**:
 The condition `!wanderStartTime` incorrectly treats `0` as a falsy value, causing the wander target to be regenerated even when it shouldn't be. Since `0` is a valid game time (start of game), this causes the behavior to always regenerate the target on every tick if the game starts at time 0.
@@ -46,57 +50,333 @@ if (!wanderTarget || wanderStartTime === undefined || currentTime - wanderStartT
 
 ---
 
-## Testing Infrastructure Challenges
+## Semantic and Logic Issues Found
 
-### Challenge #1: Search Index Dependency
+### ⚠️ Issue #1: prey-graze-behavior.ts - Redundant distance check in action
 
-**Severity**: High (blocks testing many behaviors)
+**Location**: `prey-graze-behavior.ts:82-89`
+
+**Severity**: Low (code quality)
+
+**Type**: Semantic Issue - Redundant Logic
 
 **Description**:
-Many behaviors use `findClosestEntity()` which requires `context.gameState.search` to be a fully initialized search index with methods like `byRadius()`, `all()`, etc. This is an `IndexedWorldState` with complex spatial indexing structures.
+The action node recalculates distance and checks if within range, even though the condition node already verified the bush exists and set `needToMoveToTarget` flag appropriately. This creates duplicate logic.
 
-**Affected Behaviors**:
-- All gathering/hunting behaviors
-- Fleeing behaviors  
-- Social behaviors (find nearby tribe members)
-- Procreation behaviors (find mates)
-- And many more...
+**Current Code**:
+```typescript
+// In condition (lines 40-56):
+if (distance <= PREY_INTERACTION_RANGE) {
+  Blackboard.set(blackboard, 'grazingTarget', closestBush.id);
+  return true;
+} else {
+  Blackboard.set(blackboard, 'grazingTarget', closestBush.id);
+  Blackboard.set(blackboard, 'needToMoveToTarget', true);
+  return true;
+}
 
-**Current Blocker**:
-Creating proper mock contexts with search indexes requires:
-1. Understanding the IndexedWorldState structure
-2. Implementing or mocking spatial indexing
-3. Properly initializing search indexes for all entity types
-4. Maintaining index consistency with entity additions
+// In action (lines 82-89):
+if (distance <= PREY_INTERACTION_RANGE) {
+  // Within range, start grazing
+  prey.activeAction = 'grazing';
+  ...
+} else if (needToMove || distance > PREY_INTERACTION_RANGE) {
+  // Need to move closer
+  prey.activeAction = 'moving';
+  ...
+}
+```
 
-**Attempted Workaround**:
-Created test for `prey-graze-behavior.ts` but it failed due to missing `search.berryBush` index.
+**Analysis**:
+- The condition already determines if target is within range
+- The action recalculates the same distance
+- The `needToMove` flag is set but the action still checks distance again
+- This is semantically correct but inefficient
 
 **Recommendation**:
-Either:
-1. Create a comprehensive `createMockIndexedContext()` helper that properly sets up search indexes
-2. Refactor behaviors to accept injected finder functions (dependency injection)
-3. Test only the simpler behaviors that don't use spatial queries
-4. Focus on integration testing with real game state
+Trust the condition's decision and simplify action logic:
+```typescript
+// Action should simply check the flag:
+if (needToMove) {
+  prey.activeAction = 'moving';
+  ...
+} else {
+  prey.activeAction = 'grazing';
+  ...
+}
+```
+
+**Impact**: Minor - works correctly but less efficient than needed
 
 ---
 
-### Challenge #2: Circular Import in fleeing-behavior
+### ⚠️ Issue #2: predator-hunt-behavior.ts - Inconsistent use of TimeoutNode
+
+**Location**: `predator-hunt-behavior.ts:65-115`
+
+**Severity**: Medium (behavioral)
+
+**Type**: Semantic Issue - Timeout may cause premature abandonment
+
+**Description**:
+The hunt action is wrapped in a TimeoutNode with a 10-hour timeout. This means if the predator is chasing prey for more than 10 hours, it will abandon the hunt even if it's close to catching the prey.
+
+**Current Code**:
+```typescript
+new TimeoutNode(
+  new ActionNode(
+    (predator, context: UpdateContext, blackboard) => {
+      // Hunt logic
+      return NodeStatus.RUNNING;
+    },
+    'Hunt or Approach Prey',
+    depth + 2,
+  ),
+  10,
+  'Hunt Timeout (10 hour)',
+  depth + 1,
+)
+```
+
+**Analysis**:
+- Timeout is meant to prevent infinite pursuit
+- However, 10 hours might be too short if prey is fast or evasive
+- Predator might abandon hunt right before catching prey
+- No consideration of distance to prey in timeout logic
+
+**Potential Problems**:
+1. **Wasted Energy**: Predator invests energy chasing, then gives up near success
+2. **Gameplay Balance**: May make predators less effective than intended
+3. **Semantic Mismatch**: Timeout is based on time, not on pursuit viability (distance, prey health, etc.)
+
+**Better Approach**:
+- Use distance-based abandonment (if prey gets too far, give up)
+- Use success probability metric (if chase is futile, abandon earlier)
+- Combine timeout with distance check
+
+**Impact**: Moderate - affects predator hunting effectiveness
+
+---
+
+### ⚠️ Issue #3: gathering-behavior.ts - Potential race condition with CachingNode
+
+**Location**: `gathering-behavior.ts:195-207`
+
+**Severity**: Low (edge case)
+
+**Type**: Logic Issue - Cache invalidation timing
+
+**Description**:
+The CachingNode caches the food source search result for `BT_GATHERING_SEARCH_COOLDOWN_HOURS`. If a food source is found, cached, then depleted by another entity, the behavior will continue trying to use the cached (now invalid) target until the cache expires.
+
+**Current Code**:
+```typescript
+new CachingNode(
+  findFoodSourceAction,
+  BT_GATHERING_SEARCH_COOLDOWN_HOURS,
+  'Cache Food Source Search',
+  depth + 3,
+),
+moveAndGatherAction,
+```
+
+**Analysis**:
+- Cache is time-based, not validity-based
+- If food source is depleted, `moveAndGatherAction` will detect it and fail
+- But the Sequence will try again, hit the cache, get same target, fail again
+- This creates a loop where human repeatedly tries to gather from empty source
+
+**Test Evidence**:
+From `gathering-behavior.test.ts` - we test "should FAIL if food source disappears" but this only tests the action failing, not the cache being smart about it.
+
+**Potential Problems**:
+1. **Wasted Effort**: Entity keeps trying depleted source until cache expires
+2. **Starvation Risk**: Entity doesn't look for new food when needed
+3. **NPCs look "dumb"**: Players see NPCs repeatedly failing at same task
+
+**Better Approach**:
+- Invalidate cache on FAILURE from moveAndGatherAction
+- Or use shorter cache duration
+- Or check food availability before returning cached result
+
+**Impact**: Moderate - affects gameplay realism and NPC intelligence perception
+
+---
+
+### ⚠️ Issue #4: Multiple behaviors - Inconsistent hunger threshold semantics
+
+**Location**: Various behaviors
+
+**Severity**: Low (consistency)
+
+**Type**: Semantic Issue - Inconsistent comparison operators
+
+**Description**:
+Different behaviors use different comparison operators for hunger thresholds, which can lead to off-by-one semantic errors and inconsistency.
+
+**Examples**:
+- `gathering-behavior.ts:161`: `hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING` (exclusive)
+- `prey-graze-behavior.ts:26`: `hunger <= 30` (inclusive)
+- `predator-hunt-behavior.ts:26`: `hunger <= 50` (inclusive)
+
+**Analysis**:
+When threshold is 50:
+- `hunger > 50` means 51+ will trigger (50 won't)
+- `hunger >= 50` means 50+ will trigger
+- `hunger <= 50` means 0-50 won't trigger (51+ will)
+
+**Potential Problems**:
+1. **Confusion**: Different semantics make code harder to reason about
+2. **Edge Cases**: Entities at exact threshold may behave unexpectedly
+3. **Tuning Difficulty**: Designers need to remember which operator is used where
+
+**Recommendation**:
+Standardize on one approach:
+- Either: `hunger > THRESHOLD` for "trigger when hungry" (consistent with gathering)
+- Or: `hunger >= THRESHOLD` with clear documentation
+- Document the semantics in constant definitions
+
+**Impact**: Low - works correctly but semantically inconsistent
+
+---
+
+### ⚠️ Issue #5: prey-graze-behavior.ts - Missing blackboard cleanup on failure
+
+**Location**: `prey-graze-behavior.ts:59-100`
+
+**Severity**: Low (memory leak)
+
+**Type**: Logic Issue - Blackboard state management
+
+**Description**:
+When the action fails (target is null or invalid), the blackboard keys `grazingTarget` and `needToMoveToTarget` are not explicitly cleared, potentially leaving stale data.
+
+**Current Code**:
+```typescript
+const targetId = Blackboard.get<EntityId>(blackboard, 'grazingTarget');
+const target = targetId && (context.gameState.entities.entities[targetId] as BerryBushEntity | undefined);
+
+if (!target) {
+  return NodeStatus.FAILURE; // Keys not cleared!
+}
+```
+
+**Analysis**:
+- Sequence node will fail and may re-run
+- Stale blackboard data might cause issues on next execution
+- However, condition node sets these keys on every success, which overwrites stale data
+- Still, explicit cleanup is better practice
+
+**Recommendation**:
+```typescript
+if (!target) {
+  Blackboard.delete(blackboard, 'grazingTarget');
+  Blackboard.delete(blackboard, 'needToMoveToTarget');
+  return NodeStatus.FAILURE;
+}
+```
+
+**Impact**: Very Low - unlikely to cause issues but violates cleanup principle
+
+---
+
+### ✅ Good Pattern #1: predator-hunt-behavior.ts - Proper dead entity check
+
+**Location**: `predator-hunt-behavior.ts:72`
+
+**Type**: Positive Finding
+
+**Description**:
+The behavior correctly checks `target.hitpoints <= 0` before attacking, preventing pursuit of dead prey.
+
+**Code**:
+```typescript
+if (!target || target.hitpoints <= 0) {
+  return NodeStatus.FAILURE;
+}
+```
+
+**Impact**: This is semantically correct and prevents wasteful pursuit.
+
+---
+
+### ✅ Good Pattern #2: prey-flee-behavior.ts - Normalized direction vectors
+
+**Location**: `prey-flee-behavior.ts:105`
+
+**Type**: Positive Finding
+
+**Description**:
+Flee direction is properly normalized, ensuring consistent flee speed regardless of threat position.
+
+**Code**:
+```typescript
+const normalizedFleeDirection = vectorNormalize(fleeDirection);
+```
+
+**Impact**: Ensures consistent and predictable behavior.
+
+---
+
+## Testing Infrastructure Challenges
+
+### ✅ Challenge #1: Search Index Dependency - RESOLVED
+
+**Resolution**: Created comprehensive `search-index-mock.ts` with full IndexType implementation
+
+**Impact**: Unblocked testing of ~30 behaviors requiring spatial queries
+
+---
+
+### ⚠️ Challenge #2: Circular Import in fleeing-behavior - STILL PRESENT
 
 **Severity**: High (blocks testing)
 
 **Description**:
-When attempting to import `fleeing-behavior.ts`, a circular dependency error occurs:
-```
-ReferenceError: Cannot access '__vite_ssr_import_4__' before initialization
-```
+When attempting to import `fleeing-behavior.ts`, a circular dependency error occurs.
 
-**Root Cause**: Not yet determined
+**Status**: Not yet investigated in detail
 
 **Impact**:
 - Cannot unit test fleeing behavior
 - Suggests potential architectural issue in module structure
 - May affect runtime performance or reliability
+
+**Next Steps**: Investigate import chain and break circular dependency
+
+---
+
+## Recommendations Summary
+
+### High Priority
+1. **Investigate circular import** in fleeing-behavior.ts
+2. **Review timeout logic** in predator-hunt-behavior.ts for balance
+
+### Medium Priority
+3. **Implement cache invalidation** on failure in gathering-behavior.ts
+4. **Standardize hunger threshold semantics** across all behaviors
+
+### Low Priority
+5. **Add blackboard cleanup** on failure paths
+6. **Remove redundant distance checks** where condition already checked
+
+### Good Practices to Continue
+- Testing exact threshold values (edge cases)
+- Checking for dead entities before interacting
+- Normalizing direction vectors
+- Using explicit undefined checks instead of falsy checks
+
+---
+
+## Statistics
+
+- **Behaviors Tested**: 7 / ~41 (17%)
+- **Tests Written**: 110
+- **Tests Passing**: 110 (100%)
+- **Bugs Found**: 1 (fixed)
+- **Semantic Issues Found**: 5 (documented)
+- **Good Patterns Identified**: 2
+- **Blockers**: 1 (circular import)
 
 **Investigation Needed**:
 - Map out the import dependency chain
