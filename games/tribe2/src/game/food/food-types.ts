@@ -1,7 +1,6 @@
-
 export enum FoodType {
-  Berry = "berry",
-  Meat = "meat",
+  Berry = 'berry',
+  Meat = 'meat',
 }
 
 export interface FoodItem {
@@ -9,6 +8,6 @@ export interface FoodItem {
 }
 
 export const FOOD_TYPE_EMOJIS: Record<FoodType, string> = {
-  [FoodType.Berry]: "🍓",
-  [FoodType.Meat]: "🥩",
+  [FoodType.Berry]: '🍓',
+  [FoodType.Meat]: '🥩',
 };

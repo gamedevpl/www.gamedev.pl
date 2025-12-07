@@ -14,6 +14,7 @@ import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping } from './render-utils';
 import { Entity } from '../entities/entities-types';
+import { FOOD_TYPE_EMOJIS } from '../food/food-types';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -22,6 +23,9 @@ const STONE_VAR_RADIUS = 0.5; // How much size varies
 const STONE_VAR_OFFSET = 2; // How much position wiggles
 const STONE_COLOR_BASE = '#5a5a5a'; // Dark grey
 const STONE_COLOR_HIGHLIGHT = '#7e7e7e'; // Lighter grey
+
+// Storage rendering constants
+const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
 /**
  * A simple pseudo-random number generator based on an input seed.
@@ -105,6 +109,45 @@ function drawStoneRect(
 }
 
 /**
+ * Renders the contents of a storage spot as miniature food item icons
+ * scattered around the building.
+ */
+function renderStorageContents(ctx: CanvasRenderingContext2D, building: BuildingEntity): void {
+  if (!building.storedFood || building.storedFood.length === 0) {
+    return;
+  }
+
+  const { position, storedFood } = building;
+
+  ctx.save();
+  ctx.font = `${STORAGE_ITEM_ICON_SIZE}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Add a subtle shadow to make emojis stand out
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 2;
+
+  storedFood.forEach((foodItem) => {
+    const emoji = FOOD_TYPE_EMOJIS[foodItem.item.type];
+
+    // Use stored position if available, otherwise calculate fallback
+    const renderPos: Vector2D = {
+      x: position.x + foodItem.positionOffset.x,
+      y: position.y + foodItem.positionOffset.y,
+    };
+
+    ctx.fillText(emoji, renderPos.x, renderPos.y);
+  });
+
+  // Reset shadow
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+
+  ctx.restore();
+}
+
+/**
  * Renders a building entity.
  */
 export function renderBuilding(
@@ -174,25 +217,10 @@ export function renderBuilding(
     );
   }
 
-  // 4. Draw Storage Capacity (for storage spots)
-  if (building.buildingType === 'storageSpot' && building.storedFood !== undefined) {
-    const capacityText = `${building.storedFood.length}/${building.storageCapacity ?? 0}`;
-    const textY = position.y - height / 2 - 20;
-
-    ctx.save();
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Draw text with outline for better visibility
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.lineWidth = 3;
-    ctx.strokeText(capacityText, position.x, textY);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(capacityText, position.x, textY);
-
-    ctx.restore();
+  // 4. Render storage contents as miniature food items
+  // This is called after ctx.restore() to ensure clean transform state
+  if (building.buildingType === 'storageSpot' && isConstructed) {
+    renderStorageContents(ctx, building);
   }
 }
 

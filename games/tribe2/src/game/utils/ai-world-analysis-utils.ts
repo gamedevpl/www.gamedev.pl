@@ -20,10 +20,9 @@ import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
 import { areFamily, getFamilyMembers, getTribeMembers, isLineage } from './family-tribe-utils';
 import { findClosestEntity } from './entity-finder-utils';
-import { findValidPlantingSpot, getTribeCenter, isPositionOccupied } from './spatial-utils';
+import { findValidPlantingSpot, getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
-import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 
 /**
  * Checks if a human's primary partner is procreating with another human nearby.
@@ -425,126 +424,4 @@ export function findPreyOnClaimedBush(human: HumanEntity, gameState: GameWorldSt
   }
 
   return undefined;
-}
-
-/**
- * Checks if a position is within the rectangular bounds of a building zone,
- * accounting for world wrapping (toroidal world).
- */
-export function isPositionInZone(position: Vector2D, zone: BuildingEntity, gameState: GameWorldState): boolean {
-  const worldWidth = gameState.mapDimensions.width;
-  const worldHeight = gameState.mapDimensions.height;
-
-  // Calculate relative position accounting for wrapping
-  let dx = position.x - zone.position.x;
-  let dy = position.y - zone.position.y;
-
-  // Handle wrapping
-  if (Math.abs(dx) > worldWidth / 2) dx -= Math.sign(dx) * worldWidth;
-  if (Math.abs(dy) > worldHeight / 2) dy -= Math.sign(dy) * worldHeight;
-
-  return Math.abs(dx) <= zone.width / 2 && Math.abs(dy) <= zone.height / 2;
-}
-
-/**
- * Calculates the maximum number of bushes that can fit in a planting zone
- * based on its dimensions and required clearance radius.
- */
-export function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
-  const diameter = BERRY_BUSH_PLANTING_CLEARANCE_RADIUS * 2;
-  const cols = Math.floor(zone.width / diameter);
-  const rows = Math.floor(zone.height / diameter);
-  return Math.max(1, cols * rows); // At least 1 bush can fit
-}
-
-/**
- * Counts the number of berry bushes currently within a planting zone.
- */
-export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
-  const indexedState = gameState as IndexedWorldState;
-
-  // Search for bushes in a radius that covers the zone
-  const searchRadius = Math.sqrt(zone.width * zone.width + zone.height * zone.height) / 2;
-  const nearbyBushes = indexedState.search.berryBush.byRadius(zone.position, searchRadius);
-
-  // Filter to only bushes actually within the zone bounds
-  return nearbyBushes.filter((bush) => isPositionInZone(bush.position, zone, gameState)).length;
-}
-
-/**
- * Gets all planting zones belonging to the human's tribe.
- */
-export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldState): BuildingEntity[] {
-  // If the human has no tribe, they can't have planting zones
-  if (!human.leaderId) {
-    return [];
-  }
-
-  const indexedState = gameState as IndexedWorldState;
-
-  // Get all buildings in the world
-  const allBuildings = indexedState.search.building.all();
-
-  // Filter for planting zones owned by tribe members
-  return allBuildings.filter((building) => {
-    if (building.buildingType !== BuildingType.PlantingZone) {
-      return false;
-    }
-
-    // Check if the building owner is part of the same tribe
-    if (building.ownerId) {
-      const owner = gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
-      return owner && owner.leaderId === human.leaderId;
-    }
-
-    return false;
-  });
-}
-
-/**
- * Finds an optimal planting spot within the tribe's planting zones.
- * Returns null if no zones exist or all zones are full.
- */
-export function findOptimalPlantingZoneSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
-  const zones = getTribePlantingZones(human, gameState);
-
-  // No planting zones exist
-  if (zones.length === 0) {
-    return null;
-  }
-
-  const worldWidth = gameState.mapDimensions.width;
-  const worldHeight = gameState.mapDimensions.height;
-
-  // Try each zone to find a valid planting spot
-  for (const zone of zones) {
-    const capacity = calculatePlantingZoneCapacity(zone);
-    const currentCount = countBushesInZone(zone, gameState);
-
-    // Skip if this zone is full
-    if (currentCount >= capacity) {
-      continue;
-    }
-
-    // Try to find a valid spot within this zone (multiple random attempts)
-    const maxAttempts = 20;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      // Generate a random position within the zone
-      const randomX = zone.position.x + (Math.random() - 0.5) * zone.width;
-      const randomY = zone.position.y + (Math.random() - 0.5) * zone.height;
-
-      const position = {
-        x: ((randomX % worldWidth) + worldWidth) % worldWidth,
-        y: ((randomY % worldHeight) + worldHeight) % worldHeight,
-      };
-
-      // Check if this position is valid (not occupied)
-      if (!isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)) {
-        return position;
-      }
-    }
-  }
-
-  // All zones are full or no valid spots found
-  return null;
 }

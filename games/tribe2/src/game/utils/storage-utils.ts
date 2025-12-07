@@ -3,8 +3,19 @@ import { BuildingEntity } from '../entities/buildings/building-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
+import { Vector2D } from './math-types';
 
 const STORAGE_SEARCH_RADIUS = 100;
+const STORAGE_ITEM_SCATTER_RADIUS = 25;
+
+/**
+ * A simple pseudo-random number generator based on an input seed.
+ * Returns a number between 0 and 1.
+ */
+function pseudoRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
 
 /**
  * Checks if there are any nearby non-full storage spots belonging to the human's tribe.
@@ -124,4 +135,16 @@ export function findClosestStorage(
   }
 
   return closestStorage ? { storage: closestStorage, distance: closestDistance } : null;
+}
+
+/** Calculates the position offset for a food item within a storage building */
+export function calculateStorageFoodPosition(storage: BuildingEntity): Vector2D {
+  const itemCount = storage.storedFood ? storage.storedFood.length : 0;
+  const angle = pseudoRandom(itemCount + storage.id) * 2 * Math.PI;
+  const radius = pseudoRandom(itemCount + storage.id + 1) * STORAGE_ITEM_SCATTER_RADIUS;
+
+  return {
+    x: Math.cos(angle) * radius,
+    y: Math.sin(angle) * radius,
+  };
 }

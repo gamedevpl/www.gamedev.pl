@@ -105,7 +105,7 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
     // Transfer one food item from storage to thief
     const foodItem = target.storedFood.pop();
     if (foodItem) {
-      source.food.push(foodItem);
+      source.food.push(foodItem.item);
     }
 
     // Update cooldown timestamp

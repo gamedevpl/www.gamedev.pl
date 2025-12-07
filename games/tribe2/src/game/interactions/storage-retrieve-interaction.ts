@@ -6,6 +6,7 @@ import { STORAGE_INTERACTION_RANGE, STORAGE_RETRIEVE_COOLDOWN } from '../storage
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_RETRIEVING } from '../entities/characters/human/states/human-state-types';
+import { calculateStorageFoodPosition } from '../utils/storage-utils';
 
 /**
  * Interaction for retrieving food from a storage spot.
@@ -65,7 +66,10 @@ export const storageRetrieveInteraction: InteractionDefinition<HumanEntity, Buil
     // Transfer one food item from storage to source
     const foodItem = target.storedFood.pop();
     if (foodItem) {
-      source.food.push(foodItem);
+      source.food.push(foodItem.item);
+
+      // Recalculate positions for remaining stored items
+      calculateStorageFoodPosition(target);
     }
 
     // Update cooldown timestamp

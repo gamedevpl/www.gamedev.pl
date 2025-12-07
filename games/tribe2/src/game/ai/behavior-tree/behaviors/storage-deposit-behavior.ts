@@ -3,25 +3,45 @@ import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Selector } from '../nodes/composite-nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { BlackboardData } from '../behavior-tree-blackboard';
+import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
-import { findClosestStorage, findNearbyTribeStorageWithCapacity } from '../../../utils/storage-utils';
+import {
+  getStorageUtilization,
+  assignStorageSpot,
+  countTribeMembersWithAction,
+} from '../../../utils/tribe-food-utils';
+import { getTribeMembers } from '../../../utils';
+import {
+  DEPOSIT_COOLDOWN_HOURS,
+  DEPOSIT_THRESHOLD_LOW_STORAGE,
+  DEPOSIT_THRESHOLD_MID_STORAGE,
+  DEPOSIT_THRESHOLD_HIGH_STORAGE,
+} from '../../../ai-consts';
+import { calculateWrappedDistance } from '../../../utils/math-utils';
+import { EntityId } from '../../../entities/entities-types';
+import { BuildingEntity } from '../../../entities/buildings/building-types';
+
+const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
+const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
 
 /**
  * Creates a behavior for depositing excess food into tribe storage spots.
- * NPCs will deposit food when they have more than 50% of their carrying capacity.
+ * NPCs will deposit food based on adaptive thresholds that respond to tribe storage utilization.
+ * Includes cooldown to prevent constant trips and smart storage spot assignment.
  */
 export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Selector<HumanEntity>(
     [
       new Sequence<HumanEntity>(
         [
-          // Check if human has excess food and storage is available
+          // Check if human has excess food and storage is available (with adaptive threshold)
           new ConditionNode<HumanEntity>(
-            (human: HumanEntity, context: UpdateContext, _blackboard: BlackboardData) => {
-              // Must have excess food (more than 20% capacity)
-              if (human.food.length <= human.maxFood * 0.2) {
-                return [false, 'Not enough food to deposit'];
+            (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+              // Check cooldown
+              const lastDepositTime = Blackboard.get<number>(blackboard, LAST_DEPOSIT_TIME_KEY) || 0;
+              const timeSinceDeposit = context.gameState.time - lastDepositTime;
+              if (timeSinceDeposit < DEPOSIT_COOLDOWN_HOURS) {
+                return [false, `Cooldown: ${(DEPOSIT_COOLDOWN_HOURS - timeSinceDeposit).toFixed(1)}h remaining`];
               }
 
               // Must be an adult
@@ -29,56 +49,105 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 return [false, 'Not an adult'];
               }
 
-              // Find nearby storage spots belonging to the tribe with capacity
-              const tribeStorages = findNearbyTribeStorageWithCapacity(human, context.gameState);
-              const closest = findClosestStorage(human, tribeStorages, context.gameState);
-              const tribeStorage = closest?.storage;
+              // Must have a tribe
+              if (!human.leaderId) {
+                return [false, 'No tribe'];
+              }
 
-              if (!tribeStorage) {
+              // Calculate storage utilization and determine threshold
+              const storageUtil = getStorageUtilization(human.leaderId, context.gameState);
+              let depositThreshold: number;
+
+              if (storageUtil < 0.3) {
+                depositThreshold = DEPOSIT_THRESHOLD_LOW_STORAGE; // 0.4 - deposit more aggressively
+              } else if (storageUtil < 0.7) {
+                depositThreshold = DEPOSIT_THRESHOLD_MID_STORAGE; // 0.6 - balanced
+              } else {
+                depositThreshold = DEPOSIT_THRESHOLD_HIGH_STORAGE; // 0.8 - only deposit when very full
+              }
+
+              const personalFoodRatio = human.food.length / human.maxFood;
+              if (personalFoodRatio <= depositThreshold) {
+                return [
+                  false,
+                  `Food ${(personalFoodRatio * 100).toFixed(0)}% < threshold ${(depositThreshold * 100).toFixed(0)}%`,
+                ];
+              }
+
+              // Check if storage is available
+              const assignedStorage = assignStorageSpot(human, context.gameState);
+              if (!assignedStorage) {
                 return [false, 'No available tribe storage nearby'];
               }
 
               return [
                 true,
-                `Storage found at distance ${closest.distance.toFixed(1)}`,
+                `Storage util: ${(storageUtil * 100).toFixed(0)}%, Personal: ${(personalFoodRatio * 100).toFixed(0)}%`,
               ];
             },
             'Check for Excess Food and Storage',
             depth + 1,
           ),
 
+          // Coordination check: Ensure not too many tribe members are depositing simultaneously
+          new ConditionNode<HumanEntity>(
+            (human, context) => {
+              if (!human.leaderId) return [true, 'No tribe coordination needed'];
+
+              const activeDepositors = countTribeMembersWithAction(human.leaderId, context.gameState, 'depositing');
+              const tribeMembers = getTribeMembers(human, context.gameState);
+              const maxDepositors = Math.max(1, Math.ceil(tribeMembers.length * 0.4)); // Max 40% of tribe
+
+              return [activeDepositors < maxDepositors, `Active depositors: ${activeDepositors}/${maxDepositors}`];
+            },
+            'Not Too Many Depositors',
+            depth + 1,
+          ),
+
           // Navigate to storage and deposit
           new ActionNode<HumanEntity>(
-            (human: HumanEntity, context: UpdateContext, _blackboard: BlackboardData) => {
-              // Find nearest tribe storage spot with capacity
-              const tribeStorages = findNearbyTribeStorageWithCapacity(human, context.gameState);
+            (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+              // Get or assign storage spot
+              let storageId = Blackboard.get<EntityId>(blackboard, ASSIGNED_STORAGE_KEY);
+              let assignedStorage: BuildingEntity | null = null;
 
-              if (tribeStorages.length === 0) {
-                return [NodeStatus.FAILURE, 'No storage available'];
+              if (storageId) {
+                assignedStorage =
+                  (context.gameState.entities.entities[storageId] as BuildingEntity | undefined) || null;
               }
 
-              // Find closest storage
-              const closest = findClosestStorage(human, tribeStorages, context.gameState);
-
-              if (!closest) {
-                return [NodeStatus.FAILURE, 'No storage found'];
+              if (!assignedStorage) {
+                assignedStorage = assignStorageSpot(human, context.gameState);
+                if (!assignedStorage) {
+                  return [NodeStatus.FAILURE, 'No storage available'];
+                }
+                Blackboard.set(blackboard, ASSIGNED_STORAGE_KEY, assignedStorage.id);
               }
 
-              const closestStorage = closest.storage;
-              const closestDistance = closest.distance;
+              const distance = calculateWrappedDistance(
+                human.position,
+                assignedStorage.position,
+                context.gameState.mapDimensions.width,
+                context.gameState.mapDimensions.height,
+              );
 
               // Check if within interaction range
-              if (closestDistance <= STORAGE_INTERACTION_RANGE) {
-                // Within range - set depositing action so interaction can happen
+              if (distance <= STORAGE_INTERACTION_RANGE) {
+                // Within range - set depositing action
                 human.activeAction = 'depositing';
                 human.target = undefined;
+
+                // Set last deposit time and clear assigned storage
+                Blackboard.set(blackboard, LAST_DEPOSIT_TIME_KEY, context.gameState.time);
+                Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+
                 return [NodeStatus.SUCCESS, 'Depositing food'];
               }
 
               // Navigate toward storage
               human.activeAction = 'moving';
-              human.target = closestStorage.position;
-              return [NodeStatus.RUNNING, `Moving to storage (${closestDistance.toFixed(1)}px away)`];
+              human.target = assignedStorage.position;
+              return [NodeStatus.RUNNING, `Moving to storage (${distance.toFixed(1)}px away)`];
             },
             'Navigate to Storage and Deposit',
             depth + 1,

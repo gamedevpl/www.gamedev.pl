@@ -5,8 +5,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-utils';
 import { Vector2D } from './math-types';
 import { findTribeMembers, getFamilyMembers } from './family-tribe-utils';
-import { getTribePlantingZones, isPositionInZone } from './ai-world-analysis-utils';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts';
+import { BuildingEntity } from '../entities/buildings/building-types';
 
 export function getRandomNearbyPosition(
   center: Vector2D,
@@ -124,26 +123,20 @@ export function getFamilyCenter(human: HumanEntity, gameState: GameWorldState): 
 }
 
 /**
- * Checks if a position is inside any of the player's tribe's planting zones.
- * Also validates that the position has sufficient clearance from existing bushes.
- * @param position The position to check
- * @param player The player entity
- * @param gameState The current game state
- * @returns true if the position is in any planting zone and has clearance, false otherwise
+ * Checks if a position is within the rectangular bounds of a building zone,
+ * accounting for world wrapping (toroidal world).
  */
-export function isPositionInAnyPlantingZone(
-  position: Vector2D,
-  player: HumanEntity,
-  gameState: GameWorldState,
-): boolean {
-  const zones = getTribePlantingZones(player, gameState);
-  const isInZone = zones.some((zone) => isPositionInZone(position, zone, gameState));
-  
-  // If not in any zone, return false immediately
-  if (!isInZone) {
-    return false;
-  }
-  
-  // Check if the position has sufficient clearance from existing bushes
-  return !isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS);
+export function isPositionInZone(position: Vector2D, zone: BuildingEntity, gameState: GameWorldState): boolean {
+  const worldWidth = gameState.mapDimensions.width;
+  const worldHeight = gameState.mapDimensions.height;
+
+  // Calculate relative position accounting for wrapping
+  let dx = position.x - zone.position.x;
+  let dy = position.y - zone.position.y;
+
+  // Handle wrapping
+  if (Math.abs(dx) > worldWidth / 2) dx -= Math.sign(dx) * worldWidth;
+  if (Math.abs(dy) > worldHeight / 2) dy -= Math.sign(dy) * worldHeight;
+
+  return Math.abs(dx) <= zone.width / 2 && Math.abs(dy) <= zone.height / 2;
 }

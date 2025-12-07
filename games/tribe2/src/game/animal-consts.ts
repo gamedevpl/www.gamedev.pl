@@ -10,14 +10,14 @@ export const PREY_INITIAL_AGE: number = 2;
 export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better interactions
 
 // Player interaction ranges for animal hunting/defending
-export const PREY_FLEE_DISTANCE: number = 150;
-export const PREY_FLEE_SPEED_MODIFIER: number = 1.5; // 50% speed boost when fleeing
+export const PREY_FLEE_DISTANCE: number = 100;
+export const PREY_FLEE_SPEED_MODIFIER: number = 1.3; // 50% speed boost when fleeing
 export const PREY_MIN_PROCREATION_AGE: number = 2;
-export const PREY_MAX_PROCREATION_AGE: number = 8;
-export const PREY_EATING_COOLDOWN_HOURS: number = 0.5;
+export const PREY_MAX_PROCREATION_AGE: number = 3;
+export const PREY_EATING_COOLDOWN_HOURS: number = 0.9;
 export const PREY_BERRY_BUSH_DAMAGE: number = 1; // Reduces berry bush lifespan
-export const PREY_HUNGER_THRESHOLD_SLOW: number = 80; // When prey start moving slower
-export const PREY_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
+export const PREY_HUNGER_THRESHOLD_SLOW: number = 50; // When prey start moving slower
+export const PREY_SLOW_SPEED_MODIFIER: number = 0.5; // Speed reduction when hungry
 
 // Predator Constants
 export const PREDATOR_MAX_AGE_YEARS: number = 20; // Longer lifespan than prey
@@ -35,7 +35,7 @@ export const PREDATOR_HUNT_DAMAGE: number = 60; // Even higher for hunting prey
 export const PREDATOR_ATTACK_COOLDOWN_HOURS: number = 2;
 export const PREDATOR_HUNGER_THRESHOLD_SLOW: number = 90; // When predators start moving slower
 export const PREDATOR_SLOW_SPEED_MODIFIER: number = 0.7; // Speed reduction when hungry
-export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1.5;
+export const PREDATOR_HUNT_COOLDOWN_HOURS: number = 1;
 export const PREDATOR_MIN_PROCREATION_AGE: number = 3;
 export const PREDATOR_MAX_PROCREATION_AGE: number = 15;
 export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 80; // How much hunger is reduced by eating meat

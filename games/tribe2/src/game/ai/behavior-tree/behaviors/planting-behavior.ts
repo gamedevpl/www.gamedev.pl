@@ -2,18 +2,32 @@ import { FoodType } from '../../../food/food-types';
 import { Vector2D } from '../../../utils/math-types';
 import { calculateWrappedDistance, dirToTarget, getDirectionVectorOnTorus, vectorAdd } from '../../../utils/math-utils';
 import {
-  countEntitiesOfTypeInRadius,
-  findChildren,
   findOptimalBushPlantingSpot,
   findOptimalPlantingZoneSpot,
   isPositionOccupied,
+  getTribeMembers,
 } from '../../../utils';
 import {
-  AI_PLANTING_CHECK_RADIUS,
+  calculateTribeFoodSecurity,
+  getProductiveBushDensity,
+  assignPlantingZone,
+  countTribeMembersWithAction,
+} from '../../../utils/tribe-food-utils';
+import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   BERRY_COST_FOR_PLANTING,
 } from '../../../berry-bush-consts.ts';
-import { BT_PLANTING_SEARCH_COOLDOWN_HOURS, HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING } from '../../../ai-consts.ts';
+import {
+  BT_PLANTING_SEARCH_COOLDOWN_HOURS,
+  HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
+  FOOD_SECURITY_EMERGENCY_THRESHOLD,
+  FOOD_SECURITY_GROWTH_THRESHOLD,
+  FOOD_SECURITY_MAINTENANCE_THRESHOLD,
+  BUSHES_PER_MEMBER_EMERGENCY,
+  BUSHES_PER_MEMBER_GROWTH,
+  BUSHES_PER_MEMBER_MAINTENANCE,
+  BUSHES_PER_MEMBER_ABUNDANCE,
+} from '../../../ai-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
@@ -21,6 +35,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
+const ASSIGNED_ZONE_KEY = 'assignedPlantingZone';
 
 /**
  * Helper function to get the closest wrapped representation of a target position
@@ -44,6 +59,8 @@ function getClosestWrappedTarget(
  * an existing planting task or to start a new one. The search for a new planting
  * spot is the most expensive part, so it's wrapped in a CooldownNode to prevent
  * it from running on every tick, which improves performance.
+ *
+ * Enhanced with adaptive logic based on tribe food security and smart zone distribution.
  */
 export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to move to the spot and plant. Assumes 'plantingSpot' is in the blackboard.
@@ -108,7 +125,12 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      // First, try to find a spot in a planting zone
+      // First, try to find a spot in an assigned or available planting zone
+      const assignedZone = assignPlantingZone(human, context.gameState);
+      if (assignedZone) {
+        Blackboard.set(blackboard, ASSIGNED_ZONE_KEY, assignedZone.id);
+      }
+
       let spot = findOptimalPlantingZoneSpot(human, context.gameState);
 
       // If no zones exist or all are full, fall back to the original behavior
@@ -134,31 +156,69 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
           const hasEnoughBerries =
             human.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING;
           const isNotStarving = human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING;
-          return (human.isAdult && hasEnoughBerries && isNotStarving) ?? false;
+          const canPlant = (human.isAdult && hasEnoughBerries && isNotStarving) ?? false;
+          return [
+            canPlant,
+            canPlant
+              ? 'Can plant'
+              : `Cannot plant: adult=${human.isAdult}, berries=${human.food.filter((f) => f.type === FoodType.Berry).length}/${BERRY_COST_FOR_PLANTING}, hunger=${human.hunger.toFixed(0)}`,
+          ];
         },
         'Can Plant',
         depth + 1,
       ),
 
-      // 2. Environmental condition: Check if there's a need for more bushes.
+      // 2. Environmental condition: Check if there's a need for more bushes (adaptive).
       new ConditionNode(
         (human, context) => {
-          const nearbyBushes = countEntitiesOfTypeInRadius(
-            human.position,
-            context.gameState,
-            'berryBush',
-            AI_PLANTING_CHECK_RADIUS,
-          );
-          const children = findChildren(context.gameState, human);
-          // Plant more if the bush-to-child ratio is less than 2:1
-          const hasEnoughBushesForChildren = children.length === 0 || nearbyBushes >= children.length * 5;
-          return !hasEnoughBushesForChildren;
+          if (!human.leaderId) {
+            return [false, 'No tribe'];
+          }
+
+          const foodSecurity = calculateTribeFoodSecurity(human, context.gameState);
+          const bushDensity = getProductiveBushDensity(human.leaderId, context.gameState);
+
+          // Determine required bushes per member based on food security
+          let requiredBushesPerMember: number;
+          if (foodSecurity < FOOD_SECURITY_EMERGENCY_THRESHOLD) {
+            // Emergency: focus on gathering, minimal planting
+            requiredBushesPerMember = BUSHES_PER_MEMBER_EMERGENCY;
+          } else if (foodSecurity < FOOD_SECURITY_GROWTH_THRESHOLD) {
+            requiredBushesPerMember = BUSHES_PER_MEMBER_GROWTH;
+          } else if (foodSecurity < FOOD_SECURITY_MAINTENANCE_THRESHOLD) {
+            requiredBushesPerMember = BUSHES_PER_MEMBER_MAINTENANCE;
+          } else {
+            // Abundance: conservative planting
+            requiredBushesPerMember = BUSHES_PER_MEMBER_ABUNDANCE;
+          }
+
+          const needsMoreBushes = bushDensity < requiredBushesPerMember;
+
+          return [
+            needsMoreBushes,
+            `Food security: ${(foodSecurity * 100).toFixed(0)}%, Bush density: ${bushDensity.toFixed(1)}/${requiredBushesPerMember}`,
+          ];
         },
-        'Has Not Enough Nearby Bushes',
+        'Needs More Bushes (Adaptive)',
         depth + 1,
       ),
 
-      // 3. Main logic: Either continue the current planting task or find a new spot.
+      // 3. Coordination check: Ensure not too many tribe members are planting simultaneously.
+      new ConditionNode(
+        (human, context) => {
+          if (!human.leaderId) return [true, 'No tribe coordination needed'];
+
+          const tribeMembers = getTribeMembers(human, context.gameState);
+          const activePlanters = countTribeMembersWithAction(human.leaderId, context.gameState, 'planting');
+          const maxPlanters = Math.max(1, Math.ceil(tribeMembers.length * 0.3)); // Max 30% of tribe
+
+          return [activePlanters < maxPlanters, `Active planters: ${activePlanters}/${maxPlanters}`];
+        },
+        'Not Too Many Planters',
+        depth + 1,
+      ),
+
+      // 4. Main logic: Either continue the current planting task or find a new spot.
       new Selector(
         [
           // Branch A: A spot is already chosen. Move to it and plant.

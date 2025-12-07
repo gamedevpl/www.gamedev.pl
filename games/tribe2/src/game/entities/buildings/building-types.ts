@@ -35,7 +35,10 @@ export interface BuildingEntity extends Entity {
 
   // Storage-related properties (for StorageSpot buildings)
   /** Array of food items stored in the building. */
-  storedFood?: FoodItem[];
+  storedFood?: {
+    item: FoodItem;
+    positionOffset: { x: number; y: number };
+  }[];
 
   /** Maximum capacity for stored food. */
   storageCapacity?: number;

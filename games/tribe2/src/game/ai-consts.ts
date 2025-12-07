@@ -86,3 +86,19 @@ export const AUTOPILOT_MOVE_DISTANCE_THRESHOLD = 20;
 
 // LLM Autopilot
 export const LLM_AUTOPILOT_COOLDOWN_HOURS = 1; // Cooldown in game hours for LLM Autopilot decisions
+
+// Food Security and Adaptive Behavior Constants
+export const FOOD_SECURITY_EMERGENCY_THRESHOLD = 0.3; // Below this, tribe is in emergency mode
+export const FOOD_SECURITY_GROWTH_THRESHOLD = 0.6; // Below this, tribe is in growth mode
+export const FOOD_SECURITY_MAINTENANCE_THRESHOLD = 0.8; // Below this, tribe is in maintenance mode
+// Above MAINTENANCE_THRESHOLD is abundance mode
+
+export const BUSHES_PER_MEMBER_EMERGENCY = 1; // Minimal bush target during emergency
+export const BUSHES_PER_MEMBER_GROWTH = 3; // Bush target during growth phase
+export const BUSHES_PER_MEMBER_MAINTENANCE = 5; // Bush target during maintenance
+export const BUSHES_PER_MEMBER_ABUNDANCE = 6; // Bush target during abundance
+
+export const DEPOSIT_COOLDOWN_HOURS = 0.5; // Cooldown between deposits to prevent constant back-and-forth
+export const DEPOSIT_THRESHOLD_LOW_STORAGE = 0.4; // Deposit when personal food > 40% if storage < 30%
+export const DEPOSIT_THRESHOLD_MID_STORAGE = 0.6; // Deposit when personal food > 60% if storage 30-70%
+export const DEPOSIT_THRESHOLD_HIGH_STORAGE = 0.8; // Deposit when personal food > 80% if storage > 70%

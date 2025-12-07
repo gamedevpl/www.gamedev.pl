@@ -42,7 +42,7 @@ export function renderWorld(
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
   const sortedEntities = Object.values(gameState.entities.entities).sort((a, b) =>
-    a.position.y - b.position.y || a.id - b.id || a.type === 'building' ? -1 : 1,
+    a.type === 'building' && b.type !== 'building' ? -1 : a.position.y - b.position.y || a.id - b.id,
   );
 
   const visibleEntities = sortedEntities.filter((entity) =>

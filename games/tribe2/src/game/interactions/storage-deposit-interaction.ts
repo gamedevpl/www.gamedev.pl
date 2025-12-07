@@ -6,6 +6,7 @@ import { STORAGE_INTERACTION_RANGE, STORAGE_DEPOSIT_COOLDOWN } from '../storage-
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';
+import { calculateStorageFoodPosition } from '../utils/storage-utils';
 
 /**
  * Interaction for depositing food into a storage spot.
@@ -71,7 +72,10 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
     // Transfer one food item from source to storage
     const foodItem = source.food.pop();
     if (foodItem) {
-      target.storedFood.push(foodItem);
+      target.storedFood.push({
+        item: foodItem,
+        positionOffset: calculateStorageFoodPosition(target),
+      });
     }
 
     // Update cooldown timestamp
