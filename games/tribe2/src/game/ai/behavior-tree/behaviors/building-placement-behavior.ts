@@ -8,6 +8,7 @@ import { getTribeMembers } from '../../../utils/family-tribe-utils';
 import { getTribeStorageSpots, getStorageUtilization, getTribePlantingZones } from '../../../utils/tribe-food-utils';
 import { getTribeCenter } from '../../../utils/spatial-utils';
 import { Vector2D } from '../../../utils/math-types';
+import { STORAGE_SPOT_CAPACITY } from '../../../storage-spot-consts';
 
 const BUILDING_PLACEMENT_CHECK_COOLDOWN_HOURS = 12; // Check every 12 hours
 const MIN_TRIBE_SIZE_FOR_BUILDINGS = 5; // Minimum tribe size before placing buildings
@@ -15,6 +16,10 @@ const STORAGE_UTILIZATION_THRESHOLD = 0.6; // Place storage when utilization > 6
 const PLANTING_ZONE_MEMBERS_PER_ZONE = 8; // One planting zone per 8 members
 const BUILDING_PLACEMENT_SEARCH_RADIUS = 300; // Search radius around tribe center
 const BUILDING_PLACEMENT_ATTEMPTS = 20; // Number of random positions to try
+
+// Storage capacity planning constants
+const FOOD_ITEMS_PER_MEMBER_TARGET = 2; // Target: 2 food items per tribe member in storage
+const GROWTH_FACTOR = 1.5; // Plan for 50% growth in tribe size
 
 /**
  * Finds an optimal position for a building near the tribe center.
@@ -120,18 +125,33 @@ export function createBuildingPlacementBehavior(depth: number): BehaviorNode<Hum
                     const tribeMembers = getTribeMembers(human, context.gameState);
                     const storageSpots = getTribeStorageSpots(human.leaderId, context.gameState);
                     
+                    // Calculate current storage capacity
+                    const currentStorageCapacity = storageSpots.reduce(
+                      (sum, spot) => sum + (spot.storageCapacity || 0),
+                      0,
+                    );
+                    
+                    // Calculate target storage capacity based on tribe size and planned growth
+                    // Target: FOOD_ITEMS_PER_MEMBER_TARGET food items per member, planning for growth
+                    const currentTribeSize = tribeMembers.length;
+                    const plannedTribeSize = Math.ceil(currentTribeSize * GROWTH_FACTOR);
+                    const targetStorageCapacity = plannedTribeSize * FOOD_ITEMS_PER_MEMBER_TARGET;
+                    
                     // Need storage if:
-                    // 1. Utilization is high (> 60%), OR
-                    // 2. No storage exists and tribe is growing
+                    // 1. Current capacity is less than target capacity, OR
+                    // 2. Utilization is high (> 60%) indicating we need more space, OR
+                    // 3. No storage exists and tribe is growing
+                    const capacityDeficit = targetStorageCapacity - currentStorageCapacity;
                     const needsStorage =
+                      capacityDeficit >= STORAGE_SPOT_CAPACITY ||
                       storageUtilization > STORAGE_UTILIZATION_THRESHOLD ||
                       (storageSpots.length === 0 && tribeMembers.length >= MIN_TRIBE_SIZE_FOR_BUILDINGS);
 
                     return [
                       needsStorage,
                       needsStorage
-                        ? `Storage util: ${(storageUtilization * 100).toFixed(0)}%, Spots: ${storageSpots.length}`
-                        : `Storage adequate: ${(storageUtilization * 100).toFixed(0)}%`,
+                        ? `Need storage: capacity ${currentStorageCapacity}/${targetStorageCapacity} (deficit: ${capacityDeficit}), util: ${(storageUtilization * 100).toFixed(0)}%`
+                        : `Storage adequate: capacity ${currentStorageCapacity}/${targetStorageCapacity}, util: ${(storageUtilization * 100).toFixed(0)}%`,
                     ];
                   },
                   'Check Storage Need',

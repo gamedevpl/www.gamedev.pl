@@ -21,10 +21,16 @@ The behavior makes decisions about two types of buildings:
 #### 1. Storage Spots
 
 Storage spots are placed when:
+- Current storage capacity is insufficient for tribe size + planned growth (50% growth factor), OR
 - Storage utilization exceeds 60% (`STORAGE_UTILIZATION_THRESHOLD`), OR
 - The tribe has no storage and is large enough (≥5 members)
 
-**Purpose**: Provides centralized food storage to help tribes manage resources better, especially during times of abundance.
+**Calculation**: Target capacity = `(tribe_size * 1.5) * 2` food items
+- Plans for 50% tribe growth
+- Targets 2 food items per member in storage
+- Places new storage when deficit ≥ 20 items (one storage spot capacity)
+
+**Purpose**: Provides centralized food storage to help tribes manage resources better, especially during times of abundance, with capacity planning for future growth.
 
 #### 2. Planting Zones
 
@@ -87,6 +93,8 @@ const STORAGE_UTILIZATION_THRESHOLD = 0.6;           // Storage threshold (60%)
 const PLANTING_ZONE_MEMBERS_PER_ZONE = 8;            // Members per zone
 const BUILDING_PLACEMENT_SEARCH_RADIUS = 300;        // Search radius
 const BUILDING_PLACEMENT_ATTEMPTS = 20;              // Placement attempts
+const FOOD_ITEMS_PER_MEMBER_TARGET = 2;              // Target food per member
+const GROWTH_FACTOR = 1.5;                           // Plan for 50% growth
 ```
 
 ## Impact on Gameplay
