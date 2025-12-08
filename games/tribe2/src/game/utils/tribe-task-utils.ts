@@ -3,6 +3,7 @@ import { GameWorldState } from '../world-types';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { EntityId } from '../entities/entities-types';
 import { Vector2D } from './math-types';
+import { getTribeMembers } from './family-tribe-utils';
 
 /**
  * Task timeout in game hours - after this time, a task is considered abandoned
@@ -39,6 +40,17 @@ export function getTribeLeaderForCoordination(human: HumanEntity, gameState: Gam
     const leader = gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
     if (leader && leader.aiBlackboard) {
       return leader;
+    }
+
+    // Leader missing or without a blackboard — fall back to a deterministic tribe coordinator
+    const tribeMembers = getTribeMembers(human, gameState).filter((member) => member.aiBlackboard);
+    if (tribeMembers.length > 0) {
+      const [coordinator] = tribeMembers.sort((a, b) => {
+        if (a.isAdult !== b.isAdult) return a.isAdult ? -1 : 1; // Prefer adults
+        if (a.age !== b.age) return b.age - a.age; // Older first
+        return a.id - b.id; // Stable fallback
+      });
+      return coordinator;
     }
   }
 
