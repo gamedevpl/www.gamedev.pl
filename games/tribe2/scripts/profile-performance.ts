@@ -35,6 +35,11 @@ function createManyHumans(gameState: GameWorldState, count: number): void {
       false, // not player
       18, // adult age
       75, // some hunger
+      undefined, // motherId
+      undefined, // fatherId
+      [], // ancestorIds
+      undefined, // leaderId
+      undefined, // tribeBadge
     );
   }
 }
