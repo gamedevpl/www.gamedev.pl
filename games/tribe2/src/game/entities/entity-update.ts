@@ -16,58 +16,70 @@ import { buildingUpdate } from './buildings/building-update';
 import { BuildingEntity } from './buildings/building-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
-  // Apply friction/damping
-  entity.forces.push(vectorScale(entity.velocity, -0.1));
+  // Optimization: Skip physics for static entities (buildings, berry bushes, corpses with zero velocity)
+  const isStaticEntity = entity.type === 'berryBush' || entity.type === 'building';
+  const hasMovement = entity.velocity.x !== 0 || entity.velocity.y !== 0 || entity.acceleration !== 0;
+  
+  if (!isStaticEntity || hasMovement) {
+    // Apply friction/damping
+    entity.forces.push(vectorScale(entity.velocity, -0.1));
 
-  // Boundary forces are removed as the world now wraps
-  // const boundaryForce = calculateBoundaryForce(entity.position, BOUNDARY_FORCE_RANGE, BOUNDARY_FORCE_STRENGTH);
-  // entity.forces.push(boundaryForce);
+    // Apply acceleration force based on direction
+    const accelerationForce = vectorScale(vectorNormalize(entity.direction), entity.acceleration);
+    entity.forces.push(accelerationForce);
 
-  // Apply acceleration force based on direction
-  const accelerationForce = vectorScale(vectorNormalize(entity.direction), entity.acceleration);
-  entity.forces.push(accelerationForce);
+    // Optimization: Only process debuffs if there are any
+    if (entity.debuffs.length > 0) {
+      const currentTime = updateContext.gameState.time;
+      
+      // Process each active debuff
+      entity.debuffs.forEach((debuff) => {
+        const debuffElapsed = currentTime - debuff.startTime;
 
-  // Process each active debuff
-  entity.debuffs.forEach((debuff) => {
-    const debuffElapsed = updateContext.gameState.time - debuff.startTime;
+        if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
+          // Apply debuff effect - currently all debuffs reduce velocity by 50%
+          // Multiple debuffs stack multiplicatively
+          entity.velocity = vectorScale(entity.velocity, 0.5);
+        }
+      });
 
-    if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
-      // Apply debuff effect - currently all debuffs reduce velocity by 50%
-      // Multiple debuffs stack multiplicatively
-      entity.velocity = vectorScale(entity.velocity, 0.5);
+      // Clean up expired debuffs
+      entity.debuffs = entity.debuffs.filter((debuff) => {
+        const debuffElapsed = currentTime - debuff.startTime;
+        return debuffElapsed < debuff.duration;
+      });
     }
-  });
 
-  // Clean up expired debuffs
-  entity.debuffs = entity.debuffs.filter((debuff) => {
-    const debuffElapsed = updateContext.gameState.time - debuff.startTime;
-    return debuffElapsed < debuff.duration;
-  });
+    // Apply accumulated forces to velocity
+    entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
 
-  // Apply accumulated forces to velocity
-  entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
+    // Optimization: Cache velocity length to avoid recalculation
+    const velocityMagnitude = vectorLength(entity.velocity);
+    
+    // Zero velocity if it's too small to prevent drifting
+    if (velocityMagnitude < 0.001) {
+      entity.velocity = { x: 0, y: 0 };
+    }
 
-  // Zero velocity if it's too small to prevent drifting
-  if (vectorLength(entity.velocity) < 0.001) {
-    entity.velocity = { x: 0, y: 0 };
+    // Update position based on velocity
+    if (velocityMagnitude >= 0.001) {
+      entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
+
+      // --- World Wrapping ---
+      // Ensure the entity position wraps around the world boundaries
+      entity.position.x =
+        ((entity.position.x % updateContext.gameState.mapDimensions.width) + updateContext.gameState.mapDimensions.width) %
+        updateContext.gameState.mapDimensions.width;
+      entity.position.y =
+        ((entity.position.y % updateContext.gameState.mapDimensions.height) +
+          updateContext.gameState.mapDimensions.height) %
+        updateContext.gameState.mapDimensions.height;
+      // --- End World Wrapping ---
+    }
+
+    // Reset forces for the next frame
+    entity.forces = [];
   }
-
-  // Update position based on velocity
-  entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
-
-  // --- World Wrapping ---
-  // Ensure the entity position wraps around the world boundaries
-  entity.position.x =
-    ((entity.position.x % updateContext.gameState.mapDimensions.width) + updateContext.gameState.mapDimensions.width) %
-    updateContext.gameState.mapDimensions.width;
-  entity.position.y =
-    ((entity.position.y % updateContext.gameState.mapDimensions.height) +
-      updateContext.gameState.mapDimensions.height) %
-    updateContext.gameState.mapDimensions.height;
-  // --- End World Wrapping ---
-
-  // Reset forces for the next frame
-  entity.forces = [];
 
   // Specific entity type updates (e.g., physiological changes)
   if (entity.type === 'human') {
