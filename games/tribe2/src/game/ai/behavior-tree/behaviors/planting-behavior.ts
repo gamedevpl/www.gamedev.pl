@@ -1,16 +1,10 @@
 import { FoodType } from '../../../food/food-types';
 import { Vector2D } from '../../../utils/math-types';
 import { calculateWrappedDistance, dirToTarget, getDirectionVectorOnTorus, vectorAdd } from '../../../utils/math-utils';
-import {
-  findOptimalBushPlantingSpot,
-  findOptimalPlantingZoneSpot,
-  isPositionOccupied,
-  getTribeMembers,
-} from '../../../utils';
+import { findOptimalPlantingZoneSpot, isPositionOccupied, getTribeMembers } from '../../../utils';
 import {
   calculateTribeFoodSecurity,
   getProductiveBushDensity,
-  assignPlantingZone,
   countTribeMembersWithAction,
 } from '../../../utils/tribe-food-utils';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../../../berry-bush-consts.ts';
@@ -32,7 +26,6 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
-const ASSIGNED_ZONE_KEY = 'assignedPlantingZone';
 const PLANTING_PROXIMITY_RADIUS = 50;
 
 /**
@@ -135,18 +128,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      // First, try to find a spot in an assigned or available planting zone
-      const assignedZone = assignPlantingZone(human, context.gameState);
-      if (assignedZone) {
-        Blackboard.set(blackboard, ASSIGNED_ZONE_KEY, assignedZone.id);
-      }
-
       let spot = findOptimalPlantingZoneSpot(human, context.gameState);
-
-      // If no zones exist or all are full, fall back to the original behavior
-      if (!spot) {
-        spot = findOptimalBushPlantingSpot(human, context.gameState);
-      }
 
       if (spot) {
         Blackboard.set(blackboard, BLACKBOARD_KEY, spot);

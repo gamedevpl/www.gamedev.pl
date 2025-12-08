@@ -17,7 +17,7 @@ const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
  * Returns a value between 0 and 1, where:
  * - 0 means no food at all
  * - 1 means all storage and members are at full capacity
- * 
+ *
  * @param human A member of the tribe
  * @param gameState The current game state
  * @returns Food security score (0-1), or 0 if the human has no tribe
@@ -40,7 +40,7 @@ export function calculateTribeFoodSecurity(human: HumanEntity, gameState: GameWo
 /**
  * Calculates the total amount of food available to the tribe.
  * This includes food in storage spots and food carried by tribe members.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Total food count
@@ -63,7 +63,7 @@ export function getTribeTotalFood(leaderId: EntityId, gameState: GameWorldState)
 /**
  * Calculates the total food capacity available to the tribe.
  * This includes storage capacity and the carrying capacity of all tribe members.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Total capacity
@@ -88,7 +88,7 @@ export function getTribeTotalCapacity(leaderId: EntityId, gameState: GameWorldSt
  * Returns a value between 0 and 1, where:
  * - 0 means storage is empty
  * - 1 means storage is full
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Storage utilization (0-1), or 0 if no storage exists
@@ -119,7 +119,7 @@ export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldSt
  * Calculates the number of productive bushes per tribe member.
  * Productive bushes are those that are not dying and have food available.
  * Only counts bushes within a reasonable radius of the tribe center.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Bushes per member ratio
@@ -138,7 +138,7 @@ export function getProductiveBushDensity(leaderId: EntityId, gameState: GameWorl
 /**
  * Counts the number of productive bushes near the tribe.
  * Productive bushes are those that are not dying and have food available.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Count of productive bushes
@@ -154,7 +154,7 @@ export function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldS
   const productiveBushes = nearbyBushes.filter((bush) => {
     // Check state machine for dying state
     const isDying = bush.stateMachine && bush.stateMachine[0] === 'bushDying';
-    
+
     // Check if bush has food (food is an array of FoodItem)
     const hasFood = bush.food.length > 0;
     return !isDying && hasFood;
@@ -165,7 +165,7 @@ export function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldS
 
 /**
  * Gets all constructed planting zones owned by tribe members.
- * 
+ *
  * @param human A member of the tribe
  * @param gameState The current game state
  * @returns Array of planting zone buildings
@@ -202,7 +202,7 @@ export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldSt
 /**
  * Calculates the maximum number of bushes that can fit in a planting zone.
  * Based on zone dimensions and bush clearance radius.
- * 
+ *
  * @param zone The planting zone building
  * @returns Maximum number of bushes
  */
@@ -215,14 +215,14 @@ export function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
 
 /**
  * Counts the number of berry bushes currently within a planting zone.
- * 
+ *
  * @param zone The planting zone building
  * @param gameState The current game state
  * @returns Count of bushes in the zone
  */
 export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
-  
+
   // Get all bushes near the zone center
   const searchRadius = Math.max(zone.width, zone.height);
   const nearbyBushes = indexedState.search.berryBush.byRadius(zone.position, searchRadius);
@@ -240,7 +240,7 @@ export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldStat
 /**
  * Gets detailed distribution information for all tribe planting zones.
  * For each zone, calculates capacity, current bush count, and number of assigned planters.
- * 
+ *
  * @param human A member of the tribe
  * @param gameState The current game state
  * @returns Array of zone distribution data
@@ -295,46 +295,9 @@ export function getPlantingZoneDistribution(
 }
 
 /**
- * Assigns a human to the most suitable planting zone.
- * Prioritizes zones with the lowest fill ratio and fewest assigned planters.
- * 
- * @param human The human to assign a zone to
- * @param gameState The current game state
- * @returns The assigned planting zone, or null if no suitable zone exists
- */
-export function assignPlantingZone(human: HumanEntity, gameState: GameWorldState): BuildingEntity | null {
-  const distribution = getPlantingZoneDistribution(human, gameState);
-
-  if (distribution.length === 0) {
-    return null;
-  }
-
-  // Filter out full zones
-  const availableZones = distribution.filter((d) => d.currentBushes < d.capacity);
-
-  if (availableZones.length === 0) {
-    return null;
-  }
-
-  // Sort by fill ratio (ascending), then by assigned planters (ascending)
-  availableZones.sort((a, b) => {
-    const fillRatioA = a.currentBushes / a.capacity;
-    const fillRatioB = b.currentBushes / b.capacity;
-
-    if (Math.abs(fillRatioA - fillRatioB) > 0.01) {
-      return fillRatioA - fillRatioB;
-    }
-
-    return a.assignedPlanters - b.assignedPlanters;
-  });
-
-  return availableZones[0].zone;
-}
-
-/**
  * Gets detailed distribution information for all tribe storage spots.
  * For each storage, calculates capacity, current food, assigned depositors, and distance.
- * 
+ *
  * @param human A member of the tribe
  * @param gameState The current game state
  * @returns Array of storage distribution data
@@ -403,7 +366,7 @@ export function getStorageSpotDistribution(
  * Assigns a human to the most suitable storage spot for depositing.
  * Prioritizes storage with the lowest fill ratio, fewest depositors, and closest distance.
  * Only considers storage within a reasonable radius.
- * 
+ *
  * @param human The human to assign a storage spot to
  * @param gameState The current game state
  * @returns The assigned storage spot, or null if no suitable storage exists
@@ -450,7 +413,7 @@ export function assignStorageSpot(human: HumanEntity, gameState: GameWorldState)
 
 /**
  * Counts how many tribe members are currently performing a specific action.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @param action The action to count ('planting' or 'depositing')
@@ -468,7 +431,7 @@ export function countTribeMembersWithAction(
 
 /**
  * Gets all constructed storage spots owned by tribe members.
- * 
+ *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
  * @returns Array of storage spot buildings
@@ -561,12 +524,12 @@ export function isPositionInAnyPlantingZone(
 ): boolean {
   const zones = getTribePlantingZones(player, gameState);
   const isInZone = zones.some((zone) => isPositionInZone(position, zone, gameState));
-  
+
   // If not in any zone, return false immediately
   if (!isInZone) {
     return false;
   }
-  
+
   // Check if the position has sufficient clearance from existing bushes
   return !isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS);
 }

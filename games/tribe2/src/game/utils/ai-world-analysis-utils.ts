@@ -8,9 +8,7 @@ import {
   LEADER_WORLD_ANALYSIS_GRID_SIZE,
   LEADER_WORLD_ANALYSIS_GRID_STEP,
 } from '../ai-consts.ts';
-import { AI_PLANTING_SEARCH_RADIUS, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts.ts';
 import { MAX_ATTACKERS_PER_TARGET } from '../human-consts.ts';
-import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
 import { GameWorldState } from '../world-types';
@@ -18,8 +16,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
 import { areFamily, getFamilyMembers } from './family-tribe-utils';
-import { findClosestEntity } from './entity-finder-utils';
-import { findValidPlantingSpot, getTribeCenter } from './spatial-utils';
+import { getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 
@@ -116,25 +113,6 @@ export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWor
   }
 
   return bestTarget;
-}
-
-export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
-  // Find the closest bush owned by this human
-  const closestBush = findClosestEntity<BerryBushEntity>(human, gameState, 'berryBush', AI_PLANTING_SEARCH_RADIUS);
-
-  if (!closestBush) {
-    return human.position; // No bush found, plant nearby
-  }
-
-  // Find a valid spot near the owned bush, ignoring the owned bush itself.
-  const spot = findValidPlantingSpot(
-    closestBush.position,
-    gameState,
-    AI_PLANTING_SEARCH_RADIUS,
-    BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-    closestBush.id, // Pass the ID of the nearby bush to ignore
-  );
-  return spot;
 }
 
 export function findBestAttackTarget<T extends HumanEntity | PreyEntity>(

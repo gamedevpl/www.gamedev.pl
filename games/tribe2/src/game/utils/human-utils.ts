@@ -29,8 +29,8 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
   // Check diplomacy status if they are in different tribes
   if (human1.leaderId && human2.leaderId) {
     const tribe1Diplomacy = (gameState.entities.entities[human1.leaderId] as HumanEntity)?.diplomacy?.[human2.leaderId];
-    const tribe2Diplomacy = (gameState.entities.entities[human2.leaderId] as HumanEntity)?.diplomacy?.[human1.leaderId];
-    return tribe1Diplomacy === DiplomacyStatus.Hostile || tribe2Diplomacy === DiplomacyStatus.Hostile;
+    // const tribe2Diplomacy = (gameState.entities.entities[human2.leaderId] as HumanEntity)?.diplomacy?.[human1.leaderId];
+    return tribe1Diplomacy === DiplomacyStatus.Hostile; // || tribe2Diplomacy === DiplomacyStatus.Hostile;
   }
 
   // Default to not hostile if tribe information is missing
@@ -61,7 +61,7 @@ export const canProcreate = (human1: HumanEntity, human2: HumanEntity, gameState
     return false;
   }
 
-  // Diplomacy check: procreation is only allowed between members of the same tribe or friendly tribes
+  // Diplomacy check: procreation is only allowed between members of the same tribe or tribe is not hostile towards the other
   if (isHostile(human1, human2, gameState)) {
     return false;
   }
