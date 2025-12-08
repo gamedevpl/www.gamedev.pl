@@ -5,7 +5,7 @@ import {
   AI_GATHERING_SEARCH_RADIUS,
 } from '../../../ai-consts';
 import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts';
-import { ActionNode, ConditionNode, CachingNode, Selector, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CachingNode, Selector, Sequence, TribalTaskDecorator } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { findChildren, findClosestEntity } from '../../../utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
@@ -17,10 +17,8 @@ import { Blackboard } from '../behavior-tree-blackboard';
 import { hasNearbyNonFullStorage } from '../../../utils/storage-utils';
 import {
   getTribeLeaderForCoordination,
-  isTribalGatherTaskAssigned,
-  registerTribalGatherTask,
-  removeTribalGatherTask,
-  getTribalGatherTaskAssignee,
+  TribalTaskData,
+  TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../utils/tribe-task-utils';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
@@ -34,8 +32,8 @@ const BLACKBOARD_KEY = 'foodSource';
  * food source is computationally more expensive, so it's wrapped in a CachingNode
  * to prevent it from running on every single AI tick, improving performance.
  *
- * Now includes tribe coordination to prevent multiple members from gathering
- * from the same bush simultaneously.
+ * Now includes tribe coordination via TribalTaskDecorator to prevent multiple members
+ * from gathering from the same bush simultaneously.
  */
 export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find the closest food source and store it in the blackboard.
@@ -55,11 +53,17 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           }
 
           // Check if another tribe member is already gathering from this bush
-          if (leader && isTribalGatherTaskAssigned(leader, bush.id, context.gameState.time)) {
-            const assignee = getTribalGatherTaskAssignee(leader, bush.id);
-            // Allow if we're the one assigned to it
-            if (assignee !== human.id) {
-              return false;
+          if (leader && leader.aiBlackboard) {
+            const taskKey = `tribal_gather_${bush.id}`;
+            const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
+            if (task) {
+              // Check if task is not stale
+              if (context.gameState.time - task.startTime <= TRIBAL_TASK_TIMEOUT_HOURS) {
+                // If assigned to someone else, skip it
+                if (!task.memberIds.includes(human.id)) {
+                  return false;
+                }
+              }
             }
           }
 
@@ -104,11 +108,16 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           if (c.food.length === 0) {
             return false;
           }
-          if (leader && isTribalGatherTaskAssigned(leader, c.id, context.gameState.time)) {
-            const assignee = getTribalGatherTaskAssignee(leader, c.id);
-            // Allow if we're the one assigned to it
-            if (assignee !== human.id) {
-              return false;
+          // Check if another tribe member is already gathering from this corpse
+          if (leader && leader.aiBlackboard) {
+            const taskKey = `tribal_gather_${c.id}`;
+            const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
+            if (task) {
+              if (context.gameState.time - task.startTime <= TRIBAL_TASK_TIMEOUT_HOURS) {
+                if (!task.memberIds.includes(human.id)) {
+                  return false;
+                }
+              }
             }
           }
           return true;
@@ -135,11 +144,6 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       }
 
       if (foodSource) {
-        // Register the gathering task
-        if (leader) {
-          registerTribalGatherTask(leader, foodSource.id, human.id, context.gameState.time);
-        }
-
         Blackboard.set(blackboard, BLACKBOARD_KEY, foodSource.id);
         return [
           NodeStatus.SUCCESS,
@@ -153,56 +157,53 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
   );
 
   // Action to move towards the food source and gather from it.
-  const moveAndGatherAction = new ActionNode<HumanEntity>(
-    (human, context, blackboard) => {
-      const targetId = Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY);
-      if (!targetId) {
-        return [NodeStatus.FAILURE, 'No target in blackboard'];
-      }
-      const target = context.gameState.entities.entities[targetId] as FoodSource | undefined;
-
-      // Guard: If no target, fail. This shouldn't happen if the sequence is structured correctly.
-      if (!target || target.food.length === 0) {
-        // Clean up tribal task if it was a bush
-        const leader = getTribeLeaderForCoordination(human, context.gameState);
-        if (leader && target) {
-          removeTribalGatherTask(leader, target.id);
+  const moveAndGatherAction = new TribalTaskDecorator(
+    new ActionNode<HumanEntity>(
+      (human, context, blackboard) => {
+        const targetId = Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY);
+        if (!targetId) {
+          return [NodeStatus.FAILURE, 'No target in blackboard'];
         }
-        Blackboard.delete(blackboard, BLACKBOARD_KEY);
-        return [NodeStatus.FAILURE, 'Food source is invalid or depleted'];
-      }
+        const target = context.gameState.entities.entities[targetId] as FoodSource | undefined;
 
-      const distance = calculateWrappedDistance(
-        human.position,
-        target.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-
-      // If close enough, start gathering. The state machine will handle the rest.
-      if (distance < HUMAN_INTERACTION_PROXIMITY) {
-        human.activeAction = 'gathering';
-        human.direction = { x: 0, y: 0 };
-        human.target = target.id; // Set target for interaction system
-
-        // Clean up tribal task when we start gathering
-        // The interaction system will handle the actual gathering
-        const leader = getTribeLeaderForCoordination(human, context.gameState);
-        if (leader) {
-          removeTribalGatherTask(leader, target.id);
+        // Guard: If no target, fail.
+        if (!target || target.food.length === 0) {
+          Blackboard.delete(blackboard, BLACKBOARD_KEY);
+          return [NodeStatus.FAILURE, 'Food source is invalid or depleted'];
         }
 
-        Blackboard.delete(blackboard, BLACKBOARD_KEY);
-        return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
-      } else {
-        // Not close enough, so move towards the target.
-        human.activeAction = 'moving';
-        human.target = target.id;
-        human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
-        return [NodeStatus.RUNNING, `Moving to ${target.type}`];
-      }
+        const distance = calculateWrappedDistance(
+          human.position,
+          target.position,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
+
+        // If close enough, start gathering. The state machine will handle the rest.
+        if (distance < HUMAN_INTERACTION_PROXIMITY) {
+          human.activeAction = 'gathering';
+          human.direction = { x: 0, y: 0 };
+          human.target = target.id; // Set target for interaction system
+
+          Blackboard.delete(blackboard, BLACKBOARD_KEY);
+          return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
+        } else {
+          // Not close enough, so move towards the target.
+          human.activeAction = 'moving';
+          human.target = target.id;
+          human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
+          return [NodeStatus.RUNNING, `Moving to ${target.type}`];
+        }
+      },
+      'Move To Food and Gather',
+      depth + 3,
+    ),
+    {
+      taskType: 'gather',
+      maxCapacity: 1,
+      getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY) ?? null,
     },
-    'Move To Food and Gather',
+    'Tribal Gather Task',
     depth + 3,
   );
 

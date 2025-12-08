@@ -7,7 +7,6 @@ import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';
 import { calculateStorageFoodPosition } from '../utils/storage-utils';
-import { getTribeLeaderForCoordination, removeTribalStorageTask } from '../utils/tribe-task-utils';
 
 /**
  * Interaction for depositing food into a storage spot.
@@ -84,16 +83,5 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
 
     // Play deposit sound
     playSoundAt(context, SoundType.StorageDeposit, target.position);
-
-    // Check if the deposit sequence is complete for this agent
-    const isComplete = source.food.length === 0 || target.storedFood.length >= (target.storageCapacity ?? 0);
-
-    if (isComplete) {
-      // Free up the storage task slot
-      const leader = getTribeLeaderForCoordination(source, context.gameState);
-      if (leader) {
-        removeTribalStorageTask(leader, target.id, source.id);
-      }
-    }
   },
 };

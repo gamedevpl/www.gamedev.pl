@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { UpdateContext } from '../../../world-types';
-import { ActionNode, CachingNode, ConditionNode, Sequence, TimeoutNode } from '../nodes';
+import { ActionNode, CachingNode, ConditionNode, Sequence, TimeoutNode, TribalTaskDecorator } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
@@ -12,16 +12,9 @@ import {
   BT_ACTION_TIMEOUT_HOURS,
   BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS,
 } from '../../../ai-consts.ts';
-import {
-  getTribeLeaderForCoordination,
-  canJoinTribalHuntTask,
-  registerTribalHuntTask,
-  removeFromTribalHuntTask,
-  getTribalHuntTaskCount,
-} from '../../../utils/tribe-task-utils';
+import { MAX_HUNTERS_PER_PREY } from '../../../utils/tribe-task-utils';
 
 const HUNT_TARGET_KEY = 'huntTarget';
-const HUNT_TASK_REGISTERED_KEY = 'huntTaskRegistered';
 
 /**
  * Creates a behavior tree branch for humans hunting prey
@@ -46,25 +39,15 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
               context.gameState,
               'prey',
               AI_HUNTING_FOOD_SEARCH_RADIUS,
-              (prey) => {
-                // Check if we can join the hunt (not too many hunters already)
-                const leader = getTribeLeaderForCoordination(human, context.gameState);
-                if (!canJoinTribalHuntTask(leader, prey.id, context.gameState.time)) {
-                  return false;
-                }
-
+              () => {
+                // We rely on the decorator to check for task capacity later.
                 return true;
               },
             );
 
             if (nearbyPrey) {
               Blackboard.set(blackboard, HUNT_TARGET_KEY, nearbyPrey.id);
-
-              // Get hunt task info for debug
-              const leader = getTribeLeaderForCoordination(human, context.gameState);
-              const hunterCount = getTribalHuntTaskCount(leader, nearbyPrey.id);
-
-              return [true, `Found prey (${hunterCount} hunters)`];
+              return [true, `Found prey`];
             }
 
             return [false, 'No suitable prey found'];
@@ -77,86 +60,66 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
         depth + 1,
       ),
 
-      // 2. Action: Hunt the prey (with a timeout to prevent getting stuck)
-      new TimeoutNode<HumanEntity>(
-        new ActionNode(
-          (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-            if (!human.leaderId) {
-              return NodeStatus.FAILURE;
-            }
-
-            const targetId = Blackboard.get<number>(blackboard, HUNT_TARGET_KEY);
-            if (!targetId) {
-              return NodeStatus.FAILURE;
-            }
-            const leader = getTribeLeaderForCoordination(human, context.gameState);
-            const target = context.gameState.entities.entities[targetId] as PreyEntity | undefined;
-            if (!target || target.hitpoints <= 0) {
-              // Target is dead or gone - cleanup and succeed
-              if (leader) {
-                removeFromTribalHuntTask(leader, targetId, human.id);
+      // 2. Action: Hunt the prey (wrapped in TribalTaskDecorator)
+      new TribalTaskDecorator(
+        new TimeoutNode<HumanEntity>(
+          new ActionNode(
+            (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+              if (!human.leaderId) {
+                return NodeStatus.FAILURE;
               }
-              Blackboard.delete(blackboard, HUNT_TARGET_KEY);
-              Blackboard.delete(blackboard, HUNT_TASK_REGISTERED_KEY);
-              human.activeAction = 'idle';
-              human.attackTargetId = undefined;
-              return NodeStatus.SUCCESS;
-            }
 
-            const { gameState } = context;
-            const tribeCenter = getTribeCenter(human.leaderId, gameState);
-            const distanceFromCenter = calculateWrappedDistance(
-              human.position,
-              tribeCenter,
-              gameState.mapDimensions.width,
-              gameState.mapDimensions.height,
-            );
-
-            // Fail if chasing too far from home
-            if (
-              distanceFromCenter > AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER ||
-              !canJoinTribalHuntTask(leader, targetId, gameState.time)
-            ) {
-              const leader = getTribeLeaderForCoordination(human, gameState);
-              if (leader) {
-                removeFromTribalHuntTask(leader, targetId, human.id);
+              const targetId = Blackboard.get<number>(blackboard, HUNT_TARGET_KEY);
+              if (!targetId) {
+                return NodeStatus.FAILURE;
               }
-              Blackboard.delete(blackboard, HUNT_TARGET_KEY);
-              Blackboard.delete(blackboard, HUNT_TASK_REGISTERED_KEY);
-              human.activeAction = 'idle';
-              human.attackTargetId = undefined;
-              return NodeStatus.FAILURE;
-            }
 
-            // Register the hunt task if not already registered
-            const isRegistered = Blackboard.get<boolean>(blackboard, HUNT_TASK_REGISTERED_KEY);
-            if (!isRegistered) {
-              const leader = getTribeLeaderForCoordination(human, gameState);
-              if (leader) {
-                const registered = registerTribalHuntTask(leader, targetId, human.id, gameState.time);
-                if (!registered) {
-                  // Failed to register (too many hunters), abort
-                  Blackboard.delete(blackboard, HUNT_TARGET_KEY);
-                  human.activeAction = 'idle';
-                  human.attackTargetId = undefined;
-                  return NodeStatus.FAILURE;
-                }
-                Blackboard.set(blackboard, HUNT_TASK_REGISTERED_KEY, true);
+              const target = context.gameState.entities.entities[targetId] as PreyEntity | undefined;
+              if (!target || target.hitpoints <= 0) {
+                // Target is dead or gone - cleanup and succeed
+                Blackboard.delete(blackboard, HUNT_TARGET_KEY);
+                human.activeAction = 'idle';
+                human.attackTargetId = undefined;
+                return NodeStatus.SUCCESS;
               }
-            }
 
-            // Set hunting state
-            human.activeAction = 'attacking';
-            human.attackTargetId = target.id;
+              const { gameState } = context;
+              const tribeCenter = getTribeCenter(human.leaderId, gameState);
+              const distanceFromCenter = calculateWrappedDistance(
+                human.position,
+                tribeCenter,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
 
-            // The actual hunting/attacking is handled by the interaction system
-            return NodeStatus.RUNNING;
-          },
-          'Hunt Prey Action',
+              // Fail if chasing too far from home
+              if (distanceFromCenter > AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER) {
+                Blackboard.delete(blackboard, HUNT_TARGET_KEY);
+                human.activeAction = 'idle';
+                human.attackTargetId = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Set hunting state
+              human.activeAction = 'attacking';
+              human.attackTargetId = target.id;
+
+              // The actual hunting/attacking is handled by the interaction system
+              return NodeStatus.RUNNING;
+            },
+            'Hunt Prey Action',
+            depth + 3,
+          ),
+          BT_ACTION_TIMEOUT_HOURS, // Use a generous timeout
+          'Hunt Prey Timeout',
           depth + 2,
         ),
-        BT_ACTION_TIMEOUT_HOURS, // Use a generous timeout
-        'Hunt Prey Timeout',
+        {
+          taskType: 'hunt',
+          maxCapacity: MAX_HUNTERS_PER_PREY,
+          getTargetId: (_entity, _context, blackboard) => Blackboard.get<number>(blackboard, HUNT_TARGET_KEY) ?? null,
+        },
+        'Tribal Hunt Task',
         depth + 1,
       ),
     ],

@@ -1,5 +1,5 @@
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, Sequence, TribalTaskDecorator } from '../nodes';
 import { Selector } from '../nodes/composite-nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
@@ -20,11 +20,7 @@ import {
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
-import {
-  getTribeLeaderForCoordination,
-  canUseStorage,
-  registerTribalStorageTask,
-} from '../../../utils/tribe-task-utils';
+import { MAX_USERS_PER_STORAGE } from '../../../utils/tribe-task-utils';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
@@ -33,7 +29,7 @@ const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
  * Creates a behavior for depositing excess food into tribe storage spots.
  * NPCs will deposit food based on adaptive thresholds that respond to tribe storage utilization.
  * Includes cooldown to prevent constant trips and smart storage spot assignment.
- * Now includes tribal task coordination to prevent storage crowding.
+ * Uses TribalTaskDecorator for coordination to prevent storage crowding.
  */
 export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Selector<HumanEntity>(
@@ -86,11 +82,8 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 return [false, 'No available tribe storage nearby'];
               }
 
-              // Check if the storage spot is not too crowded (tribal coordination)
-              const leader = getTribeLeaderForCoordination(human, context.gameState);
-              if (leader && !canUseStorage(leader, assignedStorage.id, context.gameState.time)) {
-                return [false, 'Storage busy'];
-              }
+              // Store the assigned storage in blackboard for the decorator and action
+              Blackboard.set(blackboard, ASSIGNED_STORAGE_KEY, assignedStorage.id);
 
               return [
                 true,
@@ -101,7 +94,7 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
             depth + 1,
           ),
 
-          // Coordination check: Ensure not too many tribe members are depositing simultaneously
+          // Coordination check: Ensure not too many tribe members are depositing simultaneously (Global limit)
           new ConditionNode<HumanEntity>(
             (human, context) => {
               if (!human.leaderId) return [true, 'No tribe coordination needed'];
@@ -116,64 +109,58 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
             depth + 1,
           ),
 
-          // Navigate to storage and deposit
-          new ActionNode<HumanEntity>(
-            (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-              const leader = getTribeLeaderForCoordination(human, context.gameState);
+          // Navigate to storage and deposit (Decorated with TribalTask)
+          new TribalTaskDecorator(
+            new ActionNode<HumanEntity>(
+              (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+                // Get assigned storage spot
+                const storageId = Blackboard.get<EntityId>(blackboard, ASSIGNED_STORAGE_KEY);
+                if (!storageId) {
+                  return [NodeStatus.FAILURE, 'No storage assigned'];
+                }
 
-              // Get or assign storage spot
-              let storageId = Blackboard.get<EntityId>(blackboard, ASSIGNED_STORAGE_KEY);
-              let assignedStorage: BuildingEntity | null = null;
-
-              if (storageId) {
-                assignedStorage =
-                  (context.gameState.entities.entities[storageId] as BuildingEntity | undefined) || null;
-              }
-
-              if (!assignedStorage) {
-                assignedStorage = assignStorageSpot(human, context.gameState);
+                const assignedStorage = context.gameState.entities.entities[storageId] as BuildingEntity | undefined;
                 if (!assignedStorage) {
-                  return [NodeStatus.FAILURE, 'No storage available'];
-                }
-                Blackboard.set(blackboard, ASSIGNED_STORAGE_KEY, assignedStorage.id);
-              }
-
-              const distance = calculateWrappedDistance(
-                human.position,
-                assignedStorage.position,
-                context.gameState.mapDimensions.width,
-                context.gameState.mapDimensions.height,
-              );
-
-              // Check if within interaction range
-              if (distance <= STORAGE_INTERACTION_RANGE) {
-                // Within range - set depositing action
-                // Register the task to hold the slot while depositing
-                if (leader) {
-                  registerTribalStorageTask(leader, assignedStorage.id, human.id, 'deposit', context.gameState.time);
+                  Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+                  return [NodeStatus.FAILURE, 'Storage entity missing'];
                 }
 
-                human.activeAction = 'depositing';
-                human.target = undefined;
+                const distance = calculateWrappedDistance(
+                  human.position,
+                  assignedStorage.position,
+                  context.gameState.mapDimensions.width,
+                  context.gameState.mapDimensions.height,
+                );
 
-                // Set last deposit time and clear assigned storage
-                Blackboard.set(blackboard, LAST_DEPOSIT_TIME_KEY, context.gameState.time);
-                Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+                // Check if within interaction range
+                if (distance <= STORAGE_INTERACTION_RANGE) {
+                  // Within range - set depositing action
+                  human.activeAction = 'depositing';
+                  human.target = undefined;
 
-                return [NodeStatus.SUCCESS, 'Depositing food'];
-              }
+                  // Set last deposit time and clear assigned storage
+                  Blackboard.set(blackboard, LAST_DEPOSIT_TIME_KEY, context.gameState.time);
+                  Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
 
-              // Navigate toward storage
-              // Register the task to reserve the slot while moving
-              if (leader) {
-                registerTribalStorageTask(leader, assignedStorage.id, human.id, 'deposit', context.gameState.time);
-              }
+                  return [NodeStatus.SUCCESS, 'Depositing food'];
+                }
 
-              human.activeAction = 'moving';
-              human.target = assignedStorage.position;
-              return [NodeStatus.RUNNING, `Moving to storage (${distance.toFixed(1)}px away)`];
+                // Navigate toward storage
+                human.activeAction = 'moving';
+                human.target = assignedStorage.position;
+                return [NodeStatus.RUNNING, `Moving to storage (${distance.toFixed(1)}px away)`];
+              },
+              'Navigate to Storage and Deposit',
+              depth + 2,
+            ),
+            {
+              taskType: 'storage',
+              maxCapacity: MAX_USERS_PER_STORAGE,
+              storageAction: 'deposit',
+              getTargetId: (_entity, _context, blackboard) =>
+                Blackboard.get<EntityId>(blackboard, ASSIGNED_STORAGE_KEY) ?? null,
             },
-            'Navigate to Storage and Deposit',
+            'Tribal Storage Deposit Task',
             depth + 1,
           ),
         ],

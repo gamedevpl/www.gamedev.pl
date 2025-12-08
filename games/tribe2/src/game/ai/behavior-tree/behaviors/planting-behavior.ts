@@ -27,15 +27,9 @@ import {
 } from '../../../ai-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence, TribalTaskDecorator } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
-import {
-  getTribeLeaderForCoordination,
-  isTribalPlantTaskAssigned,
-  registerTribalPlantTask,
-  removeTribalPlantTask,
-} from '../../../utils/tribe-task-utils';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 const ASSIGNED_ZONE_KEY = 'assignedPlantingZone';
@@ -65,14 +59,13 @@ function getClosestWrappedTarget(
  * it from running on every tick, which improves performance.
  *
  * Enhanced with adaptive logic based on tribe food security and smart zone distribution.
- * Now includes tribal task coordination to prevent multiple members from planting in the same spot.
+ * Now includes tribal task coordination via TribalTaskDecorator.
  */
 export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to move to the spot and plant. Assumes 'plantingSpot' is in the blackboard.
   const moveAndPlantAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const plantingSpot = Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY);
-      const leader = getTribeLeaderForCoordination(human, context.gameState);
 
       // Guard: If the spot is gone, fail and clear the blackboard.
       if (!plantingSpot) {
@@ -82,16 +75,8 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
 
       // Check if spot is occupied
       if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
-        if (leader) {
-          removeTribalPlantTask(leader, plantingSpot);
-        }
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is occupied'];
-      }
-
-      // Register/refresh the planting task to hold the spot
-      if (leader) {
-        registerTribalPlantTask(leader, plantingSpot, human.id, context.gameState.time);
       }
 
       // Calculate the closest wrapped representation of the target
@@ -120,30 +105,36 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
 
       // Arrived at the spot. Check one more time if it's still available.
       if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
-        if (leader) {
-          removeTribalPlantTask(leader, plantingSpot);
-        }
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is now occupied'];
       }
 
       // Spot is available, initiate the planting state.
       // The Human state machine will handle the actual planting.
-      // Keep the task registered so no one else tries to plant here.
-      // The task will timeout after TRIBAL_TASK_TIMEOUT_HOURS or be cleaned up when the bush appears.
       human.activeAction = 'planting';
       human.target = plantingSpot;
       return [NodeStatus.RUNNING, 'Planting state initiated'];
     },
     'Move To Spot and Plant',
+    depth + 4,
+  );
+
+  // Wrap the move and plant action with the tribal task decorator
+  const coordinatedMoveAndPlant = new TribalTaskDecorator(
+    moveAndPlantAction,
+    {
+      taskType: 'plant',
+      proximityRadius: PLANTING_PROXIMITY_RADIUS,
+      getTargetPosition: (_entity, _context, blackboard) =>
+        Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY) ?? null,
+    },
+    'Coordinated Planting',
     depth + 3,
   );
 
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      const leader = getTribeLeaderForCoordination(human, context.gameState);
-
       // First, try to find a spot in an assigned or available planting zone
       const assignedZone = assignPlantingZone(human, context.gameState);
       if (assignedZone) {
@@ -158,11 +149,6 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       }
 
       if (spot) {
-        // Check if this spot (or nearby area) is already assigned to another tribe member
-        if (leader && isTribalPlantTaskAssigned(leader, spot, context.gameState.time, PLANTING_PROXIMITY_RADIUS)) {
-          return [NodeStatus.FAILURE, 'Spot already assigned to another tribe member'];
-        }
-
         Blackboard.set(blackboard, BLACKBOARD_KEY, spot);
         return [NodeStatus.SUCCESS, `Found new spot at ${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}`];
       }
@@ -257,7 +243,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
                 'Has Planting Spot?',
                 depth + 2,
               ),
-              moveAndPlantAction,
+              coordinatedMoveAndPlant,
             ],
             'Continue Planting Action',
             depth + 2,
