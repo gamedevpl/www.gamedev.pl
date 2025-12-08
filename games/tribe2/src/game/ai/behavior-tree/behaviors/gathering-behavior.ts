@@ -20,6 +20,7 @@ import {
   TribalTaskData,
   TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../utils/tribe-task-utils';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -67,13 +68,12 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
             }
           }
 
-          // If bush is not claimed or claim has expired, it's fair game.
-          if (!bush.ownerId || !bush.claimedUntil || context.gameState.time >= bush.claimedUntil) {
-            return true;
-          }
-
           // Bush is claimed. Get the owner.
-          const owner = context.gameState.entities.entities[bush.ownerId] as HumanEntity | undefined;
+          const ownerId = (context.gameState as IndexedWorldState).search.building.byRadius(
+            bush.position,
+            bush.radius,
+          )[0]?.ownerId;
+          const owner = context.gameState.entities.entities[ownerId!] as HumanEntity | undefined;
           if (!owner) {
             return true; // Owner doesn't exist, so it's fair game.
           }

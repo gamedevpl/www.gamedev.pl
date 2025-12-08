@@ -3,15 +3,8 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HUMAN_GATHERING } from '../entities/characters/human/states/human-state-types';
-import {
-  BERRY_BUSH_CLAIM_DURATION_HOURS
-} from '../berry-bush-consts.ts';
-import {
-  HUMAN_INTERACTION_RANGE
-} from '../human-consts.ts';
-import {
-  EFFECT_DURATION_SHORT_HOURS
-} from '../effect-consts.ts';
+import { HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
@@ -40,10 +33,6 @@ const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity, BerryB
 
     human.gatheringCooldownTime = context.gameState.time + 1; // 1 second cooldown
     berryBush.timeSinceLastHarvest = context.gameState.time;
-
-    // Claim the bush
-    berryBush.ownerId = human.id;
-    berryBush.claimedUntil = context.gameState.time + BERRY_BUSH_CLAIM_DURATION_HOURS;
 
     // Add visual effect for claiming the bush
     addVisualEffect(context.gameState, VisualEffectType.BushClaimed, berryBush.position, EFFECT_DURATION_SHORT_HOURS);

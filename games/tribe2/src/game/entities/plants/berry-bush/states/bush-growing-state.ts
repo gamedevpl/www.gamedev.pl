@@ -1,18 +1,8 @@
 import { State, StateContext, StateTransition } from '../../../../state-machine/state-machine-types';
 import { BerryBushEntity } from '../berry-bush-types';
 import { BushGrowingStateData, BUSH_DYING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
-import {
-  HOURS_PER_GAME_DAY,
-  GAME_DAY_IN_REAL_SECONDS
-} from '../../../../game-consts.ts';
-import {
-  BERRY_BUSH_REGENERATION_HOURS
-} from '../../../../berry-bush-consts.ts';
-import {
-  EFFECT_DURATION_SHORT_HOURS
-} from '../../../../effect-consts.ts';
-import { addVisualEffect } from '../../../../utils/visual-effects-utils';
-import { VisualEffectType } from '../../../../visual-effects/visual-effect-types';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../game-consts.ts';
+import { BERRY_BUSH_REGENERATION_HOURS } from '../../../../berry-bush-consts.ts';
 import { FoodType } from '../../../../food/food-types';
 
 export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
@@ -24,18 +14,6 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
     entity.age += gameHoursDelta;
     if (entity.age >= entity.lifespan) {
       return { nextState: BUSH_DYING, data: { ...data, enteredAt: updateContext.gameState.time } };
-    }
-
-    // Check for claim expiration
-    if (entity.ownerId && entity.claimedUntil && updateContext.gameState.time > entity.claimedUntil) {
-      addVisualEffect(
-        updateContext.gameState,
-        VisualEffectType.BushClaimLost,
-        entity.position,
-        EFFECT_DURATION_SHORT_HOURS,
-      );
-      entity.ownerId = undefined;
-      entity.claimedUntil = undefined;
     }
 
     entity.timeSinceLastBerryRegen += gameHoursDelta;

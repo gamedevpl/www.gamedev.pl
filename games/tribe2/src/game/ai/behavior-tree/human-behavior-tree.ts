@@ -18,7 +18,6 @@ import {
   createTribeSplitBehavior,
   createJealousyAttackBehavior,
   createDefendFamilyBehavior,
-  createDefendClaimedBushBehavior,
   createDesperateAttackBehavior,
   createPlayerCommandBehavior,
   createFollowLeaderBehavior,
@@ -52,7 +51,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         2,
       ),
       new AutopilotControlled(createJealousyAttackBehavior(2), 'attack', 'Gated Jealousy Attack', 2),
-      new AutopilotControlled(createDefendClaimedBushBehavior(2), 'attack', 'Gated Defend Claimed Bush', 2),
       new AutopilotControlled(createDesperateAttackBehavior(2), 'attack', 'Gated Desperate Attack', 2),
 
       // --- PLAYER COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---

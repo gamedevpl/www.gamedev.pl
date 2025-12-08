@@ -17,7 +17,6 @@ export * from './follow-patriarch-behavior';
 export * from './tribe-split-behavior';
 export * from './jealousy-attack-behavior';
 export * from './defend-family-behavior';
-export * from './defend-claimed-bush-behavior';
 export * from './desperate-attack-behavior';
 export * from './player-command-behavior';
 export * from './follow-leader-behavior';

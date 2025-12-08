@@ -1,5 +1,4 @@
 import {
-  AI_DEFEND_BUSH_PREY_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_SEARCH_RADIUS,
   AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
   AI_MIGRATION_TARGET_SEARCH_RADIUS,
@@ -10,7 +9,7 @@ import {
   LEADER_WORLD_ANALYSIS_GRID_STEP,
 } from '../ai-consts.ts';
 import { AI_PLANTING_SEARCH_RADIUS, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts.ts';
-import { HUMAN_INTERACTION_RANGE, MAX_ATTACKERS_PER_TARGET } from '../human-consts.ts';
+import { MAX_ATTACKERS_PER_TARGET } from '../human-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
@@ -18,7 +17,7 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
-import { areFamily, getFamilyMembers, getTribeMembers, isLineage } from './family-tribe-utils';
+import { areFamily, getFamilyMembers } from './family-tribe-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { findValidPlantingSpot, getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
@@ -43,45 +42,6 @@ export function findPartnerProcreatingWithStranger(
   });
 
   return potentialTargets[0];
-}
-
-/**
- * Finds a human from another tribe gathering from a bush claimed by the given human's tribe.
- * @returns The intruder entity, otherwise undefined.
- */
-export function findIntruderOnClaimedBush(
-  human: HumanEntity,
-  gameState: GameWorldState,
-  radius: number,
-): HumanEntity | undefined {
-  if (!human.leaderId) {
-    return undefined; // Not in a tribe, cannot have claimed bushes
-  }
-
-  const indexedState = gameState as IndexedWorldState;
-  const nearbyBushes = indexedState.search.berryBush
-    .byRadius(human.position, radius)
-    .filter((bush) => bush.ownerId === human.id);
-
-  for (const bush of nearbyBushes) {
-    // Check if the bush is owned by the human's tribe
-    if (bush.claimedUntil && gameState.time < bush.claimedUntil) {
-      // This is a tribe-claimed bush. Now check for intruders.
-      const potentialIntruders = indexedState.search.human.byRadius(bush.position, HUMAN_INTERACTION_RANGE);
-
-      for (const potentialIntruder of potentialIntruders) {
-        if (
-          !isLineage(potentialIntruder, human) && // Not from the same tribe
-          potentialIntruder.activeAction === 'gathering' &&
-          potentialIntruder.target === bush.id
-        ) {
-          return potentialIntruder; // Found an intruder!
-        }
-      }
-    }
-  }
-
-  return undefined;
 }
 
 /**
@@ -160,27 +120,19 @@ export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWor
 
 export function findOptimalBushPlantingSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
   // Find the closest bush owned by this human
-  const closestOwnedBush = findClosestEntity<BerryBushEntity>(
-    human,
-    gameState,
-    'berryBush',
-    AI_PLANTING_SEARCH_RADIUS,
-    (bush) => bush.ownerId === human.id,
-  );
+  const closestBush = findClosestEntity<BerryBushEntity>(human, gameState, 'berryBush', AI_PLANTING_SEARCH_RADIUS);
 
-  if (!closestOwnedBush) {
-    // If the human doesn't own any bushes, they can't plant a new one based on proximity to an existing one.
-    // They must first claim a wild bush by gathering from it.
-    return null;
+  if (!closestBush) {
+    return human.position; // No bush found, plant nearby
   }
 
   // Find a valid spot near the owned bush, ignoring the owned bush itself.
   const spot = findValidPlantingSpot(
-    closestOwnedBush.position,
+    closestBush.position,
     gameState,
     AI_PLANTING_SEARCH_RADIUS,
     BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
-    closestOwnedBush.id, // Pass the ID of the owned bush to ignore
+    closestBush.id, // Pass the ID of the nearby bush to ignore
   );
   return spot;
 }
@@ -396,32 +348,4 @@ export function findOptimalMigrationTarget(leader: HumanEntity, gameState: GameW
   }
 
   return bestCandidate;
-}
-
-/**
- * Finds a prey entity that is currently eating from a berry bush claimed by the human's tribe.
- * @returns The prey entity, otherwise undefined.
- */
-export function findPreyOnClaimedBush(human: HumanEntity, gameState: GameWorldState): PreyEntity | undefined {
-  const indexedState = gameState as IndexedWorldState;
-  const tribeMembers = getTribeMembers(human, gameState);
-  const tribeMemberIds = new Set(tribeMembers.map((m) => m.id));
-
-  const nearbyBushes = indexedState.search.berryBush.byRadius(human.position, AI_DEFEND_BUSH_PREY_SEARCH_RADIUS);
-
-  for (const bush of nearbyBushes) {
-    // Check if the bush is owned by the human's tribe
-    if (bush.ownerId && tribeMemberIds.has(bush.ownerId) && bush.claimedUntil && gameState.time < bush.claimedUntil) {
-      // This is a tribe-claimed bush. Now check for prey eating from it.
-      const potentialPrey = indexedState.search.prey.byRadius(bush.position, HUMAN_INTERACTION_RANGE);
-
-      for (const prey of potentialPrey) {
-        if (prey.activeAction === 'grazing' && prey.target === bush.id) {
-          return prey; // Found a prey eating from a claimed bush!
-        }
-      }
-    }
-  }
-
-  return undefined;
 }
