@@ -27,6 +27,7 @@ import { isEntityInView, renderWithWrapping } from './render-utils';
 import { Vector2D } from '../utils/math-types';
 import { renderBuilding } from './render-building.ts';
 import { BuildingEntity } from '../entities/buildings/building-types.ts';
+import { profiler } from '../performance-profiler';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -35,12 +36,15 @@ export function renderWorld(
   viewportCenter: Vector2D,
   canvasDimensions: { width: number; height: number },
 ): void {
+  profiler.start('findPlayerEntity');
   const player = findPlayerEntity(gameState);
   const playerChildren = player ? findChildren(gameState, player) : [];
   const playerHeir = findHeir(playerChildren);
+  profiler.end('findPlayerEntity');
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
+  profiler.start('sortEntities');
   const sortedEntities = Object.values(gameState.entities.entities).sort((a, b) =>
     isDebugOn && a.id === gameState.debugCharacterId && a.id !== b.id
       ? -1
@@ -48,11 +52,15 @@ export function renderWorld(
       ? -1
       : a.position.y - b.position.y || a.id - b.id,
   );
+  profiler.end('sortEntities');
 
+  profiler.start('filterVisibleEntities');
   const visibleEntities = sortedEntities.filter((entity) =>
     isEntityInView(entity, viewportCenter, canvasDimensions, gameState.mapDimensions),
   );
+  profiler.end('filterVisibleEntities');
 
+  profiler.start('renderEntities');
   visibleEntities.forEach((entity: Entity) => {
     if (entity.type === 'building') {
       renderWithWrapping(
@@ -138,7 +146,9 @@ export function renderWorld(
       );
     }
   });
+  profiler.end('renderEntities');
 
+  profiler.start('renderVisualEffects');
   const visibleVisualEffects = gameState.visualEffects.filter((effect) =>
     isEntityInView(effect, viewportCenter, canvasDimensions, gameState.mapDimensions),
   );
@@ -146,7 +156,9 @@ export function renderWorld(
   visibleVisualEffects.forEach((effect) => {
     renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
   });
+  profiler.end('renderVisualEffects');
 
+  profiler.start('renderHighlights');
   // Render notification entity highlights
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
   for (const notification of activeNotifications) {
@@ -197,4 +209,5 @@ export function renderWorld(
       }
     }
   }
+  profiler.end('renderHighlights');
 }

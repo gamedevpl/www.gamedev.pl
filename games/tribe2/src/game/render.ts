@@ -29,6 +29,7 @@ import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
 import { renderGhostBuilding } from './render/render-building';
 import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
+import { profiler } from './performance-profiler';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -52,7 +53,9 @@ export function renderGame(
     return;
   }
 
+  profiler.start('renderWorld');
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
+  profiler.end('renderWorld');
 
   const player = findPlayerEntity(gameState);
 

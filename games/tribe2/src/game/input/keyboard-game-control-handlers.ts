@@ -5,6 +5,7 @@ import { FAST_FORWARD_AMOUNT_SECONDS } from '../tribe-consts.ts';
 import { findPlayerEntity } from '../utils/world-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { saveGame } from '../persistence/persistence-utils';
+import { profiler } from '../performance-profiler';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -129,6 +130,23 @@ export const handleGameControlKeyDown = (
         }
 
         newState.debugPanel = DebugPanelType.Performance;
+      } else {
+        handled = false;
+      }
+      break;
+    case '#':
+      if (event.shiftKey) {
+        // Toggle profiler
+        if (profiler.isEnabled()) {
+          profiler.disable();
+          profiler.printResults(1); // Print results for operations taking > 1ms
+          profiler.reset();
+          console.log('Profiler disabled and results printed');
+        } else {
+          profiler.enable();
+          profiler.reset();
+          console.log('Profiler enabled - press Shift+# again to see results');
+        }
       } else {
         handled = false;
       }
