@@ -1,6 +1,6 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation, getTribeCenter } from '../../../utils';
+import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../tribe-consts.ts';
@@ -31,7 +31,11 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
     [
       // 1. Perform the expensive check to see if all conditions are met.
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext) => {
+        (human: HumanEntity, context: UpdateContext, aiBlackboard) => {
+          let migrationTarget = Blackboard.get<Vector2D>(aiBlackboard, MIGRATION_TARGET_KEY);
+          if (migrationTarget) {
+            return [true, 'Already migrating'];
+          }
           const { canSplit, progress } = canSplitTribe(human, context.gameState);
           return canSplit ? [true, `Progress: ${(progress ?? 0) * 100}%`] : [false, 'Cannot split'];
         },
@@ -49,8 +53,10 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
           if (!migrationTarget) {
             if (!human.leaderId) return NodeStatus.FAILURE; // Should not happen if CanSplitTribe passed
 
-            const originalTribeCenter = getTribeCenter(human.leaderId, gameState);
-            const newLocation = findSafeTribeSplitLocation(originalTribeCenter, human, gameState);
+            const leader = gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
+            if (!leader) return NodeStatus.FAILURE; // Should not happen if CanSplitTribe passed
+
+            const newLocation = findSafeTribeSplitLocation(leader.position, human, gameState);
 
             if (newLocation) {
               Blackboard.set(aiBlackboard, MIGRATION_TARGET_KEY, newLocation);

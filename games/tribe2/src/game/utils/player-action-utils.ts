@@ -1,14 +1,6 @@
-import {
-  BERRY_COST_FOR_PLANTING
-} from '../berry-bush-consts.ts';
-import {
-  HUMAN_ATTACK_RANGE,
-  HUMAN_FOOD_HUNGER_REDUCTION,
-  HUMAN_INTERACTION_RANGE
-} from '../human-consts.ts';
-import {
-  PLAYER_CALL_TO_ATTACK_RADIUS
-} from '../tribe-consts.ts';
+import { BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
+import { HUMAN_ATTACK_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import { PLAYER_CALL_TO_ATTACK_RADIUS } from '../tribe-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
@@ -17,14 +9,15 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
-import { GameWorldState } from '../world-types';
+import { GameWorldState, HoveredAutopilotAction } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { findNearbyEnemiesOfTribe } from './ai-world-analysis-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from './tribe-split-utils';
-import { canProcreate, isHostile } from '.';
+import { canProcreate, isHostile, isEnemyBuilding } from './human-utils';
 import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
+import { Entity } from '../entities/entities-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -204,4 +197,22 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   return actions;
+}
+
+export function getHoveredPlayerAction(
+  gameState: GameWorldState,
+  player: HumanEntity,
+  hoveredEntity: Entity,
+): HoveredAutopilotAction | undefined {
+  if (hoveredEntity.type === 'building') {
+    const building = hoveredEntity as BuildingEntity;
+    // Only leaders can interact with enemy buildings
+    if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState)) {
+      if (gameState.selectedBuildingType === 'removal') {
+        return { action: PlayerActionType.RemoveEnemyBuilding, targetEntityId: building.id };
+      }
+      return { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
+    }
+  }
+  return undefined;
 }

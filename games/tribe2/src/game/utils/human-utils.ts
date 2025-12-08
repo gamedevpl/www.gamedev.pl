@@ -1,6 +1,7 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { HUMAN_FEMALE_MAX_PROCREATION_AGE, HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../human-consts.ts';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
+import { BuildingEntity } from '../entities/buildings/building-types';
 
 /**
  * Checks if two human entities are hostile towards each other.
@@ -35,6 +36,38 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
 
   // Default to not hostile if tribe information is missing
   return false;
+};
+
+/**
+ * Checks if a building belongs to an enemy tribe.
+ *
+ * @param human The human entity checking the building.
+ * @param building The building entity to check.
+ * @param gameState The current game world state.
+ * @returns `true` if the building belongs to a hostile tribe, `false` otherwise.
+ */
+export const isEnemyBuilding = (human: HumanEntity, building: BuildingEntity, gameState: GameWorldState): boolean => {
+  // 1. The human must have a leaderId (be part of a tribe)
+  if (!human.leaderId) {
+    return false;
+  }
+
+  // 2. The building must have an ownerId
+  if (!building.ownerId) {
+    return false;
+  }
+
+  // 3. The building's owner is NOT the human's leader (or human's tribe)
+  if (building.ownerId === human.leaderId) {
+    return false;
+  }
+
+  // 4. The diplomacy status between the human's tribe and the building's owner tribe is Hostile
+  const humanTribeDiplomacy = (gameState.entities.entities[human.leaderId] as HumanEntity)?.diplomacy?.[
+    building.ownerId
+  ];
+
+  return humanTribeDiplomacy === DiplomacyStatus.Hostile;
 };
 
 /**

@@ -76,6 +76,14 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotRetrieve;
       targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.TakeOverBuilding;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.RemoveEnemyBuilding;
+      targetEntityId: EntityId;
     };
 
 // Game State Interface

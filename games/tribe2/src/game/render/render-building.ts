@@ -15,6 +15,8 @@ import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping } from './render-utils';
 import { Entity } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS } from '../food/food-types';
+import { isEnemyBuilding } from '../utils/human-utils';
+import { findPlayerEntity } from '../utils';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -23,6 +25,10 @@ const STONE_VAR_RADIUS = 0.5; // How much size varies
 const STONE_VAR_OFFSET = 2; // How much position wiggles
 const STONE_COLOR_BASE = '#5a5a5a'; // Dark grey
 const STONE_COLOR_HIGHLIGHT = '#7e7e7e'; // Lighter grey
+
+// Hostile building colors
+const STONE_COLOR_HOSTILE_BASE = '#8B0000'; // Dark Red
+const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 
 // Storage rendering constants
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
@@ -46,6 +52,7 @@ function drawStoneRect(
   height: number,
   seed: number,
   overrideColor?: string,
+  overrideHighlightColor?: string,
 ) {
   const perimeter = (width + height) * 2;
   const stoneCount = Math.floor(perimeter / STONE_SPACING);
@@ -94,7 +101,14 @@ function drawStoneRect(
     ctx.beginPath();
     const radius = STONE_BASE_RADIUS + randSize * STONE_VAR_RADIUS;
 
-    ctx.fillStyle = overrideColor || (randSize > 0.5 ? STONE_COLOR_HIGHLIGHT : STONE_COLOR_BASE);
+    // Determine color
+    if (overrideColor) {
+      ctx.fillStyle = overrideColor;
+    } else {
+      ctx.fillStyle =
+        randSize > 0.5 ? overrideHighlightColor || STONE_COLOR_HIGHLIGHT : overrideColor || STONE_COLOR_BASE;
+    }
+
     // Draw slightly irregular circle (ellipse)
     ctx.ellipse(x + wiggleX, y + wiggleY, radius, radius * 0.85, randOffset * Math.PI, 0, Math.PI * 2);
     ctx.fill();
@@ -153,11 +167,15 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
 export function renderBuilding(
   ctx: CanvasRenderingContext2D,
   building: BuildingEntity,
-  _indexedWorld: IndexedWorldState,
+  indexedWorld: IndexedWorldState,
 ): void {
   const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed, id } =
     building;
   const definition = BUILDING_DEFINITIONS[building.buildingType];
+
+  // Check hostility
+  const player = findPlayerEntity(indexedWorld);
+  const isHostile = player && isEnemyBuilding(player, building, indexedWorld);
 
   ctx.save();
   ctx.translate(position.x, position.y);
@@ -168,7 +186,17 @@ export function renderBuilding(
     ctx.globalAlpha = 0.3 + constructionProgress * 0.7;
   }
 
-  drawStoneRect(ctx, width, height, id);
+  if (isHostile) {
+    // Pass explicit colors for hostile buildings
+    // We use the highlight color logic inside drawStoneRect slightly differently than before,
+    // so let's pass undefined for overrideColor to let it use base/highlight logic,
+    // but we need to modify drawStoneRect to accept base/highlight overrides.
+    // For now, let's just use a single override color or update drawStoneRect to handle base/highlight overrides.
+    // I updated drawStoneRect signature to accept overrideHighlightColor.
+    drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+  } else {
+    drawStoneRect(ctx, width, height, id);
+  }
 
   // 2. Draw Icon (Floating in the middle, no background box)
   // We add a slight shadow/outline to the emoji so it pops against grass

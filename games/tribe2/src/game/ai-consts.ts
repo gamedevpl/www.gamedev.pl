@@ -115,3 +115,7 @@ export const LEADER_BUILDING_MAX_PLANTING_ZONES_PER_TRIBE = 2; // Maximum planti
 export const LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE = 0.1; // Expected growth rate to factor into building decisions
 export const LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 400; // Min distance from other tribes for buildings
 export const LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 800; // Min distance for first storage (base establishment)
+
+// Leader Building Interaction Constants (Enemy Buildings)
+export const LEADER_BUILDING_INTERACTION_CHECK_INTERVAL_HOURS = 5; // How often leaders check for enemy buildings to take over or destroy
+export const LEADER_BUILDING_INTERACTION_RANGE = 600; // Detection range for finding enemy buildings

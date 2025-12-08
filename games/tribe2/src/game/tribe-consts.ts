@@ -1,10 +1,10 @@
 // Tribe and Family Constants
 
 // Tribe Split Constants
-export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 40;
+export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 20;
 export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.3;
 export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
-export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 500;
+export const TRIBE_SPLIT_MOVE_AWAY_DISTANCE = 250;
 
 // Player Action Constants
 export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;

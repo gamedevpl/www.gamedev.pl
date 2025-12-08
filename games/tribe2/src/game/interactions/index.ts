@@ -18,6 +18,8 @@ import { predatorAttackRivalInteraction } from './predator-attack-rival-interact
 import { storageDepositInteraction } from './storage-deposit-interaction';
 import { storageRetrieveInteraction } from './storage-retrieve-interaction';
 import { storageStealInteraction } from './storage-steal-interaction';
+import { buildingTakeoverInteraction } from './building-takeover-interaction';
+import { buildingRemovalInteraction } from './building-removal-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -28,6 +30,8 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   storageDepositInteraction, // Storage interactions
   storageRetrieveInteraction,
   storageStealInteraction,
+  buildingTakeoverInteraction,
+  buildingRemovalInteraction,
   // Animal interactions
   preyEatBerryBushInteraction,
   preyChildFeedingInteraction, // Prey parent-child feeding

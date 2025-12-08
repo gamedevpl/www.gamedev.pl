@@ -66,12 +66,12 @@ export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { 
     return { canSplit: false }; // The human is already the heir, no need to split
   }
 
-  const currentTribeMembers = findTribeMembers(human.leaderId, gameState);
+  const currentTribeMembers = findTribeMembers(human.leaderId, gameState).filter((m) => m.isAdult);
   if (currentTribeMembers.length < TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
     return { canSplit: false };
   }
 
-  const descendants = findDescendants(human, gameState);
+  const descendants = findDescendants(human, gameState).filter((d) => d.isAdult);
   const familySize = descendants.length + 1; // +1 for the leader himself
 
   const requiredSize = Math.min(

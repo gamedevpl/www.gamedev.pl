@@ -33,6 +33,8 @@ import {
   createStorageRetrieveBehavior,
   createStorageStealBehavior,
   createLeaderBuildingPlacementBehavior,
+  createTakeOverBuildingBehavior,
+  createRemoveEnemyBuildingBehavior,
 } from './behaviors';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
@@ -67,6 +69,32 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
+
+      // --- LEADER BUILDING INTERACTIONS (TAKE OVER / DESTROY ENEMY BUILDINGS) ---
+      new NonPlayerControlled(
+        new Selector(
+          [
+            // Prioritize taking over (preserves the building)
+            new CachingNode(
+              createTakeOverBuildingBehavior(5),
+              BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+              'Cache Take Over Building',
+              4,
+            ),
+            // Fall back to destruction if takeover isn't viable
+            new CachingNode(
+              createRemoveEnemyBuildingBehavior(5),
+              BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+              'Cache Remove Enemy Building',
+              4,
+            ),
+          ],
+          'Building Interaction Selector',
+          3,
+        ),
+        'Gated Leader Building Interactions',
+        2,
+      ),
 
       // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
       new NonPlayerControlled(

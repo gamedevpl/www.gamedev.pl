@@ -42,6 +42,8 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   planting: 'gathering',
   depositing: 'gathering',
   retrieving: 'gathering',
+  takingOverBuilding: 'attacking',
+  destroyingBuilding: 'attacking',
 };
 
 /**
