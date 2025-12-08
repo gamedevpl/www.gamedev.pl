@@ -1,4 +1,8 @@
-import { BT_ACTION_TIMEOUT_HOURS, BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../ai-consts.ts';
+import {
+  BT_ACTION_TIMEOUT_HOURS,
+  BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+  BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
+} from '../../ai-consts.ts';
 import { BehaviorNode } from './behavior-tree-types';
 import { AutopilotControlled, CachingNode, ManualControl, NonPlayerControlled, Selector, TimeoutNode } from './nodes';
 import {
@@ -28,6 +32,7 @@ import {
   createStorageDepositBehavior,
   createStorageRetrieveBehavior,
   createStorageStealBehavior,
+  createLeaderBuildingPlacementBehavior,
 } from './behaviors';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
@@ -62,6 +67,18 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
+
+      // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
+      new NonPlayerControlled(
+        new CachingNode(
+          createLeaderBuildingPlacementBehavior(4),
+          BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
+          'Cache Building Placement',
+          3,
+        ),
+        'Gated Leader Building Placement',
+        2,
+      ),
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),

@@ -150,3 +150,53 @@ export function findEntityAtPosition(
   }
   return undefined;
 }
+
+/**
+ * Checks if a specific location is too close to the center of any other tribe.
+ * Used for strategic building placement to avoid crowding or settling too close to enemies.
+ */
+export function isLocationTooCloseToOtherTribes(
+  location: Vector2D,
+  myLeaderId: EntityId | undefined,
+  minDistance: number,
+  gameState: GameWorldState,
+): boolean {
+  const humans = findAllHumans(gameState);
+  const otherTribeCenters: Record<string, { sumX: number; sumY: number; count: number }> = {};
+
+  // Group humans by tribe to calculate approximate centers
+  for (const human of humans) {
+    if (!human.leaderId || human.leaderId === myLeaderId) continue;
+
+    if (!otherTribeCenters[human.leaderId]) {
+      otherTribeCenters[human.leaderId] = { sumX: 0, sumY: 0, count: 0 };
+    }
+    // Note: Using simple average for center calculation.
+    // This is an approximation that might be slightly off for tribes spanning the world seam,
+    // but sufficient for general proximity checks.
+    otherTribeCenters[human.leaderId].sumX += human.position.x;
+    otherTribeCenters[human.leaderId].sumY += human.position.y;
+    otherTribeCenters[human.leaderId].count++;
+  }
+
+  for (const tribeId in otherTribeCenters) {
+    const data = otherTribeCenters[tribeId];
+    const center: Vector2D = {
+      x: data.sumX / data.count,
+      y: data.sumY / data.count,
+    };
+
+    const dist = calculateWrappedDistance(
+      location,
+      center,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (dist < minDistance) {
+      return true;
+    }
+  }
+
+  return false;
+}
