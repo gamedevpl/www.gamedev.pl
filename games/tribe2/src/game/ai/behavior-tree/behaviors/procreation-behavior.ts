@@ -23,7 +23,15 @@ import {
 } from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence, TribalTaskDecorator, TribalTaskConfig } from '../nodes';
+import {
+  ActionNode,
+  ConditionNode,
+  CooldownNode,
+  Selector,
+  Sequence,
+  TribalTaskDecorator,
+  TribalTaskConfig,
+} from '../nodes';
 import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { EntityId } from '../../../entities/entities-types.ts';
 
@@ -41,16 +49,8 @@ const findValidPartner = (
 // Configuration for the tribal task decorator
 const procreationTaskConfig: TribalTaskConfig = {
   taskType: 'procreation',
+  maxCapacity: 2,
   getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, 'procreationPartner') ?? null,
-  getSecondaryTargetId: (entity) => entity.id,
-  generateTaskKey: (_type, target) => {
-    if (typeof target === 'object' && 'primary' in target) {
-      const id1 = Math.min(target.primary, target.secondary);
-      const id2 = Math.max(target.primary, target.secondary);
-      return `tribal_procreation_${id1}_${id2}`;
-    }
-    return '';
-  },
 };
 
 export function createProcreationBehavior(depth: number): BehaviorNode<HumanEntity> {
@@ -87,7 +87,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
     }, 'Start Procreating'),
     procreationTaskConfig,
     'Tribal Start Procreating',
-    depth + 2
+    depth + 2,
   );
 
   const locateDistantPartner = new ConditionNode(
@@ -108,38 +108,38 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
   );
 
   const moveTowardsPartner = new TribalTaskDecorator(
-    new ActionNode(
-      (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-        const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
-        const partner = partnerId && (context.gameState.entities.entities[partnerId] as HumanEntity | undefined);
-        if (!partner) {
-          return NodeStatus.FAILURE;
-        }
-        const distance = calculateWrappedDistance(
-          human.position,
-          partner.position,
-          context.gameState.mapDimensions.width,
-          context.gameState.mapDimensions.height,
-        );
-        if (distance < HUMAN_INTERACTION_PROXIMITY) {
-          return NodeStatus.SUCCESS;
-        }
-        human.activeAction = 'moving';
-        human.target = partner.id;
-        const dirToTarget = getDirectionVectorOnTorus(
-          human.position,
-          partner.position,
-          context.gameState.mapDimensions.width,
-          context.gameState.mapDimensions.height,
-        );
-        human.direction = vectorNormalize(dirToTarget);
-        return NodeStatus.RUNNING;
-      },
-      'Move Towards Partner',
-    ),
+    new ActionNode((human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+      const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
+      const partner = partnerId && (context.gameState.entities.entities[partnerId] as HumanEntity | undefined);
+      if (!partner) {
+        return NodeStatus.FAILURE;
+      }
+      if (partner.isPregnant) {
+        return NodeStatus.FAILURE;
+      }
+      const distance = calculateWrappedDistance(
+        human.position,
+        partner.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      if (distance < HUMAN_INTERACTION_PROXIMITY) {
+        return NodeStatus.SUCCESS;
+      }
+      human.activeAction = 'moving';
+      human.target = partner.id;
+      const dirToTarget = getDirectionVectorOnTorus(
+        human.position,
+        partner.position,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+      human.direction = vectorNormalize(dirToTarget);
+      return NodeStatus.RUNNING;
+    }, 'Move Towards Partner'),
     procreationTaskConfig,
     'Tribal Move To Partner',
-    depth + 3
+    depth + 3,
   );
 
   return new Sequence(

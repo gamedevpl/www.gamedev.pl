@@ -24,8 +24,10 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence, TribalTaskDecorator } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
+import { EntityId } from '../../../entities/entities-types';
 
 const BLACKBOARD_KEY = 'plantingSpot';
+const PLANTING_ZONE_KEY = 'plantingZoneId';
 const PLANTING_PROXIMITY_RADIUS = 50;
 
 /**
@@ -63,12 +65,14 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       // Guard: If the spot is gone, fail and clear the blackboard.
       if (!plantingSpot) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is missing'];
       }
 
       // Check if spot is occupied
       if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is occupied'];
       }
 
@@ -99,6 +103,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       // Arrived at the spot. Check one more time if it's still available.
       if (isPositionOccupied(plantingSpot, context.gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is now occupied'];
       }
 
@@ -117,9 +122,10 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
     moveAndPlantAction,
     {
       taskType: 'plant',
+      maxCapacity: 2,
       proximityRadius: PLANTING_PROXIMITY_RADIUS,
-      getTargetPosition: (_entity, _context, blackboard) =>
-        Blackboard.get<Vector2D>(blackboard, BLACKBOARD_KEY) ?? null,
+      // Use zone ID for coordination to allow one planter per zone (or configured capacity)
+      getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, PLANTING_ZONE_KEY) ?? null,
     },
     'Coordinated Planting',
     depth + 3,
@@ -128,11 +134,15 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
   // Action to find a new spot. This is the expensive operation.
   const findSpotAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
-      let spot = findOptimalPlantingZoneSpot(human, context.gameState);
+      const result = findOptimalPlantingZoneSpot(human, context.gameState);
 
-      if (spot) {
-        Blackboard.set(blackboard, BLACKBOARD_KEY, spot);
-        return [NodeStatus.SUCCESS, `Found new spot at ${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}`];
+      if (result) {
+        Blackboard.set(blackboard, BLACKBOARD_KEY, result.position);
+        Blackboard.set(blackboard, PLANTING_ZONE_KEY, result.zoneId);
+        return [
+          NodeStatus.SUCCESS,
+          `Found new spot at ${result.position.x.toFixed(0)}, ${result.position.y.toFixed(0)} (Zone ${result.zoneId})`,
+        ];
       }
       return [NodeStatus.FAILURE, 'No suitable planting spot found'];
     },

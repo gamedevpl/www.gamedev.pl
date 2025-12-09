@@ -5,11 +5,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
-import {
-  getStorageUtilization,
-  assignStorageSpot,
-  countTribeMembersWithAction,
-} from '../../../utils/tribe-food-utils';
+import { getStorageUtilization, assignStorageSpot, countTribeMembersWithAction } from '../../../utils/tribe-food-utils';
 import { getTribeMembers } from '../../../utils';
 import {
   DEPOSIT_COOLDOWN_HOURS,
@@ -123,6 +119,11 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 if (!assignedStorage) {
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
                   return [NodeStatus.FAILURE, 'Storage entity missing'];
+                }
+
+                if ((assignedStorage.storedFood?.length ?? 0) >= (assignedStorage.storageCapacity ?? 0)) {
+                  Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+                  return [NodeStatus.FAILURE, 'Storage full'];
                 }
 
                 const distance = calculateWrappedDistance(

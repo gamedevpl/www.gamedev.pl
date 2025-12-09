@@ -200,7 +200,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
     ),
     {
       taskType: 'gather',
-      maxCapacity: 1,
+      maxCapacity: 2,
       getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, BLACKBOARD_KEY) ?? null,
     },
     'Tribal Gather Task',

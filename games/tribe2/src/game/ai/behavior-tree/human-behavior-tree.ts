@@ -140,6 +140,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- CHILD NEEDS (SEEK FOOD) ---
       createSeekingFoodFromParentBehavior(2),
 
+      // --- SOCIAL & REPRODUCTION (PROCREATE) ---
+      new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
+
       // --- RESOURCE MANAGEMENT (PLANT) ---
       new TimeoutNode(
         new AutopilotControlled(createPlantingBehavior(4), 'planting', 'Gated Planting', 3),
@@ -150,9 +153,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- HUNTING BEHAVIORS ---
       new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
-
-      // --- SOCIAL & REPRODUCTION (PROCREATE) ---
-      new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
       new CachingNode(createTribeSplitBehavior(3), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 2),

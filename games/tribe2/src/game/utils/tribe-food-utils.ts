@@ -465,7 +465,10 @@ export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldSta
  * Finds an optimal planting spot within the tribe's planting zones.
  * Returns null if no zones exist or all zones are full.
  */
-export function findOptimalPlantingZoneSpot(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
+export function findOptimalPlantingZoneSpot(
+  human: HumanEntity,
+  gameState: GameWorldState,
+): { position: Vector2D; zoneId: EntityId } | null {
   const zones = getTribePlantingZones(human, gameState);
 
   // No planting zones exist
@@ -500,7 +503,7 @@ export function findOptimalPlantingZoneSpot(human: HumanEntity, gameState: GameW
 
       // Check if this position is valid (not occupied)
       if (!isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)) {
-        return position;
+        return { position, zoneId: zone.id };
       }
     }
   }

@@ -13,6 +13,7 @@ import {
   BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS,
 } from '../../../ai-consts.ts';
 import { MAX_HUNTERS_PER_PREY } from '../../../utils/tribe-task-utils';
+import { EntityId } from '../../../entities/entities-types';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
@@ -117,7 +118,7 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
         {
           taskType: 'hunt',
           maxCapacity: MAX_HUNTERS_PER_PREY,
-          getTargetId: (_entity, _context, blackboard) => Blackboard.get<number>(blackboard, HUNT_TARGET_KEY) ?? null,
+          getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, HUNT_TARGET_KEY) ?? null,
         },
         'Tribal Hunt Task',
         depth + 1,

@@ -5,7 +5,6 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 import { EntityId } from '../../../entities/entities-types';
-import { Vector2D } from '../../../utils/math-types';
 import { getTribeLeaderForCoordination, TRIBAL_TASK_TIMEOUT_HOURS } from '../../../utils/tribe-task-utils';
 
 /**
@@ -19,28 +18,19 @@ export type TribalTaskType = 'gather' | 'hunt' | 'plant' | 'storage' | 'procreat
 export type TribalTaskConfig = {
   /** Type of the task */
   taskType: TribalTaskType;
-  
+
   /** Maximum number of members that can work on the same task simultaneously */
   maxCapacity?: number;
-  
+
   /** For proximity-based tasks (like planting), the radius to check */
   proximityRadius?: number;
-  
+
   /** Function to extract the task target ID from the entity or blackboard */
   getTargetId?: (entity: CharacterEntity, context: UpdateContext, blackboard: BlackboardData) => EntityId | null;
-  
-  /** Function to extract the task target position from the entity or blackboard */
-  getTargetPosition?: (entity: CharacterEntity, context: UpdateContext, blackboard: BlackboardData) => Vector2D | null;
-  
-  /** Function to extract secondary target (for procreation: partner) */
-  getSecondaryTargetId?: (entity: CharacterEntity, context: UpdateContext, blackboard: BlackboardData) => EntityId | null;
-  
+
   /** Custom key generator for the task (if not using default) */
-  generateTaskKey?: (
-    taskType: TribalTaskType,
-    target: EntityId | Vector2D | { primary: EntityId; secondary: EntityId },
-  ) => string;
-  
+  generateTaskKey?: (taskType: TribalTaskType, target: EntityId) => string;
+
   /** Action type for storage tasks */
   storageAction?: 'deposit' | 'retrieve';
 };
@@ -52,20 +42,18 @@ type TaskData = {
   memberIds: EntityId[];
   startTime: number;
   maxCapacity: number;
-  position?: Vector2D;
-  action?: 'deposit' | 'retrieve';
 };
 
 /**
  * A generic decorator node for tribal task coordination.
- * 
+ *
  * This decorator wraps a behavior node and handles:
  * - Checking if the task is available (not at max capacity)
  * - Registering the entity as working on the task
  * - Maintaining the task registration while the child is RUNNING
  * - Cleaning up the task when the child completes or fails
  * - Handling task timeouts
- * 
+ *
  * The decorator is parameterized to work with different task types:
  * - gather: One member per food source
  * - hunt: Multiple members per prey (configurable max)
@@ -76,7 +64,7 @@ type TaskData = {
 export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode<T> {
   public name: string;
   public depth: number;
-  
+
   private readonly registeredKey: string;
 
   constructor(
@@ -96,7 +84,7 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
     btProfiler.nodeStart(this.name);
     try {
       const leader = getTribeLeaderForCoordination(entity as any, context.gameState);
-      
+
       // If no leader for coordination, just execute the child normally
       if (!leader || !leader.aiBlackboard) {
         const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
@@ -136,7 +124,7 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
       // If already registered, just execute the child and maintain the registration
       if (isAlreadyRegistered) {
         const [childStatus, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
-        
+
         if (childStatus === NodeStatus.RUNNING) {
           // Still running, refresh the task timestamp
           this.refreshTaskTimestamp(leader.aiBlackboard, taskKey, entity.id, currentTime);
@@ -169,7 +157,7 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
 
       // Not yet registered, check if we can join the task
       const canJoin = this.canJoinTask(leader.aiBlackboard, taskKey, entity.id, currentTime);
-      
+
       if (!canJoin) {
         this.setLastStatus(entity, NodeStatus.FAILURE);
         const taskData = Blackboard.get<TaskData>(leader.aiBlackboard, taskKey);
@@ -187,8 +175,8 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
       }
 
       // Register the task
-      const registered = this.registerTask(leader.aiBlackboard, taskKey, entity.id, currentTime, target);
-      
+      const registered = this.registerTask(leader.aiBlackboard, taskKey, entity.id, currentTime);
+
       if (!registered) {
         this.setLastStatus(entity, NodeStatus.FAILURE);
         Blackboard.recordNodeExecution(
@@ -246,43 +234,30 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
   /**
    * Gets the task target from the entity or blackboard
    */
-  private getTaskTarget(
-    entity: T,
-    context: UpdateContext,
-    blackboard: BlackboardData,
-  ): EntityId | Vector2D | { primary: EntityId; secondary: EntityId } | null {
+  private getTaskTarget(entity: T, context: UpdateContext, blackboard: BlackboardData): EntityId | null {
     if (this.config.taskType === 'procreation') {
-      const primary = this.config.getTargetId?.(entity, context, blackboard);
-      const secondary = this.config.getSecondaryTargetId?.(entity, context, blackboard);
-      if (primary && secondary) {
-        return { primary, secondary };
-      }
-      return null;
+      return this.config.getTargetId?.(entity, context, blackboard) ?? null;
     }
 
-    if (this.config.taskType === 'plant') {
-      return this.config.getTargetPosition?.(entity, context, blackboard) ?? null;
+    // Try to get target ID first (preferred for all types if available)
+    const targetId = this.config.getTargetId?.(entity, context, blackboard);
+    if (targetId !== null && targetId !== undefined) {
+      return targetId;
     }
 
-    return this.config.getTargetId?.(entity, context, blackboard) ?? null;
+    return null;
   }
 
   /**
    * Generates a task key for the blackboard
    */
-  private getTaskKey(target: EntityId | Vector2D | { primary: EntityId; secondary: EntityId }): string {
+  private getTaskKey(target: EntityId): string {
     if (this.config.generateTaskKey) {
       return this.config.generateTaskKey(this.config.taskType, target);
     }
 
     // Default key generation
-    if (typeof target === 'number') {
-      return `tribal_${this.config.taskType}_${target}`;
-    } else if ('primary' in target) {
-      return `tribal_${this.config.taskType}_${target.primary}_${target.secondary}`;
-    } else {
-      return `tribal_${this.config.taskType}_${Math.round(target.x)}_${Math.round(target.y)}`;
-    }
+    return `tribal_${this.config.taskType}_${target}`;
   }
 
   /**
@@ -325,7 +300,6 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
     taskKey: string,
     entityId: EntityId,
     currentTime: number,
-    target: EntityId | Vector2D | { primary: EntityId; secondary: EntityId },
   ): boolean {
     let task = Blackboard.get<TaskData>(leaderBlackboard, taskKey);
 
@@ -336,16 +310,6 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
         startTime: currentTime,
         maxCapacity: this.config.maxCapacity ?? 1,
       };
-
-      // Store position for plant tasks
-      if (this.config.taskType === 'plant' && typeof target !== 'number' && !('primary' in target)) {
-        task.position = target;
-      }
-
-      // Store action for storage tasks
-      if (this.config.taskType === 'storage') {
-        task.action = this.config.storageAction;
-      }
 
       Blackboard.set(leaderBlackboard, taskKey, task);
       return true;
@@ -358,14 +322,6 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
         startTime: currentTime,
         maxCapacity: this.config.maxCapacity ?? 1,
       };
-
-      if (this.config.taskType === 'plant' && typeof target !== 'number' && !('primary' in target)) {
-        task.position = target;
-      }
-
-      if (this.config.taskType === 'storage') {
-        task.action = this.config.storageAction;
-      }
 
       Blackboard.set(leaderBlackboard, taskKey, task);
       return true;
