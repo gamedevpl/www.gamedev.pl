@@ -4,7 +4,6 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { HUMAN_OLD_AGE_THRESHOLD } from '../human-consts';
-import { findFamilyPatriarch } from './family-tribe-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 
 /**
