@@ -31,28 +31,35 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
     depth + 1,
   );
 
-  const isTooCloseToParents = new ConditionNode(
-    (human: HumanEntity, context: UpdateContext) => {
+  const isTooCloseToParentsOrMovingToTerritory = new ConditionNode(
+    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+      // If a territory move is already in progress, allow it to continue.
+      // This prevents the sequence from aborting mid-move when the human
+      // has already moved far enough from their father.
+      if (Blackboard.get(blackboard, 'territoryMoveTarget') !== undefined) {
+        return [true, 'Territory move in progress'];
+      }
+
       // The player's heir should not try to establish a new territory.
       const player = findPlayerEntity(context.gameState);
       if (player) {
         const playerHeir = findHeir(findChildren(context.gameState, player));
         if (playerHeir?.id === human.id) {
-          return false;
+          return [false, 'Is player heir'];
         }
       }
 
       if (!human.fatherId) {
-        return false;
+        return [false, 'No father'];
       }
 
       const father = context.gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
       if (!father) {
-        return false; // No parents to be close to.
+        return [false, 'Father not found']; // No parents to be close to.
       }
 
       if (findHeir(findChildren(context.gameState, father))?.id === human.id) {
-        return false;
+        return [false, 'Is father heir'];
       }
 
       const distance = calculateWrappedDistance(
@@ -62,12 +69,12 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
         context.gameState.mapDimensions.height,
       );
       if (distance < ADULT_MALE_FAMILY_DISTANCE_RADIUS) {
-        return true; // Too close to at least one parent.
+        return [true, `Too close to father: ${distance.toFixed(0)}`]; // Too close to at least one parent.
       }
 
-      return false; // Not too close to any parent.
+      return [false, `Far enough from father: ${distance.toFixed(0)}`]; // Not too close to any parent.
     },
-    'Is Too Close To Father?',
+    'Is Too Close To Father Or Moving?',
     depth + 1,
   );
 
@@ -199,7 +206,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
   );
 
   return new Sequence(
-    [isAdultMaleWithFamily, isTooCloseToParents, establishOrContinueMove],
+    [isAdultMaleWithFamily, isTooCloseToParentsOrMovingToTerritory, establishOrContinueMove],
     'Establish Family Territory',
     depth,
   );
