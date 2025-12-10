@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence } from '../nodes';
+import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import {
   ADULT_MALE_FAMILY_DISTANCE_RADIUS,
   BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
@@ -12,6 +12,9 @@ import { findChildren, findHeir, getRandomNearbyPosition, findPlayerEntity } fro
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { Blackboard, BlackboardData } from '../behavior-tree-blackboard';
 import { Vector2D } from '../../../utils/math-types';
+
+const TERRITORY_TARGET_KEY = 'territoryMoveTarget';
+const TERRITORY_START_TIME_KEY = 'territoryMoveStartTime';
 
 /**
  * Creates a behavior for an adult male with a family to move away from his parents
@@ -31,12 +34,16 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
     depth + 1,
   );
 
-  const isTooCloseToParentsOrMovingToTerritory = new ConditionNode(
+  // Condition: Should attempt to establish territory?
+  // Returns true if:
+  // 1. A territory move is already in progress (to allow continuation), OR
+  // 2. Human is too close to their father and should start a new move
+  const shouldEstablishTerritory = new ConditionNode(
     (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
       // If a territory move is already in progress, allow it to continue.
       // This prevents the sequence from aborting mid-move when the human
       // has already moved far enough from their father.
-      if (Blackboard.get(blackboard, 'territoryMoveTarget') !== undefined) {
+      if (Blackboard.get(blackboard, TERRITORY_TARGET_KEY) !== undefined) {
         return [true, 'Territory move in progress'];
       }
 
@@ -74,39 +81,41 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
       return [false, `Far enough from father: ${distance.toFixed(0)}`]; // Not too close to any parent.
     },
-    'Is Too Close To Father Or Moving?',
+    'Should Establish Territory?',
     depth + 1,
   );
 
-  // --- Decomposed Nodes ---\\n\\n  // Node to check if a move is already in progress
-  const isMovingToTerritory = new ConditionNode(
-    (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
-      return Blackboard.get(blackboard, 'territoryMoveTarget') !== undefined;
-    },
-    'Is Moving To Territory?',
-    depth + 3,
-  );
-
-  // Node to handle timeout and arrival checks for an in-progress move
-  const checkTimeoutAndArrival = new ActionNode(
+  // Combined action node that handles both starting and continuing the move
+  // (similar pattern to tribe-split-behavior.ts)
+  const moveToNewTerritory = new ActionNode(
     (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-      const moveTarget = Blackboard.get<Vector2D>(blackboard, 'territoryMoveTarget');
-      const moveStartTime = Blackboard.get<number>(blackboard, 'territoryMoveStartTime');
+      let moveTarget = Blackboard.get<Vector2D>(blackboard, TERRITORY_TARGET_KEY);
+      let moveStartTime = Blackboard.get<number>(blackboard, TERRITORY_START_TIME_KEY);
 
-      // This node should only run if target and time exist, but we check to be safe
-      if (!moveTarget || !moveStartTime) {
-        return [NodeStatus.FAILURE, 'Missing move data'];
+      // Step 1: If no target exists, create one (starting a new move)
+      if (!moveTarget) {
+        const newTerritorySpot = getRandomNearbyPosition(
+          human.position,
+          context.gameState.mapDimensions.width / 4, // Wander up to a quarter of the map away
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
+
+        Blackboard.set(blackboard, TERRITORY_TARGET_KEY, newTerritorySpot);
+        Blackboard.set(blackboard, TERRITORY_START_TIME_KEY, context.gameState.time);
+        moveTarget = newTerritorySpot;
+        moveStartTime = context.gameState.time;
       }
 
-      // Condition 1: Check for timeout
-      const elapsed = context.gameState.time - moveStartTime;
+      // Step 2: Check for timeout
+      const elapsed = context.gameState.time - (moveStartTime ?? context.gameState.time);
       if (elapsed > ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS) {
-        Blackboard.delete(blackboard, 'territoryMoveTarget');
-        Blackboard.delete(blackboard, 'territoryMoveStartTime');
+        Blackboard.delete(blackboard, TERRITORY_TARGET_KEY);
+        Blackboard.delete(blackboard, TERRITORY_START_TIME_KEY);
         return [NodeStatus.FAILURE, 'Territory move timed out'];
       }
 
-      // Condition 2: Check for arrival
+      // Step 3: Check for arrival
       const distanceToTarget = calculateWrappedDistance(
         human.position,
         moveTarget,
@@ -115,99 +124,44 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       );
 
       if (distanceToTarget < HUMAN_INTERACTION_PROXIMITY) {
-        Blackboard.delete(blackboard, 'territoryMoveTarget');
-        Blackboard.delete(blackboard, 'territoryMoveStartTime');
+        Blackboard.delete(blackboard, TERRITORY_TARGET_KEY);
+        Blackboard.delete(blackboard, TERRITORY_START_TIME_KEY);
         return [NodeStatus.SUCCESS, 'Arrived at new territory'];
       }
 
-      // Still moving, ensure state is correct as another behavior might have interrupted
+      // Step 4: Continue moving
       human.activeAction = 'moving';
       human.target = moveTarget;
       const dirToTarget = getDirectionVectorOnTorus(
         human.position,
-        human.target as Vector2D,
+        moveTarget,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
       human.direction = vectorNormalize(dirToTarget);
 
-      return [NodeStatus.RUNNING, 'Continuing move to territory'];
+      return [NodeStatus.RUNNING, 'Moving to new territory'];
     },
-    'Check Timeout & Arrival',
-    depth + 3,
-  );
-
-  // Sequence to handle an in-progress move
-  const handleInProgressMove = new Sequence(
-    [isMovingToTerritory, checkTimeoutAndArrival],
-    'Handle In-Progress Move',
+    'Move To New Territory',
     depth + 2,
   );
 
-  // Condition to check if we should start a new move
-  const shouldStartNewMove = new ConditionNode(
-    (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
-      return Blackboard.get(blackboard, 'territoryMoveTarget') === undefined;
-    },
-    'Should Start New Move?',
-    depth + 4,
-  );
-
-  // Node to start a new move
-  const startNewTerritoryMove = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-      // Start a new move action
-      const newTerritorySpot = getRandomNearbyPosition(
-        human.position,
-        context.gameState.mapDimensions.width / 4, // Wander up to a quarter of the map away
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-
-      Blackboard.set(blackboard, 'territoryMoveTarget', newTerritorySpot);
-      Blackboard.set(blackboard, 'territoryMoveStartTime', context.gameState.time);
-
-      human.activeAction = 'moving';
-      human.target = newTerritorySpot;
-      const dirToTarget = getDirectionVectorOnTorus(
-        human.position,
-        human.target as Vector2D,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-      human.direction = vectorNormalize(dirToTarget);
-
-      return [NodeStatus.RUNNING, 'Started moving to new territory'];
-    },
-    'Start New Territory Move',
-    depth + 4,
-  );
-
-  // Sequence to wrap the start move logic
-  const startNewTerritoryMoveSequence = new Sequence(
-    [shouldStartNewMove, startNewTerritoryMove],
-    'Start New Territory Move Action',
-    depth + 3,
-  );
-
-  // Selector to either handle the in-progress move or start a new one
-  const establishOrContinueMove = new Selector(
-    [
-      handleInProgressMove,
-      new CooldownNode(
-        BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
-        startNewTerritoryMoveSequence,
-        'Establish Territory Cooldown',
-        depth + 2,
-      ),
-    ],
-    'Establish or Continue Move',
-    depth + 1,
-  );
-
-  return new Sequence(
-    [isAdultMaleWithFamily, isTooCloseToParentsOrMovingToTerritory, establishOrContinueMove],
+  // The full behavior sequence:
+  // 1. Check if adult male with family
+  // 2. Check if should establish territory (too close to father OR move in progress)
+  // 3. Move to new territory (handles both starting and continuing)
+  const establishTerritorySequence = new Sequence(
+    [isAdultMaleWithFamily, shouldEstablishTerritory, moveToNewTerritory],
     'Establish Family Territory',
+    depth,
+  );
+
+  // Wrap in cooldown to prevent constant re-checking
+  // Note: The cooldown only triggers when the sequence SUCCEEDS (arrives at destination)
+  return new CooldownNode(
+    BT_ESTABLISH_TERRITORY_COOLDOWN_HOURS,
+    establishTerritorySequence,
+    'Establish Territory Cooldown',
     depth,
   );
 }
