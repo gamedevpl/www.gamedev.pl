@@ -107,8 +107,13 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
         moveStartTime = context.gameState.time;
       }
 
+      // At this point, both moveTarget and moveStartTime are guaranteed to be defined
+      // (either from blackboard or just set above)
+      const target = moveTarget;
+      const startTime = moveStartTime!;
+
       // Step 2: Check for timeout
-      const elapsed = context.gameState.time - (moveStartTime ?? context.gameState.time);
+      const elapsed = context.gameState.time - startTime;
       if (elapsed > ESTABLISH_TERRITORY_MOVEMENT_TIMEOUT_HOURS) {
         Blackboard.delete(blackboard, TERRITORY_TARGET_KEY);
         Blackboard.delete(blackboard, TERRITORY_START_TIME_KEY);
@@ -118,7 +123,7 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
       // Step 3: Check for arrival
       const distanceToTarget = calculateWrappedDistance(
         human.position,
-        moveTarget,
+        target,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
@@ -131,10 +136,10 @@ export function createEstablishFamilyTerritoryBehavior(depth: number): BehaviorN
 
       // Step 4: Continue moving
       human.activeAction = 'moving';
-      human.target = moveTarget;
+      human.target = target;
       const dirToTarget = getDirectionVectorOnTorus(
         human.position,
-        moveTarget,
+        target,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
