@@ -21,6 +21,7 @@ export enum DebugPanelType {
   General,
   Performance,
   Ecosystem,
+  Tribe,
 }
 
 export const PERFORMANCE_METRICS_HISTORY_LENGTH = 100;
