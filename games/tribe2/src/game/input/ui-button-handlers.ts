@@ -171,8 +171,8 @@ export const handleUIButtonClick = (
         const otherTribeId = button.targetTribeId;
         const otherTribe = gameState.entities.entities[otherTribeId] as HumanEntity | undefined;
 
-        const playerDiplomacy = player.diplomacy;
-        const otherDiplomacy = otherTribe?.diplomacy;
+        const playerDiplomacy = player.tribeControl?.diplomacy;
+        const otherDiplomacy = otherTribe?.tribeControl?.diplomacy;
 
         if (playerDiplomacy && otherDiplomacy) {
           const currentStatus = playerDiplomacy[otherTribeId] || DiplomacyStatus.Friendly;

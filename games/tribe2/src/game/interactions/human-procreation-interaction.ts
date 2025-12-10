@@ -95,7 +95,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         const newTribeBadge = generateTribeBadge();
         male.leaderId = male.id; // The male becomes the leader of a new tribe
         male.tribeBadge = newTribeBadge;
-        male.diplomacy = {};
+        male.tribeControl = {
+          roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
+          diplomacy: {},
+        };
         female.leaderId = male.id; // The female joins the new tribe
         female.tribeBadge = newTribeBadge;
       }
@@ -106,7 +109,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       const newTribeBadge = generateTribeBadge();
       male.leaderId = male.id; // The male becomes the leader
       male.tribeBadge = newTribeBadge;
-      male.diplomacy = {};
+      male.tribeControl = {
+        roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
+        diplomacy: {},
+      };
       female.leaderId = male.id; // The female joins the new tribe
       female.tribeBadge = newTribeBadge;
     }

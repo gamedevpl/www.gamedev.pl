@@ -209,7 +209,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
         heir.tribeBadge = entity.tribeBadge;
-        heir.diplomacy = { ...entity.diplomacy };
+        heir.tribeControl = entity.tribeControl;
 
         // Update followers
         Object.values(gameState.entities.entities).forEach((e) => {

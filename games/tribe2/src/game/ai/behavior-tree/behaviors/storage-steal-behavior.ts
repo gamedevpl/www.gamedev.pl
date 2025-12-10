@@ -38,7 +38,7 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
               }
 
               const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-              if (!leader || !leader.diplomacy) {
+              if (!leader || !leader.tribeControl?.diplomacy) {
                 return [false, 'No diplomacy info'];
               }
 
@@ -65,7 +65,7 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
                 }
 
                 // Must be hostile
-                const diplomacyStatus = leader.diplomacy![buildingEntity.ownerId];
+                const diplomacyStatus = leader.tribeControl?.diplomacy![buildingEntity.ownerId];
                 if (diplomacyStatus !== DiplomacyStatus.Hostile) {
                   return false;
                 }
@@ -120,7 +120,7 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
               }
 
               const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-              if (!leader || !leader.diplomacy) {
+              if (!leader || !leader.tribeControl?.diplomacy) {
                 return [NodeStatus.FAILURE, 'No diplomacy info'];
               }
 
@@ -147,7 +147,7 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
                 }
 
                 // Must be hostile
-                const diplomacyStatus = leader.diplomacy![buildingEntity.ownerId];
+                const diplomacyStatus = leader.tribeControl?.diplomacy![buildingEntity.ownerId];
                 if (diplomacyStatus !== DiplomacyStatus.Hostile) {
                   return false;
                 }

@@ -99,8 +99,8 @@ export const determineHoveredAutopilotAction = (
               ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined)
               : undefined;
 
-            if (playerLeader && playerLeader.diplomacy) {
-              const diplomacyStatus = playerLeader.diplomacy[building.ownerId];
+            if (playerLeader && playerLeader.tribeControl?.diplomacy) {
+              const diplomacyStatus = playerLeader.tribeControl.diplomacy[building.ownerId];
               if (diplomacyStatus === DiplomacyStatus.Hostile) {
                 // Hostile tribe - suggest STEAL (actual stealing will be validated by interaction checker)
                 determinedAction = { action: PlayerActionType.AutopilotGather, targetEntityId: hoveredEntity.id };

@@ -29,9 +29,10 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
 
   // Check diplomacy status if they are in different tribes
   if (human1.leaderId && human2.leaderId) {
-    const tribe1Diplomacy = (gameState.entities.entities[human1.leaderId] as HumanEntity)?.diplomacy?.[human2.leaderId];
-    // const tribe2Diplomacy = (gameState.entities.entities[human2.leaderId] as HumanEntity)?.diplomacy?.[human1.leaderId];
-    return tribe1Diplomacy === DiplomacyStatus.Hostile; // || tribe2Diplomacy === DiplomacyStatus.Hostile;
+    const tribe1Diplomacy = (gameState.entities.entities[human1.leaderId] as HumanEntity)?.tribeControl?.diplomacy[
+      human2.leaderId
+    ];
+    return tribe1Diplomacy === DiplomacyStatus.Hostile;
   }
 
   // Default to not hostile if tribe information is missing
@@ -63,7 +64,7 @@ export const isEnemyBuilding = (human: HumanEntity, building: BuildingEntity, ga
   }
 
   // 4. The diplomacy status between the human's tribe and the building's owner tribe is Hostile
-  const humanTribeDiplomacy = (gameState.entities.entities[human.leaderId] as HumanEntity)?.diplomacy?.[
+  const humanTribeDiplomacy = (gameState.entities.entities[human.leaderId] as HumanEntity)?.tribeControl?.diplomacy[
     building.ownerId
   ];
 

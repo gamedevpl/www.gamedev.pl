@@ -97,11 +97,19 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
   // The founder becomes the new leader
   human.leaderId = human.id;
   human.tribeBadge = newTribeBadge;
-  human.diplomacy = {};
-  if (previousLeader && previousLeader.diplomacy) {
-    previousLeader.diplomacy[human.id] = DiplomacyStatus.Hostile;
+  human.tribeControl = {
+    roleWeights: {
+      gatherer: 1,
+      hunter: 1,
+      mover: 1,
+      warrior: 1,
+      leader: 0,
+    },
+    diplomacy: {},
+  };
+  if (previousLeader && previousLeader.tribeControl?.diplomacy) {
+    previousLeader.tribeControl.diplomacy[human.id] = DiplomacyStatus.Hostile;
   }
-
   // Update all descendants
   for (const descendant of descendants) {
     descendant.leaderId = human.id;

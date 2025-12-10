@@ -253,7 +253,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
   }
 
   const playerDiplomacy = playerLeaderId
-    ? (gameState.entities.entities[playerLeaderId] as HumanEntity | undefined)?.diplomacy
+    ? (gameState.entities.entities[playerLeaderId] as HumanEntity | undefined)?.tribeControl?.diplomacy
     : undefined;
 
   const tribeInfoList: TribeInfo[] = Array.from(tribes.values()).map((tribe) => {

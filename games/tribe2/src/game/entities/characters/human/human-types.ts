@@ -1,7 +1,7 @@
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
-import { DiplomacyStatus } from '../../../world-types';
 import { CharacterEntity } from '../character-types';
+import { TribeControl } from '../../tribe/tribe-types';
 
 /**
  * Represents a human entity in the game.
@@ -108,8 +108,8 @@ export interface HumanEntity extends CharacterEntity {
   /** A temporary slowdown effect, usually after being hit. */
   movementSlowdown?: { modifier: number; endTime: number };
 
-  /** The current state machine of the human, if any. */
-  diplomacy?: Record<EntityId, DiplomacyStatus>; // LeaderId -> Status
+  /** The tribe settings available only for tribe leaders. */
+  tribeControl?: TribeControl;
 }
 
 export type HumanAction =

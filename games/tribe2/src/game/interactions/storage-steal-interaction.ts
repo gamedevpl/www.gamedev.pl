@@ -60,12 +60,12 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
       ? (context.gameState.entities.entities[source.leaderId] as HumanEntity | undefined)
       : undefined;
 
-    if (!sourceLeader || !sourceLeader.diplomacy) {
+    if (!sourceLeader || !sourceLeader.tribeControl?.diplomacy) {
       // If no diplomacy info, default to not allowing stealing
       return false;
     }
 
-    const diplomacyStatus = sourceLeader.diplomacy[target.ownerId];
+    const diplomacyStatus = sourceLeader.tribeControl.diplomacy[target.ownerId];
     if (diplomacyStatus !== DiplomacyStatus.Hostile) {
       return false;
     }
