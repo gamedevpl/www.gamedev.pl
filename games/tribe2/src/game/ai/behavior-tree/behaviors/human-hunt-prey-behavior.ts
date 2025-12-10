@@ -12,7 +12,7 @@ import {
   BT_ACTION_TIMEOUT_HOURS,
   BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS,
 } from '../../../ai-consts.ts';
-import { MAX_HUNTERS_PER_PREY } from '../../../utils/tribe-task-utils';
+import { MAX_HUNTERS_PER_PREY } from '../../../entities/tribe/tribe-task-utils.ts';
 import { EntityId } from '../../../entities/entities-types';
 
 const HUNT_TARGET_KEY = 'huntTarget';

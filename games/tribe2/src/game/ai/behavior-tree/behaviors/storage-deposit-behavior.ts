@@ -5,7 +5,11 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
-import { getStorageUtilization, assignStorageSpot, countTribeMembersWithAction } from '../../../utils/tribe-food-utils';
+import {
+  getStorageUtilization,
+  assignStorageSpot,
+  countTribeMembersWithAction,
+} from '../../../entities/tribe/tribe-food-utils';
 import { getTribeMembers } from '../../../utils';
 import {
   DEPOSIT_COOLDOWN_HOURS,
@@ -16,7 +20,7 @@ import {
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
-import { MAX_USERS_PER_STORAGE } from '../../../utils/tribe-task-utils';
+import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';

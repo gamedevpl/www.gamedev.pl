@@ -4,7 +4,7 @@ import { AIType } from './ai-types';
 import { Blackboard } from './behavior-tree/behavior-tree-blackboard';
 import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 import { buildHumanBehaviorTree } from './behavior-tree/human-behavior-tree';
-import { cleanupStaleTribalTasks, getTribeLeaderForCoordination } from '../utils/tribe-task-utils';
+import { cleanupStaleTribalTasks, getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
 
 export const humanBehaviorTree = buildHumanBehaviorTree();
 

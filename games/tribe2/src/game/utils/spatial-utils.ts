@@ -4,7 +4,7 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-utils';
 import { Vector2D } from './math-types';
-import { findTribeMembers, getFamilyMembers } from './family-tribe-utils';
+import { findTribeMembers, getFamilyMembers } from '../entities/tribe/family-tribe-utils';
 import { BuildingEntity } from '../entities/buildings/building-types';
 
 export function getRandomNearbyPosition(

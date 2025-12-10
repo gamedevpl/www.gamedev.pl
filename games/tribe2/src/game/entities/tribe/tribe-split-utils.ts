@@ -1,21 +1,21 @@
-import { NOTIFICATION_DURATION_LONG_HOURS } from '../notifications/notification-consts.ts';
+import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notification-consts.ts';
 import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
   TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
-} from '../tribe-consts.ts';
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { NotificationType } from '../notifications/notification-types';
-import { addNotification } from '../notifications/notification-utils';
-import { playSoundAt } from '../sound/sound-manager';
-import { SoundType } from '../sound/sound-types';
-import { DiplomacyStatus, GameWorldState, UpdateContext } from '../world-types';
-import { calculateWrappedDistance } from './math-utils';
-import { Vector2D } from './math-types';
+} from '../../tribe-consts.ts';
+import { HumanEntity } from '../characters/human/human-types.ts';
+import { NotificationType } from '../../notifications/notification-types.ts';
+import { addNotification } from '../../notifications/notification-utils.ts';
+import { playSoundAt } from '../../sound/sound-manager.ts';
+import { SoundType } from '../../sound/sound-types.ts';
+import { DiplomacyStatus, GameWorldState, UpdateContext } from '../../world-types.ts';
+import { calculateWrappedDistance } from '../../utils/math-utils.ts';
+import { Vector2D } from '../../utils/math-types.ts';
 import { findChildren, findDescendants, findHeir, findTribeMembers } from './family-tribe-utils';
-import { generateTribeBadge } from './general-utils';
-import { getRandomNearbyPosition, isPositionOccupied } from './spatial-utils';
-import { TribeRole } from '../entities/tribe/tribe-types.ts';
+import { generateTribeBadge } from '../../utils/general-utils.ts';
+import { getRandomNearbyPosition, isPositionOccupied } from '../../utils/spatial-utils.ts';
+import { TribeRole } from './tribe-types.ts';
 
 export function findSafeTribeSplitLocation(
   originalTribeCenter: Vector2D,

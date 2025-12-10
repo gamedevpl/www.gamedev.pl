@@ -1,9 +1,9 @@
-import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../human-consts.ts';
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { EntityId } from '../entities/entities-types';
-import { DiplomacyStatus, GameWorldState } from '../world-types';
-import { IndexedWorldState } from '../world-index/world-index-types';
-import { TribeInfo } from '../ui/ui-types';
+import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../../human-consts.ts';
+import { HumanEntity } from '../characters/human/human-types.ts';
+import { EntityId } from '../entities-types.ts';
+import { DiplomacyStatus, GameWorldState } from '../../world-types.ts';
+import { IndexedWorldState } from '../../world-index/world-index-types.ts';
+import { TribeInfo } from '../../ui/ui-types.ts';
 
 export function countLivingOffspring(humanId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;

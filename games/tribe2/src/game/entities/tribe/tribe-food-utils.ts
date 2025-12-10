@@ -1,13 +1,13 @@
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
-import { EntityId } from '../entities/entities-types';
-import { GameWorldState } from '../world-types';
-import { IndexedWorldState } from '../world-index/world-index-types';
+import { HumanEntity } from '../characters/human/human-types';
+import { BuildingEntity, BuildingType } from '../buildings/building-types';
+import { EntityId } from '../entities-types';
+import { GameWorldState } from '../../world-types';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 import { getTribeMembers } from './family-tribe-utils';
-import { calculateWrappedDistance } from './math-utils';
-import { getTribeCenter, isPositionOccupied, isPositionInZone } from './spatial-utils';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../berry-bush-consts';
-import { Vector2D } from './math-types';
+import { calculateWrappedDistance } from '../../utils/math-utils';
+import { getTribeCenter, isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../berry-bush-consts';
+import { Vector2D } from '../../utils/math-types';
 
 const TRIBE_BUSH_SEARCH_RADIUS = 500; // Radius to search for bushes near tribe center
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment

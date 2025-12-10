@@ -15,7 +15,7 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
-import { areFamily, getFamilyMembers } from './family-tribe-utils';
+import { areFamily, getFamilyMembers } from '../entities/tribe/family-tribe-utils.ts';
 import { getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
 import { PreyEntity } from '../entities/characters/prey/prey-types';

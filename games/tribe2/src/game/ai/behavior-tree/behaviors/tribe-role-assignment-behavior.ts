@@ -1,7 +1,7 @@
 import { BT_EXPENSIVE_OPERATION_CACHE_HOURS } from '../../../ai-consts.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
-import { getTribeMembers } from '../../../utils/family-tribe-utils';
+import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, CachingNode } from '../nodes';
 

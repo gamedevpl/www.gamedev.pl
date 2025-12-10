@@ -9,8 +9,8 @@ import {
   getProductiveBushDensity,
   getTribeStorageSpots,
   getTribePlantingZones,
-} from '../../../utils/tribe-food-utils';
-import { getTribeMembers } from '../../../utils/family-tribe-utils';
+} from '../../../entities/tribe/tribe-food-utils';
+import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { getTribeCenter } from '../../../utils/spatial-utils';
 import { Vector2D } from '../../../utils/math-types';
 import { EntityId } from '../../../entities/entities-types';

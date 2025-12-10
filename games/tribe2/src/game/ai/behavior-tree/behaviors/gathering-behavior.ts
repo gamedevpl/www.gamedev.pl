@@ -19,7 +19,7 @@ import {
   getTribeLeaderForCoordination,
   TribalTaskData,
   TRIBAL_TASK_TIMEOUT_HOURS,
-} from '../../../utils/tribe-task-utils';
+} from '../../../entities/tribe/tribe-task-utils';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 
 type FoodSource = BerryBushEntity | CorpseEntity;

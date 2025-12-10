@@ -1,8 +1,8 @@
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { GameWorldState } from '../world-types';
-import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
-import { EntityId } from '../entities/entities-types';
-import { Vector2D } from './math-types';
+import { HumanEntity } from '../characters/human/human-types';
+import { GameWorldState } from '../../world-types';
+import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
+import { EntityId } from '../entities-types';
+import { Vector2D } from '../../utils/math-types';
 
 /**
  * Task timeout in game hours - after this time, a task is considered abandoned

@@ -6,7 +6,7 @@ import {
   calculateTribeFoodSecurity,
   getProductiveBushDensity,
   countTribeMembersWithAction,
-} from '../../../utils/tribe-food-utils';
+} from '../../../entities/tribe/tribe-food-utils.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../../../berry-bush-consts.ts';
 import {
   BT_PLANTING_SEARCH_COOLDOWN_HOURS,

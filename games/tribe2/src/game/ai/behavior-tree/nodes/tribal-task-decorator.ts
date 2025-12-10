@@ -5,7 +5,7 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 import { EntityId } from '../../../entities/entities-types';
-import { getTribeLeaderForCoordination, TRIBAL_TASK_TIMEOUT_HOURS } from '../../../utils/tribe-task-utils';
+import { getTribeLeaderForCoordination, TRIBAL_TASK_TIMEOUT_HOURS } from '../../../entities/tribe/tribe-task-utils';
 
 /**
  * Task types that can be coordinated

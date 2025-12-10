@@ -13,7 +13,7 @@ import {
   TribalTaskData,
   MAX_HUNTERS_PER_PREY,
   TRIBAL_TASK_TIMEOUT_HOURS,
-} from '../../../utils/tribe-task-utils';
+} from '../../../entities/tribe/tribe-task-utils.ts';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 
 const HUNT_TARGET_KEY = 'huntTarget';
@@ -27,7 +27,7 @@ function canJoinTribalHuntTask(leader: HumanEntity | null, preyId: EntityId, cur
 
   if (!task) return true;
   if (currentTime - task.startTime > TRIBAL_TASK_TIMEOUT_HOURS) return true;
-  
+
   return task.memberIds.length < (task.maxCapacity || MAX_HUNTERS_PER_PREY);
 }
 

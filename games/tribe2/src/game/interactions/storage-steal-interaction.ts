@@ -9,7 +9,7 @@ import {
 } from '../storage-spot-consts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { getTribeMembers } from '../utils/family-tribe-utils';
+import { getTribeMembers } from '../entities/tribe/family-tribe-utils';
 import { calculateWrappedDistance } from '../utils/math-utils';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';

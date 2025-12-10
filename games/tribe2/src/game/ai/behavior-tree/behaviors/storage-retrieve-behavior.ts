@@ -7,7 +7,7 @@ import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
 import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../ai-consts';
 import { findClosestStorage, findNearbyTribeStorageWithFood } from '../../../utils/storage-utils';
-import { MAX_USERS_PER_STORAGE } from '../../../utils/tribe-task-utils';
+import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
@@ -49,10 +49,7 @@ export function createStorageRetrieveBehavior(depth: number): BehaviorNode<Human
               // Store the target in blackboard for the action node and decorator
               Blackboard.set(blackboard, RETRIEVAL_STORAGE_KEY, tribeStorage.id);
 
-              return [
-                true,
-                `Storage with food found at distance ${closest.distance.toFixed(1)}`,
-              ];
+              return [true, `Storage with food found at distance ${closest.distance.toFixed(1)}`];
             },
             'Check for Hunger and Storage Food',
             depth + 1,

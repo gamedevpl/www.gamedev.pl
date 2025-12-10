@@ -14,7 +14,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { findNearbyEnemiesOfTribe } from './ai-world-analysis-utils';
 import { findClosestEntity } from './entity-finder-utils';
-import { canSplitTribe } from './tribe-split-utils';
+import { canSplitTribe } from '../entities/tribe/tribe-split-utils.ts';
 import { canProcreate, isHostile, isEnemyBuilding } from './human-utils';
 import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
 import { Entity } from '../entities/entities-types';

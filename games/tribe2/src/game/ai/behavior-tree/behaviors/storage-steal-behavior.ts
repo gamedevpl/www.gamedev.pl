@@ -8,7 +8,7 @@ import { STORAGE_INTERACTION_RANGE, STORAGE_STEAL_DETECTION_RANGE } from '../../
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
-import { getTribeMembers } from '../../../utils/family-tribe-utils';
+import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 
 /**
  * Creates a behavior for stealing food from enemy storage spots.

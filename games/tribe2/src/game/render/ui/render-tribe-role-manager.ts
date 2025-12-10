@@ -3,7 +3,7 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
 import { ClickableUIButton, UIButtonActionType } from '../../ui/ui-types';
 import { TribeRole } from '../../entities/tribe/tribe-types';
 import { UI_BUTTON_TEXT_COLOR, UI_FONT_SIZE } from '../../ui/ui-consts.ts';
-import { findTribeMembers } from '../../utils/family-tribe-utils';
+import { findTribeMembers } from '../../entities/tribe/family-tribe-utils.ts';
 
 const PANEL_WIDTH = 600;
 const PANEL_PADDING = 30;
