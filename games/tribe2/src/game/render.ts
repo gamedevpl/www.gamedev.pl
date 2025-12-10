@@ -23,6 +23,7 @@ import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
+import { renderTribeDebugger } from './render/render-tribe-debugger';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
@@ -199,6 +200,9 @@ export function renderGame(
     switch (gameState.debugPanel) {
       case DebugPanelType.Ecosystem:
         renderEcosystemDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+        break;
+      case DebugPanelType.Tribe:
+        renderTribeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
       case DebugPanelType.Performance:
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
