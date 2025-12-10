@@ -96,13 +96,14 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       ),
 
       // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
-      new NonPlayerControlled(
+      new AutopilotControlled(
         new CachingNode(
           createLeaderBuildingPlacementBehavior(4),
           BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
           'Cache Building Placement',
           3,
         ),
+        'build',
         'Gated Leader Building Placement',
         2,
       ),

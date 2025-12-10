@@ -276,6 +276,7 @@ export function renderUIButtons(
         buttonAction: UIButtonActionType.CommandBuild,
         shortcut: 'L',
         name: 'Build',
+        toggleKey: 'build',
         condition: () => player.isAdult === true && player.leaderId === player.id,
       },
     ];
@@ -304,7 +305,7 @@ export function renderUIButtons(
       const isBuildMenuOpen = isBuildButton && gameState.buildMenuOpen;
 
       const shiftTooltip =
-        !gameState.hasPlayerEnabledAutopilot || gameState.hasPlayerEnabledAutopilot < 3
+        !gameState.hasPlayerEnabledAutopilot || gameState.hasPlayerEnabledAutopilot < 4
           ? ' (Press Shift to toggle Auto)'
           : '';
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;

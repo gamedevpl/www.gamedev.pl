@@ -151,6 +151,7 @@ export type AutopilotControls = {
     attack: boolean;
     feedChildren: boolean;
     followLeader: boolean;
+    build: boolean;
   };
   hoveredAutopilotAction?: HoveredAutopilotAction;
   activeAutopilotAction?: HoveredAutopilotAction;

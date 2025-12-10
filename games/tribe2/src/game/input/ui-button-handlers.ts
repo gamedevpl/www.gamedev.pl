@@ -49,6 +49,7 @@ export const handleUIButtonClick = (
       UIButtonActionType.CommandGather,
       UIButtonActionType.CommandPlant,
       UIButtonActionType.ToggleProcreationBehavior,
+      UIButtonActionType.CommandBuild,
     ].includes(button.action)
   ) {
     gameState.hasPlayerEnabledAutopilot++;
@@ -149,7 +150,11 @@ export const handleUIButtonClick = (
       }
       break;
     case UIButtonActionType.CommandBuild:
-      gameState.buildMenuOpen = !gameState.buildMenuOpen;
+      if (shift) {
+        behaviors.build = !behaviors.build;
+      } else {
+        gameState.buildMenuOpen = !gameState.buildMenuOpen;
+      }
       break;
     case UIButtonActionType.SelectStorageSpot:
       gameState.selectedBuildingType = 'storageSpot';

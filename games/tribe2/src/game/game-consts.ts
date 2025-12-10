@@ -4,8 +4,8 @@ export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Constants
 
 // Time Constants
-export const MAP_WIDTH: number = 3000; // pixels
-export const MAP_HEIGHT: number = 3000; // pixels
+export const MAP_WIDTH: number = 4000; // pixels
+export const MAP_HEIGHT: number = 4000; // pixels
 export const VIEWPORT_FOLLOW_SPEED = 2.0;
 
 // Intro Screen Constants

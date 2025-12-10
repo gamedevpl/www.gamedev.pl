@@ -38,16 +38,43 @@ export function initWorld(): GameWorldState {
   const centerY = MAP_HEIGHT / 2;
 
   // Spawn player character (male) at center
-  const player = createHuman(entities, { x: centerX, y: centerY }, initialTime, 'male', true);
+  const player = createHuman(entities, { x: centerX - 25, y: centerY }, initialTime, 'male', true);
 
   // Spawn partner character (female) near the player
   createHuman(
     entities,
-    { x: centerX + 50, y: centerY },
+    { x: centerX + 25, y: centerY },
     initialTime,
     'female',
     false, // isPlayer = false
   );
+
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const radiusX = MAP_WIDTH / 2;
+    const radiusY = MAP_HEIGHT / 2;
+    const spawnPosition = {
+      x: centerX + Math.cos(angle) * radiusX,
+      y: centerY + Math.sin(angle) * radiusY,
+    };
+
+    // Spawn second tribe
+    createHuman(
+      entities,
+      { x: spawnPosition.x, y: spawnPosition.y },
+      initialTime,
+      'male',
+      false, // isPlayer = false
+    );
+
+    createHuman(
+      entities,
+      { x: spawnPosition.x + 50, y: spawnPosition.y },
+      initialTime,
+      'female',
+      false, // isPlayer = false
+    );
+  }
 
   // Spawn a pairs of prey at random positions
   for (let i = 0; i < INITIAL_PREY_COUNT; i++) {
@@ -136,6 +163,7 @@ export function initWorld(): GameWorldState {
         attack: false,
         feedChildren: true,
         followLeader: false,
+        build: false,
       },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,
@@ -276,6 +304,7 @@ export function initIntroWorld(): GameWorldState {
         attack: false,
         feedChildren: true,
         followLeader: false,
+        build: false,
       },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,
