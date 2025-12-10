@@ -10,6 +10,7 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { generateTribeBadge, isLineage, canProcreate } from '../utils';
+import { TribeRole } from '../entities/tribe/tribe-types.ts';
 
 /**
  * Defines an interaction for human procreation.
@@ -95,6 +96,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         const newTribeBadge = generateTribeBadge();
         male.leaderId = male.id; // The male becomes the leader of a new tribe
         male.tribeBadge = newTribeBadge;
+        male.tribeRole = TribeRole.Leader;
         male.tribeControl = {
           roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
           diplomacy: {},
@@ -109,6 +111,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       const newTribeBadge = generateTribeBadge();
       male.leaderId = male.id; // The male becomes the leader
       male.tribeBadge = newTribeBadge;
+      male.tribeRole = TribeRole.Leader;
       male.tribeControl = {
         roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
         diplomacy: {},

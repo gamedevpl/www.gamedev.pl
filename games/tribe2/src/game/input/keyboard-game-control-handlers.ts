@@ -64,6 +64,12 @@ export const handleGameControlKeyDown = (
         }
       }
       break;
+    case 'u':
+      const player = findPlayerEntity(gameState);
+      if (player && player.isAdult && player.leaderId === player.id) {
+        gameState.roleManagerOpen = !gameState.roleManagerOpen;
+      }
+      break;
     case 'm':
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);

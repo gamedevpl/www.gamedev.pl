@@ -1,5 +1,6 @@
 import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
+import { TribeRole } from '../entities/tribe/tribe-types';
 import { DiplomacyStatus } from '../world-types';
 
 export enum PlayerActionType {
@@ -90,6 +91,22 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
 };
 
+export const TRIBE_ROLE_EMOJIS: Record<TribeRole, string> = {
+  [TribeRole.Leader]: '👑',
+  [TribeRole.Gatherer]: '🧺',
+  [TribeRole.Hunter]: '🏹',
+  [TribeRole.Mover]: '📦',
+  [TribeRole.Warrior]: '⚔️',
+};
+
+export const TRIBE_ROLE_NAMES: Record<TribeRole, string> = {
+  [TribeRole.Leader]: 'Leader',
+  [TribeRole.Gatherer]: 'Gatherer',
+  [TribeRole.Hunter]: 'Hunter',
+  [TribeRole.Mover]: 'Mover',
+  [TribeRole.Warrior]: 'Warrior',
+};
+
 export interface PlayerActionHint {
   type: PlayerActionType;
   action: HumanAction;
@@ -164,6 +181,12 @@ export enum UIButtonActionType {
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',
+
+  // --- Tribe Role Manager ---
+  OpenRoleManager = 'OpenRoleManager',
+  CloseRoleManager = 'CloseRoleManager',
+  IncreaseRoleWeight = 'IncreaseRoleWeight',
+  DecreaseRoleWeight = 'DecreaseRoleWeight',
 }
 
 export interface ClickableUIButton {
@@ -180,4 +203,5 @@ export interface ClickableUIButton {
   lastActivated?: number;
   activated?: boolean;
   targetTribeId?: EntityId;
+  targetRole?: TribeRole;
 }

@@ -279,6 +279,13 @@ export function renderUIButtons(
         toggleKey: 'build',
         condition: () => player.isAdult === true && player.leaderId === player.id,
       },
+      {
+        playerAction: PlayerActionType.Build, // Reuse this for now
+        buttonAction: UIButtonActionType.OpenRoleManager,
+        shortcut: 'U',
+        name: 'Roles',
+        condition: () => player.isAdult === true && player.leaderId === player.id,
+      },
     ];
 
     playerCommandButtons = playerCommandButtons.filter((b) => (b.condition ? b.condition() : true));
@@ -311,20 +318,20 @@ export function renderUIButtons(
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
       const backgroundColor =
-        isBehaviorActive || isBuildMenuOpen ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+        isBehaviorActive || isBuildMenuOpen || (behavior.buttonAction === UIButtonActionType.OpenRoleManager && gameState.roleManagerOpen) ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
 
       const button: ClickableUIButton = {
         id: `commandButton_${behavior.name}`,
         action: behavior.buttonAction,
         rect: { x: buttonX, y: buttonY, width: UI_AUTOPILOT_BUTTON_SIZE, height: UI_AUTOPILOT_BUTTON_SIZE },
-        icon: PLAYER_ACTION_EMOJIS[behavior.playerAction],
+        icon: behavior.buttonAction === UIButtonActionType.OpenRoleManager ? '📋' : PLAYER_ACTION_EMOJIS[behavior.playerAction],
         text: behavior.shortcut,
         backgroundColor: backgroundColor,
         textColor: UI_BUTTON_TEXT_COLOR,
         currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
         tooltip: tooltipText,
         isDisabled,
-        activated: isBehaviorActive || isBuildMenuOpen,
+        activated: isBehaviorActive || isBuildMenuOpen || (behavior.buttonAction === UIButtonActionType.OpenRoleManager && gameState.roleManagerOpen),
       };
       gameState.uiButtons.push(button);
     });

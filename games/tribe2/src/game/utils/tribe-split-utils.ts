@@ -15,6 +15,7 @@ import { Vector2D } from './math-types';
 import { findChildren, findDescendants, findHeir, findTribeMembers } from './family-tribe-utils';
 import { generateTribeBadge } from './general-utils';
 import { getRandomNearbyPosition, isPositionOccupied } from './spatial-utils';
+import { TribeRole } from '../entities/tribe/tribe-types.ts';
 
 export function findSafeTribeSplitLocation(
   originalTribeCenter: Vector2D,
@@ -97,6 +98,7 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
   // The founder becomes the new leader
   human.leaderId = human.id;
   human.tribeBadge = newTribeBadge;
+  human.tribeRole = TribeRole.Leader;
   human.tribeControl = {
     roleWeights: {
       gatherer: 1,

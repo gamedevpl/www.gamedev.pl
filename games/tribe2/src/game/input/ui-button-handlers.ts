@@ -184,6 +184,28 @@ export const handleUIButtonClick = (
         }
       }
       break;
+    case UIButtonActionType.OpenRoleManager:
+      gameState.roleManagerOpen = true;
+      break;
+    case UIButtonActionType.CloseRoleManager:
+      gameState.roleManagerOpen = false;
+      break;
+    case UIButtonActionType.IncreaseRoleWeight:
+      if (player && player.tribeControl && button.targetRole) {
+        const currentWeight = player.tribeControl.roleWeights[button.targetRole] || 0;
+        if (currentWeight < 10) {
+          player.tribeControl.roleWeights[button.targetRole] = currentWeight + 1;
+        }
+      }
+      break;
+    case UIButtonActionType.DecreaseRoleWeight:
+      if (player && player.tribeControl && button.targetRole) {
+        const currentWeight = player.tribeControl.roleWeights[button.targetRole] || 0;
+        if (currentWeight > 0) {
+          player.tribeControl.roleWeights[button.targetRole] = currentWeight - 1;
+        }
+      }
+      break;
   }
 
   // For most cases, the original gameState object is mutated, so we return it.

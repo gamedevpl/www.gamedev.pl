@@ -4,7 +4,7 @@ import {
   BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
 } from '../../ai-consts.ts';
 import { BehaviorNode } from './behavior-tree-types';
-import { AutopilotControlled, CachingNode, ManualControl, NonPlayerControlled, Selector, TimeoutNode } from './nodes';
+import { AutopilotControlled, CachingNode, Inverter, ManualControl, NonPlayerControlled, Selector, Succeeder, TimeoutNode } from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -34,6 +34,7 @@ import {
   createLeaderBuildingPlacementBehavior,
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
+  createTribeRoleAssignmentBehavior,
 } from './behaviors';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
@@ -62,6 +63,13 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- PLAYER COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
       // These actions are triggered by direct player clicks and should always have high priority.
       createPlayerCommandBehavior(2),
+
+      // --- TRIBE ROLE ASSIGNMENT ---
+      new Inverter(
+        new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),
+        'Role Assignment Gate',
+        2,
+      ),
 
       // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
       new NonPlayerControlled(createLeaderCombatStrategyBehavior(3), 'Gated Leader Combat Strategy', 2),

@@ -1,7 +1,7 @@
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../../food/food-types';
 import { CharacterEntity } from '../character-types';
-import { TribeControl } from '../../tribe/tribe-types';
+import { TribeControl, TribeRole } from '../../tribe/tribe-types';
 
 /**
  * Represents a human entity in the game.
@@ -110,6 +110,9 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The tribe settings available only for tribe leaders. */
   tribeControl?: TribeControl;
+
+  /** The current role assigned within the tribe, if any. */
+  tribeRole?: TribeRole;
 }
 
 export type HumanAction =

@@ -26,6 +26,7 @@ export * from './tribe-migration-behavior';
 export * from './diplomacy-behavior';
 export * from './human-hunt-prey-behavior';
 export * from './human-defend-predator-behavior';
+export * from './tribe-role-assignment-behavior';
 
 // Animal-specific behaviors
 export * from './prey-flee-behavior';

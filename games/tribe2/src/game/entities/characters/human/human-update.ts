@@ -30,6 +30,7 @@ import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
+import { TribeRole } from '../../tribe/tribe-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -209,7 +210,19 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
         heir.tribeBadge = entity.tribeBadge;
-        heir.tribeControl = entity.tribeControl;
+        heir.tribeRole = TribeRole.Leader;
+
+        // Initialize or transfer tribe control
+        heir.tribeControl = entity.tribeControl ?? {
+          roleWeights: {
+            [TribeRole.Leader]: 0,
+            [TribeRole.Gatherer]: 3,
+            [TribeRole.Hunter]: 2,
+            [TribeRole.Mover]: 2,
+            [TribeRole.Warrior]: 2,
+          },
+          diplomacy: {},
+        };
 
         // Update followers
         Object.values(gameState.entities.entities).forEach((e) => {

@@ -30,6 +30,7 @@ import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
 import { renderGhostBuilding } from './render/render-building';
 import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
+import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -207,6 +208,12 @@ export function renderGame(
       case DebugPanelType.Performance:
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
         break;
+    }
+
+    // --- Tribe Role Manager ---
+    if (gameState.roleManagerOpen && player && player.leaderId === player.id) {
+      const roleManagerButtons = renderTribeRoleManager(ctx, gameState, player);
+      gameState.uiButtons.push(...roleManagerButtons);
     }
 
     if (gameState.isPaused && gameState.exitConfirmation !== 'pending') {

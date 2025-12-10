@@ -105,6 +105,7 @@ export interface GameWorldState {
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
+  roleManagerOpen: boolean;
   selectedBuildingType: 'storageSpot' | 'plantingZone' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
