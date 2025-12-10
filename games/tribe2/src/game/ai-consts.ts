@@ -17,9 +17,9 @@ export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const CHILD_MAX_WANDER_DISTANCE_FROM_PARENT: number = 100;
 export const FEMALE_PARTNER_MAX_WANDER_DISTANCE_FROM_MALE_PARTNER: number = 100;
 export const FATHER_FOLLOW_DISTANCE = 150;
-export const FATHER_FOLLOW_STOP_DISTANCE = 100;
-export const HEIR_FOLLOW_STOP_DISTANCE = 150;
-export const LEADER_FOLLOW_RADIUS = 250; // Radius within which followers will try to stay close to their leader
+export const FATHER_FOLLOW_STOP_DISTANCE = 300;
+export const HEIR_FOLLOW_STOP_DISTANCE = 350;
+export const LEADER_FOLLOW_RADIUS = 350; // Radius within which followers will try to stay close to their leader
 export const FOLLOW_LEADER_MIN_HUNGER_THRESHOLD = 120; // Followers will stop following if hunger is above this
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 400; // Radius in pixels to search for food sources when considering procreation
@@ -74,7 +74,7 @@ export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a p
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
 export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
 export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a claimed bush is within this radius, avoid gathering
-export const AI_GATHERING_SEARCH_RADIUS = 400; // Radius for AI to search for food sources
+export const AI_GATHERING_SEARCH_RADIUS = 600; // Radius for AI to search for food sources
 
 // AI Fleeing Constants
 export const AI_FLEE_HEALTH_THRESHOLD = 0.15; // representing 15% of max health

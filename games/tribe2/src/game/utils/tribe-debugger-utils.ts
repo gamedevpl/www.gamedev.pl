@@ -30,8 +30,7 @@ export interface FoodMetrics {
  * Information about a family group
  */
 export interface FamilyInfo {
-  patriarchId: EntityId;
-  patriarchName: string;
+  patriarch: HumanEntity;
   memberCount: number;
   members: EntityId[];
 }
@@ -168,13 +167,8 @@ export function findTopFamilies(gameState: GameWorldState, limit: number): Famil
     // Skip if the patriarch entity is somehow missing from state
     if (!patriarch) continue;
 
-    const patriarchName = patriarch.isPlayer
-      ? 'Player'
-      : `${patriarch.gender === 'male' ? 'Male' : 'Female'} Leader #${patriarch.id}`;
-
     families.push({
-      patriarchId: patriarch.id,
-      patriarchName,
+      patriarch,
       memberCount: members.length,
       members: members.map((m) => m.id),
     });

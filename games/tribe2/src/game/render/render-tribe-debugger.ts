@@ -1,6 +1,7 @@
 import { GameWorldState } from '../world-types';
 import { calculatePopulationBreakdown, calculateFoodMetrics, findTopFamilies } from '../utils/tribe-debugger-utils';
 import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts';
+import { canSplitTribe } from '../utils';
 
 interface PopulationHistory {
   time: number;
@@ -189,7 +190,9 @@ export function renderTribeDebugger(
   } else {
     topFamilies.forEach((family, index) => {
       const rank = index + 1;
-      const text = `${rank}. ${family.patriarchName} (${family.memberCount} members)`;
+      const text = `${rank}. ${family.patriarch.isPlayer ? 'Player' : '#' + family.patriarch.id} (${
+        family.memberCount
+      } members, can split: ${canSplitTribe(family.patriarch, gameState).canSplit})`;
       ctx.fillText(text, leftMargin, currentY);
       currentY += lineHeight;
     });

@@ -15,7 +15,6 @@ export * from './tribe-member-combat-behavior';
 export * from './leader-building-placement-behavior';
 export * from './take-over-building-behavior';
 export * from './remove-enemy-building-behavior';
-export * from './establish-family-territory-behavior';
 export * from './follow-patriarch-behavior';
 export * from './tribe-split-behavior';
 export * from './jealousy-attack-behavior';

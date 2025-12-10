@@ -121,6 +121,25 @@ export const handleGameControlKeyDown = (
         handled = false;
       }
       break;
+    case '#':
+      if (event.shiftKey) {
+        if (newState.debugPanel === DebugPanelType.Tribe) {
+          newState.debugPanel = DebugPanelType.None;
+          break;
+        }
+      }
+
+      newState.debugPanel = DebugPanelType.Tribe;
+      if (!newState.debugCharacterId) {
+        newState.debugCharacterId =
+          findPlayerEntity(newState)?.id ??
+          Object.values(newState.entities.entities).find(
+            (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
+          )?.id;
+      } else {
+        handled = false;
+      }
+      break;
     case '@':
       if (event.shiftKey) {
         if (newState.debugPanel === DebugPanelType.Performance) {

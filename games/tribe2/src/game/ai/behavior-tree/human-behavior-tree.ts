@@ -17,7 +17,6 @@ import {
   createProcreationBehavior,
   createSeekingFoodFromParentBehavior,
   createTribeMemberCombatBehavior,
-  createEstablishFamilyTerritoryBehavior,
   createFollowPatriarchBehavior,
   createTribeSplitBehavior,
   createJealousyAttackBehavior,
@@ -159,14 +158,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- TRIBE MANAGEMENT (MIGRATION) ---
       new NonPlayerControlled(createTribeMigrationBehavior(3), 'Gated Tribe Migration', 2),
-
-      // --- TERRITORY MANAGEMENT (ESTABLISH FAMILY) ---
-      new CachingNode(
-        createEstablishFamilyTerritoryBehavior(3),
-        BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-        'Cache Establish Territory',
-        2,
-      ),
 
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
       new AutopilotControlled(createFollowLeaderBehavior(3), 'followLeader', 'Gated Follow Leader', 2),
