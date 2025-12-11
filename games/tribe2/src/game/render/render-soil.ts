@@ -94,6 +94,9 @@ export function renderDepletedSoil(
   const visibleBottom = viewportCenter.y + halfCanvasHeight + padding;
 
   ctx.save();
+  
+  // Store original globalAlpha to ensure proper restoration
+  const originalAlpha = ctx.globalAlpha;
 
   // Render each visible depleted sector
   for (const sector of depletedSectors) {
@@ -127,6 +130,8 @@ export function renderDepletedSoil(
     }
   }
 
+  // Ensure globalAlpha is reset before restore
+  ctx.globalAlpha = originalAlpha;
   ctx.restore();
 }
 

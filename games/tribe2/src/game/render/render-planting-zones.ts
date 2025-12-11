@@ -113,6 +113,12 @@ function renderMetaballGroup(
 ): void {
   if (zones.length === 0) return;
   
+  // Save context state at the start
+  ctx.save();
+  
+  // Ensure globalAlpha is 1 for consistent rendering
+  ctx.globalAlpha = 1;
+  
   const bounds = getGroupBounds(zones, dimensions, METABALL_PADDING);
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
@@ -172,6 +178,9 @@ function renderMetaballGroup(
     renderStonesAlongPath(ctx, sortedPoints, isHostile, regionSeed);
     regionSeed += 1000;
   }
+  
+  // Restore context state
+  ctx.restore();
 }
 
 /**
