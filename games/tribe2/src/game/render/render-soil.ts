@@ -209,12 +209,35 @@ function getAverageStrength(x: number, y: number, metaballs: MetaballSource[]): 
 }
 
 /**
+ * Parse a hex color string to RGB values.
+ * Returns default brown color if parsing fails.
+ */
+function parseHexColor(hexColor: string): { r: number; g: number; b: number } {
+  const colorMatch = hexColor.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (colorMatch) {
+    return {
+      r: parseInt(colorMatch[1], 16),
+      g: parseInt(colorMatch[2], 16),
+      b: parseInt(colorMatch[3], 16),
+    };
+  }
+  // Default brown color fallback
+  return { r: 139, g: 115, b: 85 };
+}
+
+/**
  * Calculate the alpha value for a pixel based on metaball field value and strength.
  */
 function calculatePixelAlpha(fieldValue: number, avgStrength: number): number {
+  // Guard against division by zero
+  if (METABALL_THRESHOLD <= 0) {
+    return 0;
+  }
   // Smooth falloff near the edge of the metaball field
   const edgeFactor = Math.min(1, (fieldValue - METABALL_THRESHOLD) / METABALL_THRESHOLD);
-  return Math.min(MAX_ALPHA, Math.floor(avgStrength * SOIL_DEPLETED_OPACITY_MAX * edgeFactor * MAX_ALPHA));
+  // Calculate alpha as a value from 0 to MAX_ALPHA
+  const rawAlpha = avgStrength * SOIL_DEPLETED_OPACITY_MAX * edgeFactor * MAX_ALPHA;
+  return Math.min(MAX_ALPHA, Math.floor(rawAlpha));
 }
 
 /**
@@ -242,11 +265,8 @@ function renderMetaballs(
   const imageData = offCtx.createImageData(canvasWidth, canvasHeight);
   const data = imageData.data;
 
-  // Parse the depleted color
-  const colorMatch = SOIL_DEPLETED_COLOR.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  const r = colorMatch ? parseInt(colorMatch[1], 16) : 139;
-  const g = colorMatch ? parseInt(colorMatch[2], 16) : 115;
-  const b = colorMatch ? parseInt(colorMatch[3], 16) : 85;
+  // Parse the depleted color using utility function
+  const { r, g, b } = parseHexColor(SOIL_DEPLETED_COLOR);
 
   // Calculate world coordinates for each pixel
   const startWorldX = viewportCenter.x - width / 2;
