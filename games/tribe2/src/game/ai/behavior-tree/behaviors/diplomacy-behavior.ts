@@ -33,7 +33,6 @@ export function createDiplomacyBehavior(depth: number): BehaviorNode<HumanEntity
         // Simple logic: Become hostile if much stronger, otherwise become friendly.
         if (playerTribeStrength > otherTribeStrength * LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD) {
           if (currentStatus !== DiplomacyStatus.Hostile && leader.tribeControl?.diplomacy) {
-            console.log(`⚔️ DIPLOMACY CHANGE: Leader ${leader.id} (strength ${playerTribeStrength.toFixed(1)}) set HOSTILE to tribe ${otherTribeInfo.leaderId} (strength ${otherTribeStrength.toFixed(1)})`);
             leader.tribeControl.diplomacy[otherTribeInfo.leaderId] = DiplomacyStatus.Hostile;
           }
         } else {

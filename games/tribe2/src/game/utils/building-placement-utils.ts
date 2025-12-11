@@ -98,11 +98,6 @@ export function createBuilding(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): BuildingEntity {
-  console.log(
-    `🏗️ BUILDING CREATED: Type=${buildingType}, Owner=${ownerId}, Position=(${position.x.toFixed(
-      0,
-    )}, ${position.y.toFixed(0)})`,
-  );
   const building = createBuildingEntity(gameState.entities, position, buildingType, ownerId);
   // Update planting zone connections when a new planting zone is created
   if (buildingType === BuildingType.PlantingZone) {

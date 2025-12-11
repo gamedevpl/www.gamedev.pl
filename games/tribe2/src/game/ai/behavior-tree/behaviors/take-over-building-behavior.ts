@@ -135,7 +135,6 @@ export function createTakeOverBuildingBehavior(depth: number): BehaviorNode<Huma
           }
 
           // Set the action - the interaction system will handle the actual takeover
-          console.log(`🎯 AI TAKEOVER INITIATED: Leader ${human.id} targeting building ${targetBuilding.id} (type: ${targetBuilding.buildingType})`);
           human.activeAction = 'takingOverBuilding';
           human.target = targetBuilding.id;
 
