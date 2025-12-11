@@ -2,7 +2,10 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGE } from '../human-consts.ts';
-import { PLAYER_CALL_TO_ATTACK_DURATION_HOURS, PLAYER_CALL_TO_FOLLOW_DURATION_HOURS } from '../tribe-consts.ts';
+import {
+  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
+  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
+} from '../entities/tribe/tribe-consts.ts';
 import { BERRY_BUSH_SPREAD_RADIUS } from '../berry-bush-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';

@@ -13,3 +13,6 @@ export const PLAYER_CALL_TO_FOLLOW_DURATION_HOURS: number = 12;
 export const PLAYER_CALL_TO_FOLLOW_RADIUS: number = 300;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
 export const FAST_FORWARD_AMOUNT_SECONDS = 10;
+
+// Tribe control constants
+export const TRIBE_ROLES_EFFECTIVE_MIN_HEADCOUNT = 10; // Minimum headcount for roles to be effective

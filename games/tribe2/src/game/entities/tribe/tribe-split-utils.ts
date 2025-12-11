@@ -3,7 +3,7 @@ import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
   TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
-} from '../../tribe-consts.ts';
+} from './tribe-consts.ts';
 import { HumanEntity } from '../characters/human/human-types.ts';
 import { NotificationType } from '../../notifications/notification-types.ts';
 import { addNotification } from '../../notifications/notification-utils.ts';
@@ -102,6 +102,7 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
   human.tribeControl = {
     roleWeights: {
       gatherer: 1,
+      planter: 1,
       hunter: 1,
       mover: 1,
       warrior: 1,

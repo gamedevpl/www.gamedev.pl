@@ -26,6 +26,7 @@ import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity, getAvailablePlayerActions } from '../../utils/world-utils';
+import { areTribeRolesEffective } from '../../entities/tribe/tribe-role-utils.ts';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -284,7 +285,8 @@ export function renderUIButtons(
         buttonAction: UIButtonActionType.OpenRoleManager,
         shortcut: 'U',
         name: 'Roles',
-        condition: () => player.isAdult === true && player.leaderId === player.id,
+        condition: () =>
+          player.isAdult === true && player.leaderId === player.id && areTribeRolesEffective(player, gameState),
       },
     ];
 

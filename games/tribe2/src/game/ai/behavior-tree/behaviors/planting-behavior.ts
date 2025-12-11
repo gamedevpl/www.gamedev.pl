@@ -25,6 +25,8 @@ import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence, TribalTask
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types';
+import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
+import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 const PLANTING_ZONE_KEY = 'plantingZoneId';
@@ -154,7 +156,11 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
     [
       // 1. Basic conditions: Check if the AI is in a state to plant.
       new ConditionNode(
-        (human) => {
+        (human, context) => {
+          if (!isTribeRole(human, TribeRole.Planter, context.gameState)) {
+            return [false, 'Not a Planter'];
+          }
+
           const hasEnoughBerries =
             human.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING;
           const isNotStarving = human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING;

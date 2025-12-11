@@ -117,6 +117,7 @@ export interface GameWorldState {
   tutorial: Tutorial;
   tutorialState: TutorialState;
   debugCharacterId?: EntityId;
+  debugTribeId?: EntityId;
   hoveredButtonId?: string;
   mousePosition?: Vector2D;
   notifications: Notification[];

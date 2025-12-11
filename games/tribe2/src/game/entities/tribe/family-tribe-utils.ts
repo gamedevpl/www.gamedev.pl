@@ -20,23 +20,36 @@ export function findPotentialNewPartners(
   const indexedState = gameState as IndexedWorldState;
   const candidates = indexedState.search.human.byRadius(sourceHuman.position, radius);
 
-  return candidates.filter((partner) => {
-    if (
-      partner.id === sourceHuman.id ||
-      partner.gender === sourceHuman.gender ||
-      !partner.isAdult ||
-      partner.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
-      (partner.procreationCooldown || 0) > 0 ||
-      (partner.gender === 'female' && partner.isPregnant)
-    ) {
-      return false;
-    }
+  return candidates
+    .filter((partner) => {
+      if (
+        partner.id === sourceHuman.id ||
+        partner.gender === sourceHuman.gender ||
+        !partner.isAdult ||
+        partner.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
+        (partner.procreationCooldown || 0) > 0 ||
+        (partner.gender === 'female' && partner.isPregnant)
+      ) {
+        return false;
+      }
 
-    const isParentOfSource = partner.id === sourceHuman.motherId || partner.id === sourceHuman.fatherId;
-    const isChildOfSource = sourceHuman.id === partner.motherId || sourceHuman.id === partner.fatherId;
+      const isChild = sourceHuman.motherId === partner.id || sourceHuman.fatherId === partner.id;
+      if (isChild && !!partner.partnerIds?.length) {
+        return false;
+      }
 
-    return !isParentOfSource && !isChildOfSource;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      const isAParent = a.id === sourceHuman.motherId || a.id === sourceHuman.fatherId;
+      const isAChild = sourceHuman.id === a.motherId || sourceHuman.id === a.fatherId;
+      const isBParent = b.id === sourceHuman.motherId || b.id === sourceHuman.fatherId;
+      const isBChild = sourceHuman.id === b.motherId || sourceHuman.id === b.fatherId;
+
+      if (isAParent || isAChild) return 1;
+      if (isBParent || isBChild) return -1;
+      return a.age - b.age;
+    });
 }
 
 export function findHeir(potentialHeirs: HumanEntity[]): HumanEntity | undefined {

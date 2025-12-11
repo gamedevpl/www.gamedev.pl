@@ -6,7 +6,7 @@ import {
   FAST_FORWARD_AMOUNT_SECONDS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
-} from '../tribe-consts.ts';
+} from '../entities/tribe/tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';

@@ -1,6 +1,6 @@
 import { BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
 import { HUMAN_ATTACK_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
-import { PLAYER_CALL_TO_ATTACK_RADIUS } from '../tribe-consts.ts';
+import { PLAYER_CALL_TO_ATTACK_RADIUS } from '../entities/tribe/tribe-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';

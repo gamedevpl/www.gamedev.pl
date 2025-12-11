@@ -4,7 +4,16 @@ import {
   BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
 } from '../../ai-consts.ts';
 import { BehaviorNode } from './behavior-tree-types';
-import { AutopilotControlled, CachingNode, Inverter, ManualControl, NonPlayerControlled, Selector, Succeeder, TimeoutNode } from './nodes';
+import {
+  AutopilotControlled,
+  CachingNode,
+  Inverter,
+  ManualControl,
+  NonPlayerControlled,
+  Selector,
+  Succeeder,
+  TimeoutNode,
+} from './nodes';
 import {
   createAttackingBehavior,
   createEatingBehavior,
@@ -120,7 +129,7 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       createTribeMemberCombatBehavior(2),
 
       // --- OPPORTUNISTIC STEALING ---
-      new AutopilotControlled(createStorageStealBehavior(3), 'attack', 'Gated Storage Steal', 2),
+      createStorageStealBehavior(2),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
       new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
@@ -129,7 +138,10 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       createEatingBehavior(2),
 
       // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
-      new AutopilotControlled(createStorageRetrieveBehavior(3), 'gathering', 'Gated Storage Retrieve', 2),
+      createStorageRetrieveBehavior(2),
+
+      // --- SOCIAL & REPRODUCTION (PROCREATE) ---
+      new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
 
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new TimeoutNode(
@@ -147,9 +159,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- CHILD NEEDS (SEEK FOOD) ---
       createSeekingFoodFromParentBehavior(2),
-
-      // --- SOCIAL & REPRODUCTION (PROCREATE) ---
-      new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
       new TimeoutNode(

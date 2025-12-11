@@ -216,7 +216,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         heir.tribeControl = entity.tribeControl ?? {
           roleWeights: {
             [TribeRole.Leader]: 0,
-            [TribeRole.Gatherer]: 3,
+            [TribeRole.Gatherer]: 2,
+            [TribeRole.Planter]: 2,
             [TribeRole.Hunter]: 2,
             [TribeRole.Mover]: 2,
             [TribeRole.Warrior]: 2,

@@ -75,6 +75,7 @@ export function renderTribeRoleManager(
   const roleCounts: Record<TribeRole, number> = {
     [TribeRole.Leader]: 0,
     [TribeRole.Gatherer]: 0,
+    [TribeRole.Planter]: 0,
     [TribeRole.Hunter]: 0,
     [TribeRole.Mover]: 0,
     [TribeRole.Warrior]: 0,
@@ -90,6 +91,7 @@ export function renderTribeRoleManager(
   const weights = player.tribeControl.roleWeights;
   const rolesToDisplay = [
     { role: TribeRole.Gatherer, emoji: '🧺', name: 'Gatherer' },
+    { role: TribeRole.Planter, emoji: '🌱', name: 'Planter' },
     { role: TribeRole.Hunter, emoji: '🏹', name: 'Hunter' },
     { role: TribeRole.Mover, emoji: '📦', name: 'Mover' },
     { role: TribeRole.Warrior, emoji: '⚔️', name: 'Warrior' },

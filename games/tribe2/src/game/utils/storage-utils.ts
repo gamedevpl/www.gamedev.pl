@@ -4,8 +4,11 @@ import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
+import { Blackboard, BlackboardData } from '../ai/behavior-tree/behavior-tree-blackboard';
+import { EntityId } from '../entities/entities-types';
+import { TribalTaskData, MAX_USERS_PER_STORAGE } from '../entities/tribe/tribe-task-utils';
 
-const STORAGE_SEARCH_RADIUS = 100;
+const STORAGE_SEARCH_RADIUS = 400;
 const STORAGE_ITEM_SCATTER_RADIUS = 25;
 
 /**
@@ -41,7 +44,7 @@ export function hasNearbyNonFullStorage(
       buildingEntity.isConstructed &&
       buildingEntity.storedFood &&
       buildingEntity.storageCapacity &&
-      buildingEntity.storedFood.length < buildingEntity.storageCapacity
+      buildingEntity.storedFood.length < buildingEntity.storageCapacity / 2
     );
   });
 }
@@ -57,20 +60,36 @@ export function findNearbyTribeStorageWithFood(
   human: HumanEntity,
   gameState: GameWorldState,
   searchRadius: number = STORAGE_SEARCH_RADIUS,
+  leaderBlackboard?: BlackboardData,
+  memberId?: EntityId,
 ): BuildingEntity[] {
   const indexedState = gameState as IndexedWorldState;
   const nearbyBuildings = indexedState.search.building.byRadius(human.position, searchRadius);
 
-  return nearbyBuildings.filter((building) => {
-    const buildingEntity = building as BuildingEntity;
-    return (
-      buildingEntity.buildingType === 'storageSpot' &&
-      buildingEntity.ownerId === human.leaderId &&
-      buildingEntity.isConstructed &&
-      buildingEntity.storedFood &&
-      buildingEntity.storedFood.length > 0
-    );
-  }) as BuildingEntity[];
+  return nearbyBuildings
+    .filter((building) => {
+      const buildingEntity = building as BuildingEntity;
+      return (
+        buildingEntity.buildingType === 'storageSpot' &&
+        buildingEntity.ownerId === human.leaderId &&
+        buildingEntity.isConstructed &&
+        buildingEntity.storedFood &&
+        buildingEntity.storedFood.length > 0
+      );
+    })
+    .filter((buildingEntity) => {
+      if (leaderBlackboard) {
+        const taskKey = `tribal_storage_${buildingEntity.id}`;
+        const task = Blackboard.get<TribalTaskData>(leaderBlackboard, taskKey);
+        if (task && task.memberIds.length >= MAX_USERS_PER_STORAGE) {
+          if (!memberId || !task.memberIds.includes(memberId)) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }) as BuildingEntity[];
 }
 
 /**

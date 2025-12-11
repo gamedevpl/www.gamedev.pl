@@ -2,6 +2,8 @@ import { GameWorldState } from '../world-types';
 import { calculatePopulationBreakdown, calculateFoodMetrics, findTopFamilies } from '../utils/tribe-debugger-utils';
 import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts';
 import { canSplitTribe } from '../utils';
+import { getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
+import { IndexedWorldState } from '../world-index/world-index-types';
 
 interface PopulationHistory {
   time: number;
@@ -36,9 +38,21 @@ export function renderTribeDebugger(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
+  if (!gameState.debugCharacterId) {
+    return;
+  }
+
+  const debugCharacter = (gameState as IndexedWorldState).search.human.byProperty('id', gameState.debugCharacterId)[0];
+  if (!debugCharacter) {
+    return;
+  }
+  let leaderId = getTribeLeaderForCoordination(debugCharacter, gameState)?.id;
+  if (!leaderId) {
+    return;
+  }
   // Calculate current metrics
-  const populationBreakdown = calculatePopulationBreakdown(gameState);
-  const foodMetrics = calculateFoodMetrics(gameState);
+  const populationBreakdown = calculatePopulationBreakdown(leaderId, gameState);
+  const foodMetrics = calculateFoodMetrics(leaderId, gameState);
 
   // Record history data at intervals
   if (gameState.time - lastRecordTime >= HISTORY_INTERVAL) {
@@ -180,7 +194,7 @@ export function renderTribeDebugger(
   ctx.fillText('👨‍👩‍👧‍👦 Top 5 Families', leftMargin, currentY);
   currentY += 18;
 
-  const topFamilies = findTopFamilies(gameState, 5);
+  const topFamilies = findTopFamilies(leaderId, gameState, 5);
   ctx.fillStyle = 'white';
   ctx.font = '11px monospace';
 

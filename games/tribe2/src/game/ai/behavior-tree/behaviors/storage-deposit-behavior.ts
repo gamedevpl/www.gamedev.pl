@@ -21,6 +21,8 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
+import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
+import { TribeRole } from '../../../entities/tribe/tribe-types';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
@@ -39,6 +41,13 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
           // Check if human has excess food and storage is available (with adaptive threshold)
           new ConditionNode<HumanEntity>(
             (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+              if (
+                !isTribeRole(human, TribeRole.Gatherer, context.gameState) &&
+                !isTribeRole(human, TribeRole.Mover, context.gameState)
+              ) {
+                return [false, 'Not a Gatherer/Mover'];
+              }
+
               // Check cooldown
               const lastDepositTime = Blackboard.get<number>(blackboard, LAST_DEPOSIT_TIME_KEY) || 0;
               const timeSinceDeposit = context.gameState.time - lastDepositTime;

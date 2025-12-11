@@ -8,6 +8,8 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity, getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
 import { EntityId } from '../../../entities/entities-types.ts';
+import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
+import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 
 const ATTACK_TARGET_KEY = 'attackTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -53,6 +55,10 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
               }
               return true;
             }
+          }
+
+          if (!isTribeRole(human, TribeRole.Warrior, gameState)) {
+            return [false, 'Not a Warrior'];
           }
 
           // Find a new target if not currently engaged.

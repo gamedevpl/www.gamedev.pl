@@ -17,13 +17,18 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.FAILURE;
       }
 
-      // 2. Get the leader entity
+      // 2. Must be adult
+      if (!human.isAdult) {
+        return NodeStatus.FAILURE;
+      }
+
+      // 3. Get the leader entity
       const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
       if (!leader || !leader.tribeControl) {
         return NodeStatus.FAILURE;
       }
 
-      // 3. If I am the leader, ensure my role is Leader and exit
+      // 4. If I am the leader, ensure my role is Leader and exit
       if (human.id === leader.id) {
         if (human.tribeRole !== TribeRole.Leader) {
           human.tribeRole = TribeRole.Leader;
@@ -31,7 +36,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.SUCCESS;
       }
 
-      // 4. Get all tribe members to calculate distribution
+      // 5. Get all tribe members to calculate distribution
       const tribeMembers = getTribeMembers(leader, context.gameState);
       const nonLeaderMembers = tribeMembers.filter((m) => m.id !== leader.id);
       const totalNonLeaders = nonLeaderMembers.length;
@@ -40,7 +45,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.SUCCESS;
       }
 
-      // 5. Calculate target counts based on weights
+      // 6. Calculate target counts based on weights
       const weights = leader.tribeControl.roleWeights;
       let totalWeight = 0;
       const availableRoles: TribeRole[] = [];

@@ -1,10 +1,11 @@
 import { DebugPanelType, GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
-import { FAST_FORWARD_AMOUNT_SECONDS } from '../tribe-consts.ts';
+import { FAST_FORWARD_AMOUNT_SECONDS } from '../entities/tribe/tribe-consts.ts';
 import { findPlayerEntity } from '../utils/world-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { saveGame } from '../persistence/persistence-utils';
+import { IndexedWorldState } from '../world-index/world-index-types.ts';
 
 /**
  * Handles global keyboard shortcuts that are not direct player actions.
@@ -139,9 +140,7 @@ export const handleGameControlKeyDown = (
       if (!newState.debugCharacterId) {
         newState.debugCharacterId =
           findPlayerEntity(newState)?.id ??
-          Object.values(newState.entities.entities).find(
-            (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
-          )?.id;
+          (newState as IndexedWorldState).search.human.all().find((h) => h.leaderId === h.id)?.id;
       } else {
         handled = false;
       }
@@ -159,31 +158,45 @@ export const handleGameControlKeyDown = (
       }
       break;
     case 'tab':
-      newState.debugPanel = DebugPanelType.General; // Always turn on debug if cycling
+      if (newState.debugPanel !== DebugPanelType.General && newState.debugPanel !== DebugPanelType.Tribe) {
+        newState.debugPanel = DebugPanelType.General;
+      }
 
-      const allCharacters = Object.values(newState.entities.entities).filter(
-        (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
-      );
+      if (newState.debugPanel === DebugPanelType.General) {
+        const allCharacters = Object.values(newState.entities.entities).filter(
+          (e) => e.type === 'human' || e.type === 'prey' || e.type === 'predator',
+        );
 
-      if (allCharacters.length > 0) {
-        // Sort: player first, then humans, then prey, then predators, all by ID
-        const sortedCharacters = allCharacters.sort((a, b) => {
-          if (a.type === 'human' && (a as HumanEntity).isPlayer) return -1;
-          if (b.type === 'human' && (b as HumanEntity).isPlayer) return 1;
-          if (a.type !== b.type) {
-            const order: Record<string, number> = { human: 0, prey: 1, predator: 2 };
-            const aOrder = order[a.type] ?? 999;
-            const bOrder = order[b.type] ?? 999;
-            return aOrder - bOrder;
-          }
-          return a.id - b.id;
-        });
+        if (allCharacters.length > 0) {
+          // Sort: player first, then humans, then prey, then predators, all by ID
+          const sortedCharacters = allCharacters.sort((a, b) => {
+            if (a.type === 'human' && (a as HumanEntity).isPlayer) return -1;
+            if (b.type === 'human' && (b as HumanEntity).isPlayer) return 1;
+            if (a.type !== b.type) {
+              const order: Record<string, number> = { human: 0, prey: 1, predator: 2 };
+              const aOrder = order[a.type] ?? 999;
+              const bOrder = order[b.type] ?? 999;
+              return aOrder - bOrder;
+            }
+            return a.id - b.id;
+          });
 
-        const currentDebugId = newState.debugCharacterId;
-        const currentIndex = currentDebugId ? sortedCharacters.findIndex((c) => c.id === currentDebugId) : -1;
-        const nextIndex = (currentIndex + 1) % sortedCharacters.length;
-        newState.debugCharacterId = sortedCharacters[nextIndex].id;
+          const currentDebugId = newState.debugCharacterId;
+          const currentIndex = currentDebugId ? sortedCharacters.findIndex((c) => c.id === currentDebugId) : -1;
+          const nextIndex = (currentIndex + 1) % sortedCharacters.length;
+          newState.debugCharacterId = sortedCharacters[nextIndex].id;
+        } else {
+          newState.debugCharacterId = undefined;
+        }
+      } else if (newState.debugPanel === DebugPanelType.Tribe) {
+        const leaders = (newState as IndexedWorldState).search.human.all().filter((h) => h.leaderId === h.id);
+        let currentLeaderIdx = leaders.findIndex((l) => l.id === newState.debugCharacterId) + 1;
+        if (currentLeaderIdx === -1 || currentLeaderIdx >= leaders.length - 1) {
+          currentLeaderIdx = 0;
+        }
+        newState.debugCharacterId = leaders[currentLeaderIdx].id;
       } else {
+        newState.debugPanel = DebugPanelType.None;
         newState.debugCharacterId = undefined;
       }
       break;

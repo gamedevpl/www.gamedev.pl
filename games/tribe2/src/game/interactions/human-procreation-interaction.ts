@@ -98,7 +98,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         male.tribeBadge = newTribeBadge;
         male.tribeRole = TribeRole.Leader;
         male.tribeControl = {
-          roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
+          roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
           diplomacy: {},
         };
         female.leaderId = male.id; // The female joins the new tribe
@@ -113,7 +113,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
       male.tribeBadge = newTribeBadge;
       male.tribeRole = TribeRole.Leader;
       male.tribeControl = {
-        roleWeights: { gatherer: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
+        roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
         diplomacy: {},
       };
       female.leaderId = male.id; // The female joins the new tribe

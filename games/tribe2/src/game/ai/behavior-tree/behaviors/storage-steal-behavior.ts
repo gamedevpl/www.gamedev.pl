@@ -2,13 +2,12 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Selector } from '../nodes/composite-nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { UpdateContext, DiplomacyStatus } from '../../../world-types';
+import { UpdateContext } from '../../../world-types';
 import { BlackboardData } from '../behavior-tree-blackboard';
-import { STORAGE_INTERACTION_RANGE, STORAGE_STEAL_DETECTION_RANGE } from '../../../storage-spot-consts';
+import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
-import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 
 /**
  * Creates a behavior for stealing food from enemy storage spots.
@@ -32,21 +31,11 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
                 return [false, 'Inventory full'];
               }
 
-              // Must have a leader with diplomacy info
-              if (!human.leaderId) {
-                return [false, 'No tribe leader'];
-              }
-
-              const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-              if (!leader || !leader.tribeControl?.diplomacy) {
-                return [false, 'No diplomacy info'];
-              }
-
               // Find nearby enemy storage spots
               const indexedState = context.gameState as IndexedWorldState;
               const nearbyBuildings = indexedState.search.building.byRadius(human.position, 150);
 
-              const enemyStorage = nearbyBuildings.find((building) => {
+              const storage = nearbyBuildings.find((building) => {
                 const buildingEntity = building as BuildingEntity;
 
                 // Must be a storage spot with food
@@ -64,71 +53,35 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
                   return false;
                 }
 
-                // Must be hostile
-                const diplomacyStatus = leader.tribeControl?.diplomacy![buildingEntity.ownerId];
-                if (diplomacyStatus !== DiplomacyStatus.Hostile) {
-                  return false;
-                }
-
-                // Check for nearby defenders
-                const defenders = getTribeMembers(
-                  { leaderId: buildingEntity.ownerId } as HumanEntity,
-                  context.gameState,
-                );
-
-                for (const defender of defenders) {
-                  const distance = calculateWrappedDistance(
-                    human.position,
-                    defender.position,
-                    context.gameState.mapDimensions.width,
-                    context.gameState.mapDimensions.height,
-                  );
-
-                  if (distance <= STORAGE_STEAL_DETECTION_RANGE) {
-                    // Defender nearby - too risky
-                    return false;
-                  }
-                }
-
                 return true;
               });
 
-              if (!enemyStorage) {
-                return [false, 'No undefended enemy storage nearby'];
+              if (!storage) {
+                return [false, 'No storage for stealing nearby'];
               }
 
               return [
                 true,
-                `Undefended enemy storage found at distance ${calculateWrappedDistance(
+                `Storage for stealing found at distance ${calculateWrappedDistance(
                   human.position,
-                  enemyStorage.position,
+                  storage.position,
                   context.gameState.mapDimensions.width,
                   context.gameState.mapDimensions.height,
                 ).toFixed(1)}`,
               ];
             },
-            'Check for Undefended Enemy Storage',
+            'Check for Storage for Stealing',
             depth + 1,
           ),
 
           // Navigate to storage and steal
           new ActionNode<HumanEntity>(
             (human: HumanEntity, context: UpdateContext, _blackboard: BlackboardData) => {
-              // Must have a leader with diplomacy info
-              if (!human.leaderId) {
-                return [NodeStatus.FAILURE, 'No tribe leader'];
-              }
-
-              const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-              if (!leader || !leader.tribeControl?.diplomacy) {
-                return [NodeStatus.FAILURE, 'No diplomacy info'];
-              }
-
-              // Find nearest undefended enemy storage
+              // Find nearest storage for stealing
               const indexedState = context.gameState as IndexedWorldState;
               const nearbyBuildings = indexedState.search.building.byRadius(human.position, 150);
 
-              const enemyStorages = nearbyBuildings.filter((building) => {
+              const storages = nearbyBuildings.filter((building) => {
                 const buildingEntity = building as BuildingEntity;
 
                 // Must be a storage spot with food
@@ -146,36 +99,10 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
                   return false;
                 }
 
-                // Must be hostile
-                const diplomacyStatus = leader.tribeControl?.diplomacy![buildingEntity.ownerId];
-                if (diplomacyStatus !== DiplomacyStatus.Hostile) {
-                  return false;
-                }
-
-                // Check for nearby defenders
-                const defenders = getTribeMembers(
-                  { leaderId: buildingEntity.ownerId } as HumanEntity,
-                  context.gameState,
-                );
-
-                for (const defender of defenders) {
-                  const distance = calculateWrappedDistance(
-                    human.position,
-                    defender.position,
-                    context.gameState.mapDimensions.width,
-                    context.gameState.mapDimensions.height,
-                  );
-
-                  if (distance <= STORAGE_STEAL_DETECTION_RANGE) {
-                    // Defender nearby - too risky
-                    return false;
-                  }
-                }
-
                 return true;
               });
 
-              if (enemyStorages.length === 0) {
+              if (storages.length === 0) {
                 return [NodeStatus.FAILURE, 'No undefended storage available'];
               }
 
@@ -183,7 +110,7 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
               let closestStorage: BuildingEntity | null = null;
               let closestDistance = Infinity;
 
-              for (const storage of enemyStorages) {
+              for (const storage of storages) {
                 const distance = calculateWrappedDistance(
                   human.position,
                   storage.position,
@@ -212,9 +139,9 @@ export function createStorageStealBehavior(depth: number): BehaviorNode<HumanEnt
               // Navigate toward storage
               human.activeAction = 'moving';
               human.target = closestStorage.position;
-              return [NodeStatus.RUNNING, `Moving to enemy storage (${closestDistance.toFixed(1)}px away)`];
+              return [NodeStatus.RUNNING, `Moving to storage (${closestDistance.toFixed(1)}px away)`];
             },
-            'Navigate to Enemy Storage and Steal',
+            'Navigate to Storage and Steal',
             depth + 1,
           ),
         ],

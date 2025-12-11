@@ -1,6 +1,6 @@
 import { HumanEntity } from '../characters/human/human-types';
 import { GameWorldState } from '../../world-types';
-import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
+import { Blackboard, BlackboardData } from '../../ai/behavior-tree/behavior-tree-blackboard';
 import { EntityId } from '../entities-types';
 import { Vector2D } from '../../utils/math-types';
 
@@ -17,7 +17,7 @@ export const MAX_HUNTERS_PER_PREY = 2;
 /**
  * Maximum number of tribe members that can use the same storage spot simultaneously
  */
-export const MAX_USERS_PER_STORAGE = 2;
+export const MAX_USERS_PER_STORAGE = 3;
 
 /**
  * Generic task data structure stored in the blackboard
@@ -133,4 +133,13 @@ export function removeTribalStorageTask(leader: HumanEntity, storageId: EntityId
   } else {
     Blackboard.set(leader.aiBlackboard, taskKey, task);
   }
+}
+
+/**
+ * Gets the number of tribe members currently assigned to a specific task target
+ */
+export function getTribalTaskCount(leaderBlackboard: BlackboardData, taskType: string, targetId: EntityId): number {
+  const taskKey = `tribal_${taskType}_${targetId}`;
+  const task = Blackboard.get<TribalTaskData>(leaderBlackboard, taskKey);
+  return task?.memberIds.length ?? 0;
 }

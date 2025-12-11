@@ -1,10 +1,9 @@
 import { GameWorldState } from '../world-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
+import { BuildingType } from '../entities/buildings/building-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { HUMAN_OLD_AGE_THRESHOLD } from '../human-consts';
-import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 
 /**
  * Population breakdown statistics
@@ -40,8 +39,8 @@ export interface FamilyInfo {
  * @param gameState The current game state
  * @returns Population breakdown with counts for total, children, males, females, and old members
  */
-export function calculatePopulationBreakdown(gameState: GameWorldState): PopulationBreakdown {
-  const humans = Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[];
+export function calculatePopulationBreakdown(leaderId: EntityId, gameState: GameWorldState): PopulationBreakdown {
+  const humans = (gameState as IndexedWorldState).search.human.byProperty('leaderId', leaderId);
 
   const breakdown: PopulationBreakdown = {
     total: humans.length,
@@ -78,15 +77,16 @@ export function calculatePopulationBreakdown(gameState: GameWorldState): Populat
  * @param gameState The current game state
  * @returns Food metrics object
  */
-export function calculateFoodMetrics(gameState: GameWorldState): FoodMetrics {
-  const entities = Object.values(gameState.entities.entities);
+export function calculateFoodMetrics(leaderId: EntityId, gameState: GameWorldState): FoodMetrics {
+  const search = (gameState as IndexedWorldState).search;
 
   // Sum food from all berry bushes
-  const berryBushes = entities.filter((e) => e.type === 'berryBush') as BerryBushEntity[];
+  const plantingZones = search.building.byProperty('ownerId', leaderId);
+  const berryBushes = plantingZones.flatMap((zone) => search.berryBush.byRadius(zone.position, zone.radius));
   const totalBushFood = berryBushes.reduce((sum, bush) => sum + bush.food.length, 0);
 
   // Sum food from all storage spots
-  const buildings = entities.filter((e) => e.type === 'building') as BuildingEntity[];
+  const buildings = search.building.byProperty('ownerId', leaderId);
   const storageSpots = buildings.filter((b) => b.buildingType === BuildingType.StorageSpot);
   const totalStorageFood = storageSpots.reduce((sum, storage) => sum + (storage.storedFood?.length || 0), 0);
 
@@ -104,9 +104,9 @@ export function calculateFoodMetrics(gameState: GameWorldState): FoodMetrics {
  * @param limit Maximum number of families to return
  * @returns Array of family info sorted by member count (descending)
  */
-export function findTopFamilies(gameState: GameWorldState, limit: number): FamilyInfo[] {
+export function findTopFamilies(leaderId: EntityId, gameState: GameWorldState, limit: number): FamilyInfo[] {
   const indexedState = gameState as IndexedWorldState;
-  const humans = indexedState.search.human.all();
+  const humans = indexedState.search.human.byProperty('leaderId', leaderId);
   const allEntities = gameState.entities.entities;
 
   // Cache to store the resolved ancestor ID for each human to prevent O(N^2) lookups
@@ -134,14 +134,28 @@ export function findTopFamilies(gameState: GameWorldState, limit: number): Famil
     // In the context of a child calling this, it means the child is the new root.
     if (!entity) return entityId;
 
-    // 4. Trace up: If father exists and is ALIVE (in entities), recurse.
+    // 4. Trace up: If female and has living male partner, join his family
+    if (entity.gender === 'female' && entity.partnerIds?.length) {
+      const malePartnerId = entity.partnerIds.find((id) => {
+        const partner = allEntities[id] as HumanEntity | undefined;
+        return partner && partner.gender === 'male';
+      });
+
+      if (malePartnerId) {
+        const rootAncestor = getTopLivingAncestor(malePartnerId, visited);
+        ancestorCache.set(entityId, rootAncestor);
+        return rootAncestor;
+      }
+    }
+
+    // 5. Trace up: If father exists and is ALIVE (in entities), recurse.
     if (entity.fatherId && allEntities[entity.fatherId]) {
       const rootAncestor = getTopLivingAncestor(entity.fatherId, visited);
       ancestorCache.set(entityId, rootAncestor);
       return rootAncestor;
     }
 
-    // 5. No living father found; this entity is the patriarch.
+    // 6. No living father found; this entity is the patriarch.
     ancestorCache.set(entityId, entityId);
     return entityId;
   };

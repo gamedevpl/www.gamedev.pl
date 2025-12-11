@@ -62,7 +62,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
         Blackboard.set(blackboard, 'procreationPartner', partner.id);
         return true;
       }
-      return false;
+      return [false, 'No immediate partner found'];
     },
     'Find Immediate Partner',
   );
@@ -102,7 +102,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
         Blackboard.set(blackboard, 'procreationPartner', partner.id);
         return true;
       }
-      return false;
+      return [false, 'No distant partner found'];
     },
     'Locate Distant Partner',
   );
@@ -147,12 +147,13 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       // Basic conditions to even consider procreating
       new ConditionNode(
         (human: HumanEntity) => {
-          if (!human.isAdult || (human.gender === 'female' && human.isPregnant)) return false;
+          if (!human.isAdult || (human.gender === 'female' && human.isPregnant))
+            return [false, 'Not adult or pregnant'];
           if (
             human.age < HUMAN_MIN_PROCREATION_AGE ||
             (human.gender === 'female' && human.age > HUMAN_FEMALE_MAX_PROCREATION_AGE)
           )
-            return false;
+            return [false, 'Not fertile due to age or pregnancy status'];
           return true;
         },
         'Is Fertile (age, not pregnant)',
@@ -185,7 +186,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
                     'berryBush',
                     PROCREATION_FOOD_SEARCH_RADIUS,
                   );
-                  return nearbyBushes >= PROCREATION_MIN_NEARBY_BERRY_BUSHES;
+                  return [nearbyBushes >= PROCREATION_MIN_NEARBY_BERRY_BUSHES, `Found ${nearbyBushes} bushes`];
                 },
                 'Is Environment Viable (food)',
                 depth + 3,
@@ -207,12 +208,12 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
             [
               new ConditionNode(
                 (human: HumanEntity, context: UpdateContext) => {
-                  if (human.gender === 'male') {
-                    const children = findChildren(context.gameState, human);
-                    const heir = findHeir(children);
-                    return !heir;
+                  const children = findChildren(context.gameState, human);
+                  const heir = findHeir(children);
+                  if (heir) {
+                    return [false, 'Has an heir'];
                   }
-                  return false;
+                  return true;
                 },
                 'Is Male Without Heir',
                 depth + 3,

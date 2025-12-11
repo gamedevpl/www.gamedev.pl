@@ -7,7 +7,7 @@ import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
 import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../ai-consts';
 import { findClosestStorage, findNearbyTribeStorageWithFood } from '../../../utils/storage-utils';
-import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
+import { MAX_USERS_PER_STORAGE, getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
@@ -38,7 +38,14 @@ export function createStorageRetrieveBehavior(depth: number): BehaviorNode<Human
               }
 
               // Find nearby storage spots belonging to the tribe with food
-              const tribeStorages = findNearbyTribeStorageWithFood(human, context.gameState);
+              const leader = getTribeLeaderForCoordination(human, context.gameState);
+              const tribeStorages = findNearbyTribeStorageWithFood(
+                human,
+                context.gameState,
+                undefined,
+                leader?.aiBlackboard,
+                human.id,
+              );
               const closest = findClosestStorage(human, tribeStorages, context.gameState);
               const tribeStorage = closest?.storage;
 

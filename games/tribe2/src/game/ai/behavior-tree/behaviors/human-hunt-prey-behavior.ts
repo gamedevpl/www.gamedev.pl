@@ -14,6 +14,8 @@ import {
 } from '../../../ai-consts.ts';
 import { MAX_HUNTERS_PER_PREY } from '../../../entities/tribe/tribe-task-utils.ts';
 import { EntityId } from '../../../entities/entities-types';
+import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
+import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
@@ -33,6 +35,10 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
 
             if (!human.leaderId) {
               return [false, 'Not in a tribe'];
+            }
+
+            if (!isTribeRole(human, TribeRole.Hunter, context.gameState)) {
+              return [false, 'Not a Hunter'];
             }
 
             const nearbyPrey = findClosestEntity<PreyEntity>(

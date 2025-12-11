@@ -21,6 +21,8 @@ import {
   TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../entities/tribe/tribe-task-utils';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
+import { TribeRole } from '../../../entities/tribe/tribe-types';
+import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -222,11 +224,15 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           const hasNonFullStorage = hasNearbyNonFullStorage(human, context.gameState);
 
           return [
-            (human.isAdult && hasCapacity && (isHungryEnough || hungryChildren.length > 0 || hasNonFullStorage)) ??
+            (human.isAdult &&
+              hasCapacity &&
+              (isHungryEnough ||
+                hungryChildren.length > 0 ||
+                (hasNonFullStorage && isTribeRole(human, TribeRole.Gatherer, context.gameState)))) ??
               false,
-            `${isHungryEnough ? 'H' : ''}${hungryChildren.length > 0 ? ' HC(' + hungryChildren.length + ')' : ''}${
-              hasNonFullStorage ? ' S' : ''
-            }`,
+            `${isHungryEnough ? 'Hungry' : ''}${
+              hungryChildren.length > 0 ? ' Children(' + hungryChildren.length + ')' : ''
+            }${hasNonFullStorage ? ' Storage' : ''}`,
           ];
         },
         'Should Gather Food',

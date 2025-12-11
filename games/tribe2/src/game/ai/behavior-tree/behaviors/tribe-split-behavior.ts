@@ -3,7 +3,7 @@ import { UpdateContext } from '../../../world-types';
 import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
-import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../tribe-consts.ts';
+import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../entities/tribe/tribe-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { Vector2D } from '../../../utils/math-types';
