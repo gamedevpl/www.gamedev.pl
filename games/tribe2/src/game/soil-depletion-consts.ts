@@ -13,8 +13,8 @@ export const SOIL_HEALTH_MIN = 0; // Minimum soil health
 
 // Depletion rates (per game hour)
 export const SOIL_DEPLETION_PER_BUSH_PLANT = 20; // Soil health lost when a bush is planted
-export const SOIL_DEPLETION_PER_WALK = 1.5; // Soil health lost per walk step
-export const SOIL_WALK_DEPLETION_COOLDOWN_HOURS = 0.05; // Short cooldown for frequent depletion
+export const SOIL_DEPLETION_PER_WALK = 1.0; // Soil health lost per walk step
+export const SOIL_WALK_DEPLETION_COOLDOWN_HOURS = 0.5; // Short cooldown for frequent depletion
 
 // Recovery rates (per game hour)
 export const SOIL_RECOVERY_RATE_BASE = 0.3; // Base recovery rate when not in use
