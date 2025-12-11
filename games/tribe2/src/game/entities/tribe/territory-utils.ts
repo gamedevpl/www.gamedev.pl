@@ -9,13 +9,12 @@ import { IndexedWorldState } from '../../world-index/world-index-types';
 import { TribeTerritory, TerritoryCircle, TerritoryCheckResult } from './territory-types';
 import {
   TERRITORY_BUILDING_RADIUS,
-  TERRITORY_CENTER_RADIUS,
   TERRITORY_BORDER_PLACEMENT_DISTANCE,
   TERRITORY_MINIMUM_GAP,
   TERRITORY_COLORS,
   TERRITORY_WANDER_DISTANCE,
 } from './territory-consts';
-import { calculateWrappedDistance, getAveragePosition, getDirectionVectorOnTorus } from '../../utils/math-utils';
+import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../../utils/math-utils';
 
 /**
  * Calculates the territory for a specific tribe.
@@ -54,41 +53,12 @@ export function calculateTribeTerritory(
     });
   }
 
-  // Calculate tribe center from buildings
-  const buildingPositions = buildings.map((b) => b.position);
-  const territoryCenter = getAveragePosition(buildingPositions);
-
-  // Add a circle at the tribe center (based on number of buildings)
-  // More buildings = larger center radius
-  const centerRadius = Math.min(TERRITORY_CENTER_RADIUS, TERRITORY_BUILDING_RADIUS * (1 + buildings.length * 0.5));
-  circles.push({
-    center: { ...territoryCenter },
-    radius: centerRadius,
-  });
-
-  // Calculate bounding radius from center
-  let boundingRadius = centerRadius;
-  for (const circle of circles) {
-    const distFromCenter = calculateWrappedDistance(
-      territoryCenter,
-      circle.center,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-    const extendedRadius = distFromCenter + circle.radius;
-    if (extendedRadius > boundingRadius) {
-      boundingRadius = extendedRadius;
-    }
-  }
-
   // Get color for this tribe
   const color = TERRITORY_COLORS[tribeColorIndex % TERRITORY_COLORS.length];
 
   return {
     leaderId,
-    center: territoryCenter,
     circles,
-    boundingRadius,
     color,
   };
 }
@@ -126,12 +96,7 @@ export function calculateAllTerritories(gameState: GameWorldState): Map<EntityId
 /**
  * Checks if a position is inside a specific territory circle.
  */
-function isInsideCircle(
-  position: Vector2D,
-  circle: TerritoryCircle,
-  worldWidth: number,
-  worldHeight: number,
-): boolean {
+function isInsideCircle(position: Vector2D, circle: TerritoryCircle, worldWidth: number, worldHeight: number): boolean {
   const distance = calculateWrappedDistance(position, circle.center, worldWidth, worldHeight);
   return distance <= circle.radius;
 }
@@ -211,7 +176,7 @@ export function canPlaceBuildingInTerritory(
 
       const checkResult = checkPositionInTerritory(position, otherTerritory, gameState);
       if (checkResult.isInsideTerritory) {
-        return { canPlace: false, reason: 'Position is inside another tribe\'s territory' };
+        return { canPlace: false, reason: "Position is inside another tribe's territory" };
       }
     }
     return { canPlace: true };
@@ -229,7 +194,7 @@ export function canPlaceBuildingInTerritory(
 
     const otherCheck = checkPositionInTerritory(position, otherTerritory, gameState);
     if (otherCheck.isInsideTerritory || otherCheck.distanceToEdge < TERRITORY_MINIMUM_GAP) {
-      return { canPlace: false, reason: 'Position is too close to another tribe\'s territory' };
+      return { canPlace: false, reason: "Position is too close to another tribe's territory" };
     }
   }
 
@@ -240,11 +205,7 @@ export function canPlaceBuildingInTerritory(
  * Checks if a position is valid for a tribe member to wander to.
  * Members should stay within territory or close to its edge.
  */
-export function isValidWanderPosition(
-  position: Vector2D,
-  leaderId: EntityId,
-  gameState: GameWorldState,
-): boolean {
+export function isValidWanderPosition(position: Vector2D, leaderId: EntityId, gameState: GameWorldState): boolean {
   const territories = calculateAllTerritories(gameState);
   const ownTerritory = territories.get(leaderId);
 
@@ -280,10 +241,7 @@ export function isValidWanderPosition(
  * Gets the territory boundary points for rendering.
  * Returns an array of points that outline the territory.
  */
-export function getTerritoryBoundaryPoints(
-  territory: TribeTerritory,
-  segmentsPerCircle: number = 32,
-): Vector2D[][] {
+export function getTerritoryBoundaryPoints(territory: TribeTerritory, segmentsPerCircle: number = 32): Vector2D[][] {
   const boundaries: Vector2D[][] = [];
 
   // For each circle, generate boundary points
@@ -390,8 +348,8 @@ export function constrainWanderToTerritory(
 
   for (let d = step; d <= maxDistance; d += step) {
     const testPosition: Vector2D = {
-      x: ((currentPosition.x + (directionToTarget.x * d) / magnitude) % worldWidth + worldWidth) % worldWidth,
-      y: ((currentPosition.y + (directionToTarget.y * d) / magnitude) % worldHeight + worldHeight) % worldHeight,
+      x: (((currentPosition.x + (directionToTarget.x * d) / magnitude) % worldWidth) + worldWidth) % worldWidth,
+      y: (((currentPosition.y + (directionToTarget.y * d) / magnitude) % worldHeight) + worldHeight) % worldHeight,
     };
 
     if (isValidWanderPosition(testPosition, leaderId, gameState)) {

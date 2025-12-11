@@ -21,12 +21,8 @@ export interface TerritoryCircle {
 export interface TribeTerritory {
   /** The leader ID of the tribe that owns this territory */
   leaderId: EntityId;
-  /** The center of the territory (weighted average of all territory points) */
-  center: Vector2D;
   /** Individual territory circles that make up the full territory */
   circles: TerritoryCircle[];
-  /** The overall bounding radius of the territory from its center */
-  boundingRadius: number;
   /** Badge color for rendering the territory border */
   color: string;
 }

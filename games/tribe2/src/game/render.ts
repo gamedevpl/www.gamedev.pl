@@ -33,7 +33,7 @@ import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
 import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
 import { renderDepletedSoil } from './render/render-soil';
-import { renderAllTerritories, renderTerritoryExpansionPreview } from './render/render-territory';
+import { renderAllTerritories } from './render/render-territory';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -82,8 +82,6 @@ export function renderGame(
     );
     const isValid = canPlaceBuilding(worldPos, gameState.selectedBuildingType, player.leaderId, gameState);
     renderGhostBuilding(ctx, worldPos, gameState.selectedBuildingType, isValid, gameState.mapDimensions);
-    // Also render territory expansion preview
-    renderTerritoryExpansionPreview(ctx, worldPos, gameState, viewportCenter, canvasDimensions, isValid);
   }
 
   // --- Notification Area Highlights ---

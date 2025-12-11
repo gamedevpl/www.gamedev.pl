@@ -5,9 +5,6 @@
 /** Base radius around each building that contributes to territory */
 export const TERRITORY_BUILDING_RADIUS = 80;
 
-/** Base radius around the tribe center that contributes to territory */
-export const TERRITORY_CENTER_RADIUS = 200;
-
 /** Distance from territory border within which new buildings can be placed */
 export const TERRITORY_BORDER_PLACEMENT_DISTANCE = 50;
 
