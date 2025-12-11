@@ -16,8 +16,6 @@ import { Vector2D } from '../../../utils/math-types';
 import { EntityId } from '../../../entities/entities-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import {
-  LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-  LEADER_BUILDING_SPIRAL_STEP,
   LEADER_BUILDING_MIN_TRIBE_SIZE,
   LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD,
   LEADER_BUILDING_MIN_BUSHES_PER_MEMBER,
@@ -28,25 +26,26 @@ import {
   LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE,
 } from '../../../ai-consts';
 import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../nodes';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
+
+/** Distance from existing buildings to check for adjacent placement */
+const ADJACENT_PLACEMENT_DISTANCE = 60;
+/** Number of angles to check around each building */
+const ADJACENT_PLACEMENT_ANGLES = 8;
+/** Maximum distance rings to check around each building */
+const ADJACENT_PLACEMENT_MAX_RINGS = 3;
 
 /**
- * Finds a valid building placement location using a spiral search pattern.
- * Starts from the center position and spirals outward until a valid location is found
- * or the maximum radius is reached.
+ * Finds a valid building placement location adjacent to existing tribe buildings.
+ * If no buildings exist, places at the tribe center (leader position).
  *
- * @param centerPos The center position to start the spiral search from (typically tribe center)
- * @param maxRadius The maximum radius to search
- * @param stepSize The distance between spiral check points
  * @param minDistanceFromOtherTribes Minimum distance to keep from other tribe centers
  * @param buildingType The type of building to place
  * @param ownerId The ID of the entity that will own the building
  * @param gameState The current game state
  * @returns A valid position for building placement, or undefined if none found
  */
-function findSpiralPlacementLocation(
-  centerPos: Vector2D,
-  maxRadius: number,
-  stepSize: number,
+function findAdjacentPlacementLocation(
   minDistanceFromOtherTribes: number,
   buildingType: BuildingType,
   ownerId: EntityId,
@@ -54,40 +53,74 @@ function findSpiralPlacementLocation(
 ): Vector2D | undefined {
   const worldWidth = gameState.mapDimensions.width;
   const worldHeight = gameState.mapDimensions.height;
+  const indexedState = gameState as IndexedWorldState;
 
-  // Archimedean spiral: r = a + b*theta
-  // We'll increment theta and calculate r based on it
-  const angleIncrement = Math.PI / 8; // 22.5 degrees per step
-  const radiusPerRotation = stepSize * 2; // How much radius increases per full rotation
-  const b = radiusPerRotation / (2 * Math.PI);
+  // Get all buildings owned by this tribe
+  const tribeBuildings = indexedState.search.building.byProperty('ownerId', ownerId);
 
-  let theta = 0;
-  let radius = 0;
-
-  // Continue spiraling until we exceed the max radius
-  while (radius <= maxRadius) {
-    // Calculate position on the spiral
-    const x = centerPos.x + radius * Math.cos(theta);
-    const y = centerPos.y + radius * Math.sin(theta);
-
-    // Wrap coordinates to world dimensions (toroidal world)
-    const wrappedPos: Vector2D = {
-      x: ((x % worldWidth) + worldWidth) % worldWidth,
-      y: ((y % worldHeight) + worldHeight) % worldHeight,
-    };
+  // If no buildings exist, place at tribe center (first building)
+  if (tribeBuildings.length === 0) {
+    const tribeCenter = getTribeCenter(ownerId, gameState);
     if (
-      canPlaceBuilding(wrappedPos, buildingType, ownerId, gameState) &&
-      !isLocationTooCloseToOtherTribes(wrappedPos, undefined, minDistanceFromOtherTribes, gameState)
+      canPlaceBuilding(tribeCenter, buildingType, ownerId, gameState) &&
+      !isLocationTooCloseToOtherTribes(tribeCenter, undefined, minDistanceFromOtherTribes, gameState)
     ) {
-      return wrappedPos;
+      return tribeCenter;
     }
-
-    // Move to next point on the spiral
-    theta += angleIncrement;
-    radius = b * theta;
+    // If center is not valid, try positions around the center
+    for (let ring = 1; ring <= ADJACENT_PLACEMENT_MAX_RINGS; ring++) {
+      const distance = ADJACENT_PLACEMENT_DISTANCE * ring;
+      for (let i = 0; i < ADJACENT_PLACEMENT_ANGLES; i++) {
+        const angle = (i / ADJACENT_PLACEMENT_ANGLES) * Math.PI * 2;
+        const x = tribeCenter.x + distance * Math.cos(angle);
+        const y = tribeCenter.y + distance * Math.sin(angle);
+        const wrappedPos: Vector2D = {
+          x: ((x % worldWidth) + worldWidth) % worldWidth,
+          y: ((y % worldHeight) + worldHeight) % worldHeight,
+        };
+        if (
+          canPlaceBuilding(wrappedPos, buildingType, ownerId, gameState) &&
+          !isLocationTooCloseToOtherTribes(wrappedPos, undefined, minDistanceFromOtherTribes, gameState)
+        ) {
+          return wrappedPos;
+        }
+      }
+    }
+    return undefined;
   }
 
-  // No valid location found within the search radius
+  // Try to place adjacent to existing buildings
+  // Shuffle buildings to avoid always placing next to the same building
+  const shuffledBuildings = [...tribeBuildings].sort(() => Math.random() - 0.5);
+
+  // Try multiple rings of distance around each building
+  for (let ring = 1; ring <= ADJACENT_PLACEMENT_MAX_RINGS; ring++) {
+    const distance = ADJACENT_PLACEMENT_DISTANCE * ring;
+
+    for (const building of shuffledBuildings) {
+      // Try positions in a circle around this building
+      for (let i = 0; i < ADJACENT_PLACEMENT_ANGLES; i++) {
+        const angle = (i / ADJACENT_PLACEMENT_ANGLES) * Math.PI * 2;
+        const x = building.position.x + distance * Math.cos(angle);
+        const y = building.position.y + distance * Math.sin(angle);
+
+        // Wrap coordinates to world dimensions (toroidal world)
+        const wrappedPos: Vector2D = {
+          x: ((x % worldWidth) + worldWidth) % worldWidth,
+          y: ((y % worldHeight) + worldHeight) % worldHeight,
+        };
+
+        if (
+          canPlaceBuilding(wrappedPos, buildingType, ownerId, gameState) &&
+          !isLocationTooCloseToOtherTribes(wrappedPos, undefined, minDistanceFromOtherTribes, gameState)
+        ) {
+          return wrappedPos;
+        }
+      }
+    }
+  }
+
+  // No valid location found adjacent to any building
   return undefined;
 }
 
@@ -254,11 +287,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         ? LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER
         : LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER;
 
-      const tribeCenter = getTribeCenter(entity.leaderId!, context.gameState);
-      const placementLocation = findSpiralPlacementLocation(
-        tribeCenter,
-        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-        LEADER_BUILDING_SPIRAL_STEP,
+      const placementLocation = findAdjacentPlacementLocation(
         minDistanceFromOtherTribes,
         BuildingType.StorageSpot,
         entity.id,
@@ -268,7 +297,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       if (!placementLocation) {
         return [
           NodeStatus.FAILURE,
-          `No valid location found for storage within ${LEADER_BUILDING_SPIRAL_SEARCH_RADIUS}px`,
+          `No valid location found for storage adjacent to existing buildings`,
         ];
       }
 
@@ -346,11 +375,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Place planting zone
   const placePlantingZoneAction = new ActionNode<HumanEntity>(
     (entity, context) => {
-      const tribeCenter = getTribeCenter(entity.leaderId!, context.gameState);
-      const placementLocation = findSpiralPlacementLocation(
-        tribeCenter,
-        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-        LEADER_BUILDING_SPIRAL_STEP,
+      const placementLocation = findAdjacentPlacementLocation(
         LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
         BuildingType.PlantingZone,
         entity.id,
@@ -360,7 +385,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       if (!placementLocation) {
         return [
           NodeStatus.FAILURE,
-          `No valid location found for planting zone within ${LEADER_BUILDING_SPIRAL_SEARCH_RADIUS}px`,
+          `No valid location found for planting zone adjacent to existing buildings`,
         ];
       }
 
