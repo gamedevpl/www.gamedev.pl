@@ -15,11 +15,35 @@ import {
   METABALL_RENDER_RESOLUTION,
 } from '../soil-depletion-consts';
 
+// Constants for metaball calculations
+const MIN_DISTANCE_SQUARED = 0.0001; // Minimum distance squared to avoid division by zero
+const CENTER_FIELD_MULTIPLIER = 100; // Field value multiplier when very close to metaball center
+const MAX_ALPHA = 255; // Maximum alpha value for pixel rendering
+
 interface MetaballSource {
   x: number;
   y: number;
   radius: number;
   strength: number; // Based on depletion level
+}
+
+// Cache for offscreen canvas to avoid creating new canvas every frame
+let cachedOffscreenCanvas: HTMLCanvasElement | null = null;
+let cachedCanvasWidth = 0;
+let cachedCanvasHeight = 0;
+
+/**
+ * Gets or creates a cached offscreen canvas for metaball rendering.
+ */
+function getOffscreenCanvas(width: number, height: number): HTMLCanvasElement {
+  if (!cachedOffscreenCanvas || cachedCanvasWidth !== width || cachedCanvasHeight !== height) {
+    cachedOffscreenCanvas = document.createElement('canvas');
+    cachedOffscreenCanvas.width = width;
+    cachedOffscreenCanvas.height = height;
+    cachedCanvasWidth = width;
+    cachedCanvasHeight = height;
+  }
+  return cachedOffscreenCanvas;
 }
 
 /**
@@ -88,7 +112,7 @@ export function renderDepletedSoil(
     return;
   }
 
-  // Render metaballs using marching squares approach
+  // Render metaballs using pixel-based approach for smooth organic shapes
   renderMetaballs(ctx, metaballs, viewportCenter, canvasDimensions);
 }
 
@@ -149,9 +173,9 @@ function calculateMetaballField(x: number, y: number, metaballs: MetaballSource[
     const dy = y - ball.y;
     const distSquared = dx * dx + dy * dy;
 
-    if (distSquared < 0.0001) {
-      // Very close to center, avoid division issues
-      fieldValue += ball.strength * 100;
+    if (distSquared < MIN_DISTANCE_SQUARED) {
+      // Very close to center, use maximum field contribution to avoid division issues
+      fieldValue += ball.strength * CENTER_FIELD_MULTIPLIER;
     } else {
       // Classic metaball formula with strength modifier
       const radiusSquared = ball.radius * ball.radius;
@@ -185,6 +209,15 @@ function getAverageStrength(x: number, y: number, metaballs: MetaballSource[]): 
 }
 
 /**
+ * Calculate the alpha value for a pixel based on metaball field value and strength.
+ */
+function calculatePixelAlpha(fieldValue: number, avgStrength: number): number {
+  // Smooth falloff near the edge of the metaball field
+  const edgeFactor = Math.min(1, (fieldValue - METABALL_THRESHOLD) / METABALL_THRESHOLD);
+  return Math.min(MAX_ALPHA, Math.floor(avgStrength * SOIL_DEPLETED_OPACITY_MAX * edgeFactor * MAX_ALPHA));
+}
+
+/**
  * Renders metaballs using a pixel-based approach for smooth organic shapes.
  */
 function renderMetaballs(
@@ -196,16 +229,17 @@ function renderMetaballs(
   const { width, height } = canvasDimensions;
   const resolution = METABALL_RENDER_RESOLUTION;
 
-  // Create an offscreen canvas for the metaball rendering
-  const offscreenCanvas = document.createElement('canvas');
-  offscreenCanvas.width = Math.ceil(width / resolution);
-  offscreenCanvas.height = Math.ceil(height / resolution);
+  const canvasWidth = Math.ceil(width / resolution);
+  const canvasHeight = Math.ceil(height / resolution);
+
+  // Get cached offscreen canvas for metaball rendering
+  const offscreenCanvas = getOffscreenCanvas(canvasWidth, canvasHeight);
   const offCtx = offscreenCanvas.getContext('2d');
 
   if (!offCtx) return;
 
   // Get image data for direct pixel manipulation
-  const imageData = offCtx.createImageData(offscreenCanvas.width, offscreenCanvas.height);
+  const imageData = offCtx.createImageData(canvasWidth, canvasHeight);
   const data = imageData.data;
 
   // Parse the depleted color
@@ -219,8 +253,8 @@ function renderMetaballs(
   const startWorldY = viewportCenter.y - height / 2;
 
   // Render each pixel
-  for (let py = 0; py < offscreenCanvas.height; py++) {
-    for (let px = 0; px < offscreenCanvas.width; px++) {
+  for (let py = 0; py < canvasHeight; py++) {
+    for (let px = 0; px < canvasWidth; px++) {
       const worldX = startWorldX + px * resolution;
       const worldY = startWorldY + py * resolution;
 
@@ -228,13 +262,9 @@ function renderMetaballs(
 
       if (fieldValue >= METABALL_THRESHOLD) {
         const avgStrength = getAverageStrength(worldX, worldY, metaballs);
-        
-        // Calculate alpha based on field value and strength
-        // Smooth falloff near the edge
-        const edgeFactor = Math.min(1, (fieldValue - METABALL_THRESHOLD) / METABALL_THRESHOLD);
-        const alpha = Math.min(255, Math.floor(avgStrength * SOIL_DEPLETED_OPACITY_MAX * edgeFactor * 255));
+        const alpha = calculatePixelAlpha(fieldValue, avgStrength);
 
-        const idx = (py * offscreenCanvas.width + px) * 4;
+        const idx = (py * canvasWidth + px) * 4;
         data[idx] = r;
         data[idx + 1] = g;
         data[idx + 2] = b;
