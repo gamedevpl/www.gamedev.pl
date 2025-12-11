@@ -1,53 +1,62 @@
 /**
- * Renders depleted soil patches on the game world using 2D metaballs
- * for organic, merged shapes when adjacent sectors are depleted.
+ * Renders depleted soil patches on the game world.
+ * Uses a grid-based approach with border rendering for organic shapes.
  */
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { getDepletedSectorsForRendering } from '../soil-depletion-update';
+import { getDepletedSectorsForRendering, getSectorHealth } from '../soil-depletion-update';
 import {
   SOIL_SECTOR_SIZE,
   SOIL_DEPLETED_COLOR,
-  SOIL_DEPLETED_OPACITY_MAX,
+  SOIL_DEPLETED_BORDER_COLOR,
+  SOIL_DEPLETED_OPACITY,
   SOIL_DEPLETED_RENDER_THRESHOLD,
-  METABALL_THRESHOLD,
-  METABALL_RENDER_RESOLUTION,
+  SOIL_VISIBLE_DEPLETION_THRESHOLD,
+  SOIL_HEALTH_MAX,
 } from '../soil-depletion-consts';
 
-// Constants for metaball calculations
-const MIN_DISTANCE_SQUARED = 0.0001; // Minimum distance squared to avoid division by zero
-const CENTER_FIELD_MULTIPLIER = 100; // Field value multiplier when very close to metaball center
-const MAX_ALPHA = 255; // Maximum alpha value for pixel rendering
-
-interface MetaballSource {
-  x: number;
-  y: number;
-  radius: number;
-  strength: number; // Based on depletion level
-}
-
-// Cache for offscreen canvas to avoid creating new canvas every frame
-let cachedOffscreenCanvas: HTMLCanvasElement | null = null;
-let cachedCanvasWidth = 0;
-let cachedCanvasHeight = 0;
+// Cache for visible sectors to avoid recalculating every frame
+let cachedSectorsHash = '';
+let cachedSectorSet: Set<string> | null = null;
 
 /**
- * Gets or creates a cached offscreen canvas for metaball rendering.
+ * Creates a hash key for a set of sectors
  */
-function getOffscreenCanvas(width: number, height: number): HTMLCanvasElement {
-  if (!cachedOffscreenCanvas || cachedCanvasWidth !== width || cachedCanvasHeight !== height) {
-    cachedOffscreenCanvas = document.createElement('canvas');
-    cachedOffscreenCanvas.width = width;
-    cachedOffscreenCanvas.height = height;
-    cachedCanvasWidth = width;
-    cachedCanvasHeight = height;
-  }
-  return cachedOffscreenCanvas;
+function createSectorsHash(sectors: Array<{ gridX: number; gridY: number; health: number }>): string {
+  return sectors.map(s => `${s.gridX},${s.gridY},${Math.floor(s.health)}`).join('|');
 }
 
 /**
- * Renders all depleted soil sectors using metaballs for organic shapes.
+ * Creates a set of sector keys for quick lookup
+ */
+function createSectorSet(sectors: Array<{ gridX: number; gridY: number }>): Set<string> {
+  const set = new Set<string>();
+  for (const s of sectors) {
+    set.add(`${s.gridX},${s.gridY}`);
+  }
+  return set;
+}
+
+/**
+ * Checks if a neighboring sector is also depleted
+ */
+function hasDepletedNeighbor(
+  sectorSet: Set<string>,
+  gridX: number,
+  gridY: number,
+  dx: number,
+  dy: number,
+  maxGridX: number,
+  maxGridY: number,
+): boolean {
+  const nx = ((gridX + dx) % maxGridX + maxGridX) % maxGridX;
+  const ny = ((gridY + dy) % maxGridY + maxGridY) % maxGridY;
+  return sectorSet.has(`${nx},${ny}`);
+}
+
+/**
+ * Renders all depleted soil sectors with clear borders.
  */
 export function renderDepletedSoil(
   ctx: CanvasRenderingContext2D,
@@ -67,23 +76,33 @@ export function renderDepletedSoil(
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const halfCanvasWidth = canvasDimensions.width / 2;
   const halfCanvasHeight = canvasDimensions.height / 2;
+  const maxGridX = Math.ceil(worldWidth / SOIL_SECTOR_SIZE);
+  const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
 
-  // Calculate visible world bounds (with padding for metaball influence)
-  const padding = SOIL_SECTOR_SIZE * 4;
+  // Update sector set cache if needed
+  const sectorsHash = createSectorsHash(depletedSectors);
+  if (sectorsHash !== cachedSectorsHash) {
+    cachedSectorsHash = sectorsHash;
+    cachedSectorSet = createSectorSet(depletedSectors);
+  }
+  const sectorSet = cachedSectorSet!;
+
+  // Calculate visible world bounds
+  const padding = SOIL_SECTOR_SIZE * 2;
   const visibleLeft = viewportCenter.x - halfCanvasWidth - padding;
   const visibleRight = viewportCenter.x + halfCanvasWidth + padding;
   const visibleTop = viewportCenter.y - halfCanvasHeight - padding;
   const visibleBottom = viewportCenter.y + halfCanvasHeight + padding;
 
-  // Convert depleted sectors to metaball sources
-  const metaballs: MetaballSource[] = [];
+  ctx.save();
 
+  // Render each visible depleted sector
   for (const sector of depletedSectors) {
-    const sectorWorldX = sector.gridX * SOIL_SECTOR_SIZE + SOIL_SECTOR_SIZE / 2;
-    const sectorWorldY = sector.gridY * SOIL_SECTOR_SIZE + SOIL_SECTOR_SIZE / 2;
+    const sectorWorldX = sector.gridX * SOIL_SECTOR_SIZE;
+    const sectorWorldY = sector.gridY * SOIL_SECTOR_SIZE;
 
-    // Get all visible wrapped positions for this sector
-    const wrappedPositions = getVisibleWrappedPositions(
+    // Get visible positions (handling world wrapping)
+    const visiblePositions = getVisiblePositions(
       sectorWorldX,
       sectorWorldY,
       worldWidth,
@@ -94,32 +113,31 @@ export function renderDepletedSoil(
       visibleBottom,
     );
 
-    // Calculate strength based on depletion level (0 to 1)
-    const depletionRatio = 1 - sector.health / SOIL_DEPLETED_RENDER_THRESHOLD;
-    const strength = Math.max(0.1, Math.min(1, depletionRatio));
-
-    for (const pos of wrappedPositions) {
-      metaballs.push({
-        x: pos.x,
-        y: pos.y,
-        radius: SOIL_SECTOR_SIZE * 1.2,
-        strength: strength,
-      });
+    for (const pos of visiblePositions) {
+      renderSector(
+        ctx,
+        pos.x,
+        pos.y,
+        sector.health,
+        sector.gridX,
+        sector.gridY,
+        sectorSet,
+        maxGridX,
+        maxGridY,
+        viewportCenter,
+        halfCanvasWidth,
+        halfCanvasHeight,
+      );
     }
   }
 
-  if (metaballs.length === 0) {
-    return;
-  }
-
-  // Render metaballs using pixel-based approach for smooth organic shapes
-  renderMetaballs(ctx, metaballs, viewportCenter, canvasDimensions);
+  ctx.restore();
 }
 
 /**
- * Gets wrapped positions that are within the visible bounds.
+ * Gets positions where the sector should be rendered (handling world wrapping).
  */
-function getVisibleWrappedPositions(
+function getVisiblePositions(
   worldX: number,
   worldY: number,
   worldWidth: number,
@@ -130,7 +148,7 @@ function getVisibleWrappedPositions(
   visibleBottom: number,
 ): Vector2D[] {
   const result: Vector2D[] = [];
-  const checkRadius = SOIL_SECTOR_SIZE * 2;
+  const size = SOIL_SECTOR_SIZE;
 
   const offsets = [
     { dx: 0, dy: 0 },
@@ -149,10 +167,10 @@ function getVisibleWrappedPositions(
     const y = worldY + offset.dy;
 
     if (
-      x + checkRadius >= visibleLeft &&
-      x - checkRadius <= visibleRight &&
-      y + checkRadius >= visibleTop &&
-      y - checkRadius <= visibleBottom
+      x + size >= visibleLeft &&
+      x <= visibleRight &&
+      y + size >= visibleTop &&
+      y <= visibleBottom
     ) {
       result.push({ x, y });
     }
@@ -162,150 +180,81 @@ function getVisibleWrappedPositions(
 }
 
 /**
- * Calculate the metaball field value at a given point.
- * Uses the classic metaball equation: sum of (radius^2 / distance^2)
+ * Renders a single depleted sector with border effects.
  */
-function calculateMetaballField(x: number, y: number, metaballs: MetaballSource[]): number {
-  let fieldValue = 0;
-
-  for (const ball of metaballs) {
-    const dx = x - ball.x;
-    const dy = y - ball.y;
-    const distSquared = dx * dx + dy * dy;
-
-    if (distSquared < MIN_DISTANCE_SQUARED) {
-      // Very close to center, use maximum field contribution to avoid division issues
-      fieldValue += ball.strength * CENTER_FIELD_MULTIPLIER;
-    } else {
-      // Classic metaball formula with strength modifier
-      const radiusSquared = ball.radius * ball.radius;
-      fieldValue += (ball.strength * radiusSquared) / distSquared;
-    }
-  }
-
-  return fieldValue;
-}
-
-/**
- * Get the average strength of metaballs influencing a point (for opacity calculation).
- */
-function getAverageStrength(x: number, y: number, metaballs: MetaballSource[]): number {
-  let totalWeight = 0;
-  let weightedStrength = 0;
-
-  for (const ball of metaballs) {
-    const dx = x - ball.x;
-    const dy = y - ball.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const influence = Math.max(0, 1 - dist / (ball.radius * 2));
-
-    if (influence > 0) {
-      weightedStrength += ball.strength * influence;
-      totalWeight += influence;
-    }
-  }
-
-  return totalWeight > 0 ? weightedStrength / totalWeight : 0;
-}
-
-/**
- * Parse a hex color string to RGB values.
- * Returns default brown color if parsing fails.
- */
-function parseHexColor(hexColor: string): { r: number; g: number; b: number } {
-  const colorMatch = hexColor.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  if (colorMatch) {
-    return {
-      r: parseInt(colorMatch[1], 16),
-      g: parseInt(colorMatch[2], 16),
-      b: parseInt(colorMatch[3], 16),
-    };
-  }
-  // Default brown color fallback
-  return { r: 139, g: 115, b: 85 };
-}
-
-/**
- * Calculate the alpha value for a pixel based on metaball field value and strength.
- */
-function calculatePixelAlpha(fieldValue: number, avgStrength: number): number {
-  // Guard against division by zero
-  if (METABALL_THRESHOLD <= 0) {
-    return 0;
-  }
-  // Smooth falloff near the edge of the metaball field
-  const edgeFactor = Math.min(1, (fieldValue - METABALL_THRESHOLD) / METABALL_THRESHOLD);
-  // Calculate alpha as a value from 0 to MAX_ALPHA
-  const rawAlpha = avgStrength * SOIL_DEPLETED_OPACITY_MAX * edgeFactor * MAX_ALPHA;
-  return Math.min(MAX_ALPHA, Math.floor(rawAlpha));
-}
-
-/**
- * Renders metaballs using a pixel-based approach for smooth organic shapes.
- */
-function renderMetaballs(
+function renderSector(
   ctx: CanvasRenderingContext2D,
-  metaballs: MetaballSource[],
+  worldX: number,
+  worldY: number,
+  health: number,
+  gridX: number,
+  gridY: number,
+  sectorSet: Set<string>,
+  maxGridX: number,
+  maxGridY: number,
   viewportCenter: Vector2D,
-  canvasDimensions: { width: number; height: number },
+  halfCanvasWidth: number,
+  halfCanvasHeight: number,
 ): void {
-  const { width, height } = canvasDimensions;
-  const resolution = METABALL_RENDER_RESOLUTION;
+  // Convert world coordinates to screen coordinates (floor to avoid shaking)
+  const screenX = Math.floor(worldX - viewportCenter.x + halfCanvasWidth);
+  const screenY = Math.floor(worldY - viewportCenter.y + halfCanvasHeight);
+  const size = SOIL_SECTOR_SIZE;
 
-  const canvasWidth = Math.ceil(width / resolution);
-  const canvasHeight = Math.ceil(height / resolution);
+  // Calculate opacity based on depletion level
+  const depletionRatio = 1 - health / SOIL_DEPLETED_RENDER_THRESHOLD;
+  const isFullyVisible = health < SOIL_VISIBLE_DEPLETION_THRESHOLD;
+  const opacity = isFullyVisible ? SOIL_DEPLETED_OPACITY : SOIL_DEPLETED_OPACITY * depletionRatio;
 
-  // Get cached offscreen canvas for metaball rendering
-  const offscreenCanvas = getOffscreenCanvas(canvasWidth, canvasHeight);
-  const offCtx = offscreenCanvas.getContext('2d');
+  // Check which neighbors are NOT depleted (for border rendering)
+  const hasTopBorder = !hasDepletedNeighbor(sectorSet, gridX, gridY, 0, -1, maxGridX, maxGridY);
+  const hasBottomBorder = !hasDepletedNeighbor(sectorSet, gridX, gridY, 0, 1, maxGridX, maxGridY);
+  const hasLeftBorder = !hasDepletedNeighbor(sectorSet, gridX, gridY, -1, 0, maxGridX, maxGridY);
+  const hasRightBorder = !hasDepletedNeighbor(sectorSet, gridX, gridY, 1, 0, maxGridX, maxGridY);
 
-  if (!offCtx) return;
+  // Draw main fill
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = SOIL_DEPLETED_COLOR;
+  ctx.fillRect(screenX, screenY, size, size);
 
-  // Get image data for direct pixel manipulation
-  const imageData = offCtx.createImageData(canvasWidth, canvasHeight);
-  const data = imageData.data;
+  // Draw border/cliff effect on edges where there's no depleted neighbor
+  const borderWidth = 3;
+  ctx.fillStyle = SOIL_DEPLETED_BORDER_COLOR;
+  ctx.globalAlpha = opacity * 1.2; // Slightly more opaque for border
 
-  // Parse the depleted color using utility function
-  const { r, g, b } = parseHexColor(SOIL_DEPLETED_COLOR);
-
-  // Calculate world coordinates for each pixel
-  const startWorldX = viewportCenter.x - width / 2;
-  const startWorldY = viewportCenter.y - height / 2;
-
-  // Render each pixel
-  for (let py = 0; py < canvasHeight; py++) {
-    for (let px = 0; px < canvasWidth; px++) {
-      const worldX = startWorldX + px * resolution;
-      const worldY = startWorldY + py * resolution;
-
-      const fieldValue = calculateMetaballField(worldX, worldY, metaballs);
-
-      if (fieldValue >= METABALL_THRESHOLD) {
-        const avgStrength = getAverageStrength(worldX, worldY, metaballs);
-        const alpha = calculatePixelAlpha(fieldValue, avgStrength);
-
-        const idx = (py * canvasWidth + px) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = alpha;
-      }
-    }
+  if (hasTopBorder) {
+    ctx.fillRect(screenX, screenY, size, borderWidth);
+  }
+  if (hasBottomBorder) {
+    ctx.fillRect(screenX, screenY + size - borderWidth, size, borderWidth);
+  }
+  if (hasLeftBorder) {
+    ctx.fillRect(screenX, screenY, borderWidth, size);
+  }
+  if (hasRightBorder) {
+    ctx.fillRect(screenX + size - borderWidth, screenY, borderWidth, size);
   }
 
-  // Put the image data back
-  offCtx.putImageData(imageData, 0, 0);
+  // Draw corner highlights for more depth
+  ctx.globalAlpha = opacity * 0.5;
+  const cornerSize = borderWidth + 1;
+  
+  // Top-left corner
+  if (hasTopBorder && hasLeftBorder) {
+    ctx.fillRect(screenX, screenY, cornerSize, cornerSize);
+  }
+  // Top-right corner
+  if (hasTopBorder && hasRightBorder) {
+    ctx.fillRect(screenX + size - cornerSize, screenY, cornerSize, cornerSize);
+  }
+  // Bottom-left corner
+  if (hasBottomBorder && hasLeftBorder) {
+    ctx.fillRect(screenX, screenY + size - cornerSize, cornerSize, cornerSize);
+  }
+  // Bottom-right corner
+  if (hasBottomBorder && hasRightBorder) {
+    ctx.fillRect(screenX + size - cornerSize, screenY + size - cornerSize, cornerSize, cornerSize);
+  }
 
-  // Draw the offscreen canvas to the main context, scaled up
-  ctx.save();
-  
-  // Reset transform to draw in screen space
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  
-  // Draw with smoothing for softer edges
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(offscreenCanvas, 0, 0, width, height);
-  
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }
