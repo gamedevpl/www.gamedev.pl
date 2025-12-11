@@ -48,6 +48,9 @@ export function renderBehaviorTreeDebugger(
   const panelX = canvasWidth - panelWidth - 10;
   const panelY = UI_PADDING + UI_FONT_SIZE * 2;
 
+  // Store the panel's rect in the game state for input handling
+  gameState.debugPanelRect = { x: panelX, y: panelY, width: panelWidth, height: panelHeight };
+
   // Save context state
   ctx.save();
 
@@ -117,6 +120,7 @@ export function renderBehaviorTreeDebugger(
     currentY,
     panelWidth - 30,
     panelHeight - (currentY - panelY) - 10,
+    gameState,
   );
 
   // Footer
@@ -136,6 +140,7 @@ function renderTreeContent(
   y: number,
   width: number,
   height: number,
+  gameState: GameWorldState,
 ): void {
   const executionData = character.aiBlackboard!.nodeExecutionData;
   // We cast the tree to BehaviorNode<any> because the specific character type (Human, Predator, Prey)
@@ -154,11 +159,17 @@ function renderTreeContent(
     return;
   }
 
+  const scrollX = gameState.debugPanelScroll?.x ?? 0;
+  const scrollY = gameState.debugPanelScroll?.y ?? 0;
+
   // Create a clipping region for the tree content
   ctx.save();
   ctx.beginPath();
   ctx.rect(x - 5, y, width + 10, height);
   ctx.clip();
+
+  // Apply scroll translation
+  ctx.translate(-scrollX, -scrollY);
 
   ctx.font = `${UI_BT_DEBUG_FONT_SIZE}px Arial`;
   ctx.textAlign = 'left';
@@ -179,19 +190,15 @@ function renderTreeContent(
     }
   };
 
+  let maxContentWidth = 0;
+
   // Helper to recursively render each node of the tree
   const renderNode = (node: BehaviorNode<CharacterEntity>, yPos: number): number => {
     if (!node.name || !executionData[node.name]) {
       return yPos;
     }
     let currentY = yPos;
-
-    // Check if we are out of the visible area
-    if (currentY > y + height) {
-      // We can stop rendering if we are below the panel, but we need to traverse to calculate layout if we want scrolling (not implemented yet)
-      // For now, simple culling
-      return currentY + UI_BT_DEBUG_LINE_HEIGHT;
-    }
+    const isVisible = currentY + UI_BT_DEBUG_LINE_HEIGHT > y + scrollY && currentY < y + height + scrollY;
 
     const nodeExecutionInfo = executionData[node.name];
     const xPos = x + (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
@@ -214,69 +221,79 @@ function renderTreeContent(
     }
 
     const statusColor = getColorForStatus(status);
-
-    // Draw status indicator
-    ctx.fillStyle = statusColor;
-    ctx.fillText('●', xPos, currentY);
-
-    // Draw node name and debug info
-    ctx.fillStyle = textColor;
     const nodeText = ` ${node.name}` + (debugInfo ? `: ${debugInfo}` : '');
-    ctx.fillText(nodeText, xPos + 8, currentY);
 
-    // Render histogram if execution data is available
-    if (nodeExecutionInfo && nodeExecutionInfo.executionHistory.length > 0) {
-      const { executionHistory } = nodeExecutionInfo;
-      const historyWindowInGameHours =
-        (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
-      const historyEndTime = currentTime;
-      const historyStartTime = historyEndTime - historyWindowInGameHours;
+    // Always calculate content width for scroll clamping
+    const textWidth = ctx.measureText(nodeText).width;
+    const histogramTotalWidth = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH + UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+    const currentLineWidth = xPos - x + 8 + textWidth + histogramTotalWidth;
+    if (currentLineWidth > maxContentWidth) {
+      maxContentWidth = currentLineWidth;
+    }
 
-      // Position histogram to the right, relative to the panel width
-      const histogramStartX = x + width - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
-      let currentX = histogramStartX;
-      const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
+    // --- Draw only if visible ---
+    if (isVisible) {
+      // Draw status indicator
+      ctx.fillStyle = statusColor;
+      ctx.fillText('●', xPos, currentY);
 
-      const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
-      let lastStatus: NodeStatus | null =
-        recordsBeforeWindow.length > 0 ? recordsBeforeWindow[recordsBeforeWindow.length - 1].status : null;
-      let lastTime = historyStartTime;
+      // Draw node name and debug info
+      ctx.fillStyle = textColor;
+      ctx.fillText(nodeText, xPos + 8, currentY);
 
-      const recordsInWindow = executionHistory.filter((r) => r.time >= historyStartTime && r.time <= historyEndTime);
-      const pixelsPerGameHour = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH / historyWindowInGameHours;
+      // Render histogram if execution data is available
+      if (nodeExecutionInfo && nodeExecutionInfo.executionHistory.length > 0) {
+        const { executionHistory } = nodeExecutionInfo;
+        const historyWindowInGameHours =
+          (UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS / GAME_DAY_IN_REAL_SECONDS) * HOURS_PER_GAME_DAY;
+        const historyEndTime = currentTime;
+        const historyStartTime = historyEndTime - historyWindowInGameHours;
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.fillRect(histogramStartX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+        const histogramStartX = x + width - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+        let currentX = histogramStartX;
+        const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
 
-      for (const record of recordsInWindow) {
-        const segmentDuration = record.time - lastTime;
-        const segmentWidth = segmentDuration * pixelsPerGameHour;
+        const recordsBeforeWindow = executionHistory.filter((r) => r.time < historyStartTime);
+        let lastStatus: NodeStatus | null =
+          recordsBeforeWindow.length > 0 ? recordsBeforeWindow[recordsBeforeWindow.length - 1].status : null;
+        let lastTime = historyStartTime;
 
-        if (segmentWidth > 0) {
-          ctx.fillStyle = getColorForStatus(lastStatus);
-          ctx.fillRect(currentX, barY, segmentWidth, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
-          currentX += segmentWidth;
+        const recordsInWindow = executionHistory.filter((r) => r.time >= historyStartTime && r.time <= historyEndTime);
+        const pixelsPerGameHour = UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH / historyWindowInGameHours;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(histogramStartX, barY, UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+
+        for (const record of recordsInWindow) {
+          const segmentDuration = record.time - lastTime;
+          const segmentWidth = segmentDuration * pixelsPerGameHour;
+
+          if (segmentWidth > 0) {
+            ctx.fillStyle = getColorForStatus(lastStatus);
+            ctx.fillRect(currentX, barY, segmentWidth, UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
+            currentX += segmentWidth;
+          }
+
+          lastStatus = record.status;
+          lastTime = record.time;
         }
 
-        lastStatus = record.status;
-        lastTime = record.time;
-      }
+        if (currentTime - lastTime > AI_UPDATE_INTERVAL) {
+          lastStatus = NodeStatus.NOT_EVALUATED;
+        }
 
-      if (currentTime - lastTime > AI_UPDATE_INTERVAL) {
-        lastStatus = NodeStatus.NOT_EVALUATED; // If no new data, mark as NOT_EVALUATED
+        const finalSegmentDuration = historyEndTime - lastTime;
+        const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
+        ctx.fillStyle = getColorForStatus(lastStatus);
+        const remainingWidth = histogramStartX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
+        ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
       }
-
-      const finalSegmentDuration = historyEndTime - lastTime;
-      const finalSegmentWidth = finalSegmentDuration * pixelsPerGameHour;
-      ctx.fillStyle = getColorForStatus(lastStatus);
-      const remainingWidth = histogramStartX + UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - currentX;
-      ctx.fillRect(currentX, barY, Math.min(finalSegmentWidth, remainingWidth), UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT);
     }
+
     currentY += UI_BT_DEBUG_LINE_HEIGHT;
 
-    // Recursively render children
+    // Recursively process children to calculate total height
     if (node.children) {
-      // TODO: Implement scrolling or pagination here if needed
       for (const child of node.children) {
         currentY = renderNode(child, currentY);
       }
@@ -288,7 +305,11 @@ function renderTreeContent(
   };
 
   // Start rendering from the root node
-  renderNode(tree, y);
+  const finalY = renderNode(tree, y);
+  const totalContentHeight = finalY - y;
+
+  // Store content dimensions for input handlers
+  gameState.debugPanelContentSize = { width: maxContentWidth, height: totalContentHeight };
 
   ctx.restore();
 }

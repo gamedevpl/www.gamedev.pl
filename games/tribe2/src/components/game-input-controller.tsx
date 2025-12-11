@@ -11,6 +11,10 @@ import {
   handlePlayerActionKeyDown,
   handlePlayerActionKeyUp,
   handleNotificationClick,
+  handleDebugPanelMouseWheel,
+  handleDebugPanelMouseDown,
+  handleDebugPanelMouseUp,
+  handleDebugPanelMouseMove,
 } from '../game/input';
 import { screenToWorldCoords } from '../game/render/render-utils';
 
@@ -34,6 +38,24 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
   keysPressed,
   returnToIntro,
 }) => {
+  // Handle Wheel Events (Scrolling)
+  useEffect(() => {
+    const handleWheel = (event: WheelEvent) => {
+      if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
+
+      const debugResult = handleDebugPanelMouseWheel(event, gameStateRef.current);
+      gameStateRef.current = debugResult.newState;
+      if (debugResult.handled) {
+        return;
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+    };
+  }, [isActive, canvasRef, gameStateRef]);
+
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
       if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
@@ -42,6 +64,13 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const rect = canvasRef.current.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
+
+      // Check for debug panel interaction first
+      const debugResult = handleDebugPanelMouseDown(event, gameStateRef.current);
+      gameStateRef.current = debugResult.newState;
+      if (debugResult.handled) {
+        return;
+      }
 
       // Check for notification click first, as they overlay other UI
       const notificationClicked = handleNotificationClick(gameStateRef.current, mouseX, mouseY);
@@ -73,15 +102,37 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       handleAutopilotClick(gameStateRef.current, worldPos);
     };
 
+    const handleMouseUp = (event: MouseEvent) => {
+      if (!isActive() || !canvasRef.current) return;
+
+      const debugResult = handleDebugPanelMouseUp(event, gameStateRef.current);
+      gameStateRef.current = debugResult.newState;
+    };
+
     window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isActive, canvasRef, gameStateRef, viewportCenterRef, returnToIntro]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
       if (!isActive() || !canvasRef.current) return;
+
+      // Handle debug panel dragging
+      const debugMoveResult = handleDebugPanelMouseMove(event, gameStateRef.current);
+      gameStateRef.current = debugMoveResult.newState;
+      if (debugMoveResult.handled) {
+        return;
+      }
+
+      // If dragging stopped outside the panel (e.g. mouse up happened outside window), ensure we stop dragging
+      if (gameStateRef.current.isDraggingDebugPanel && (event.buttons & 1) === 0) {
+        const debugUpResult = handleDebugPanelMouseUp(event, gameStateRef.current);
+        gameStateRef.current = debugUpResult.newState;
+      }
 
       const rect = canvasRef.current.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;

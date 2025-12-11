@@ -128,6 +128,10 @@ export interface GameWorldState {
   };
   ecosystem: EcosystemState;
   debugPanel: DebugPanelType;
+  debugPanelScroll: Vector2D;
+  isDraggingDebugPanel: boolean;
+  debugPanelRect?: Rect;
+  debugPanelContentSize?: Pick<Rect, 'width' | 'height'>;
   performanceMetrics: PerformanceMetrics;
   autosaveIntervalSeconds?: number; // How often to autosave in real seconds
   lastAutosaveTime: number; // Timestamp of the last autosave (Date.now())

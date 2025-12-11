@@ -182,6 +182,8 @@ export function initWorld(): GameWorldState {
     tutorial,
     tutorialState,
     debugPanel: DebugPanelType.None,
+    debugPanelScroll: { x: 0, y: 0 },
+    isDraggingDebugPanel: false,
     performanceMetrics: {
       currentBucket: {
         renderTime: 0,
@@ -324,6 +326,8 @@ export function initIntroWorld(): GameWorldState {
     tutorial,
     tutorialState,
     debugPanel: DebugPanelType.None,
+    debugPanelScroll: { x: 0, y: 0 },
+    isDraggingDebugPanel: false,
     performanceMetrics: {
       currentBucket: {
         renderTime: 0,
