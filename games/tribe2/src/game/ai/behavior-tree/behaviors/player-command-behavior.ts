@@ -11,11 +11,11 @@ import {
   FATHER_FOLLOW_STOP_DISTANCE,
 } from '../../../ai-consts.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../berry-bush-consts.ts';
-import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
+import { HUMAN_INTERACTION_PROXIMITY, HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
-import { canProcreate, isPositionOccupied } from '../../../utils';
+import { canProcreate, isPositionOccupied, isEnemyBuilding } from '../../../utils';
 import { BuildingEntity } from '../../../entities/buildings/building-types.ts';
 
 /**
@@ -372,6 +372,90 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = leader.id;
               human.direction = dirToTarget(human.position, leader.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- TAKE OVER BUILDING ---
+            case PlayerActionType.TakeOverBuilding: {
+              const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
+                | BuildingEntity
+                | undefined;
+
+              // Validate building exists and is an enemy building
+              if (
+                !targetBuilding ||
+                targetBuilding.type !== 'building' ||
+                !isEnemyBuilding(human, targetBuilding, gameState)
+              ) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Only leaders can take over buildings
+              if (human.leaderId !== human.id) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const takeoverDistance = calculateWrappedDistance(
+                human.position,
+                targetBuilding.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (takeoverDistance <= HUMAN_INTERACTION_RANGE) {
+                human.activeAction = 'takingOverBuilding';
+                human.target = targetBuilding.id;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = targetBuilding.id;
+              human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- REMOVE ENEMY BUILDING ---
+            case PlayerActionType.RemoveEnemyBuilding: {
+              const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
+                | BuildingEntity
+                | undefined;
+
+              // Validate building exists and is an enemy building
+              if (
+                !targetBuilding ||
+                targetBuilding.type !== 'building' ||
+                !isEnemyBuilding(human, targetBuilding, gameState)
+              ) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              // Only leaders can remove enemy buildings
+              if (human.leaderId !== human.id) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const removalDistance = calculateWrappedDistance(
+                human.position,
+                targetBuilding.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (removalDistance <= HUMAN_INTERACTION_RANGE) {
+                human.activeAction = 'destroyingBuilding';
+                human.target = targetBuilding.id;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = targetBuilding.id;
+              human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 

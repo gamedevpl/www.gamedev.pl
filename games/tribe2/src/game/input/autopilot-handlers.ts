@@ -11,6 +11,7 @@ import {
   isHostile,
   canProcreate,
   isPositionOccupied,
+  isEnemyBuilding,
 } from '../utils';
 import { Vector2D } from '../utils/math-types';
 import {
@@ -78,8 +79,15 @@ export const determineHoveredAutopilotAction = (
       const building = hoveredEntity as BuildingEntity;
 
       if (gameState.selectedBuildingType === 'removal') {
-        // No action when removal tool is selected
-        determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
+        // Removal tool selected - if enemy building, show RemoveEnemyBuilding; else just Removal
+        if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState) && building.isConstructed) {
+          determinedAction = { action: PlayerActionType.RemoveEnemyBuilding, targetEntityId: building.id };
+        } else {
+          determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
+        }
+      } else if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState) && building.isConstructed) {
+        // Enemy building - only leaders can take over
+        determinedAction = { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
       } else if (building.buildingType === 'storageSpot') {
         // Handle storage spot interactions
         const isPlayerTribeStorage = building.ownerId === player.leaderId;
