@@ -302,3 +302,25 @@ export function getDepletedSectorsInArea(
   
   return result;
 }
+
+/**
+ * Gets the speed modifier for movement based on soil depletion at a position.
+ * Returns a value >= 1.0, with depleted soil giving a speed bonus.
+ */
+export function getSoilSpeedModifier(
+  state: SoilDepletionState,
+  position: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+  depletedSpeedBonus: number,
+): number {
+  const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
+  const health = getSectorHealth(state, gridX, gridY);
+  
+  // If soil is depleted, apply speed bonus
+  if (health < SOIL_HEALTH_DEPLETED_THRESHOLD) {
+    return depletedSpeedBonus;
+  }
+  
+  return 1.0;
+}

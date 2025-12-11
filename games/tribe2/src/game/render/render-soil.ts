@@ -5,7 +5,7 @@
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { getDepletedSectorsForRendering, getSectorHealth } from '../soil-depletion-update';
+import { getDepletedSectorsForRendering } from '../soil-depletion-update';
 import {
   SOIL_SECTOR_SIZE,
   SOIL_DEPLETED_COLOR,
@@ -13,7 +13,6 @@ import {
   SOIL_DEPLETED_OPACITY,
   SOIL_DEPLETED_RENDER_THRESHOLD,
   SOIL_VISIBLE_DEPLETION_THRESHOLD,
-  SOIL_HEALTH_MAX,
 } from '../soil-depletion-consts';
 
 // Cache for visible sectors to avoid recalculating every frame

@@ -3,6 +3,8 @@ import { Vector2D } from '../../../../utils/math-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
+import { getSoilSpeedModifier } from '../../../../soil-depletion-update';
+import { SOIL_DEPLETED_SPEED_BONUS } from '../../../../soil-depletion-consts';
 import {
   HUMAN_MOVING,
   HumanMovingStateData,
@@ -77,8 +79,17 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     );
     entity.direction = vectorNormalize(dirToTarget);
 
-    // Set acceleration based on effective speed
-    entity.acceleration = getEffectiveSpeed(entity);
+    // Get terrain speed modifier from soil depletion state
+    const terrainSpeedModifier = getSoilSpeedModifier(
+      updateContext.gameState.soilDepletion,
+      entity.position,
+      updateContext.gameState.mapDimensions.width,
+      updateContext.gameState.mapDimensions.height,
+      SOIL_DEPLETED_SPEED_BONUS,
+    );
+
+    // Set acceleration based on effective speed with terrain modifier
+    entity.acceleration = getEffectiveSpeed(entity, terrainSpeedModifier);
 
     // Check if we've reached the target
     const distance = calculateWrappedDistance(
