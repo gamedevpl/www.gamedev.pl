@@ -14,7 +14,7 @@ import {
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
 } from '../../../human-consts.ts';
-import { HUNGER_EFFECT_THRESHOLD, EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
+import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
 import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui/ui-consts.ts';
 import {
   CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
@@ -63,14 +63,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
-
-  if (
-    entity.hunger > HUNGER_EFFECT_THRESHOLD &&
-    (!entity.lastHungerEffectTime || gameState.time - entity.lastHungerEffectTime > EFFECT_DURATION_MEDIUM_HOURS * 2)
-  ) {
-    addVisualEffect(gameState, VisualEffectType.Hunger, entity.position, EFFECT_DURATION_MEDIUM_HOURS, entity.id);
-    entity.lastHungerEffectTime = gameState.time;
-  }
 
   entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
 

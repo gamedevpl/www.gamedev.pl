@@ -9,3 +9,4 @@ export * from './ui/render-autopilot-hints';
 export * from './ui/render-autopilot-indicator';
 export * from './ui/render-notifications';
 export * from './ui/render-performance-debugger';
+export * from './render-behavior-tree-debug';

@@ -43,6 +43,7 @@ const GameScreenInitialised: React.FC<{ initialState: GameWorldState }> = ({ ini
   const debugPanelTypeRef = useRef<DebugPanelType>(initialState.debugPanel);
   const viewportCenterRef = useRef<Vector2D>(initialState.viewportCenter);
   const playerActionHintsRef = useRef<PlayerActionHint[]>([]);
+  // Note: debugCharacterId is managed within gameStateRef.current
 
   const { appState, setAppState } = useGameContext();
 

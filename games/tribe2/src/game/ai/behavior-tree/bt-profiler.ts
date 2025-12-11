@@ -4,7 +4,7 @@
  */
 
 // Interface for storing profiling data for a single node
-interface ProfiledNode {
+export interface ProfiledNode {
   path: string;
   totalTime: number;
   callCount: number;
@@ -126,6 +126,15 @@ class BTProfiler {
     this.nodeData.clear();
     this.pathStack = [];
     this.startTimeStack = [];
+  }
+
+  /**
+   * Retrieves profiling data for a specific node path.
+   * @param path The full path of the node (e.g. "Root > Child > Leaf").
+   * @returns The profiling data if available, otherwise undefined.
+   */
+  public getNodeData(path: string): ProfiledNode | undefined {
+    return this.nodeData.get(path);
   }
 }
 

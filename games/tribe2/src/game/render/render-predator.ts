@@ -2,7 +2,6 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
-import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
@@ -51,7 +50,6 @@ export function renderPredator(
   ctx: CanvasRenderingContext2D,
   predator: PredatorEntity,
   isDebugOn: boolean = false,
-  currentTime: number = 0,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = predator;
@@ -111,11 +109,6 @@ export function renderPredator(
 
   // Debug rendering
   const showDebug = isDebugOn && (debugEntityId === undefined || predator.id === debugEntityId);
-
-  if (showDebug && predator.aiBlackboard) {
-    renderBehaviorTreeDebug(ctx, predator, currentTime);
-  }
-
   if (showDebug) {
     renderPredatorDebugInfo(ctx, predator);
   }

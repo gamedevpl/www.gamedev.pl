@@ -98,7 +98,6 @@ export interface HumanEntity extends CharacterEntity {
   animationSpeed?: number;
 
   // Visual effect cooldowns
-  lastHungerEffectTime?: number;
   lastPregnantEffectTime?: number;
   lastPartneredEffectTime?: number;
   lastTargetAcquiredEffectTime?: number;

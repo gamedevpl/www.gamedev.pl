@@ -2,7 +2,6 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
-import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
 
 // Map prey actions to sprite stances
 const preyStanceMap: Record<string, string> = {
@@ -50,7 +49,6 @@ export function renderPrey(
   ctx: CanvasRenderingContext2D,
   prey: PreyEntity,
   isDebugOn: boolean = false,
-  currentTime: number = 0,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = prey;
@@ -98,10 +96,6 @@ export function renderPrey(
 
   // Debug rendering
   const showDebug = isDebugOn && (debugEntityId === undefined || prey.id === debugEntityId);
-
-  if (showDebug && prey.aiBlackboard) {
-    renderBehaviorTreeDebug(ctx, prey, currentTime);
-  }
 
   if (showDebug) {
     renderPreyDebugInfo(ctx, prey);

@@ -4,7 +4,6 @@ import { Vector2D } from '../utils/math-types';
 export type VisualEffectId = number;
 
 export enum VisualEffectType {
-  Hunger,
   Procreation,
   Pregnant,
   TargetAcquired,

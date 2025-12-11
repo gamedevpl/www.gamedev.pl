@@ -1,7 +1,6 @@
 import { AI_UPDATE_INTERVAL } from '../ai-consts.ts';
 import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../game-consts.ts';
 import {
-  UI_BT_DEBUG_BACKGROUND_COLOR,
   UI_BT_DEBUG_FONT_SIZE,
   UI_BT_DEBUG_HEATMAP_COLD_COLOR,
   UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS,
@@ -16,34 +15,129 @@ import {
   UI_BT_DEBUG_STATUS_NOT_EVALUATED_COLOR,
   UI_BT_DEBUG_STATUS_RUNNING_COLOR,
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
-  UI_BT_DEBUG_X_OFFSET,
-  UI_BT_DEBUG_Y_OFFSET,
+  UI_FONT_SIZE,
+  UI_PADDING,
 } from '../ui/ui-consts.ts';
 import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
 import { lerpColor } from '../utils/math-utils';
 import { CharacterEntity } from '../entities/characters/character-types';
 import { humanBehaviorTree } from '../ai/human-ai-update.ts';
 import { predatorBehaviorTree, preyBehaviorTree } from '../ai/animal-ai-update.ts';
+import { GameWorldState } from '../world-types.ts';
 
 /**
- * Renders a debug visualization of a character's behavior tree.
- * This function iterates through the entire static tree structure and displays the
- * real-time status of each node. Nodes that were not evaluated in the last
- * tick are shown as 'NOT_EVALUATED'.
+ * Renders the behavior tree debugger panel.
+ * This function displays the real-time status of the behavior tree for the selected debug character.
  *
  * @param ctx The canvas rendering context.
- * @param character The character entity whose AI tree is to be rendered.
- * @param currentTime The current game time, used for heatmap calculations.
+ * @param gameState The current game world state.
+ * @param canvasWidth The width of the canvas.
+ * @param canvasHeight The height of the canvas.
  */
-export function renderBehaviorTreeDebug<T extends CharacterEntity>(
+export function renderBehaviorTreeDebugger(
+  ctx: CanvasRenderingContext2D,
+  gameState: GameWorldState,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  const { debugCharacterId, time: currentTime } = gameState;
+
+  // Setup debugger panel
+  const panelWidth = 500;
+  const panelHeight = Math.min(canvasHeight * 0.9, 800);
+  const panelX = canvasWidth - panelWidth - 10;
+  const panelY = UI_PADDING + UI_FONT_SIZE * 2;
+
+  // Save context state
+  ctx.save();
+
+  // Draw panel background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+  ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+  // Draw panel border
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+  // Setup text rendering for header
+  ctx.fillStyle = 'white';
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  let currentY = panelY + 20;
+  const leftMargin = panelX + 15;
+
+  // Title
+  ctx.fillStyle = '#66ccff';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillText('🧠 Behavior Tree Debugger', leftMargin, currentY);
+  currentY += 25;
+
+  if (!debugCharacterId) {
+    ctx.fillStyle = '#888';
+    ctx.font = '12px monospace';
+    ctx.fillText('No character selected for debugging.', leftMargin, currentY);
+    ctx.fillText('Click on a character to inspect behavior.', leftMargin, currentY + 20);
+    ctx.restore();
+    return;
+  }
+
+  const character = gameState.entities.entities[debugCharacterId] as CharacterEntity | undefined;
+
+  if (!character) {
+    ctx.fillStyle = '#ff4444';
+    ctx.font = '12px monospace';
+    ctx.fillText(`Character #${debugCharacterId} not found (might be dead).`, leftMargin, currentY);
+    ctx.restore();
+    return;
+  }
+
+  if (!character.aiBlackboard) {
+    ctx.fillStyle = '#ffaa44';
+    ctx.font = '12px monospace';
+    ctx.fillText(`Character #${debugCharacterId} has no AI Blackboard.`, leftMargin, currentY);
+    ctx.restore();
+    return;
+  }
+
+  // Display character info
+  ctx.fillStyle = 'white';
+  ctx.font = '12px monospace';
+  ctx.fillText(`Character: ${character.type} #${character.id} (${character.age.toFixed(1)}y)`, leftMargin, currentY);
+  currentY += 20;
+
+  // Render the tree content
+  renderTreeContent(
+    ctx,
+    character,
+    currentTime,
+    leftMargin,
+    currentY,
+    panelWidth - 30,
+    panelHeight - (currentY - panelY) - 10,
+  );
+
+  // Footer
+  ctx.fillStyle = '#888';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText("Press '~' to toggle this debugger", panelX + panelWidth / 2, panelY + panelHeight - 10);
+
+  ctx.restore();
+}
+
+function renderTreeContent(
   ctx: CanvasRenderingContext2D,
   character: CharacterEntity,
   currentTime: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
 ): void {
-  if (!character.aiBlackboard) {
-    return;
-  }
-  const executionData = character.aiBlackboard.nodeExecutionData;
+  const executionData = character.aiBlackboard!.nodeExecutionData;
   // We cast the tree to BehaviorNode<any> because the specific character type (Human, Predator, Prey)
   // doesn't matter for rendering, only the node structure and blackboard data.
   const tree = (
@@ -54,12 +148,18 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
       : character.type === 'prey'
       ? preyBehaviorTree
       : null
-  ) as BehaviorNode<T> | null;
+  ) as BehaviorNode<CharacterEntity> | null;
+
   if (!tree) {
     return;
   }
 
+  // Create a clipping region for the tree content
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(x - 5, y, width + 10, height);
+  ctx.clip();
+
   ctx.font = `${UI_BT_DEBUG_FONT_SIZE}px Arial`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
@@ -79,52 +179,22 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
     }
   };
 
-  // Helper to calculate the required panel dimensions by traversing the static tree
-  const calculateDimensions = (node: BehaviorNode<T>): { width: number; height: number } => {
-    if (!node.name || !executionData[node.name]) {
-      return { width: 0, height: 0 };
-    }
-
-    let maxWidth = 0;
-    let height = 0;
-
-    const nodeExecutionInfo = executionData[node.name];
-    const debugText = ` ${node.name}` + (nodeExecutionInfo?.debugInfo ? `: ${nodeExecutionInfo.debugInfo}` : '');
-    const textWidth = ctx.measureText(debugText).width;
-    const indentedWidth =
-      (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE +
-      8 + // Status circle
-      textWidth +
-      UI_BT_DEBUG_HISTOGRAM_X_OFFSET +
-      UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH +
-      20; // Padding
-    maxWidth = Math.max(maxWidth, indentedWidth);
-    height += UI_BT_DEBUG_LINE_HEIGHT;
-
-    if (node.children) {
-      for (const child of node.children) {
-        const childDimensions = calculateDimensions(child);
-        maxWidth = Math.max(maxWidth, childDimensions.width);
-        height += childDimensions.height;
-      }
-    } else if (node.child) {
-      const childDimensions = calculateDimensions(node.child);
-      maxWidth = Math.max(maxWidth, childDimensions.width);
-      height += childDimensions.height;
-    }
-
-    return { width: maxWidth, height };
-  };
-
   // Helper to recursively render each node of the tree
-  const renderNode = (node: BehaviorNode<T>, yPos: number, panelX: number, panelWidth: number): number => {
+  const renderNode = (node: BehaviorNode<CharacterEntity>, yPos: number): number => {
     if (!node.name || !executionData[node.name]) {
       return yPos;
     }
     let currentY = yPos;
 
+    // Check if we are out of the visible area
+    if (currentY > y + height) {
+      // We can stop rendering if we are below the panel, but we need to traverse to calculate layout if we want scrolling (not implemented yet)
+      // For now, simple culling
+      return currentY + UI_BT_DEBUG_LINE_HEIGHT;
+    }
+
     const nodeExecutionInfo = executionData[node.name];
-    const xPos = panelX + 2 + (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
+    const xPos = x + (node.depth ?? 0) * UI_BT_DEBUG_INDENT_SIZE;
 
     let status = NodeStatus.NOT_EVALUATED;
     let textColor = UI_BT_DEBUG_HEATMAP_COLD_COLOR;
@@ -162,7 +232,8 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
       const historyEndTime = currentTime;
       const historyStartTime = historyEndTime - historyWindowInGameHours;
 
-      const histogramStartX = panelX + panelWidth - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
+      // Position histogram to the right, relative to the panel width
+      const histogramStartX = x + width - UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH - UI_BT_DEBUG_HISTOGRAM_X_OFFSET;
       let currentX = histogramStartX;
       const barY = currentY + (UI_BT_DEBUG_LINE_HEIGHT - UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT) / 2;
 
@@ -205,31 +276,19 @@ export function renderBehaviorTreeDebug<T extends CharacterEntity>(
 
     // Recursively render children
     if (node.children) {
+      // TODO: Implement scrolling or pagination here if needed
       for (const child of node.children) {
-        currentY = renderNode(child, currentY, panelX, panelWidth);
+        currentY = renderNode(child, currentY);
       }
     } else if (node.child) {
-      currentY = renderNode(node.child, currentY, panelX, panelWidth);
+      currentY = renderNode(node.child, currentY);
     }
 
     return currentY;
   };
 
-  // --- Main execution --
-  const { width: panelWidth, height: panelHeight } = calculateDimensions(tree);
-  if (panelHeight === 0) {
-    ctx.restore();
-    return; // Don't render anything if the tree is empty or has no named nodes
-  }
-  const panelX = character.position.x + UI_BT_DEBUG_X_OFFSET;
-  const panelY = character.position.y + UI_BT_DEBUG_Y_OFFSET - panelHeight / 2;
-
-  // Draw background panel
-  ctx.fillStyle = UI_BT_DEBUG_BACKGROUND_COLOR;
-  ctx.fillRect(panelX, panelY, panelWidth, panelHeight + 4);
-
   // Start rendering from the root node
-  renderNode(tree, panelY + 2, panelX, panelWidth);
+  renderNode(tree, y);
 
   ctx.restore();
 }

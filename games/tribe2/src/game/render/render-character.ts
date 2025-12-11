@@ -26,7 +26,6 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 import { EntityId } from '../entities/entities-types';
-import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -289,10 +288,6 @@ export function renderCharacter(
   }
 
   const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
-
-  if (showDebug && human.aiBlackboard) {
-    renderBehaviorTreeDebug(ctx, human, currentTime);
-  }
 
   renderAttackProgress(ctx, human, currentTime);
 

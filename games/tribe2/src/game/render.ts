@@ -24,6 +24,7 @@ import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
 import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
 import { renderTribeDebugger } from './render/render-tribe-debugger';
+import { renderBehaviorTreeDebugger } from './render/render-behavior-tree-debug';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
@@ -207,6 +208,9 @@ export function renderGame(
         break;
       case DebugPanelType.Performance:
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
+        break;
+      case DebugPanelType.General:
+        renderBehaviorTreeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
     }
 
