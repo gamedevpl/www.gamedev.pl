@@ -11,6 +11,17 @@ import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-typ
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
 
+/**
+ * Describes which edges of a planting zone are connected to adjacent zones of the same tribe.
+ * Used to visually join adjacent planting zones by hiding stone borders between them.
+ */
+export interface PlantingZoneConnections {
+  top: boolean;
+  bottom: boolean;
+  left: boolean;
+  right: boolean;
+}
+
 export enum DiplomacyStatus {
   Friendly = 'Friendly',
   Hostile = 'Hostile',
@@ -135,6 +146,9 @@ export interface GameWorldState {
   performanceMetrics: PerformanceMetrics;
   autosaveIntervalSeconds?: number; // How often to autosave in real seconds
   lastAutosaveTime: number; // Timestamp of the last autosave (Date.now())
+  // Map from planting zone entity ID to its connections to adjacent zones of the same tribe.
+  // This is recalculated whenever planting zones change.
+  plantingZoneConnections: Record<EntityId, PlantingZoneConnections>;
 }
 
 export type UpdateContext = {

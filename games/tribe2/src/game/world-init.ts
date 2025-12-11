@@ -218,6 +218,7 @@ export function initWorld(): GameWorldState {
     },
     autosaveIntervalSeconds: 5,
     lastAutosaveTime: Date.now(),
+    plantingZoneConnections: {},
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -349,6 +350,7 @@ export function initIntroWorld(): GameWorldState {
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
     lastAutosaveTime: 0,
+    plantingZoneConnections: {},
   };
 
   return indexWorldState(initialWorldState);

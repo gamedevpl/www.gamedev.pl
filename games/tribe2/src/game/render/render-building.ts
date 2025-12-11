@@ -187,12 +187,6 @@ export function renderBuilding(
   }
 
   if (isHostile) {
-    // Pass explicit colors for hostile buildings
-    // We use the highlight color logic inside drawStoneRect slightly differently than before,
-    // so let's pass undefined for overrideColor to let it use base/highlight logic,
-    // but we need to modify drawStoneRect to accept base/highlight overrides.
-    // For now, let's just use a single override color or update drawStoneRect to handle base/highlight overrides.
-    // I updated drawStoneRect signature to accept overrideHighlightColor.
     drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
   } else {
     drawStoneRect(ctx, width, height, id);

@@ -27,6 +27,8 @@ import { isEntityInView, renderWithWrapping } from './render-utils';
 import { Vector2D } from '../utils/math-types';
 import { renderBuilding } from './render-building.ts';
 import { BuildingEntity } from '../entities/buildings/building-types.ts';
+import { renderPlantingZonesMetaball } from './render-planting-zones.ts';
+import { BuildingType } from '../building-consts.ts';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -40,6 +42,10 @@ export function renderWorld(
   const playerHeir = findHeir(playerChildren);
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // Render planting zones using metaball approach (before individual entities)
+  // This creates smooth, organic joining of adjacent zones belonging to the same tribe
+  renderPlantingZonesMetaball(ctx, gameState, viewportCenter, player?.leaderId);
 
   const sortedEntities = Object.values(gameState.entities.entities).sort((a, b) =>
     isDebugOn && a.id === gameState.debugCharacterId && a.id !== b.id
@@ -55,12 +61,17 @@ export function renderWorld(
 
   visibleEntities.forEach((entity: Entity) => {
     if (entity.type === 'building') {
+      const building = entity as BuildingEntity;
+      // Skip planting zones as they are rendered by metaball approach
+      if (building.buildingType === BuildingType.PlantingZone && building.isConstructed) {
+        return;
+      }
       renderWithWrapping(
         ctx,
         worldWidth,
         worldHeight,
         renderBuilding,
-        entity as BuildingEntity,
+        building,
         gameState,
         player,
         gameState.time,
