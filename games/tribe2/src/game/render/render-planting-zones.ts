@@ -19,7 +19,6 @@ const METABALL_THRESHOLD = 1.0; // Field strength threshold for rendering
 const METABALL_PADDING = 20; // Extra padding around zones for smooth edges
 const FIELD_SAMPLE_STEP = 4; // Pixel step for field sampling (lower = higher quality, slower)
 const STONE_SPACING = 8; // Spacing between stones along the border
-const METABALL_INFLUENCE_RADIUS_MULTIPLIER = 2.5; // Multiplier for the influence radius of each zone
 
 // Fill color for planting zone area (subtle darker green tint to distinguish from grass)
 const ZONE_FILL_COLOR = 'rgba(34, 85, 34, 0.25)'; // Dark green, semi-transparent
