@@ -172,6 +172,16 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
         depth + 1,
       ),
 
+      new ConditionNode(
+        (human: HumanEntity, context: UpdateContext) => {
+          const children = findChildren(context.gameState, human);
+          const maleChildrenCount = children.filter((c) => c.gender === 'male').length;
+          return maleChildrenCount < 3 ? true : [false, `Has ${maleChildrenCount} male children`];
+        },
+        'Has not enough male children',
+        depth + 1,
+      ),
+
       // New Selector: Either the environment is viable, OR the male is desperate to have an heir.
       new Selector(
         [

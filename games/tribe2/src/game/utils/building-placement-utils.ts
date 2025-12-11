@@ -8,6 +8,7 @@ import { isPositionOccupied } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
+import { canPlaceBuildingInTerritory } from '../entities/tribe/territory-utils';
 import { getDepletedSectorsInArea } from '../soil-depletion-update';
 
 /**
@@ -79,6 +80,12 @@ export function canPlaceBuilding(
       // 0.9 factor to allow slight visual overlap but not logical overlap
       return false;
     }
+  }
+
+  // 3. Check territory constraints - buildings can only be placed within or near tribe territory
+  const territoryCheck = canPlaceBuildingInTerritory(position, ownerId, gameState);
+  if (!territoryCheck.canPlace) {
+    return false;
   }
 
   return true;

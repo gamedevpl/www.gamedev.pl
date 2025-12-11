@@ -33,6 +33,7 @@ import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
 import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
 import { renderDepletedSoil } from './render/render-soil';
+import { renderAllTerritories } from './render/render-territory';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -56,12 +57,15 @@ export function renderGame(
     return;
   }
 
+  const player = findPlayerEntity(gameState);
+
+  // Render territory borders (before world entities so they appear behind)
+  renderAllTerritories(ctx, gameState, viewportCenter, canvasDimensions, gameState.time, player?.leaderId);
+
   // Render depleted soil patches (under entities)
   renderDepletedSoil(ctx, gameState, viewportCenter, canvasDimensions);
 
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
-
-  const player = findPlayerEntity(gameState);
 
   // Render ghost building preview
   if (

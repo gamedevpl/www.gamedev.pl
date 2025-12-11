@@ -23,6 +23,7 @@ import {
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
+import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
@@ -52,6 +53,11 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         AI_GATHERING_SEARCH_RADIUS,
         (bush) => {
           if (bush.food.length === 0) {
+            return false;
+          }
+
+          // Check if bush is within tribe's operating range (territory + small buffer)
+          if (human.leaderId && !isWithinOperatingRange(bush.position, human.leaderId, context.gameState)) {
             return false;
           }
 
@@ -110,6 +116,12 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           if (c.food.length === 0) {
             return false;
           }
+
+          // Check if corpse is within tribe's operating range (territory + small buffer)
+          if (human.leaderId && !isWithinOperatingRange(c.position, human.leaderId, context.gameState)) {
+            return false;
+          }
+
           // Check if another tribe member is already gathering from this corpse
           if (leader && leader.aiBlackboard) {
             const taskKey = `tribal_gather_${c.id}`;

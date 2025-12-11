@@ -1,9 +1,14 @@
 import Flatbush from 'flatbush';
-import { Entity } from '../entities/entities-types';
 import { Vector2D } from '../utils/math-types';
 import { IndexType, Rect } from './world-index-types';
 
-const indexCache: Record<string, IndexType<Entity>> = {};
+interface IndexItem {
+  position: Vector2D;
+  width?: number;
+  height?: number;
+}
+
+const indexCache: Record<string, IndexType<IndexItem>> = {};
 
 /**
  * Creates an indexed queryable object from a list of items.
@@ -11,7 +16,7 @@ const indexCache: Record<string, IndexType<Entity>> = {};
  * @param cacheKey An optional key to cache the index.
  * @returns An IndexType object for querying the items.
  */
-export function indexItems<T extends Entity>(items: T[], cacheKey?: string): IndexType<T> {
+export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): IndexType<T> {
   if (cacheKey && indexCache[cacheKey]) {
     return indexCache[cacheKey] as IndexType<T>;
   }
@@ -31,7 +36,11 @@ export function indexItems<T extends Entity>(items: T[], cacheKey?: string): Ind
   const propertyCache = new Map<keyof T, Map<unknown, T[]>>();
 
   for (const item of items) {
-    index.add(item.position.x, item.position.y, item.position.x, item.position.y);
+    if (item.width !== undefined && item.height !== undefined) {
+      index.add(item.position.x, item.position.y, item.position.x + item.width, item.position.y + item.height);
+    } else {
+      index.add(item.position.x, item.position.y, item.position.x, item.position.y);
+    }
   }
   index.finish();
 
