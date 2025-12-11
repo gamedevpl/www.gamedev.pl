@@ -7,6 +7,7 @@ import { createBuilding as createBuildingEntity } from '../entities/entities-upd
 import { isPositionOccupied } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
+import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
 
 /**
  * Checks if a building of a given type can be placed at the specified position.
@@ -81,7 +82,12 @@ export function createBuilding(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): BuildingEntity {
-  return createBuildingEntity(gameState.entities, position, buildingType, ownerId);
+  const building = createBuildingEntity(gameState.entities, position, buildingType, ownerId);
+  // Update planting zone connections when a new planting zone is created
+  if (buildingType === BuildingType.PlantingZone) {
+    updatePlantingZoneConnections(gameState);
+  }
+  return building;
 }
 
 /**
@@ -94,6 +100,10 @@ export function startBuildingDestruction(buildingId: EntityId, gameState: GameWo
   if (building && building.type === 'building' && !building.isBeingDestroyed) {
     building.isBeingDestroyed = true;
     building.destructionProgress = 0;
+    // Update planting zone connections when a planting zone starts being destroyed
+    if (building.buildingType === BuildingType.PlantingZone) {
+      updatePlantingZoneConnections(gameState);
+    }
   }
 }
 

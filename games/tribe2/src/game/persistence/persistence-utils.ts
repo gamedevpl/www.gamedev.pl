@@ -1,6 +1,7 @@
 import { SavedGameState, SerializedWorldState } from './persistence-types';
 import { GameWorldState } from '../world-types';
 import { indexWorldState } from '../world-index/world-state-index';
+import { updatePlantingZoneConnections } from '../utils/planting-zone-connections-utils';
 
 const DB_NAME = 'tribe-game-db';
 const STORE_NAME = 'save-files';
@@ -68,6 +69,10 @@ export async function loadGame(): Promise<GameWorldState | null> {
     // Re-index the world state
     const indexedGameState = indexWorldState(readWorldState(savedGameState.gameState));
 
+    // Recalculate planting zone connections after loading
+    // This ensures connections are properly set even for older save files
+    updatePlantingZoneConnections(indexedGameState);
+
     return indexedGameState;
   } catch (error) {
     console.error('Failed to load game:', error);
@@ -92,7 +97,12 @@ export async function clearSavedGame(): Promise<void> {
 // --- Logic Helpers ---
 
 function readWorldState(serialized: SerializedWorldState): GameWorldState {
-  return serialized as unknown as GameWorldState; // Assuming identity for now based on your snippet
+  const gameState = serialized as unknown as GameWorldState;
+  // Ensure plantingZoneConnections exists for older saves
+  if (!gameState.plantingZoneConnections) {
+    gameState.plantingZoneConnections = {};
+  }
+  return gameState;
 }
 
 function serializedWorldState(worldState: GameWorldState): SerializedWorldState {

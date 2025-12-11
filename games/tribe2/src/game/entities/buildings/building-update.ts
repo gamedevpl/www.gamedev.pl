@@ -1,8 +1,9 @@
 import { UpdateContext } from '../../world-types';
 import { BuildingEntity } from './building-types';
-import { getBuildingConstructionTime, getBuildingDestructionTime } from '../../building-consts';
+import { getBuildingConstructionTime, getBuildingDestructionTime, BuildingType } from '../../building-consts';
 import { removeEntity } from '../entities-update';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts.ts';
+import { updatePlantingZoneConnections } from '../../utils/planting-zone-connections-utils';
 
 /**
  * Updates the state of a building entity.
@@ -28,7 +29,12 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     }
 
     if (building.destructionProgress >= 1) {
+      const isPlantingZone = building.buildingType === BuildingType.PlantingZone;
       removeEntity(gameState.entities, building.id);
+      // Update planting zone connections after a planting zone is removed
+      if (isPlantingZone) {
+        updatePlantingZoneConnections(gameState);
+      }
       return; // Entity removed, no further updates needed
     }
   }
@@ -45,7 +51,10 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     if (building.constructionProgress >= 1) {
       building.constructionProgress = 1;
       building.isConstructed = true;
-      // Triggers or effects on completion could be added here
+      // Update planting zone connections when a planting zone completes construction
+      if (building.buildingType === BuildingType.PlantingZone) {
+        updatePlantingZoneConnections(gameState);
+      }
     }
   }
 }

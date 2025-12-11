@@ -8,3 +8,4 @@ export * from '../entities/tribe/tribe-split-utils';
 export * from './human-utils';
 export * from './building-placement-utils';
 export * from '../entities/tribe/tribe-food-utils';
+export * from './planting-zone-connections-utils';

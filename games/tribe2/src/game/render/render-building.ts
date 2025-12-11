@@ -17,6 +17,7 @@ import { Entity } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS } from '../food/food-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
+import { PlantingZoneConnections } from '../world-types';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -45,6 +46,8 @@ function pseudoRandom(seed: number): number {
 
 /**
  * Draws a border made of stones around a rectangle.
+ * If connections are provided, stones on connected edges will be skipped,
+ * creating a visual joining effect between adjacent zones.
  */
 function drawStoneRect(
   ctx: CanvasRenderingContext2D,
@@ -53,6 +56,7 @@ function drawStoneRect(
   seed: number,
   overrideColor?: string,
   overrideHighlightColor?: string,
+  connections?: PlantingZoneConnections,
 ) {
   const perimeter = (width + height) * 2;
   const stoneCount = Math.floor(perimeter / STONE_SPACING);
@@ -74,23 +78,47 @@ function drawStoneRect(
     let currentDist = i * STONE_SPACING;
     let x = 0;
     let y = 0;
+    let edgeType: 'top' | 'right' | 'bottom' | 'left';
 
     if (currentDist < width) {
       // Top Edge
       x = left + currentDist;
       y = top;
+      edgeType = 'top';
     } else if (currentDist < width + height) {
       // Right Edge
       x = right;
       y = top + (currentDist - width);
+      edgeType = 'right';
     } else if (currentDist < width * 2 + height) {
       // Bottom Edge
       x = right - (currentDist - (width + height));
       y = bottom;
+      edgeType = 'bottom';
     } else {
       // Left Edge
       x = left;
       y = bottom - (currentDist - (width * 2 + height));
+      edgeType = 'left';
+    }
+
+    // Skip drawing stones on connected edges (but keep corner stones for a nice look)
+    if (connections) {
+      const cornerMargin = width * 0.15; // Keep stones at corners even if edges are connected
+      const isNearCorner =
+        (edgeType === 'top' && (x < left + cornerMargin || x > right - cornerMargin)) ||
+        (edgeType === 'bottom' && (x < left + cornerMargin || x > right - cornerMargin)) ||
+        (edgeType === 'left' && (y < top + cornerMargin || y > bottom - cornerMargin)) ||
+        (edgeType === 'right' && (y < top + cornerMargin || y > bottom - cornerMargin));
+
+      if (!isNearCorner) {
+        if ((edgeType === 'top' && connections.top) ||
+            (edgeType === 'bottom' && connections.bottom) ||
+            (edgeType === 'left' && connections.left) ||
+            (edgeType === 'right' && connections.right)) {
+          continue; // Skip this stone
+        }
+      }
     }
 
     // Apply wiggle
@@ -177,6 +205,12 @@ export function renderBuilding(
   const player = findPlayerEntity(indexedWorld);
   const isHostile = player && isEnemyBuilding(player, building, indexedWorld);
 
+  // Get connections for planting zones to visually join adjacent zones
+  const connections =
+    building.buildingType === BuildingType.PlantingZone && isConstructed
+      ? indexedWorld.plantingZoneConnections[id]
+      : undefined;
+
   ctx.save();
   ctx.translate(position.x, position.y);
 
@@ -193,9 +227,9 @@ export function renderBuilding(
     // but we need to modify drawStoneRect to accept base/highlight overrides.
     // For now, let's just use a single override color or update drawStoneRect to handle base/highlight overrides.
     // I updated drawStoneRect signature to accept overrideHighlightColor.
-    drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+    drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT, connections);
   } else {
-    drawStoneRect(ctx, width, height, id);
+    drawStoneRect(ctx, width, height, id, undefined, undefined, connections);
   }
 
   // 2. Draw Icon (Floating in the middle, no background box)
