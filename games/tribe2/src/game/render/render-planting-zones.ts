@@ -96,8 +96,8 @@ function getGroupBounds(
 
 /**
  * Renders a group of planting zones using the metaball technique.
- * Creates a smooth, organic shape that blends adjacent zones together.
- * Also renders stones along the continuous metaball boundary.
+ * Only renders the stone border around the continuous metaball boundary.
+ * The fill/background is not rendered - only the border stones.
  */
 function renderMetaballGroup(
   ctx: CanvasRenderingContext2D,
@@ -112,68 +112,24 @@ function renderMetaballGroup(
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
   
-  // Create an offscreen canvas for the metaball rendering
-  const offscreenCanvas = document.createElement('canvas');
-  offscreenCanvas.width = Math.ceil(width / FIELD_SAMPLE_STEP);
-  offscreenCanvas.height = Math.ceil(height / FIELD_SAMPLE_STEP);
-  const offCtx = offscreenCanvas.getContext('2d')!;
-  
-  // Create image data for pixel manipulation
-  const imageData = offCtx.createImageData(offscreenCanvas.width, offscreenCanvas.height);
-  const data = imageData.data;
+  // Calculate field values for edge detection (no background rendering)
+  const canvasWidth = Math.ceil(width / FIELD_SAMPLE_STEP);
+  const canvasHeight = Math.ceil(height / FIELD_SAMPLE_STEP);
   
   // Store field values for edge detection
   const fieldValues: number[][] = [];
-  for (let py = 0; py < offscreenCanvas.height; py++) {
+  for (let py = 0; py < canvasHeight; py++) {
     fieldValues[py] = [];
-  }
-  
-  // Sample the field at each pixel
-  for (let py = 0; py < offscreenCanvas.height; py++) {
-    for (let px = 0; px < offscreenCanvas.width; px++) {
+    for (let px = 0; px < canvasWidth; px++) {
       const worldX = bounds.minX + px * FIELD_SAMPLE_STEP;
       const worldY = bounds.minY + py * FIELD_SAMPLE_STEP;
       
       const fieldStrength = calculateFieldStrength(worldX, worldY, zones, dimensions);
       fieldValues[py][px] = fieldStrength;
-      
-      if (fieldStrength > METABALL_THRESHOLD) {
-        const i = (py * offscreenCanvas.width + px) * 4;
-        
-        if (isHostile) {
-          // Reddish tint for hostile zones
-          data[i] = 139;     // R
-          data[i + 1] = 50;  // G
-          data[i + 2] = 50;  // B
-        } else {
-          // Brownish earth tone
-          data[i] = 139;     // R
-          data[i + 1] = 90;  // G
-          data[i + 2] = 43;  // B
-        }
-        
-        // Calculate alpha based on field strength for smoother edges
-        const edgeSoftness = Math.min(1, (fieldStrength - METABALL_THRESHOLD) * 2);
-        data[i + 3] = Math.floor(edgeSoftness * 100); // Semi-transparent
-      }
     }
   }
   
-  offCtx.putImageData(imageData, 0, 0);
-  
-  // Draw the metaball shape to the main canvas, scaled up
-  ctx.save();
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(
-    offscreenCanvas,
-    bounds.minX,
-    bounds.minY,
-    width,
-    height,
-  );
-  ctx.restore();
-  
-  // Find and render stones along the metaball boundary
+  // Find and render stones along the metaball boundary (no background fill)
   renderMetaballBorder(ctx, fieldValues, bounds, isHostile, groupSeed);
 }
 
