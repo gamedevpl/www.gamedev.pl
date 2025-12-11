@@ -27,6 +27,9 @@ export const buildingTakeoverInteraction: InteractionDefinition<HumanEntity, Bui
   },
 
   perform: (source, target, context) => {
+    // Log the takeover event
+    console.log(`🏴 BUILDING TAKEOVER: Leader ${source.id} took over building ${target.id} (type: ${target.buildingType}) at time ${context.gameState.time.toFixed(2)}`);
+    
     // Transfer ownership
     target.ownerId = source.id;
 
