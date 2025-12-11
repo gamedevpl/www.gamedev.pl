@@ -10,6 +10,7 @@ import { Vector2D } from './utils/math-types';
 import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-types';
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
+import { SoilDepletionState } from './soil-depletion-types';
 
 /**
  * Describes which edges of a planting zone are connected to adjacent zones of the same tribe.
@@ -138,6 +139,7 @@ export interface GameWorldState {
     view: Record<string, Rect>;
   };
   ecosystem: EcosystemState;
+  soilDepletion: SoilDepletionState; // Tracks soil health across the world grid
   debugPanel: DebugPanelType;
   debugPanelScroll: Vector2D;
   isDraggingDebugPanel: boolean;

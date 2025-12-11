@@ -14,6 +14,7 @@ import { humanAIUpdate } from '../ai/human-ai-update';
 import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 import { buildingUpdate } from './buildings/building-update';
 import { BuildingEntity } from './buildings/building-types';
+import { applySoilWalkDepletion } from '../soil-depletion-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -68,6 +69,18 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
 
   // Reset forces for the next frame
   entity.forces = [];
+
+  // Apply soil depletion when humans are walking (moving with significant velocity)
+  if (entity.type === 'human' && vectorLength(entity.velocity) > 0.1) {
+    applySoilWalkDepletion(
+      updateContext.gameState.soilDepletion,
+      entity.position,
+      entity.id,
+      updateContext.gameState.time,
+      updateContext.gameState.mapDimensions.width,
+      updateContext.gameState.mapDimensions.height,
+    );
+  }
 
   // Specific entity type updates (e.g., physiological changes)
   if (entity.type === 'human') {

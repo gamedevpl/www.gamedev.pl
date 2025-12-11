@@ -32,6 +32,7 @@ import { renderGhostBuilding } from './render/render-building';
 import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
 import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
+import { renderDepletedSoil } from './render/render-soil';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -54,6 +55,9 @@ export function renderGame(
     renderGameOverScreen(ctx, gameState);
     return;
   }
+
+  // Render depleted soil patches (under entities)
+  renderDepletedSoil(ctx, gameState, viewportCenter, canvasDimensions);
 
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
 
