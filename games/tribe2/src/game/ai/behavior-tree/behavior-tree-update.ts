@@ -19,7 +19,10 @@ export function updateBehaviorTreeAI(
 ): void {
   if (human.aiBlackboard) {
     const lastAiUpdateTime: number = Blackboard.get(human.aiBlackboard, 'lastAiUpdateTime') ?? 0;
-    if (context.gameState.time - lastAiUpdateTime >= AI_UPDATE_INTERVAL) {
+    if (
+      context.gameState.time - lastAiUpdateTime + ((Math.random() - Math.random()) * AI_UPDATE_INTERVAL) / 10 >=
+      AI_UPDATE_INTERVAL
+    ) {
       behaviorTree.execute(human, context, human.aiBlackboard);
       Blackboard.set(human.aiBlackboard, 'lastAiUpdateTime', context.gameState.time);
     }

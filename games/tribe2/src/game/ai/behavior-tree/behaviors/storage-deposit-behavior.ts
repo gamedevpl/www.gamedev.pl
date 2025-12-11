@@ -43,9 +43,10 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
             (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
               if (
                 !isTribeRole(human, TribeRole.Gatherer, context.gameState) &&
-                !isTribeRole(human, TribeRole.Mover, context.gameState)
+                !isTribeRole(human, TribeRole.Mover, context.gameState) &&
+                !isTribeRole(human, TribeRole.Hunter, context.gameState)
               ) {
-                return [false, 'Not a Gatherer/Mover'];
+                return [false, 'Not a Gatherer/Mover/Hunter'];
               }
 
               // Check cooldown
