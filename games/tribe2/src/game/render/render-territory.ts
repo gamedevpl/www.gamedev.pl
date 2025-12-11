@@ -69,8 +69,137 @@ function calculateMetaballField(
 }
 
 /**
+ * Chain segments together to form continuous contours.
+ * Returns arrays of connected points forming closed or open paths.
+ */
+function chainSegments(segments: [Vector2D, Vector2D][]): Vector2D[][] {
+  if (segments.length === 0) return [];
+
+  const chains: Vector2D[][] = [];
+  const used = new Set<number>();
+  const tolerance = 1.0; // Distance tolerance for connecting points
+
+  const pointsEqual = (p1: Vector2D, p2: Vector2D) => {
+    const dx = Math.abs(p1.x - p2.x);
+    const dy = Math.abs(p1.y - p2.y);
+    return dx < tolerance && dy < tolerance;
+  };
+
+  while (used.size < segments.length) {
+    // Find an unused segment to start a new chain
+    let startIdx = -1;
+    for (let i = 0; i < segments.length; i++) {
+      if (!used.has(i)) {
+        startIdx = i;
+        break;
+      }
+    }
+    if (startIdx === -1) break;
+
+    const chain: Vector2D[] = [];
+
+    // Add first segment
+    used.add(startIdx);
+    chain.push(segments[startIdx][0]);
+    chain.push(segments[startIdx][1]);
+
+    // Try to extend the chain
+    let extended = true;
+    while (extended) {
+      extended = false;
+      const lastPoint = chain[chain.length - 1];
+
+      // Find a segment that connects to the last point
+      for (let i = 0; i < segments.length; i++) {
+        if (used.has(i)) continue;
+
+        const seg = segments[i];
+        if (pointsEqual(seg[0], lastPoint)) {
+          chain.push(seg[1]);
+          used.add(i);
+          extended = true;
+          break;
+        } else if (pointsEqual(seg[1], lastPoint)) {
+          chain.push(seg[0]);
+          used.add(i);
+          extended = true;
+          break;
+        }
+      }
+    }
+
+    // Also try to extend backward from the start
+    extended = true;
+    while (extended) {
+      extended = false;
+      const firstPoint = chain[0];
+
+      for (let i = 0; i < segments.length; i++) {
+        if (used.has(i)) continue;
+
+        const seg = segments[i];
+        if (pointsEqual(seg[1], firstPoint)) {
+          chain.unshift(seg[0]);
+          used.add(i);
+          extended = true;
+          break;
+        } else if (pointsEqual(seg[0], firstPoint)) {
+          chain.unshift(seg[1]);
+          used.add(i);
+          extended = true;
+          break;
+        }
+      }
+    }
+
+    if (chain.length > 0) {
+      chains.push(chain);
+    }
+  }
+
+  return chains;
+}
+
+/**
+ * Place border posts at regular intervals along a chain of points.
+ */
+function placePostsAlongChain(chain: Vector2D[], spacing: number): Vector2D[] {
+  if (chain.length < 2) return [];
+
+  const posts: Vector2D[] = [];
+  let accumulatedDistance = 0;
+  let distanceToNextPost = spacing / 2; // Start with half spacing for first post
+
+  for (let i = 0; i < chain.length - 1; i++) {
+    const p1 = chain[i];
+    const p2 = chain[i + 1];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+    if (segmentLength < 0.001) continue;
+
+    let distanceInSegment = distanceToNextPost - accumulatedDistance;
+
+    while (distanceInSegment <= segmentLength) {
+      const t = distanceInSegment / segmentLength;
+      posts.push({
+        x: p1.x + dx * t,
+        y: p1.y + dy * t,
+      });
+      distanceInSegment += spacing;
+    }
+
+    accumulatedDistance = (accumulatedDistance + segmentLength) % spacing;
+    distanceToNextPost = spacing - accumulatedDistance;
+  }
+
+  return posts;
+}
+
+/**
  * Generate contour points using marching squares algorithm.
- * Returns an array of points along the territory boundary.
+ * Returns an array of points along the territory boundary at regular intervals.
  */
 function generateMetaballContourPoints(
   territory: TribeTerritory,
@@ -209,30 +338,17 @@ function generateMetaballContourPoints(
     }
   }
 
-  // Convert segments to evenly spaced points along the contour
-  const points: Vector2D[] = [];
-  let accumulatedDistance = 0;
+  // Chain segments together to form continuous paths
+  const chains = chainSegments(segments);
 
-  for (const segment of segments) {
-    const [p1, p2] = segment;
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const segmentLength = Math.sqrt(dx * dx + dy * dy);
-
-    // Add points along this segment at regular intervals
-    let distanceAlongSegment = BORDER_POST_SPACING - accumulatedDistance;
-    while (distanceAlongSegment < segmentLength) {
-      const t = distanceAlongSegment / segmentLength;
-      points.push({
-        x: p1.x + dx * t,
-        y: p1.y + dy * t,
-      });
-      distanceAlongSegment += BORDER_POST_SPACING;
-    }
-    accumulatedDistance = (accumulatedDistance + segmentLength) % BORDER_POST_SPACING;
+  // Place posts at regular intervals along each chain
+  const allPosts: Vector2D[] = [];
+  for (const chain of chains) {
+    const posts = placePostsAlongChain(chain, BORDER_POST_SPACING);
+    allPosts.push(...posts);
   }
 
-  return points;
+  return allPosts;
 }
 
 /**

@@ -19,7 +19,8 @@ import { calculateWrappedDistance, getAveragePosition, getDirectionVectorOnTorus
 
 /**
  * Calculates the territory for a specific tribe.
- * Territory is based on buildings owned by the tribe and the tribe center.
+ * Territory is based on buildings owned by the tribe.
+ * No buildings = no territory border.
  */
 export function calculateTribeTerritory(
   leaderId: EntityId,
@@ -30,6 +31,11 @@ export function calculateTribeTerritory(
 
   // Get all buildings owned by this tribe
   const buildings = indexedState.search.building.byProperty('ownerId', leaderId);
+
+  // No buildings means no territory
+  if (buildings.length === 0) {
+    return undefined;
+  }
 
   // Get tribe members to calculate tribe center
   const tribeMembers = indexedState.search.human.byProperty('leaderId', leaderId);
@@ -48,24 +54,20 @@ export function calculateTribeTerritory(
     });
   }
 
-  // Calculate tribe center from buildings if available, otherwise from members
-  let territoryCenter: Vector2D;
-  if (buildings.length > 0) {
-    const buildingPositions = buildings.map((b) => b.position);
-    territoryCenter = getAveragePosition(buildingPositions);
-  } else {
-    const memberPositions = tribeMembers.map((m) => m.position);
-    territoryCenter = getAveragePosition(memberPositions);
-  }
+  // Calculate tribe center from buildings
+  const buildingPositions = buildings.map((b) => b.position);
+  const territoryCenter = getAveragePosition(buildingPositions);
 
-  // Add a circle at the tribe center
+  // Add a circle at the tribe center (based on number of buildings)
+  // More buildings = larger center radius
+  const centerRadius = Math.min(TERRITORY_CENTER_RADIUS, TERRITORY_BUILDING_RADIUS * (1 + buildings.length * 0.5));
   circles.push({
     center: { ...territoryCenter },
-    radius: TERRITORY_CENTER_RADIUS,
+    radius: centerRadius,
   });
 
   // Calculate bounding radius from center
-  let boundingRadius = TERRITORY_CENTER_RADIUS;
+  let boundingRadius = centerRadius;
   for (const circle of circles) {
     const distFromCenter = calculateWrappedDistance(
       territoryCenter,
