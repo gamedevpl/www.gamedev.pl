@@ -179,6 +179,7 @@ function renderMetaballGroup(
 
 /**
  * Finds edge pixels where the field crosses the threshold and renders stones along them.
+ * Handles disconnected regions separately to avoid connecting distant zones.
  */
 function renderMetaballBorder(
   ctx: CanvasRenderingContext2D,
@@ -215,17 +216,75 @@ function renderMetaballBorder(
     }
   }
   
-  // Sort edge points to form a continuous path (simple nearest-neighbor approach)
-  const sortedPoints = sortEdgePoints(edgePoints);
+  // Find connected regions of edge points
+  const regions = findConnectedRegions(edgePoints);
   
-  // Place stones at regular intervals along the edge
-  renderStonesAlongPath(ctx, sortedPoints, isHostile, seed);
+  // Render stones for each connected region separately
+  let regionSeed = seed;
+  for (const region of regions) {
+    // Sort points within each region to form a continuous path
+    const sortedPoints = sortEdgePointsInRegion(region);
+    
+    // Place stones at regular intervals along this region's edge
+    renderStonesAlongPath(ctx, sortedPoints, isHostile, regionSeed);
+    regionSeed += 1000; // Different seed for each region
+  }
 }
 
 /**
- * Sorts edge points to form a more continuous path using nearest-neighbor.
+ * Finds connected regions of edge points using a clustering approach.
+ * Points within MAX_NEIGHBOR_DIST of each other are considered connected.
  */
-function sortEdgePoints(points: Vector2D[]): Vector2D[] {
+function findConnectedRegions(points: Vector2D[]): Vector2D[][] {
+  if (points.length === 0) return [];
+  
+  const MAX_NEIGHBOR_DIST = FIELD_SAMPLE_STEP * 2; // Max distance to consider points as neighbors
+  const MAX_NEIGHBOR_DIST_SQ = MAX_NEIGHBOR_DIST * MAX_NEIGHBOR_DIST;
+  
+  const visited = new Set<number>();
+  const regions: Vector2D[][] = [];
+  
+  for (let i = 0; i < points.length; i++) {
+    if (visited.has(i)) continue;
+    
+    // Start a new region with flood-fill
+    const region: Vector2D[] = [];
+    const queue: number[] = [i];
+    
+    while (queue.length > 0) {
+      const idx = queue.shift()!;
+      if (visited.has(idx)) continue;
+      
+      visited.add(idx);
+      region.push(points[idx]);
+      
+      // Find all unvisited neighbors
+      for (let j = 0; j < points.length; j++) {
+        if (visited.has(j)) continue;
+        
+        const dx = points[j].x - points[idx].x;
+        const dy = points[j].y - points[idx].y;
+        const distSq = dx * dx + dy * dy;
+        
+        if (distSq <= MAX_NEIGHBOR_DIST_SQ) {
+          queue.push(j);
+        }
+      }
+    }
+    
+    if (region.length > 0) {
+      regions.push(region);
+    }
+  }
+  
+  return regions;
+}
+
+/**
+ * Sorts edge points within a single connected region to form a continuous path.
+ * Uses nearest-neighbor within the region only.
+ */
+function sortEdgePointsInRegion(points: Vector2D[]): Vector2D[] {
   if (points.length <= 1) return points;
   
   const sorted: Vector2D[] = [];
@@ -252,13 +311,7 @@ function sortEdgePoints(points: Vector2D[]): Vector2D[] {
       }
     }
     
-    // Only add if reasonably close (to handle disconnected regions)
-    if (nearestDist < FIELD_SAMPLE_STEP * FIELD_SAMPLE_STEP * 4) {
-      sorted.push(remaining.splice(nearestIndex, 1)[0]);
-    } else {
-      // Start a new segment - just continue with remaining points
-      sorted.push(remaining.shift()!);
-    }
+    sorted.push(remaining.splice(nearestIndex, 1)[0]);
   }
   
   return sorted;
