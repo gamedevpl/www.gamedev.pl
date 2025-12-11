@@ -20,6 +20,7 @@ import {
   startBuildingDestruction,
 } from '../utils/building-placement-utils';
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
+import { isSoilDepleted } from '../soil-depletion-update';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -133,7 +134,8 @@ export const determineHoveredAutopilotAction = (
       } else if (
         building.buildingType === 'plantingZone' &&
         player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
-        !isPositionOccupied(worldPos, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)
+        !isPositionOccupied(worldPos, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS) &&
+        !isSoilDepleted(gameState.soilDepletion, worldPos, gameState.mapDimensions.width, gameState.mapDimensions.height)
       ) {
         determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
       } else {
@@ -144,7 +146,8 @@ export const determineHoveredAutopilotAction = (
     // --- POSITION-BASED ACTIONS ---
     if (
       player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
-      (gameState.autopilotControls.isManuallyPlanting || isPositionInAnyPlantingZone(worldPos, player, gameState))
+      (gameState.autopilotControls.isManuallyPlanting || isPositionInAnyPlantingZone(worldPos, player, gameState)) &&
+      !isSoilDepleted(gameState.soilDepletion, worldPos, gameState.mapDimensions.width, gameState.mapDimensions.height)
     ) {
       determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
     } else {

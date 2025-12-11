@@ -123,9 +123,6 @@ export function renderDepletedSoil(
         sectorSet,
         maxGridX,
         maxGridY,
-        viewportCenter,
-        halfCanvasWidth,
-        halfCanvasHeight,
       );
     }
   }
@@ -191,13 +188,11 @@ function renderSector(
   sectorSet: Set<string>,
   maxGridX: number,
   maxGridY: number,
-  viewportCenter: Vector2D,
-  halfCanvasWidth: number,
-  halfCanvasHeight: number,
 ): void {
   // Convert world coordinates to screen coordinates (floor to avoid shaking)
-  const screenX = Math.floor(worldX - viewportCenter.x + halfCanvasWidth);
-  const screenY = Math.floor(worldY - viewportCenter.y + halfCanvasHeight);
+  // Note: The context is already transformed by the viewport center, so we use world coordinates directly.
+  const screenX = Math.floor(worldX);
+  const screenY = Math.floor(worldY);
   const size = SOIL_SECTOR_SIZE;
 
   // Calculate opacity based on depletion level
