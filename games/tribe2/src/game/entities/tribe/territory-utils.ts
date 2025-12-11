@@ -328,6 +328,12 @@ export function constrainWanderToTerritory(
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const directionToTarget = getDirectionVectorOnTorus(currentPosition, targetPosition, worldWidth, worldHeight);
 
+  // Pre-calculate magnitude to avoid division by zero
+  const magnitude = Math.sqrt(directionToTarget.x ** 2 + directionToTarget.y ** 2);
+  if (magnitude === 0) {
+    return currentPosition; // Target is at the same position
+  }
+
   // Binary search to find the furthest valid position along the direction
   let validPosition = currentPosition;
   const maxDistance = calculateWrappedDistance(currentPosition, targetPosition, worldWidth, worldHeight);
@@ -335,8 +341,8 @@ export function constrainWanderToTerritory(
 
   for (let d = step; d <= maxDistance; d += step) {
     const testPosition: Vector2D = {
-      x: ((currentPosition.x + directionToTarget.x * d / Math.sqrt(directionToTarget.x ** 2 + directionToTarget.y ** 2)) % worldWidth + worldWidth) % worldWidth,
-      y: ((currentPosition.y + directionToTarget.y * d / Math.sqrt(directionToTarget.x ** 2 + directionToTarget.y ** 2)) % worldHeight + worldHeight) % worldHeight,
+      x: ((currentPosition.x + (directionToTarget.x * d) / magnitude) % worldWidth + worldWidth) % worldWidth,
+      y: ((currentPosition.y + (directionToTarget.y * d) / magnitude) % worldHeight + worldHeight) % worldHeight,
     };
 
     if (isValidWanderPosition(testPosition, leaderId, gameState)) {

@@ -11,9 +11,6 @@ export const TERRITORY_CENTER_RADIUS = 200;
 /** Distance from territory border within which new buildings can be placed */
 export const TERRITORY_BORDER_PLACEMENT_DISTANCE = 50;
 
-/** How much territory expands when a building is placed near the border */
-export const TERRITORY_EXPANSION_PER_BUILDING = 30;
-
 /** Maximum distance a tribe member will wander from territory edge */
 export const TERRITORY_WANDER_DISTANCE = 100;
 
