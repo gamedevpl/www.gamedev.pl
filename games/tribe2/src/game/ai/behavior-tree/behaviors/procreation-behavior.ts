@@ -49,7 +49,7 @@ const findValidPartner = (
 // Configuration for the tribal task decorator
 const procreationTaskConfig: TribalTaskConfig = {
   taskType: 'procreation',
-  maxCapacity: 2,
+  maxCapacity: 5,
   getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, 'procreationPartner') ?? null,
 };
 
@@ -112,10 +112,10 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       const partnerId = Blackboard.get<EntityId>(blackboard, 'procreationPartner');
       const partner = partnerId && (context.gameState.entities.entities[partnerId] as HumanEntity | undefined);
       if (!partner) {
-        return NodeStatus.FAILURE;
+        return [NodeStatus.FAILURE, 'No partner found'];
       }
       if (partner.isPregnant) {
-        return NodeStatus.FAILURE;
+        return [NodeStatus.FAILURE, 'Partner is pregnant'];
       }
       const distance = calculateWrappedDistance(
         human.position,
@@ -124,7 +124,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
         context.gameState.mapDimensions.height,
       );
       if (distance < HUMAN_INTERACTION_PROXIMITY) {
-        return NodeStatus.SUCCESS;
+        return [NodeStatus.SUCCESS, 'Reached partner'];
       }
       human.activeAction = 'moving';
       human.target = partner.id;
@@ -135,7 +135,7 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
         context.gameState.mapDimensions.height,
       );
       human.direction = vectorNormalize(dirToTarget);
-      return NodeStatus.RUNNING;
+      return [NodeStatus.RUNNING, `${distance.toFixed(1)} units away`];
     }, 'Move Towards Partner'),
     procreationTaskConfig,
     'Tribal Move To Partner',
@@ -296,7 +296,11 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
           // Branch 2: If no immediate partner, find a distant one and move towards them
           new CooldownNode(
             BT_PROCREATION_SEARCH_COOLDOWN_HOURS,
-            new Sequence([locateDistantPartner, moveTowardsPartner], 'Seek Distant Partner Action', depth + 3),
+            new Sequence(
+              [locateDistantPartner, moveTowardsPartner, startProcreating],
+              'Seek Distant Partner Action',
+              depth + 3,
+            ),
             'Seek Distant Partner Cooldown',
             depth + 2,
           ),

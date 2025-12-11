@@ -19,6 +19,7 @@ import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
+import { createSoilDepletionState } from './soil-depletion-types';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -216,6 +217,7 @@ export function initWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
+    soilDepletion: createSoilDepletionState(),
     autosaveIntervalSeconds: 5,
     lastAutosaveTime: Date.now(),
     plantingZoneConnections: {},
@@ -349,6 +351,7 @@ export function initIntroWorld(): GameWorldState {
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
+    soilDepletion: createSoilDepletionState(),
     lastAutosaveTime: 0,
     plantingZoneConnections: {},
   };

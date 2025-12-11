@@ -8,6 +8,7 @@ import { isPositionOccupied } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
+import { getDepletedSectorsInArea } from '../soil-depletion-update';
 
 /**
  * Checks if a building of a given type can be placed at the specified position.
@@ -39,7 +40,22 @@ export function canPlaceBuilding(
     return false;
   }
 
-  // 2. Check for overlap with existing buildings (using rectangular collision if possible, or radius approximation)
+  // 2. For planting zones, check if soil is depleted
+  if (buildingType === BuildingType.PlantingZone) {
+    const depletedSectors = getDepletedSectorsInArea(
+      gameState.soilDepletion,
+      position,
+      dimensions.width,
+      dimensions.height,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    if (depletedSectors.length > 0) {
+      return false; // Cannot place planting zone on depleted soil
+    }
+  }
+
+  // 3. Check for overlap with existing buildings (using rectangular collision if possible, or radius approximation)
   // For now, we'll use the spatial index and radius check which is already efficient.
   // A more precise rectangular check could be added if needed.
   const indexedState = gameState as IndexedWorldState;

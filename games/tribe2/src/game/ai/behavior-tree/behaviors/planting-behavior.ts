@@ -27,6 +27,7 @@ import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
+import { isSoilDepleted } from '../../../soil-depletion-update';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 const PLANTING_ZONE_KEY = 'plantingZoneId';
@@ -69,6 +70,18 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
         return [NodeStatus.FAILURE, 'Planting spot is missing'];
+      }
+
+      // Check if soil is depleted - cannot plant on depleted soil
+      if (isSoilDepleted(
+        context.gameState.soilDepletion,
+        plantingSpot,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      )) {
+        Blackboard.delete(blackboard, BLACKBOARD_KEY);
+        Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
+        return [NodeStatus.FAILURE, 'Soil is depleted at planting spot'];
       }
 
       // Check if spot is occupied

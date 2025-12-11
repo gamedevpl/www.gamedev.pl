@@ -8,6 +8,7 @@ import { calculateWrappedDistance } from '../../utils/math-utils';
 import { getTribeCenter, isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../berry-bush-consts';
 import { Vector2D } from '../../utils/math-types';
+import { isSoilDepleted } from '../../soil-depletion-update';
 
 const TRIBE_BUSH_SEARCH_RADIUS = 500; // Radius to search for bushes near tribe center
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
@@ -464,6 +465,7 @@ export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldSta
 /**
  * Finds an optimal planting spot within the tribe's planting zones.
  * Returns null if no zones exist or all zones are full.
+ * Now considers soil depletion when selecting planting spots.
  */
 export function findOptimalPlantingZoneSpot(
   human: HumanEntity,
@@ -478,6 +480,7 @@ export function findOptimalPlantingZoneSpot(
 
   const worldWidth = gameState.mapDimensions.width;
   const worldHeight = gameState.mapDimensions.height;
+  const soilDepletion = gameState.soilDepletion;
 
   // Try each zone to find a valid planting spot
   for (const zone of zones) {
@@ -500,6 +503,11 @@ export function findOptimalPlantingZoneSpot(
         x: ((randomX % worldWidth) + worldWidth) % worldWidth,
         y: ((randomY % worldHeight) + worldHeight) % worldHeight,
       };
+
+      // Check if soil is depleted at this position
+      if (isSoilDepleted(soilDepletion, position, worldWidth, worldHeight)) {
+        continue; // Skip depleted soil
+      }
 
       // Check if this position is valid (not occupied)
       if (!isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)) {

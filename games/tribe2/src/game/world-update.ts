@@ -11,6 +11,7 @@ import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
 import { saveGame } from './persistence/persistence-utils';
 import { updateUI } from './ui/ui-utils.ts';
+import { updateSoilRecovery } from './soil-depletion-update';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -51,6 +52,15 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update ecosystem balancer
     updateEcosystemBalancer(indexedState);
+
+    // Update soil depletion recovery
+    updateSoilRecovery(
+      indexedState.soilDepletion,
+      indexedState.time,
+      deltaTime,
+      indexedState.mapDimensions.width,
+      indexedState.mapDimensions.height,
+    );
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);

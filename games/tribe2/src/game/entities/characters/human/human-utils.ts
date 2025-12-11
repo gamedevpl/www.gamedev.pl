@@ -7,8 +7,8 @@ import {
 } from '../../../human-consts.ts';
 import { HumanEntity } from './human-types';
 
-export function getEffectiveSpeed(human: HumanEntity): number {
-  // Calculate effective speed considering hunger, old age, and attack slowdowns
+export function getEffectiveSpeed(human: HumanEntity, terrainSpeedModifier: number = 1.0): number {
+  // Calculate effective speed considering hunger, old age, attack slowdowns, and terrain
   let effectiveSpeed = HUMAN_BASE_SPEED;
 
   // Apply hunger slowdown
@@ -25,6 +25,9 @@ export function getEffectiveSpeed(human: HumanEntity): number {
   if (human.movementSlowdown) {
     effectiveSpeed *= human.movementSlowdown.modifier;
   }
+
+  // Apply terrain speed modifier (e.g., faster on depleted paths)
+  effectiveSpeed *= terrainSpeedModifier;
 
   return effectiveSpeed;
 }
