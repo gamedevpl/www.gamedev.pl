@@ -38,17 +38,21 @@ export function initWorld(): GameWorldState {
   const centerX = MAP_WIDTH / 2;
   const centerY = MAP_HEIGHT / 2;
 
-  // Spawn player character (male) at center
+  // Spawn player character (male) at center - player is their own tribe leader
   const player = createHuman(entities, { x: centerX - 25, y: centerY }, initialTime, 'male', true);
+  player.leaderId = player.id; // Player is the leader of their tribe
+  player.tribeBadge = '👑';
 
-  // Spawn partner character (female) near the player
-  createHuman(
+  // Spawn partner character (female) near the player - they join the player's tribe
+  const partner = createHuman(
     entities,
     { x: centerX + 25, y: centerY },
     initialTime,
     'female',
     false, // isPlayer = false
   );
+  partner.leaderId = player.id; // Partner joins player's tribe
+  partner.tribeBadge = '👑';
 
   for (let i = 0; i < 5; i++) {
     const angle = (i / 5) * Math.PI * 2;
@@ -59,22 +63,27 @@ export function initWorld(): GameWorldState {
       y: centerY + Math.sin(angle) * radiusY,
     };
 
-    // Spawn second tribe
-    createHuman(
+    // Spawn other tribes - each pair forms a tribe with male as leader
+    const tribeBadges = ['🔥', '⭐', '🌙', '☀️', '🌿'];
+    const male = createHuman(
       entities,
       { x: spawnPosition.x, y: spawnPosition.y },
       initialTime,
       'male',
       false, // isPlayer = false
     );
+    male.leaderId = male.id; // Male is the leader
+    male.tribeBadge = tribeBadges[i];
 
-    createHuman(
+    const female = createHuman(
       entities,
       { x: spawnPosition.x + 50, y: spawnPosition.y },
       initialTime,
       'female',
       false, // isPlayer = false
     );
+    female.leaderId = male.id; // Female joins the tribe
+    female.tribeBadge = tribeBadges[i];
   }
 
   // Spawn a pairs of prey at random positions
