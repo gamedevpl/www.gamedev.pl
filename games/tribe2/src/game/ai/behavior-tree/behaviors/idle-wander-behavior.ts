@@ -43,12 +43,12 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntit
 
         // If the human has a tribe, constrain wandering to territory
         if (human.leaderId) {
-          // First check if the target is valid
-          if (!isValidWanderPosition(randomTarget, human.leaderId, gameState)) {
-            // Constrain to territory
-            wanderTarget = constrainWanderToTerritory(human.position, randomTarget, human.leaderId, gameState);
-          } else {
+          // Check if the random target is within valid territory bounds
+          if (isValidWanderPosition(randomTarget, human.leaderId, gameState)) {
             wanderTarget = randomTarget;
+          } else {
+            // Target is outside territory - constrain it to stay within bounds
+            wanderTarget = constrainWanderToTerritory(human.position, randomTarget, human.leaderId, gameState);
           }
         } else {
           // No tribe, can wander freely
@@ -84,6 +84,8 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntit
       }
 
       // At target or no target - idle
+      // Note: We preserve wanderTarget in blackboard so the human can resume
+      // walking to the same destination after being interrupted by higher priority behaviors
       human.activeAction = 'idle';
       human.direction = { x: 0, y: 0 };
       human.target = undefined;
