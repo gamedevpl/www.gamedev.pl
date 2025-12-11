@@ -303,6 +303,53 @@ export function getTerritoryBoundaryPoints(
 }
 
 /**
+ * Checks if a target position is within reasonable operating range for a tribe member.
+ * This allows gathering/hunting slightly outside territory but not too far.
+ * @param targetPosition The position to check
+ * @param leaderId The leader ID of the tribe
+ * @param gameState The current game state
+ * @param maxDistanceOutside Maximum distance outside territory edge (default: TERRITORY_WANDER_DISTANCE)
+ * @returns True if the target is within operating range
+ */
+export function isWithinOperatingRange(
+  targetPosition: Vector2D,
+  leaderId: EntityId,
+  gameState: GameWorldState,
+  maxDistanceOutside: number = TERRITORY_WANDER_DISTANCE,
+): boolean {
+  const territories = calculateAllTerritories(gameState);
+  const ownTerritory = territories.get(leaderId);
+
+  // If no territory (no buildings), allow operating anywhere
+  if (!ownTerritory) {
+    return true;
+  }
+
+  const checkResult = checkPositionInTerritory(targetPosition, ownTerritory, gameState);
+
+  // Inside territory is always valid
+  if (checkResult.isInsideTerritory) {
+    return true;
+  }
+
+  // Allow operating slightly outside territory
+  if (checkResult.distanceToEdge <= maxDistanceOutside) {
+    // But not if it's inside another tribe's territory
+    for (const [otherId, otherTerritory] of territories) {
+      if (otherId === leaderId) continue;
+
+      const otherCheck = checkPositionInTerritory(targetPosition, otherTerritory, gameState);
+      if (otherCheck.isInsideTerritory) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Constrains a wander target to be within territory bounds.
  * If the target is outside territory, returns a position on the territory edge
  * in the direction of the original target.

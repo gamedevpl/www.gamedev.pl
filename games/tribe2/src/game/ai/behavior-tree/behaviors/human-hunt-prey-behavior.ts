@@ -16,6 +16,7 @@ import { MAX_HUNTERS_PER_PREY } from '../../../entities/tribe/tribe-task-utils.t
 import { EntityId } from '../../../entities/entities-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
+import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
@@ -46,7 +47,11 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
               context.gameState,
               'prey',
               AI_HUNTING_FOOD_SEARCH_RADIUS,
-              () => {
+              (prey) => {
+                // Check if prey is within tribe's operating range (territory + buffer)
+                if (human.leaderId && !isWithinOperatingRange(prey.position, human.leaderId, context.gameState)) {
+                  return false;
+                }
                 // We rely on the decorator to check for task capacity later.
                 return true;
               },
