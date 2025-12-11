@@ -3,6 +3,7 @@
  * Adjacent planting zones belonging to the same tribe are visually joined
  * with smooth, organic edges using metaball field calculations.
  * Stone borders are rendered around the continuous metaball boundary.
+ * A subtle tint is applied to distinguish planting zones from regular grass.
  */
 
 import { BuildingEntity } from '../entities/buildings/building-types';
@@ -18,6 +19,10 @@ const METABALL_THRESHOLD = 1.0; // Field strength threshold for rendering
 const METABALL_PADDING = 20; // Extra padding around zones for smooth edges
 const FIELD_SAMPLE_STEP = 4; // Pixel step for field sampling (lower = higher quality, slower)
 const STONE_SPACING = 8; // Spacing between stones along the border
+
+// Fill color for planting zone area (subtle darker green tint to distinguish from grass)
+const ZONE_FILL_COLOR = 'rgba(34, 85, 34, 0.25)'; // Dark green, semi-transparent
+const ZONE_FILL_COLOR_HOSTILE = 'rgba(139, 50, 50, 0.25)'; // Reddish tint for hostile
 
 /**
  * Groups planting zones by their owner (tribe leader).
@@ -96,8 +101,7 @@ function getGroupBounds(
 
 /**
  * Renders a group of planting zones using the metaball technique.
- * Only renders the stone border around the continuous metaball boundary.
- * The fill/background is not rendered - only the border stones.
+ * Renders a subtle tinted fill and stone border around the metaball boundary.
  */
 function renderMetaballGroup(
   ctx: CanvasRenderingContext2D,
@@ -112,14 +116,21 @@ function renderMetaballGroup(
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
   
-  // Calculate field values for edge detection (no background rendering)
+  // Calculate field values for edge detection and fill rendering
   const canvasWidth = Math.ceil(width / FIELD_SAMPLE_STEP);
   const canvasHeight = Math.ceil(height / FIELD_SAMPLE_STEP);
   
   // Store field values for edge detection
   const fieldValues: number[][] = [];
+  const edgePoints: Vector2D[] = [];
+  
+  // Pre-allocate arrays for better performance
   for (let py = 0; py < canvasHeight; py++) {
-    fieldValues[py] = [];
+    fieldValues[py] = new Array(canvasWidth);
+  }
+  
+  // Sample the field at each pixel and collect edge points in a single pass
+  for (let py = 0; py < canvasHeight; py++) {
     for (let px = 0; px < canvasWidth; px++) {
       const worldX = bounds.minX + px * FIELD_SAMPLE_STEP;
       const worldY = bounds.minY + py * FIELD_SAMPLE_STEP;
@@ -129,41 +140,20 @@ function renderMetaballGroup(
     }
   }
   
-  // Find and render stones along the metaball boundary (no background fill)
-  renderMetaballBorder(ctx, fieldValues, bounds, isHostile, groupSeed);
-}
-
-/**
- * Finds edge pixels where the field crosses the threshold and renders stones along them.
- * Handles disconnected regions separately to avoid connecting distant zones.
- */
-function renderMetaballBorder(
-  ctx: CanvasRenderingContext2D,
-  fieldValues: number[][],
-  bounds: { minX: number; minY: number; maxX: number; maxY: number },
-  isHostile: boolean,
-  seed: number,
-): void {
-  const edgePoints: Vector2D[] = [];
+  // Render the subtle fill for the metaball area
+  renderMetaballFill(ctx, fieldValues, bounds, isHostile);
   
-  // Find edge pixels (where field crosses the threshold)
-  for (let py = 1; py < fieldValues.length - 1; py++) {
-    for (let px = 1; px < fieldValues[py].length - 1; px++) {
+  // Find edge points (where field crosses the threshold)
+  for (let py = 1; py < canvasHeight - 1; py++) {
+    for (let px = 1; px < canvasWidth - 1; px++) {
       const current = fieldValues[py][px];
       
-      // Check if this pixel is on the edge (inside but has outside neighbor)
       if (current >= METABALL_THRESHOLD) {
-        const neighbors = [
-          fieldValues[py - 1][px],     // top
-          fieldValues[py + 1][px],     // bottom
-          fieldValues[py][px - 1],     // left
-          fieldValues[py][px + 1],     // right
-        ];
-        
-        // If any neighbor is outside the threshold, this is an edge pixel
-        const isEdge = neighbors.some(n => n < METABALL_THRESHOLD);
-        
-        if (isEdge) {
+        // Check if any neighbor is outside the threshold (edge detection)
+        if (fieldValues[py - 1][px] < METABALL_THRESHOLD ||
+            fieldValues[py + 1][px] < METABALL_THRESHOLD ||
+            fieldValues[py][px - 1] < METABALL_THRESHOLD ||
+            fieldValues[py][px + 1] < METABALL_THRESHOLD) {
           const worldX = bounds.minX + px * FIELD_SAMPLE_STEP;
           const worldY = bounds.minY + py * FIELD_SAMPLE_STEP;
           edgePoints.push({ x: worldX, y: worldY });
@@ -172,38 +162,98 @@ function renderMetaballBorder(
     }
   }
   
-  // Find connected regions of edge points
+  // Find connected regions and render stones for each
   const regions = findConnectedRegions(edgePoints);
   
-  // Render stones for each connected region separately
-  let regionSeed = seed;
+  let regionSeed = groupSeed;
   for (const region of regions) {
-    // Sort points within each region to form a continuous path
     const sortedPoints = sortEdgePointsInRegion(region);
-    
-    // Place stones at regular intervals along this region's edge
     renderStonesAlongPath(ctx, sortedPoints, isHostile, regionSeed);
-    regionSeed += 1000; // Different seed for each region
+    regionSeed += 1000;
   }
+}
+
+/**
+ * Renders a subtle tinted fill for the metaball area.
+ */
+function renderMetaballFill(
+  ctx: CanvasRenderingContext2D,
+  fieldValues: number[][],
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  isHostile: boolean,
+): void {
+  const fillColor = isHostile ? ZONE_FILL_COLOR_HOSTILE : ZONE_FILL_COLOR;
+  
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  
+  // Draw filled rectangles for pixels inside the threshold
+  for (let py = 0; py < fieldValues.length; py++) {
+    for (let px = 0; px < fieldValues[py].length; px++) {
+      if (fieldValues[py][px] >= METABALL_THRESHOLD) {
+        const worldX = bounds.minX + px * FIELD_SAMPLE_STEP;
+        const worldY = bounds.minY + py * FIELD_SAMPLE_STEP;
+        ctx.rect(worldX, worldY, FIELD_SAMPLE_STEP, FIELD_SAMPLE_STEP);
+      }
+    }
+  }
+  
+  ctx.fill();
+  ctx.restore();
 }
 
 /**
  * Finds connected regions of edge points using a clustering approach.
  * Points within MAX_NEIGHBOR_DIST of each other are considered connected.
+ * Optimized with spatial grid for better performance.
  */
 function findConnectedRegions(points: Vector2D[]): Vector2D[][] {
   if (points.length === 0) return [];
   
-  const MAX_NEIGHBOR_DIST = FIELD_SAMPLE_STEP * 2; // Max distance to consider points as neighbors
-  const MAX_NEIGHBOR_DIST_SQ = MAX_NEIGHBOR_DIST * MAX_NEIGHBOR_DIST;
+  const MAX_NEIGHBOR_DIST = FIELD_SAMPLE_STEP * 2;
+  const CELL_SIZE = MAX_NEIGHBOR_DIST;
+  
+  // Build spatial grid for O(1) neighbor lookups
+  const grid = new Map<string, number[]>();
+  
+  function getCellKey(x: number, y: number): string {
+    const cx = Math.floor(x / CELL_SIZE);
+    const cy = Math.floor(y / CELL_SIZE);
+    return `${cx},${cy}`;
+  }
+  
+  // Populate grid
+  for (let i = 0; i < points.length; i++) {
+    const key = getCellKey(points[i].x, points[i].y);
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key)!.push(i);
+  }
+  
+  // Get neighbors from adjacent cells
+  function getNeighborCandidates(x: number, y: number): number[] {
+    const candidates: number[] = [];
+    const cx = Math.floor(x / CELL_SIZE);
+    const cy = Math.floor(y / CELL_SIZE);
+    
+    // Check 3x3 grid of cells
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = `${cx + dx},${cy + dy}`;
+        const cell = grid.get(key);
+        if (cell) candidates.push(...cell);
+      }
+    }
+    return candidates;
+  }
   
   const visited = new Set<number>();
   const regions: Vector2D[][] = [];
+  const MAX_NEIGHBOR_DIST_SQ = MAX_NEIGHBOR_DIST * MAX_NEIGHBOR_DIST;
   
   for (let i = 0; i < points.length; i++) {
     if (visited.has(i)) continue;
     
-    // Start a new region with flood-fill
     const region: Vector2D[] = [];
     const queue: number[] = [i];
     
@@ -214,8 +264,9 @@ function findConnectedRegions(points: Vector2D[]): Vector2D[][] {
       visited.add(idx);
       region.push(points[idx]);
       
-      // Find all unvisited neighbors
-      for (let j = 0; j < points.length; j++) {
+      // Use spatial grid for efficient neighbor lookup
+      const candidates = getNeighborCandidates(points[idx].x, points[idx].y);
+      for (const j of candidates) {
         if (visited.has(j)) continue;
         
         const dx = points[j].x - points[idx].x;
