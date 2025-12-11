@@ -9,7 +9,10 @@ import { calculateAllTerritories } from '../entities/tribe/territory-utils';
 import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { TribeTerritory } from '../entities/tribe/territory-types';
+import { TerritoryCircle } from '../entities/tribe/territory-types';
+import { IndexType } from '../world-index/world-index-types';
+import { indexItems } from '../world-index/world-index-utils';
+import { calculateWrappedDistance, vectorSubtract } from '../utils/math-utils';
 
 /** Size of the border post flag */
 const BORDER_POST_FLAG_SIZE = 8;
@@ -60,22 +63,22 @@ function drawBorderPost(ctx: CanvasRenderingContext2D, x: number, y: number, col
  * Since the Territory type isn't fully defined in snippets, we use a generic radius check strategy
  * common to this genre.
  */
-function getOwnerOfPoint(x: number, y: number, territories: Map<EntityId, TribeTerritory>): EntityId | null {
-  // Iterate all territories to see who owns this point
-  // In a real optimized engine, this would use a QuadTree or Spatial Hash.
-  // For standard Settlers map sizes, a linear check over a few active tribes is fine.
-
-  for (const [leaderId, territory] of territories.entries()) {
-    // Assuming 'territory' contains a collection of circles/influence sources
-    // If the calculateAllTerritories returns pre-computed polygons, use "point in polygon".
-    // Here we assume the S3 "influence circles" model:
-    for (const circle of territory.circles) {
-      const dx = x - circle.center.x;
-      const dy = y - circle.center.y;
-      // Standard squared distance check
-      if (dx * dx + dy * dy <= circle.radius * circle.radius) {
-        return leaderId;
-      }
+function getOwnerOfPoint(
+  x: number,
+  y: number,
+  worldWidth: number,
+  worldHeight: number,
+  index: IndexType<{
+    circle: TerritoryCircle;
+    leaderId: EntityId;
+  }>,
+): EntityId | null {
+  const rects = index.byRect({ left: x, top: y, right: x, bottom: y });
+  for (const rect of rects) {
+    const { circle, leaderId } = rect;
+    const distance = calculateWrappedDistance({ x, y }, circle.center, worldWidth, worldHeight);
+    if (distance <= circle.radius) {
+      return leaderId;
     }
   }
   return null;
@@ -137,17 +140,35 @@ export function renderAllTerritories(
   const endY =
     Math.floor((viewportCenter.y + canvasDimensions.height / 2 + padding) / TERRITORY_GRID_STEP) * TERRITORY_GRID_STEP;
 
+  // 3. Index territories for quick lookup
+  const index = indexItems(
+    [...territories.entries()].flatMap(([leaderId, territory]) =>
+      territory.circles.map((circle) => ({
+        position: vectorSubtract(circle.center, { x: circle.radius, y: circle.radius }),
+        width: circle.radius * 2,
+        height: circle.radius * 2,
+        circle,
+        leaderId,
+      })),
+    ),
+  );
+
   // 3. Marching Grid Algorithm (Edge Detection)
   // We check the owner of the current point, and compare it to the Right and Down neighbors.
 
   for (let y = startY; y <= endY; y += TERRITORY_GRID_STEP) {
     for (let x = startX; x <= endX; x += TERRITORY_GRID_STEP) {
-      const currentOwner = getOwnerOfPoint(x, y, territories);
+      const currentOwner = getOwnerOfPoint(x, y, gameState.mapDimensions.width, gameState.mapDimensions.height, index);
 
       // -- Check Horizontal Edge (Current vs Right) --
       const nextX = x + TERRITORY_GRID_STEP;
-      const rightOwner = getOwnerOfPoint(nextX, y, territories);
-
+      const rightOwner = getOwnerOfPoint(
+        nextX,
+        y,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+        index,
+      );
       if (currentOwner !== rightOwner) {
         // If one is null and other is valid, draw the valid one's border
         // If both are valid (War border), we can draw one or both. Here we draw the one that "starts" the edge relative to scan direction
@@ -166,7 +187,7 @@ export function renderAllTerritories(
 
       // -- Check Vertical Edge (Current vs Down) --
       const nextY = y + TERRITORY_GRID_STEP;
-      const downOwner = getOwnerOfPoint(x, nextY, territories);
+      const downOwner = getOwnerOfPoint(x, nextY, gameState.mapDimensions.width, gameState.mapDimensions.height, index);
 
       if (currentOwner !== downOwner) {
         const ownerToDraw = currentOwner || downOwner;
