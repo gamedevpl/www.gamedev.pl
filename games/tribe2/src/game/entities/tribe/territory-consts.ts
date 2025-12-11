@@ -18,13 +18,7 @@ export const TERRITORY_WANDER_DISTANCE = 100;
 export const TERRITORY_MINIMUM_GAP = 20;
 
 /** Alpha value for territory border rendering */
-export const TERRITORY_BORDER_ALPHA = 0.5;
-
-/** Line width for territory border */
-export const TERRITORY_BORDER_LINE_WIDTH = 3;
-
-/** Dash pattern for territory border [dash length, gap length] */
-export const TERRITORY_BORDER_DASH_PATTERN = [8, 4];
+export const TERRITORY_BORDER_ALPHA = 0.8;
 
 /** Colors for different tribes' territories (indexed by tribe order) */
 export const TERRITORY_COLORS = [
@@ -37,6 +31,3 @@ export const TERRITORY_COLORS = [
   '#FFEB3B', // Yellow
   '#795548', // Brown
 ];
-
-/** Pulse speed for territory border animation */
-export const TERRITORY_BORDER_PULSE_SPEED = 2;

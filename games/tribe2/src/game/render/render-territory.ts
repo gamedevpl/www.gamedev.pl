@@ -1,6 +1,6 @@
 /**
  * Rendering functions for tribe territory borders.
- * Provides subtle visual indication of tribe boundaries using metaballs approach.
+ * Visualizes territory boundaries using border posts/flags like in Settlers 3.
  */
 
 import { GameWorldState } from '../world-types';
@@ -9,11 +9,7 @@ import { calculateAllTerritories } from '../entities/tribe/territory-utils';
 import { TribeTerritory, TerritoryCircle } from '../entities/tribe/territory-types';
 import {
   TERRITORY_BORDER_ALPHA,
-  TERRITORY_BORDER_LINE_WIDTH,
-  TERRITORY_BORDER_DASH_PATTERN,
-  TERRITORY_BORDER_PULSE_SPEED,
   TERRITORY_COLORS,
-  TERRITORY_BUILDING_RADIUS,
 } from '../entities/tribe/territory-consts';
 import { EntityId } from '../entities/entities-types';
 
@@ -21,7 +17,16 @@ import { EntityId } from '../entities/entities-types';
 const METABALL_THRESHOLD = 1.0;
 
 /** Resolution for marching squares grid (smaller = smoother but slower) */
-const MARCHING_SQUARES_RESOLUTION = 15;
+const MARCHING_SQUARES_RESOLUTION = 20;
+
+/** Distance between border posts along the contour */
+const BORDER_POST_SPACING = 40;
+
+/** Size of the border post flag */
+const BORDER_POST_FLAG_SIZE = 8;
+
+/** Height of the border post pole */
+const BORDER_POST_POLE_HEIGHT = 12;
 
 /**
  * Calculate the metaball field value at a given point.
@@ -65,13 +70,13 @@ function calculateMetaballField(
 
 /**
  * Generate contour points using marching squares algorithm.
- * Returns an array of line segments that form the territory boundary.
+ * Returns an array of points along the territory boundary.
  */
-function generateMetaballContour(
+function generateMetaballContourPoints(
   territory: TribeTerritory,
   worldWidth: number,
   worldHeight: number,
-): Vector2D[][] {
+): Vector2D[] {
   const circles = territory.circles;
   if (circles.length === 0) return [];
 
@@ -105,8 +110,8 @@ function generateMetaballContour(
     }
   }
 
-  // Marching squares to find contour
-  const segments: Vector2D[][] = [];
+  // Marching squares to find contour segments
+  const segments: [Vector2D, Vector2D][] = [];
 
   for (let j = 0; j < rows - 1; j++) {
     for (let i = 0; i < cols - 1; i++) {
@@ -204,67 +209,96 @@ function generateMetaballContour(
     }
   }
 
-  return segments;
+  // Convert segments to evenly spaced points along the contour
+  const points: Vector2D[] = [];
+  let accumulatedDistance = 0;
+
+  for (const segment of segments) {
+    const [p1, p2] = segment;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+    // Add points along this segment at regular intervals
+    let distanceAlongSegment = BORDER_POST_SPACING - accumulatedDistance;
+    while (distanceAlongSegment < segmentLength) {
+      const t = distanceAlongSegment / segmentLength;
+      points.push({
+        x: p1.x + dx * t,
+        y: p1.y + dy * t,
+      });
+      distanceAlongSegment += BORDER_POST_SPACING;
+    }
+    accumulatedDistance = (accumulatedDistance + segmentLength) % BORDER_POST_SPACING;
+  }
+
+  return points;
 }
 
 /**
- * Renders the territory border for a single tribe using metaballs approach.
+ * Draw a single border post (flag on a pole) at the given position.
+ */
+function drawBorderPost(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+  tribeBadge: string,
+): void {
+  // Draw the pole
+  ctx.strokeStyle = '#5D4037'; // Brown pole
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - BORDER_POST_POLE_HEIGHT);
+  ctx.stroke();
+
+  // Draw the flag (triangular pennant)
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - BORDER_POST_POLE_HEIGHT);
+  ctx.lineTo(x + BORDER_POST_FLAG_SIZE, y - BORDER_POST_POLE_HEIGHT + BORDER_POST_FLAG_SIZE / 2);
+  ctx.lineTo(x, y - BORDER_POST_POLE_HEIGHT + BORDER_POST_FLAG_SIZE);
+  ctx.closePath();
+  ctx.fill();
+
+  // Draw badge/emoji on flag if provided
+  if (tribeBadge) {
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(tribeBadge, x + BORDER_POST_FLAG_SIZE / 2, y - BORDER_POST_POLE_HEIGHT + BORDER_POST_FLAG_SIZE / 2);
+  }
+}
+
+/**
+ * Renders the territory border for a single tribe using border posts.
  * Note: The canvas context is already translated to world coordinates when this is called.
  */
 function renderSingleTerritoryBorder(
   ctx: CanvasRenderingContext2D,
   territory: TribeTerritory,
   gameState: GameWorldState,
-  time: number,
-  isPlayerTribe: boolean,
+  _time: number,
+  _isPlayerTribe: boolean,
+  tribeBadge: string,
 ): void {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
   if (territory.circles.length === 0) return;
 
-  // Calculate pulsing alpha
-  const pulse = (Math.sin(time * TERRITORY_BORDER_PULSE_SPEED) + 1) / 2;
-  const alpha = TERRITORY_BORDER_ALPHA * (0.5 + pulse * 0.5);
-
   ctx.save();
+  ctx.globalAlpha = TERRITORY_BORDER_ALPHA;
 
-  // Generate metaball contour
-  const segments = generateMetaballContour(territory, worldWidth, worldHeight);
+  // Generate contour points for border posts
+  const borderPoints = generateMetaballContourPoints(territory, worldWidth, worldHeight);
 
-  // Set styling for border
-  ctx.strokeStyle = territory.color;
-  ctx.globalAlpha = alpha;
-  ctx.lineWidth = isPlayerTribe ? TERRITORY_BORDER_LINE_WIDTH * 1.5 : TERRITORY_BORDER_LINE_WIDTH;
-  ctx.setLineDash(TERRITORY_BORDER_DASH_PATTERN);
-
-  // Draw the contour segments with world wrapping
-  for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
-    for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
-      ctx.beginPath();
-      for (const segment of segments) {
-        ctx.moveTo(segment[0].x + dx, segment[0].y + dy);
-        ctx.lineTo(segment[1].x + dx, segment[1].y + dy);
-      }
-      ctx.stroke();
-    }
-  }
-
-  // Draw subtle fill using a different approach - sample points and fill
-  const fillAlpha = alpha * 0.1;
-  ctx.globalAlpha = fillAlpha;
-  ctx.fillStyle = territory.color;
-
-  // Create a path from the contour for filling
-  // We'll use a simplified approach: draw filled circles at each metaball center
-  // but with composite operation to create merged effect
-  ctx.globalCompositeOperation = 'source-over';
-
-  for (const circle of territory.circles) {
+  // Draw border posts at each point with world wrapping
+  for (const point of borderPoints) {
     for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
       for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
-        ctx.beginPath();
-        ctx.arc(circle.center.x + dx, circle.center.y + dy, circle.radius, 0, Math.PI * 2);
-        ctx.fill();
+        drawBorderPost(ctx, point.x + dx, point.y + dy, territory.color, tribeBadge);
       }
     }
   }
@@ -287,6 +321,17 @@ export function renderAllTerritories(
 ): void {
   const territories = calculateAllTerritories(gameState);
 
+  // Get tribe badges from human entities
+  const tribeBadges = new Map<EntityId, string>();
+  for (const entity of Object.values(gameState.entities.entities)) {
+    if (entity.type === 'human') {
+      const human = entity as { leaderId?: EntityId; tribeBadge?: string };
+      if (human.leaderId && human.tribeBadge) {
+        tribeBadges.set(human.leaderId, human.tribeBadge);
+      }
+    }
+  }
+
   // Sort territories so player's tribe is rendered last (on top)
   const sortedTerritories = Array.from(territories.entries()).sort(([idA], [idB]) => {
     if (idA === playerLeaderId) return 1;
@@ -301,12 +346,15 @@ export function renderAllTerritories(
     const tribeColorIndex = isPlayerTribe ? 0 : colorIndex++;
     territory.color = TERRITORY_COLORS[tribeColorIndex % TERRITORY_COLORS.length];
 
+    const badge = tribeBadges.get(leaderId) || '';
+
     renderSingleTerritoryBorder(
       ctx,
       territory,
       gameState,
       time,
       isPlayerTribe,
+      badge,
     );
   }
 }
@@ -317,35 +365,13 @@ export function renderAllTerritories(
  * Note: The canvas context should already be translated to world coordinates.
  */
 export function renderTerritoryExpansionPreview(
-  ctx: CanvasRenderingContext2D,
-  position: Vector2D,
-  gameState: GameWorldState,
+  _ctx: CanvasRenderingContext2D,
+  _position: Vector2D,
+  _gameState: GameWorldState,
   _viewportCenter: Vector2D,
   _canvasDimensions: { width: number; height: number },
-  isValid: boolean,
+  _isValid: boolean,
 ): void {
-  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-
-  ctx.save();
-
-  // Set styling for preview
-  ctx.strokeStyle = isValid ? '#4CAF50' : '#F44336';
-  ctx.globalAlpha = 0.4;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 4]);
-
-  // Handle world wrapping
-  for (let dx = -worldWidth; dx <= worldWidth; dx += worldWidth) {
-    for (let dy = -worldHeight; dy <= worldHeight; dy += worldHeight) {
-      const wrappedX = position.x + dx;
-      const wrappedY = position.y + dy;
-
-      // Draw the expansion preview circle (in world coordinates)
-      ctx.beginPath();
-      ctx.arc(wrappedX, wrappedY, TERRITORY_BUILDING_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
+  // No longer showing the building radius preview circle
+  // Territory expansion is handled by the metaball field automatically
 }
