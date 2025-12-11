@@ -4,7 +4,7 @@
  */
 
 // Grid configuration - soil is tracked in a grid of sectors
-export const SOIL_SECTOR_SIZE = 50; // Size of each soil sector in pixels
+export const SOIL_SECTOR_SIZE = 16; // Size of each soil sector in pixels (smaller for finer detail)
 
 // Depletion thresholds
 export const SOIL_HEALTH_MAX = 100; // Maximum soil health
@@ -12,9 +12,9 @@ export const SOIL_HEALTH_DEPLETED_THRESHOLD = 20; // Below this, soil is conside
 export const SOIL_HEALTH_MIN = 0; // Minimum soil health
 
 // Depletion rates (per game hour)
-export const SOIL_DEPLETION_PER_BUSH_PLANT = 25; // Soil health lost when a bush is planted
-export const SOIL_DEPLETION_PER_WALK = 5; // Soil health lost per walk step (accumulated)
-export const SOIL_WALK_DEPLETION_COOLDOWN_HOURS = 0.02; // Cooldown before same entity can deplete same sector again
+export const SOIL_DEPLETION_PER_BUSH_PLANT = 15; // Soil health lost when a bush is planted
+export const SOIL_DEPLETION_PER_WALK = 0.3; // Soil health lost per walk step (reduced for more natural progression)
+export const SOIL_WALK_DEPLETION_COOLDOWN_HOURS = 0.1; // Cooldown before same entity can deplete same sector again
 
 // Recovery rates (per game hour)
 export const SOIL_RECOVERY_RATE_BASE = 0.5; // Base recovery rate when not in use
@@ -23,5 +23,9 @@ export const SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS = 2; // Time without activit
 
 // Visual rendering
 export const SOIL_DEPLETED_COLOR = '#8B7355'; // Brown/tan color for depleted soil
-export const SOIL_DEPLETED_OPACITY_MAX = 0.8; // Maximum opacity for fully depleted soil
+export const SOIL_DEPLETED_OPACITY_MAX = 0.7; // Maximum opacity for fully depleted soil
 export const SOIL_DEPLETED_RENDER_THRESHOLD = 80; // Start showing depletion visual below this health
+
+// Metaball rendering settings
+export const METABALL_THRESHOLD = 1.0; // Threshold for metaball field to be considered "inside"
+export const METABALL_RENDER_RESOLUTION = 4; // Pixel resolution for metaball rendering (lower = more detail but slower)
