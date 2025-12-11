@@ -161,53 +161,123 @@ function chainSegments(segments: [Vector2D, Vector2D][]): Vector2D[][] {
 }
 
 /**
- * Place border posts at regular intervals along a chain of points.
+ * Calculate the total length of a chain of points.
  */
-function placePostsAlongChain(chain: Vector2D[], spacing: number): Vector2D[] {
-  if (chain.length < 2) return [];
+function calculateChainLength(chain: Vector2D[]): number {
+  let totalLength = 0;
+  for (let i = 0; i < chain.length - 1; i++) {
+    const dx = chain[i + 1].x - chain[i].x;
+    const dy = chain[i + 1].y - chain[i].y;
+    totalLength += Math.sqrt(dx * dx + dy * dy);
+  }
+  return totalLength;
+}
 
-  const posts: Vector2D[] = [];
+/**
+ * Get a point at a specific distance along a chain.
+ */
+function getPointAtDistance(chain: Vector2D[], targetDistance: number): Vector2D | null {
   let accumulatedDistance = 0;
-  let distanceToNextPost = spacing / 2; // Start with half spacing for first post
-
+  
   for (let i = 0; i < chain.length - 1; i++) {
     const p1 = chain[i];
     const p2 = chain[i + 1];
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     const segmentLength = Math.sqrt(dx * dx + dy * dy);
-
+    
     if (segmentLength < 0.001) continue;
-
-    let distanceInSegment = distanceToNextPost - accumulatedDistance;
-
-    while (distanceInSegment <= segmentLength) {
-      const t = distanceInSegment / segmentLength;
-      posts.push({
+    
+    if (accumulatedDistance + segmentLength >= targetDistance) {
+      // The target point is within this segment
+      const distanceIntoSegment = targetDistance - accumulatedDistance;
+      const t = distanceIntoSegment / segmentLength;
+      return {
         x: p1.x + dx * t,
         y: p1.y + dy * t,
-      });
-      distanceInSegment += spacing;
+      };
     }
-
-    accumulatedDistance = (accumulatedDistance + segmentLength) % spacing;
-    distanceToNextPost = spacing - accumulatedDistance;
+    
+    accumulatedDistance += segmentLength;
   }
+  
+  return null;
+}
 
+/**
+ * Place border posts at exactly equal intervals along a chain of points.
+ */
+function placePostsAlongChain(chain: Vector2D[], spacing: number): Vector2D[] {
+  if (chain.length < 2) return [];
+  
+  const totalLength = calculateChainLength(chain);
+  if (totalLength < spacing) return [];
+  
+  // Calculate number of posts that will fit with equal spacing
+  const numPosts = Math.floor(totalLength / spacing);
+  if (numPosts === 0) return [];
+  
+  // Calculate the actual spacing to ensure equal distribution
+  const actualSpacing = totalLength / numPosts;
+  
+  const posts: Vector2D[] = [];
+  
+  // Place posts at equal intervals, starting at half spacing
+  for (let i = 0; i < numPosts; i++) {
+    const distance = (i + 0.5) * actualSpacing;
+    const point = getPointAtDistance(chain, distance);
+    if (point) {
+      posts.push(point);
+    }
+  }
+  
   return posts;
+}
+
+/**
+ * Calculate the metaball field value at a given point for a specific tribe,
+ * subtracting the influence of other tribes to create tangent boundaries.
+ */
+function calculateNetMetaballField(
+  x: number,
+  y: number,
+  ownCircles: TerritoryCircle[],
+  otherCircles: TerritoryCircle[],
+  worldWidth: number,
+  worldHeight: number,
+): number {
+  // Calculate own territory field
+  const ownField = calculateMetaballField(x, y, ownCircles, worldWidth, worldHeight);
+  
+  // Calculate other territories' field
+  const otherField = calculateMetaballField(x, y, otherCircles, worldWidth, worldHeight);
+  
+  // The net field is own field minus other field
+  // This creates a boundary where the two fields are equal
+  return ownField - otherField;
 }
 
 /**
  * Generate contour points using marching squares algorithm.
  * Returns an array of points along the territory boundary at regular intervals.
+ * Takes into account other territories to create tangent boundaries.
  */
 function generateMetaballContourPoints(
   territory: TribeTerritory,
+  allTerritories: Map<EntityId, TribeTerritory>,
   worldWidth: number,
   worldHeight: number,
 ): Vector2D[] {
   const circles = territory.circles;
   if (circles.length === 0) return [];
+
+  // Collect circles from other territories
+  const otherCircles: TerritoryCircle[] = [];
+  for (const [leaderId, otherTerritory] of allTerritories) {
+    if (leaderId !== territory.leaderId) {
+      otherCircles.push(...otherTerritory.circles);
+    }
+  }
 
   // Calculate bounding box with some padding
   let minX = Infinity,
@@ -229,13 +299,14 @@ function generateMetaballContourPoints(
   const rows = Math.ceil(height / cellSize) + 1;
 
   // Sample the field at grid points
+  // Use net field (own - others) so territories push each other out
   const field: number[][] = [];
   for (let j = 0; j < rows; j++) {
     field[j] = [];
     for (let i = 0; i < cols; i++) {
       const x = minX + i * cellSize;
       const y = minY + j * cellSize;
-      field[j][i] = calculateMetaballField(x, y, circles, worldWidth, worldHeight);
+      field[j][i] = calculateNetMetaballField(x, y, circles, otherCircles, worldWidth, worldHeight);
     }
   }
 
@@ -395,6 +466,7 @@ function drawBorderPost(
 function renderSingleTerritoryBorder(
   ctx: CanvasRenderingContext2D,
   territory: TribeTerritory,
+  allTerritories: Map<EntityId, TribeTerritory>,
   gameState: GameWorldState,
   _time: number,
   _isPlayerTribe: boolean,
@@ -407,8 +479,8 @@ function renderSingleTerritoryBorder(
   ctx.save();
   ctx.globalAlpha = TERRITORY_BORDER_ALPHA;
 
-  // Generate contour points for border posts
-  const borderPoints = generateMetaballContourPoints(territory, worldWidth, worldHeight);
+  // Generate contour points for border posts (with other territories for tangent boundaries)
+  const borderPoints = generateMetaballContourPoints(territory, allTerritories, worldWidth, worldHeight);
 
   // Draw border posts at each point with world wrapping
   for (const point of borderPoints) {
@@ -467,6 +539,7 @@ export function renderAllTerritories(
     renderSingleTerritoryBorder(
       ctx,
       territory,
+      territories,
       gameState,
       time,
       isPlayerTribe,
