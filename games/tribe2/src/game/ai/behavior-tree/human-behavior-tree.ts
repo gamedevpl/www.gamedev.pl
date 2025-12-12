@@ -45,6 +45,7 @@ import {
   createRemoveEnemyBuildingBehavior,
   createTribeRoleAssignmentBehavior,
 } from './behaviors';
+import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
 /**
@@ -139,6 +140,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
       createStorageRetrieveBehavior(2),
+
+      // --- TRIBE SPLIT GATHERING ---
+      createTribeSplitGatherBehavior(2),
 
       // --- SOCIAL & REPRODUCTION (PROCREATE) ---
       new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
