@@ -19,26 +19,28 @@ import { TribeSplitPhase, TribeSplitStrategy, TribeSplitState } from '../../../e
 import { calculateWrappedDistance } from '../../../utils/math-utils.ts';
 import { Blackboard, BlackboardData } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types.ts';
+import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils.ts';
+import { GameWorldState } from '../../../world-types.ts';
 
-// Blackboard keys for the tribe split state
-const SPLIT_STATE_STRATEGY_KEY = 'tribeSplit_strategy';
-const SPLIT_STATE_PHASE_KEY = 'tribeSplit_phase';
-const SPLIT_STATE_TARGET_X_KEY = 'tribeSplit_targetX';
-const SPLIT_STATE_TARGET_Y_KEY = 'tribeSplit_targetY';
-const SPLIT_STATE_START_TIME_KEY = 'tribeSplit_startTime';
-const SPLIT_STATE_FAMILY_IDS_KEY = 'tribeSplit_familyIds';
-const SPLIT_STATE_BUILDING_ID_KEY = 'tribeSplit_buildingId';
+// Blackboard keys for the tribe split state (stored on tribe leader's blackboard)
+// Key format: tribeSplit_{patriarchId}_{field}
+function getSplitStateKey(patriarchId: EntityId, field: string): string {
+  return `tribeSplit_${patriarchId}_${field}`;
+}
 
 /**
- * Helper to get split state from blackboard
+ * Helper to get split state from leader's blackboard for a specific patriarch
  */
-function getSplitStateFromBlackboard(blackboard: BlackboardData): TribeSplitState | null {
-  const strategy = Blackboard.get<string>(blackboard, SPLIT_STATE_STRATEGY_KEY);
-  const phase = Blackboard.get<string>(blackboard, SPLIT_STATE_PHASE_KEY);
-  const targetX = Blackboard.get<number>(blackboard, SPLIT_STATE_TARGET_X_KEY);
-  const targetY = Blackboard.get<number>(blackboard, SPLIT_STATE_TARGET_Y_KEY);
-  const startTime = Blackboard.get<number>(blackboard, SPLIT_STATE_START_TIME_KEY);
-  const familyIds = Blackboard.get<EntityId[]>(blackboard, SPLIT_STATE_FAMILY_IDS_KEY);
+function getSplitStateFromLeaderBlackboard(
+  leaderBlackboard: BlackboardData,
+  patriarchId: EntityId,
+): TribeSplitState | null {
+  const strategy = Blackboard.get<string>(leaderBlackboard, getSplitStateKey(patriarchId, 'strategy'));
+  const phase = Blackboard.get<string>(leaderBlackboard, getSplitStateKey(patriarchId, 'phase'));
+  const targetX = Blackboard.get<number>(leaderBlackboard, getSplitStateKey(patriarchId, 'targetX'));
+  const targetY = Blackboard.get<number>(leaderBlackboard, getSplitStateKey(patriarchId, 'targetY'));
+  const startTime = Blackboard.get<number>(leaderBlackboard, getSplitStateKey(patriarchId, 'startTime'));
+  const familyIds = Blackboard.get<string>(leaderBlackboard, getSplitStateKey(patriarchId, 'familyIds'));
 
   if (
     strategy === undefined ||
@@ -51,44 +53,60 @@ function getSplitStateFromBlackboard(blackboard: BlackboardData): TribeSplitStat
     return null;
   }
 
-  const targetBuildingId = Blackboard.get<EntityId>(blackboard, SPLIT_STATE_BUILDING_ID_KEY);
+  const targetBuildingId = Blackboard.get<number>(leaderBlackboard, getSplitStateKey(patriarchId, 'buildingId'));
+
+  // Parse family IDs from comma-separated string
+  const familyMemberIds = familyIds.split(',').map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
 
   return {
     strategy: strategy as TribeSplitStrategy,
     phase: phase as TribeSplitPhase,
     gatheringTarget: { x: targetX, y: targetY },
     startTime,
-    familyMemberIds: familyIds,
+    familyMemberIds,
     targetBuildingId,
   };
 }
 
 /**
- * Helper to save split state to blackboard
+ * Helper to save split state to leader's blackboard for a specific patriarch
  */
-function saveSplitStateToBlackboard(blackboard: BlackboardData, state: TribeSplitState): void {
-  Blackboard.set(blackboard, SPLIT_STATE_STRATEGY_KEY, state.strategy);
-  Blackboard.set(blackboard, SPLIT_STATE_PHASE_KEY, state.phase);
-  Blackboard.set(blackboard, SPLIT_STATE_TARGET_X_KEY, state.gatheringTarget.x);
-  Blackboard.set(blackboard, SPLIT_STATE_TARGET_Y_KEY, state.gatheringTarget.y);
-  Blackboard.set(blackboard, SPLIT_STATE_START_TIME_KEY, state.startTime);
-  Blackboard.set(blackboard, SPLIT_STATE_FAMILY_IDS_KEY, state.familyMemberIds);
+function saveSplitStateToLeaderBlackboard(
+  leaderBlackboard: BlackboardData,
+  patriarchId: EntityId,
+  state: TribeSplitState,
+): void {
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'strategy'), state.strategy);
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'phase'), state.phase);
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'targetX'), state.gatheringTarget.x);
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'targetY'), state.gatheringTarget.y);
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'startTime'), state.startTime);
+  // Store family IDs as comma-separated string (blackboard supports strings)
+  Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'familyIds'), state.familyMemberIds.join(','));
   if (state.targetBuildingId !== undefined) {
-    Blackboard.set(blackboard, SPLIT_STATE_BUILDING_ID_KEY, state.targetBuildingId);
+    Blackboard.set(leaderBlackboard, getSplitStateKey(patriarchId, 'buildingId'), state.targetBuildingId);
   }
 }
 
 /**
- * Helper to clear split state from blackboard
+ * Helper to clear split state from leader's blackboard for a specific patriarch
  */
-function clearSplitStateFromBlackboard(blackboard: BlackboardData): void {
-  Blackboard.delete(blackboard, SPLIT_STATE_STRATEGY_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_PHASE_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_TARGET_X_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_TARGET_Y_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_START_TIME_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_FAMILY_IDS_KEY);
-  Blackboard.delete(blackboard, SPLIT_STATE_BUILDING_ID_KEY);
+function clearSplitStateFromLeaderBlackboard(leaderBlackboard: BlackboardData, patriarchId: EntityId): void {
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'strategy'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'phase'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'targetX'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'targetY'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'startTime'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'familyIds'));
+  Blackboard.delete(leaderBlackboard, getSplitStateKey(patriarchId, 'buildingId'));
+}
+
+/**
+ * Helper to get the tribe leader's blackboard for coordination
+ */
+function getLeaderBlackboard(human: HumanEntity, gameState: GameWorldState): BlackboardData | null {
+  const leader = getTribeLeaderForCoordination(human, gameState);
+  return leader?.aiBlackboard ?? null;
 }
 
 /**
@@ -99,12 +117,11 @@ function clearSplitStateFromBlackboard(blackboard: BlackboardData): void {
  * - Concentration: Gather at a key building (storage), split, and take it over. Used when the splitting group is large (>=50%).
  *
  * The process has three phases:
- * 1. Planning: Determine strategy, find target location, store state in blackboard.
+ * 1. Planning: Determine strategy, find target location, store state in leader's blackboard.
  * 2. Gathering: Coordinate family to rally at the target point.
  * 3. Executing: Perform the split and post-split actions (build or takeover).
  *
- * This is a high-cost check, so it's wrapped in a CooldownNode to prevent it
- * from being evaluated on every AI tick.
+ * State is stored on the tribe leader's blackboard for coordination.
  *
  * @param depth The depth of the node in the behavior tree.
  * @returns A behavior node.
@@ -112,8 +129,13 @@ function clearSplitStateFromBlackboard(blackboard: BlackboardData): void {
 export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Condition: Check if the split process is already in progress
   const isSplitInProgress = new ConditionNode(
-    (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
-      const splitState = getSplitStateFromBlackboard(blackboard);
+    (human: HumanEntity, context: UpdateContext) => {
+      const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+      if (!leaderBlackboard) {
+        return [false, 'No leader blackboard'];
+      }
+
+      const splitState = getSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
       if (splitState) {
         return [true, `Phase: ${splitState.phase}, Strategy: ${splitState.strategy}`];
       }
@@ -135,7 +157,12 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
 
   // Action: Initialize the split process (Planning phase)
   const initializeSplit = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
+    (human: HumanEntity, context: UpdateContext) => {
+      const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+      if (!leaderBlackboard) {
+        return [NodeStatus.FAILURE, 'No leader blackboard'];
+      }
+
       const splitState = createSplitState(human, context.gameState, context.gameState.time);
 
       if (!splitState) {
@@ -145,8 +172,8 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       // Move to gathering phase
       splitState.phase = TribeSplitPhase.Gathering;
 
-      // Save state to blackboard
-      saveSplitStateToBlackboard(blackboard, splitState);
+      // Save state to leader's blackboard
+      saveSplitStateToLeaderBlackboard(leaderBlackboard, human.id, splitState);
 
       // Start coordinating family movement
       coordinateFamilyMovement(human, splitState, context.gameState);
@@ -162,8 +189,13 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
 
   // Action: Continue the gathering phase
   const continueGathering = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-      const splitState = getSplitStateFromBlackboard(blackboard);
+    (human: HumanEntity, context: UpdateContext) => {
+      const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+      if (!leaderBlackboard) {
+        return [NodeStatus.FAILURE, 'No leader blackboard'];
+      }
+
+      const splitState = getSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
       if (!splitState) {
         return [NodeStatus.FAILURE, 'No split state'];
       }
@@ -172,7 +204,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       const elapsedTime = context.gameState.time - splitState.startTime;
       if (elapsedTime > TRIBE_SPLIT_GATHERING_TIMEOUT_HOURS) {
         // Abort the split due to timeout
-        clearSplitStateFromBlackboard(blackboard);
+        clearSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
         human.target = undefined;
         human.activeAction = 'idle';
         return [NodeStatus.FAILURE, `Gathering timed out after ${elapsedTime.toFixed(0)} hours`];
@@ -189,7 +221,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       if (allGathered) {
         // Move to execution phase
         splitState.phase = TribeSplitPhase.Executing;
-        saveSplitStateToBlackboard(blackboard, splitState);
+        saveSplitStateToLeaderBlackboard(leaderBlackboard, human.id, splitState);
         return [NodeStatus.SUCCESS, 'Family gathered, ready to execute'];
       }
 
@@ -218,8 +250,13 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
 
   // Action: Execute the split (final phase)
   const executeSplit = new ActionNode(
-    (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-      const splitState = getSplitStateFromBlackboard(blackboard);
+    (human: HumanEntity, context: UpdateContext) => {
+      const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+      if (!leaderBlackboard) {
+        return [NodeStatus.FAILURE, 'No leader blackboard'];
+      }
+
+      const splitState = getSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
       if (!splitState) {
         return [NodeStatus.FAILURE, 'No split state'];
       }
@@ -243,17 +280,17 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
 
         if (!transferred) {
           // Building may have been destroyed, but split still succeeded
-          clearSplitStateFromBlackboard(blackboard);
+          clearSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
           return [NodeStatus.SUCCESS, 'Split complete (building takeover failed)'];
         }
 
-        clearSplitStateFromBlackboard(blackboard);
+        clearSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
         return [NodeStatus.SUCCESS, `Split complete with building takeover`];
       }
 
       // Migration strategy: the new tribe will need to build their own base
       // This happens naturally through the building placement behavior
-      clearSplitStateFromBlackboard(blackboard);
+      clearSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
       return [NodeStatus.SUCCESS, 'Split complete (migration)'];
     },
     'Execute Split',
@@ -270,8 +307,10 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
           new Sequence(
             [
               new ConditionNode(
-                (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
-                  const splitState = getSplitStateFromBlackboard(blackboard);
+                (human: HumanEntity, context: UpdateContext) => {
+                  const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+                  if (!leaderBlackboard) return [false, 'No leader blackboard'];
+                  const splitState = getSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
                   return splitState?.phase === TribeSplitPhase.Gathering
                     ? [true, 'In gathering phase']
                     : [false, 'Not in gathering phase'];
@@ -288,8 +327,10 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
           new Sequence(
             [
               new ConditionNode(
-                (_human: HumanEntity, _context: UpdateContext, blackboard: BlackboardData) => {
-                  const splitState = getSplitStateFromBlackboard(blackboard);
+                (human: HumanEntity, context: UpdateContext) => {
+                  const leaderBlackboard = getLeaderBlackboard(human, context.gameState);
+                  if (!leaderBlackboard) return [false, 'No leader blackboard'];
+                  const splitState = getSplitStateFromLeaderBlackboard(leaderBlackboard, human.id);
                   return splitState?.phase === TribeSplitPhase.Executing
                     ? [true, 'In executing phase']
                     : [false, 'Not in executing phase'];
