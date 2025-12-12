@@ -225,8 +225,8 @@ export function findSafeMigrationTarget(human: HumanEntity, gameState: GameWorld
   const fallbackDistance = TRIBE_SPLIT_MIGRATION_MIN_DISTANCE;
 
   return {
-    x: ((tribeCenter.x + normalizedDirection.x * fallbackDistance % worldWidth) + worldWidth) % worldWidth,
-    y: ((tribeCenter.y + normalizedDirection.y * fallbackDistance % worldHeight) + worldHeight) % worldHeight,
+    x: (((tribeCenter.x + normalizedDirection.x * fallbackDistance) % worldWidth) + worldWidth) % worldWidth,
+    y: (((tribeCenter.y + normalizedDirection.y * fallbackDistance) % worldHeight) + worldHeight) % worldHeight,
   };
 }
 
