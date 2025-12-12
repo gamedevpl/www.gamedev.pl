@@ -1,52 +1,14 @@
 import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notification-consts.ts';
-import {
-  TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
-  TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
-  TRIBE_SPLIT_MOVE_AWAY_DISTANCE,
-} from './tribe-consts.ts';
+import { TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE, TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT } from './tribe-consts.ts';
 import { HumanEntity } from '../characters/human/human-types.ts';
 import { NotificationType } from '../../notifications/notification-types.ts';
 import { addNotification } from '../../notifications/notification-utils.ts';
 import { playSoundAt } from '../../sound/sound-manager.ts';
 import { SoundType } from '../../sound/sound-types.ts';
 import { DiplomacyStatus, GameWorldState, UpdateContext } from '../../world-types.ts';
-import { calculateWrappedDistance } from '../../utils/math-utils.ts';
-import { Vector2D } from '../../utils/math-types.ts';
 import { findChildren, findDescendants, findHeir, findTribeMembers } from './family-tribe-utils';
 import { generateTribeBadge } from '../../utils/general-utils.ts';
-import { getRandomNearbyPosition, isPositionOccupied } from '../../utils/spatial-utils.ts';
 import { TribeRole } from './tribe-types.ts';
-
-export function findSafeTribeSplitLocation(
-  originalTribeCenter: Vector2D,
-  human: HumanEntity,
-  gameState: GameWorldState,
-): Vector2D | null {
-  const worldWidth = gameState.mapDimensions.width;
-  const worldHeight = gameState.mapDimensions.height;
-  const checkRadius = human.radius * 2; // Clearance needed for the spot
-
-  // Start searching from the minimum distance and expand outwards
-  for (let r = TRIBE_SPLIT_MOVE_AWAY_DISTANCE; r < worldWidth / 2; r += 50) {
-    // Try a few random positions at this radius
-    for (let i = 0; i < 10; i++) {
-      const spot = getRandomNearbyPosition(originalTribeCenter, r, worldWidth, worldHeight);
-
-      // Check if the spot is far enough from the center
-      const distanceFromCenter = calculateWrappedDistance(originalTribeCenter, spot, worldWidth, worldHeight);
-
-      if (distanceFromCenter < TRIBE_SPLIT_MOVE_AWAY_DISTANCE) {
-        continue; // Not far enough, try another spot
-      }
-
-      if (!isPositionOccupied(spot, gameState, checkRadius, human.id)) {
-        return spot; // Found a safe and unoccupied spot
-      }
-    }
-  }
-
-  return null; // No suitable location found
-}
 
 export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { canSplit: boolean; progress?: number } {
   if (!human.isAdult || human.gender !== 'male' || human.leaderId === human.id || !human.leaderId) {
@@ -74,6 +36,13 @@ export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { 
 
   const descendants = findDescendants(human, gameState).filter((d) => d.isAdult);
   const familySize = descendants.length + 1; // +1 for the leader himself
+
+  const leaderDescendants = findDescendants(leader, gameState);
+  const leaderFamillySize = leaderDescendants.length + 1;
+
+  if (familySize >= leaderFamillySize && familySize > TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
+    return { canSplit: true };
+  }
 
   const requiredSize = Math.min(
     currentTribeMembers.length * TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,

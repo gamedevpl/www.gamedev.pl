@@ -1,15 +1,9 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { canSplitTribe, performTribeSplit, findSafeTribeSplitLocation } from '../../../utils';
+import { canSplitTribe, performTribeSplit } from '../../../utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../entities/tribe/tribe-consts.ts';
-import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { Vector2D } from '../../../utils/math-types';
-import { Blackboard } from '../behavior-tree-blackboard.ts';
-
-const MIGRATION_TARGET_KEY = 'tribeSplitMigrationTarget';
 
 /**
  * Creates a behavior that allows a potential family leader to split from their current tribe,
@@ -20,8 +14,7 @@ const MIGRATION_TARGET_KEY = 'tribeSplitMigrationTarget';
  *
  * The process is a sequence:
  * 1. Check if a split is possible.
- * 2. Find a safe location far away and move there.
- * 3. Formally perform the split.
+ * 2. Formally perform the split.
  *
  * @param depth The depth of the node in the behavior tree.
  * @returns A behavior node.
@@ -31,11 +24,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
     [
       // 1. Perform the expensive check to see if all conditions are met.
       new ConditionNode(
-        (human: HumanEntity, context: UpdateContext, aiBlackboard) => {
-          let migrationTarget = Blackboard.get<Vector2D>(aiBlackboard, MIGRATION_TARGET_KEY);
-          if (migrationTarget) {
-            return [true, 'Already migrating'];
-          }
+        (human: HumanEntity, context: UpdateContext) => {
           const { canSplit, progress } = canSplitTribe(human, context.gameState);
           return canSplit ? [true, `Progress: ${(progress ?? 0) * 100}%`] : [false, 'Cannot split'];
         },
@@ -43,57 +32,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
         depth + 2,
       ),
 
-      // 2. Find a safe location and move there. This node is stateful.
-      new ActionNode<HumanEntity>(
-        (human, context, aiBlackboard) => {
-          const { gameState } = context;
-          let migrationTarget = Blackboard.get<Vector2D>(aiBlackboard, MIGRATION_TARGET_KEY);
-
-          // Step 1: Find and set the target if it doesn't exist
-          if (!migrationTarget) {
-            if (!human.leaderId) return NodeStatus.FAILURE; // Should not happen if CanSplitTribe passed
-
-            const leader = gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-            if (!leader) return NodeStatus.FAILURE; // Should not happen if CanSplitTribe passed
-
-            const newLocation = findSafeTribeSplitLocation(leader.position, human, gameState);
-
-            if (newLocation) {
-              Blackboard.set(aiBlackboard, MIGRATION_TARGET_KEY, newLocation);
-              migrationTarget = newLocation;
-            } else {
-              // Cannot find a safe location, fail for now
-              return NodeStatus.FAILURE;
-            }
-          }
-
-          // Step 2: Check if we have arrived
-          const distance = calculateWrappedDistance(
-            human.position,
-            migrationTarget,
-            gameState.mapDimensions.width,
-            gameState.mapDimensions.height,
-          );
-
-          if (distance < HUMAN_INTERACTION_PROXIMITY) {
-            // Arrived at destination
-            Blackboard.delete(aiBlackboard, MIGRATION_TARGET_KEY);
-            human.activeAction = 'idle'; // Stop moving
-            human.target = undefined;
-            return NodeStatus.SUCCESS;
-          }
-
-          human.activeAction = 'moving';
-          human.target = migrationTarget;
-
-          // Still moving
-          return NodeStatus.RUNNING;
-        },
-        'Move to New Territory',
-        depth + 2,
-      ),
-
-      // 3. If movement was successful, perform the administrative split.
+      // 2. If movement was successful, perform the administrative split.
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
           performTribeSplit(human, context.gameState);

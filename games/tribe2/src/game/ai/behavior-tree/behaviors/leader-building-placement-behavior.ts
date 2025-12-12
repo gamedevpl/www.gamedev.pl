@@ -1,9 +1,7 @@
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { GameWorldState } from '../../../world-types';
 import { BuildingType } from '../../../building-consts';
-import { canPlaceBuilding, createBuilding } from '../../../utils/building-placement-utils';
-import { isLocationTooCloseToOtherTribes } from '../../../utils/entity-finder-utils';
+import { createBuilding, findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
 import {
   getStorageUtilization,
   getProductiveBushDensity,
@@ -11,85 +9,17 @@ import {
   getTribePlantingZones,
 } from '../../../entities/tribe/tribe-food-utils';
 import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
-import { getTribeCenter } from '../../../utils/spatial-utils';
-import { Vector2D } from '../../../utils/math-types';
-import { EntityId } from '../../../entities/entities-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import {
   LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-  LEADER_BUILDING_SPIRAL_STEP,
   LEADER_BUILDING_MIN_TRIBE_SIZE,
   LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD,
   LEADER_BUILDING_MIN_BUSHES_PER_MEMBER,
-  LEADER_BUILDING_MAX_STORAGE_PER_TRIBE,
   LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
-  LEADER_BUILDING_MAX_PLANTING_ZONES_PER_TRIBE,
   LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE,
 } from '../../../ai-consts';
 import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../nodes';
-
-/**
- * Finds a valid building placement location using a spiral search pattern.
- * Starts from the center position and spirals outward until a valid location is found
- * or the maximum radius is reached.
- *
- * @param centerPos The center position to start the spiral search from (typically tribe center)
- * @param maxRadius The maximum radius to search
- * @param stepSize The distance between spiral check points
- * @param minDistanceFromOtherTribes Minimum distance to keep from other tribe centers
- * @param buildingType The type of building to place
- * @param ownerId The ID of the entity that will own the building
- * @param gameState The current game state
- * @returns A valid position for building placement, or undefined if none found
- */
-function findSpiralPlacementLocation(
-  centerPos: Vector2D,
-  maxRadius: number,
-  stepSize: number,
-  minDistanceFromOtherTribes: number,
-  buildingType: BuildingType,
-  ownerId: EntityId,
-  gameState: GameWorldState,
-): Vector2D | undefined {
-  const worldWidth = gameState.mapDimensions.width;
-  const worldHeight = gameState.mapDimensions.height;
-
-  // Archimedean spiral: r = a + b*theta
-  // We'll increment theta and calculate r based on it
-  const angleIncrement = Math.PI / 8; // 22.5 degrees per step
-  const radiusPerRotation = stepSize * 2; // How much radius increases per full rotation
-  const b = radiusPerRotation / (2 * Math.PI);
-
-  let theta = 0;
-  let radius = 0;
-
-  // Continue spiraling until we exceed the max radius
-  while (radius <= maxRadius) {
-    // Calculate position on the spiral
-    const x = centerPos.x + radius * Math.cos(theta);
-    const y = centerPos.y + radius * Math.sin(theta);
-
-    // Wrap coordinates to world dimensions (toroidal world)
-    const wrappedPos: Vector2D = {
-      x: ((x % worldWidth) + worldWidth) % worldWidth,
-      y: ((y % worldHeight) + worldHeight) % worldHeight,
-    };
-    if (
-      canPlaceBuilding(wrappedPos, buildingType, ownerId, gameState) &&
-      !isLocationTooCloseToOtherTribes(wrappedPos, undefined, minDistanceFromOtherTribes, gameState)
-    ) {
-      return wrappedPos;
-    }
-
-    // Move to next point on the spiral
-    theta += angleIncrement;
-    radius = b * theta;
-  }
-
-  // No valid location found within the search radius
-  return undefined;
-}
 
 /**
  * Factory function to create a leader building placement behavior node.
@@ -97,11 +27,11 @@ function findSpiralPlacementLocation(
  * (storage spots and planting zones) based on their tribe's needs.
  *
  * The behavior tree structure:
- * - Sequence (all must succeed):
+ * - Sequence (all must succeed)
  *   1. Condition: Is tribe leader
  *   2. CachingNode: Analyze tribe (cached for performance)
  *   3. Condition: Tribe meets minimum size
- *   4. Selector (try each until one succeeds):
+ *   4. Selector (try each until one succeeds)
  *      a. Sequence: Try to place storage
  *      b. Sequence: Try to place planting zone
  *
@@ -215,18 +145,12 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const projectedUtilization = storageUtilization * (projectedAdultCount / Math.max(1, adultCount));
 
       const needsStorage =
-        existingStorageSpots < LEADER_BUILDING_MAX_STORAGE_PER_TRIBE &&
-        (needsFirstStorage ||
-          storageUtilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD ||
-          projectedUtilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD);
+        needsFirstStorage ||
+        storageUtilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD ||
+        projectedUtilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD;
 
       if (!needsStorage) {
-        return [
-          false,
-          `Storage adequate: ${existingStorageSpots}/${LEADER_BUILDING_MAX_STORAGE_PER_TRIBE}, util: ${(
-            storageUtilization * 100
-          ).toFixed(0)}%`,
-        ];
+        return [false, `Storage adequate: ${existingStorageSpots}, util: ${(storageUtilization * 100).toFixed(0)}%`];
       }
 
       const reason = needsFirstStorage
@@ -254,15 +178,12 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         ? LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER
         : LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER;
 
-      const tribeCenter = getTribeCenter(entity.leaderId!, context.gameState);
-      const placementLocation = findSpiralPlacementLocation(
-        tribeCenter,
-        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-        LEADER_BUILDING_SPIRAL_STEP,
-        minDistanceFromOtherTribes,
+      const placementLocation = findAdjacentBuildingPlacement(
         BuildingType.StorageSpot,
         entity.id,
         context.gameState,
+        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
+        minDistanceFromOtherTribes,
       );
 
       if (!placementLocation) {
@@ -315,9 +236,8 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
 
       const needsPlantingZone =
         needsFirstPlantingZone ||
-        (existingPlantingZones < LEADER_BUILDING_MAX_PLANTING_ZONES_PER_TRIBE &&
-          (bushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER ||
-            projectedBushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER));
+        bushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER ||
+        projectedBushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER;
 
       if (needsPlantingZone && zoneDensity > projectedBushDensity) {
         return [
@@ -329,12 +249,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       }
 
       if (!needsPlantingZone) {
-        return [
-          false,
-          `Planting zones adequate: ${existingPlantingZones}/${LEADER_BUILDING_MAX_PLANTING_ZONES_PER_TRIBE}, density: ${bushDensity.toFixed(
-            1,
-          )}`,
-        ];
+        return [false, `Planting zones adequate: ${existingPlantingZones}, density: ${bushDensity.toFixed(1)}`];
       }
 
       return [true, `Low bush density: ${bushDensity.toFixed(1)} (projected: ${projectedBushDensity.toFixed(1)})`];
@@ -346,15 +261,12 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Place planting zone
   const placePlantingZoneAction = new ActionNode<HumanEntity>(
     (entity, context) => {
-      const tribeCenter = getTribeCenter(entity.leaderId!, context.gameState);
-      const placementLocation = findSpiralPlacementLocation(
-        tribeCenter,
-        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
-        LEADER_BUILDING_SPIRAL_STEP,
-        LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
+      const placementLocation = findAdjacentBuildingPlacement(
         BuildingType.PlantingZone,
         entity.id,
         context.gameState,
+        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
+        LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
       );
 
       if (!placementLocation) {

@@ -108,12 +108,10 @@ export const DEPOSIT_THRESHOLD_HIGH_STORAGE = 0.8; // Deposit when personal food
 // Leader Building Placement Constants
 export const BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS = 2; // How often to check for building needs
 export const LEADER_BUILDING_SPIRAL_SEARCH_RADIUS = MAP_WIDTH / 2; // Max distance to search for building placement
-export const LEADER_BUILDING_SPIRAL_STEP = 60; // Distance between spiral search points
+export const LEADER_BUILDING_SPIRAL_STEP = 10; // Distance between spiral search points
 export const LEADER_BUILDING_MIN_TRIBE_SIZE = 2; // Minimum adult tribe members to consider building
 export const LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD = 0.7; // Build storage when 70% full
-export const LEADER_BUILDING_MIN_BUSHES_PER_MEMBER = 0.2; // Build planting zone when below this ratio
-export const LEADER_BUILDING_MAX_STORAGE_PER_TRIBE = 5; // Maximum storage spots per tribe
-export const LEADER_BUILDING_MAX_PLANTING_ZONES_PER_TRIBE = 50; // Maximum planting zones per tribe
+export const LEADER_BUILDING_MIN_BUSHES_PER_MEMBER = 0.5; // Build planting zone when below this ratio
 export const LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE = 0.1; // Expected growth rate to factor into building decisions
 export const LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 400; // Min distance from other tribes for buildings
 export const LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 800; // Min distance for first storage (base establishment)

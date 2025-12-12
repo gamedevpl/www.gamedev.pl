@@ -49,7 +49,7 @@ const findValidPartner = (
 // Configuration for the tribal task decorator
 const procreationTaskConfig: TribalTaskConfig = {
   taskType: 'procreation',
-  maxCapacity: 5,
+  maxCapacity: 2,
   getTargetId: (_entity, _context, blackboard) => Blackboard.get<EntityId>(blackboard, 'procreationPartner') ?? null,
 };
 

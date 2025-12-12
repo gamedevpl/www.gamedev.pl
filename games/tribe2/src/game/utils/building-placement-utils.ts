@@ -4,12 +4,13 @@ import { BuildingType, getBuildingDimensions } from '../building-consts';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
 import { createBuilding as createBuildingEntity } from '../entities/entities-update';
-import { isPositionOccupied } from './spatial-utils';
+import { isPositionOccupied, getTribeCenter } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
 import { canPlaceBuildingInTerritory } from '../entities/tribe/territory-utils';
 import { getDepletedSectorsInArea } from '../soil-depletion-update';
+import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
 
 /**
  * Checks if a building of a given type can be placed at the specified position.
@@ -89,6 +90,95 @@ export function canPlaceBuilding(
   }
 
   return true;
+}
+
+/**
+ * Finds a valid building placement location adjacent to existing tribe buildings.
+ * Searches in expanding rings around existing buildings to find suitable locations.
+ * If no buildings exist, searches around the tribe center instead.
+ *
+ * @param buildingType The type of building to place
+ * @param ownerId The ID of the tribe leader (owner of the building)
+ * @param gameState The current game state
+ * @param searchRadius Maximum radius to search from each anchor point
+ * @param minDistanceFromOtherTribes Minimum distance to keep from other tribe centers
+ * @returns A valid position for building placement, or undefined if none found
+ */
+export function findAdjacentBuildingPlacement(
+  buildingType: BuildingType,
+  ownerId: EntityId,
+  gameState: GameWorldState,
+  searchRadius: number,
+  minDistanceFromOtherTribes: number,
+): Vector2D | undefined {
+  const indexedState = gameState as IndexedWorldState;
+  const dimensions = getBuildingDimensions(buildingType);
+  const worldWidth = gameState.mapDimensions.width;
+  const worldHeight = gameState.mapDimensions.height;
+
+  // Get all buildings owned by this tribe
+  const tribeBuildings = indexedState.search.building.byProperty('ownerId', ownerId) as BuildingEntity[];
+
+  // Determine anchor points: existing buildings or tribe center
+  const anchorPoints: Vector2D[] = [];
+
+  if (tribeBuildings.length > 0) {
+    // Use existing buildings as anchor points
+    // Sort by distance from tribe center to prioritize central buildings
+    const tribeCenter = getTribeCenter(ownerId, gameState);
+    const sortedBuildings = [...tribeBuildings].sort((a, b) => {
+      const distA = calculateWrappedDistance(a.position, tribeCenter, worldWidth, worldHeight);
+      const distB = calculateWrappedDistance(b.position, tribeCenter, worldWidth, worldHeight);
+      return distA - distB;
+    });
+    anchorPoints.push(...sortedBuildings.map((b) => b.position));
+  } else {
+    // No buildings yet, use tribe center as anchor
+    anchorPoints.push(getTribeCenter(ownerId, gameState));
+  }
+
+  // Search parameters
+  const buildingSize = Math.max(dimensions.width, dimensions.height);
+  const minDistance = buildingSize + 20; // Building size + small gap
+  const radiusStep = buildingSize / 2; // Step size for expanding rings
+
+  // Search around each anchor point
+  for (const anchor of anchorPoints) {
+    // Expand in rings from minDistance to searchRadius
+    for (let radius = minDistance; radius <= searchRadius; radius += radiusStep) {
+      // Determine number of angles to check based on radius
+      // More angles at larger radii for better coverage
+      const numAngles = Math.max(8, Math.min(16, Math.ceil((2 * Math.PI * radius) / buildingSize)));
+      const angleStep = (2 * Math.PI) / numAngles;
+
+      // Check positions at regular angles around the ring
+      for (let i = 0; i < numAngles; i++) {
+        const angle = i * angleStep;
+        const offsetX = Math.cos(angle) * radius;
+        const offsetY = Math.sin(angle) * radius;
+
+        // Calculate candidate position with world wrapping
+        const candidateX = anchor.x + offsetX;
+        const candidateY = anchor.y + offsetY;
+
+        const wrappedPosition: Vector2D = {
+          x: ((candidateX % worldWidth) + worldWidth) % worldWidth,
+          y: ((candidateY % worldHeight) + worldHeight) % worldHeight,
+        };
+
+        // Validate the candidate position
+        if (
+          canPlaceBuilding(wrappedPosition, buildingType, ownerId, gameState) &&
+          !isLocationTooCloseToOtherTribes(wrappedPosition, ownerId, minDistanceFromOtherTribes, gameState)
+        ) {
+          return wrappedPosition;
+        }
+      }
+    }
+  }
+
+  // No valid location found
+  return undefined;
 }
 
 /**
