@@ -2,10 +2,11 @@ import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notificati
 import {
   TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
   TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
-  TRIBE_SPLIT_CONCENTRATION_THRESHOLD,
   TRIBE_SPLIT_MIGRATION_MIN_DISTANCE,
-  TRIBE_SPLIT_MIGRATION_MAX_DISTANCE,
-  TRIBE_SPLIT_BUILDING_SEARCH_RADIUS,
+  TRIBE_SPLIT_CONCENTRATION_STORAGE_RADIUS,
+  TRIBE_SPLIT_PHASE_TIMEOUT_HOURS,
+  TRIBE_SPLIT_COOLDOWN_AFTER_FAILURE_HOURS,
+  TRIBE_SPLIT_GATHER_RADIUS,
 } from './tribe-consts.ts';
 import { HumanEntity } from '../characters/human/human-types.ts';
 import { NotificationType } from '../../notifications/notification-types.ts';
@@ -15,68 +16,466 @@ import { SoundType } from '../../sound/sound-types.ts';
 import { DiplomacyStatus, GameWorldState, UpdateContext } from '../../world-types.ts';
 import { findChildren, findDescendants, findHeir, findTribeMembers } from './family-tribe-utils';
 import { generateTribeBadge } from '../../utils/general-utils.ts';
-import { TribeRole, TribeSplitStrategy, TribeSplitPhase, TribeSplitState } from './tribe-types.ts';
+import { TribeRole } from './tribe-types.ts';
 import { Vector2D } from '../../utils/math-types.ts';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils.ts';
+import { calculateWrappedDistance } from '../../utils/math-utils.ts';
 import { IndexedWorldState } from '../../world-index/world-index-types.ts';
-import { BuildingEntity } from '../buildings/building-types.ts';
-import { calculateAllTerritories, checkPositionInTerritory } from './territory-utils.ts';
+import { BuildingEntity, BuildingType } from '../buildings/building-types.ts';
+import { calculateAllTerritories } from './territory-utils.ts';
 import { EntityId } from '../entities-types.ts';
-import { getTribeCenter } from '../../utils/spatial-utils.ts';
+import { Blackboard, BlackboardData } from '../../ai/behavior-tree/behavior-tree-blackboard.ts';
 
-export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { canSplit: boolean; progress?: number } {
+// ============================================================================
+// Blackboard Key Constants for State Management
+// All keys are prefixed with 'tribeSplit_'
+// ============================================================================
+const BB_SPLIT_PHASE = 'tribeSplit_phase'; // 'idle' | 'checking' | 'planning' | 'gathering' | 'executing'
+const BB_SPLIT_STRATEGY = 'tribeSplit_strategy'; // 'migration' | 'concentration'
+const BB_SPLIT_TARGET_POSITION = 'tribeSplit_targetPosition'; // Vector2D for migration
+const BB_SPLIT_TARGET_BUILDING_ID = 'tribeSplit_targetBuildingId'; // EntityId for concentration
+const BB_SPLIT_FAMILY_IDS = 'tribeSplit_familyIds'; // EntityId[] of family members involved
+const BB_SPLIT_PHASE_START_TIME = 'tribeSplit_phaseStartTime'; // number (game time)
+const BB_SPLIT_LAST_FAILURE_TIME = 'tribeSplit_lastFailureTime'; // number (game time)
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+export type TribeSplitPhase = 'idle' | 'checking' | 'planning' | 'gathering' | 'executing';
+export type TribeSplitStrategy = 'migration' | 'concentration';
+
+/**
+ * Result of checking split conditions
+ */
+export interface SplitCheckResult {
+  canSplit: boolean;
+  reason?: string;
+  progress?: number;
+  strategy?: TribeSplitStrategy;
+}
+
+// ============================================================================
+// Blackboard State Management Functions
+// ============================================================================
+
+/**
+ * Resets the split state in the blackboard
+ */
+function resetSplitState(blackboard: BlackboardData, gameTime: number): void {
+  Blackboard.set(blackboard, BB_SPLIT_PHASE, 'idle');
+  Blackboard.delete(blackboard, BB_SPLIT_STRATEGY);
+  Blackboard.delete(blackboard, BB_SPLIT_TARGET_POSITION);
+  Blackboard.delete(blackboard, BB_SPLIT_TARGET_BUILDING_ID);
+  Blackboard.delete(blackboard, BB_SPLIT_FAMILY_IDS);
+  Blackboard.set(blackboard, BB_SPLIT_LAST_FAILURE_TIME, gameTime);
+}
+
+/**
+ * Checks if enough time has passed since the last failure
+ */
+function canAttemptSplitAfterFailure(blackboard: BlackboardData, gameTime: number): boolean {
+  const lastFailureTime = Blackboard.get<number>(blackboard, BB_SPLIT_LAST_FAILURE_TIME);
+  if (!lastFailureTime) return true;
+  return gameTime - lastFailureTime >= TRIBE_SPLIT_COOLDOWN_AFTER_FAILURE_HOURS;
+}
+
+/**
+ * Checks if the current phase has timed out
+ */
+function hasPhaseTimedOut(blackboard: BlackboardData, gameTime: number): boolean {
+  const phaseStartTime = Blackboard.get<number>(blackboard, BB_SPLIT_PHASE_START_TIME);
+  if (!phaseStartTime) return false;
+  return gameTime - phaseStartTime >= TRIBE_SPLIT_PHASE_TIMEOUT_HOURS;
+}
+
+/**
+ * Gets the current split phase from the blackboard
+ */
+export function getSplitPhase(blackboard: BlackboardData | undefined): TribeSplitPhase {
+  if (!blackboard) return 'idle';
+  return Blackboard.get<TribeSplitPhase>(blackboard, BB_SPLIT_PHASE) ?? 'idle';
+}
+
+/**
+ * Sets the split phase in the blackboard
+ */
+export function setSplitPhase(blackboard: BlackboardData, phase: TribeSplitPhase, gameTime: number): void {
+  Blackboard.set(blackboard, BB_SPLIT_PHASE, phase);
+  Blackboard.set(blackboard, BB_SPLIT_PHASE_START_TIME, gameTime);
+}
+
+/**
+ * Sets the split strategy in the blackboard
+ */
+export function setSplitStrategy(blackboard: BlackboardData, strategy: TribeSplitStrategy): void {
+  Blackboard.set(blackboard, BB_SPLIT_STRATEGY, strategy);
+}
+
+/**
+ * Handles phase timeout by resetting the split state
+ */
+export function handlePhaseTimeout(blackboard: BlackboardData, gameTime: number): void {
+  resetSplitState(blackboard, gameTime);
+}
+
+/**
+ * Checks if the phase has timed out and handles it
+ */
+export function checkAndHandleTimeout(blackboard: BlackboardData, gameTime: number): boolean {
+  if (hasPhaseTimedOut(blackboard, gameTime)) {
+    handlePhaseTimeout(blackboard, gameTime);
+    return true;
+  }
+  return false;
+}
+
+// ============================================================================
+// Phase 1: Check Split Conditions
+// ============================================================================
+
+/**
+ * Phase 1: Check if a tribe split is possible and determine the best strategy
+ */
+export function checkSplitConditions(human: HumanEntity, gameState: GameWorldState): SplitCheckResult {
+  // Basic eligibility checks
   if (!human.isAdult || human.gender !== 'male' || human.leaderId === human.id || !human.leaderId) {
-    return { canSplit: false };
+    return { canSplit: false, reason: 'Not eligible to split' };
   }
 
-  if (!human.leaderId) {
-    return { canSplit: false }; // Not in a tribe, can't split
+  if (!human.aiBlackboard) {
+    return { canSplit: false, reason: 'No blackboard available' };
+  }
+
+  // Check cooldown after previous failure
+  if (!canAttemptSplitAfterFailure(human.aiBlackboard, gameState.time)) {
+    return { canSplit: false, reason: 'Cooldown after previous failure' };
   }
 
   const leader = gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
   if (!leader || leader.type !== 'human') {
-    return { canSplit: false }; // Leader is not a human or doesn't exist
+    return { canSplit: false, reason: 'Leader not found' };
   }
 
+  // Check if human is the heir (heirs don't split)
   const heir = findHeir(findChildren(gameState, leader));
   if (heir && heir.id === human.id) {
-    return { canSplit: false }; // The human is already the heir, no need to split
+    return { canSplit: false, reason: 'Heir cannot split' };
   }
 
+  // Check tribe size
   const currentTribeMembers = findTribeMembers(human.leaderId, gameState).filter((m) => m.isAdult);
   if (currentTribeMembers.length < TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
-    return { canSplit: false };
+    return { canSplit: false, reason: 'Tribe too small' };
   }
 
+  // Check family size
   const descendants = findDescendants(human, gameState).filter((d) => d.isAdult);
   const familySize = descendants.length + 1; // +1 for the leader himself
 
   const leaderDescendants = findDescendants(leader, gameState);
-  const leaderFamillySize = leaderDescendants.length + 1;
+  const leaderFamilySize = leaderDescendants.length + 1;
 
-  if (familySize >= leaderFamillySize && familySize > TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
-    return { canSplit: true };
+  // If family is larger than leader's family, can split
+  if (familySize >= leaderFamilySize && familySize > TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT) {
+    // Determine strategy based on territory
+    const strategy = determineOptimalStrategy(human, gameState);
+    return { canSplit: true, progress: 1, strategy };
   }
 
+  // Check if family meets minimum percentage
   const requiredSize = Math.min(
     currentTribeMembers.length * TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE,
     TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT,
   );
 
-  return { canSplit: familySize >= requiredSize, progress: familySize / requiredSize };
-}
+  const progress = familySize / requiredSize;
 
-export function performTribeSplit(human: HumanEntity, gameState: GameWorldState): void {
-  if (!canSplitTribe(human, gameState).canSplit) {
-    return;
+  if (familySize >= requiredSize) {
+    const strategy = determineOptimalStrategy(human, gameState);
+    return { canSplit: true, progress, strategy };
   }
 
-  const previousLeader = human.leaderId
-    ? (gameState.entities.entities[human.leaderId] as HumanEntity | undefined)
-    : undefined;
+  return { canSplit: false, progress, reason: 'Family too small' };
+}
+
+/**
+ * Determines the optimal split strategy based on current territory and resources
+ */
+function determineOptimalStrategy(human: HumanEntity, gameState: GameWorldState): TribeSplitStrategy {
+  if (!human.leaderId) return 'migration';
+
+  const indexedState = gameState as IndexedWorldState;
+
+  // Check for available storage buildings within radius
+  const storageBuildings = indexedState.search.building
+    .byProperty('ownerId', human.leaderId)
+    .filter((b) => b.buildingType === BuildingType.StorageSpot && b.isConstructed);
+
+  // If there are storage buildings, check if any are close enough
+  if (storageBuildings.length > 0) {
+    const nearbyStorage = storageBuildings.find((building) => {
+      const distance = calculateWrappedDistance(
+        human.position,
+        building.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      );
+      return distance <= TRIBE_SPLIT_CONCENTRATION_STORAGE_RADIUS;
+    });
+
+    if (nearbyStorage) {
+      return 'concentration';
+    }
+  }
+
+  // Default to migration
+  return 'migration';
+}
+
+// ============================================================================
+// Phase 2: Plan Split
+// ============================================================================
+
+/**
+ * Phase 2: Plan the split based on the chosen strategy
+ */
+export function planSplit(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (!human.aiBlackboard) return false;
+
+  const strategy = Blackboard.get<TribeSplitStrategy>(human.aiBlackboard, BB_SPLIT_STRATEGY);
+  if (!strategy) return false;
+
+  const descendants = findDescendants(human, gameState);
+  const familyIds = [human.id, ...descendants.map((d) => d.id)];
+  Blackboard.set(human.aiBlackboard, BB_SPLIT_FAMILY_IDS, familyIds);
+
+  if (strategy === 'migration') {
+    return planMigrationSplit(human, gameState);
+  } else if (strategy === 'concentration') {
+    return planConcentrationSplit(human, gameState);
+  }
+
+  return false;
+}
+
+/**
+ * Plans a migration split: find a suitable location outside current territory
+ */
+function planMigrationSplit(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (!human.aiBlackboard || !human.leaderId) return false;
+
+  const territories = calculateAllTerritories(gameState);
+
+  // Find a position far from current territory
+  let bestPosition: Vector2D | null = null;
+  let maxMinDistance = 0;
+
+  // Sample positions in a grid
+  const gridStep = 100;
+  for (let x = 0; x < gameState.mapDimensions.width; x += gridStep) {
+    for (let y = 0; y < gameState.mapDimensions.height; y += gridStep) {
+      const position = { x, y };
+
+      // Calculate minimum distance to any territory
+      let minDistanceToAnyTerritory = Infinity;
+
+      for (const [, territory] of territories) {
+        for (const circle of territory.circles) {
+          const distance = calculateWrappedDistance(
+            position,
+            circle.center,
+            gameState.mapDimensions.width,
+            gameState.mapDimensions.height,
+          );
+          const distanceToEdge = distance - circle.radius;
+          if (distanceToEdge < minDistanceToAnyTerritory) {
+            minDistanceToAnyTerritory = distanceToEdge;
+          }
+        }
+      }
+
+      // We want a position that is far from all territories
+      if (minDistanceToAnyTerritory > maxMinDistance && minDistanceToAnyTerritory >= TRIBE_SPLIT_MIGRATION_MIN_DISTANCE) {
+        maxMinDistance = minDistanceToAnyTerritory;
+        bestPosition = position;
+      }
+    }
+  }
+
+  if (!bestPosition) {
+    // Fallback: just pick a position far from the human's current position
+    const angle = Math.random() * Math.PI * 2;
+    const distance = TRIBE_SPLIT_MIGRATION_MIN_DISTANCE + Math.random() * 200;
+    bestPosition = {
+      x: ((human.position.x + Math.cos(angle) * distance) % gameState.mapDimensions.width + gameState.mapDimensions.width) % gameState.mapDimensions.width,
+      y: ((human.position.y + Math.sin(angle) * distance) % gameState.mapDimensions.height + gameState.mapDimensions.height) % gameState.mapDimensions.height,
+    };
+  }
+
+  Blackboard.set(human.aiBlackboard, BB_SPLIT_TARGET_POSITION, bestPosition);
+  return true;
+}
+
+/**
+ * Plans a concentration split: find a suitable storage building to gather at
+ */
+function planConcentrationSplit(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (!human.aiBlackboard || !human.leaderId) return false;
+
+  const indexedState = gameState as IndexedWorldState;
+  const storageBuildings = indexedState.search.building
+    .byProperty('ownerId', human.leaderId)
+    .filter((b) => b.buildingType === BuildingType.StorageSpot && b.isConstructed);
+
+  if (storageBuildings.length === 0) {
+    return false;
+  }
+
+  // Find the closest storage building
+  let closestBuilding: BuildingEntity | null = null;
+  let minDistance = Infinity;
+
+  for (const building of storageBuildings) {
+    const distance = calculateWrappedDistance(
+      human.position,
+      building.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestBuilding = building;
+    }
+  }
+
+  if (!closestBuilding) {
+    return false;
+  }
+
+  Blackboard.set(human.aiBlackboard, BB_SPLIT_TARGET_BUILDING_ID, closestBuilding.id);
+  return true;
+}
+
+// ============================================================================
+// Phase 3: Gathering
+// ============================================================================
+
+/**
+ * Coordinates family members to move towards the gathering point
+ */
+export function coordinateFamilyGathering(human: HumanEntity, gameState: GameWorldState): void {
+  if (!human.aiBlackboard) return;
+
+  const strategy = Blackboard.get<TribeSplitStrategy>(human.aiBlackboard, BB_SPLIT_STRATEGY);
+  const familyIds = Blackboard.get<EntityId[]>(human.aiBlackboard, BB_SPLIT_FAMILY_IDS);
+
+  if (!strategy || !familyIds) return;
+
+  let targetPosition: Vector2D | undefined;
+
+  if (strategy === 'migration') {
+    targetPosition = Blackboard.get<Vector2D>(human.aiBlackboard, BB_SPLIT_TARGET_POSITION);
+  } else if (strategy === 'concentration') {
+    const buildingId = Blackboard.get<EntityId>(human.aiBlackboard, BB_SPLIT_TARGET_BUILDING_ID);
+    if (buildingId) {
+      const building = gameState.entities.entities[buildingId] as BuildingEntity | undefined;
+      if (building) {
+        targetPosition = building.position;
+      }
+    }
+  }
+
+  if (!targetPosition) return;
+
+  // Set target for all family members including the patriarch
+  for (const memberId of familyIds) {
+    const member = gameState.entities.entities[memberId] as HumanEntity | undefined;
+    if (!member || member.type !== 'human') continue;
+
+    const distance = calculateWrappedDistance(
+      member.position,
+      targetPosition,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    // Only set target if not already close enough
+    if (distance > TRIBE_SPLIT_GATHER_RADIUS) {
+      member.target = targetPosition;
+      member.activeAction = 'moving';
+    }
+  }
+}
+
+/**
+ * Checks if family members have gathered at the target location
+ * Returns true if at least 80% of family members are within range
+ */
+export function checkFamilyGathered(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (!human.aiBlackboard) return false;
+
+  const strategy = Blackboard.get<TribeSplitStrategy>(human.aiBlackboard, BB_SPLIT_STRATEGY);
+  const familyIds = Blackboard.get<EntityId[]>(human.aiBlackboard, BB_SPLIT_FAMILY_IDS);
+
+  if (!strategy || !familyIds) return false;
+
+  let targetPosition: Vector2D | undefined;
+
+  if (strategy === 'migration') {
+    targetPosition = Blackboard.get<Vector2D>(human.aiBlackboard, BB_SPLIT_TARGET_POSITION);
+  } else if (strategy === 'concentration') {
+    const buildingId = Blackboard.get<EntityId>(human.aiBlackboard, BB_SPLIT_TARGET_BUILDING_ID);
+    if (buildingId) {
+      const building = gameState.entities.entities[buildingId] as BuildingEntity | undefined;
+      if (building) {
+        targetPosition = building.position;
+      }
+    }
+  }
+
+  if (!targetPosition) return false;
+
+  // Check if all family members are within gathering radius
+  let gatheredCount = 0;
+  for (const familyId of familyIds) {
+    const member = gameState.entities.entities[familyId] as HumanEntity | undefined;
+    if (!member || member.type !== 'human') continue;
+
+    const distance = calculateWrappedDistance(
+      member.position,
+      targetPosition,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance <= TRIBE_SPLIT_GATHER_RADIUS) {
+      gatheredCount++;
+    }
+  }
+
+  // Require at least 80% of family to be gathered
+  const requiredCount = Math.ceil(familyIds.length * 0.8);
+  return gatheredCount >= requiredCount;
+}
+
+// ============================================================================
+// Phase 4: Execute Split
+// ============================================================================
+
+/**
+ * Phase 4: Execute the tribe split
+ */
+export function executeSplit(human: HumanEntity, gameState: GameWorldState): boolean {
+  if (!human.aiBlackboard) return false;
+
+  const strategy = Blackboard.get<TribeSplitStrategy>(human.aiBlackboard, BB_SPLIT_STRATEGY);
+  const familyIds = Blackboard.get<EntityId[]>(human.aiBlackboard, BB_SPLIT_FAMILY_IDS);
+
+  if (!strategy || !familyIds) return false;
+
+  const previousLeader = human.leaderId ? (gameState.entities.entities[human.leaderId] as HumanEntity | undefined) : undefined;
 
   const newTribeBadge = generateTribeBadge();
-  const descendants = findDescendants(human, gameState);
 
   // The founder becomes the new leader
   human.leaderId = human.id;
@@ -93,304 +492,106 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
     },
     diplomacy: {},
   };
+
+  // Set diplomacy with previous leader
   if (previousLeader && previousLeader.tribeControl?.diplomacy) {
     previousLeader.tribeControl.diplomacy[human.id] = DiplomacyStatus.Hostile;
   }
-  // Update all descendants
-  for (const descendant of descendants) {
-    descendant.leaderId = human.id;
-    descendant.tribeBadge = newTribeBadge;
+
+  // Update all family members
+  for (const familyId of familyIds) {
+    if (familyId === human.id) continue;
+    const member = gameState.entities.entities[familyId] as HumanEntity | undefined;
+    if (!member || member.type !== 'human') continue;
+
+    member.leaderId = human.id;
+    member.tribeBadge = newTribeBadge;
   }
+
+  // Handle strategy-specific actions
+  if (strategy === 'concentration') {
+    const buildingId = Blackboard.get<EntityId>(human.aiBlackboard, BB_SPLIT_TARGET_BUILDING_ID);
+    if (buildingId) {
+      const building = gameState.entities.entities[buildingId] as BuildingEntity | undefined;
+      if (building && building.type === 'building') {
+        // Take over the building
+        building.ownerId = human.id;
+      }
+    }
+  }
+  // For migration strategy, the family should build a new storage at the target position
+  // This will be handled by the normal building behavior
 
   // Add notification
   addNotification(gameState, {
     type: NotificationType.NewTribeFormed,
-    message: `A new tribe has formed! ${newTribeBadge}`,
+    message: `A new tribe has formed via ${strategy}! ${newTribeBadge}`,
     duration: NOTIFICATION_DURATION_LONG_HOURS,
     targetEntityIds: [human.id],
-    highlightedEntityIds: [human.id, ...descendants.map((d) => d.id)],
+    highlightedEntityIds: familyIds,
   });
 
   // Play sound
   const updateContext: UpdateContext = { gameState, deltaTime: 0 };
   playSoundAt(updateContext, SoundType.TribeSplit, human.position);
+
+  // Reset split state
+  resetSplitState(human.aiBlackboard, gameState.time);
+
+  return true;
 }
 
+// ============================================================================
+// Legacy Functions (Backward Compatibility)
+// ============================================================================
+
+/**
+ * Legacy function for backward compatibility - now delegates to the new multi-phase system
+ */
+export function canSplitTribe(human: HumanEntity, gameState: GameWorldState): { canSplit: boolean; progress?: number } {
+  const result = checkSplitConditions(human, gameState);
+  return { canSplit: result.canSplit, progress: result.progress };
+}
+
+/**
+ * Legacy function for backward compatibility - now delegates to the new multi-phase system
+ */
+export function performTribeSplit(human: HumanEntity, gameState: GameWorldState): void {
+  if (!human.aiBlackboard) return;
+
+  // Quick path: check, plan, and execute immediately (for backward compatibility)
+  const checkResult = checkSplitConditions(human, gameState);
+  if (!checkResult.canSplit || !checkResult.strategy) return;
+
+  setSplitStrategy(human.aiBlackboard, checkResult.strategy);
+
+  if (!planSplit(human, gameState)) return;
+
+  // For legacy behavior, skip gathering phase and execute immediately
+  executeSplit(human, gameState);
+}
+
+/**
+ * Helper function for propagating new leader to descendants (unchanged)
+ */
 export function propagateNewLeaderToDescendants(
   newLeader: HumanEntity,
   human: HumanEntity,
   gameState: GameWorldState,
 ): void {
-  human.leaderId = newLeader.id; // Set the new leader for this human
-  human.tribeBadge = newLeader.tribeBadge; // Update tribe badge to match new leader
+  human.leaderId = newLeader.id;
+  human.tribeBadge = newLeader.tribeBadge;
 
-  // Recursively propagate to children
   if (human.gender === 'male') {
     findChildren(gameState, human).forEach((child) => {
       propagateNewLeaderToDescendants(newLeader, child, gameState);
       if (child.motherId && human.partnerIds?.includes(child.motherId)) {
-        // If the child is from the same family, propagate to the mother as long as she is currently partnered with the father
         const mother = gameState.entities.entities[child.motherId] as HumanEntity | undefined;
         if (mother) {
-          mother.leaderId = newLeader.id; // Set the new leader for the mother
-          mother.tribeBadge = newLeader.tribeBadge; // Update tribe badge to match new leader
+          mother.leaderId = newLeader.id;
+          mother.tribeBadge = newLeader.tribeBadge;
         }
       }
     });
   }
-}
-
-// ============================================================================
-// Strategic Split Utility Functions
-// ============================================================================
-
-/**
- * Determines the appropriate split strategy based on family size relative to tribe size.
- * - Migration: Move away to a safe spot, then split, then build a base. Used when the splitting group is small (<50%).
- * - Concentration: Gather at a key building (storage), split, and take it over. Used when the splitting group is large (>=50%).
- */
-export function determineSplitStrategy(human: HumanEntity, gameState: GameWorldState): TribeSplitStrategy {
-  if (!human.leaderId) {
-    return TribeSplitStrategy.Migration;
-  }
-
-  const tribeMembers = findTribeMembers(human.leaderId, gameState).filter((m) => m.isAdult);
-  const descendants = findDescendants(human, gameState).filter((d) => d.isAdult);
-  const familySize = descendants.length + 1; // +1 for the patriarch
-
-  const familyRatio = familySize / Math.max(1, tribeMembers.length);
-
-  // Use concentration strategy if family is >= 50% of the tribe
-  if (familyRatio >= TRIBE_SPLIT_CONCENTRATION_THRESHOLD) {
-    return TribeSplitStrategy.Concentration;
-  }
-
-  return TribeSplitStrategy.Migration;
-}
-
-/**
- * Finds a safe position outside the current tribe's territory for migration.
- * Searches in expanding rings from the patriarch's position, avoiding other tribes' territories.
- */
-export function findSafeMigrationTarget(human: HumanEntity, gameState: GameWorldState): Vector2D | null {
-  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-  const territories = calculateAllTerritories(gameState);
-  const currentLeaderId = human.leaderId;
-
-  if (!currentLeaderId) {
-    return null;
-  }
-
-  const tribeCenter = getTribeCenter(currentLeaderId, gameState);
-
-  // Search in expanding rings from the tribe center, looking for a position outside current territory
-  const angleStep = Math.PI / 8; // 16 directions
-  const distanceStep = 50;
-
-  for (let distance = TRIBE_SPLIT_MIGRATION_MIN_DISTANCE; distance <= TRIBE_SPLIT_MIGRATION_MAX_DISTANCE; distance += distanceStep) {
-    for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-      const candidateX = tribeCenter.x + Math.cos(angle) * distance;
-      const candidateY = tribeCenter.y + Math.sin(angle) * distance;
-
-      const position: Vector2D = {
-        x: ((candidateX % worldWidth) + worldWidth) % worldWidth,
-        y: ((candidateY % worldHeight) + worldHeight) % worldHeight,
-      };
-
-      // Check if the position is outside all territories
-      let isInsideAnyTerritory = false;
-      for (const [, territory] of territories) {
-        const checkResult = checkPositionInTerritory(position, territory, gameState);
-        if (checkResult.isInsideTerritory) {
-          isInsideAnyTerritory = true;
-          break;
-        }
-      }
-
-      // If the position is outside all territories, it's a good migration target
-      if (!isInsideAnyTerritory) {
-        return position;
-      }
-    }
-  }
-
-  // Fallback: return a position far from tribe center if no perfect spot found
-  const direction = getDirectionVectorOnTorus(
-    tribeCenter,
-    { x: human.position.x + 100, y: human.position.y + 100 },
-    worldWidth,
-    worldHeight,
-  );
-  const normalizedDirection = vectorNormalize(direction);
-  const fallbackDistance = TRIBE_SPLIT_MIGRATION_MIN_DISTANCE;
-
-  return {
-    x: (((tribeCenter.x + normalizedDirection.x * fallbackDistance) % worldWidth) + worldWidth) % worldWidth,
-    y: (((tribeCenter.y + normalizedDirection.y * fallbackDistance) % worldHeight) + worldHeight) % worldHeight,
-  };
-}
-
-/**
- * Finds the closest storage spot owned by the current tribe for the concentration strategy.
- * Returns the storage building and its position if found.
- */
-export function findClosestStorageForConcentration(
-  human: HumanEntity,
-  gameState: GameWorldState,
-): { storage: BuildingEntity; position: Vector2D } | null {
-  if (!human.leaderId) {
-    return null;
-  }
-
-  const indexedState = gameState as IndexedWorldState;
-  const storageSpots = indexedState.search.building
-    .byRadius(human.position, TRIBE_SPLIT_BUILDING_SEARCH_RADIUS)
-    .filter((building) => {
-      return (
-        building.buildingType === 'storageSpot' &&
-        building.ownerId === human.leaderId &&
-        building.isConstructed
-      );
-    });
-
-  if (storageSpots.length === 0) {
-    return null;
-  }
-
-  // Find the closest storage
-  let closestStorage: BuildingEntity | null = null;
-  let closestDistance = Infinity;
-
-  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-
-  for (const storage of storageSpots) {
-    const distance = calculateWrappedDistance(human.position, storage.position, worldWidth, worldHeight);
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closestStorage = storage;
-    }
-  }
-
-  return closestStorage ? { storage: closestStorage, position: closestStorage.position } : null;
-}
-
-/**
- * Gets the IDs of all family members that will be part of the split.
- * This includes the patriarch and all their descendants.
- */
-export function getSplittingFamilyMemberIds(human: HumanEntity, gameState: GameWorldState): EntityId[] {
-  const descendants = findDescendants(human, gameState);
-  return [human.id, ...descendants.map((d) => d.id)];
-}
-
-/**
- * Creates the initial split state for a patriarch starting the split process.
- */
-export function createSplitState(
-  human: HumanEntity,
-  gameState: GameWorldState,
-  currentTime: number,
-): TribeSplitState | null {
-  const initialStrategy = determineSplitStrategy(human, gameState);
-  const familyMemberIds = getSplittingFamilyMemberIds(human, gameState);
-
-  let gatheringTarget: Vector2D;
-  let targetBuildingId: EntityId | undefined;
-  let finalStrategy = initialStrategy;
-
-  if (initialStrategy === TribeSplitStrategy.Concentration) {
-    const storageInfo = findClosestStorageForConcentration(human, gameState);
-    if (storageInfo) {
-      gatheringTarget = storageInfo.position;
-      targetBuildingId = storageInfo.storage.id;
-    } else {
-      // Fall back to migration if no storage found
-      finalStrategy = TribeSplitStrategy.Migration;
-      const migrationTarget = findSafeMigrationTarget(human, gameState);
-      if (!migrationTarget) {
-        return null;
-      }
-      gatheringTarget = migrationTarget;
-    }
-  } else {
-    const migrationTarget = findSafeMigrationTarget(human, gameState);
-    if (!migrationTarget) {
-      return null;
-    }
-    gatheringTarget = migrationTarget;
-  }
-
-  return {
-    strategy: finalStrategy,
-    phase: TribeSplitPhase.Planning,
-    gatheringTarget,
-    startTime: currentTime,
-    familyMemberIds,
-    targetBuildingId,
-  };
-}
-
-/**
- * Checks if all family members have arrived at the gathering target.
- */
-export function areFamilyMembersGathered(
-  familyMemberIds: EntityId[],
-  gatheringTarget: Vector2D,
-  gameState: GameWorldState,
-  arrivalDistance: number,
-): boolean {
-  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-
-  for (const memberId of familyMemberIds) {
-    const member = gameState.entities.entities[memberId] as HumanEntity | undefined;
-    if (!member || member.type !== 'human') {
-      continue; // Skip if member no longer exists
-    }
-
-    const distance = calculateWrappedDistance(member.position, gatheringTarget, worldWidth, worldHeight);
-    if (distance > arrivalDistance) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Sets the target for all family members to move towards the gathering point.
- * Called by the patriarch to coordinate the family's movement.
- */
-export function coordinateFamilyMovement(
-  _human: HumanEntity,
-  splitState: TribeSplitState,
-  gameState: GameWorldState,
-): void {
-  for (const memberId of splitState.familyMemberIds) {
-    const member = gameState.entities.entities[memberId] as HumanEntity | undefined;
-    if (!member || member.type !== 'human') {
-      continue;
-    }
-
-    // Set the member's target to the gathering point
-    member.target = splitState.gatheringTarget;
-    member.activeAction = 'moving';
-  }
-}
-
-/**
- * Transfers ownership of a building to a new owner (the new tribe leader).
- * Used in the concentration strategy when the splitting family takes over a storage.
- */
-export function transferBuildingOwnership(
-  buildingId: EntityId,
-  newOwnerId: EntityId,
-  gameState: GameWorldState,
-): boolean {
-  const building = gameState.entities.entities[buildingId] as BuildingEntity | undefined;
-  if (!building || building.type !== 'building') {
-    return false;
-  }
-
-  building.ownerId = newOwnerId;
-  return true;
 }

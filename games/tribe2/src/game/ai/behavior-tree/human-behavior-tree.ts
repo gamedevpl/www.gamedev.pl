@@ -28,6 +28,7 @@ import {
   createTribeMemberCombatBehavior,
   createFollowPatriarchBehavior,
   createTribeSplitBehavior,
+  createTribeSplitGatherBehavior,
   createJealousyAttackBehavior,
   createDefendFamilyBehavior,
   createDesperateAttackBehavior,
@@ -173,6 +174,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
       new CachingNode(createTribeSplitBehavior(3), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 2),
+
+      // --- TRIBE SPLIT GATHERING (for family members following a splitting patriarch) ---
+      createTribeSplitGatherBehavior(2),
 
       // --- TRIBE MANAGEMENT (MIGRATION) ---
       new NonPlayerControlled(createTribeMigrationBehavior(3), 'Gated Tribe Migration', 2),
