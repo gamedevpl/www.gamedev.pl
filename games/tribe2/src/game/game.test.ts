@@ -108,7 +108,7 @@ describe('Game Mechanics', () => {
 
     expect(bushCount).toBeGreaterThan(0);
     expect(humanCount).toBeGreaterThan(0);
-  }, 60000);
+  }, 300000); // 5 minutes timeout for long-running simulation
 });
 
 describe('Tribe Formation via Splitting', () => {

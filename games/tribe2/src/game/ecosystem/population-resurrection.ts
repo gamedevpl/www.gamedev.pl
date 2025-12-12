@@ -3,7 +3,7 @@
  * Handles direct population intervention when species go extinct.
  */
 
-import { createPrey, createPredator, createBerryBush } from '../entities/entities-update';
+import { createPrey, createPredator, createBerryBush, createHuman } from '../entities/entities-update';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { generateRandomPreyGeneCode } from '../entities/characters/prey/prey-utils';
@@ -14,7 +14,9 @@ import {
 } from '../game-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
 import { Vector2D } from '../utils/math-types';
+import { generateTribeBadge } from '../utils/world-utils';
 
 /**
  * Find a good spawn location for prey near bushes but away from predators and humans
@@ -272,6 +274,156 @@ export function emergencyPopulationBoost(gameState: GameWorldState): boolean {
       const bushPosition = findBushSpawnLocation(indexedState);
       createBerryBush(gameState.entities, bushPosition, gameState.time);
     }
+    interventionMade = true;
+  }
+  
+  // Check human population for critical issues
+  const humanIntervention = checkHumanPopulationHealth(gameState);
+  if (humanIntervention) {
+    interventionMade = true;
+  }
+  
+  return interventionMade;
+}
+
+/**
+ * Find a good spawn location for humans near existing humans or bushes
+ */
+function findHumanSpawnLocation(indexedState: IndexedWorldState): Vector2D {
+  const humans = indexedState.search.human.byProperty('type', 'human') as HumanEntity[];
+  const bushes = indexedState.search.berryBush.byProperty('type', 'berryBush') as BerryBushEntity[];
+  
+  // Try to find location near existing humans first
+  for (let attempt = 0; attempt < 15; attempt++) {
+    let candidate: Vector2D;
+    
+    if (humans.length > 0 && attempt < 10) {
+      // Try to spawn near an existing human
+      const randomHuman = humans[Math.floor(Math.random() * humans.length)];
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = 50 + Math.random() * 100; // 50-150 pixels from human
+      candidate = {
+        x: Math.max(50, Math.min(MAP_WIDTH - 50, randomHuman.position.x + Math.cos(angle) * distance)),
+        y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomHuman.position.y + Math.sin(angle) * distance))
+      };
+    } else if (bushes.length > 0) {
+      // Try to spawn near a bush
+      const randomBush = bushes[Math.floor(Math.random() * bushes.length)];
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = 30 + Math.random() * 70;
+      candidate = {
+        x: Math.max(50, Math.min(MAP_WIDTH - 50, randomBush.position.x + Math.cos(angle) * distance)),
+        y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomBush.position.y + Math.sin(angle) * distance))
+      };
+    } else {
+      // Fallback to center of map
+      candidate = {
+        x: MAP_WIDTH * 0.3 + Math.random() * MAP_WIDTH * 0.4,
+        y: MAP_HEIGHT * 0.3 + Math.random() * MAP_HEIGHT * 0.4
+      };
+    }
+    
+    return candidate;
+  }
+  
+  // Fallback to center area
+  return {
+    x: MAP_WIDTH * 0.3 + Math.random() * MAP_WIDTH * 0.4,
+    y: MAP_HEIGHT * 0.3 + Math.random() * MAP_HEIGHT * 0.4
+  };
+}
+
+/**
+ * Respawn humans when population is critically low or gender-imbalanced
+ */
+function respawnHumans(gameState: GameWorldState, count: number, gender: 'male' | 'female'): void {
+  console.log(`🚨 Respawning ${count} ${gender} humans to prevent extinction`);
+  const indexedState = gameState as IndexedWorldState;
+  const humans = indexedState.search.human.byProperty('type', 'human') as HumanEntity[];
+  
+  // Find an existing tribe to join, or create a new one
+  let leaderId: number | undefined;
+  let tribeBadge: string | undefined;
+  
+  if (humans.length > 0) {
+    // Join an existing tribe
+    const existingHuman = humans.find(h => h.leaderId !== undefined);
+    if (existingHuman) {
+      leaderId = existingHuman.leaderId;
+      tribeBadge = existingHuman.tribeBadge;
+    }
+  }
+  
+  for (let i = 0; i < count; i++) {
+    const spawnPosition = findHumanSpawnLocation(indexedState);
+    const newHuman = createHuman(
+      gameState.entities,
+      spawnPosition,
+      gameState.time,
+      gender,
+      false, // not a player
+      20 + Math.random() * 5, // age 20-25
+    );
+    
+    // If no tribe exists, make the first male a leader
+    if (!leaderId && gender === 'male' && i === 0) {
+      leaderId = newHuman.id;
+      tribeBadge = generateTribeBadge();
+      newHuman.leaderId = leaderId;
+      newHuman.tribeBadge = tribeBadge;
+    } else if (leaderId) {
+      newHuman.leaderId = leaderId;
+      newHuman.tribeBadge = tribeBadge;
+    }
+  }
+}
+
+/**
+ * Check human population health and intervene if needed
+ */
+export function checkHumanPopulationHealth(gameState: GameWorldState): boolean {
+  const indexedState = gameState as IndexedWorldState;
+  const humans = indexedState.search.human.byProperty('type', 'human') as HumanEntity[];
+  
+  const humanCount = humans.length;
+  const maleCount = humans.filter(h => h.gender === 'male' && h.age >= 16 && h.age < 60).length;
+  const femaleCount = humans.filter(h => h.gender === 'female' && h.age >= 16 && h.age < 40).length;
+  
+  let interventionMade = false;
+  
+  // If human population is extinct, respawn a starter tribe
+  if (humanCount === 0) {
+    console.log('🚨 Human extinction detected! Respawning starter tribe.');
+    respawnHumans(gameState, 3, 'male');
+    respawnHumans(gameState, 3, 'female');
+    return true;
+  }
+  
+  // If population is critically low (less than 4), boost it
+  if (humanCount > 0 && humanCount < 4) {
+    console.log(`🚨 Human population critically low (${humanCount}). Boosting population.`);
+    if (maleCount < 2) {
+      respawnHumans(gameState, 2 - maleCount, 'male');
+      interventionMade = true;
+    }
+    if (femaleCount < 2) {
+      respawnHumans(gameState, 2 - femaleCount, 'female');
+      interventionMade = true;
+    }
+    return interventionMade;
+  }
+  
+  // Check for critical gender imbalance that would prevent procreation
+  // Need at least 1 fertile male and 1 fertile female
+  if (maleCount === 0 && femaleCount > 0) {
+    console.log(`🚨 No fertile males! Respawning males to restore balance.`);
+    respawnHumans(gameState, Math.min(2, Math.ceil(femaleCount / 3)), 'male');
+    interventionMade = true;
+  }
+  
+  if (femaleCount === 0 && maleCount > 0) {
+    console.log(`🚨 No fertile females! Respawning females to restore balance.`);
+    respawnHumans(gameState, Math.min(2, Math.ceil(maleCount / 3)), 'female');
     interventionMade = true;
   }
   
