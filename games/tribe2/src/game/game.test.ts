@@ -21,6 +21,8 @@ const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | und
 describe('Game Mechanics', () => {
   it('should be able to run for 100 years without a player and still have alive humans', () => {
     let gameState: GameWorldState = initGame();
+    // disable auto save
+    gameState.autosaveIntervalSeconds = 0;
 
     // Find the player and disable player control
     const playerEntity = Object.values(gameState.entities.entities).find(
