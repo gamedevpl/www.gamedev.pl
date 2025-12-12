@@ -291,19 +291,21 @@ export function createSplitState(
   gameState: GameWorldState,
   currentTime: number,
 ): TribeSplitState | null {
-  const strategy = determineSplitStrategy(human, gameState);
+  const initialStrategy = determineSplitStrategy(human, gameState);
   const familyMemberIds = getSplittingFamilyMemberIds(human, gameState);
 
   let gatheringTarget: Vector2D;
   let targetBuildingId: EntityId | undefined;
+  let finalStrategy = initialStrategy;
 
-  if (strategy === TribeSplitStrategy.Concentration) {
+  if (initialStrategy === TribeSplitStrategy.Concentration) {
     const storageInfo = findClosestStorageForConcentration(human, gameState);
     if (storageInfo) {
       gatheringTarget = storageInfo.position;
       targetBuildingId = storageInfo.storage.id;
     } else {
       // Fall back to migration if no storage found
+      finalStrategy = TribeSplitStrategy.Migration;
       const migrationTarget = findSafeMigrationTarget(human, gameState);
       if (!migrationTarget) {
         return null;
@@ -319,7 +321,7 @@ export function createSplitState(
   }
 
   return {
-    strategy: targetBuildingId ? TribeSplitStrategy.Concentration : TribeSplitStrategy.Migration,
+    strategy: finalStrategy,
     phase: TribeSplitPhase.Planning,
     gatheringTarget,
     startTime: currentTime,

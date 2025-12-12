@@ -55,8 +55,15 @@ function getSplitStateFromLeaderBlackboard(
 
   const targetBuildingId = Blackboard.get<number>(leaderBlackboard, getSplitStateKey(patriarchId, 'buildingId'));
 
-  // Parse family IDs from comma-separated string
-  const familyMemberIds = familyIds.split(',').map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
+  // Parse family IDs from comma-separated string (handle empty string case)
+  const familyMemberIds = familyIds.length > 0
+    ? familyIds.split(',').map((id) => parseInt(id, 10)).filter((id) => !isNaN(id))
+    : [];
+
+  // If no family members, the state is invalid
+  if (familyMemberIds.length === 0) {
+    return null;
+  }
 
   return {
     strategy: strategy as TribeSplitStrategy,
@@ -352,26 +359,30 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
     depth + 1,
   );
 
-  // Branch for initiating a new split
-  const initiateSplitProcess = new Sequence(
-    [canInitiateSplit, initializeSplit],
-    'Initiate Split Process',
+  // Branch for initiating a new split (wrapped in cooldown to rate-limit checking)
+  const initiateSplitProcess = new CooldownNode(
+    TRIBE_SPLIT_CHECK_INTERVAL_HOURS,
+    new Sequence(
+      [canInitiateSplit, initializeSplit],
+      'Initiate Split Sequence',
+      depth + 2,
+    ),
+    'Initiate Split Cooldown',
     depth + 1,
   );
 
   // Main selector: either continue an in-progress split or start a new one
+  // The cooldown is only on the initiate branch, not the continue branch
   const tribeSplitAction = new Selector(
     [
-      // First, check if there's an in-progress split to continue
+      // First, check if there's an in-progress split to continue (no cooldown)
       new Sequence([isSplitInProgress, continueSplitProcess], 'Handle In-Progress Split', depth + 1),
-      // Otherwise, try to initiate a new split
+      // Otherwise, try to initiate a new split (with cooldown)
       initiateSplitProcess,
     ],
     'Tribe Split Action',
     depth,
   );
 
-  // Wrap the entire action in a CooldownNode to rate-limit this behavior.
-  // Note: The cooldown only applies when not in the middle of a split process.
-  return new CooldownNode(TRIBE_SPLIT_CHECK_INTERVAL_HOURS, tribeSplitAction, 'Tribe Split Cooldown', depth);
+  return tribeSplitAction;
 }
