@@ -12,11 +12,20 @@ import {
   MAP_WIDTH,
   MAP_HEIGHT
 } from '../game-consts.ts';
+import {
+  HUMAN_MIN_PROCREATION_AGE,
+  HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  HUMAN_MAX_AGE_YEARS
+} from '../human-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { Vector2D } from '../utils/math-types';
 import { generateTribeBadge } from '../utils/world-utils';
+
+// Human population resurrection constants
+const HUMAN_CRITICAL_POPULATION_THRESHOLD = 4; // Minimum population before intervention
+const HUMAN_MIN_FERTILE_PER_GENDER = 2; // Minimum fertile members of each gender
 
 /**
  * Find a good spawn location for prey near bushes but away from predators and humans
@@ -306,6 +315,8 @@ function findHumanSpawnLocation(indexedState: IndexedWorldState): Vector2D {
         x: Math.max(50, Math.min(MAP_WIDTH - 50, randomHuman.position.x + Math.cos(angle) * distance)),
         y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomHuman.position.y + Math.sin(angle) * distance))
       };
+      // For humans, we don't need to check for safety - just return a valid location near existing humans
+      return candidate;
     } else if (bushes.length > 0) {
       // Try to spawn near a bush
       const randomBush = bushes[Math.floor(Math.random() * bushes.length)];
@@ -315,15 +326,8 @@ function findHumanSpawnLocation(indexedState: IndexedWorldState): Vector2D {
         x: Math.max(50, Math.min(MAP_WIDTH - 50, randomBush.position.x + Math.cos(angle) * distance)),
         y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomBush.position.y + Math.sin(angle) * distance))
       };
-    } else {
-      // Fallback to center of map
-      candidate = {
-        x: MAP_WIDTH * 0.3 + Math.random() * MAP_WIDTH * 0.4,
-        y: MAP_HEIGHT * 0.3 + Math.random() * MAP_HEIGHT * 0.4
-      };
+      return candidate;
     }
-    
-    return candidate;
   }
   
   // Fallback to center area
@@ -386,28 +390,30 @@ export function checkHumanPopulationHealth(gameState: GameWorldState): boolean {
   const humans = indexedState.search.human.byProperty('type', 'human') as HumanEntity[];
   
   const humanCount = humans.length;
-  const maleCount = humans.filter(h => h.gender === 'male' && h.age >= 16 && h.age < 60).length;
-  const femaleCount = humans.filter(h => h.gender === 'female' && h.age >= 16 && h.age < 40).length;
+  // Use constants for fertility age ranges
+  const maleMaxFertileAge = HUMAN_MAX_AGE_YEARS * 0.75; // Males can procreate until 75% of max age
+  const maleCount = humans.filter(h => h.gender === 'male' && h.age >= HUMAN_MIN_PROCREATION_AGE && h.age < maleMaxFertileAge).length;
+  const femaleCount = humans.filter(h => h.gender === 'female' && h.age >= HUMAN_MIN_PROCREATION_AGE && h.age < HUMAN_FEMALE_MAX_PROCREATION_AGE).length;
   
   let interventionMade = false;
   
   // If human population is extinct, respawn a starter tribe
   if (humanCount === 0) {
     console.log('🚨 Human extinction detected! Respawning starter tribe.');
-    respawnHumans(gameState, 3, 'male');
-    respawnHumans(gameState, 3, 'female');
+    respawnHumans(gameState, HUMAN_MIN_FERTILE_PER_GENDER + 1, 'male');
+    respawnHumans(gameState, HUMAN_MIN_FERTILE_PER_GENDER + 1, 'female');
     return true;
   }
   
-  // If population is critically low (less than 4), boost it
-  if (humanCount > 0 && humanCount < 4) {
+  // If population is critically low, boost it
+  if (humanCount > 0 && humanCount < HUMAN_CRITICAL_POPULATION_THRESHOLD) {
     console.log(`🚨 Human population critically low (${humanCount}). Boosting population.`);
-    if (maleCount < 2) {
-      respawnHumans(gameState, 2 - maleCount, 'male');
+    if (maleCount < HUMAN_MIN_FERTILE_PER_GENDER) {
+      respawnHumans(gameState, HUMAN_MIN_FERTILE_PER_GENDER - maleCount, 'male');
       interventionMade = true;
     }
-    if (femaleCount < 2) {
-      respawnHumans(gameState, 2 - femaleCount, 'female');
+    if (femaleCount < HUMAN_MIN_FERTILE_PER_GENDER) {
+      respawnHumans(gameState, HUMAN_MIN_FERTILE_PER_GENDER - femaleCount, 'female');
       interventionMade = true;
     }
     return interventionMade;
@@ -417,13 +423,13 @@ export function checkHumanPopulationHealth(gameState: GameWorldState): boolean {
   // Need at least 1 fertile male and 1 fertile female
   if (maleCount === 0 && femaleCount > 0) {
     console.log(`🚨 No fertile males! Respawning males to restore balance.`);
-    respawnHumans(gameState, Math.min(2, Math.ceil(femaleCount / 3)), 'male');
+    respawnHumans(gameState, Math.min(HUMAN_MIN_FERTILE_PER_GENDER, Math.ceil(femaleCount / 3)), 'male');
     interventionMade = true;
   }
   
   if (femaleCount === 0 && maleCount > 0) {
     console.log(`🚨 No fertile females! Respawning females to restore balance.`);
-    respawnHumans(gameState, Math.min(2, Math.ceil(maleCount / 3)), 'female');
+    respawnHumans(gameState, Math.min(HUMAN_MIN_FERTILE_PER_GENDER, Math.ceil(maleCount / 3)), 'female');
     interventionMade = true;
   }
   
