@@ -16,10 +16,6 @@ import {
 } from '../../../human-consts.ts';
 import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
 import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui/ui-consts.ts';
-import {
-  CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
-  NOTIFICATION_DURATION_MEDIUM_HOURS,
-} from '../../../notifications/notification-consts.ts';
 import { HumanEntity } from './human-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
@@ -65,25 +61,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
 
   entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
-
-  // --- Starving Children Notification Check (for player) ---
-  if (entity.isPlayer) {
-    const starvingChildren = findChildren(gameState, entity).filter(
-      (child) => child.hunger >= CHILD_HUNGER_THRESHOLD_FOR_NOTIFICATION,
-    );
-
-    if (starvingChildren.length > 0) {
-      const starvingIds = starvingChildren.map((c) => c.id);
-      addNotification(gameState, {
-        identifier: 'children_starving',
-        type: NotificationType.ChildrenStarving,
-        message: 'Your children are starving!',
-        duration: NOTIFICATION_DURATION_MEDIUM_HOURS,
-        targetEntityIds: starvingIds,
-        highlightedEntityIds: starvingIds,
-      });
-    }
-  }
 
   if (entity.gender === 'female' && entity.isPregnant && entity.gestationTime) {
     entity.gestationTime -= gameHoursDelta;

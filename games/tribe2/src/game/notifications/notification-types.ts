@@ -24,7 +24,6 @@ export enum NotificationType {
   Hello = 'HELLO',
   NewTribeFormed = 'NEW_TRIBE_FORMED',
   NoHeir = 'NO_HEIR',
-  ChildrenStarving = 'CHILDREN_STARVING',
 }
 
 export interface Notification {
