@@ -55,7 +55,7 @@ export const isEnemyBuilding = (human: HumanEntity, building: BuildingEntity, ga
 
   // 2. The building must have an ownerId
   if (!building.ownerId) {
-    return false;
+    return true;
   }
 
   // 3. The building's owner is NOT the human's leader (or human's tribe)
@@ -63,7 +63,12 @@ export const isEnemyBuilding = (human: HumanEntity, building: BuildingEntity, ga
     return false;
   }
 
-  // 4. The diplomacy status between the human's tribe and the building's owner tribe is Hostile
+  // 4. The building owner does not exist in the game state
+  if (!gameState.entities.entities[building.ownerId]) {
+    return true;
+  }
+
+  // 5. The diplomacy status between the human's tribe and the building's owner tribe is Hostile
   const humanTribeDiplomacy = (gameState.entities.entities[human.leaderId] as HumanEntity)?.tribeControl?.diplomacy[
     building.ownerId
   ];

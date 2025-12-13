@@ -361,7 +361,9 @@ export function checkFamilyGathered(human: HumanEntity, gameState: GameWorldStat
   if (!human.aiBlackboard) return [false, 0];
 
   const strategy = Blackboard.get<TribeSplitStrategy>(human.aiBlackboard, BB_SPLIT_STRATEGY);
-  const familyIds = Blackboard.get<EntityId[]>(human.aiBlackboard, BB_SPLIT_FAMILY_IDS);
+  const familyIds = Blackboard.get<EntityId[]>(human.aiBlackboard, BB_SPLIT_FAMILY_IDS)?.filter(
+    (id) => !!gameState.entities.entities[id],
+  );
 
   if (!strategy || !familyIds) return [false, 0];
 
@@ -400,7 +402,7 @@ export function checkFamilyGathered(human: HumanEntity, gameState: GameWorldStat
   }
 
   // Require at least 80% of family to be gathered
-  const requiredCount = Math.ceil(familyIds.length * 0.8);
+  const requiredCount = Math.ceil(familyIds.length * 0.5);
   return [gatheredCount >= requiredCount, gatheredCount / requiredCount];
 }
 
