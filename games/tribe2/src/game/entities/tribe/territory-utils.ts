@@ -94,14 +94,6 @@ export function calculateAllTerritories(gameState: GameWorldState): Map<EntityId
 }
 
 /**
- * Checks if a position is inside a specific territory circle.
- */
-function isInsideCircle(position: Vector2D, circle: TerritoryCircle, worldWidth: number, worldHeight: number): boolean {
-  const distance = calculateWrappedDistance(position, circle.center, worldWidth, worldHeight);
-  return distance <= circle.radius;
-}
-
-/**
  * Gets the distance from a position to the edge of the nearest circle in a territory.
  * Returns negative values if inside, positive if outside.
  */
@@ -136,13 +128,14 @@ export function checkPositionInTerritory(
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
   // Check if inside any circle
-  let isInside = false;
-  for (const circle of territory.circles) {
-    if (isInsideCircle(position, circle, worldWidth, worldHeight)) {
-      isInside = true;
-      break;
-    }
-  }
+  let isInside = (gameState as IndexedWorldState).search.territorySector
+    .byRect({
+      left: position.x,
+      top: position.y,
+      right: position.x,
+      bottom: position.y,
+    })
+    .some((sector) => sector.leaderId === territory.leaderId);
 
   const distanceToEdge = getDistanceToTerritoryEdge(position, territory, worldWidth, worldHeight);
   const isNearBorder = !isInside && distanceToEdge <= TERRITORY_BORDER_PLACEMENT_DISTANCE;
@@ -165,7 +158,7 @@ export function canPlaceBuildingInTerritory(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): { canPlace: boolean; reason?: string } {
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
   const ownerTerritory = territories.get(ownerId);
 
   // If the owner has no territory yet (first building), allow placement
@@ -206,7 +199,7 @@ export function canPlaceBuildingInTerritory(
  * Members should stay within territory or close to its edge.
  */
 export function isValidWanderPosition(position: Vector2D, leaderId: EntityId, gameState: GameWorldState): boolean {
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
   const ownTerritory = territories.get(leaderId);
 
   // If no territory, allow wandering anywhere
@@ -275,7 +268,7 @@ export function isWithinOperatingRange(
   gameState: GameWorldState,
   maxDistanceOutside: number = TERRITORY_WANDER_DISTANCE,
 ): boolean {
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
   const ownTerritory = territories.get(leaderId);
 
   // If no territory (no buildings), allow operating anywhere
@@ -318,7 +311,7 @@ export function constrainWanderToTerritory(
   leaderId: EntityId,
   gameState: GameWorldState,
 ): Vector2D {
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
   const ownTerritory = territories.get(leaderId);
 
   // If no territory, don't constrain

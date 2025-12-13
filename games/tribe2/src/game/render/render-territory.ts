@@ -5,14 +5,12 @@
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { calculateAllTerritories } from '../entities/tribe/territory-utils';
 import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { TerritoryCircle } from '../entities/tribe/territory-types';
-import { IndexType } from '../world-index/world-index-types';
-import { indexItems } from '../world-index/world-index-utils';
-import { calculateWrappedDistance, vectorSubtract } from '../utils/math-utils';
+import { IndexedWorldState, IndexType } from '../world-index/world-index-types';
+import { calculateWrappedDistance } from '../utils/math-utils';
 
 /** Size of the border post flag */
 const BORDER_POST_FLAG_SIZE = 8;
@@ -97,7 +95,7 @@ export function renderAllTerritories(
   _time: number,
   playerLeaderId?: EntityId,
 ): void {
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
 
   // 1. Setup Badges & Colors
   const tribeBadges = new Map<EntityId, string>();
@@ -140,21 +138,10 @@ export function renderAllTerritories(
   const endY =
     Math.floor((viewportCenter.y + canvasDimensions.height / 2 + padding) / TERRITORY_GRID_STEP) * TERRITORY_GRID_STEP;
 
-  // 3. Index territories for quick lookup
-  const index = indexItems(
-    [...territories.entries()].flatMap(([leaderId, territory]) =>
-      territory.circles.map((circle) => ({
-        position: vectorSubtract(circle.center, { x: circle.radius, y: circle.radius }),
-        width: circle.radius * 2,
-        height: circle.radius * 2,
-        circle,
-        leaderId,
-      })),
-    ),
-  );
-
   // 3. Marching Grid Algorithm (Edge Detection)
   // We check the owner of the current point, and compare it to the Right and Down neighbors.
+
+  const index = (gameState as IndexedWorldState).search.territorySector;
 
   for (let y = startY; y <= endY; y += TERRITORY_GRID_STEP) {
     for (let x = startX; x <= endX; x += TERRITORY_GRID_STEP) {

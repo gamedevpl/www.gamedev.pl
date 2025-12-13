@@ -173,7 +173,7 @@ function determineOptimalStrategy(human: HumanEntity, gameState: GameWorldState)
   if (!human.leaderId) return 'migration';
 
   const indexedState = gameState as IndexedWorldState;
-  const territories = calculateAllTerritories(gameState);
+  const territories = indexedState.territories;
   const ownTerritory = territories.get(human.leaderId);
 
   // If no territory (no buildings), migration is the only option
@@ -274,7 +274,7 @@ function isValidMigrationTarget(
 function planMigrationSplit(human: HumanEntity, gameState: GameWorldState): boolean {
   if (!human.aiBlackboard || !human.leaderId) return false;
 
-  const territories = calculateAllTerritories(gameState);
+  const territories = (gameState as IndexedWorldState).territories;
   const worldWidth = gameState.mapDimensions.width;
   const worldHeight = gameState.mapDimensions.height;
 

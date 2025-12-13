@@ -40,3 +40,14 @@ export interface TerritoryCheckResult {
   /** The tribe territory if inside or near one */
   territory?: TribeTerritory;
 }
+
+/**
+ * Represents a sector (grid cell) of the world used for territory calculations.
+ */
+export interface TerritorySector {
+  position: Vector2D;
+  width: number;
+  height: number;
+  circle: TerritoryCircle;
+  leaderId: EntityId;
+}
