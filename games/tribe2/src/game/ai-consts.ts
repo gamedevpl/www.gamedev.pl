@@ -55,13 +55,6 @@ export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expe
 // Leader Meta AI Strategy Constants
 export const LEADER_META_STRATEGY_COOLDOWN_HOURS = 10; // How often the leader re-evaluates the grand strategy
 export const AI_DIPLOMACY_CHECK_INTERVAL_HOURS = 24; // How often the AI leader re-evaluates diplomacy
-export const AI_MIGRATION_CHECK_INTERVAL_HOURS = 24;
-export const AI_MIGRATION_TARGET_SEARCH_RADIUS = 1500;
-export const LEADER_WORLD_ANALYSIS_GRID_SIZE = 500; // The size of each cell in the world analysis grid
-export const LEADER_WORLD_ANALYSIS_GRID_STEP = 400; // The distance between the centers of each cell
-export const LEADER_HABITAT_SCORE_BUSH_WEIGHT = 10; // Points for each bush in a region
-export const LEADER_HABITAT_SCORE_DANGER_WEIGHT = -5; // Points against for each enemy/dangerous entity in a region
-export const LEADER_MIGRATION_SUPERIORITY_THRESHOLD = 1.5; // How much better a new habitat must be to consider moving
 export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat
 export const LEADER_COMBAT_STRENGTH_ADVANTAGE_THRESHOLD = 1.2;
 

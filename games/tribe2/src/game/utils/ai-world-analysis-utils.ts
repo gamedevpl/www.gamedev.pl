@@ -1,24 +1,11 @@
-import {
-  AI_DESPERATE_ATTACK_SEARCH_RADIUS,
-  AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT,
-  AI_MIGRATION_TARGET_SEARCH_RADIUS,
-  LEADER_HABITAT_SCORE_BUSH_WEIGHT,
-  LEADER_HABITAT_SCORE_DANGER_WEIGHT,
-  LEADER_MIGRATION_SUPERIORITY_THRESHOLD,
-  LEADER_WORLD_ANALYSIS_GRID_SIZE,
-  LEADER_WORLD_ANALYSIS_GRID_STEP,
-} from '../ai-consts.ts';
-import { MAX_ATTACKERS_PER_TARGET } from '../human-consts.ts';
+import { AI_DESPERATE_ATTACK_SEARCH_RADIUS, AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT } from '../ai-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { EntityId } from '../entities/entities-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
-import { Vector2D } from './math-types';
 import { areFamily, getFamilyMembers } from '../entities/tribe/family-tribe-utils.ts';
-import { getTribeCenter } from './spatial-utils';
 import { isHostile } from './world-utils';
-import { PreyEntity } from '../entities/characters/prey/prey-types';
 
 /**
  * Checks if a human's primary partner is procreating with another human nearby.
@@ -115,54 +102,6 @@ export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWor
   return bestTarget;
 }
 
-export function findBestAttackTarget<T extends HumanEntity | PreyEntity>(
-  sourceHuman: HumanEntity,
-  gameState: GameWorldState,
-  targetType: 'human' | 'prey',
-  maxDistance: number,
-  filterFn?: (entity: T) => boolean,
-): T | null {
-  const indexedState = gameState as IndexedWorldState;
-  const potentialTargets = indexedState.search[targetType].byRadius(sourceHuman.position, maxDistance) as T[];
-
-  let bestTarget: T | null = null;
-  let minAttackers = Infinity;
-  let minDistance = Infinity;
-
-  for (const target of potentialTargets) {
-    if (target.id === sourceHuman.id || (filterFn && !filterFn(target))) {
-      continue;
-    }
-
-    // Count current attackers on this target
-    let currentAttackers = 0;
-    for (const entity of Object.values(gameState.entities.entities)) {
-      if (entity.type === 'human' && (entity as HumanEntity).attackTargetId === target.id) {
-        currentAttackers++;
-      }
-    }
-
-    if (currentAttackers >= MAX_ATTACKERS_PER_TARGET) {
-      continue; // Skip targets that are already sufficiently engaged
-    }
-
-    const distance = calculateWrappedDistance(
-      sourceHuman.position,
-      target.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-
-    // Prioritize targets with fewer attackers, then by distance
-    if (currentAttackers < minAttackers || (currentAttackers === minAttackers && distance < minDistance)) {
-      minAttackers = currentAttackers;
-      minDistance = distance;
-      bestTarget = target;
-    }
-  }
-
-  return bestTarget;
-}
 export function findNearbyEnemiesOfTribe(
   human: HumanEntity,
   gameState: IndexedWorldState,
@@ -187,66 +126,6 @@ export function countTribeAttackersOnTarget(
   return count;
 }
 
-export function calculateHabitabilityScore(
-  position: Vector2D,
-  radius: number,
-  gameState: IndexedWorldState,
-  evaluatingTribeId: EntityId,
-): { score: number; occupyingTribeId?: EntityId } {
-  const bushes = gameState.search.berryBush.byRadius(position, radius);
-  const enemies = gameState.search.human.byRadius(position, radius).filter((h) => h.leaderId !== evaluatingTribeId);
-
-  let score = bushes.length * LEADER_HABITAT_SCORE_BUSH_WEIGHT;
-  score += enemies.length * LEADER_HABITAT_SCORE_DANGER_WEIGHT;
-
-  let occupyingTribeId: EntityId | undefined;
-  if (enemies.length > 0) {
-    const enemyTribeCounts: Record<EntityId, number> = {};
-    for (const enemy of enemies) {
-      if (enemy.leaderId) {
-        enemyTribeCounts[enemy.leaderId] = (enemyTribeCounts[enemy.leaderId] || 0) + 1;
-      }
-    }
-    let maxCount = 0;
-    for (const tribeId in enemyTribeCounts) {
-      if (enemyTribeCounts[tribeId] > maxCount) {
-        maxCount = enemyTribeCounts[tribeId];
-        occupyingTribeId = parseInt(tribeId, 10);
-      }
-    }
-  }
-
-  return { score, occupyingTribeId };
-}
-
-export function findBestHabitat(
-  gameState: IndexedWorldState,
-  evaluatingTribeId: EntityId,
-  gridStep: number,
-): { position: Vector2D; score: number; occupyingTribeId?: EntityId } | null {
-  let bestScore = -Infinity;
-  let bestHabitat: { position: Vector2D; score: number; occupyingTribeId?: EntityId } | null = null;
-
-  for (let x = 0; x < gameState.mapDimensions.width; x += gridStep) {
-    for (let y = 0; y < gameState.mapDimensions.height; y += gridStep) {
-      const position = { x, y };
-      const { score, occupyingTribeId } = calculateHabitabilityScore(
-        position,
-        LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
-        gameState,
-        evaluatingTribeId,
-      );
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestHabitat = { position, score, occupyingTribeId };
-      }
-    }
-  }
-
-  return bestHabitat;
-}
-
 export function calculateTribeStrength(tribeMembers: HumanEntity[]): number {
   return tribeMembers
     .filter((m) => m.isAdult)
@@ -256,74 +135,4 @@ export function calculateTribeStrength(tribeMembers: HumanEntity[]): number {
       strength += member.food.length * 2; // Well-fed members are stronger
       return total + strength;
     }, 0);
-}
-
-export function isTribeUnderAttack(tribeMembers: HumanEntity[], gameState: IndexedWorldState): boolean {
-  for (const member of tribeMembers) {
-    const aggressors = gameState.search.human
-      .byProperty('attackTargetId', member.id)
-      .filter((attacker) => attacker.leaderId !== member.leaderId);
-    if (aggressors.length > 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export function findOptimalMigrationTarget(leader: HumanEntity, gameState: GameWorldState): Vector2D | null {
-  if (leader.id !== leader.leaderId) {
-    return null;
-  }
-
-  const indexedState = gameState as IndexedWorldState;
-  const currentTribeCenter = getTribeCenter(leader.id, gameState);
-  const { score: currentScore } = calculateHabitabilityScore(
-    currentTribeCenter,
-    LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
-    indexedState,
-    leader.id,
-  );
-
-  let bestCandidate: Vector2D | null = null;
-  let bestScore = currentScore;
-
-  const gridStep = LEADER_WORLD_ANALYSIS_GRID_STEP;
-  const searchRadius = AI_MIGRATION_TARGET_SEARCH_RADIUS;
-
-  // Search in a grid around the leader
-  for (let x = leader.position.x - searchRadius; x < leader.position.x + searchRadius; x += gridStep) {
-    for (let y = leader.position.y - searchRadius; y < leader.position.y + searchRadius; y += gridStep) {
-      const position = {
-        x: ((x % gameState.mapDimensions.width) + gameState.mapDimensions.width) % gameState.mapDimensions.width,
-        y: ((y % gameState.mapDimensions.height) + gameState.mapDimensions.height) % gameState.mapDimensions.height,
-      };
-
-      const distanceFromCurrent = calculateWrappedDistance(
-        currentTribeCenter,
-        position,
-        gameState.mapDimensions.width,
-        gameState.mapDimensions.height,
-      );
-
-      // Don't consider spots too close to the current location
-      if (distanceFromCurrent < LEADER_WORLD_ANALYSIS_GRID_SIZE * 2) {
-        continue;
-      }
-
-      const { score: newScore } = calculateHabitabilityScore(
-        position,
-        LEADER_WORLD_ANALYSIS_GRID_SIZE / 2,
-        indexedState,
-        leader.id,
-      );
-
-      // Check if the new spot is significantly better and the best one so far
-      if (newScore > bestScore * LEADER_MIGRATION_SUPERIORITY_THRESHOLD) {
-        bestScore = newScore;
-        bestCandidate = position;
-      }
-    }
-  }
-
-  return bestCandidate;
 }

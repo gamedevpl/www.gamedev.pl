@@ -22,7 +22,6 @@ export * from './defend-family-behavior';
 export * from './desperate-attack-behavior';
 export * from './player-command-behavior';
 export * from './follow-leader-behavior';
-export * from './tribe-migration-behavior';
 export * from './diplomacy-behavior';
 export * from './human-hunt-prey-behavior';
 export * from './human-defend-predator-behavior';

@@ -9,11 +9,11 @@ import {
   setSplitPhase,
   setSplitStrategy,
   checkAndHandleTimeout,
-  coordinateFamilyGathering,
 } from '../../../entities/tribe/tribe-split-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, CooldownNode, Sequence, Selector } from '../nodes';
 import { TRIBE_SPLIT_CHECK_INTERVAL_HOURS } from '../../../entities/tribe/tribe-consts.ts';
+import { findLivingFamilyRoot } from '../../../utils/index.ts';
 
 /**
  * Creates a behavior that allows a potential family leader to split from their current tribe
@@ -39,16 +39,26 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
           new ConditionNode(
             (human: HumanEntity, context: UpdateContext) => {
               if (!human.aiBlackboard) return [false, 'No blackboard'];
-              
+
+              if (!human.leaderId || human.leaderId === human.id) {
+                return [false, 'No tribe or the leader'];
+              }
+
+              const patriarch = findLivingFamilyRoot(human, context.gameState);
+              if (patriarch.id !== human.id) {
+                return [false, 'Not patriarch'];
+              }
+
               const currentPhase = getSplitPhase(human.aiBlackboard);
-              
+
               // Check for timeout in any active phase
               if (currentPhase !== 'idle') {
                 if (checkAndHandleTimeout(human.aiBlackboard, context.gameState.time)) {
+                  setSplitPhase(human.aiBlackboard, 'idle', context.gameState.time);
                   return [false, 'Phase timed out, reset to idle'];
                 }
               }
-              
+
               return [currentPhase === 'idle', `Phase: ${currentPhase}`];
             },
             'Is Idle?',
@@ -59,14 +69,14 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
               if (!human.aiBlackboard) return NodeStatus.FAILURE;
 
               const result = checkSplitConditions(human, context.gameState);
-              
+
               if (result.canSplit && result.strategy) {
                 setSplitPhase(human.aiBlackboard, 'planning', context.gameState.time);
                 setSplitStrategy(human.aiBlackboard, result.strategy);
                 return NodeStatus.SUCCESS;
               }
-              
-              return NodeStatus.FAILURE;
+
+              return [NodeStatus.FAILURE, result.reason || 'Cannot split'];
             },
             'Check Split Conditions',
             depth + 2,
@@ -93,12 +103,12 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
               if (!human.aiBlackboard) return NodeStatus.FAILURE;
 
               const success = planSplit(human, context.gameState);
-              
+
               if (success) {
                 setSplitPhase(human.aiBlackboard, 'gathering', context.gameState.time);
                 return NodeStatus.SUCCESS;
               }
-              
+
               // Planning failed, reset to idle
               setSplitPhase(human.aiBlackboard, 'idle', context.gameState.time);
               return NodeStatus.FAILURE;
@@ -127,19 +137,16 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
             (human: HumanEntity, context: UpdateContext) => {
               if (!human.aiBlackboard) return NodeStatus.FAILURE;
 
-              // Actively coordinate family members to move to the gathering point
-              coordinateFamilyGathering(human, context.gameState);
-
               // Check if family has gathered
-              const gathered = checkFamilyGathered(human, context.gameState);
-              
+              const [gathered, progress] = checkFamilyGathered(human, context.gameState);
+
               if (gathered) {
                 setSplitPhase(human.aiBlackboard, 'executing', context.gameState.time);
                 return NodeStatus.SUCCESS;
               }
-              
+
               // Still gathering, return RUNNING to keep trying
-              return NodeStatus.RUNNING;
+              return [NodeStatus.RUNNING, `Progress: ${progress.toFixed(2)}`];
             },
             'Wait for Family to Gather',
             depth + 2,
@@ -166,13 +173,14 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
               if (!human.aiBlackboard) return NodeStatus.FAILURE;
 
               const success = executeSplit(human, context.gameState);
-              
+
               if (success) {
                 // Split complete, state is reset to idle by executeSplit
                 return NodeStatus.SUCCESS;
               }
-              
-              // Execution failed, reset to idle\n              setSplitPhase(human.aiBlackboard, 'idle', context.gameState.time);
+
+              // Execution failed, reset to idle
+              setSplitPhase(human.aiBlackboard, 'idle', context.gameState.time);
               return NodeStatus.FAILURE;
             },
             'Execute Tribe Split',
@@ -188,10 +196,5 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
   );
 
   // Wrap the entire state machine in a CooldownNode to rate-limit this behavior
-  return new CooldownNode(
-    TRIBE_SPLIT_CHECK_INTERVAL_HOURS,
-    tribeSplitStateMachine,
-    'Tribe Split Cooldown',
-    depth,
-  );
+  return new CooldownNode(TRIBE_SPLIT_CHECK_INTERVAL_HOURS, tribeSplitStateMachine, 'Tribe Split Cooldown', depth);
 }

@@ -9,7 +9,7 @@ export const TERRITORY_BUILDING_RADIUS = 80;
 export const TERRITORY_BORDER_PLACEMENT_DISTANCE = 50;
 
 /** Maximum distance a tribe member will wander from territory edge */
-export const TERRITORY_WANDER_DISTANCE = 400;
+export const TERRITORY_WANDER_DISTANCE = 100;
 
 /** Minimum distance between territories of different tribes */
 export const TERRITORY_MINIMUM_GAP = 20;

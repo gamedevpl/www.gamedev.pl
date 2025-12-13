@@ -3,15 +3,13 @@ import { UpdateContext } from '../../../world-types';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
-import {
-  getSplitPhase,
-  TribeSplitStrategy,
-} from '../../../entities/tribe/tribe-split-utils';
+import { getSplitPhase, TribeSplitStrategy } from '../../../entities/tribe/tribe-split-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { Vector2D } from '../../../utils/math-types';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { TRIBE_SPLIT_GATHER_RADIUS } from '../../../entities/tribe/tribe-consts';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
+import { findLivingFamilyRoot } from '../../../entities/tribe/family-tribe-utils';
 
 // Re-declaring these constants locally to avoid circular dependency issues if they are not exported or to keep it self-contained if needed,
 // but ideally we should import them. Since they are not exported from tribe-split-utils in a way that is easily importable without potential cycles or if they are private,
@@ -38,24 +36,21 @@ export function createTribeSplitGatherBehavior(depth: number): BehaviorNode<Huma
     [
       new ConditionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          // 1. Check if we have a leader
-          if (!human.leaderId || human.leaderId === human.id) {
-            return [false, 'No leader or is leader'];
+          // 1. Find the patriarch of the family line
+          const patriarch = findLivingFamilyRoot(human, context.gameState);
+
+          if (!patriarch.aiBlackboard) {
+            return [false, 'Patriarch has no blackboard'];
           }
 
-          const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
-          if (!leader || !leader.aiBlackboard) {
-            return [false, 'Leader not found or no blackboard'];
-          }
-
-          // 2. Check if leader is in gathering phase
-          const leaderPhase = getSplitPhase(leader.aiBlackboard);
-          if (leaderPhase !== 'gathering') {
-            return [false, `Leader phase: ${leaderPhase}`];
+          // 2. Check if patriarch is in gathering phase
+          const patriarchPhase = getSplitPhase(patriarch.aiBlackboard);
+          if (patriarchPhase !== 'gathering') {
+            return [false, `Patriarch phase: ${patriarchPhase}`];
           }
 
           // 3. Check if we are part of the splitting family
-          const familyIds = Blackboard.get<EntityId[]>(leader.aiBlackboard, BB_SPLIT_FAMILY_IDS);
+          const familyIds = Blackboard.get<EntityId[]>(patriarch.aiBlackboard, BB_SPLIT_FAMILY_IDS);
           if (!familyIds || !familyIds.includes(human.id)) {
             return [false, 'Not in split family'];
           }
@@ -67,17 +62,17 @@ export function createTribeSplitGatherBehavior(depth: number): BehaviorNode<Huma
       ),
       new ActionNode(
         (human: HumanEntity, context: UpdateContext) => {
-          const leader = context.gameState.entities.entities[human.leaderId!] as HumanEntity;
-          // We already checked leader existence in the condition node
+          const patriarch = findLivingFamilyRoot(human, context.gameState);
+          // We already checked patriarch existence and identity in the condition node
 
-          const strategy = Blackboard.get<TribeSplitStrategy>(leader.aiBlackboard!, BB_SPLIT_STRATEGY);
-          
+          const strategy = Blackboard.get<TribeSplitStrategy>(patriarch.aiBlackboard!, BB_SPLIT_STRATEGY);
+
           let targetPosition: Vector2D | undefined;
 
           if (strategy === 'migration') {
-            targetPosition = Blackboard.get<Vector2D>(leader.aiBlackboard!, BB_SPLIT_TARGET_POSITION);
+            targetPosition = Blackboard.get<Vector2D>(patriarch.aiBlackboard!, BB_SPLIT_TARGET_POSITION);
           } else if (strategy === 'concentration') {
-            const buildingId = Blackboard.get<EntityId>(leader.aiBlackboard!, BB_SPLIT_TARGET_BUILDING_ID);
+            const buildingId = Blackboard.get<EntityId>(patriarch.aiBlackboard!, BB_SPLIT_TARGET_BUILDING_ID);
             if (buildingId) {
               const building = context.gameState.entities.entities[buildingId] as BuildingEntity | undefined;
               if (building) {
@@ -102,18 +97,20 @@ export function createTribeSplitGatherBehavior(depth: number): BehaviorNode<Huma
           // Actually, if we return SUCCESS, the parent selector (if this is high priority) will pick this behavior again next frame
           // as long as the condition holds.
           // However, we want to actively move if we are far.
-          
+
           if (distance <= TRIBE_SPLIT_GATHER_RADIUS) {
-             // We are there. We can idle or just return success.
-             // To prevent jitter, maybe we just stop moving.
-             return NodeStatus.SUCCESS;
+            // We are there. We can idle or just return success.
+            // To prevent jitter, maybe we just stop moving.
+            human.activeAction = 'idle';
+            human.target = undefined;
+            return NodeStatus.SUCCESS;
           }
 
           // Move towards target
           human.activeAction = 'moving';
           human.target = targetPosition;
-          
-          return NodeStatus.RUNNING;
+
+          return [NodeStatus.RUNNING, `Distance: ${distance.toFixed(2)}`];
         },
         'Move to Split Gathering Point',
         depth + 1,

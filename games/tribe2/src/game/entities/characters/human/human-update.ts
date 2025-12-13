@@ -27,6 +27,7 @@ import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 import { TribeRole } from '../../tribe/tribe-types';
+import { checkAndExecuteTribeMerges } from '../../tribe/family-tribe-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -220,6 +221,9 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         });
       }
     }
+
+    // Check if this death created orphaned tribes and trigger merges
+    checkAndExecuteTribeMerges(gameState);
 
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));

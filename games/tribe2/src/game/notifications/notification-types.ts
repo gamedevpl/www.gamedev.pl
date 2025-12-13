@@ -23,6 +23,7 @@ export interface Circle {
 export enum NotificationType {
   Hello = 'HELLO',
   NewTribeFormed = 'NEW_TRIBE_FORMED',
+  TribeMerged = 'TRIBE_MERGED',
   NoHeir = 'NO_HEIR',
 }
 

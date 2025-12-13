@@ -117,6 +117,9 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       if (partner.isPregnant) {
         return [NodeStatus.FAILURE, 'Partner is pregnant'];
       }
+      if (human.hunger > HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+        return [NodeStatus.FAILURE, 'Too hungry to procreate'];
+      }
       const distance = calculateWrappedDistance(
         human.position,
         partner.position,
@@ -169,16 +172,6 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       new ConditionNode(
         (human: HumanEntity) => (human.procreationCooldown || 0) <= 0,
         'Is Ready (cooldown)',
-        depth + 1,
-      ),
-
-      new ConditionNode(
-        (human: HumanEntity, context: UpdateContext) => {
-          const children = findChildren(context.gameState, human);
-          const maleChildrenCount = children.filter((c) => c.gender === 'male').length;
-          return maleChildrenCount < 3 ? true : [false, `Has ${maleChildrenCount} male children`];
-        },
-        'Has not enough male children',
         depth + 1,
       ),
 

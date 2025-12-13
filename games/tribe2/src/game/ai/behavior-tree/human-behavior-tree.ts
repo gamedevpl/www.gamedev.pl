@@ -33,7 +33,6 @@ import {
   createDesperateAttackBehavior,
   createPlayerCommandBehavior,
   createFollowLeaderBehavior,
-  createTribeMigrationBehavior,
   createDiplomacyBehavior,
   createHumanHuntPreyBehavior,
   createHumanDefendAgainstPredatorBehavior,
@@ -141,6 +140,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
       createStorageRetrieveBehavior(2),
 
+      // --- TRIBE MANAGEMENT (SPLIT) ---
+      createTribeSplitBehavior(2),
+
       // --- TRIBE SPLIT GATHERING ---
       createTribeSplitGatherBehavior(2),
 
@@ -174,19 +176,17 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- HUNTING BEHAVIORS ---
       new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
-
-      // --- TRIBE MANAGEMENT (SPLIT) ---
-      new CachingNode(createTribeSplitBehavior(3), BT_EXPENSIVE_OPERATION_CACHE_HOURS, 'Cache Tribe Split', 2),
-
-      // --- TRIBE MANAGEMENT (MIGRATION) ---
-      new NonPlayerControlled(createTribeMigrationBehavior(3), 'Gated Tribe Migration', 2),
-
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
       new AutopilotControlled(createFollowLeaderBehavior(3), 'followLeader', 'Gated Follow Leader', 2),
       new NonPlayerControlled(createFollowPatriarchBehavior(2), 'Gated Follow Patriarch', 2),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---
-      new NonPlayerControlled(createIdleWanderBehavior(2), 'Gated Idle Wander', 2),
+      new TimeoutNode(
+        new NonPlayerControlled(createIdleWanderBehavior(2), 'Gated Idle Wander', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Idle Wander',
+        2,
+      ),
     ],
     'AI Root Selector',
     1,

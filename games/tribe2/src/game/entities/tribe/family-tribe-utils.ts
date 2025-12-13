@@ -4,6 +4,10 @@ import { EntityId } from '../entities-types.ts';
 import { DiplomacyStatus, GameWorldState } from '../../world-types.ts';
 import { IndexedWorldState } from '../../world-index/world-index-types.ts';
 import { TribeInfo } from '../../ui/ui-types.ts';
+import { NotificationType } from '../../notifications/notification-types.ts';
+import { addNotification } from '../../notifications/notification-utils.ts';
+import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notification-consts.ts';
+import { startBuildingDestruction } from '../../utils/building-placement-utils.ts';
 
 export function countLivingOffspring(humanId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
@@ -200,6 +204,31 @@ export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldStat
   return null;
 }
 
+export function findLivingFamilyRoot(human: HumanEntity, gameState: GameWorldState): HumanEntity {
+  let current = human;
+  const visited = new Set<EntityId>();
+  visited.add(current.id);
+
+  while (true) {
+    let next: HumanEntity | null = null;
+
+    if (current.gender === 'female') {
+      next = findMalePartner(current, gameState);
+    }
+
+    if (!next && current.fatherId) {
+      next = gameState.entities.entities[current.fatherId] as HumanEntity | undefined || null;
+    }
+
+    if (!next || visited.has(next.id)) break;
+
+    current = next;
+    visited.add(current.id);
+  }
+
+  return current;
+}
+
 export function getFamilyMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
   const family = new Set<HumanEntity>();
 
@@ -314,4 +343,175 @@ export function getTribeMembers(human: HumanEntity, gameState: GameWorldState): 
   }
   const indexedState = gameState as IndexedWorldState;
   return indexedState.search.human.byProperty('leaderId', human.leaderId);
+}
+
+// --- New functions for Dynamic Heir Recalculation and Peaceful Tribe Merging ---
+
+export function detectOrphanedTribes(gameState: GameWorldState): EntityId[] {
+  const orphanedTribeLeaderIds: Set<EntityId> = new Set();
+
+  // Iterate through all humans to find tribes
+  const humans = Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[];
+
+  // Group humans by leaderId
+  const tribes = new Map<EntityId, HumanEntity[]>();
+  for (const human of humans) {
+    if (human.leaderId) {
+      if (!tribes.has(human.leaderId)) {
+        tribes.set(human.leaderId, []);
+      }
+      tribes.get(human.leaderId)?.push(human);
+    }
+  }
+
+  // Check each tribe for validity
+  for (const [leaderId, members] of tribes) {
+    if (members.length === 0) continue;
+
+    const leader = gameState.entities.entities[leaderId] as HumanEntity | undefined;
+
+    // A tribe is orphaned if:
+    // 1. The leader doesn't exist (died)
+    // 2. The leader exists but has joined another tribe (leaderId !== id)
+    const isLeaderDead = !leader;
+    const isLeaderInAnotherTribe = leader && leader.leaderId !== leaderId;
+
+    if (isLeaderDead || isLeaderInAnotherTribe) {
+      orphanedTribeLeaderIds.add(leaderId);
+    }
+  }
+
+  return Array.from(orphanedTribeLeaderIds);
+}
+
+export function determineTribeMergeTarget(orphanedTribeLeaderId: EntityId, gameState: GameWorldState): EntityId | null {
+  const members = findTribeMembers(orphanedTribeLeaderId, gameState);
+  if (members.length === 0) return null;
+
+  // If the leader is still alive but joined another tribe, that tribe is the primary target
+  const oldLeader = gameState.entities.entities[orphanedTribeLeaderId] as HumanEntity | undefined;
+  if (oldLeader && oldLeader.leaderId && oldLeader.leaderId !== oldLeader.id) {
+    return oldLeader.leaderId;
+  }
+
+  // Otherwise, look for family connections
+  const potentialTargets = new Map<EntityId, number>();
+
+  for (const member of members) {
+    const family = getFamilyMembers(member, gameState);
+    for (const relative of family) {
+      // If relative is in a different valid tribe
+      if (
+        relative.leaderId &&
+        relative.leaderId !== orphanedTribeLeaderId &&
+        relative.leaderId === relative.id // Ensure target is a tribe leader
+      ) {
+        // Stronger weight for close relations
+        let weight = 1;
+        if (relative.id === member.fatherId || relative.id === member.motherId) weight = 3;
+        if (relative.partnerIds?.includes(member.id)) weight = 3;
+        if (member.partnerIds?.includes(relative.id)) weight = 3;
+
+        const currentScore = potentialTargets.get(relative.leaderId) || 0;
+        potentialTargets.set(relative.leaderId, currentScore + weight);
+      } else if (relative.leaderId && relative.leaderId !== orphanedTribeLeaderId) {
+        // Relative is a member of another tribe
+        const targetLeaderId = relative.leaderId;
+        // Check if that leader is valid
+        const targetLeader = gameState.entities.entities[targetLeaderId] as HumanEntity | undefined;
+        if (targetLeader && targetLeader.leaderId === targetLeader.id) {
+          let weight = 1;
+          if (relative.id === member.fatherId || relative.id === member.motherId) weight = 2;
+          if (relative.partnerIds?.includes(member.id)) weight = 2;
+          if (member.partnerIds?.includes(relative.id)) weight = 2;
+
+          const currentScore = potentialTargets.get(targetLeaderId) || 0;
+          potentialTargets.set(targetLeaderId, currentScore + weight);
+        }
+      }
+    }
+  }
+
+  // Find the tribe with the highest connection score
+  let bestTargetId: EntityId | null = null;
+  let maxScore = 0;
+
+  for (const [targetId, score] of potentialTargets) {
+    if (score > maxScore) {
+      maxScore = score;
+      bestTargetId = targetId;
+    }
+  }
+
+  return bestTargetId;
+}
+
+export function executeTribeMerge(
+  fromTribeLeaderId: EntityId,
+  toTribeLeaderId: EntityId,
+  gameState: GameWorldState,
+): void {
+  const members = findTribeMembers(fromTribeLeaderId, gameState);
+  const targetLeader = gameState.entities.entities[toTribeLeaderId] as HumanEntity | undefined;
+
+  if (!targetLeader || !targetLeader.leaderId) return;
+
+  const oldTribeBadge = members.length > 0 ? members[0].tribeBadge : '?';
+  const newTribeBadge = targetLeader.tribeBadge;
+
+  // Transfer members
+  for (const member of members) {
+    member.leaderId = toTribeLeaderId;
+    member.tribeBadge = newTribeBadge;
+    // Reset role, new leader will assign
+    member.tribeRole = undefined;
+  }
+
+  // Transfer buildings
+  const indexedState = gameState as IndexedWorldState;
+  const buildings = indexedState.search.building.byProperty('ownerId', fromTribeLeaderId);
+  for (const building of buildings) {
+    building.ownerId = toTribeLeaderId;
+  }
+
+  // Merge diplomacy (simple approach: keep target's diplomacy, maybe add source's enemies?)
+  // For now, we assume the merged tribe adopts the target tribe's politics completely.
+  // If the source leader is still alive (e.g. joined the tribe), their personal diplomacy might matter,
+  // but tribe diplomacy is stored on the leader.
+
+  // Notification
+  addNotification(gameState, {
+    type: NotificationType.TribeMerged,
+    message: `Tribe ${oldTribeBadge} has merged into Tribe ${newTribeBadge}!`,
+    duration: NOTIFICATION_DURATION_LONG_HOURS,
+    targetEntityIds: [toTribeLeaderId],
+    highlightedEntityIds: [toTribeLeaderId, ...members.map((m) => m.id)],
+  });
+}
+
+export function checkAndExecuteTribeMerges(gameState: GameWorldState): void {
+  const orphanedTribes = detectOrphanedTribes(gameState);
+
+  for (const orphanedTribeId of orphanedTribes) {
+    const targetTribeId = determineTribeMergeTarget(orphanedTribeId, gameState);
+
+    if (targetTribeId) {
+      executeTribeMerge(orphanedTribeId, targetTribeId, gameState);
+    } else {
+      // Dissolve tribe if no target found
+      const members = findTribeMembers(orphanedTribeId, gameState);
+      for (const member of members) {
+        member.leaderId = undefined;
+        member.tribeBadge = undefined;
+        member.tribeRole = undefined;
+      }
+
+      // Buildings also become abandoned
+      const indexedState = gameState as IndexedWorldState;
+      const buildings = indexedState.search.building.byProperty('ownerId', orphanedTribeId);
+      for (const building of buildings) {
+        startBuildingDestruction(building.id, gameState);
+      }
+    }
+  }
 }
