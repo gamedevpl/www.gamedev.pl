@@ -55,22 +55,6 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 1,
   );
 
-  // Action: Reset tribe analysis in blackboard
-  const resetBlackboardAction = new ActionNode<HumanEntity>(
-    (_entity, _context, blackboard) => {
-      Blackboard.delete(blackboard, 'tribeAnalysis_adultCount');
-      Blackboard.delete(blackboard, 'tribeAnalysis_existingStorageSpots');
-      Blackboard.delete(blackboard, 'tribeAnalysis_existingPlantingZones');
-      Blackboard.delete(blackboard, 'tribeAnalysis_storageUtilization');
-      Blackboard.delete(blackboard, 'tribeAnalysis_bushDensity');
-      Blackboard.delete(blackboard, 'tribeAnalysis_zoneDensity');
-      Blackboard.delete(blackboard, 'tribeAnalysis_projectedAdultCount');
-      return [NodeStatus.SUCCESS, 'Reset tribe analysis from blackboard'];
-    },
-    'Reset Tribe Analysis',
-    depth + 2,
-  );
-
   // Action: Analyze tribe and cache results in blackboard
   // Store as simple primitives to satisfy BlackboardValueType constraints
   const analyzeTribeAction = new ActionNode<HumanEntity>(
@@ -209,7 +193,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   );
 
   const storageSequence = new Sequence<HumanEntity>(
-    [needsStorageCondition, placeStorageAction, resetBlackboardAction],
+    [needsStorageCondition, placeStorageAction],
     'Storage Sequence',
     depth + 1,
   );
@@ -292,7 +276,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   );
 
   const plantingZoneSequence = new Sequence<HumanEntity>(
-    [needsPlantingZoneCondition, placePlantingZoneAction, resetBlackboardAction],
+    [needsPlantingZoneCondition, placePlantingZoneAction],
     'Planting Zone Sequence',
     depth + 1,
   );

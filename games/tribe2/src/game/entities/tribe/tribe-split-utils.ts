@@ -30,7 +30,7 @@ import { IndexedWorldState } from '../../world-index/world-index-types.ts';
 import { BuildingEntity } from '../buildings/building-types.ts';
 import { BuildingType } from '../../building-consts.ts';
 import { EntityId } from '../entities-types.ts';
-import { calculateAllTerritories, checkPositionInTerritory } from './territory-utils.ts';
+import { checkPositionInTerritory } from './territory-utils.ts';
 import { TribeTerritory } from './territory-types.ts';
 import { isPositionOccupied } from '../../utils/spatial-utils.ts';
 

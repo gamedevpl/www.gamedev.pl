@@ -106,7 +106,7 @@ function readWorldState(serialized: SerializedWorldState): GameWorldState {
 }
 
 function serializedWorldState(worldState: GameWorldState): SerializedWorldState {
-  return worldState as unknown as SerializedWorldState;
+  return worldState as SerializedWorldState;
 }
 
 // --- Compression Helpers (Native Streams) ---

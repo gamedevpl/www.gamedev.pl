@@ -109,6 +109,11 @@ export const LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE = 0.1; // Expected grow
 export const LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 400; // Min distance from other tribes for buildings
 export const LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 800; // Min distance for first storage (base establishment)
 
+// Building Placement Optimization Constants
+export const BUILDING_PLACEMENT_MAX_ANCHORS = 8; // Maximum number of anchor points (buildings) to search from
+export const BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS = 5; // Log searches that take longer than this (in milliseconds)
+export const BUILDING_PLACEMENT_TRIG_CACHE_SIZE = 16; // Maximum number of angles to pre-compute for trig cache
+
 // Leader Building Interaction Constants (Enemy Buildings)
 export const LEADER_BUILDING_INTERACTION_CHECK_INTERVAL_HOURS = 5; // How often leaders check for enemy buildings to take over or destroy
 export const LEADER_BUILDING_INTERACTION_RANGE = 600; // Detection range for finding enemy buildings

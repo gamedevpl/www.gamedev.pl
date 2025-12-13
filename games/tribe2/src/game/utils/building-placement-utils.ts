@@ -11,6 +11,23 @@ import { updatePlantingZoneConnections } from './planting-zone-connections-utils
 import { canPlaceBuildingInTerritory } from '../entities/tribe/territory-utils';
 import { getDepletedSectorsInArea } from '../soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
+import {
+  BUILDING_PLACEMENT_MAX_ANCHORS,
+  BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS,
+  BUILDING_PLACEMENT_TRIG_CACHE_SIZE,
+} from '../ai-consts';
+
+/**
+ * Statistics for building placement search performance.
+ * Used for instrumentation and debugging.
+ */
+interface PlacementSearchStats {
+  totalTimeMs: number;
+  anchorsSearched: number;
+  candidatesTested: number;
+  canPlaceChecks: number;
+  tribeDistanceChecks: number;
+}
 
 /**
  * Checks if a building of a given type can be placed at the specified position.
@@ -93,9 +110,34 @@ export function canPlaceBuilding(
 }
 
 /**
+ * Pre-computes sine and cosine values for a given number of angles.
+ * This avoids repeated Math.sin/cos calls during the search.
+ * @param numAngles Number of angles to compute (evenly distributed around circle)
+ * @returns Array of {cos, sin} pairs
+ */
+function precomputeTrigCache(numAngles: number): Array<{ cos: number; sin: number }> {
+  const cache: Array<{ cos: number; sin: number }> = [];
+  const angleStep = (2 * Math.PI) / numAngles;
+  for (let i = 0; i < numAngles; i++) {
+    const angle = i * angleStep;
+    cache.push({
+      cos: Math.cos(angle),
+      sin: Math.sin(angle),
+    });
+  }
+  return cache;
+}
+
+/**
  * Finds a valid building placement location adjacent to existing tribe buildings.
  * Searches in expanding rings around existing buildings to find suitable locations.
  * If no buildings exist, searches around the tribe center instead.
+ *
+ * Optimized to reduce frame spikes by:
+ * - Capping anchor points to BUILDING_PLACEMENT_MAX_ANCHORS
+ * - Pre-computing trigonometric values
+ * - Running cheap checks before expensive ones
+ * - Avoiding object allocations in tight loops
  *
  * @param buildingType The type of building to place
  * @param ownerId The ID of the tribe leader (owner of the building)
@@ -111,6 +153,15 @@ export function findAdjacentBuildingPlacement(
   searchRadius: number,
   minDistanceFromOtherTribes: number,
 ): Vector2D | undefined {
+  const startTime = performance.now();
+  const stats: PlacementSearchStats = {
+    totalTimeMs: 0,
+    anchorsSearched: 0,
+    candidatesTested: 0,
+    canPlaceChecks: 0,
+    tribeDistanceChecks: 0,
+  };
+
   const indexedState = gameState as IndexedWorldState;
   const dimensions = getBuildingDimensions(buildingType);
   const worldWidth = gameState.mapDimensions.width;
@@ -137,47 +188,76 @@ export function findAdjacentBuildingPlacement(
     anchorPoints.push(getTribeCenter(ownerId, gameState));
   }
 
+  // OPTIMIZATION: Cap anchor points to MAX_ANCHORS to bound search space
+  const maxAnchors = Math.min(anchorPoints.length, BUILDING_PLACEMENT_MAX_ANCHORS);
+
   // Search parameters
   const buildingSize = Math.max(dimensions.width, dimensions.height);
   const minDistance = buildingSize + 20; // Building size + small gap
   const radiusStep = buildingSize / 2; // Step size for expanding rings
 
-  // Search around each anchor point
-  for (const anchor of anchorPoints) {
+  // Search around each anchor point (capped)
+  for (let anchorIdx = 0; anchorIdx < maxAnchors; anchorIdx++) {
+    const anchor = anchorPoints[anchorIdx];
+    stats.anchorsSearched++;
+
     // Expand in rings from minDistance to searchRadius
     for (let radius = minDistance; radius <= searchRadius; radius += radiusStep) {
       // Determine number of angles to check based on radius
       // More angles at larger radii for better coverage
-      const numAngles = Math.max(8, Math.min(16, Math.ceil((2 * Math.PI * radius) / buildingSize)));
-      const angleStep = (2 * Math.PI) / numAngles;
+      const numAngles = Math.max(8, Math.min(BUILDING_PLACEMENT_TRIG_CACHE_SIZE, Math.ceil((2 * Math.PI * radius) / buildingSize)));
+
+      // OPTIMIZATION: Pre-compute trig values for this ring
+      const trigCache = precomputeTrigCache(numAngles);
 
       // Check positions at regular angles around the ring
       for (let i = 0; i < numAngles; i++) {
-        const angle = i * angleStep;
-        const offsetX = Math.cos(angle) * radius;
-        const offsetY = Math.sin(angle) * radius;
+        stats.candidatesTested++;
+
+        // OPTIMIZATION: Use pre-computed trig values
+        const offsetX = trigCache[i].cos * radius;
+        const offsetY = trigCache[i].sin * radius;
 
         // Calculate candidate position with world wrapping
         const candidateX = anchor.x + offsetX;
         const candidateY = anchor.y + offsetY;
 
-        const wrappedPosition: Vector2D = {
-          x: ((candidateX % worldWidth) + worldWidth) % worldWidth,
-          y: ((candidateY % worldHeight) + worldHeight) % worldHeight,
-        };
+        // OPTIMIZATION: Use local variables instead of object allocation
+        const wx = ((candidateX % worldWidth) + worldWidth) % worldWidth;
+        const wy = ((candidateY % worldHeight) + worldHeight) % worldHeight;
 
-        // Validate the candidate position
-        if (
-          canPlaceBuilding(wrappedPosition, buildingType, ownerId, gameState) &&
-          !isLocationTooCloseToOtherTribes(wrappedPosition, ownerId, minDistanceFromOtherTribes, gameState)
-        ) {
-          return wrappedPosition;
+        // OPTIMIZATION: Swap check order - run cheap check first
+        // Check tribe distance first (1 spatial query + distance checks)
+        stats.tribeDistanceChecks++;
+        if (isLocationTooCloseToOtherTribes({ x: wx, y: wy }, ownerId, minDistanceFromOtherTribes, gameState)) {
+          continue; // Skip this candidate, too close to other tribes
+        }
+
+        // Then check if building can be placed (4 spatial queries)
+        stats.canPlaceChecks++;
+        if (canPlaceBuilding({ x: wx, y: wy }, buildingType, ownerId, gameState)) {
+          // Found valid position - log stats and return
+          stats.totalTimeMs = performance.now() - startTime;
+          if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
+            console.log(
+              `[BuildingPlacement] Slow search for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${stats.tribeDistanceChecks}`,
+            );
+          }
+          // OPTIMIZATION: Only allocate Vector2D on return
+          return { x: wx, y: wy };
         }
       }
     }
   }
 
-  // No valid location found
+  // No valid location found - log stats
+  stats.totalTimeMs = performance.now() - startTime;
+  if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
+    console.log(
+      `[BuildingPlacement] Slow search (no valid location) for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${stats.tribeDistanceChecks}`,
+    );
+  }
+
   return undefined;
 }
 

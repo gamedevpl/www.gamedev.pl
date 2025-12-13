@@ -13,6 +13,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { Vector2D } from '../utils/math-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { isEntityInView } from './render-utils';
 
 // Metaball rendering constants
 const METABALL_THRESHOLD = 1.0; // Field strength threshold for rendering
@@ -23,6 +24,38 @@ const STONE_SPACING = 8; // Spacing between stones along the border
 // Fill color for planting zone area (subtle darker green tint to distinguish from grass)
 const ZONE_FILL_COLOR = 'rgba(34, 85, 34, 0.25)'; // Dark green, semi-transparent
 const ZONE_FILL_COLOR_HOSTILE = 'rgba(139, 50, 50, 0.25)'; // Reddish tint for hostile
+
+// Cache for field calculations (zones don't move, so we can cache by zone IDs)
+interface CachedFieldData {
+  fieldValues: number[][];
+  edgePoints: Vector2D[];
+  regions: Vector2D[][];
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+}
+
+const fieldDataCache = new Map<string, CachedFieldData>();
+const MAX_CACHE_SIZE = 50; // Prevent unbounded growth
+
+/**
+ * Generates a cache key from a list of zone IDs.
+ */
+function generateCacheKey(zones: BuildingEntity[]): string {
+  return zones
+    .map((z) => z.id)
+    .sort((a, b) => a - b)
+    .join(',');
+}
+
+/**
+ * Manages cache size using simple LRU eviction.
+ */
+function manageCacheSize(): void {
+  if (fieldDataCache.size > MAX_CACHE_SIZE) {
+    // Remove oldest entry (first key in the map)
+    const firstKey = fieldDataCache.keys().next().value;
+    if (firstKey) fieldDataCache.delete(firstKey);
+  }
+}
 
 /**
  * Groups planting zones by their owner (tribe leader).
@@ -100,62 +133,50 @@ function getGroupBounds(
 }
 
 /**
- * Renders a group of planting zones using the metaball technique.
- * Renders a subtle tinted fill and stone border around the metaball boundary.
+ * Gets cached field data or computes it if not in cache.
  */
-function renderMetaballGroup(
-  ctx: CanvasRenderingContext2D,
+function getOrComputeFieldData(
   zones: BuildingEntity[],
   dimensions: { width: number; height: number },
-  isHostile: boolean,
-  groupSeed: number,
-): void {
-  if (zones.length === 0) return;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+): CachedFieldData {
+  const cacheKey = generateCacheKey(zones);
 
-  // Save context state at the start
-  ctx.save();
+  // Check cache
+  if (fieldDataCache.has(cacheKey)) {
+    return fieldDataCache.get(cacheKey)!;
+  }
 
-  // Ensure globalAlpha is 1 for consistent rendering
-  ctx.globalAlpha = 1;
-
-  const bounds = getGroupBounds(zones, dimensions, METABALL_PADDING);
+  // Compute field data
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
-
-  // Calculate field values for edge detection and fill rendering
   const canvasWidth = Math.ceil(width / FIELD_SAMPLE_STEP);
   const canvasHeight = Math.ceil(height / FIELD_SAMPLE_STEP);
 
-  // Store field values for edge detection
   const fieldValues: number[][] = [];
   const edgePoints: Vector2D[] = [];
 
-  // Pre-allocate arrays for better performance
+  // Pre-allocate arrays
   for (let py = 0; py < canvasHeight; py++) {
     fieldValues[py] = new Array(canvasWidth);
   }
 
-  // Sample the field at each pixel and collect edge points in a single pass
+  // Calculate field values
   for (let py = 0; py < canvasHeight; py++) {
     for (let px = 0; px < canvasWidth; px++) {
       const worldX = bounds.minX + px * FIELD_SAMPLE_STEP;
       const worldY = bounds.minY + py * FIELD_SAMPLE_STEP;
-
       const fieldStrength = calculateFieldStrength(worldX, worldY, zones, dimensions);
       fieldValues[py][px] = fieldStrength;
     }
   }
 
-  // Render the subtle fill for the metaball area
-  renderMetaballFill(ctx, fieldValues, bounds, isHostile);
-
-  // Find edge points (where field crosses the threshold)
+  // Find edge points
   for (let py = 1; py < canvasHeight - 1; py++) {
     for (let px = 1; px < canvasWidth - 1; px++) {
       const current = fieldValues[py][px];
 
       if (current >= METABALL_THRESHOLD) {
-        // Check if any neighbor is outside the threshold (edge detection)
         if (
           fieldValues[py - 1][px] < METABALL_THRESHOLD ||
           fieldValues[py + 1][px] < METABALL_THRESHOLD ||
@@ -170,8 +191,44 @@ function renderMetaballGroup(
     }
   }
 
-  // Find connected regions and render stones for each
+  // Compute connected regions (expensive operation, cache it)
   const regions = findConnectedRegions(edgePoints);
+
+  const cachedData: CachedFieldData = { fieldValues, edgePoints, regions, bounds };
+
+  // Store in cache
+  fieldDataCache.set(cacheKey, cachedData);
+  manageCacheSize();
+
+  return cachedData;
+}
+
+/**
+ * Renders a group of planting zones using the metaball technique.
+ * Renders a subtle tinted fill and stone border around the metaball boundary.
+ */
+function renderMetaballGroup(
+  ctx: CanvasRenderingContext2D,
+  zones: BuildingEntity[],
+  _dimensions: { width: number; height: number },
+  isHostile: boolean,
+  groupSeed: number,
+  fieldData: CachedFieldData,
+): void {
+  if (zones.length === 0) return;
+
+  // Save context state at the start
+  ctx.save();
+
+  // Ensure globalAlpha is 1 for consistent rendering
+  ctx.globalAlpha = 1;
+
+  const { fieldValues, regions, bounds } = fieldData;
+
+  // Render the subtle fill for the metaball area
+  renderMetaballFill(ctx, fieldValues, bounds, isHostile);
+
+  // Use cached connected regions and render stones for each
 
   let regionSeed = groupSeed;
   for (const region of regions) {
@@ -433,8 +490,20 @@ export function renderPlantingZonesMetaball(
 
   if (plantingZones.length === 0) return;
 
+  // Apply frustum culling to only process visible zones
+  const visibleZones = plantingZones.filter((zone) =>
+    isEntityInView(
+      zone,
+      _viewportCenter,
+      { width: ctx.canvas.width, height: ctx.canvas.height },
+      gameState.mapDimensions,
+    ),
+  );
+
+  if (visibleZones.length === 0) return;
+
   const dimensions = BUILDING_DEFINITIONS[BuildingType.PlantingZone].dimensions;
-  const zonesByOwner = groupZonesByOwner(plantingZones);
+  const zonesByOwner = groupZonesByOwner(visibleZones);
 
   // Get player's tribe leader to determine hostility
   const player = playerLeaderId ? (gameState.entities.entities[playerLeaderId] as HumanEntity | undefined) : undefined;
@@ -447,8 +516,14 @@ export function renderPlantingZonesMetaball(
     // Use the owner ID as the seed for consistent stone placement
     const groupSeed = typeof ownerId === 'number' ? ownerId : 0;
 
+    // Calculate bounds for this group
+    const bounds = getGroupBounds(zones, dimensions, METABALL_PADDING);
+
+    // Get or compute field data (uses cache)
+    const fieldData = getOrComputeFieldData(zones, dimensions, bounds);
+
     // Render metaball fill and continuous stone border for the group
-    renderMetaballGroup(ctx, zones, dimensions, isHostile, groupSeed);
+    renderMetaballGroup(ctx, zones, dimensions, isHostile, groupSeed, fieldData);
   }
 }
 
