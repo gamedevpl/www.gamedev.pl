@@ -8,7 +8,7 @@ import {
   getTribeStorageSpots,
   getTribePlantingZones,
 } from '../../../entities/tribe/tribe-food-utils';
-import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
+import { findChildren, getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
 import {
   LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
@@ -20,6 +20,7 @@ import {
   LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE,
 } from '../../../ai-consts';
 import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../nodes';
+import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 
 /**
  * Factory function to create a leader building placement behavior node.
@@ -41,9 +42,12 @@ import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../n
 export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Condition: Check if entity is a tribe leader
   const isLeaderCondition = new ConditionNode<HumanEntity>(
-    (entity) => {
+    (entity, context) => {
       if (!entity.leaderId || entity.leaderId !== entity.id) {
         return [false, 'Not a tribe leader'];
+      }
+      if (findChildren(context.gameState, entity).length < TRIBE_BUILDINGS_MIN_HEADCOUNT) {
+        return [false, 'Leader has no children'];
       }
       return [true, 'Is tribe leader'];
     },

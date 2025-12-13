@@ -25,8 +25,9 @@ import {
 import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
-import { findPlayerEntity, getAvailablePlayerActions } from '../../utils/world-utils';
+import { findChildren, findPlayerEntity, getAvailablePlayerActions } from '../../utils/world-utils';
 import { areTribeRolesEffective } from '../../entities/tribe/tribe-role-utils.ts';
+import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -278,7 +279,10 @@ export function renderUIButtons(
         shortcut: 'L',
         name: 'Build',
         toggleKey: 'build',
-        condition: () => player.isAdult === true && player.leaderId === player.id,
+        condition: () =>
+          player.isAdult === true &&
+          player.leaderId === player.id &&
+          findChildren(gameState, player).length > TRIBE_BUILDINGS_MIN_HEADCOUNT,
       },
       {
         playerAction: PlayerActionType.Build, // Reuse this for now
