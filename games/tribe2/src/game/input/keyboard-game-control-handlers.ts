@@ -68,7 +68,13 @@ export const handleGameControlKeyDown = (
     case 'u':
       const player = findPlayerEntity(gameState);
       if (player && player.isAdult && player.leaderId === player.id) {
-        gameState.roleManagerOpen = !gameState.roleManagerOpen;
+        if (event.shiftKey) {
+          // Toggle roleManagement autopilot behavior
+          gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
+        } else {
+          // Toggle role manager UI
+          gameState.roleManagerOpen = !gameState.roleManagerOpen;
+        }
       }
       break;
     case 'm':

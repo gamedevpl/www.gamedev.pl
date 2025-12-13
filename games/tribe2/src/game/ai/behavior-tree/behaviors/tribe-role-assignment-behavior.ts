@@ -28,7 +28,12 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.FAILURE;
       }
 
-      // 4. If I am the leader, ensure my role is Leader and exit
+      // 4. Check if this is a player-controlled leader and roleManagement autopilot is disabled
+      if (leader.isPlayer && !context.gameState.autopilotControls.behaviors.roleManagement) {
+        return [NodeStatus.FAILURE, 'Player leader with roleManagement autopilot disabled'];
+      }
+
+      // 5. If I am the leader, ensure my role is Leader and exit
       if (human.id === leader.id) {
         if (human.tribeRole !== TribeRole.Leader) {
           human.tribeRole = TribeRole.Leader;
@@ -36,7 +41,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.SUCCESS;
       }
 
-      // 5. Get all tribe members to calculate distribution
+      // 6. Get all tribe members to calculate distribution
       const tribeMembers = getTribeMembers(leader, context.gameState);
       const nonLeaderMembers = tribeMembers.filter((m) => m.id !== leader.id);
       const totalNonLeaders = nonLeaderMembers.length;
@@ -45,7 +50,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.SUCCESS;
       }
 
-      // 6. Calculate target counts based on weights
+      // 7. Calculate target counts based on weights
       const weights = leader.tribeControl.roleWeights;
       let totalWeight = 0;
       const availableRoles: TribeRole[] = [];
@@ -89,7 +94,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         deficits[role] = targetCounts[role] - currentCounts[role];
       }
 
-      // 6. Check if we need to assign or reassign
+      // 8. Check if we need to assign or reassign
       let needsAssignment = false;
 
       if (!human.tribeRole || human.tribeRole === TribeRole.Leader) {
@@ -109,7 +114,7 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         }
       }
 
-      // 7. Assign new role if needed
+      // 9. Assign new role if needed
       if (needsAssignment) {
         // Pick a role based on deficits.
         // We only consider roles that have a "positive need" (deficit > -something).

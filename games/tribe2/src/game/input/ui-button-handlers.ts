@@ -50,6 +50,7 @@ export const handleUIButtonClick = (
       UIButtonActionType.CommandPlant,
       UIButtonActionType.ToggleProcreationBehavior,
       UIButtonActionType.CommandBuild,
+      UIButtonActionType.OpenRoleManager,
     ].includes(button.action)
   ) {
     gameState.hasPlayerEnabledAutopilot++;
@@ -185,7 +186,13 @@ export const handleUIButtonClick = (
       }
       break;
     case UIButtonActionType.OpenRoleManager:
-      gameState.roleManagerOpen = true;
+      if (shift) {
+        // Toggle roleManagement autopilot behavior
+        behaviors.roleManagement = !behaviors.roleManagement;
+      } else {
+        // Open role manager UI
+        gameState.roleManagerOpen = true;
+      }
       break;
     case UIButtonActionType.CloseRoleManager:
       gameState.roleManagerOpen = false;

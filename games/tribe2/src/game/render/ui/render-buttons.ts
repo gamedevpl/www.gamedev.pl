@@ -289,6 +289,7 @@ export function renderUIButtons(
         buttonAction: UIButtonActionType.OpenRoleManager,
         shortcut: 'U',
         name: 'Roles',
+        toggleKey: 'roleManagement',
         condition: () =>
           player.isAdult === true && player.leaderId === player.id && areTribeRolesEffective(player, gameState),
       },
@@ -326,7 +327,8 @@ export function renderUIButtons(
       const backgroundColor =
         isBehaviorActive ||
         isBuildMenuOpen ||
-        (behavior.buttonAction === UIButtonActionType.OpenRoleManager && gameState.roleManagerOpen)
+        (behavior.buttonAction === UIButtonActionType.OpenRoleManager &&
+          (gameState.roleManagerOpen || gameState.autopilotControls.behaviors.roleManagement))
           ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
           : UI_BUTTON_BACKGROUND_COLOR;
 
@@ -347,7 +349,8 @@ export function renderUIButtons(
         activated:
           isBehaviorActive ||
           (behavior.buttonAction === UIButtonActionType.CommandBuild && isBuildMenuOpen) ||
-          (behavior.buttonAction === UIButtonActionType.OpenRoleManager && gameState.roleManagerOpen),
+          (behavior.buttonAction === UIButtonActionType.OpenRoleManager &&
+            (gameState.roleManagerOpen || gameState.autopilotControls.behaviors.roleManagement)),
       };
       gameState.uiButtons.push(button);
     });
