@@ -42,6 +42,15 @@ export interface IndexType<T> {
   byRadius(position: Vector2D, distance: number): T[];
 
   /**
+   * Spatial query for the first entity within a given radius of a point.
+   * More efficient than byRadius when you only need to check if any entity exists.
+   * @param position The center of the search radius.
+   * @param distance The radius to search within.
+   * @returns The first entity found, or undefined if none found.
+   */
+  byRadiusFirst(position: Vector2D, distance: number): T | undefined;
+
+  /**
    * Non-spatial query for entities matching a specific property value.
    * @param propertyName The name of the property to query.
    * @param propertyValue The value of the property to match.

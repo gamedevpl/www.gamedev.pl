@@ -26,6 +26,7 @@ export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): 
       all: () => [],
       byRect: () => [],
       byRadius: () => [],
+      byRadiusFirst: () => undefined,
       byProperty: () => [],
       resetPropertyCache: () => {},
       count: () => 0,
@@ -56,6 +57,12 @@ export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): 
     byRadius(position: Vector2D, distance: number): T[] {
       const indices = index.neighbors(position.x, position.y, undefined, distance);
       return indices.map((i) => items[i]);
+    },
+
+    byRadiusFirst(position: Vector2D, distance: number): T | undefined {
+      // Get at most 1 neighbor within the distance
+      const indices = index.neighbors(position.x, position.y, 1, distance);
+      return indices.length > 0 ? items[indices[0]] : undefined;
     },
 
     byProperty(propertyName: keyof T, propertyValue: unknown): T[] {

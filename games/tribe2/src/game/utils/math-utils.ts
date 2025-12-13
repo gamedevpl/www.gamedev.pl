@@ -93,6 +93,11 @@ export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth:
   return vectorLength(difference);
 }
 
+export function calculateWrappedDistanceSq(v1: Vector2D, v2: Vector2D, worldWidth: number, worldHeight: number): number {
+  const difference = getDirectionVectorOnTorus(v1, v2, worldWidth, worldHeight);
+  return difference.x * difference.x + difference.y * difference.y;
+}
+
 export function vectorDot(v1: Vector2D, v2: Vector2D): number {
   return v1.x * v2.x + v1.y * v2.y;
 }

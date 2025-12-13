@@ -2,16 +2,28 @@ import { Entity, EntityId, EntityType } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { calculateWrappedDistance, vectorDistance } from './math-utils';
+import { calculateWrappedDistance, calculateWrappedDistanceSq, vectorDistance } from './math-utils';
 import { Vector2D } from './math-types';
 
-export function findClosestEntity<T extends Entity>(
+/**
+ * Result type for findClosestEntityWithDistance that includes both the entity and its distance.
+ */
+export interface ClosestEntityResult<T> {
+  entity: T;
+  distance: number;
+}
+
+/**
+ * Finds the closest entity of a given type, returning both the entity and its distance.
+ * This is more efficient when the caller needs both pieces of information.
+ */
+export function findClosestEntityWithDistance<T extends Entity>(
   sourceEntityOrPosition: Entity | Vector2D,
   gameState: GameWorldState,
   targetType: EntityType,
   maxDistance: number,
   filterFn?: (entity: T) => boolean,
-): T | null {
+): ClosestEntityResult<T> | null {
   const indexedState = gameState as IndexedWorldState;
   const searchRadius = maxDistance;
   const sourceEntity =
@@ -21,27 +33,47 @@ export function findClosestEntity<T extends Entity>(
   const candidates = indexedState.search[targetType].byRadius(sourcePosition, searchRadius) as unknown as T[];
 
   let closestEntity: T | null = null;
-  let minDistance = searchRadius;
+  // Use squared distance for comparisons to avoid sqrt overhead
+  let minDistanceSq = searchRadius * searchRadius;
 
   for (const entity of candidates) {
     if (entity.id === sourceEntity?.id || (filterFn && !filterFn(entity))) {
       continue;
     }
 
-    const distance = calculateWrappedDistance(
+    const distanceSq = calculateWrappedDistanceSq(
       sourcePosition,
       entity.position,
       gameState.mapDimensions.width,
       gameState.mapDimensions.height,
     );
 
-    if (distance < minDistance) {
-      minDistance = distance;
+    if (distanceSq < minDistanceSq) {
+      minDistanceSq = distanceSq;
       closestEntity = entity;
     }
   }
 
-  return closestEntity;
+  if (closestEntity) {
+    // Only compute actual distance once for the final result
+    return {
+      entity: closestEntity,
+      distance: Math.sqrt(minDistanceSq),
+    };
+  }
+
+  return null;
+}
+
+export function findClosestEntity<T extends Entity>(
+  sourceEntityOrPosition: Entity | Vector2D,
+  gameState: GameWorldState,
+  targetType: EntityType,
+  maxDistance: number,
+  filterFn?: (entity: T) => boolean,
+): T | null {
+  const result = findClosestEntityWithDistance<T>(sourceEntityOrPosition, gameState, targetType, maxDistance, filterFn);
+  return result?.entity ?? null;
 }
 
 export function findEntitiesOfTypeInRadius<T extends Entity>(

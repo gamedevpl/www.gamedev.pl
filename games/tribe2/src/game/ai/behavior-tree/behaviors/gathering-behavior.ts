@@ -7,10 +7,10 @@ import {
 import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts';
 import { ActionNode, ConditionNode, CachingNode, Selector, Sequence, TribalTaskDecorator } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
-import { findChildren, findClosestEntity } from '../../../utils';
+import { findChildren, findClosestEntityWithDistance, ClosestEntityResult } from '../../../utils';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 import { CorpseEntity } from '../../../entities/characters/corpse-types';
-import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { calculateWrappedDistanceSq, dirToTarget } from '../../../utils/math-utils';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { EntityId } from '../../../entities/entities-types';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -24,9 +24,13 @@ import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
+import { BuildingEntity } from '../../../entities/buildings/building-types';
 
 type FoodSource = BerryBushEntity | CorpseEntity;
 const BLACKBOARD_KEY = 'foodSource';
+
+// Distance threshold for considering a bush "good enough" to skip corpse search
+const GOOD_ENOUGH_DISTANCE = 100;
 
 /**
  * Creates a behavior tree for gathering food (from bushes or corpses).
@@ -38,123 +42,122 @@ const BLACKBOARD_KEY = 'foodSource';
  *
  * Now includes tribe coordination via TribalTaskDecorator to prevent multiple members
  * from gathering from the same bush simultaneously.
+ *
+ * Performance optimizations:
+ * - Uses byRadiusFirst for building ownership check (O(1) vs O(n) array creation)
+ * - Uses squared distance comparisons to avoid sqrt overhead
+ * - Returns distance from findClosestEntityWithDistance to avoid recomputing
+ * - Short-circuits corpse search if a "good enough" bush is found nearby
+ * - Caches owner distance lookups
  */
 export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find the closest food source and store it in the blackboard.
   const findFoodSourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const leader = getTribeLeaderForCoordination(human, context.gameState);
+      const indexedState = context.gameState as IndexedWorldState;
+      const currentTime = context.gameState.time;
+      const humanLeaderId = human.leaderId;
+
+      // Cache for owner distance lookups to avoid recalculating for same owner
       const distanceToOwnerCache = new Map<EntityId, number>();
 
-      const closestBush = findClosestEntity<BerryBushEntity>(
+      // Helper to check if a food source is being gathered by another tribe member
+      const isBeingGatheredByOther = (foodSourceId: EntityId): boolean => {
+        if (!leader?.aiBlackboard) return false;
+        const taskKey = `tribal_gather_${foodSourceId}`;
+        const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
+        if (!task) return false;
+        // Check if task is not stale and assigned to someone else
+        if (currentTime - task.startTime <= TRIBAL_TASK_TIMEOUT_HOURS) {
+          return !task.memberIds.includes(human.id);
+        }
+        return false;
+      };
+
+      // Helper to check bush ownership without creating arrays
+      const getBushOwner = (bush: BerryBushEntity): HumanEntity | undefined => {
+        // Use byRadiusFirst to get first building overlapping the bush (O(1) vs building array)
+        const building = indexedState.search.building.byRadiusFirst(bush.position, bush.radius) as
+          | BuildingEntity
+          | undefined;
+        if (!building) return undefined;
+        return context.gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
+      };
+
+      // Find closest bush with optimized predicate
+      const bushResult = findClosestEntityWithDistance<BerryBushEntity>(
         human,
         context.gameState,
         'berryBush',
         AI_GATHERING_SEARCH_RADIUS,
         (bush) => {
-          if (bush.food.length === 0) {
+          // Quick checks first (no lookups)
+          if (bush.food.length === 0) return false;
+
+          // Territory check
+          if (humanLeaderId && !isWithinOperatingRange(bush.position, humanLeaderId, context.gameState)) {
             return false;
           }
 
-          // Check if bush is within tribe's operating range (territory + small buffer)
-          if (human.leaderId && !isWithinOperatingRange(bush.position, human.leaderId, context.gameState)) {
-            return false;
-          }
+          // Tribal task check
+          if (isBeingGatheredByOther(bush.id)) return false;
 
-          // Check if another tribe member is already gathering from this bush
-          if (leader && leader.aiBlackboard) {
-            const taskKey = `tribal_gather_${bush.id}`;
-            const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
-            if (task) {
-              // Check if task is not stale
-              if (context.gameState.time - task.startTime <= TRIBAL_TASK_TIMEOUT_HOURS) {
-                // If assigned to someone else, skip it
-                if (!task.memberIds.includes(human.id)) {
-                  return false;
-                }
-              }
-            }
-          }
+          // Ownership check - optimized with byRadiusFirst
+          const owner = getBushOwner(bush);
+          if (!owner) return true; // No owner, fair game
 
-          // Bush is claimed. Get the owner.
-          const ownerId = (context.gameState as IndexedWorldState).search.building.byRadius(
-            bush.position,
-            bush.radius,
-          )[0]?.ownerId;
-          const owner = context.gameState.entities.entities[ownerId!] as HumanEntity | undefined;
-          if (!owner) {
-            return true; // Owner doesn't exist, so it's fair game.
-          }
+          // Same tribe check
+          if (owner.leaderId === humanLeaderId) return true;
 
-          // If owner is from the same tribe (or is the human itself), it's okay to gather.
-          if (owner.leaderId === human.leaderId) {
-            return true;
-          }
-
-          // Owner is from a different tribe. Check proximity.
-          const distanceToOwner =
-            distanceToOwnerCache.get(owner.id) ??
-            calculateWrappedDistance(
+          // Different tribe - check proximity (cached)
+          let distanceToOwner = distanceToOwnerCache.get(owner.id);
+          if (distanceToOwner === undefined) {
+            const distSq = calculateWrappedDistanceSq(
               human.position,
               owner.position,
               context.gameState.mapDimensions.width,
               context.gameState.mapDimensions.height,
             );
-          distanceToOwnerCache.set(owner.id, distanceToOwner);
+            distanceToOwner = Math.sqrt(distSq);
+            distanceToOwnerCache.set(owner.id, distanceToOwner);
+          }
 
-          // It's a valid target only if the owner is far away.
           return distanceToOwner > AI_GATHERING_AVOID_OWNER_PROXIMITY;
         },
       );
 
-      const closestCorpse = findClosestEntity<CorpseEntity>(
-        human,
-        context.gameState,
-        'corpse',
-        AI_GATHERING_SEARCH_RADIUS,
-        (c) => {
-          if (c.food.length === 0) {
-            return false;
-          }
+      // Short-circuit: skip corpse search if we found a bush that's close enough
+      let corpseResult: ClosestEntityResult<CorpseEntity> | null = null;
+      if (!bushResult || bushResult.distance > GOOD_ENOUGH_DISTANCE) {
+        // Find closest corpse
+        corpseResult = findClosestEntityWithDistance<CorpseEntity>(
+          human,
+          context.gameState,
+          'corpse',
+          AI_GATHERING_SEARCH_RADIUS,
+          (c) => {
+            if (c.food.length === 0) return false;
 
-          // Check if corpse is within tribe's operating range (territory + small buffer)
-          if (human.leaderId && !isWithinOperatingRange(c.position, human.leaderId, context.gameState)) {
-            return false;
-          }
-
-          // Check if another tribe member is already gathering from this corpse
-          if (leader && leader.aiBlackboard) {
-            const taskKey = `tribal_gather_${c.id}`;
-            const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
-            if (task) {
-              if (context.gameState.time - task.startTime <= TRIBAL_TASK_TIMEOUT_HOURS) {
-                if (!task.memberIds.includes(human.id)) {
-                  return false;
-                }
-              }
+            // Territory check
+            if (humanLeaderId && !isWithinOperatingRange(c.position, humanLeaderId, context.gameState)) {
+              return false;
             }
-          }
-          return true;
-        },
-      );
 
+            // Tribal task check
+            return !isBeingGatheredByOther(c.id);
+          },
+        );
+      }
+
+      // Choose the closer food source using pre-computed distances
       let foodSource: FoodSource | null = null;
-      if (closestBush && closestCorpse) {
-        const distToBush = calculateWrappedDistance(
-          human.position,
-          closestBush.position,
-          context.gameState.mapDimensions.width,
-          context.gameState.mapDimensions.height,
-        );
-        const distToCorpse = calculateWrappedDistance(
-          human.position,
-          closestCorpse.position,
-          context.gameState.mapDimensions.width,
-          context.gameState.mapDimensions.height,
-        );
-        foodSource = distToBush <= distToCorpse ? closestBush : closestCorpse;
-      } else {
-        foodSource = closestBush || closestCorpse;
+      if (bushResult && corpseResult) {
+        foodSource = bushResult.distance <= corpseResult.distance ? bushResult.entity : corpseResult.entity;
+      } else if (bushResult) {
+        foodSource = bushResult.entity;
+      } else if (corpseResult) {
+        foodSource = corpseResult.entity;
       }
 
       if (foodSource) {
@@ -186,19 +189,22 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           return [NodeStatus.FAILURE, 'Food source is invalid or depleted'];
         }
 
-        const distance = calculateWrappedDistance(
+        // Use squared distance to avoid sqrt overhead
+        const distanceSq = calculateWrappedDistanceSq(
           human.position,
           target.position,
           context.gameState.mapDimensions.width,
           context.gameState.mapDimensions.height,
         );
+        const proximityThresholdSq = HUMAN_INTERACTION_PROXIMITY * HUMAN_INTERACTION_PROXIMITY;
 
         // If close enough, start gathering. The state machine will handle the rest.
-        if (distance < HUMAN_INTERACTION_PROXIMITY) {
+        if (distanceSq < proximityThresholdSq) {
           human.activeAction = 'gathering';
           human.direction = { x: 0, y: 0 };
           human.target = target.id; // Set target for interaction system
 
+          // Clear blackboard target only after successfully starting to gather
           Blackboard.delete(blackboard, BLACKBOARD_KEY);
           return [NodeStatus.SUCCESS, `Gathering from ${target.type}`];
         } else {
@@ -206,6 +212,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
           human.activeAction = 'moving';
           human.target = target.id;
           human.direction = dirToTarget(human.position, target.position, context.gameState.mapDimensions);
+          // Keep target in blackboard while moving (RUNNING state)
           return [NodeStatus.RUNNING, `Moving to ${target.type}`];
         }
       },
