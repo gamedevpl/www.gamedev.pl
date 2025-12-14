@@ -85,3 +85,77 @@ type IsClassInstance<T> = T extends { new (...args: any[]): any } ? true : false
  * Instead of explicitly rewriting the type, use the helper.
  */
 export type SerializedWorldState = StrictJson<GameWorldState>;
+
+/**
+ * Message types for communication between the main thread and the persistence worker.
+ */
+export enum WorkerMessageType {
+  SAVE_REQUEST = 'SAVE_REQUEST',
+  SAVE_RESPONSE = 'SAVE_RESPONSE',
+  LOAD_REQUEST = 'LOAD_REQUEST',
+  LOAD_RESPONSE = 'LOAD_RESPONSE',
+  CLEAR_REQUEST = 'CLEAR_REQUEST',
+  CLEAR_RESPONSE = 'CLEAR_RESPONSE',
+}
+
+/**
+ * Request to save game state to persistent storage (sent from main thread to worker).
+ */
+export interface SaveRequest {
+  type: WorkerMessageType.SAVE_REQUEST;
+  id: string;
+  gameState: SerializedWorldState;
+}
+
+/**
+ * Request to load game state from persistent storage (sent from main thread to worker).
+ */
+export interface LoadRequest {
+  type: WorkerMessageType.LOAD_REQUEST;
+  id: string;
+}
+
+/**
+ * Request to clear saved game state (sent from main thread to worker).
+ */
+export interface ClearRequest {
+  type: WorkerMessageType.CLEAR_REQUEST;
+  id: string;
+}
+
+/**
+ * Response to a save request (sent from worker to main thread).
+ */
+export interface SaveResponse {
+  type: WorkerMessageType.SAVE_RESPONSE;
+  id: string;
+  success: boolean;
+  error?: string;
+  size?: number;
+}
+
+/**
+ * Response to a load request (sent from worker to main thread).
+ */
+export interface LoadResponse {
+  type: WorkerMessageType.LOAD_RESPONSE;
+  id: string;
+  success: boolean;
+  gameState?: SerializedWorldState;
+  error?: string;
+}
+
+/**
+ * Response to a clear request (sent from worker to main thread).
+ */
+export interface ClearResponse {
+  type: WorkerMessageType.CLEAR_RESPONSE;
+  id: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Union type of all worker messages for type-safe communication.
+ */
+export type WorkerMessage = SaveRequest | SaveResponse | LoadRequest | LoadResponse | ClearRequest | ClearResponse;
