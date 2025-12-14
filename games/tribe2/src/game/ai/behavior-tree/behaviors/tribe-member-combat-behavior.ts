@@ -17,6 +17,8 @@ import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { Vector2D } from '../../../utils/math-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types.ts';
+import { registerDemand } from '../../../entities/tribe/logistics-utils.ts';
+import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils.ts';
 
 const COMBAT_TARGET_KEY = 'combatTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -33,9 +35,20 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
   );
 
   const isFitForCombat = new ConditionNode<HumanEntity>(
-    (human) =>
-      human.hunger < HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING &&
-      human.hitpoints >= human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD,
+    (human, context) => {
+      const isHungry = human.hunger >= HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING;
+      
+      // If warrior is too hungry, register a demand for food delivery
+      if (isHungry) {
+        const leader = getTribeLeaderForCoordination(human, context.gameState);
+        if (leader?.aiBlackboard) {
+          const priority = human.hunger > 120 ? 5 : human.hunger > 100 ? 4 : 3;
+          registerDemand(leader.aiBlackboard, human.id, priority, human.position, context.gameState.time);
+        }
+      }
+      
+      return !isHungry && human.hitpoints >= human.maxHitpoints * AI_FLEE_HEALTH_THRESHOLD;
+    },
     'Is Fit for Combat?',
     depth + 1,
   );

@@ -41,7 +41,6 @@ import {
   createRemoveEnemyBuildingBehavior,
   createTribeRoleAssignmentBehavior,
   createMoverBehavior,
-  createConsumerDemandBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -78,10 +77,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         'Role Assignment Gate',
         2,
       ),
-
-      // --- CONSUMER DEMAND REGISTRATION (Non-blocking) ---
-      // Warriors and Hunters register hunger demands so Movers can deliver food to them
-      createConsumerDemandBehavior(2),
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
@@ -167,9 +162,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- MOVER LOGISTICS (RESOURCE TRANSPORT) ---
       new TimeoutNode(
-        new AutopilotControlled(createMoverBehavior(4), 'gathering', 'Gated Mover Logistics', 3),
+        createMoverBehavior(3),
         BT_ACTION_TIMEOUT_HOURS,
-        'Timeout Mover Logistics',
+        'Timeout Mover',
         2,
       ),
 
