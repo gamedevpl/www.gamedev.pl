@@ -98,6 +98,12 @@ export const DEPOSIT_THRESHOLD_LOW_STORAGE = 0.4; // Deposit when personal food 
 export const DEPOSIT_THRESHOLD_MID_STORAGE = 0.6; // Deposit when personal food > 60% if storage 30-70%
 export const DEPOSIT_THRESHOLD_HIGH_STORAGE = 0.8; // Deposit when personal food > 80% if storage > 70%
 
+// Mover Role Constants
+export const MOVER_TRIBE_FEEDING_COOLDOWN_HOURS = 1; // Cooldown after feeding a tribe member
+export const MOVER_HUNGRY_MEMBER_THRESHOLD = 90; // Hunger level at which movers will feed tribe members
+export const MOVER_STORAGE_BALANCE_THRESHOLD = 0.3; // Difference in fill ratio to trigger storage balancing
+export const MOVER_SEARCH_RADIUS = 500; // Radius for mover to search for targets
+
 // Leader Building Placement Constants
 export const BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS = 2; // How often to check for building needs
 export const LEADER_BUILDING_SPIRAL_SEARCH_RADIUS = MAP_WIDTH / 2; // Max distance to search for building placement

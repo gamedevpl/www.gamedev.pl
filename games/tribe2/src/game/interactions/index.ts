@@ -20,12 +20,14 @@ import { storageRetrieveInteraction } from './storage-retrieve-interaction';
 import { storageStealInteraction } from './storage-steal-interaction';
 import { buildingTakeoverInteraction } from './building-takeover-interaction';
 import { buildingRemovalInteraction } from './building-removal-interaction';
+import { moverTribeFeedingInteraction } from './mover-tribe-feeding-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
   ...humanGatherFoodInteractions,
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
+  moverTribeFeedingInteraction, // Mover tribe member feeding
   humanAttackInteraction,
   storageDepositInteraction, // Storage interactions
   storageRetrieveInteraction,

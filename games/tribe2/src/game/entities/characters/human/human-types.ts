@@ -65,6 +65,9 @@ export interface HumanEntity extends CharacterEntity {
   /** Cooldown time for feeding a parent. */
   feedParentCooldownTime?: number;
 
+  /** Cooldown time for a mover to feed a tribe member. */
+  tribeFeedingCooldownTime?: number;
+
   /** Current active action. Set by player input or AI decision. */
   activeAction?: HumanAction;
 
@@ -126,4 +129,5 @@ export type HumanAction =
   | 'depositing' // Depositing resources into storage
   | 'retrieving' // Retrieving resources from storage
   | 'takingOverBuilding' // Taking over an enemy building
-  | 'destroyingBuilding'; // Destroying an enemy building
+  | 'destroyingBuilding' // Destroying an enemy building
+  | 'tribeFeeding'; // Mover delivering food to tribe members
