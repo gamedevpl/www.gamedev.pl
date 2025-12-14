@@ -40,6 +40,7 @@ import {
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
   createTribeRoleAssignmentBehavior,
+  createMoverDeliveryBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -158,6 +159,14 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- STORAGE DEPOSIT (EXCESS FOOD) ---
       new AutopilotControlled(createStorageDepositBehavior(3), 'gathering', 'Gated Storage Deposit', 2),
+
+      // --- MOVER DELIVERY (RESOURCE DISTRIBUTION) ---
+      new TimeoutNode(
+        new AutopilotControlled(createMoverDeliveryBehavior(3), 'gathering', 'Gated Mover Delivery', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Mover Delivery',
+        2,
+      ),
 
       // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
       new AutopilotControlled(createFeedingChildBehavior(3), 'feedChildren', 'Gated Feed Child', 2),
