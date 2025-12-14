@@ -6,7 +6,7 @@ import {
   STORAGE_INTERACTION_RANGE,
   STORAGE_STEAL_COOLDOWN,
   STORAGE_STEAL_DETECTION_RANGE,
-} from '../storage-spot-consts';
+} from '../entities/buildings/storage-spot-consts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { getTribeMembers } from '../entities/tribe/family-tribe-utils';

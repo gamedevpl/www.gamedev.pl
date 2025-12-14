@@ -1,6 +1,6 @@
 import { Entity, EntityId } from '../entities-types';
-import { BuildingType } from '../../building-consts';
-import { FoodItem } from '../../food/food-types';
+import { BuildingType } from './building-consts';
+import { FoodItem } from '../food-types';
 
 export { BuildingType };
 

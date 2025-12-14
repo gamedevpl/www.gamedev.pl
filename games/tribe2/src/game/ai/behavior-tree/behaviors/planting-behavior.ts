@@ -1,4 +1,4 @@
-import { FoodType } from '../../../food/food-types';
+import { FoodType } from '../../../entities/food-types.ts';
 import { Vector2D } from '../../../utils/math-types';
 import { calculateWrappedDistance, dirToTarget, getDirectionVectorOnTorus, vectorAdd } from '../../../utils/math-utils';
 import { findOptimalPlantingZoneSpot, isPositionOccupied, getTribeMembers } from '../../../utils';
@@ -7,7 +7,10 @@ import {
   getProductiveBushDensity,
   countTribeMembersWithAction,
 } from '../../../entities/tribe/tribe-food-utils.ts';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../../../berry-bush-consts.ts';
+import {
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  BERRY_COST_FOR_PLANTING,
+} from '../../../entities/plants/berry-bush/berry-bush-consts.ts';
 import {
   BT_PLANTING_SEARCH_COOLDOWN_HOURS,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING,
@@ -27,7 +30,7 @@ import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
-import { isSoilDepleted } from '../../../soil-depletion-update';
+import { isSoilDepleted } from '../../../entities/plants/soil-depletion-update.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
 const PLANTING_ZONE_KEY = 'plantingZoneId';
@@ -73,12 +76,14 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       }
 
       // Check if soil is depleted - cannot plant on depleted soil
-      if (isSoilDepleted(
-        context.gameState.soilDepletion,
-        plantingSpot,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      )) {
+      if (
+        isSoilDepleted(
+          context.gameState.soilDepletion,
+          plantingSpot,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        )
+      ) {
         Blackboard.delete(blackboard, BLACKBOARD_KEY);
         Blackboard.delete(blackboard, PLANTING_ZONE_KEY);
         return [NodeStatus.FAILURE, 'Soil is depleted at planting spot'];

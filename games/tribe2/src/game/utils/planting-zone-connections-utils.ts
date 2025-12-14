@@ -6,7 +6,7 @@
 
 import { EntityId } from '../entities/entities-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { BuildingType, BUILDING_DEFINITIONS } from '../building-consts';
+import { BuildingType, BUILDING_DEFINITIONS } from '../entities/buildings/building-consts';
 import { GameWorldState, PlantingZoneConnections } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 
@@ -95,9 +95,7 @@ function isAdjacentVertically(
  * @param gameState The current game state.
  * @returns A record mapping zone entity IDs to their connection information.
  */
-function calculatePlantingZoneConnections(
-  gameState: GameWorldState,
-): Record<EntityId, PlantingZoneConnections> {
+function calculatePlantingZoneConnections(gameState: GameWorldState): Record<EntityId, PlantingZoneConnections> {
   const connections: Record<EntityId, PlantingZoneConnections> = {};
   const dimensions = getPlantingZoneDimensions();
 

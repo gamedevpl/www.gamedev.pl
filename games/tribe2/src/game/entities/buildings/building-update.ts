@@ -1,6 +1,6 @@
 import { UpdateContext } from '../../world-types';
 import { BuildingEntity } from './building-types';
-import { getBuildingConstructionTime, getBuildingDestructionTime, BuildingType } from '../../building-consts';
+import { getBuildingConstructionTime, getBuildingDestructionTime, BuildingType } from './building-consts.ts';
 import { removeEntity } from '../entities-update';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts.ts';
 import { updatePlantingZoneConnections } from '../../utils/planting-zone-connections-utils';
@@ -13,7 +13,7 @@ import { updatePlantingZoneConnections } from '../../utils/planting-zone-connect
  */
 export function buildingUpdate(building: BuildingEntity, updateContext: UpdateContext): void {
   const { gameState, deltaTime } = updateContext;
-  
+
   // Calculate game hours passed in this frame
   // deltaTime is in seconds (real time)
   // We need to convert this to game hours

@@ -1,5 +1,5 @@
 import { EntityId } from '../../entities-types';
-import { FoodItem } from '../../../food/food-types';
+import { FoodItem } from '../../food-types';
 import { CharacterEntity } from '../character-types';
 import { TribeControl, TribeRole } from '../../tribe/tribe-types';
 

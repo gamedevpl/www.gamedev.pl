@@ -4,7 +4,7 @@ import { Selector } from '../nodes/composite-nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { BlackboardData, Blackboard } from '../behavior-tree-blackboard';
-import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts';
+import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts';
 import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../ai-consts';
 import { findClosestStorage, findNearbyTribeStorageWithFood } from '../../../utils/storage-utils';
 import { MAX_USERS_PER_STORAGE, getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';

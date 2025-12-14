@@ -1,10 +1,13 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { HumanEntity } from '../human-types';
 import { HumanPlantingStateData, HUMAN_IDLE, HUMAN_PLANTING } from './human-state-types';
-import { BERRY_COST_FOR_PLANTING, HUMAN_PLANTING_DURATION_HOURS } from '../../../../berry-bush-consts.ts';
+import {
+  BERRY_COST_FOR_PLANTING,
+  HUMAN_PLANTING_DURATION_HOURS,
+} from '../../../plants/berry-bush/berry-bush-consts.ts';
 import { createBerryBush } from '../../../entities-update';
-import { FoodType } from '../../../../food/food-types';
-import { applySoilPlantDepletion, isSoilDepleted } from '../../../../soil-depletion-update';
+import { FoodType } from '../../../food-types.ts';
+import { applySoilPlantDepletion, isSoilDepleted } from '../../../plants/soil-depletion-update.ts';
 
 export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
   id: HUMAN_PLANTING,
@@ -16,7 +19,7 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
 
     if (timeInState >= HUMAN_PLANTING_DURATION_HOURS) {
       const berryCount = entity.food.filter((f) => f.type === FoodType.Berry).length;
-      
+
       // Check if soil is depleted - if so, cancel planting
       const soilDepleted = isSoilDepleted(
         gameState.soilDepletion,
@@ -24,7 +27,7 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
         gameState.mapDimensions.width,
         gameState.mapDimensions.height,
       );
-      
+
       if (berryCount >= BERRY_COST_FOR_PLANTING && !soilDepleted) {
         // Consume berries
         for (let i = 0; i < BERRY_COST_FOR_PLANTING; i++) {
@@ -35,7 +38,7 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
         }
         // Create a new bush
         createBerryBush(gameState.entities, data.plantingSpot, gameState.time);
-        
+
         // Apply soil depletion from planting
         applySoilPlantDepletion(
           gameState.soilDepletion,

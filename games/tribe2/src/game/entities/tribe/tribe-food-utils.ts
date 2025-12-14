@@ -6,9 +6,9 @@ import { IndexedWorldState } from '../../world-index/world-index-types';
 import { getTribeMembers } from './family-tribe-utils';
 import { calculateWrappedDistance } from '../../utils/math-utils';
 import { getTribeCenter, isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../berry-bush-consts';
+import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../plants/berry-bush/berry-bush-consts';
 import { Vector2D } from '../../utils/math-types';
-import { isSoilDepleted } from '../../soil-depletion-update';
+import { isSoilDepleted } from '../plants/soil-depletion-update';
 
 const TRIBE_BUSH_SEARCH_RADIUS = 500; // Radius to search for bushes near tribe center
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment

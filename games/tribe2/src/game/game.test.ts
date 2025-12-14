@@ -5,12 +5,12 @@ import { GameWorldState } from './world-types';
 import { HumanEntity } from './entities/characters/human/human-types';
 
 import { GAME_DAY_IN_REAL_SECONDS } from './game-consts.ts';
-import { HUMAN_PLANTING_DURATION_HOURS } from './berry-bush-consts.ts';
+import { HUMAN_PLANTING_DURATION_HOURS } from './entities/plants/berry-bush/berry-bush-consts.ts';
 import { HUMAN_YEAR_IN_REAL_SECONDS } from './human-consts.ts';
 import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
-import { FoodType } from './food/food-types';
+import { FoodType } from './entities/food-types.ts';
 import { btProfiler } from './ai/behavior-tree/bt-profiler';
 
 // Helper to find a human by ID, with proper type assertion

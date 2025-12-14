@@ -1,4 +1,4 @@
-import { BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
+import { BERRY_COST_FOR_PLANTING } from '../entities/plants/berry-bush/berry-bush-consts.ts';
 import { HUMAN_ATTACK_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
@@ -6,14 +6,14 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { FoodType } from '../food/food-types';
+import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { GameWorldState } from '../world-types';
 import { calculateWrappedDistance } from './math-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from '../entities/tribe/tribe-split-utils.ts';
 import { canProcreate, isHostile } from './human-utils';
-import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
+import { STORAGE_INTERACTION_RANGE } from '../entities/buildings/storage-spot-consts.ts';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];

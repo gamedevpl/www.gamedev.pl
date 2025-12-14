@@ -1,6 +1,6 @@
 import { Vector2D } from './math-types';
 import { GameWorldState } from '../world-types';
-import { BuildingType, getBuildingDimensions } from '../building-consts';
+import { BuildingType, getBuildingDimensions } from '../entities/buildings/building-consts';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
 import { createBuilding as createBuildingEntity } from '../entities/entities-update';
@@ -9,7 +9,7 @@ import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
 import { canPlaceBuildingInTerritory } from '../entities/tribe/territory-utils';
-import { getDepletedSectorsInArea } from '../soil-depletion-update';
+import { getDepletedSectorsInArea } from '../entities/plants/soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
 import {
   BUILDING_PLACEMENT_MAX_ANCHORS,
@@ -205,7 +205,10 @@ export function findAdjacentBuildingPlacement(
     for (let radius = minDistance; radius <= searchRadius; radius += radiusStep) {
       // Determine number of angles to check based on radius
       // More angles at larger radii for better coverage
-      const numAngles = Math.max(8, Math.min(BUILDING_PLACEMENT_TRIG_CACHE_SIZE, Math.ceil((2 * Math.PI * radius) / buildingSize)));
+      const numAngles = Math.max(
+        8,
+        Math.min(BUILDING_PLACEMENT_TRIG_CACHE_SIZE, Math.ceil((2 * Math.PI * radius) / buildingSize)),
+      );
 
       // OPTIMIZATION: Pre-compute trig values for this ring
       const trigCache = precomputeTrigCache(numAngles);
@@ -240,7 +243,11 @@ export function findAdjacentBuildingPlacement(
           stats.totalTimeMs = performance.now() - startTime;
           if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
             console.log(
-              `[BuildingPlacement] Slow search for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${stats.tribeDistanceChecks}`,
+              `[BuildingPlacement] Slow search for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${
+                stats.anchorsSearched
+              }, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${
+                stats.tribeDistanceChecks
+              }`,
             );
           }
           // OPTIMIZATION: Only allocate Vector2D on return
@@ -254,7 +261,11 @@ export function findAdjacentBuildingPlacement(
   stats.totalTimeMs = performance.now() - startTime;
   if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
     console.log(
-      `[BuildingPlacement] Slow search (no valid location) for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${stats.tribeDistanceChecks}`,
+      `[BuildingPlacement] Slow search (no valid location) for ${buildingType}: ${stats.totalTimeMs.toFixed(
+        2,
+      )}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${
+        stats.canPlaceChecks
+      }, tribeDist=${stats.tribeDistanceChecks}`,
     );
   }
 

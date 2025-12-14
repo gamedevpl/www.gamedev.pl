@@ -2,9 +2,9 @@ import { State, StateContext, StateTransition } from '../../../../state-machine/
 import { BerryBushEntity } from '../berry-bush-types';
 import { BushGrowingStateData, BUSH_DYING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../game-consts.ts';
-import { BERRY_BUSH_REGENERATION_HOURS } from '../../../../berry-bush-consts.ts';
-import { FoodType } from '../../../../food/food-types';
-import { isSoilDepleted } from '../../../../soil-depletion-update';
+import { BERRY_BUSH_REGENERATION_HOURS } from '../berry-bush-consts.ts';
+import { FoodType } from '../../../food-types.ts';
+import { isSoilDepleted } from '../../soil-depletion-update.ts';
 
 export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
   id: BUSH_GROWING,
@@ -26,15 +26,14 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
     );
 
     if (!soilDepleted) {
-    entity.timeSinceLastBerryRegen += gameHoursDelta;
+      entity.timeSinceLastBerryRegen += gameHoursDelta;
 
-    if (entity.timeSinceLastBerryRegen >= BERRY_BUSH_REGENERATION_HOURS) {
-      if (entity.food.length < entity.maxFood) {
-        entity.food.push({ type: FoodType.Berry });
-        entity.timeSinceLastBerryRegen = 0;
+      if (entity.timeSinceLastBerryRegen >= BERRY_BUSH_REGENERATION_HOURS) {
+        if (entity.food.length < entity.maxFood) {
+          entity.food.push({ type: FoodType.Berry });
+          entity.timeSinceLastBerryRegen = 0;
+        }
       }
-    }
-
     }
     if (entity.food.length >= entity.maxFood) {
       return {

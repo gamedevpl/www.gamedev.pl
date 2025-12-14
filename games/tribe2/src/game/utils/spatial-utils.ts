@@ -6,7 +6,7 @@ import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-
 import { Vector2D } from './math-types';
 import { findTribeMembers, getFamilyMembers } from '../entities/tribe/family-tribe-utils';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { isSoilDepleted } from '../soil-depletion-update';
+import { isSoilDepleted } from '../entities/plants/soil-depletion-update';
 
 export function getRandomNearbyPosition(
   center: Vector2D,

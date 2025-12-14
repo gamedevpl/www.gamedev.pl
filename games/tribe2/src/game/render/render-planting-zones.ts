@@ -7,7 +7,7 @@
  */
 
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { BuildingType, BUILDING_DEFINITIONS } from '../building-consts';
+import { BuildingType, BUILDING_DEFINITIONS } from '../entities/buildings/building-consts';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { Vector2D } from '../utils/math-types';

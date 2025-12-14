@@ -28,7 +28,7 @@ import { Vector2D } from '../../utils/math-types.ts';
 import { calculateWrappedDistance } from '../../utils/math-utils.ts';
 import { IndexedWorldState } from '../../world-index/world-index-types.ts';
 import { BuildingEntity } from '../buildings/building-types.ts';
-import { BuildingType } from '../../building-consts.ts';
+import { BuildingType } from '../buildings/building-consts.ts';
 import { EntityId } from '../entities-types.ts';
 import { checkPositionInTerritory } from './territory-utils.ts';
 import { TribeTerritory } from './territory-types.ts';

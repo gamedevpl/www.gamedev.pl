@@ -8,13 +8,13 @@ import {
   BUILDING_DESTRUCTION_BAR_COLOR,
   BUILDING_PROGRESS_BAR_HEIGHT,
   BUILDING_PROGRESS_BAR_OFFSET,
-} from '../building-consts';
+} from '../entities/buildings/building-consts';
 import { Vector2D } from '../utils/math-types';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping } from './render-utils';
 import { Entity } from '../entities/entities-types';
-import { FOOD_TYPE_EMOJIS } from '../food/food-types';
+import { FOOD_TYPE_EMOJIS } from '../entities/food-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
 

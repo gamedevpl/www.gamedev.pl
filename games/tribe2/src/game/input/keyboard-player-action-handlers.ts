@@ -2,7 +2,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGE } from '../human-consts.ts';
-import { BERRY_BUSH_SPREAD_RADIUS } from '../berry-bush-consts.ts';
+import { BERRY_BUSH_SPREAD_RADIUS } from '../entities/plants/berry-bush/berry-bush-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
@@ -11,7 +11,7 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
+import { STORAGE_INTERACTION_RANGE } from '../entities/buildings/storage-spot-consts.ts';
 
 /**
  * Handles keyboard events that correspond to direct player actions.

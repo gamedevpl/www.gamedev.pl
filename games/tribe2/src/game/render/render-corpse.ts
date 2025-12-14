@@ -4,7 +4,7 @@ import { TribePrey2D } from '../../../../../tools/asset-generator/generator-asse
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.js';
 import { HUMAN_MAX_FOOD } from '../human-consts';
-import { FOOD_TYPE_EMOJIS } from '../food/food-types';
+import { FOOD_TYPE_EMOJIS } from '../entities/food-types.js';
 
 const CORPSE_MEAT_ICON_SIZE = 9;
 

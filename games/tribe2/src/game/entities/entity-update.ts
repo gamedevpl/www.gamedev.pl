@@ -14,7 +14,7 @@ import { humanAIUpdate } from '../ai/human-ai-update';
 import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 import { buildingUpdate } from './buildings/building-update';
 import { BuildingEntity } from './buildings/building-types';
-import { applySoilWalkDepletion } from '../soil-depletion-update';
+import { applySoilWalkDepletion } from './plants/soil-depletion-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -100,7 +100,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   if (entity.type === 'human') {
     humanAIUpdate(entity as HumanEntity, updateContext);
   }
-  
+
   // AI decision making for animals
   if (entity.type === 'prey') {
     preyAIUpdate(entity as PreyEntity, updateContext);

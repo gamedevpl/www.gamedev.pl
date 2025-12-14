@@ -11,7 +11,7 @@ import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
 import { saveGame } from './persistence/persistence-utils';
 import { updateUI } from './ui/ui-utils.ts';
-import { updateSoilRecovery } from './soil-depletion-update';
+import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 

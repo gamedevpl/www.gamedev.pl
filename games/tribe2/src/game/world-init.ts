@@ -1,7 +1,10 @@
 import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
 import { DebugPanelType, GameWorldState } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS } from './game-consts.ts';
-import { INITIAL_BERRY_BUSH_COUNT, MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';
+import {
+  INITIAL_BERRY_BUSH_COUNT,
+  MIN_BERRY_BUSH_SPREAD_CHANCE,
+} from './entities/plants/berry-bush/berry-bush-consts.ts';
 import { INITIAL_MASTER_VOLUME } from './sound-consts.ts';
 import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from './ui/ui-consts.ts';
 import {
@@ -19,7 +22,7 @@ import { ClickableUIButton, UIButtonActionType } from './ui/ui-types';
 import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
-import { createSoilDepletionState } from './soil-depletion-types';
+import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();

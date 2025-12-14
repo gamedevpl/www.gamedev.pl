@@ -3,7 +3,7 @@
  * Defines building types, dimensions, costs, and visual properties.
  */
 
-import { FoodType } from './food/food-types';
+import { FoodType } from '../food-types';
 
 export const BuildingType = {
   StorageSpot: 'storageSpot',

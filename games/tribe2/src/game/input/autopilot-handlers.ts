@@ -1,8 +1,11 @@
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { FoodType } from '../food/food-types';
+import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionType } from '../ui/ui-types';
-import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
+import {
+  BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
+  BERRY_COST_FOR_PLANTING,
+} from '../entities/plants/berry-bush/berry-bush-consts.ts';
 import { GameWorldState, HoveredAutopilotAction, DiplomacyStatus } from '../world-types';
 import {
   findEntityAtPosition,
@@ -21,7 +24,7 @@ import {
   startBuildingDestruction,
 } from '../utils/building-placement-utils';
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
-import { isSoilDepleted } from '../soil-depletion-update';
+import { isSoilDepleted } from '../entities/plants/soil-depletion-update.ts';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.

@@ -1,6 +1,6 @@
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { BuildingType } from '../../../building-consts';
+import { BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding, findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
 import {
   getStorageUtilization,

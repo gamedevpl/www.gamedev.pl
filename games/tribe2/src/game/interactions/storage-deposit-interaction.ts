@@ -2,7 +2,7 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { UpdateContext } from '../world-types';
-import { STORAGE_INTERACTION_RANGE, STORAGE_DEPOSIT_COOLDOWN } from '../storage-spot-consts';
+import { STORAGE_INTERACTION_RANGE, STORAGE_DEPOSIT_COOLDOWN } from '../entities/buildings/storage-spot-consts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';

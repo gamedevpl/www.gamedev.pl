@@ -1,4 +1,4 @@
-import { FoodItem, FOOD_TYPE_EMOJIS } from '../../food/food-types';
+import { FoodItem, FOOD_TYPE_EMOJIS } from '../../entities/food-types';
 
 export function drawProgressBar(
   ctx: CanvasRenderingContext2D,

@@ -28,7 +28,7 @@ import { Vector2D } from '../utils/math-types';
 import { renderBuilding } from './render-building.ts';
 import { BuildingEntity } from '../entities/buildings/building-types.ts';
 import { renderPlantingZonesMetaball } from './render-planting-zones.ts';
-import { BuildingType } from '../building-consts.ts';
+import { BuildingType } from '../entities/buildings/building-consts.ts';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,

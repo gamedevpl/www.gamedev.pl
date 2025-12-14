@@ -5,7 +5,7 @@
 
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
-import { getDepletedSectorsForRendering } from '../soil-depletion-update';
+import { getDepletedSectorsForRendering } from '../entities/plants/soil-depletion-update';
 import {
   SOIL_SECTOR_SIZE,
   SOIL_DEPLETED_COLOR,
@@ -13,7 +13,7 @@ import {
   SOIL_DEPLETED_OPACITY,
   SOIL_DEPLETED_RENDER_THRESHOLD,
   SOIL_VISIBLE_DEPLETION_THRESHOLD,
-} from '../soil-depletion-consts';
+} from '../entities/plants/soil-depletion-consts';
 
 // Cache for visible sectors to avoid recalculating every frame
 let cachedSectorsHash = '';
@@ -23,7 +23,7 @@ let cachedSectorSet: Set<string> | null = null;
  * Creates a hash key for a set of sectors
  */
 function createSectorsHash(sectors: Array<{ gridX: number; gridY: number; health: number }>): string {
-  return sectors.map(s => `${s.gridX},${s.gridY},${Math.floor(s.health)}`).join('|');
+  return sectors.map((s) => `${s.gridX},${s.gridY},${Math.floor(s.health)}`).join('|');
 }
 
 /**
@@ -49,8 +49,8 @@ function hasDepletedNeighbor(
   maxGridX: number,
   maxGridY: number,
 ): boolean {
-  const nx = ((gridX + dx) % maxGridX + maxGridX) % maxGridX;
-  const ny = ((gridY + dy) % maxGridY + maxGridY) % maxGridY;
+  const nx = (((gridX + dx) % maxGridX) + maxGridX) % maxGridX;
+  const ny = (((gridY + dy) % maxGridY) + maxGridY) % maxGridY;
   return sectorSet.has(`${nx},${ny}`);
 }
 
@@ -63,10 +63,7 @@ export function renderDepletedSoil(
   viewportCenter: Vector2D,
   canvasDimensions: { width: number; height: number },
 ): void {
-  const depletedSectors = getDepletedSectorsForRendering(
-    gameState.soilDepletion,
-    SOIL_DEPLETED_RENDER_THRESHOLD,
-  );
+  const depletedSectors = getDepletedSectorsForRendering(gameState.soilDepletion, SOIL_DEPLETED_RENDER_THRESHOLD);
 
   if (depletedSectors.length === 0) {
     return;
@@ -94,7 +91,7 @@ export function renderDepletedSoil(
   const visibleBottom = viewportCenter.y + halfCanvasHeight + padding;
 
   ctx.save();
-  
+
   // Store original globalAlpha to ensure proper restoration
   const originalAlpha = ctx.globalAlpha;
 
@@ -116,17 +113,7 @@ export function renderDepletedSoil(
     );
 
     for (const pos of visiblePositions) {
-      renderSector(
-        ctx,
-        pos.x,
-        pos.y,
-        sector.health,
-        sector.gridX,
-        sector.gridY,
-        sectorSet,
-        maxGridX,
-        maxGridY,
-      );
+      renderSector(ctx, pos.x, pos.y, sector.health, sector.gridX, sector.gridY, sectorSet, maxGridX, maxGridY);
     }
   }
 
@@ -167,12 +154,7 @@ function getVisiblePositions(
     const x = worldX + offset.dx;
     const y = worldY + offset.dy;
 
-    if (
-      x + size >= visibleLeft &&
-      x <= visibleRight &&
-      y + size >= visibleTop &&
-      y <= visibleBottom
-    ) {
+    if (x + size >= visibleLeft && x <= visibleRight && y + size >= visibleTop && y <= visibleBottom) {
       result.push({ x, y });
     }
   }
@@ -237,7 +219,7 @@ function renderSector(
   // Draw corner highlights for more depth
   ctx.globalAlpha = opacity * 0.5;
   const cornerSize = borderWidth + 1;
-  
+
   // Top-left corner
   if (hasTopBorder && hasLeftBorder) {
     ctx.fillRect(screenX, screenY, cornerSize, cornerSize);

@@ -10,7 +10,7 @@ import {
   BERRY_BUSH_MAX_FOOD,
   BERRY_BUSH_LIFESPAN_GAME_HOURS,
   BERRY_BUSH_SPREAD_RADIUS,
-} from '../berry-bush-consts.ts';
+} from './plants/berry-bush/berry-bush-consts.ts';
 import {
   HUMAN_INITIAL_AGE,
   HUMAN_INITIAL_HUNGER,
@@ -44,12 +44,12 @@ import { PREY_IDLE } from './characters/prey/states/prey-state-types';
 import { PREDATOR_IDLE } from './characters/predator/states/predator-state-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { FoodItem, FoodType } from '../food/food-types';
+import { FoodItem, FoodType } from './food-types.ts';
 import { AIType } from '../ai/ai-types';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { BuildingEntity, BuildingType } from './buildings/building-types';
-import { getBuildingDimensions } from '../building-consts';
-import { STORAGE_SPOT_CAPACITY } from '../storage-spot-consts';
+import { getBuildingDimensions } from './buildings/building-consts.ts';
+import { STORAGE_SPOT_CAPACITY } from './buildings/storage-spot-consts.ts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;

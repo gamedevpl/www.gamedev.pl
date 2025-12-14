@@ -1,4 +1,4 @@
-import { FoodItem } from '../../food/food-types';
+import { FoodItem } from '../food-types';
 import { Entity, EntityId } from '../entities-types';
 
 /**

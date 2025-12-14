@@ -4,8 +4,8 @@
  * and soil recovery over time.
  */
 
-import { Vector2D } from './utils/math-types';
-import { EntityId } from './entities/entities-types';
+import { Vector2D } from '../../utils/math-types';
+import { EntityId } from '../entities-types';
 import {
   SoilDepletionState,
   SoilSector,
@@ -25,7 +25,7 @@ import {
   SOIL_RECOVERY_RATE_ADJACENT_BONUS,
   SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS,
 } from './soil-depletion-consts';
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from './game-consts';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts';
 
 /**
  * Converts a world position to grid coordinates.

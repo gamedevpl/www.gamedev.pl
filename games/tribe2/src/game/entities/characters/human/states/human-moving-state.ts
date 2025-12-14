@@ -1,5 +1,5 @@
-import { SOIL_DEPLETED_SPEED_BONUS } from '../../../../soil-depletion-consts';
-import { getSoilSpeedModifier } from '../../../../soil-depletion-update';
+import { SOIL_DEPLETED_SPEED_BONUS } from '../../../plants/soil-depletion-consts';
+import { getSoilSpeedModifier } from '../../../plants/soil-depletion-update';
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
 import { Vector2D } from '../../../../utils/math-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';

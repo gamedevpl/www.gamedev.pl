@@ -3,7 +3,7 @@
  * Tracks soil health across a grid of sectors in the game world.
  */
 
-import { EntityId } from './entities/entities-types';
+import { EntityId } from '../entities-types';
 
 /**
  * Represents the state of a single soil sector.

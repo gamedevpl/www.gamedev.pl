@@ -4,7 +4,7 @@
  * This file serves as the entry point for the game's core logic.
  * It will contain functions to initialize and manage the game state.
  */
-import { MIN_BERRY_BUSH_SPREAD_CHANCE } from './berry-bush-consts.ts';
+import { MIN_BERRY_BUSH_SPREAD_CHANCE } from './entities/plants/berry-bush/berry-bush-consts.ts';
 import {
   MAX_PREDATOR_GESTATION_PERIOD,
   MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
@@ -53,5 +53,5 @@ export function initGame(): GameWorldState {
   return initialWorldState;
 }
 
-export * from './building-consts';
+export * from './entities/buildings/building-consts.ts';
 export * from './entities/buildings/building-types';
