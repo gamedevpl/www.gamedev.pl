@@ -20,6 +20,7 @@ import {
   findChildren,
   findHeir,
   canProcreate,
+  isWithinOperatingRange,
 } from '../../../utils';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../utils/math-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -128,6 +129,9 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       );
       if (distance < HUMAN_INTERACTION_PROXIMITY) {
         return [NodeStatus.SUCCESS, 'Reached partner'];
+      }
+      if (human.leaderId && !isWithinOperatingRange(partner.position, human.leaderId, context.gameState)) {
+        return [NodeStatus.FAILURE, 'Partner out of operating range'];
       }
       human.activeAction = 'moving';
       human.target = partner.id;

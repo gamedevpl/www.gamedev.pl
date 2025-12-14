@@ -25,7 +25,7 @@ export const LEADER_FOLLOW_RADIUS = 350; // Radius within which followers will t
 export const FOLLOW_LEADER_MIN_HUNGER_THRESHOLD = 120; // Followers will stop following if hunger is above this
 export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 800; // Radius in pixels to search for food sources when considering procreation
-export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 1000;
+export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 500;
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 150 * 0.85;
 export const AI_DEFEND_CLAIMED_BUSH_RANGE: number = 100; // Range to defend claimed bush
 export const AI_ATTACK_ENEMY_RANGE = 200; // Range in pixels for AI to attack an enemy
@@ -68,7 +68,6 @@ export const AI_DESPERATE_ATTACK_HUNGER_THRESHOLD = 100; // Hunger level (out of
 export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a potential target to be considered weak enough for a desperate attack
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
 export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
-export const AI_GATHERING_AVOID_OWNER_PROXIMITY = 120; // If the owner of a claimed bush is within this radius, avoid gathering
 export const AI_GATHERING_SEARCH_RADIUS = 600; // Radius for AI to search for food sources
 
 // AI Fleeing Constants

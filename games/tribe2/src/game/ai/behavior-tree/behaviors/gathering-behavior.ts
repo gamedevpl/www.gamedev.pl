@@ -1,7 +1,6 @@
 import {
   BT_GATHERING_SEARCH_COOLDOWN_HOURS,
   HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING,
-  AI_GATHERING_AVOID_OWNER_PROXIMITY,
   AI_GATHERING_SEARCH_RADIUS,
 } from '../../../ai-consts';
 import { CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD, HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts';
@@ -20,7 +19,6 @@ import {
   TribalTaskData,
   TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../entities/tribe/tribe-task-utils';
-import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
@@ -44,7 +42,6 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
   const findFoodSourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const leader = getTribeLeaderForCoordination(human, context.gameState);
-      const distanceToOwnerCache = new Map<EntityId, number>();
 
       const closestBush = findClosestEntity<BerryBushEntity>(
         human,
@@ -76,34 +73,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
             }
           }
 
-          // Bush is claimed. Get the owner.
-          const ownerId = (context.gameState as IndexedWorldState).search.building.byRadius(
-            bush.position,
-            bush.radius,
-          )[0]?.ownerId;
-          const owner = context.gameState.entities.entities[ownerId!] as HumanEntity | undefined;
-          if (!owner) {
-            return true; // Owner doesn't exist, so it's fair game.
-          }
-
-          // If owner is from the same tribe (or is the human itself), it's okay to gather.
-          if (owner.leaderId === human.leaderId) {
-            return true;
-          }
-
-          // Owner is from a different tribe. Check proximity.
-          const distanceToOwner =
-            distanceToOwnerCache.get(owner.id) ??
-            calculateWrappedDistance(
-              human.position,
-              owner.position,
-              context.gameState.mapDimensions.width,
-              context.gameState.mapDimensions.height,
-            );
-          distanceToOwnerCache.set(owner.id, distanceToOwner);
-
-          // It's a valid target only if the owner is far away.
-          return distanceToOwner > AI_GATHERING_AVOID_OWNER_PROXIMITY;
+          return true;
         },
       );
 
