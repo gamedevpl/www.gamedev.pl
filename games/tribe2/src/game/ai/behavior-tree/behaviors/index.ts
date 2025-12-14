@@ -23,6 +23,8 @@ export * from './diplomacy-behavior';
 export * from './human-hunt-prey-behavior';
 export * from './human-defend-predator-behavior';
 export * from './tribe-role-assignment-behavior';
+export * from './mover-behavior';
+export * from './consumer-demand-behavior';
 
 // Animal-specific behaviors
 export * from './prey-flee-behavior';

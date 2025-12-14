@@ -20,12 +20,15 @@ import {
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
-import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
+import { MAX_USERS_PER_STORAGE, getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
+import { registerForecastSupply, convertForecastToImmediate } from '../../../entities/tribe/logistics-utils';
+import { HUMAN_BASE_SPEED } from '../../../human-consts';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
+const FORECAST_REGISTERED_KEY = 'forecastRegistered';
 
 /**
  * Creates a behavior for depositing excess food into tribe storage spots.
@@ -132,11 +135,13 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 const assignedStorage = context.gameState.entities.entities[storageId] as BuildingEntity | undefined;
                 if (!assignedStorage) {
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+                  Blackboard.delete(blackboard, FORECAST_REGISTERED_KEY);
                   return [NodeStatus.FAILURE, 'Storage entity missing'];
                 }
 
                 if ((assignedStorage.storedFood?.length ?? 0) >= (assignedStorage.storageCapacity ?? 0)) {
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
+                  Blackboard.delete(blackboard, FORECAST_REGISTERED_KEY);
                   return [NodeStatus.FAILURE, 'Storage full'];
                 }
 
@@ -157,7 +162,38 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                   Blackboard.set(blackboard, LAST_DEPOSIT_TIME_KEY, context.gameState.time);
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
 
+                  // Convert forecast to immediate (or remove forecast entry)
+                  const leader = getTribeLeaderForCoordination(human, context.gameState);
+                  if (leader?.aiBlackboard) {
+                    convertForecastToImmediate(leader.aiBlackboard, human.id, context.gameState.time);
+                  }
+                  Blackboard.delete(blackboard, FORECAST_REGISTERED_KEY);
+
                   return [NodeStatus.SUCCESS, 'Depositing food'];
+                }
+
+                // Register forecast supply if not already done
+                // This announces "I'm bringing X food to Storage Y, ETA Z"
+                const forecastRegistered = Blackboard.get<boolean>(blackboard, FORECAST_REGISTERED_KEY);
+                if (!forecastRegistered && human.food.length > 0) {
+                  const leader = getTribeLeaderForCoordination(human, context.gameState);
+                  if (leader?.aiBlackboard) {
+                    // Calculate ETA based on distance and human speed
+                    const travelTimeHours = distance / HUMAN_BASE_SPEED; // Rough estimate
+                    const eta = context.gameState.time + travelTimeHours;
+
+                    registerForecastSupply(
+                      leader.aiBlackboard,
+                      human.id,
+                      'food',
+                      human.food.length,
+                      storageId,
+                      assignedStorage.position,
+                      eta,
+                      context.gameState.time,
+                    );
+                    Blackboard.set(blackboard, FORECAST_REGISTERED_KEY, true);
+                  }
                 }
 
                 // Navigate toward storage
