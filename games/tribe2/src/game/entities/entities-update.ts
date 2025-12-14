@@ -153,7 +153,7 @@ export function createHuman(
   return human;
 }
 
-export function createCorpse(
+function createCorpse(
   state: Entities,
   position: Vector2D,
   gender: 'male' | 'female',

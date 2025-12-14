@@ -28,6 +28,7 @@ import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 import { TribeRole } from '../../tribe/tribe-types';
 import { checkAndExecuteTribeMerges } from '../../tribe/family-tribe-utils';
+import { BuildingEntity } from '../../buildings/building-types.ts';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -194,8 +195,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             const follower = e as HumanEntity;
             follower.leaderId = heir.id; // Follow the new leader
           }
-          if (e.type === 'building' && (e as any).ownerId === entity.id) {
-            const building = e as any;
+          if (e.type === 'building' && (e as BuildingEntity).ownerId === entity.id) {
+            const building = e as BuildingEntity;
             building.ownerId = heir.id; // Transfer building ownership
           }
         });
@@ -207,8 +208,8 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             follower.leaderId = undefined;
             follower.tribeBadge = undefined;
           }
-          if (e.type === 'building' && (e as any).ownerId === entity.id) {
-            const building = e as any;
+          if (e.type === 'building' && (e as BuildingEntity).ownerId === entity.id) {
+            const building = e as BuildingEntity;
             building.ownerId = undefined;
           }
         });

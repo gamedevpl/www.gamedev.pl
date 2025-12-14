@@ -81,7 +81,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     updateTutorial(indexedState, deltaTime);
 
     // Update UI state
-    updateUI(indexedState, deltaTime);
+    updateUI(indexedState);
 
     currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;

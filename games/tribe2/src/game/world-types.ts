@@ -36,15 +36,13 @@ export enum DebugPanelType {
   Tribe,
 }
 
-export const PERFORMANCE_METRICS_HISTORY_LENGTH = 100;
-
 export type PerformanceMetricsBucket = {
   renderTime: number; // Time taken to render the frame
   worldUpdateTime: number; // Time taken to update the world state
   aiUpdateTime: number; // Time taken to update AI behaviors
 };
 
-export interface PerformanceMetrics {
+interface PerformanceMetrics {
   currentBucket: PerformanceMetricsBucket;
   history: (PerformanceMetricsBucket & { bucketTime: number })[];
 }

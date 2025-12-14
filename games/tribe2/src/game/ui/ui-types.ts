@@ -88,24 +88,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
 };
 
-export const TRIBE_ROLE_EMOJIS: Record<TribeRole, string> = {
-  [TribeRole.Leader]: '👑',
-  [TribeRole.Gatherer]: '🧺',
-  [TribeRole.Planter]: '🌱',
-  [TribeRole.Hunter]: '🏹',
-  [TribeRole.Mover]: '📦',
-  [TribeRole.Warrior]: '⚔️',
-};
-
-export const TRIBE_ROLE_NAMES: Record<TribeRole, string> = {
-  [TribeRole.Leader]: 'Leader',
-  [TribeRole.Gatherer]: 'Gatherer',
-  [TribeRole.Planter]: 'Planter',
-  [TribeRole.Hunter]: 'Hunter',
-  [TribeRole.Mover]: 'Mover',
-  [TribeRole.Warrior]: 'Warrior',
-};
-
 export interface PlayerActionHint {
   type: PlayerActionType;
   action: HumanAction;

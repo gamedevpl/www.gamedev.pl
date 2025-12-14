@@ -11,7 +11,7 @@ interface PreyIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
 }
 
-export interface PreyMovingStateData extends StateData {
+interface PreyMovingStateData extends StateData {
   target?: Vector2D | EntityId; // Where the prey is moving to
 }
 
@@ -19,7 +19,7 @@ interface PreyGrazingStateData extends StateData {
   berryBushId?: EntityId; // The ID of the berry bush being grazed on
 }
 
-export interface PreyProcreatingStateData extends StateData {
+interface PreyProcreatingStateData extends StateData {
   partnerId?: EntityId; // The ID of the partner for procreation
   duration?: number; // Duration of the procreation process
   procreationEndTime?: number; // When the procreation process ends

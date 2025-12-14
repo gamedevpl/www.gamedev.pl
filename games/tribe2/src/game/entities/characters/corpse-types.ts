@@ -46,9 +46,3 @@ export interface CorpseEntity extends Entity {
    */
   geneCode?: number;
 }
-
-/**
- * Legacy type alias for backward compatibility.
- * @deprecated Use CorpseEntity instead.
- */
-export type HumanCorpseEntity = CorpseEntity;

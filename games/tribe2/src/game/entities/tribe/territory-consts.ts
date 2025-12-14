@@ -14,9 +14,6 @@ export const TERRITORY_WANDER_DISTANCE = 500;
 /** Minimum distance between territories of different tribes */
 export const TERRITORY_MINIMUM_GAP = 20;
 
-/** Alpha value for territory border rendering */
-export const TERRITORY_BORDER_ALPHA = 0.8;
-
 /** Colors for different tribes' territories (indexed by tribe order) */
 export const TERRITORY_COLORS = [
   '#4CAF50', // Green (player tribe)

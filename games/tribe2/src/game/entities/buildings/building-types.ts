@@ -13,7 +13,7 @@ export interface BuildingEntity extends Entity {
   buildingType: BuildingType;
 
   /** ID of the tribe that owns this building. */
-  ownerId: EntityId;
+  ownerId: EntityId | undefined;
 
   /** Progress of construction, from 0.0 to 1.0. */
   constructionProgress: number;

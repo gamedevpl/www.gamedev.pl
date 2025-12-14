@@ -49,7 +49,7 @@ function openDB(): Promise<IDBDatabase> {
  * @param key The key to store the value under.
  * @param value The value to store.
  */
-async function dbPut(key: string, value: any): Promise<void> {
+async function dbPut(key: string, value: unknown): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');

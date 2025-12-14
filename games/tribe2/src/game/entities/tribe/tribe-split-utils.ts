@@ -46,13 +46,13 @@ const BB_SPLIT_FAMILY_IDS = 'tribeSplit_familyIds'; // EntityId[] of family memb
 const BB_SPLIT_PHASE_START_TIME = 'tribeSplit_phaseStartTime'; // number (game time)
 const BB_SPLIT_LAST_FAILURE_TIME = 'tribeSplit_lastFailureTime'; // number (game time)
 
-export type TribeSplitPhase = 'idle' | 'checking' | 'planning' | 'gathering' | 'executing';
+type TribeSplitPhase = 'idle' | 'checking' | 'planning' | 'gathering' | 'executing';
 export type TribeSplitStrategy = 'migration' | 'concentration';
 
 /**
  * Result of checking split conditions
  */
-export interface SplitCheckResult {
+interface SplitCheckResult {
   canSplit: boolean;
   reason?: string;
   progress?: number;
@@ -519,7 +519,7 @@ export function setSplitStrategy(blackboard: BlackboardData, strategy: TribeSpli
 /**
  * Handles phase timeout by resetting the split state
  */
-export function handlePhaseTimeout(blackboard: BlackboardData, gameTime: number): void {
+function handlePhaseTimeout(blackboard: BlackboardData, gameTime: number): void {
   resetSplitState(blackboard, gameTime);
 }
 
@@ -558,29 +558,4 @@ export function performTribeSplit(human: HumanEntity, gameState: GameWorldState)
 
   // For legacy behavior, skip gathering phase and execute immediately
   executeSplit(human, gameState);
-}
-
-/**
- * Helper function for propagating new leader to descendants (unchanged)
- */
-export function propagateNewLeaderToDescendants(
-  newLeader: HumanEntity,
-  human: HumanEntity,
-  gameState: GameWorldState,
-): void {
-  human.leaderId = newLeader.id;
-  human.tribeBadge = newLeader.tribeBadge;
-
-  if (human.gender === 'male') {
-    findChildren(gameState, human).forEach((child) => {
-      propagateNewLeaderToDescendants(newLeader, child, gameState);
-      if (child.motherId && human.partnerIds?.includes(child.motherId)) {
-        const mother = gameState.entities.entities[child.motherId] as HumanEntity | undefined;
-        if (mother) {
-          mother.leaderId = newLeader.id;
-          mother.tribeBadge = newLeader.tribeBadge;
-        }
-      }
-    });
-  }
 }

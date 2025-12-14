@@ -152,37 +152,3 @@ export class Selector<T extends CharacterEntity> extends BehaviorNode<T> {
     }
   }
 }
-
-/**
- * A composite node that executes all of its children concurrently.
- * The exact success/failure condition can vary (e.g., succeed when one succeeds, or when all succeed).
- */
-export class Parallel<T extends CharacterEntity> extends BehaviorNode<T> {
-  public name?: string;
-  public depth: number;
-  constructor(public children: BehaviorNode<T>[], name?: string, depth: number = 0) {
-    super();
-    this.name = name;
-    this.depth = depth;
-    this.children.forEach((child) => {
-      child.depth = (this.depth ?? 0) + 1;
-    });
-  }
-
-  execute(entity: T, context: UpdateContext, blackboard: BlackboardData): NodeStatus {
-    if (this.name) {
-      btProfiler.nodeStart(this.name);
-    }
-    try {
-      // TODO: Implement parallel execution logic.
-      // This is more complex as it might involve managing running state for multiple children simultaneously.
-      // For now, we can just execute them in sequence as a placeholder.
-      this.children.forEach((child) => child.execute(entity, context, blackboard));
-      return NodeStatus.SUCCESS;
-    } finally {
-      if (this.name) {
-        btProfiler.nodeEnd();
-      }
-    }
-  }
-}

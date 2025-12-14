@@ -4,7 +4,7 @@
  */
 
 // Interface for storing profiling data for a single node
-export interface ProfiledNode {
+interface ProfiledNode {
   path: string;
   totalTime: number;
   callCount: number;

@@ -46,7 +46,7 @@ export function calculateTribeFoodSecurity(human: HumanEntity, gameState: GameWo
  * @param gameState The current game state
  * @returns Total food count
  */
-export function getTribeTotalFood(leaderId: EntityId, gameState: GameWorldState): number {
+function getTribeTotalFood(leaderId: EntityId, gameState: GameWorldState): number {
   const tribeMembers = getTribeMembers({ leaderId } as HumanEntity, gameState);
   const storageSpots = getTribeStorageSpots(leaderId, gameState);
 
@@ -69,7 +69,7 @@ export function getTribeTotalFood(leaderId: EntityId, gameState: GameWorldState)
  * @param gameState The current game state
  * @returns Total capacity
  */
-export function getTribeTotalCapacity(leaderId: EntityId, gameState: GameWorldState): number {
+function getTribeTotalCapacity(leaderId: EntityId, gameState: GameWorldState): number {
   const tribeMembers = getTribeMembers({ leaderId } as HumanEntity, gameState);
   const storageSpots = getTribeStorageSpots(leaderId, gameState);
 
@@ -144,7 +144,7 @@ export function getProductiveBushDensity(leaderId: EntityId, gameState: GameWorl
  * @param gameState The current game state
  * @returns Count of productive bushes
  */
-export function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): number {
+function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
   const tribeCenter = getTribeCenter(leaderId, gameState);
 
@@ -207,7 +207,7 @@ export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldSt
  * @param zone The planting zone building
  * @returns Maximum number of bushes
  */
-export function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
+function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
   const diameter = BERRY_BUSH_PLANTING_CLEARANCE_RADIUS * 2;
   const bushesPerRow = Math.floor(zone.width / diameter);
   const bushesPerColumn = Math.floor(zone.height / diameter);
@@ -221,7 +221,7 @@ export function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
  * @param gameState The current game state
  * @returns Count of bushes in the zone
  */
-export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
+function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
 
   // Get all bushes near the zone center
@@ -239,63 +239,6 @@ export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldStat
 }
 
 /**
- * Gets detailed distribution information for all tribe planting zones.
- * For each zone, calculates capacity, current bush count, and number of assigned planters.
- *
- * @param human A member of the tribe
- * @param gameState The current game state
- * @returns Array of zone distribution data
- */
-export function getPlantingZoneDistribution(
-  human: HumanEntity,
-  gameState: GameWorldState,
-): Array<{
-  zone: BuildingEntity;
-  capacity: number;
-  currentBushes: number;
-  assignedPlanters: number;
-}> {
-  const zones = getTribePlantingZones(human, gameState);
-  const tribeMembers = getTribeMembers(human, gameState);
-
-  return zones.map((zone: BuildingEntity) => {
-    const capacity = calculatePlantingZoneCapacity(zone);
-    const currentBushes = countBushesInZone(zone, gameState);
-
-    // Count tribe members currently planting who are targeting this zone
-    const assignedPlanters = tribeMembers.filter((member) => {
-      if (member.activeAction !== 'planting') {
-        return false;
-      }
-
-      // Check if the member's target is within this zone
-      if (typeof member.target === 'object' && 'x' in member.target) {
-        const targetPos = member.target;
-        // Use a simple distance check to see if target is near zone center
-        const distance = calculateWrappedDistance(
-          targetPos,
-          zone.position,
-          gameState.mapDimensions.width,
-          gameState.mapDimensions.height,
-        );
-        // Consider them assigned if within zone's diagonal distance
-        const zoneDiagonal = Math.sqrt(zone.width * zone.width + zone.height * zone.height) / 2;
-        return distance <= zoneDiagonal;
-      }
-
-      return false;
-    }).length;
-
-    return {
-      zone,
-      capacity,
-      currentBushes,
-      assignedPlanters,
-    };
-  });
-}
-
-/**
  * Gets detailed distribution information for all tribe storage spots.
  * For each storage, calculates capacity, current food, assigned depositors, and distance.
  *
@@ -303,7 +246,7 @@ export function getPlantingZoneDistribution(
  * @param gameState The current game state
  * @returns Array of storage distribution data
  */
-export function getStorageSpotDistribution(
+function getStorageSpotDistribution(
   human: HumanEntity,
   gameState: GameWorldState,
 ): Array<{

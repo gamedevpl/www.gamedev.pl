@@ -70,7 +70,7 @@ export interface PredatorEntity extends CharacterEntity {
   lastChildFedEffectTime?: number;
 }
 
-export type PredatorAction =
+type PredatorAction =
   | 'attacking' // Fighting with humans
   | 'moving' // Changing position
   | 'idle' // Not performing any action

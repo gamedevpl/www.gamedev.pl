@@ -11,7 +11,6 @@ export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better 
 
 // Player interaction ranges for animal hunting/defending
 export const PREY_FLEE_DISTANCE: number = 100;
-export const PREY_FLEE_SPEED_MODIFIER: number = 1.3; // 50% speed boost when fleeing
 export const PREY_MIN_PROCREATION_AGE: number = 2;
 export const PREY_MAX_PROCREATION_AGE: number = 3;
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.9;
@@ -42,12 +41,10 @@ export const PREDATOR_MEAT_HUNGER_REDUCTION: number = 80; // How much hunger is 
 
 // Animal Spawning Constants
 export const INITIAL_PREY_COUNT: number = 10;
-export const INITIAL_PREDATOR_COUNT: number = 2;
 
 // Animal Feeding Constants (only females can feed children)
 export const ANIMAL_CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD: number = 80; // Higher than humans since animals use different hunger scale
 export const ANIMAL_PARENT_FEEDING_RANGE: number = 40; // Slightly smaller than humans
-export const ANIMAL_CHILD_FOOD_SEEK_PARENT_SEARCH_RADIUS: number = 200; // Smaller than humans since animals have better senses
 export const ANIMAL_FEED_CHILD_COOLDOWN_HOURS: number = 2; // How long parent must wait between feedings
 export const ANIMAL_CHILD_FEEDING_HUNGER_REDUCTION: number = 30; // How much hunger is reduced when fed by parent
 

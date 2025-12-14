@@ -22,7 +22,8 @@ import { GameWorldState } from '../world-types';
  */
 class PersistenceWorkerManager {
   private worker: Worker | null = null;
-  private pendingRequests: Map<string, { resolve: Function; reject: Function }> = new Map();
+  private pendingRequests: Map<string, { resolve: (value?: unknown) => void; reject: (reason?: Error) => void }> =
+    new Map();
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessing: boolean = false;
   private nextRequestId: number = 0;
@@ -98,7 +99,7 @@ class PersistenceWorkerManager {
    */
   private handleSaveResponse(
     response: SaveResponse,
-    pending: { resolve: Function; reject: Function },
+    pending: { resolve: () => void; reject: (reason?: Error) => void },
   ): void {
     if (response.success) {
       pending.resolve();
@@ -112,7 +113,7 @@ class PersistenceWorkerManager {
    */
   private handleLoadResponse(
     response: LoadResponse,
-    pending: { resolve: Function; reject: Function },
+    pending: { resolve: (value: SerializedWorldState | undefined) => void; reject: (reason?: Error) => void },
   ): void {
     if (response.success) {
       pending.resolve(response.gameState);
@@ -126,7 +127,7 @@ class PersistenceWorkerManager {
    */
   private handleClearResponse(
     response: ClearResponse,
-    pending: { resolve: Function; reject: Function },
+    pending: { resolve: () => void; reject: (reason?: Error) => void },
   ): void {
     if (response.success) {
       pending.resolve();
@@ -155,7 +156,7 @@ class PersistenceWorkerManager {
         return;
       }
 
-      this.pendingRequests.set(message.id, { resolve, reject });
+      this.pendingRequests.set(message.id, { resolve: resolve as (value: unknown) => void, reject });
 
       try {
         this.worker.postMessage(message);

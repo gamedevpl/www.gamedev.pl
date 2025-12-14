@@ -65,7 +65,7 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
       return false;
     }
 
-    const diplomacyStatus = sourceLeader.tribeControl.diplomacy[target.ownerId];
+    const diplomacyStatus = target.ownerId ? sourceLeader.tribeControl.diplomacy[target.ownerId] : undefined;
     if (diplomacyStatus !== DiplomacyStatus.Hostile) {
       return false;
     }

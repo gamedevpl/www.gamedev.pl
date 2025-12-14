@@ -52,11 +52,14 @@ export type StrictJson<T> =
     : // 5. Objects: Recurse over keys
     T extends object
     ? // 5a. Reject known bad types immediately
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       T extends Map<any, any>
       ? NotJsonable<'Map is not JSON compatible'>
-      : T extends Set<any>
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      T extends Set<any>
       ? NotJsonable<'Set is not JSON compatible'>
-      : T extends (...args: any[]) => any
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      T extends (...args: any[]) => any
       ? NotJsonable<'Functions are not JSON compatible'>
       : T extends Date
       ? NotJsonable<'Date is not compatible (converts to string)'>
@@ -78,6 +81,7 @@ type NotJsonable<Msg extends string> = never & { __error_msg__: Msg };
 /**
  * 2. Helper type to check if T is a class instance
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IsClassInstance<T> = T extends { new (...args: any[]): any } ? true : false;
 
 /**

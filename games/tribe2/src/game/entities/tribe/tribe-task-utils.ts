@@ -1,6 +1,6 @@
 import { HumanEntity } from '../characters/human/human-types';
 import { GameWorldState } from '../../world-types';
-import { Blackboard, BlackboardData } from '../../ai/behavior-tree/behavior-tree-blackboard';
+import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
 import { EntityId } from '../entities-types';
 import { Vector2D } from '../../utils/math-types';
 
@@ -82,64 +82,4 @@ export function cleanupStaleTribalTasks(leader: HumanEntity, currentTime: number
   for (const key of keysToDelete) {
     Blackboard.delete(leader.aiBlackboard, key);
   }
-}
-
-/**
- * Removes all tasks assigned to a specific member (useful when member dies)
- */
-export function removeAllTasksForMember(leader: HumanEntity, memberId: EntityId): void {
-  if (!leader.aiBlackboard) return;
-
-  const data = leader.aiBlackboard.data;
-  const keysToDelete: string[] = [];
-
-  for (const key in data) {
-    if (key.startsWith('tribal_')) {
-      const task = data[key] as TribalTaskData;
-
-      if (task && typeof task === 'object' && Array.isArray(task.memberIds)) {
-        task.memberIds = task.memberIds.filter((id) => id !== memberId);
-
-        if (task.memberIds.length === 0) {
-          keysToDelete.push(key);
-        } else {
-          Blackboard.set(leader.aiBlackboard, key, task);
-        }
-      }
-    }
-  }
-
-  for (const key of keysToDelete) {
-    Blackboard.delete(leader.aiBlackboard, key);
-  }
-}
-
-/**
- * Removes a specific task from the leader's blackboard.
- * This is a helper for manual cleanup if needed (e.g. from interactions).
- */
-export function removeTribalStorageTask(leader: HumanEntity, storageId: EntityId, memberId: EntityId): void {
-  if (!leader.aiBlackboard) return;
-
-  const taskKey = `tribal_storage_${storageId}`;
-  const task = Blackboard.get<TribalTaskData>(leader.aiBlackboard, taskKey);
-
-  if (!task) return;
-
-  task.memberIds = task.memberIds.filter((id) => id !== memberId);
-
-  if (task.memberIds.length === 0) {
-    Blackboard.delete(leader.aiBlackboard, taskKey);
-  } else {
-    Blackboard.set(leader.aiBlackboard, taskKey, task);
-  }
-}
-
-/**
- * Gets the number of tribe members currently assigned to a specific task target
- */
-export function getTribalTaskCount(leaderBlackboard: BlackboardData, taskType: string, targetId: EntityId): number {
-  const taskKey = `tribal_${taskType}_${targetId}`;
-  const task = Blackboard.get<TribalTaskData>(leaderBlackboard, taskKey);
-  return task?.memberIds.length ?? 0;
 }

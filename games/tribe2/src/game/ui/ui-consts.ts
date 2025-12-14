@@ -10,7 +10,6 @@ export const PLAYER_PARENT_HIGHLIGHT_COLOR: string = '#FF5722'; // Deep Orange
 export const PLAYER_PARTNER_HIGHLIGHT_COLOR: string = '#9C27B0'; // Purple
 export const PLAYER_CHILD_HIGHLIGHT_COLOR: string = '#2196F3'; // Blue
 export const PLAYER_HEIR_HIGHLIGHT_COLOR: string = '#FFC107'; // Amber/Gold
-export const FAMILY_CLAIM_COLOR: string = '#FFD700'; // Gold
 export const NON_FAMILY_CLAIM_COLOR: string = '#DC143C'; // Crimson
 export const PLAYER_ACTION_OUTLINE_COLOR: string = '#FFFFFF';
 export const PLAYER_ACTION_OUTLINE_DASH_PATTERN: number[] = [5, 5];
@@ -89,12 +88,9 @@ export const UI_BUTTON_ACTIVATED_BORDER_COLOR: string = '#FFD700'; // Gold
 export const UI_BUTTON_ACTIVATED_PULSE_SPEED: number = 5;
 
 // Behavior Tree Debug UI Constants
-export const UI_BT_DEBUG_X_OFFSET = 60;
-export const UI_BT_DEBUG_Y_OFFSET = -50;
 export const UI_BT_DEBUG_FONT_SIZE = 10;
 export const UI_BT_DEBUG_LINE_HEIGHT = 12;
 export const UI_BT_DEBUG_INDENT_SIZE = 10;
-export const UI_BT_DEBUG_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.5)';
 export const UI_BT_DEBUG_STATUS_SUCCESS_COLOR = '#4CAF50';
 export const UI_BT_DEBUG_STATUS_FAILURE_COLOR = '#F44336';
 export const UI_BT_DEBUG_STATUS_RUNNING_COLOR = '#FFC107';
@@ -135,7 +131,6 @@ export const UI_TUTORIAL_DISMISS_BUTTON_HOVER_COLOR: string = '#FF6B6B';
 // LLM Autopilot UI Constants
 export const UI_AUTOPILOT_BUTTON_SIZE = 80;
 export const UI_AUTOPILOT_BUTTON_SPACING = 10;
-export const UI_AUTOPILOT_BUTTON_FONT_SIZE = 14;
 
 // UI Notification Constants
 export const UI_NOTIFICATION_PANEL_WIDTH: number = 300;
@@ -143,7 +138,6 @@ export const UI_NOTIFICATION_PANEL_PADDING: number = 15;
 export const UI_NOTIFICATION_PANEL_BORDER_RADIUS: number = 8;
 export const UI_NOTIFICATION_PANEL_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
 export const UI_NOTIFICATION_TEXT_COLOR: string = '#FFFFFF';
-export const UI_NOTIFICATION_TITLE_FONT_SIZE: number = 16;
 export const UI_NOTIFICATION_TEXT_FONT_SIZE: number = 14;
 export const UI_NOTIFICATION_SPACING: number = 10;
 export const UI_NOTIFICATION_DISMISS_BUTTON_SIZE: number = 20;

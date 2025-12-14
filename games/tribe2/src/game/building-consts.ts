@@ -10,14 +10,14 @@ export const BuildingType = {
   PlantingZone: 'plantingZone',
 } as const;
 
-export type BuildingType = typeof BuildingType[keyof typeof BuildingType];
+export type BuildingType = (typeof BuildingType)[keyof typeof BuildingType];
 
-export interface BuildingDimensions {
+interface BuildingDimensions {
   width: number;
   height: number;
 }
 
-export interface BuildingCost {
+interface BuildingCost {
   food?: { type: FoodType; amount: number }[];
   // Future: wood, stone, etc.
 }
@@ -57,8 +57,6 @@ export const BUILDING_DEFINITIONS: Record<
 
 // Visual Constants
 export const BUILDING_GHOST_OPACITY = 0.5;
-export const BUILDING_GHOST_VALID_COLOR = 'rgba(0, 255, 0, 0.5)';
-export const BUILDING_GHOST_INVALID_COLOR = 'rgba(255, 0, 0, 0.5)';
 export const BUILDING_CONSTRUCTION_BAR_COLOR = '#FFA500'; // Orange
 export const BUILDING_DESTRUCTION_BAR_COLOR = '#FF4500'; // Red-Orange
 export const BUILDING_PROGRESS_BAR_HEIGHT = 4;

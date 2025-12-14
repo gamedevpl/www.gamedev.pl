@@ -191,7 +191,7 @@ function findBushSpawnLocation(indexedState: IndexedWorldState): Vector2D {
 /**
  * Respawn prey when they go extinct
  */
-export function respawnPrey(gameState: GameWorldState, count: number = 4): void {
+function respawnPrey(gameState: GameWorldState, count: number = 4): void {
   console.log(`🚨 Respawning ${count} prey to prevent extinction`);
   const indexedState = gameState as IndexedWorldState;
   
@@ -205,7 +205,7 @@ export function respawnPrey(gameState: GameWorldState, count: number = 4): void 
 /**
  * Respawn predators when they go extinct
  */
-export function respawnPredators(gameState: GameWorldState, count: number = 2): void {
+function respawnPredators(gameState: GameWorldState, count: number = 2): void {
   console.log(`🚨 Respawning ${count} predators to prevent extinction`);
   const indexedState = gameState as IndexedWorldState;
   

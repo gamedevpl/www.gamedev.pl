@@ -8,7 +8,7 @@ import { HUMAN_OLD_AGE_THRESHOLD } from '../human-consts';
 /**
  * Population breakdown statistics
  */
-export interface PopulationBreakdown {
+interface PopulationBreakdown {
   total: number;
   children: number;
   males: number;
@@ -19,7 +19,7 @@ export interface PopulationBreakdown {
 /**
  * Food-related metrics
  */
-export interface FoodMetrics {
+interface FoodMetrics {
   totalBushFood: number;
   totalStorageFood: number;
   consumptionRate: number;
@@ -28,7 +28,7 @@ export interface FoodMetrics {
 /**
  * Information about a family group
  */
-export interface FamilyInfo {
+interface FamilyInfo {
   patriarch: HumanEntity;
   memberCount: number;
   members: EntityId[];

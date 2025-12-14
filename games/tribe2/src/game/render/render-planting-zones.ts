@@ -65,6 +65,9 @@ function groupZonesByOwner(zones: BuildingEntity[]): Map<EntityId, BuildingEntit
 
   for (const zone of zones) {
     const ownerId = zone.ownerId;
+    if (!ownerId) {
+      continue;
+    }
     if (!groups.has(ownerId)) {
       groups.set(ownerId, []);
     }
@@ -525,27 +528,4 @@ export function renderPlantingZonesMetaball(
     // Render metaball fill and continuous stone border for the group
     renderMetaballGroup(ctx, zones, dimensions, isHostile, groupSeed, fieldData);
   }
-}
-
-/**
- * Renders a single planting zone icon (emoji) at the center.
- */
-export function renderPlantingZoneIcon(ctx: CanvasRenderingContext2D, zone: BuildingEntity): void {
-  const definition = BUILDING_DEFINITIONS[BuildingType.PlantingZone];
-  const { position, width, height } = zone;
-
-  ctx.save();
-  ctx.translate(position.x, position.y);
-
-  ctx.globalAlpha = 0.5;
-  ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 4;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(definition.icon, 0, 0);
-  ctx.shadowBlur = 0;
-
-  ctx.restore();
 }

@@ -96,9 +96,3 @@ export function renderCorpse(ctx: CanvasRenderingContext2D, corpse: CorpseEntity
     ctx.restore();
   }
 }
-
-/**
- * Legacy function for backward compatibility.
- * @deprecated Use renderCorpse instead.
- */
-export const renderHumanCorpse = renderCorpse;

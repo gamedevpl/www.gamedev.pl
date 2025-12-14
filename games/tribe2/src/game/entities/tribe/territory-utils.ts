@@ -21,7 +21,7 @@ import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../../utils
  * Territory is based on buildings owned by the tribe.
  * No buildings = no territory border.
  */
-export function calculateTribeTerritory(
+function calculateTribeTerritory(
   leaderId: EntityId,
   gameState: GameWorldState,
   tribeColorIndex: number = 0,
@@ -228,29 +228,6 @@ export function isValidWanderPosition(position: Vector2D, leaderId: EntityId, ga
   }
 
   return false;
-}
-
-/**
- * Gets the territory boundary points for rendering.
- * Returns an array of points that outline the territory.
- */
-export function getTerritoryBoundaryPoints(territory: TribeTerritory, segmentsPerCircle: number = 32): Vector2D[][] {
-  const boundaries: Vector2D[][] = [];
-
-  // For each circle, generate boundary points
-  for (const circle of territory.circles) {
-    const points: Vector2D[] = [];
-    for (let i = 0; i < segmentsPerCircle; i++) {
-      const angle = (i / segmentsPerCircle) * Math.PI * 2;
-      points.push({
-        x: circle.center.x + Math.cos(angle) * circle.radius,
-        y: circle.center.y + Math.sin(angle) * circle.radius,
-      });
-    }
-    boundaries.push(points);
-  }
-
-  return boundaries;
 }
 
 /**

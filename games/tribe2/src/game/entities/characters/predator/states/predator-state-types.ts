@@ -12,7 +12,7 @@ interface PredatorIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
 }
 
-export interface PredatorMovingStateData extends StateData {
+interface PredatorMovingStateData extends StateData {
   target?: Vector2D | EntityId; // Where the predator is moving to
 }
 
@@ -22,7 +22,7 @@ export interface PredatorAttackingStateData extends StateData {
   attackStartTime: number; // When attack started
 }
 
-export interface PredatorProcreatingStateData extends StateData {
+interface PredatorProcreatingStateData extends StateData {
   partnerId?: EntityId; // The ID of the partner for procreation
   duration?: number; // Duration of the procreation process
   procreationEndTime?: number; // When the procreation process ends

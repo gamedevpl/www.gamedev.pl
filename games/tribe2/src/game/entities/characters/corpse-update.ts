@@ -1,10 +1,7 @@
 import { CorpseEntity } from './corpse-types';
 import { UpdateContext } from '../../world-types';
 import { removeEntity } from '../entities-update';
-import {
-  HUMAN_CORPSE_DECAY_TIME_HOURS,
-  HUMAN_CORPSE_INITIAL_FOOD
-} from '../../human-consts.ts';
+import { HUMAN_CORPSE_DECAY_TIME_HOURS, HUMAN_CORPSE_INITIAL_FOOD } from '../../human-consts.ts';
 
 /**
  * Updates a corpse entity, handling its decay over time.
@@ -31,9 +28,3 @@ export function corpseUpdate(entity: CorpseEntity, updateContext: UpdateContext)
     removeEntity(updateContext.gameState.entities, entity.id);
   }
 }
-
-/**
- * Legacy function for backward compatibility.
- * @deprecated Use corpseUpdate instead.
- */
-export const humanCorpseUpdate = corpseUpdate;

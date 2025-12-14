@@ -1,4 +1,4 @@
-import { HUMAN_HUNGER_THRESHOLD_CRITICAL } from '../../human-consts.ts';
+import { HUMAN_HUNGER_THRESHOLD_CRITICAL, MAX_ANCESTORS_TO_TRACK } from '../../human-consts.ts';
 import { HumanEntity } from '../characters/human/human-types.ts';
 import { EntityId } from '../entities-types.ts';
 import { DiplomacyStatus, GameWorldState } from '../../world-types.ts';
@@ -8,13 +8,6 @@ import { NotificationType } from '../../notifications/notification-types.ts';
 import { addNotification } from '../../notifications/notification-utils.ts';
 import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notification-consts.ts';
 import { startBuildingDestruction } from '../../utils/building-placement-utils.ts';
-
-export function countLivingOffspring(humanId: EntityId, gameState: GameWorldState): number {
-  const indexedState = gameState as IndexedWorldState;
-  const childrenAsMother = indexedState.search.human.byProperty('motherId', humanId);
-  const childrenAsFather = indexedState.search.human.byProperty('fatherId', humanId);
-  return childrenAsMother.length + childrenAsFather.length;
-}
 
 export function findPotentialNewPartners(
   sourceHuman: HumanEntity,
@@ -166,7 +159,7 @@ export function findParents(human: HumanEntity, gameState: GameWorldState): Huma
   return parents;
 }
 
-export function findMalePartner(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
+function findMalePartner(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
   if (human.gender !== 'female' || !human.partnerIds || human.partnerIds.length === 0) {
     return null;
   }
@@ -209,7 +202,7 @@ export function findLivingFamilyRoot(human: HumanEntity, gameState: GameWorldSta
   const visited = new Set<EntityId>();
   visited.add(current.id);
 
-  while (true) {
+  for (let i = 0; i < MAX_ANCESTORS_TO_TRACK; i++) {
     let next: HumanEntity | null = null;
 
     if (current.gender === 'female') {
@@ -217,7 +210,7 @@ export function findLivingFamilyRoot(human: HumanEntity, gameState: GameWorldSta
     }
 
     if (!next && current.fatherId) {
-      next = gameState.entities.entities[current.fatherId] as HumanEntity | undefined || null;
+      next = (gameState.entities.entities[current.fatherId] as HumanEntity | undefined) || null;
     }
 
     if (!next || visited.has(next.id)) break;
@@ -325,18 +318,6 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
   return tribeInfoList;
 }
 
-export function getTribeForLeader(leaderId: EntityId, gameState: IndexedWorldState): HumanEntity[] {
-  const tribeMembers = gameState.search.human.byProperty('leaderId', leaderId);
-  const leader = gameState.entities.entities[leaderId] as HumanEntity | undefined;
-  if (leader) {
-    // Ensure the leader is included if they are managing their own tribe
-    if (!tribeMembers.some((m) => m.id === leaderId)) {
-      tribeMembers.push(leader);
-    }
-  }
-  return tribeMembers;
-}
-
 export function getTribeMembers(human: HumanEntity, gameState: GameWorldState): HumanEntity[] {
   if (!human.leaderId) {
     return [];
@@ -384,7 +365,7 @@ export function detectOrphanedTribes(gameState: GameWorldState): EntityId[] {
   return Array.from(orphanedTribeLeaderIds);
 }
 
-export function determineTribeMergeTarget(orphanedTribeLeaderId: EntityId, gameState: GameWorldState): EntityId | null {
+function determineTribeMergeTarget(orphanedTribeLeaderId: EntityId, gameState: GameWorldState): EntityId | null {
   const members = findTribeMembers(orphanedTribeLeaderId, gameState);
   if (members.length === 0) return null;
 
@@ -446,11 +427,7 @@ export function determineTribeMergeTarget(orphanedTribeLeaderId: EntityId, gameS
   return bestTargetId;
 }
 
-export function executeTribeMerge(
-  fromTribeLeaderId: EntityId,
-  toTribeLeaderId: EntityId,
-  gameState: GameWorldState,
-): void {
+function executeTribeMerge(fromTribeLeaderId: EntityId, toTribeLeaderId: EntityId, gameState: GameWorldState): void {
   const members = findTribeMembers(fromTribeLeaderId, gameState);
   const targetLeader = gameState.entities.entities[toTribeLeaderId] as HumanEntity | undefined;
 

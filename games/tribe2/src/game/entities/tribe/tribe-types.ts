@@ -5,7 +5,7 @@ import { EntityId } from '../entities-types';
  * Army control configuration for warriors.
  * Each value is a weight (0-10) that determines the priority of that objective.
  */
-export type ArmyControl = {
+type ArmyControl = {
   /** Priority for staying inside territory and protecting it from enemies/intruders */
   protectHomeland: number;
   /** Priority for expanding territory by placing border posts (future feature) */

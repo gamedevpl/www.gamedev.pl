@@ -14,7 +14,7 @@ export interface Rect {
 /**
  * Defines a circular area.
  */
-export interface Circle {
+interface Circle {
   x: number;
   y: number;
   radius: number;

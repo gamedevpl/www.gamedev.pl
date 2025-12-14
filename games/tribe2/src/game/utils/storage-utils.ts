@@ -93,34 +93,6 @@ export function findNearbyTribeStorageWithFood(
 }
 
 /**
- * Finds nearby tribe storage spots that have available capacity.
- * @param human The human entity searching for storage
- * @param gameState The current game state
- * @param searchRadius Optional custom search radius (defaults to 100)
- * @returns Array of storage buildings with capacity
- */
-export function findNearbyTribeStorageWithCapacity(
-  human: HumanEntity,
-  gameState: GameWorldState,
-  searchRadius: number = STORAGE_SEARCH_RADIUS,
-): BuildingEntity[] {
-  const indexedState = gameState as IndexedWorldState;
-  const nearbyBuildings = indexedState.search.building.byRadius(human.position, searchRadius);
-
-  return nearbyBuildings.filter((building) => {
-    const buildingEntity = building as BuildingEntity;
-    return (
-      buildingEntity.buildingType === 'storageSpot' &&
-      buildingEntity.ownerId === human.leaderId &&
-      buildingEntity.isConstructed &&
-      buildingEntity.storedFood &&
-      buildingEntity.storageCapacity &&
-      buildingEntity.storedFood.length < buildingEntity.storageCapacity
-    );
-  }) as BuildingEntity[];
-}
-
-/**
  * Finds the closest storage from a list of storage buildings.
  * @param human The human entity
  * @param storages Array of storage buildings

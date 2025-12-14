@@ -64,7 +64,7 @@ export interface PreyEntity extends CharacterEntity {
   lastChildFedEffectTime?: number;
 }
 
-export type PreyAction =
+type PreyAction =
   | 'grazing' // Eating berry bushes
   | 'moving' // Changing position
   | 'idle' // Not performing any action

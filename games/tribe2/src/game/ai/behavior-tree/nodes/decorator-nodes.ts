@@ -105,41 +105,6 @@ export class Succeeder<T extends CharacterEntity> extends BehaviorNode<T> {
 }
 
 /**
- * A decorator node that repeats its child's execution a specified number of times.
- */
-export class Repeater<T extends CharacterEntity> extends BehaviorNode<T> {
-  public name?: string;
-  public depth: number;
-
-  constructor(public readonly child: BehaviorNode<T>, name?: string, depth: number = 0) {
-    super();
-    this.name = name;
-    this.depth = depth;
-    this.child.depth = (this.depth ?? 0) + 1;
-  }
-
-  execute(entity: T, context: UpdateContext, blackboard: BlackboardData): NodeStatus {
-    if (this.name) {
-      btProfiler.nodeStart(this.name);
-    }
-    try {
-      // TODO: Implement decorator logic
-      const [status, debugInfo] = unpackStatus(this.child.execute(entity, context, blackboard));
-
-      this.setLastStatus(entity, status);
-      if (this.name) {
-        Blackboard.recordNodeExecution(blackboard, this.name, status, context.gameState.time, this.depth, debugInfo);
-      }
-      return status;
-    } finally {
-      if (this.name) {
-        btProfiler.nodeEnd();
-      }
-    }
-  }
-}
-
-/**
  * A decorator node that fails if its child takes too long to execute.
  * It stores the start time on the blackboard when the child first returns RUNNING.
  * If the child is still RUNNING after the timeout duration, it returns FAILURE.

@@ -90,7 +90,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       new Sequence(
         [
           new ConditionNode(
-            (human: HumanEntity, _context: UpdateContext) => {
+            (human: HumanEntity) => {
               if (!human.aiBlackboard) return [false, 'No blackboard'];
               const currentPhase = getSplitPhase(human.aiBlackboard);
               return [currentPhase === 'planning', `Phase: ${currentPhase}`];
@@ -125,7 +125,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       new Sequence(
         [
           new ConditionNode(
-            (human: HumanEntity, _context: UpdateContext) => {
+            (human: HumanEntity) => {
               if (!human.aiBlackboard) return [false, 'No blackboard'];
               const currentPhase = getSplitPhase(human.aiBlackboard);
               return [currentPhase === 'gathering', `Phase: ${currentPhase}`];
@@ -160,7 +160,7 @@ export function createTribeSplitBehavior(depth: number): BehaviorNode<HumanEntit
       new Sequence(
         [
           new ConditionNode(
-            (human: HumanEntity, _context: UpdateContext) => {
+            (human: HumanEntity) => {
               if (!human.aiBlackboard) return [false, 'No blackboard'];
               const currentPhase = getSplitPhase(human.aiBlackboard);
               return [currentPhase === 'executing', `Phase: ${currentPhase}`];

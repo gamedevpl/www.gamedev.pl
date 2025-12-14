@@ -30,7 +30,7 @@ import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from './game-consts';
 /**
  * Converts a world position to grid coordinates.
  */
-export function positionToGridCoords(
+function positionToGridCoords(
   position: Vector2D,
   worldWidth: number,
   worldHeight: number,
@@ -38,7 +38,7 @@ export function positionToGridCoords(
   // Handle wrapping
   const wrappedX = ((position.x % worldWidth) + worldWidth) % worldWidth;
   const wrappedY = ((position.y % worldHeight) + worldHeight) % worldHeight;
-  
+
   return {
     gridX: Math.floor(wrappedX / SOIL_SECTOR_SIZE),
     gridY: Math.floor(wrappedY / SOIL_SECTOR_SIZE),
@@ -60,11 +60,7 @@ function getSector(state: SoilDepletionState, gridX: number, gridY: number): Soi
  * Gets the health of a sector without modifying state.
  * Returns max health for non-existent sectors.
  */
-export function getSectorHealth(
-  state: SoilDepletionState,
-  gridX: number,
-  gridY: number,
-): number {
+function getSectorHealth(state: SoilDepletionState, gridX: number, gridY: number): number {
   const key = getSectorKey(gridX, gridY);
   const sector = state.sectors[key];
   return sector ? sector.health : SOIL_HEALTH_MAX;
@@ -87,11 +83,7 @@ export function isSoilDepleted(
 /**
  * Checks if soil at grid coordinates is viable (not depleted).
  */
-export function isSoilViableAtGrid(
-  state: SoilDepletionState,
-  gridX: number,
-  gridY: number,
-): boolean {
+function isSoilViableAtGrid(state: SoilDepletionState, gridX: number, gridY: number): boolean {
   const health = getSectorHealth(state, gridX, gridY);
   return health >= SOIL_HEALTH_DEPLETED_THRESHOLD;
 }
@@ -109,13 +101,13 @@ export function applySoilWalkDepletion(
 ): void {
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const sector = getSector(state, gridX, gridY);
-  
+
   // Check cooldown for this entity
   const lastAffected = sector.lastAffectedBy[entityId] || 0;
   if (currentTime - lastAffected < SOIL_WALK_DEPLETION_COOLDOWN_HOURS) {
     return; // Still on cooldown
   }
-  
+
   // Apply depletion
   sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - SOIL_DEPLETION_PER_WALK);
   sector.lastWalkTime = currentTime;
@@ -134,7 +126,7 @@ export function applySoilPlantDepletion(
 ): void {
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const sector = getSector(state, gridX, gridY);
-  
+
   sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - SOIL_DEPLETION_PER_BUSH_PLANT);
   sector.lastPlantTime = currentTime;
 }
@@ -150,22 +142,22 @@ function countViableAdjacentSectors(
   maxGridY: number,
 ): number {
   let count = 0;
-  
+
   // Check all 8 adjacent sectors (including diagonals)
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       if (dx === 0 && dy === 0) continue;
-      
+
       // Handle wrapping
-      const adjX = ((gridX + dx) % maxGridX + maxGridX) % maxGridX;
-      const adjY = ((gridY + dy) % maxGridY + maxGridY) % maxGridY;
-      
+      const adjX = (((gridX + dx) % maxGridX) + maxGridX) % maxGridX;
+      const adjY = (((gridY + dy) % maxGridY) + maxGridY) % maxGridY;
+
       if (isSoilViableAtGrid(state, adjX, adjY)) {
         count++;
       }
     }
   }
-  
+
   return count;
 }
 
@@ -183,33 +175,33 @@ export function updateSoilRecovery(
   const gameHoursDelta = deltaTimeSeconds * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
   const maxGridX = Math.ceil(worldWidth / SOIL_SECTOR_SIZE);
   const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
-  
+
   // Process all stored sectors
   const keysToRemove: string[] = [];
-  
+
   for (const key of Object.keys(state.sectors)) {
     const sector = state.sectors[key];
-    
+
     // Check if sector has been inactive long enough for recovery
     const lastActivity = Math.max(sector.lastWalkTime, sector.lastPlantTime);
     if (currentTime - lastActivity < SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS) {
       continue; // Still active, no recovery
     }
-    
+
     // Calculate recovery rate
     const { gridX, gridY } = parseSectorKey(key);
     const viableNeighbors = countViableAdjacentSectors(state, gridX, gridY, maxGridX, maxGridY);
     const adjacentBonus = viableNeighbors > 0 ? SOIL_RECOVERY_RATE_ADJACENT_BONUS * (viableNeighbors / 8) : 0;
     const recoveryRate = SOIL_RECOVERY_RATE_BASE + adjacentBonus;
-    
+
     // Apply recovery
     sector.health = Math.min(SOIL_HEALTH_MAX, sector.health + recoveryRate * gameHoursDelta);
-    
+
     // Clean up fully recovered sectors to save memory
     if (sector.health >= SOIL_HEALTH_MAX) {
       keysToRemove.push(key);
     }
-    
+
     // Clean up old entity cooldown entries
     const cooldownThreshold = currentTime - SOIL_WALK_DEPLETION_COOLDOWN_HOURS * 10;
     for (const entityId of Object.keys(sector.lastAffectedBy)) {
@@ -218,7 +210,7 @@ export function updateSoilRecovery(
       }
     }
   }
-  
+
   // Remove fully recovered sectors
   for (const key of keysToRemove) {
     delete state.sectors[key];
@@ -234,7 +226,7 @@ export function getDepletedSectorsForRendering(
   renderThreshold: number,
 ): Array<{ gridX: number; gridY: number; health: number }> {
   const result: Array<{ gridX: number; gridY: number; health: number }> = [];
-  
+
   for (const key of Object.keys(state.sectors)) {
     const sector = state.sectors[key];
     if (sector.health < renderThreshold) {
@@ -242,20 +234,8 @@ export function getDepletedSectorsForRendering(
       result.push({ gridX, gridY, health: sector.health });
     }
   }
-  
-  return result;
-}
 
-/**
- * Checks if a position is suitable for planting (soil is viable).
- */
-export function canPlantAtPosition(
-  state: SoilDepletionState,
-  position: Vector2D,
-  worldWidth: number,
-  worldHeight: number,
-): boolean {
-  return !isSoilDepleted(state, position, worldWidth, worldHeight);
+  return result;
 }
 
 /**
@@ -270,36 +250,36 @@ export function getDepletedSectorsInArea(
   worldHeight: number,
 ): Array<{ gridX: number; gridY: number }> {
   const result: Array<{ gridX: number; gridY: number }> = [];
-  
+
   const halfWidth = width / 2;
   const halfHeight = height / 2;
-  
+
   // Calculate grid bounds
   const minX = centerPosition.x - halfWidth;
   const maxX = centerPosition.x + halfWidth;
   const minY = centerPosition.y - halfHeight;
   const maxY = centerPosition.y + halfHeight;
-  
+
   const startGridX = Math.floor(minX / SOIL_SECTOR_SIZE);
   const endGridX = Math.ceil(maxX / SOIL_SECTOR_SIZE);
   const startGridY = Math.floor(minY / SOIL_SECTOR_SIZE);
   const endGridY = Math.ceil(maxY / SOIL_SECTOR_SIZE);
-  
+
   const maxGridX = Math.ceil(worldWidth / SOIL_SECTOR_SIZE);
   const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
-  
+
   for (let gx = startGridX; gx <= endGridX; gx++) {
     for (let gy = startGridY; gy <= endGridY; gy++) {
       // Handle wrapping
       const wrappedGx = ((gx % maxGridX) + maxGridX) % maxGridX;
       const wrappedGy = ((gy % maxGridY) + maxGridY) % maxGridY;
-      
+
       if (!isSoilViableAtGrid(state, wrappedGx, wrappedGy)) {
         result.push({ gridX: wrappedGx, gridY: wrappedGy });
       }
     }
   }
-  
+
   return result;
 }
 
@@ -316,11 +296,11 @@ export function getSoilSpeedModifier(
 ): number {
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const health = getSectorHealth(state, gridX, gridY);
-  
+
   // If soil is depleted, apply speed bonus
   if (health < SOIL_HEALTH_DEPLETED_THRESHOLD) {
     return depletedSpeedBonus;
   }
-  
+
   return 1.0;
 }

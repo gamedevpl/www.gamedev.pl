@@ -85,7 +85,11 @@ export const determineHoveredAutopilotAction = (
         } else {
           determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
         }
-      } else if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState) && building.isConstructed) {
+      } else if (
+        player.leaderId === player.id &&
+        isEnemyBuilding(player, building, gameState) &&
+        building.isConstructed
+      ) {
         // Enemy building - only leaders can take over
         determinedAction = { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
       } else if (building.buildingType === 'storageSpot') {
@@ -109,7 +113,7 @@ export const determineHoveredAutopilotAction = (
               : undefined;
 
             if (playerLeader && playerLeader.tribeControl?.diplomacy) {
-              const diplomacyStatus = playerLeader.tribeControl.diplomacy[building.ownerId];
+              const diplomacyStatus = building.ownerId && playerLeader.tribeControl.diplomacy[building.ownerId];
               if (diplomacyStatus === DiplomacyStatus.Hostile) {
                 // Hostile tribe - suggest STEAL (actual stealing will be validated by interaction checker)
                 determinedAction = { action: PlayerActionType.AutopilotGather, targetEntityId: hoveredEntity.id };
@@ -143,7 +147,12 @@ export const determineHoveredAutopilotAction = (
         building.buildingType === 'plantingZone' &&
         player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
         !isPositionOccupied(worldPos, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS) &&
-        !isSoilDepleted(gameState.soilDepletion, worldPos, gameState.mapDimensions.width, gameState.mapDimensions.height)
+        !isSoilDepleted(
+          gameState.soilDepletion,
+          worldPos,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        )
       ) {
         determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
       } else {

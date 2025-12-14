@@ -44,7 +44,7 @@ export function findClosestEntity<T extends Entity>(
   return closestEntity;
 }
 
-export function findEntitiesOfTypeInRadius<T extends Entity>(
+function findEntitiesOfTypeInRadius<T extends Entity>(
   sourcePosition: Vector2D,
   gameState: GameWorldState,
   targetType: EntityType,
@@ -94,40 +94,6 @@ export function findClosestAggressor(targetId: EntityId, gameState: GameWorldSta
 
 export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
   return Object.values(gameState.entities.entities).filter((entity) => entity.type === 'human') as HumanEntity[];
-}
-
-export function getClosestEntityFromList<T extends Entity>(
-  position: Vector2D,
-  entities: T[],
-  gameState: GameWorldState,
-) {
-  if (entities.length === 0) {
-    return undefined;
-  }
-
-  let closestEntity = entities[0];
-  let closestDistance = calculateWrappedDistance(
-    position,
-    closestEntity.position,
-    gameState.mapDimensions.width,
-    gameState.mapDimensions.height,
-  );
-
-  for (const entity of entities.slice(1)) {
-    const distance = calculateWrappedDistance(
-      position,
-      entity.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closestEntity = entity;
-    }
-  }
-
-  return closestEntity;
 }
 
 export function findEntityAtPosition(

@@ -8,13 +8,12 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
-import { GameWorldState, HoveredAutopilotAction } from '../world-types';
+import { GameWorldState } from '../world-types';
 import { calculateWrappedDistance } from './math-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from '../entities/tribe/tribe-split-utils.ts';
-import { canProcreate, isHostile, isEnemyBuilding } from './human-utils';
+import { canProcreate, isHostile } from './human-utils';
 import { STORAGE_INTERACTION_RANGE } from '../storage-spot-consts';
-import { Entity } from '../entities/entities-types';
 
 export function getAvailablePlayerActions(gameState: GameWorldState, player: HumanEntity): PlayerActionHint[] {
   const actions: PlayerActionHint[] = [];
@@ -185,22 +184,4 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   }
 
   return actions;
-}
-
-export function getHoveredPlayerAction(
-  gameState: GameWorldState,
-  player: HumanEntity,
-  hoveredEntity: Entity,
-): HoveredAutopilotAction | undefined {
-  if (hoveredEntity.type === 'building') {
-    const building = hoveredEntity as BuildingEntity;
-    // Only leaders can interact with enemy buildings
-    if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState)) {
-      if (gameState.selectedBuildingType === 'removal') {
-        return { action: PlayerActionType.RemoveEnemyBuilding, targetEntityId: building.id };
-      }
-      return { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
-    }
-  }
-  return undefined;
 }

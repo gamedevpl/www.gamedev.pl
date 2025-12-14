@@ -1,35 +1,6 @@
 import { VisualEffect, VisualEffectType } from '../visual-effects/visual-effect-types';
-import { Vector2D } from '../utils/math-types';
 
 const EFFECT_BASE_RADIUS = 15;
-
-/**
- * Renders a persistent, pulsating circle for the autopilot move target.
- * Unlike other effects, this does not have a duration and does not fade out.
- * @param ctx The canvas rendering context.
- * @param position The world position to render the target at.
- * @param currentTime The current game time, used for the pulsating animation.
- */
-export function renderAutopilotMoveTarget(
-  ctx: CanvasRenderingContext2D,
-  position: Vector2D,
-  currentTime: number,
-): void {
-  const color = 'rgba(0, 191, 255, 0.8)'; // Deep sky blue
-  const maxScale = 0.25;
-
-  // Pulsating effect based on a continuous sine wave of the current time
-  const pulse = Math.sin(currentTime * 5); // Adjust the multiplier to change pulse speed
-  const scale = 0.25 + pulse * maxScale;
-  const radius = EFFECT_BASE_RADIUS * scale;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(position.x, position.y, Math.max(0, radius), 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.restore();
-}
 
 function drawPulsatingCircle(
   ctx: CanvasRenderingContext2D,

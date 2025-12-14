@@ -25,8 +25,6 @@ export function vectorLength(v: Vector2D): number {
   return Math.sqrt(v.x * v.x + v.y * v.y);
 }
 
-export const vectorMagnitude = vectorLength;
-
 export function vectorNormalize(v: Vector2D): Vector2D {
   const length = vectorLength(v);
   if (length === 0) return { x: 0, y: 0 };
@@ -93,7 +91,7 @@ export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth:
   return vectorLength(difference);
 }
 
-export function vectorDot(v1: Vector2D, v2: Vector2D): number {
+function vectorDot(v1: Vector2D, v2: Vector2D): number {
   return v1.x * v2.x + v1.y * v2.y;
 }
 
@@ -107,6 +105,7 @@ export function vectorAngleBetween(v1: Vector2D, v2: Vector2D): number {
   return Math.acos(cosTheta);
 }
 
+/** @public */
 export function vectorRotate(v: Vector2D, angle: number): Vector2D {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);

@@ -38,9 +38,3 @@ export const STORAGE_STEAL_COOLDOWN = 2;
  * the theft attempt will be detected and prevented.
  */
 export const STORAGE_STEAL_DETECTION_RANGE = 50;
-
-/**
- * Minimum number of defending tribe members within detection range
- * needed to prevent a theft attempt.
- */
-export const STORAGE_STEAL_MIN_TRIBE_MEMBERS_NEARBY = 1;

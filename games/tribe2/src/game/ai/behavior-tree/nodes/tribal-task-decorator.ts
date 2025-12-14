@@ -6,11 +6,12 @@ import { btProfiler } from '../bt-profiler';
 import { unpackStatus } from './utils';
 import { EntityId } from '../../../entities/entities-types';
 import { getTribeLeaderForCoordination, TRIBAL_TASK_TIMEOUT_HOURS } from '../../../entities/tribe/tribe-task-utils';
+import { HumanEntity } from '../../../entities/characters/human/human-types';
 
 /**
  * Task types that can be coordinated
  */
-export type TribalTaskType = 'gather' | 'hunt' | 'plant' | 'storage' | 'procreation';
+type TribalTaskType = 'gather' | 'hunt' | 'plant' | 'storage' | 'procreation';
 
 /**
  * Configuration for different task types
@@ -61,7 +62,7 @@ type TaskData = {
  * - storage: Multiple members per storage (configurable max)
  * - procreation: One pair at a time
  */
-export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode<T> {
+export class TribalTaskDecorator<T extends HumanEntity> extends BehaviorNode<T> {
   public name: string;
   public depth: number;
 
@@ -83,7 +84,7 @@ export class TribalTaskDecorator<T extends CharacterEntity> extends BehaviorNode
   execute(entity: T, context: UpdateContext, blackboard: BlackboardData): NodeStatus {
     btProfiler.nodeStart(this.name);
     try {
-      const leader = getTribeLeaderForCoordination(entity as any, context.gameState);
+      const leader = getTribeLeaderForCoordination(entity, context.gameState);
 
       // If no leader for coordination, just execute the child normally
       if (!leader || !leader.aiBlackboard) {

@@ -22,7 +22,6 @@ export const HUMAN_OLD_AGE_SPEED_MODIFIER: number = 0.7; // Speed modifier for o
 // Human Procreation Constants
 export const HUMAN_MIN_PROCREATION_AGE: number = 16; // Minimum age for procreation
 export const HUMAN_FEMALE_MAX_PROCREATION_AGE: number = 40; // Maximum age for a female to be able to procreate
-export const HUMAN_MALE_URGENT_PROCREATION_AGE: number = 35; // Age at which male without heir urgently seeks procreation
 export const PROCREATION_WANDER_BEFORE_NO_HEIR_HOURS: number = 24; // 1 game day
 export const CHILD_TO_ADULT_AGE: number = 16; // Age at which a child becomes an adult
 export const HUMAN_GESTATION_PERIOD_HOURS: number = 72 / 3; // 3 game days
@@ -47,7 +46,7 @@ export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a
 // Human Attack Constants
 export const HUMAN_MAX_HITPOINTS = 100;
 export const HUMAN_ATTACK_DAMAGE = 35;
-export const HUMAN_ATTACK_RANGE: number = HUMAN_INTERACTION_RANGE; // Range in pixels for attack interaction
+export const HUMAN_ATTACK_RANGE = 30; // Range in pixels for attack interaction
 export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
 export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
 export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 5; // Force applied to target on successful attack

@@ -95,7 +95,7 @@ function isAdjacentVertically(
  * @param gameState The current game state.
  * @returns A record mapping zone entity IDs to their connection information.
  */
-export function calculatePlantingZoneConnections(
+function calculatePlantingZoneConnections(
   gameState: GameWorldState,
 ): Record<EntityId, PlantingZoneConnections> {
   const connections: Record<EntityId, PlantingZoneConnections> = {};
