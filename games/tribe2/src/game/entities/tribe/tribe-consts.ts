@@ -22,6 +22,11 @@ export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 export const TRIBE_BUILDINGS_MIN_HEADCOUNT = 5; // Minimum headcount to allow building placement
 export const TRIBE_ROLES_EFFECTIVE_MIN_HEADCOUNT = 10; // Minimum headcount for roles to be effective
 
+// Army Control constants - default priority weights for warrior objectives (0-10)
+export const DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND = 5;
+export const DEFAULT_ARMY_CONTROL_EXPAND_BORDERS = 0; // Future feature, disabled by default
+export const DEFAULT_ARMY_CONTROL_INVADE_ENEMIES = 5;
+
 // Tribe Merge Constants
 export const TRIBE_MERGE_CHECK_INTERVAL_HOURS = 12; // How often to check for orphaned tribes
 export const TRIBE_MERGE_MIN_FAMILY_CONNECTION_STRENGTH = 1; // Minimum family relationship strength to trigger merge

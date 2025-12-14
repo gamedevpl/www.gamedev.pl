@@ -77,6 +77,14 @@ export const handleGameControlKeyDown = (
         }
       }
       break;
+    case 'v': {
+      const playerForArmy = findPlayerEntity(gameState);
+      if (playerForArmy && playerForArmy.isAdult && playerForArmy.leaderId === playerForArmy.id) {
+        // Toggle army control UI
+        gameState.armyControlOpen = !gameState.armyControlOpen;
+      }
+      break;
+    }
     case 'm':
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);

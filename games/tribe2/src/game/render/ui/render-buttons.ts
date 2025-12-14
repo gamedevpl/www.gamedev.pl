@@ -252,18 +252,10 @@ export function renderUIButtons(
         condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {
-        playerAction: PlayerActionType.FollowMe,
-        buttonAction: UIButtonActionType.CommandFollowMe,
-        shortcut: 'C',
-        name: 'Follow Me',
-        toggleKey: 'followLeader',
-        condition: () => player.isAdult === true && player.leaderId === player.id,
-      },
-      {
-        playerAction: PlayerActionType.CallToAttack,
-        buttonAction: UIButtonActionType.CommandCallToAttack,
+        playerAction: PlayerActionType.ArmyControl,
+        buttonAction: UIButtonActionType.OpenArmyControl,
         shortcut: 'V',
-        name: 'Call to Attack',
+        name: 'Army Control',
         condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {

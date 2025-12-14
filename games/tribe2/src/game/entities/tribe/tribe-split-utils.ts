@@ -437,6 +437,11 @@ export function executeSplit(human: HumanEntity, gameState: GameWorldState): boo
       leader: 0,
     },
     diplomacy: {},
+    armyControl: {
+      protectHomeland: 5,
+      expandBorders: 0,
+      invadeEnemies: 5,
+    },
   };
 
   // Set diplomacy with previous leader

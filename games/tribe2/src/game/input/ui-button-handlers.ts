@@ -213,6 +213,36 @@ export const handleUIButtonClick = (
         }
       }
       break;
+    case UIButtonActionType.OpenArmyControl:
+      gameState.armyControlOpen = true;
+      break;
+    case UIButtonActionType.CloseArmyControl:
+      gameState.armyControlOpen = false;
+      break;
+    case UIButtonActionType.IncreaseArmyObjective:
+      if (player && player.tribeControl && button.targetArmyObjective) {
+        // Initialize armyControl if it doesn't exist
+        if (!player.tribeControl.armyControl) {
+          player.tribeControl.armyControl = { protectHomeland: 5, expandBorders: 0, invadeEnemies: 5 };
+        }
+        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
+        if (currentWeight < 10) {
+          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight + 1;
+        }
+      }
+      break;
+    case UIButtonActionType.DecreaseArmyObjective:
+      if (player && player.tribeControl && button.targetArmyObjective) {
+        // Initialize armyControl if it doesn't exist
+        if (!player.tribeControl.armyControl) {
+          player.tribeControl.armyControl = { protectHomeland: 5, expandBorders: 0, invadeEnemies: 5 };
+        }
+        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
+        if (currentWeight > 0) {
+          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight - 1;
+        }
+      }
+      break;
   }
 
   // For most cases, the original gameState object is mutated, so we return it.

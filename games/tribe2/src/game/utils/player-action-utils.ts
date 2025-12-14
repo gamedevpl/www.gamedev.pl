@@ -1,6 +1,5 @@
 import { BERRY_COST_FOR_PLANTING } from '../berry-bush-consts.ts';
 import { HUMAN_ATTACK_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
-import { PLAYER_CALL_TO_ATTACK_RADIUS } from '../entities/tribe/tribe-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
@@ -10,9 +9,7 @@ import { BuildingEntity } from '../entities/buildings/building-types';
 import { FoodType } from '../food/food-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { GameWorldState, HoveredAutopilotAction } from '../world-types';
-import { IndexedWorldState } from '../world-index/world-index-types';
 import { calculateWrappedDistance } from './math-utils';
-import { findNearbyEnemiesOfTribe } from './ai-world-analysis-utils';
 import { findClosestEntity } from './entity-finder-utils';
 import { canSplitTribe } from '../entities/tribe/tribe-split-utils.ts';
 import { canProcreate, isHostile, isEnemyBuilding } from './human-utils';
@@ -177,23 +174,14 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     }
   }
 
-  // Check for Call to Attack
-  if (player.leaderId === player.id && !player.isCallingToAttack) {
-    const indexedState = gameState as IndexedWorldState;
-    const nearbyEnemies = findNearbyEnemiesOfTribe(player, indexedState, PLAYER_CALL_TO_ATTACK_RADIUS);
-    if (nearbyEnemies.length > 0) {
-      actions.push({ type: PlayerActionType.CallToAttack, action: 'idle', key: 'v' });
-    }
+  // Check for Army Control (replaces Follow Me and Call to Attack)
+  if (player.leaderId === player.id) {
+    actions.push({ type: PlayerActionType.ArmyControl, action: 'idle', key: 'v' });
   }
 
   // Check for Tribe Split
   if (canSplitTribe(player, gameState).canSplit) {
     actions.push({ type: PlayerActionType.TribeSplit, action: 'idle', key: 'k' });
-  }
-
-  // Check for Follow Me
-  if (player.leaderId === player.id && !player.isCallingToFollow) {
-    actions.push({ type: PlayerActionType.FollowMe, action: 'idle', key: 'c' });
   }
 
   return actions;
