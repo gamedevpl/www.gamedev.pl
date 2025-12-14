@@ -1,0 +1,5 @@
+{
+  "entry": ["src/index.tsx"],
+  "project": ["**/*.{js,ts,tsx,html,css}"],
+  "ignore": ["genaicode.config.ts"]
+}

@@ -39,6 +39,11 @@ export default defineConfig({
       description: 'Run unit tests',
       autoApprove: true,
     },
+    knip: {
+      command: 'npx knip',
+      description: 'Run Knip to find unused files, exports, and types.',
+      autoApprove: true,
+    },
   },
   modelOverrides: {
     aiStudio: {
