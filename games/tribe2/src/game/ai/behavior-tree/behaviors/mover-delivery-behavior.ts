@@ -248,25 +248,23 @@ function executePickupPhase(
     human.target = undefined;
     return [NodeStatus.RUNNING, 'Retrieving from storage'];
   } else {
-    // For mover handoff, the other mover should transfer food directly
-    // This is a simplified version - in practice, a feeding-like interaction would be needed
-    // For now, we'll just try retrieving and see if the interaction system handles it
-    // We'll set a special active action and let the interaction system do the transfer
+    // For mover handoff when receiving food, the source mover should deliver to us
+    // We stay idle and wait for the other mover to deliver to us
+    // The other mover will set their action to 'delivering' when they reach us
     human.activeAction = 'idle';
     human.target = undefined;
     
-    // Simulate receiving food from another mover
-    // The handoff happens through normal interactions or we can force it here
-    const otherMover = source as HumanEntity;
-    if (otherMover.food.length > MOVER_OWN_FOOD_RESERVE && human.food.length < human.maxFood) {
-      const foodItem = otherMover.food.pop();
-      if (foodItem) {
-        human.food.push(foodItem);
-        return [NodeStatus.RUNNING, 'Received handoff'];
-      }
+    // Check if we've received enough food
+    const newAvailableFood = human.food.length - MOVER_OWN_FOOD_RESERVE;
+    if (newAvailableFood >= MOVER_MIN_FOOD_TO_DELIVER) {
+      // We now have food, transition to deliver phase
+      const plan = Blackboard.get<{ isMeshDelivery: boolean }>(blackboard, DELIVERY_PLAN_KEY);
+      Blackboard.set(blackboard, DELIVERY_PHASE_KEY, plan?.isMeshDelivery ? 'handoff' : 'deliver');
+      Blackboard.delete(blackboard, DELIVERY_SOURCE_ID_KEY);
+      return [NodeStatus.SUCCESS, 'Received food from mover, ready to deliver'];
     }
 
-    return [NodeStatus.RUNNING, 'Waiting for handoff'];
+    return [NodeStatus.RUNNING, 'Waiting for handoff from other mover'];
   }
 }
 
@@ -313,27 +311,22 @@ function executeDeliverPhase(
     return [NodeStatus.RUNNING, `Moving to ${isHandoff ? 'mover' : 'target'} (${distance.toFixed(1)}px)`];
   }
 
-  // At target, transfer food
-  if (target.food.length < target.maxFood && human.food.length > MOVER_OWN_FOOD_RESERVE) {
-    const foodItem = human.food.pop();
-    if (foodItem) {
-      target.food.push(foodItem);
+  // At target, set delivering action - the interaction system will handle the food transfer
+  human.activeAction = 'delivering';
+  human.target = target.id;
 
-      // Check if we should continue delivering
-      const stillHasFood = human.food.length > MOVER_OWN_FOOD_RESERVE;
-      const targetStillNeeds = target.food.length < target.maxFood;
+  // Check if we've delivered all our excess food or target is full
+  const stillHasExcessFood = human.food.length > MOVER_OWN_FOOD_RESERVE;
+  const targetStillNeedsFood = target.food.length < target.maxFood;
 
-      if (stillHasFood && targetStillNeeds) {
-        return [NodeStatus.RUNNING, `Delivering food (${availableFood - 1} left)`];
-      } else {
-        clearDeliveryState(blackboard);
-        return [NodeStatus.SUCCESS, `Delivery complete`];
-      }
-    }
+  if (!stillHasExcessFood || !targetStillNeedsFood) {
+    clearDeliveryState(blackboard);
+    human.activeAction = 'idle';
+    human.target = undefined;
+    return [NodeStatus.SUCCESS, 'Delivery complete'];
   }
 
-  clearDeliveryState(blackboard);
-  return [NodeStatus.SUCCESS, 'Delivery complete'];
+  return [NodeStatus.RUNNING, `Delivering food (${availableFood} left)`];
 }
 
 /**

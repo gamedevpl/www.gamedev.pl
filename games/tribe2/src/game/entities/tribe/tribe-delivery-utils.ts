@@ -91,10 +91,8 @@ export function getDeliveryPriority(human: HumanEntity, gameState: GameWorldStat
   // Check if this is a patriarch (male with children in tribe)
   if (human.gender === 'male' && human.isAdult) {
     const indexedState = gameState as IndexedWorldState;
-    const children = [
-      ...indexedState.search.human.byProperty('fatherId', human.id),
-      ...indexedState.search.human.byProperty('motherId', human.id),
-    ];
+    // Males can only be fathers, so only search by fatherId
+    const children = indexedState.search.human.byProperty('fatherId', human.id);
     if (children.length > 0) {
       return DELIVERY_PRIORITY_PATRIARCH;
     }
@@ -248,12 +246,14 @@ export function findDeliverySources(
     // Only consider nearby movers for handoff
     if (distanceToMover > MOVER_HANDOFF_RANGE * 3) continue;
 
-    // Check if this mover is closer to the target than we are
+    // For mesh delivery: accept handoff from movers who are farther from target (closer to storage)
+    // This enables a chain: Storage -> Mover A (near storage) -> Mover B (middle) -> Mover C (near target)
     const theirDistanceToTarget = calculateWrappedDistance(member.position, targetPosition, worldWidth, worldHeight);
     const ourDistanceToTarget = calculateWrappedDistance(mover.position, targetPosition, worldWidth, worldHeight);
 
-    // Only accept handoff if they're closer to the target than us
-    if (theirDistanceToTarget >= ourDistanceToTarget) continue;
+    // Accept handoff if they are farther from target (meaning closer to storage in the chain)
+    // Or if they're simply nearby with food
+    if (theirDistanceToTarget < ourDistanceToTarget) continue;
 
     sources.push({
       type: 'mover',

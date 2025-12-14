@@ -115,5 +115,6 @@ export type HumanAction =
   | 'planting' // Sowing seeds or placing plants
   | 'depositing' // Depositing resources into storage
   | 'retrieving' // Retrieving resources from storage
+  | 'delivering' // MOVER delivering resources to tribe members
   | 'takingOverBuilding' // Taking over an enemy building
   | 'destroyingBuilding'; // Destroying an enemy building

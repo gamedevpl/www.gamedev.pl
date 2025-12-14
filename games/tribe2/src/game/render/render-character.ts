@@ -41,6 +41,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   planting: 'gathering',
   depositing: 'gathering',
   retrieving: 'gathering',
+  delivering: 'walk', // MOVERs delivering food - use walk stance
   takingOverBuilding: 'attacking',
   destroyingBuilding: 'attacking',
 };
