@@ -252,7 +252,6 @@ export function findDeliverySources(
     const ourDistanceToTarget = calculateWrappedDistance(mover.position, targetPosition, worldWidth, worldHeight);
 
     // Accept handoff if they are farther from target (meaning closer to storage in the chain)
-    // Or if they're simply nearby with food
     if (theirDistanceToTarget < ourDistanceToTarget) continue;
 
     sources.push({

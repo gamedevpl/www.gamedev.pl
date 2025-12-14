@@ -255,8 +255,8 @@ function executePickupPhase(
     human.target = undefined;
     
     // Check if we've received enough food
-    const newAvailableFood = human.food.length - MOVER_OWN_FOOD_RESERVE;
-    if (newAvailableFood >= MOVER_MIN_FOOD_TO_DELIVER) {
+    const currentAvailableFood = human.food.length - MOVER_OWN_FOOD_RESERVE;
+    if (currentAvailableFood >= MOVER_MIN_FOOD_TO_DELIVER) {
       // We now have food, transition to deliver phase
       const plan = Blackboard.get<{ isMeshDelivery: boolean }>(blackboard, DELIVERY_PLAN_KEY);
       Blackboard.set(blackboard, DELIVERY_PHASE_KEY, plan?.isMeshDelivery ? 'handoff' : 'deliver');

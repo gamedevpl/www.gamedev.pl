@@ -2,7 +2,7 @@ import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { MOVER_DELIVERY_RANGE, MOVER_OWN_FOOD_RESERVE } from '../entities/tribe/tribe-delivery-utils';
 import { TribeRole } from '../entities/tribe/tribe-types';
-import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
+import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 
