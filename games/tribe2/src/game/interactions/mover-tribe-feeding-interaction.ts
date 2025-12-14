@@ -1,13 +1,13 @@
 import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { PARENT_FEEDING_RANGE, HUMAN_FOOD_HUNGER_REDUCTION } from '../human-consts.ts';
-import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
+import { PARENT_FEEDING_RANGE, HUMAN_FOOD_HUNGER_REDUCTION } from '../human-consts';
+import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { TribeRole } from '../entities/tribe/tribe-types';
-import { MOVER_TRIBE_FEEDING_COOLDOWN_HOURS } from '../ai-consts';
+import { MOVER_TRIBE_FEEDING_COOLDOWN_HOURS, MOVER_HUNGRY_MEMBER_THRESHOLD } from '../ai-consts';
 
 /**
  * Interaction for a Mover to feed another tribe member (leader or warrior).
@@ -39,8 +39,8 @@ export const moverTribeFeedingInteraction: InteractionDefinition<HumanEntity, Hu
       return false;
     }
 
-    // Target must be hungry enough to need food
-    if (target.hunger < HUMAN_FOOD_HUNGER_REDUCTION) {
+    // Target must be hungry enough to need food (use consistent threshold with behavior)
+    if (target.hunger < MOVER_HUNGRY_MEMBER_THRESHOLD) {
       return false;
     }
 
