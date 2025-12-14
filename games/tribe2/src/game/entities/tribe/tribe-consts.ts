@@ -24,7 +24,7 @@ export const TRIBE_ROLES_EFFECTIVE_MIN_HEADCOUNT = 10; // Minimum headcount for 
 
 // Army Control constants - default priority weights for warrior objectives (0-10)
 export const DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND = 5;
-export const DEFAULT_ARMY_CONTROL_EXPAND_BORDERS = 0; // Future feature, disabled by default
+export const DEFAULT_ARMY_CONTROL_EXPAND_BORDERS = 5;
 export const DEFAULT_ARMY_CONTROL_INVADE_ENEMIES = 5;
 
 // Tribe Merge Constants

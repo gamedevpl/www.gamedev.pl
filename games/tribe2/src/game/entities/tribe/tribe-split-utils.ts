@@ -439,7 +439,7 @@ export function executeSplit(human: HumanEntity, gameState: GameWorldState): boo
     diplomacy: {},
     armyControl: {
       protectHomeland: 5,
-      expandBorders: 0,
+      expandBorders: 5,
       invadeEnemies: 5,
     },
   };

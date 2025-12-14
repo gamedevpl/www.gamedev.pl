@@ -195,7 +195,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
           diplomacy: {},
           armyControl: {
             protectHomeland: 5,
-            expandBorders: 0,
+            expandBorders: 5,
             invadeEnemies: 5,
           },
         };

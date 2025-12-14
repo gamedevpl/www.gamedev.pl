@@ -119,13 +119,12 @@ export function renderArmyControl(
   ARMY_OBJECTIVES.forEach((objectiveData) => {
     const weight = armyControl[objectiveData.key] || 0;
     const percentage = totalWeight > 0 ? Math.round((weight / totalWeight) * 100) : 0;
-    const isExpandBorders = objectiveData.key === 'expandBorders';
 
     // Objective Name & Emoji
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.font = `${UI_FONT_SIZE * 0.8}px "Press Start 2P", Arial`;
-    ctx.fillStyle = isExpandBorders ? '#666' : UI_BUTTON_TEXT_COLOR;
+    ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
     ctx.fillText(`${objectiveData.emoji} ${objectiveData.name}`, leftColumnX, currentY + ROW_HEIGHT / 2);
 
     // Controls Layout
@@ -137,7 +136,7 @@ export function renderArmyControl(
     // Minus Button
     const minusBtnId = `army_minus_${objectiveData.key}`;
     const isMinusHovered = gameState.hoveredButtonId === minusBtnId;
-    const minusDisabled = weight <= 0 || isExpandBorders;
+    const minusDisabled = weight <= 0;
     const minusColor = minusDisabled ? '#555' : isMinusHovered ? '#dd6666' : '#cc4444';
 
     ctx.fillStyle = minusColor;
@@ -161,7 +160,7 @@ export function renderArmyControl(
     // Visual Weight Bar
     ctx.textAlign = 'left';
     ctx.font = '16px Arial';
-    ctx.fillStyle = isExpandBorders ? '#444' : '#4CAF50';
+    ctx.fillStyle = '#4CAF50';
 
     const barWidth = iconsWidth - 10;
     const barHeight = 12;
@@ -173,13 +172,13 @@ export function renderArmyControl(
 
     // Filled bar based on weight (0-10 scale)
     const fillWidth = (weight / 10) * barWidth;
-    ctx.fillStyle = isExpandBorders ? '#444' : '#4CAF50';
+    ctx.fillStyle = '#4CAF50';
     ctx.fillRect(iconsStartX, barY, fillWidth, barHeight);
 
     // Plus Button
     const plusBtnId = `army_plus_${objectiveData.key}`;
     const isPlusHovered = gameState.hoveredButtonId === plusBtnId;
-    const plusDisabled = weight >= 10 || isExpandBorders;
+    const plusDisabled = weight >= 10;
     const plusColor = plusDisabled ? '#555' : isPlusHovered ? '#66dd66' : '#44cc44';
 
     ctx.fillStyle = plusColor;
@@ -204,7 +203,7 @@ export function renderArmyControl(
     // Percentage
     ctx.textAlign = 'right';
     ctx.font = `${UI_FONT_SIZE * 0.8}px "Press Start 2P", Arial`;
-    ctx.fillStyle = isExpandBorders ? '#666' : UI_BUTTON_TEXT_COLOR;
+    ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
     ctx.fillText(`${percentage}%`, rightColumnX, currentY + ROW_HEIGHT / 2);
 
     currentY += ROW_HEIGHT;
