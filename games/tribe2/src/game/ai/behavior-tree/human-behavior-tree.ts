@@ -43,6 +43,7 @@ import {
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
   createTribeRoleAssignmentBehavior,
+  createWarriorPatrolBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -127,6 +128,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
+
+      // --- WARRIOR PATROL & INTRUDER DEFENSE ---
+      new AutopilotControlled(createWarriorPatrolBehavior(3), 'attack', 'Gated Warrior Patrol', 2),
 
       // --- OPPORTUNISTIC STEALING ---
       createStorageStealBehavior(2),
