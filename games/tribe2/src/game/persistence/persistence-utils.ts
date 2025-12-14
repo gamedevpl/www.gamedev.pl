@@ -25,6 +25,7 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       autopilotControls: worldState.autopilotControls,
       buildMenuOpen: worldState.buildMenuOpen,
       roleManagerOpen: worldState.roleManagerOpen,
+      armyControlOpen: worldState.armyControlOpen,
       selectedBuildingType: worldState.selectedBuildingType,
       selectedBuildingForRemoval: worldState.selectedBuildingForRemoval,
       hasPlayerMovedEver: worldState.hasPlayerMovedEver,

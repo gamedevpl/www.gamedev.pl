@@ -118,6 +118,7 @@ export interface GameWorldState {
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
   roleManagerOpen: boolean;
+  armyControlOpen: boolean;
   selectedBuildingType: 'storageSpot' | 'plantingZone' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;

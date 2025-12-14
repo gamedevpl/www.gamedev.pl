@@ -193,6 +193,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             [TribeRole.Warrior]: 2,
           },
           diplomacy: {},
+          armyControl: {
+            protectHomeland: 5,
+            expandBorders: 0,
+            invadeEnemies: 5,
+          },
         };
 
         // Update followers

@@ -6,6 +6,9 @@ import {
   FAST_FORWARD_AMOUNT_SECONDS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
+  DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+  DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+  DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
 } from '../entities/tribe/tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
@@ -210,6 +213,44 @@ export const handleUIButtonClick = (
         const currentWeight = player.tribeControl.roleWeights[button.targetRole] || 0;
         if (currentWeight > 0) {
           player.tribeControl.roleWeights[button.targetRole] = currentWeight - 1;
+        }
+      }
+      break;
+    case UIButtonActionType.OpenArmyControl:
+      gameState.armyControlOpen = true;
+      break;
+    case UIButtonActionType.CloseArmyControl:
+      gameState.armyControlOpen = false;
+      break;
+    case UIButtonActionType.IncreaseArmyObjective:
+      if (player && player.tribeControl && button.targetArmyObjective) {
+        // Initialize armyControl if it doesn't exist
+        if (!player.tribeControl.armyControl) {
+          player.tribeControl.armyControl = {
+            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
+          };
+        }
+        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
+        if (currentWeight < 10) {
+          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight + 1;
+        }
+      }
+      break;
+    case UIButtonActionType.DecreaseArmyObjective:
+      if (player && player.tribeControl && button.targetArmyObjective) {
+        // Initialize armyControl if it doesn't exist
+        if (!player.tribeControl.armyControl) {
+          player.tribeControl.armyControl = {
+            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
+          };
+        }
+        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
+        if (currentWeight > 0) {
+          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight - 1;
         }
       }
       break;

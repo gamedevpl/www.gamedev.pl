@@ -3,6 +3,9 @@ import { Entity, EntityId } from '../entities/entities-types';
 import { TribeRole } from '../entities/tribe/tribe-types';
 import { DiplomacyStatus } from '../world-types';
 
+/** Army control objective keys for use in UI buttons */
+export type ArmyControlObjective = 'protectHomeland' | 'expandBorders' | 'invadeEnemies';
+
 export enum PlayerActionType {
   Gather = 'Gather',
   Eat = 'Eat',
@@ -21,6 +24,7 @@ export enum PlayerActionType {
   Retrieve = 'Retrieve',
   TakeOverBuilding = 'TakeOverBuilding',
   RemoveEnemyBuilding = 'RemoveEnemyBuilding',
+  ArmyControl = 'ArmyControl',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -51,6 +55,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Retrieve]: '🎁',
   [PlayerActionType.TakeOverBuilding]: '🏴',
   [PlayerActionType.RemoveEnemyBuilding]: '🧨',
+  [PlayerActionType.ArmyControl]: '🎖️',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -80,6 +85,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.Retrieve]: 'Retrieve',
   [PlayerActionType.TakeOverBuilding]: 'Take Over',
   [PlayerActionType.RemoveEnemyBuilding]: 'Destroy Enemy Building',
+  [PlayerActionType.ArmyControl]: 'Army Control',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -189,6 +195,12 @@ export enum UIButtonActionType {
   CloseRoleManager = 'CloseRoleManager',
   IncreaseRoleWeight = 'IncreaseRoleWeight',
   DecreaseRoleWeight = 'DecreaseRoleWeight',
+
+  // --- Army Control ---
+  OpenArmyControl = 'OpenArmyControl',
+  CloseArmyControl = 'CloseArmyControl',
+  IncreaseArmyObjective = 'IncreaseArmyObjective',
+  DecreaseArmyObjective = 'DecreaseArmyObjective',
 }
 
 export interface ClickableUIButton {
@@ -206,4 +218,5 @@ export interface ClickableUIButton {
   activated?: boolean;
   targetTribeId?: EntityId;
   targetRole?: TribeRole;
+  targetArmyObjective?: ArmyControlObjective;
 }
