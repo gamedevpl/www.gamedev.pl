@@ -23,7 +23,7 @@ import { getTribeCenter } from '../../../utils/spatial-utils.ts';
 
 // Blackboard keys
 const PATROL_TARGET_KEY = 'warriorPatrolTarget';
-const INTRUDER_TARGET_KEY = 'warriorIntruderTarget';
+const ATTACK_TARGET_KEY = 'warriorAttackTarget';
 const HOME_CENTER_KEY = 'warriorHomeCenter';
 const LAST_PATROL_TIME_KEY = 'warriorLastPatrolTime';
 
@@ -90,7 +90,7 @@ function createAttackIntrudersBranch(depth: number): BehaviorNode<HumanEntity> {
           if (human.activeAction === 'attacking' && human.attackTargetId) {
             const currentTarget = gameState.entities.entities[human.attackTargetId] as HumanEntity;
             if (currentTarget && currentTarget.hitpoints > 0 && isHostile(human, currentTarget, gameState)) {
-              Blackboard.set(blackboard, INTRUDER_TARGET_KEY, currentTarget.id);
+              Blackboard.set(blackboard, ATTACK_TARGET_KEY, currentTarget.id);
               if (!Blackboard.get(blackboard, HOME_CENTER_KEY)) {
                 Blackboard.set(blackboard, HOME_CENTER_KEY, getTribeCenter(human.leaderId!, gameState));
               }
@@ -112,13 +112,13 @@ function createAttackIntrudersBranch(depth: number): BehaviorNode<HumanEntity> {
             // Check if the target is inside our territory (intruder)
             const targetTerritoryCheck = checkPositionInTerritory(target.position, territory, gameState);
             if (targetTerritoryCheck.isInsideTerritory || targetTerritoryCheck.isNearBorder) {
-              Blackboard.set(blackboard, INTRUDER_TARGET_KEY, target.id);
+              Blackboard.set(blackboard, ATTACK_TARGET_KEY, target.id);
               Blackboard.set(blackboard, HOME_CENTER_KEY, getTribeCenter(human.leaderId!, gameState));
               return [true, `Found intruder ${target.id}`];
             }
           }
 
-          Blackboard.set(blackboard, INTRUDER_TARGET_KEY, undefined);
+          Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
           return false;
         },
         'Find Intruder In Territory',
@@ -128,7 +128,7 @@ function createAttackIntrudersBranch(depth: number): BehaviorNode<HumanEntity> {
       // Action: Attack the intruder
       new ActionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-          const targetId = Blackboard.get<EntityId>(blackboard, INTRUDER_TARGET_KEY);
+          const targetId = Blackboard.get<EntityId>(blackboard, ATTACK_TARGET_KEY);
           const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
           const homeCenter = Blackboard.get<Vector2D>(blackboard, HOME_CENTER_KEY);
 
@@ -149,7 +149,7 @@ function createAttackIntrudersBranch(depth: number): BehaviorNode<HumanEntity> {
           if (distanceFromHome > ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER) {
             human.activeAction = 'idle';
             human.attackTargetId = undefined;
-            Blackboard.set(blackboard, INTRUDER_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
             Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
             return [NodeStatus.FAILURE, 'Too far from home'];
           }
@@ -158,7 +158,7 @@ function createAttackIntrudersBranch(depth: number): BehaviorNode<HumanEntity> {
           if (target.hitpoints <= 0) {
             human.activeAction = 'idle';
             human.attackTargetId = undefined;
-            Blackboard.set(blackboard, INTRUDER_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
             return NodeStatus.SUCCESS; // Intruder eliminated
           }
 
@@ -209,7 +209,7 @@ function createAttackHostilesBranch(depth: number): BehaviorNode<HumanEntity> {
           if (human.activeAction === 'attacking' && human.attackTargetId) {
             const currentTarget = gameState.entities.entities[human.attackTargetId] as HumanEntity;
             if (currentTarget && currentTarget.hitpoints > 0 && isHostile(human, currentTarget, gameState)) {
-              Blackboard.set(blackboard, INTRUDER_TARGET_KEY, currentTarget.id);
+              Blackboard.set(blackboard, ATTACK_TARGET_KEY, currentTarget.id);
               if (!Blackboard.get(blackboard, HOME_CENTER_KEY)) {
                 Blackboard.set(blackboard, HOME_CENTER_KEY, getTribeCenter(human.leaderId!, gameState));
               }
@@ -223,7 +223,7 @@ function createAttackHostilesBranch(depth: number): BehaviorNode<HumanEntity> {
             if (target.id === human.id || target.hitpoints <= 0) continue;
             if (!isHostile(human, target, gameState)) continue;
 
-            Blackboard.set(blackboard, INTRUDER_TARGET_KEY, target.id);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, target.id);
             Blackboard.set(blackboard, HOME_CENTER_KEY, getTribeCenter(human.leaderId!, gameState));
             return [true, `Found hostile ${target.id}`];
           }
@@ -237,7 +237,7 @@ function createAttackHostilesBranch(depth: number): BehaviorNode<HumanEntity> {
       // Action: Attack the hostile
       new ActionNode(
         (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-          const targetId = Blackboard.get<EntityId>(blackboard, INTRUDER_TARGET_KEY);
+          const targetId = Blackboard.get<EntityId>(blackboard, ATTACK_TARGET_KEY);
           const target = targetId && (context.gameState.entities.entities[targetId] as HumanEntity | undefined);
           const homeCenter = Blackboard.get<Vector2D>(blackboard, HOME_CENTER_KEY);
 
@@ -258,7 +258,7 @@ function createAttackHostilesBranch(depth: number): BehaviorNode<HumanEntity> {
           if (distanceFromHome > ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER) {
             human.activeAction = 'idle';
             human.attackTargetId = undefined;
-            Blackboard.set(blackboard, INTRUDER_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
             Blackboard.set(blackboard, HOME_CENTER_KEY, undefined);
             return [NodeStatus.FAILURE, 'Too far from home'];
           }
@@ -267,7 +267,7 @@ function createAttackHostilesBranch(depth: number): BehaviorNode<HumanEntity> {
           if (target.hitpoints <= 0) {
             human.activeAction = 'idle';
             human.attackTargetId = undefined;
-            Blackboard.set(blackboard, INTRUDER_TARGET_KEY, undefined);
+            Blackboard.set(blackboard, ATTACK_TARGET_KEY, undefined);
             return NodeStatus.SUCCESS;
           }
 
