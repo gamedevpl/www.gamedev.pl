@@ -11,10 +11,6 @@ export const TRIBE_SPLIT_PHASE_TIMEOUT_HOURS = 160; // Maximum time for any phas
 export const TRIBE_SPLIT_COOLDOWN_AFTER_FAILURE_HOURS = 72; // Cooldown after a failed split attempt (1 week)
 
 // Player Action Constants
-export const PLAYER_CALL_TO_ATTACK_DURATION_HOURS: number = 10;
-export const PLAYER_CALL_TO_ATTACK_RADIUS: number = 250;
-export const PLAYER_CALL_TO_FOLLOW_DURATION_HOURS: number = 12;
-export const PLAYER_CALL_TO_FOLLOW_RADIUS: number = 300;
 export const PLAYER_TRIBE_SPLIT_COOLDOWN_HOURS = 9999;
 export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 

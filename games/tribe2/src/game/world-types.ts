@@ -67,10 +67,6 @@ export type HoveredAutopilotAction =
       targetEntityId: EntityId;
     }
   | {
-      action: PlayerActionType.AutopilotFollowMe;
-      targetEntityId: EntityId;
-    }
-  | {
       action: PlayerActionType.AutopilotPlant;
       position: Vector2D;
     }
@@ -173,7 +169,6 @@ export type AutopilotControls = {
     gathering: boolean;
     attack: boolean;
     feedChildren: boolean;
-    followLeader: boolean;
     build: boolean;
     roleManagement: boolean;
   };

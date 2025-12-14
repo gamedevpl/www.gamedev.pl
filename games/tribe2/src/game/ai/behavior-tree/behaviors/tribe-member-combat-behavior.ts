@@ -40,15 +40,6 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
     depth + 1,
   );
 
-  const isLeaderCallingToAttack = new ConditionNode<HumanEntity>(
-    (human, context) => {
-      const leader = context.gameState.entities.entities[human.leaderId as number] as HumanEntity | undefined;
-      return !!leader?.isCallingToAttack;
-    },
-    'Is Leader Calling to Attack?',
-    depth + 1,
-  );
-
   const findBestTarget = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const { gameState } = context;
@@ -148,9 +139,5 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
     depth + 1,
   );
 
-  return new Sequence(
-    [isTribeFollower, isFitForCombat, isLeaderCallingToAttack, findBestTarget, attackTarget],
-    'Tribe Member Combat',
-    depth,
-  );
+  return new Sequence([isTribeFollower, isFitForCombat, findBestTarget, attackTarget], 'Tribe Member Combat', depth);
 }

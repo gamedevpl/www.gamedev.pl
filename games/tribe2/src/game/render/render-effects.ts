@@ -139,8 +139,5 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
     case VisualEffectType.Seize:
       drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
       break;
-    case VisualEffectType.CallToAttack:
-      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 255, 0, 0.8)', 4); // Yellow
-      break;
   }
 }

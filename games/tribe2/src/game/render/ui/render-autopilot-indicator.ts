@@ -51,58 +51,12 @@ function drawIndicator(
   ctx.restore();
 }
 
-function drawRippleEffect(ctx: CanvasRenderingContext2D, screenPos: Vector2D, time: number) {
-  ctx.save();
-  const rippleSpeed = 30; // radius units per hour
-  const maxRadius = 70;
-  const numRipples = 3;
-  const rippleSeparation = maxRadius / numRipples;
-
-  for (let i = 0; i < numRipples; i++) {
-    const offset = i * rippleSeparation;
-    const baseRadius = (time * rippleSpeed + offset) % maxRadius;
-    const opacity = 1 - baseRadius / maxRadius;
-
-    ctx.strokeStyle = `rgba(255, 215, 0, ${opacity * 0.7})`; // Gold-ish color
-    ctx.lineWidth = 1 + (1 - opacity) * 2; // gets thicker as it expands
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, baseRadius, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
-  const { activeAutopilotAction: activeAction, behaviors } = gameState.autopilotControls;
+  const { activeAutopilotAction: activeAction } = gameState.autopilotControls;
   const player = findPlayerEntity(gameState);
 
   if (!player) {
     return;
-  }
-  const rippleCallback = (context: CanvasRenderingContext2D, ripple: VisualEffect) => {
-    drawRippleEffect(context, ripple.position, gameState.time);
-  };
-
-  // Render ripple for player's "Follow Me" command
-  if (player.isCallingToFollow) {
-    renderWithWrapping(ctx, gameState.mapDimensions.width, gameState.mapDimensions.height, rippleCallback, {
-      position: player.position,
-    } as VisualEffect);
-  }
-
-  // Render ripple for AI "Follow Leader" behavior toggle
-  // This shows that the tribe is in "follow" mode.
-  if (behaviors.followLeader && !activeAction) {
-    renderWithWrapping(
-      ctx,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-      rippleCallback,
-      {
-        position: player.position,
-      } as VisualEffect,
-      70,
-    );
   }
 
   // Render indicators for other one-time autopilot actions
@@ -122,22 +76,20 @@ export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameStat
 
     if (targetPosition) {
       // We don't want to draw the old indicator for follow actions
-      if (activeAction.action !== PlayerActionType.AutopilotFollowMe && !player.isCallingToFollow) {
-        const indicatorCallback = (context: CanvasRenderingContext2D, effect: VisualEffect) => {
-          drawIndicator(context, effect.position, targetRadius, activeAction.action, gameState.time);
-        };
-        renderWithWrapping(
-          ctx,
-          gameState.mapDimensions.width,
-          gameState.mapDimensions.height,
-          indicatorCallback,
-          {
-            position: { ...targetPosition },
-          } as VisualEffect,
-          targetPosition,
-          targetRadius + 30,
-        );
-      }
+      const indicatorCallback = (context: CanvasRenderingContext2D, effect: VisualEffect) => {
+        drawIndicator(context, effect.position, targetRadius, activeAction.action, gameState.time);
+      };
+      renderWithWrapping(
+        ctx,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+        indicatorCallback,
+        {
+          position: { ...targetPosition },
+        } as VisualEffect,
+        targetPosition,
+        targetRadius + 30,
+      );
     }
   }
 }

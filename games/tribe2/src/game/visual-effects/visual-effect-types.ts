@@ -18,8 +18,6 @@ export enum VisualEffectType {
   Hit,
   SeizeBuildup,
   Seize,
-  CallToAttack,
-  CallToFollow,
   AutopilotMoveTarget,
 }
 

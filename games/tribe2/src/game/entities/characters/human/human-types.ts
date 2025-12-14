@@ -68,16 +68,6 @@ export interface HumanEntity extends CharacterEntity {
   /** Current active action. Set by player input or AI decision. */
   activeAction?: HumanAction;
 
-  /** Flag indicating if the human is currently issuing a call to attack. */
-  isCallingToAttack?: boolean;
-  /** Game time when the call to attack command ends. */
-  callToAttackEndTime?: number;
-
-  /** Flag indicating if the human is currently issuing a call to follow. */
-  isCallingToFollow?: boolean;
-  /** Game time when the call to follow command ends. */
-  callToFollowEndTime?: number;
-
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
 

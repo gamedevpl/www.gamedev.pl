@@ -2,18 +2,12 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
 import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGE } from '../human-consts.ts';
-import {
-  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
-} from '../entities/tribe/tribe-consts.ts';
 import { BERRY_BUSH_SPREAD_RADIUS } from '../berry-bush-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { CorpseEntity } from '../entities/characters/corpse-types';
-import { addVisualEffect } from '../utils/visual-effects-utils';
-import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
@@ -259,26 +253,6 @@ export const handlePlayerActionKeyDown = (
       playerEntity.target = storageSpot.id;
       playSoundAt(updateContext, SoundType.StorageRetrieve, playerEntity.position);
     }
-  } else if (key === 'v') {
-    playerEntity.isCallingToAttack = true;
-    playerEntity.callToAttackEndTime = gameState.time + PLAYER_CALL_TO_ATTACK_DURATION_HOURS;
-    addVisualEffect(
-      gameState,
-      VisualEffectType.CallToAttack,
-      playerEntity.position,
-      PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-    );
-    playSoundAt(updateContext, SoundType.CallToAttack, playerEntity.position);
-  } else if (key === 'c') {
-    playerEntity.isCallingToFollow = true;
-    playerEntity.callToFollowEndTime = gameState.time + PLAYER_CALL_TO_FOLLOW_DURATION_HOURS;
-    addVisualEffect(
-      gameState,
-      VisualEffectType.CallToFollow,
-      playerEntity.position,
-      PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
-    );
-    playSoundAt(updateContext, SoundType.CallToFollow, playerEntity.position);
   } else if (key === 'k') {
     performTribeSplit(playerEntity, gameState);
   } else if (key === 'l') {

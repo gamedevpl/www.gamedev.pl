@@ -66,16 +66,7 @@ export function renderWorld(
       if (building.buildingType === BuildingType.PlantingZone && building.isConstructed) {
         return;
       }
-      renderWithWrapping(
-        ctx,
-        worldWidth,
-        worldHeight,
-        renderBuilding,
-        building,
-        gameState,
-        player,
-        gameState.time,
-      );
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderBuilding, building, gameState, player, gameState.time);
     } else if (entity.type === 'berryBush') {
       renderWithWrapping(
         ctx,
@@ -96,15 +87,6 @@ export function renderWorld(
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
       const isPlayerAttackTarget = player?.attackTargetId === human.id;
-      const leader = human.leaderId
-        ? (gameState.entities.entities[human.leaderId] as HumanEntity | undefined)
-        : undefined;
-      const isFollower = player
-        ? human.leaderId === player.id &&
-          human.activeAction === 'moving' &&
-          human.target === human.leaderId &&
-          leader?.isCallingToFollow
-        : false;
 
       renderWithWrapping(
         ctx,
@@ -118,7 +100,6 @@ export function renderWorld(
         isPlayerPartner,
         isPlayerHeir,
         isPlayerAttackTarget,
-        isFollower,
         isDebugOn,
         gameState.time,
         gameState.debugCharacterId,

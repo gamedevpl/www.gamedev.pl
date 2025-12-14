@@ -35,18 +35,6 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
 
-  // --- Call to Attack Cooldown ---
-  if (entity.isCallingToAttack && entity.callToAttackEndTime && gameState.time > entity.callToAttackEndTime) {
-    entity.isCallingToAttack = false;
-    entity.callToAttackEndTime = undefined;
-  }
-
-  // --- Call to Follow Cooldown ---
-  if (entity.isCallingToFollow && entity.callToFollowEndTime && gameState.time > entity.callToFollowEndTime) {
-    entity.isCallingToFollow = false;
-    entity.callToFollowEndTime = undefined;
-  }
-
   // --- Movement Slowdown Cooldown ---
   if (entity.movementSlowdown && gameState.time > entity.movementSlowdown.endTime) {
     entity.movementSlowdown = undefined;

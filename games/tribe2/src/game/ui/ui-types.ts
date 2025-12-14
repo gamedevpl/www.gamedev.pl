@@ -12,9 +12,7 @@ export enum PlayerActionType {
   Procreate = 'Procreate',
   Attack = 'Attack',
   Plant = 'Plant',
-  CallToAttack = 'CallToAttack',
   TribeSplit = 'TribeSplit',
-  FollowMe = 'FollowMe',
   FeedChild = 'FeedChild',
   HuntPrey = 'HuntPrey',
   DefendAgainstPredator = 'DefendAgainstPredator',
@@ -32,7 +30,6 @@ export enum PlayerActionType {
   AutopilotProcreate = 'AutopilotProcreate',
   AutopilotPlant = 'AutopilotPlant',
   AutopilotFeedChild = 'AutopilotFeedChild',
-  AutopilotFollowMe = 'AutopilotFollowMe',
   AutopilotDeposit = 'AutopilotDeposit',
   AutopilotRetrieve = 'AutopilotRetrieve',
 }
@@ -43,9 +40,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Procreate]: '❤️',
   [PlayerActionType.Attack]: '⚔️',
   [PlayerActionType.Plant]: '🌱',
-  [PlayerActionType.CallToAttack]: '📢',
   [PlayerActionType.TribeSplit]: '🔱',
-  [PlayerActionType.FollowMe]: '➡️',
   [PlayerActionType.FeedChild]: '👨‍👧',
   [PlayerActionType.HuntPrey]: '🏹',
   [PlayerActionType.DefendAgainstPredator]: '🛡️',
@@ -62,7 +57,6 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotProcreate]: '❤️',
   [PlayerActionType.AutopilotPlant]: '🌱',
   [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
-  [PlayerActionType.AutopilotFollowMe]: '➡️',
   [PlayerActionType.AutopilotDeposit]: '📦',
   [PlayerActionType.AutopilotRetrieve]: '🎁',
 };
@@ -73,9 +67,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.Procreate]: 'Procreate',
   [PlayerActionType.Attack]: 'Attack',
   [PlayerActionType.Plant]: 'Plant',
-  [PlayerActionType.CallToAttack]: 'Call to Attack',
   [PlayerActionType.TribeSplit]: 'Split Tribe',
-  [PlayerActionType.FollowMe]: 'Follow Me',
   [PlayerActionType.FeedChild]: 'Feed Child',
   [PlayerActionType.HuntPrey]: 'Hunt Prey',
   [PlayerActionType.DefendAgainstPredator]: 'Defend',
@@ -92,7 +84,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotProcreate]: 'Procreate',
   [PlayerActionType.AutopilotPlant]: 'Plant',
   [PlayerActionType.AutopilotFeedChild]: 'Feed',
-  [PlayerActionType.AutopilotFollowMe]: 'Follow',
   [PlayerActionType.AutopilotDeposit]: 'Deposit',
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
 };
@@ -169,8 +160,6 @@ export enum UIButtonActionType {
   // --- Player Commands (One-Time Actions) ---
   CommandEat = 'CommandEat',
   CommandPlant = 'CommandPlant',
-  CommandCallToAttack = 'CommandCallToAttack',
-  CommandFollowMe = 'CommandFollowMe',
   CommandGather = 'CommandGather',
   CommandTribeSplit = 'CommandTribeSplit',
   CommandBuild = 'CommandBuild',
@@ -185,7 +174,6 @@ export enum UIButtonActionType {
   ToggleFeedChildBehavior = 'ToggleFeedChildBehavior',
   TogglePlantingBehavior = 'TogglePlantingBehavior',
   ToggleGatheringBehavior = 'ToggleGatheringBehavior',
-  ToggleAutopilotFollowLeaderBehavior = 'ToggleAutopilotFollowLeaderBehavior',
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',

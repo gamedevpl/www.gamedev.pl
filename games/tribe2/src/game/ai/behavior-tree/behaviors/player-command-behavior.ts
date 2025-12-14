@@ -5,11 +5,7 @@ import { Entity } from '../../../entities/entities-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
-import {
-  AUTOPILOT_ACTION_PROXIMITY,
-  AUTOPILOT_MOVE_DISTANCE_THRESHOLD,
-  FATHER_FOLLOW_STOP_DISTANCE,
-} from '../../../ai-consts.ts';
+import { AUTOPILOT_ACTION_PROXIMITY, AUTOPILOT_MOVE_DISTANCE_THRESHOLD } from '../../../ai-consts.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../berry-bush-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY, HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
 import { STORAGE_INTERACTION_RANGE } from '../../../storage-spot-consts.ts';
@@ -343,35 +339,6 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = targetBuilding.id;
               human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
-              return NodeStatus.RUNNING;
-            }
-
-            // --- FOLLOW LEADER ---
-            case PlayerActionType.AutopilotFollowMe: {
-              const leader = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
-
-              if (!leader || leader.type !== 'human' || leader.id !== leader.leaderId) {
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.FAILURE;
-              }
-
-              const distance = calculateWrappedDistance(
-                human.position,
-                leader.position,
-                gameState.mapDimensions.width,
-                gameState.mapDimensions.height,
-              );
-
-              if (distance <= FATHER_FOLLOW_STOP_DISTANCE) {
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                if (human.activeAction === 'moving') {
-                  human.activeAction = 'idle';
-                }
-                return NodeStatus.SUCCESS;
-              }
-              human.activeAction = 'moving';
-              human.target = leader.id;
-              human.direction = dirToTarget(human.position, leader.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 

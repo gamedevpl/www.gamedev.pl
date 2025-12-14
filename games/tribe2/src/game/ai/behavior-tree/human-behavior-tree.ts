@@ -21,7 +21,6 @@ import {
   createFleeingBehavior,
   createGatheringBehavior,
   createIdleWanderBehavior,
-  createLeaderCombatStrategyBehavior,
   createPlantingBehavior,
   createProcreationBehavior,
   createSeekingFoodFromParentBehavior,
@@ -32,7 +31,6 @@ import {
   createDefendFamilyBehavior,
   createDesperateAttackBehavior,
   createPlayerCommandBehavior,
-  createFollowLeaderBehavior,
   createDiplomacyBehavior,
   createHumanHuntPreyBehavior,
   createHumanDefendAgainstPredatorBehavior,
@@ -78,9 +76,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         'Role Assignment Gate',
         2,
       ),
-
-      // --- LEADER COMBAT STRATEGY (ATTACK OR RETREAT) ---
-      new NonPlayerControlled(createLeaderCombatStrategyBehavior(3), 'Gated Leader Combat Strategy', 2),
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
@@ -172,8 +167,7 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- HUNTING BEHAVIORS ---
       new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
-      // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW LEADER/PATRIARCH) ---
-      new AutopilotControlled(createFollowLeaderBehavior(3), 'followLeader', 'Gated Follow Leader', 2),
+      // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW PATRIARCH) ---
       new NonPlayerControlled(createFollowPatriarchBehavior(2), 'Gated Follow Patriarch', 2),
 
       // --- DEFAULT/FALLBACK BEHAVIOR (WANDER) ---

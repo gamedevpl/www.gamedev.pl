@@ -4,8 +4,6 @@ import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
 import {
   FAST_FORWARD_AMOUNT_SECONDS,
-  PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-  PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
   DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
   DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
   DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
@@ -13,8 +11,6 @@ import {
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';
-import { addVisualEffect } from '../utils/visual-effects-utils';
-import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
@@ -116,37 +112,6 @@ export const handleUIButtonClick = (
       break;
     case UIButtonActionType.ToggleFeedChildBehavior:
       behaviors.feedChildren = !behaviors.feedChildren;
-      break;
-    case UIButtonActionType.ToggleAutopilotFollowLeaderBehavior:
-      behaviors.followLeader = !behaviors.followLeader;
-      break;
-    case UIButtonActionType.CommandCallToAttack:
-      if (player && player.leaderId === player.id) {
-        player.isCallingToAttack = true;
-        player.callToAttackEndTime = gameState.time + PLAYER_CALL_TO_ATTACK_DURATION_HOURS;
-        addVisualEffect(
-          gameState,
-          VisualEffectType.CallToAttack,
-          player.position,
-          PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
-        );
-        playSoundAt(updateContext, SoundType.CallToAttack, player.position);
-      }
-      break;
-    case UIButtonActionType.CommandFollowMe:
-      if (shift) {
-        behaviors.followLeader = !behaviors.followLeader;
-      } else if (player && player.leaderId === player.id) {
-        player.isCallingToFollow = true;
-        player.callToFollowEndTime = gameState.time + PLAYER_CALL_TO_FOLLOW_DURATION_HOURS;
-        addVisualEffect(
-          gameState,
-          VisualEffectType.CallToFollow,
-          player.position,
-          PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
-        );
-        playSoundAt(updateContext, SoundType.CallToFollow, player.position);
-      }
       break;
     case UIButtonActionType.CommandTribeSplit:
       if (player) {
