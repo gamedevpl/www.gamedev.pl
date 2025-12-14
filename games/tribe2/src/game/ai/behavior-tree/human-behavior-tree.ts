@@ -38,7 +38,6 @@ import {
   createHumanDefendAgainstPredatorBehavior,
   createStorageDepositBehavior,
   createStorageRetrieveBehavior,
-  createStorageStealBehavior,
   createLeaderBuildingPlacementBehavior,
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
@@ -127,9 +126,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
-
-      // --- OPPORTUNISTIC STEALING ---
-      createStorageStealBehavior(2),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
       new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),

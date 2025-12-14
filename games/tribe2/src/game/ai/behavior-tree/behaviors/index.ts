@@ -9,7 +9,6 @@ export * from './seeking-food-from-parent-behavior';
 export * from './planting-behavior';
 export * from './storage-deposit-behavior';
 export * from './storage-retrieve-behavior';
-export * from './storage-steal-behavior';
 export * from './leader-call-to-attack-behavior';
 export * from './tribe-member-combat-behavior';
 export * from './leader-building-placement-behavior';
