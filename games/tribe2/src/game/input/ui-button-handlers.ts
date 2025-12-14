@@ -6,6 +6,9 @@ import {
   FAST_FORWARD_AMOUNT_SECONDS,
   PLAYER_CALL_TO_ATTACK_DURATION_HOURS,
   PLAYER_CALL_TO_FOLLOW_DURATION_HOURS,
+  DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+  DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+  DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
 } from '../entities/tribe/tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
@@ -223,7 +226,11 @@ export const handleUIButtonClick = (
       if (player && player.tribeControl && button.targetArmyObjective) {
         // Initialize armyControl if it doesn't exist
         if (!player.tribeControl.armyControl) {
-          player.tribeControl.armyControl = { protectHomeland: 5, expandBorders: 0, invadeEnemies: 5 };
+          player.tribeControl.armyControl = {
+            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
+          };
         }
         const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
         if (currentWeight < 10) {
@@ -235,7 +242,11 @@ export const handleUIButtonClick = (
       if (player && player.tribeControl && button.targetArmyObjective) {
         // Initialize armyControl if it doesn't exist
         if (!player.tribeControl.armyControl) {
-          player.tribeControl.armyControl = { protectHomeland: 5, expandBorders: 0, invadeEnemies: 5 };
+          player.tribeControl.armyControl = {
+            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
+          };
         }
         const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
         if (currentWeight > 0) {

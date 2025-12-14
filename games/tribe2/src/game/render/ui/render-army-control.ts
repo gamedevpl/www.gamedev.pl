@@ -2,6 +2,11 @@ import { GameWorldState } from '../../world-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { ArmyControlObjective, ClickableUIButton, UIButtonActionType } from '../../ui/ui-types';
 import { UI_BUTTON_TEXT_COLOR, UI_FONT_SIZE } from '../../ui/ui-consts.ts';
+import {
+  DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+  DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+  DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
+} from '../../entities/tribe/tribe-consts.ts';
 
 const PANEL_WIDTH = 600;
 const PANEL_PADDING = 30;
@@ -43,14 +48,15 @@ export function renderArmyControl(
 ): ClickableUIButton[] {
   const buttons: ClickableUIButton[] = [];
 
-  if (!player.tribeControl || !player.leaderId) {
+  // Check that player is a leader with tribeControl
+  if (!player.tribeControl || player.leaderId !== player.id) {
     return buttons;
   }
 
   const armyControl = player.tribeControl.armyControl ?? {
-    protectHomeland: 5,
-    expandBorders: 0,
-    invadeEnemies: 5,
+    protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
+    expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
+    invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
   };
 
   const { width, height } = ctx.canvas;
