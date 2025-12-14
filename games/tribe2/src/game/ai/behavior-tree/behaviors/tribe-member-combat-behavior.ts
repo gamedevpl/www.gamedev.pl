@@ -19,6 +19,7 @@ import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types.ts';
 import { registerDemand } from '../../../entities/tribe/logistics-utils.ts';
 import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils.ts';
+import { HUMAN_HUNGER_DEATH } from '../../../human-consts.ts';
 
 const COMBAT_TARGET_KEY = 'combatTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -42,7 +43,9 @@ export function createTribeMemberCombatBehavior(depth: number): BehaviorNode<Hum
       if (isHungry) {
         const leader = getTribeLeaderForCoordination(human, context.gameState);
         if (leader?.aiBlackboard) {
-          const priority = human.hunger > 120 ? 5 : human.hunger > 100 ? 4 : 3;
+          // Priority based on hunger level relative to death threshold
+          const hungerRatio = human.hunger / HUMAN_HUNGER_DEATH;
+          const priority = hungerRatio > 0.8 ? 5 : hungerRatio > 0.67 ? 4 : 3;
           registerDemand(leader.aiBlackboard, human.id, priority, human.position, context.gameState.time);
         }
       }

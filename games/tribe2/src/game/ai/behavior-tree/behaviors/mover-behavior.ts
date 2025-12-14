@@ -15,6 +15,7 @@ import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
+import { BuildingType } from '../../../building-consts';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { getUnclaimedDemands, claimDemand, removeDemand } from '../../../entities/tribe/logistics-utils';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts';
@@ -131,7 +132,7 @@ function executeMover(
   // Find storage with food
   const storages = (gameState as IndexedWorldState).search.building
     .byProperty('ownerId', human.leaderId)
-    .filter((b) => b.buildingType === 'storageSpot' && (b.storedFood?.length ?? 0) > 0);
+    .filter((b) => b.buildingType === BuildingType.StorageSpot && (b.storedFood?.length ?? 0) > 0);
 
   if (storages.length === 0) {
     return [NodeStatus.FAILURE, 'No supply'];
