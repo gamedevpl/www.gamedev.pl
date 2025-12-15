@@ -256,8 +256,17 @@ export const handlePlayerActionKeyDown = (
   } else if (key === 'k') {
     performTribeSplit(playerEntity, gameState);
   } else if (key === 'l') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.build = !gameState.autopilotControls.behaviors.build;
+      return;
+    }
     gameState.buildMenuOpen = !gameState.buildMenuOpen;
     playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+  } else if (key === 'u') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
+      return;
+    }
   }
 };
 

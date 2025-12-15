@@ -24,7 +24,7 @@ export function renderTribeRoleManager(
 
   const { width, height } = ctx.canvas;
   const panelX = (width - PANEL_WIDTH) / 2;
-  const panelHeight = 450;
+  const panelHeight = 480;
   const panelY = (height - panelHeight) / 2;
 
   // Draw Panel Background
@@ -207,6 +207,15 @@ export function renderTribeRoleManager(
     currentY + 10,
   );
   ctx.fillText(`(Adjust weights to control role distribution)`, panelX + PANEL_WIDTH / 2, currentY + 30);
+
+  // Autopilot indicator
+  const autopilotActive = gameState.autopilotControls.behaviors.roleManagement;
+  const autopilotText = autopilotActive ? '🤖 Auto-adjust: ON' : '🤖 Auto-adjust: OFF';
+  const autopilotColor = autopilotActive ? '#4CAF50' : '#888';
+
+  ctx.fillStyle = autopilotColor;
+  ctx.font = `${UI_FONT_SIZE * 0.6}px "Press Start 2P", Arial`;
+  ctx.fillText(`${autopilotText} (Shift+U to toggle)`, panelX + PANEL_WIDTH / 2, currentY + 50);
 
   ctx.restore();
 

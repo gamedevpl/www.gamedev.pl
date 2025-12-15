@@ -42,6 +42,7 @@ import {
   createTribeRoleAssignmentBehavior,
   createDemandBehavior,
   createSupplyBehavior,
+  createTribeRoleManagementBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -76,6 +77,19 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       new Inverter(
         new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),
         'Role Assignment Gate',
+        2,
+      ),
+
+      // --- TRIBE ROLE MANAGEMENT (LEADER) ---
+      new AutopilotControlled(
+        new CachingNode(
+          createTribeRoleManagementBehavior(3),
+          BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+          'Cache Role Management',
+          3,
+        ),
+        'roleManagement',
+        'Gated Role Management',
         2,
       ),
 
