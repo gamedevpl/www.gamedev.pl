@@ -2,7 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';
-import { getUnclaimedDemands, claimDemand } from '../../supply-chain/tribe-logistics-utils';
+import { getUnclaimedDemands, claimDemand, getDemandById } from '../../supply-chain/tribe-logistics-utils';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { HUMAN_INTERACTION_RANGE } from '../../../human-consts';
 import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts';
@@ -147,6 +147,17 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
         if (!demanderId) {
           cleanupSupplyState(human);
           return [NodeStatus.FAILURE, 'Demander ID not found in blackboard'];
+        }
+
+        const demand = getDemandById(
+          leader.aiBlackboard,
+          demanderId,
+          'food', // Assuming food for now; could be extended for other resources
+        );
+
+        if (!demand || demand.claimedBy !== human.id) {
+          cleanupSupplyState(human);
+          return [NodeStatus.FAILURE, 'Demand not found'];
         }
 
         // Get demander entity

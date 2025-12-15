@@ -25,7 +25,7 @@ import {
 import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
-import { findChildren, findPlayerEntity, getAvailablePlayerActions } from '../../utils/world-utils';
+import { findPlayerEntity, findTribeMembers, getAvailablePlayerActions } from '../../utils/world-utils';
 import { areTribeRolesEffective } from '../../entities/tribe/tribe-role-utils.ts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
 
@@ -274,7 +274,7 @@ export function renderUIButtons(
         condition: () =>
           player.isAdult === true &&
           player.leaderId === player.id &&
-          findChildren(gameState, player).length > TRIBE_BUILDINGS_MIN_HEADCOUNT,
+          findTribeMembers(player.id, gameState).length > TRIBE_BUILDINGS_MIN_HEADCOUNT,
       },
       {
         playerAction: PlayerActionType.Build, // Reuse this for now

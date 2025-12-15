@@ -10,6 +10,7 @@ import {
   Inverter,
   ManualControl,
   NonPlayerControlled,
+  Parallel,
   Selector,
   Succeeder,
   TimeoutNode,
@@ -53,9 +54,7 @@ import { HumanEntity } from '../../entities/characters/human/human-types';
  * in order until one of them succeeds or is running. This creates a priority system.
  */
 export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
-  // The AI logic is a Selector, which acts like an "OR" gate.
-  // It will try each child branch in order until one succeeds or is running.
-  const aiRoot = new Selector(
+  const mainSelector = new Selector(
     [
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(2),
@@ -72,29 +71,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- PLAYER COMMANDS (NOT GATED BY AUTOPILOT TOGGLES) ---
       // These actions are triggered by direct player clicks and should always have high priority.
       createPlayerCommandBehavior(2),
-
-      // --- TRIBE ROLE ASSIGNMENT ---
-      new Inverter(
-        new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),
-        'Role Assignment Gate',
-        2,
-      ),
-
-      // --- TRIBE ROLE MANAGEMENT (LEADER) ---
-      new AutopilotControlled(
-        new CachingNode(
-          createTribeRoleManagementBehavior(3),
-          BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-          'Cache Role Management',
-          3,
-        ),
-        'roleManagement',
-        'Gated Role Management',
-        2,
-      ),
-
-      // --- DIPLOMACY (LEADER) ---
-      new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
 
       // --- LEADER BUILDING INTERACTIONS (TAKE OVER / DESTROY ENEMY BUILDINGS) ---
       new NonPlayerControlled(
@@ -119,19 +95,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
           3,
         ),
         'Gated Leader Building Interactions',
-        2,
-      ),
-
-      // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
-      new AutopilotControlled(
-        new CachingNode(
-          createLeaderBuildingPlacementBehavior(4),
-          BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
-          'Cache Building Placement',
-          3,
-        ),
-        'build',
-        'Gated Leader Building Placement',
         2,
       ),
 
@@ -199,6 +162,59 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       ),
     ],
     'AI Root Selector',
+    1,
+  );
+
+  const nonblockingNodes = new Parallel(
+    [
+      // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
+      new AutopilotControlled(
+        new CachingNode(
+          createLeaderBuildingPlacementBehavior(4),
+          BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
+          'Cache Building Placement',
+          3,
+        ),
+        'build',
+        'Gated Leader Building Placement',
+        2,
+      ),
+
+      // --- TRIBE ROLE ASSIGNMENT ---
+      new Inverter(
+        new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),
+        'Role Assignment Gate',
+        2,
+      ),
+
+      // --- TRIBE ROLE MANAGEMENT (LEADER) ---
+      new AutopilotControlled(
+        new CachingNode(
+          createTribeRoleManagementBehavior(4),
+          BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+          'Cache Role Management',
+          3,
+        ),
+        'roleManagement',
+        'Gated Role Management',
+        2,
+      ),
+
+      // --- DIPLOMACY (LEADER) ---
+      new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
+    ],
+    'Non blocking',
+    1,
+  );
+
+  const aiRoot = new Parallel(
+    [
+      // Behaviors which are mutually exclusive
+      mainSelector,
+      // Behaviors that can happen regardless of the main action
+      nonblockingNodes,
+    ],
+    'AI Root Sequence',
     1,
   );
 
