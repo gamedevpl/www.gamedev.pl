@@ -1,6 +1,8 @@
 import { Blackboard, BlackboardData } from '../behavior-tree/behavior-tree-blackboard';
 import { EntityId } from '../../entities/entities-types';
 import { TribeDemand, SupplyChainResourceType } from './supply-chain-types';
+import { GameWorldState } from '../../world-types';
+import { HumanEntity } from '../../entities/characters/human/human-types';
 
 const BB_KEY_DEMANDS = 'tribe_logistics_demands';
 const DEMAND_STALE_THRESHOLD_HOURS = 8;
@@ -64,6 +66,66 @@ export function claimDemand(
   }
 
   return false;
+}
+
+/**
+ * Returns all demands that haven't been claimed yet, sorted by updatedAt (oldest first) for FIFO behavior.
+ */
+export function getUnclaimedDemands(blackboard: BlackboardData): TribeDemand[] {
+  const demands = getTribeDemands(blackboard);
+  return demands
+    .filter((d) => !d.claimedBy)
+    .sort((a, b) => a.updatedAt - b.updatedAt);
+}
+
+/**
+ * Removes a demand from the registry after successful transfer.
+ */
+export function fulfillDemand(
+  blackboard: BlackboardData,
+  requesterId: EntityId,
+  resourceType: SupplyChainResourceType,
+): void {
+  let demands = getTribeDemands(blackboard);
+  demands = demands.filter((d) => !(d.requesterId === requesterId && d.resourceType === resourceType));
+  Blackboard.set(blackboard, BB_KEY_DEMANDS, demands);
+}
+
+/**
+ * Retrieves a specific demand by requester ID and resource type.
+ */
+export function getDemandById(
+  blackboard: BlackboardData,
+  requesterId: EntityId,
+  resourceType: SupplyChainResourceType,
+): TribeDemand | undefined {
+  const demands = getTribeDemands(blackboard);
+  return demands.find((d) => d.requesterId === requesterId && d.resourceType === resourceType);
+}
+
+/**
+ * Checks if there's a supplier (Mover) approaching the demander.
+ * Returns the supplier entity if found, null otherwise.
+ */
+export function findSupplierForDemand(
+  blackboard: BlackboardData,
+  requesterId: EntityId,
+  resourceType: SupplyChainResourceType,
+  gameState: GameWorldState,
+): HumanEntity | null {
+  const demand = getDemandById(blackboard, requesterId, resourceType);
+  
+  if (!demand || !demand.claimedBy) {
+    return null;
+  }
+
+  const supplier = gameState.entities.entities[demand.claimedBy] as HumanEntity | undefined;
+  
+  if (!supplier || supplier.type !== 'human') {
+    return null;
+  }
+
+  return supplier;
 }
 
 /** Cleanup stale demands */

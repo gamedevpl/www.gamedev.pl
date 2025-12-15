@@ -68,6 +68,8 @@ export interface HumanEntity extends CharacterEntity {
   /** Current active action. Set by player input or AI decision. */
   activeAction?: HumanAction;
 
+  activeActionPayload?: HumanActionPayload;
+
   /** Cooldown time before being able to gather again. */
   gatheringCooldownTime?: number;
 
@@ -117,3 +119,7 @@ export type HumanAction =
   | 'retrieving' // Retrieving resources from storage
   | 'takingOverBuilding' // Taking over an enemy building
   | 'destroyingBuilding'; // Destroying an enemy building
+
+export type HumanActionPayload = {
+  amount: number;
+};

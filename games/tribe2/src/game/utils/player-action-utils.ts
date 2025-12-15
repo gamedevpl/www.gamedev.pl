@@ -173,11 +173,6 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     }
   }
 
-  // Check for Army Control (replaces Follow Me and Call to Attack)
-  if (player.leaderId === player.id) {
-    actions.push({ type: PlayerActionType.ArmyControl, action: 'idle', key: 'v' });
-  }
-
   // Check for Tribe Split
   if (canSplitTribe(player, gameState).canSplit) {
     actions.push({ type: PlayerActionType.TribeSplit, action: 'idle', key: 'k' });

@@ -59,3 +59,6 @@ export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
 export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
 export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
+
+// Supply Chain Constants
+export const SUPPLY_PROXIMITY_THRESHOLD: number = 200; // Distance in pixels at which demanders start engaging with approaching suppliers

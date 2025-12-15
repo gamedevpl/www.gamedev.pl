@@ -44,7 +44,7 @@ export function hasNearbyNonFullStorage(
       buildingEntity.isConstructed &&
       buildingEntity.storedFood &&
       buildingEntity.storageCapacity &&
-      buildingEntity.storedFood.length < buildingEntity.storageCapacity / 2
+      buildingEntity.storedFood.length < buildingEntity.storageCapacity
     );
   });
 }
@@ -90,6 +90,32 @@ export function findNearbyTribeStorageWithFood(
 
       return true;
     }) as BuildingEntity[];
+}
+
+/**
+ * Finds nearby tribe storage spots (regardless of whether they have food).
+ * Used by movers to find a waiting location when no storage has food available.
+ * @param human The human entity searching for storage
+ * @param gameState The current game state
+ * @param searchRadius Optional custom search radius (defaults to STORAGE_SEARCH_RADIUS)
+ * @returns Array of storage buildings
+ */
+export function findNearbyTribeStorage(
+  human: HumanEntity,
+  gameState: GameWorldState,
+  searchRadius: number = STORAGE_SEARCH_RADIUS,
+): BuildingEntity[] {
+  const indexedState = gameState as IndexedWorldState;
+  const nearbyBuildings = indexedState.search.building.byRadius(human.position, searchRadius);
+
+  return nearbyBuildings.filter((building) => {
+    const buildingEntity = building as BuildingEntity;
+    return (
+      buildingEntity.buildingType === 'storageSpot' &&
+      buildingEntity.ownerId === human.leaderId &&
+      buildingEntity.isConstructed
+    );
+  }) as BuildingEntity[];
 }
 
 /**
