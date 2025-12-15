@@ -6,6 +6,7 @@ import {
   ARROW_SPEED,
   ARROW_INITIAL_HEIGHT,
   ARROW_COLLISION_RADIUS,
+  ARROW_MIN_FLIGHT_TIME_SECONDS,
 } from './arrow-consts';
 import { getDirectionVectorOnTorus, vectorLength } from '../../utils/math-utils';
 
@@ -91,7 +92,7 @@ export function calculateArrowTrajectory(
   );
 
   // Avoid division by zero
-  const safeFlightTime = Math.max(flightTime, 0.01);
+  const safeFlightTime = Math.max(flightTime, ARROW_MIN_FLIGHT_TIME_SECONDS);
 
   return {
     vx: dirVector.x / safeFlightTime,

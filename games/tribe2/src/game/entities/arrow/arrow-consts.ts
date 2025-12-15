@@ -29,3 +29,6 @@ export const ARROW_COLLISION_RADIUS = 2;
 
 /** Maximum flight time before arrow despawns (~1.2 seconds in game time) */
 export const ARROW_MAX_FLIGHT_TIME_HOURS = 0.02;
+
+/** Minimum flight time to prevent division by zero in trajectory calculations */
+export const ARROW_MIN_FLIGHT_TIME_SECONDS = 0.01;

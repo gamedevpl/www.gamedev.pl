@@ -27,6 +27,7 @@ import { HUMAN_ATTACK_RANGE } from '../../../human-consts';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { EFFECT_DURATION_SHORT_HOURS } from '../../../effect-consts';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../game-consts';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
@@ -136,8 +137,8 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
 
               // Decrement arrow cooldown if active
               if (human.arrowShootingCooldown !== undefined && human.arrowShootingCooldown > 0) {
-                const deltaHours = context.deltaTime / 3600000;
-                human.arrowShootingCooldown -= deltaHours;
+                const gameHoursDelta = context.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+                human.arrowShootingCooldown -= gameHoursDelta;
               }
 
               // Distance-based attack selection

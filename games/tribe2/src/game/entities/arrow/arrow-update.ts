@@ -6,6 +6,7 @@ import {
   ARROW_EMBEDDED_DURATION_HOURS,
   ARROW_MAX_FLIGHT_TIME_HOURS,
 } from './arrow-consts';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts';
 
 /**
  * Updates an arrow entity's physics each frame.
@@ -13,7 +14,8 @@ import {
  */
 export function updateArrow(arrow: ArrowEntity, context: UpdateContext): void {
   const { gameState, deltaTime } = context;
-  const deltaSeconds = deltaTime / 1000;
+  // deltaTime is in seconds
+  const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
   // Handle embedded arrows
   if (arrow.isEmbedded) {
@@ -28,9 +30,7 @@ export function updateArrow(arrow: ArrowEntity, context: UpdateContext): void {
   }
 
   // Flying arrow logic
-  // Convert deltaTime (ms) to hours for age tracking (1 hour = 3600000ms)
-  const deltaHours = deltaTime / 3600000;
-  arrow.age += deltaHours;
+  arrow.age += gameHoursDelta;
 
   // Check if arrow has exceeded max flight time
   if (arrow.age > ARROW_MAX_FLIGHT_TIME_HOURS) {
@@ -39,11 +39,11 @@ export function updateArrow(arrow: ArrowEntity, context: UpdateContext): void {
   }
 
   // Apply gravity to vertical velocity
-  arrow.vz -= ARROW_GRAVITY * deltaSeconds;
+  arrow.vz -= ARROW_GRAVITY * deltaTime;
 
   // Update position
-  arrow.position.x += arrow.vx * deltaSeconds;
-  arrow.position.y += arrow.vy * deltaSeconds;
+  arrow.position.x += arrow.vx * deltaTime;
+  arrow.position.y += arrow.vy * deltaTime;
 
   // Handle toroidal world wrapping
   arrow.position.x =
