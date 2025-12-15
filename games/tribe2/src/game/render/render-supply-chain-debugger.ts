@@ -5,9 +5,6 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { getTribeDemands } from '../ai/supply-chain/tribe-logistics-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { renderEntityHighlight } from './render-highlights';
-import { Entity } from '../entities/entities-types';
-import { Vector2D } from '../utils/math-types';
-import { getTribeMembers } from '../utils';
 import { TribeRole } from '../entities/tribe/tribe-types';
 
 /**
@@ -261,7 +258,11 @@ function renderScrollableContent(
  * Renders visual highlights around entities involved in supply chain demands.
  * Demanders are highlighted in red/orange, movers are highlighted in green.
  */
-export function renderSupplyChainHighlights(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
+export function renderSupplyChainHighlights(
+  ctx: CanvasRenderingContext2D,
+  human: HumanEntity,
+  gameState: GameWorldState,
+): void {
   if (!gameState.debugCharacterId) {
     return;
   }
@@ -276,59 +277,35 @@ export function renderSupplyChainHighlights(ctx: CanvasRenderingContext2D, gameS
     return;
   }
 
-  // Get demands from the leader's blackboard
-  const demands = getTribeDemands(leader.aiBlackboard);
-
-  if (demands.length === 0) {
+  if (leader.id !== human.leaderId) {
     return;
   }
 
-  // Collect unique entity IDs for demanders and movers
-  const demanderIds = new Set<number>();
-  const moverIds = new Set<number>();
+  // Get demands from the leader's blackboard
+  const demands = getTribeDemands(leader.aiBlackboard);
 
-  for (const member of getTribeMembers(leader, gameState)) {
-    if (member.tribeRole === TribeRole.Mover) {
-      moverIds.add(member.id);
-    }
-  }
-
-  for (const demand of demands) {
-    demanderIds.add(demand.requesterId);
-    if (demand.claimedBy) {
-      moverIds.add(demand.claimedBy);
-    }
-  }
-
-  // Render highlights for demanders (red/orange)
-  for (const demanderId of demanderIds) {
-    const entity = gameState.entities.entities[demanderId] as Entity | undefined;
-    if (entity) {
-      renderEntityHighlight(
-        ctx,
-        entity,
-        entity.radius + 15,
-        '#ff6644', // Red/orange for demanders
-        3,
-        2.0,
-        gameState.time,
-      );
-    }
+  if (demands.some((demand) => demand.requesterId === human.id)) {
+    renderEntityHighlight(
+      ctx,
+      human,
+      human.radius + 15,
+      '#ff6644', // Red/orange for demanders
+      3,
+      2.0,
+      gameState.time,
+    );
   }
 
   // Render highlights for movers (green)
-  for (const moverId of moverIds) {
-    const entity = gameState.entities.entities[moverId] as Entity | undefined;
-    if (entity) {
-      renderEntityHighlight(
-        ctx,
-        entity,
-        entity.radius + 15,
-        '#44ff44', // Green for movers
-        3,
-        2.0,
-        gameState.time,
-      );
-    }
+  if (human.tribeRole === TribeRole.Mover) {
+    renderEntityHighlight(
+      ctx,
+      human,
+      human.radius + 15,
+      '#44ff44', // Green for movers
+      3,
+      2.0,
+      gameState.time,
+    );
   }
 }

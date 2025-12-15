@@ -24,8 +24,8 @@ import {
 import { HUMAN_ATTACK_BUILDUP_HOURS, HUMAN_ATTACK_COOLDOWN_HOURS } from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
-import { drawProgressBar } from './render-ui';
-import { EntityId } from '../entities/entities-types';
+import { drawProgressBar, renderSupplyChainHighlights } from './render-ui';
+import { DebugPanelType, GameWorldState } from '../world-types.js';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -196,8 +196,7 @@ export function renderCharacter(
   isPlayerHeir: boolean = false,
   isPlayerAttackTarget: boolean = false,
   isDebugOn: boolean = false,
-  currentTime: number,
-  debugCharacterId?: EntityId,
+  gameState: GameWorldState,
 ): void {
   const { position, activeAction = 'idle' } = human;
 
@@ -261,11 +260,15 @@ export function renderCharacter(
     drawTribeBadge(ctx, position, human.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
   }
 
-  const showDebug = isDebugOn && (debugCharacterId === undefined || human.id === debugCharacterId);
+  const showDebug = isDebugOn && (gameState.debugCharacterId === undefined || human.id === gameState.debugCharacterId);
 
-  renderAttackProgress(ctx, human, currentTime);
+  renderAttackProgress(ctx, human, gameState.time);
 
   if (showDebug) {
     renderDebugInfo(ctx, human);
+  }
+
+  if (gameState.debugPanel === DebugPanelType.SupplyChain) {
+    renderSupplyChainHighlights(ctx, human, gameState);
   }
 }

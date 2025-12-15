@@ -101,8 +101,7 @@ export function renderWorld(
         isPlayerHeir,
         isPlayerAttackTarget,
         isDebugOn,
-        gameState.time,
-        gameState.debugCharacterId,
+        gameState,
       );
     } else if (entity.type === 'corpse') {
       renderWithWrapping(ctx, worldWidth, worldHeight, renderCorpse, entity as CorpseEntity);

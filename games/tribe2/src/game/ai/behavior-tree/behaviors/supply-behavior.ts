@@ -64,7 +64,9 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
       // ===== PHASE 1: FINDING_DEMAND =====
       if (currentPhase === PHASE_FINDING_DEMAND) {
         // Get unclaimed demands (FIFO - oldest first)
-        const unclaimedDemands = getUnclaimedDemands(leader.aiBlackboard);
+        const unclaimedDemands = getUnclaimedDemands(leader.aiBlackboard).filter(
+          (demand) => demand.requesterId !== human.id,
+        );
         if (unclaimedDemands.length === 0) {
           return [NodeStatus.FAILURE, 'No unclaimed demands'];
         }

@@ -35,7 +35,7 @@ import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts
 import { renderArmyControl } from './render/ui/render-army-control.ts';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
-import { renderSupplyChainDebugger, renderSupplyChainHighlights } from './render/render-supply-chain-debugger.ts';
+import { renderSupplyChainDebugger } from './render/render-supply-chain-debugger.ts';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -68,11 +68,6 @@ export function renderGame(
   renderDepletedSoil(ctx, gameState, viewportCenter, canvasDimensions);
 
   renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
-
-  // Render supply chain highlights (in world coordinates)
-  if (gameState.debugPanel === DebugPanelType.SupplyChain) {
-    renderSupplyChainHighlights(ctx, gameState);
-  }
 
   // Render ghost building preview
   if (

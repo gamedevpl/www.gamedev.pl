@@ -28,11 +28,6 @@ export function createTribeRoleAssignmentBehavior(debugDepth: number): BehaviorN
         return NodeStatus.FAILURE;
       }
 
-      // 4. Check if this is a player-controlled leader and roleManagement autopilot is disabled
-      if (leader.isPlayer && !context.gameState.autopilotControls.behaviors.roleManagement) {
-        return [NodeStatus.FAILURE, 'Player leader with roleManagement autopilot disabled'];
-      }
-
       // 5. If I am the leader, ensure my role is Leader and exit
       if (human.id === leader.id) {
         if (human.tribeRole !== TribeRole.Leader) {
