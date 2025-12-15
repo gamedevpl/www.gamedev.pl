@@ -24,11 +24,6 @@ export const supplyTransferInteraction: InteractionDefinition<HumanEntity, Human
       return false;
     }
 
-    // Check mutual targeting
-    if (source.target === target.id) {
-      return false;
-    }
-
     // Verify both belong to same tribe
     if (source.leaderId !== target.leaderId) {
       return false;

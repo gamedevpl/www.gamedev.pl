@@ -6,11 +6,7 @@ import { getUnclaimedDemands, claimDemand } from '../../supply-chain/tribe-logis
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { HUMAN_INTERACTION_RANGE } from '../../../human-consts';
 import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts';
-import {
-  findNearbyTribeStorageWithFood,
-  findClosestStorage,
-  findNearbyTribeStorage,
-} from '../../../utils/storage-utils';
+import { findClosestStorage, findNearbyTribeStorage } from '../../../utils/storage-utils';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -67,12 +63,6 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
 
       // ===== PHASE 1: FINDING_DEMAND =====
       if (currentPhase === PHASE_FINDING_DEMAND) {
-        // Only start if inventory is empty
-        if (human.food.length > 0) {
-          cleanupSupplyState(human);
-          return [NodeStatus.FAILURE, 'Already has food'];
-        }
-
         // Get unclaimed demands (FIFO - oldest first)
         const unclaimedDemands = getUnclaimedDemands(leader.aiBlackboard);
         if (unclaimedDemands.length === 0) {
