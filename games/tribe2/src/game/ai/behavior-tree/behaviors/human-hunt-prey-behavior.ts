@@ -17,17 +17,6 @@ import { EntityId } from '../../../entities/entities-types';
 import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
-import { createArrow } from '../../../entities/arrow/arrow-utils';
-import {
-  ARROW_RANGE,
-  ARROW_BUILDUP_TIME_HOURS,
-  ARROW_COOLDOWN_HOURS,
-} from '../../../entities/arrow/arrow-consts';
-import { HUMAN_ATTACK_RANGE } from '../../../human-consts';
-import { addVisualEffect } from '../../../utils/visual-effects-utils';
-import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
-import { EFFECT_DURATION_SHORT_HOURS } from '../../../effect-consts';
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../game-consts';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
@@ -103,8 +92,6 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
                 Blackboard.delete(blackboard, HUNT_TARGET_KEY);
                 human.activeAction = 'idle';
                 human.attackTargetId = undefined;
-                human.isAimingArrow = false;
-                human.arrowBuildupStartTime = undefined;
                 return NodeStatus.SUCCESS;
               }
 
@@ -122,112 +109,15 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
                 Blackboard.delete(blackboard, HUNT_TARGET_KEY);
                 human.activeAction = 'idle';
                 human.attackTargetId = undefined;
-                human.isAimingArrow = false;
-                human.arrowBuildupStartTime = undefined;
                 return NodeStatus.FAILURE;
               }
 
-              // Calculate distance to target
-              const distanceToTarget = calculateWrappedDistance(
-                human.position,
-                target.position,
-                gameState.mapDimensions.width,
-                gameState.mapDimensions.height,
-              );
+              // Set hunting state
+              human.activeAction = 'attacking';
+              human.attackTargetId = target.id;
 
-              // Decrement arrow cooldown if active
-              if (human.arrowShootingCooldown !== undefined && human.arrowShootingCooldown > 0) {
-                const gameHoursDelta = context.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
-                human.arrowShootingCooldown -= gameHoursDelta;
-              }
-
-              // Distance-based attack selection
-              if (distanceToTarget > HUMAN_ATTACK_RANGE && distanceToTarget <= ARROW_RANGE) {
-                // Arrow range (30-150 pixels) - use ranged attack
-                
-                // Check if still in arrow cooldown
-                if (human.arrowShootingCooldown !== undefined && human.arrowShootingCooldown > 0) {
-                  // Continue chasing while on cooldown
-                  human.activeAction = 'attacking';
-                  human.attackTargetId = target.id;
-                  return NodeStatus.RUNNING;
-                }
-
-                // Check if currently aiming
-                if (human.isAimingArrow) {
-                  // Check if buildup is complete
-                  if (
-                    human.arrowBuildupStartTime !== undefined &&
-                    human.arrowBuildupStartTime + ARROW_BUILDUP_TIME_HOURS <= gameState.time
-                  ) {
-                    // Fire the arrow!
-                    createArrow(
-                      gameState.entities,
-                      human.position,
-                      target.position,
-                      target.velocity,
-                      gameState.mapDimensions,
-                      human.id,
-                      target.id,
-                    );
-
-                    // Set cooldown and reset aiming state
-                    human.arrowShootingCooldown = ARROW_COOLDOWN_HOURS;
-                    human.isAimingArrow = false;
-                    human.arrowBuildupStartTime = undefined;
-
-                    // Add arrow release visual effect
-                    addVisualEffect(
-                      gameState,
-                      VisualEffectType.ArrowRelease,
-                      human.position,
-                      EFFECT_DURATION_SHORT_HOURS,
-                      human.id,
-                    );
-
-                    return NodeStatus.RUNNING;
-                  } else {
-                    // Still building up - continue aiming
-                    return NodeStatus.RUNNING;
-                  }
-                } else {
-                  // Start aiming
-                  human.isAimingArrow = true;
-                  human.arrowBuildupStartTime = gameState.time;
-                  human.activeAction = 'attacking';
-                  human.attackTargetId = target.id;
-
-                  // Add arrow aiming visual effect
-                  addVisualEffect(
-                    gameState,
-                    VisualEffectType.ArrowAiming,
-                    human.position,
-                    ARROW_BUILDUP_TIME_HOURS,
-                    human.id,
-                  );
-
-                  return NodeStatus.RUNNING;
-                }
-              } else if (distanceToTarget <= HUMAN_ATTACK_RANGE) {
-                // Melee range (0-30 pixels) - use melee attack
-                // Reset arrow aiming if we get close
-                human.isAimingArrow = false;
-                human.arrowBuildupStartTime = undefined;
-
-                // Set hunting state
-                human.activeAction = 'attacking';
-                human.attackTargetId = target.id;
-
-                // The actual melee hunting/attacking is handled by the interaction system
-                return NodeStatus.RUNNING;
-              } else {
-                // Target too far (> arrow range) - chase
-                human.isAimingArrow = false;
-                human.arrowBuildupStartTime = undefined;
-                human.activeAction = 'attacking';
-                human.attackTargetId = target.id;
-                return NodeStatus.RUNNING;
-              }
+              // The actual hunting/attacking is handled by the interaction system
+              return NodeStatus.RUNNING;
             },
             'Hunt Prey Action',
             depth + 3,
