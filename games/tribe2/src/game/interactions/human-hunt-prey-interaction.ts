@@ -33,7 +33,9 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
       human.attackTargetId === prey.id &&
       (!human.attackCooldown || human.attackCooldown <= 0) &&
       prey.hitpoints > 0 && // Target must be alive
-      human.isAdult // Only adults can hunt
+      human.isAdult && // Only adults can hunt
+      !human.isAimingArrow && // Don't melee while aiming arrow
+      (!human.arrowShootingCooldown || human.arrowShootingCooldown <= 0) // Don't melee during arrow cooldown
     );
   },
 

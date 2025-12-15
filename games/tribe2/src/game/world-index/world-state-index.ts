@@ -9,6 +9,7 @@ import { IndexedWorldState } from './world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { calculateAllTerritories } from '../utils';
 import { vectorSubtract } from '../utils/math-utils';
+import { ArrowEntity } from '../entities/arrow/arrow-types';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -25,6 +26,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   const prey = allEntities.filter((e) => e.type === 'prey') as PreyEntity[];
   const predators = allEntities.filter((e) => e.type === 'predator') as PredatorEntity[];
   const buildings = allEntities.filter((e) => e.type === 'building') as BuildingEntity[];
+  const arrows = allEntities.filter((e) => e.type === 'arrow') as ArrowEntity[];
 
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
@@ -35,6 +37,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       prey: indexItems(prey),
       predator: indexItems(predators),
       building: indexItems(buildings),
+      arrow: indexItems(arrows),
       territorySector: indexItems([]), // populated below
     },
     territories: new Map(), // populated below

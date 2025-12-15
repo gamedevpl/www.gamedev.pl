@@ -62,3 +62,17 @@ export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is cor
 
 // Supply Chain Constants
 export const SUPPLY_PROXIMITY_THRESHOLD: number = 200; // Distance in pixels at which demanders start engaging with approaching suppliers
+
+// Arrow Shooting Constants (re-exported from arrow-consts for convenience)
+export {
+  ARROW_BASE_DAMAGE,
+  ARROW_RANGE,
+  ARROW_BUILDUP_TIME_HOURS,
+  ARROW_COOLDOWN_HOURS,
+  ARROW_SPEED,
+  ARROW_GRAVITY,
+  ARROW_EMBEDDED_DURATION_HOURS,
+  ARROW_INITIAL_HEIGHT,
+  ARROW_COLLISION_RADIUS,
+  ARROW_MAX_FLIGHT_TIME_HOURS,
+} from './entities/arrow/arrow-consts';

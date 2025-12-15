@@ -29,6 +29,8 @@ import { renderBuilding } from './render-building.ts';
 import { BuildingEntity } from '../entities/buildings/building-types.ts';
 import { renderPlantingZonesMetaball } from './render-planting-zones.ts';
 import { BuildingType } from '../entities/buildings/building-consts.ts';
+import { renderArrow } from './render-arrow';
+import { ArrowEntity } from '../entities/arrow/arrow-types';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -126,6 +128,14 @@ export function renderWorld(
         isDebugOn,
         gameState.time,
         gameState.debugCharacterId,
+      );
+    } else if (entity.type === 'arrow') {
+      renderWithWrapping(
+        ctx,
+        worldWidth,
+        worldHeight,
+        renderArrow,
+        entity as ArrowEntity,
       );
     }
   });

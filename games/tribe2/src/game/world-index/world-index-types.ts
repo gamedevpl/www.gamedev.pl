@@ -8,6 +8,7 @@ import { Vector2D } from '../utils/math-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { TerritorySector, TribeTerritory } from '../entities/tribe/territory-types';
 import { EntityId } from '../entities/entities-types';
+import { ArrowEntity } from '../entities/arrow/arrow-types';
 
 /**
  * Defines a rectangle for spatial queries.
@@ -75,6 +76,7 @@ export interface IndexedWorldState extends GameWorldState {
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
     building: IndexType<BuildingEntity>;
+    arrow: IndexType<ArrowEntity>;
     // territory
     territorySector: IndexType<TerritorySector>;
   };

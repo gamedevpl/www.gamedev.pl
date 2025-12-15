@@ -21,6 +21,8 @@ import { storageStealInteraction } from './storage-steal-interaction';
 import { buildingTakeoverInteraction } from './building-takeover-interaction';
 import { buildingRemovalInteraction } from './building-removal-interaction';
 import { supplyTransferInteraction } from './supply-transfer-interaction';
+import { arrowPreyInteraction } from './arrow-prey-interaction';
+import { arrowHumanInteraction } from './arrow-human-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
@@ -41,6 +43,8 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   predatorEatCorpseInteraction, // Predators can eat from any corpse
   predatorHuntPreyInteraction,
   humanHuntPreyInteraction,
+  arrowPreyInteraction, // Arrow interactions
+  arrowHumanInteraction,
   humanAttackPredatorInteraction, // Humans can defend against predators
   predatorAttackHumanInteraction,
   predatorAttackRivalInteraction,

@@ -19,6 +19,8 @@ export enum VisualEffectType {
   SeizeBuildup,
   Seize,
   AutopilotMoveTarget,
+  ArrowAiming,
+  ArrowRelease,
 }
 
 export interface VisualEffect {

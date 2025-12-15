@@ -110,5 +110,11 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
     case VisualEffectType.Seize:
       drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
       break;
+    case VisualEffectType.ArrowAiming:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 165, 0, 0.8)', 2); // Orange ring
+      break;
+    case VisualEffectType.ArrowRelease:
+      drawExpandingRing(ctx, effect, currentTime, 'rgba(255, 69, 0, 0.9)', 3); // Red-orange burst
+      break;
   }
 }

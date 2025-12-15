@@ -15,8 +15,16 @@ import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 import { buildingUpdate } from './buildings/building-update';
 import { BuildingEntity } from './buildings/building-types';
 import { applySoilWalkDepletion } from './plants/soil-depletion-update';
+import { ArrowEntity } from './arrow/arrow-types';
+import { updateArrow } from './arrow/arrow-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
+  // Handle arrow entities separately - they have their own physics
+  if (entity.type === 'arrow') {
+    updateArrow(entity as ArrowEntity, updateContext);
+    return;
+  }
+
   // Apply friction/damping
   entity.forces.push(vectorScale(entity.velocity, -0.1));
 

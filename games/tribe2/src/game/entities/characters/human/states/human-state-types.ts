@@ -11,6 +11,7 @@ export const HUMAN_RETRIEVING = 'humanRetrieving'; // When retrieving resources 
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_PLANTING = 'humanPlanting';
+export const HUMAN_AIMING_ARROW = 'humanAimingArrow';
 
 interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -51,6 +52,11 @@ export interface HumanPlantingStateData extends StateData {
   plantingSpot: Vector2D;
 }
 
+export interface HumanAimingArrowStateData extends StateData {
+  targetId: EntityId;
+  aimStartTime: number;
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
@@ -60,4 +66,5 @@ export type HumanStateData =
   | HumanRetrievingStateData
   | HumanProcreatingStateData
   | HumanAttackingStateData
-  | HumanPlantingStateData;
+  | HumanPlantingStateData
+  | HumanAimingArrowStateData;

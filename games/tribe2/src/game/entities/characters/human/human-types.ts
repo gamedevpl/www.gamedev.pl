@@ -75,6 +75,16 @@ export interface HumanEntity extends CharacterEntity {
 
   /** Cooldown time before being able to attack again. */
   attackCooldown?: number;
+
+  /** Cooldown time before being able to shoot another arrow. */
+  arrowShootingCooldown?: number;
+
+  /** Time when arrow aiming/buildup started. */
+  arrowBuildupStartTime?: number;
+
+  /** Whether the human is currently aiming to shoot an arrow. */
+  isAimingArrow?: boolean;
+
   attackTargetId?: EntityId;
 
   /** Cooldown for the leader's high-level strategic decision-making. */
