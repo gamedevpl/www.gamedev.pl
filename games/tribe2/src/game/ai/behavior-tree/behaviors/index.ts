@@ -1,4 +1,6 @@
 export * from './eating-behavior';
+export * from './demand-behavior';
+export * from './supply-behavior';
 export * from './fleeing-behavior';
 export * from './gathering-behavior';
 export * from './idle-wander-behavior';

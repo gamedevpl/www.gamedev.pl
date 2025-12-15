@@ -34,6 +34,7 @@ export enum DebugPanelType {
   Performance,
   Ecosystem,
   Tribe,
+  SupplyChain,
 }
 
 export type PerformanceMetricsBucket = {

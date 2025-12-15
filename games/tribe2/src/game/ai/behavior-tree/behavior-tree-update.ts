@@ -5,6 +5,7 @@ import { Blackboard } from './behavior-tree-blackboard.ts';
 import { BehaviorNode } from './behavior-tree-types.ts';
 import { CharacterEntity } from '../../entities/characters/character-types.ts';
 import { cleanupStaleTribalTasks, getTribeLeaderForCoordination } from '../../entities/tribe/tribe-task-utils.ts';
+import { cleanupStaleDemands } from '../supply-chain/tribe-logistics-utils.ts';
 
 /**
  * Updates the AI for a human entity using a behavior tree.
@@ -33,6 +34,7 @@ export function updateBehaviorTreeAI(
       const coordinationLeader = getTribeLeaderForCoordination(human, context.gameState);
       if (coordinationLeader && coordinationLeader.id === human.id && coordinationLeader.aiBlackboard) {
         cleanupStaleTribalTasks(coordinationLeader, context.gameState.time);
+        cleanupStaleDemands(coordinationLeader.aiBlackboard, context.gameState.time);
       }
 
       behaviorTree.execute(human, context, human.aiBlackboard);

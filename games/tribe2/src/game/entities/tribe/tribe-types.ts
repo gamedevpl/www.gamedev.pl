@@ -35,6 +35,7 @@ export enum TribeRole {
   // Hunts animals and enemies, delivers meat to storage spots
   Hunter = 'hunter',
   // Moves resources between storage spots, or from storage spots to tribe members
+  // See src/game/tribe-supply-chain for logistics system
   Mover = 'mover',
   // Warrior is responsible for defending the tribe and attacking enemies
   Warrior = 'warrior',

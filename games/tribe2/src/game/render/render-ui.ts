@@ -10,3 +10,4 @@ export * from './ui/render-autopilot-indicator';
 export * from './ui/render-notifications';
 export * from './ui/render-performance-debugger';
 export * from './render-behavior-tree-debug';
+export * from './render-supply-chain-debugger';

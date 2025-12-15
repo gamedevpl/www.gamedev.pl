@@ -35,6 +35,7 @@ import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts
 import { renderArmyControl } from './render/ui/render-army-control.ts';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
+import { renderSupplyChainDebugger } from './render/render-supply-chain-debugger.ts';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -214,6 +215,9 @@ export function renderGame(
         break;
       case DebugPanelType.Tribe:
         renderTribeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+        break;
+      case DebugPanelType.SupplyChain:
+        renderSupplyChainDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
       case DebugPanelType.Performance:
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
