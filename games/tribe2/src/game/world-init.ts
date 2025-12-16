@@ -43,8 +43,6 @@ export function initWorld(): GameWorldState {
 
   // Spawn player character (male) at center - player is their own tribe leader
   const player = createHuman(entities, { x: centerX - 25, y: centerY }, initialTime, 'male', true);
-  player.leaderId = player.id; // Player is the leader of their tribe
-  player.tribeBadge = '👑';
 
   // Spawn partner character (female) near the player - they join the player's tribe
   const partner = createHuman(

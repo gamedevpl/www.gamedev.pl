@@ -7,7 +7,7 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { AUTOPILOT_ACTION_PROXIMITY, AUTOPILOT_MOVE_DISTANCE_THRESHOLD } from '../../../ai-consts.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../entities/plants/berry-bush/berry-bush-consts.ts';
-import { HUMAN_INTERACTION_PROXIMITY, HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
+import { ARROW_RANGE, HUMAN_INTERACTION_PROXIMITY, HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
 import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
@@ -46,7 +46,7 @@ function handleAutopilotAttack(
     gameState.mapDimensions.height,
   );
 
-  if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
+  if (distance <= ARROW_RANGE) {
     human.activeAction = 'attacking';
     human.attackTargetId = target.id;
     gameState.autopilotControls.activeAutopilotAction = undefined;

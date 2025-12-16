@@ -18,10 +18,6 @@ export const isHostile = (human1: HumanEntity, human2: HumanEntity, gameState: G
     return false;
   }
 
-  if (!!human1.leaderId && !human2.leaderId) {
-    return true; // One of them is not part of a tribe
-  }
-
   // Not hostile if they are in the same tribe
   if (human1.leaderId === human2.leaderId) {
     return false;
