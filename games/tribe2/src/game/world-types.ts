@@ -114,7 +114,7 @@ export interface GameWorldState {
   buildMenuOpen: boolean;
   roleManagerOpen: boolean;
   armyControlOpen: boolean;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'removal' | null;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;

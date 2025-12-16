@@ -147,6 +147,7 @@ export enum UIButtonActionType {
   CommandBuild = 'CommandBuild',
   SelectStorageSpot = 'SelectStorageSpot',
   SelectPlantingZone = 'SelectPlantingZone',
+  SelectBorderPost = 'SelectBorderPost',
   SelectRemovalTool = 'SelectRemovalTool',
 
   // --- Autopilot Behavior Toggles ---

@@ -14,6 +14,7 @@ export * from './storage-retrieve-behavior';
 export * from './tribe-member-combat-behavior';
 export * from './leader-building-placement-behavior';
 export * from './take-over-building-behavior';
+export * from './border-post-placement-behavior';
 export * from './remove-enemy-building-behavior';
 export * from './follow-patriarch-behavior';
 export * from './tribe-split-behavior';

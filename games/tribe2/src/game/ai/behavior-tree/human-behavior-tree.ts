@@ -40,6 +40,7 @@ import {
   createLeaderBuildingPlacementBehavior,
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
+  createBorderPostPlacementBehavior,
   createTribeRoleAssignmentBehavior,
   createDemandBehavior,
   createSupplyBehavior,
@@ -100,6 +101,18 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
+
+      // --- BORDER POST PLACEMENT (WARRIORS & LEADERS) ---
+      new NonPlayerControlled(
+        new CachingNode(
+          createBorderPostPlacementBehavior(4),
+          BT_EXPENSIVE_OPERATION_CACHE_HOURS,
+          'Cache Border Post Placement',
+          3,
+        ),
+        'Gated Border Post Placement',
+        2,
+      ),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
       new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),

@@ -48,6 +48,10 @@ export const handlePlayerActionKeyDown = (
       gameState.selectedBuildingType = 'removal';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
+    } else if (key === '4') {
+      gameState.selectedBuildingType = 'borderPost';
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
     }
   }
 

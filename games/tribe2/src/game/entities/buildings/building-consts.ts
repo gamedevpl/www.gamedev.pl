@@ -8,6 +8,7 @@ import { FoodType } from '../food-types';
 export const BuildingType = {
   StorageSpot: 'storageSpot',
   PlantingZone: 'plantingZone',
+  BorderPost: 'borderPost',
 } as const;
 
 export type BuildingType = (typeof BuildingType)[keyof typeof BuildingType];
@@ -50,6 +51,15 @@ export const BUILDING_DEFINITIONS: Record<
     icon: '🌾',
     dimensions: { width: 60, height: 60 },
     constructionTimeHours: 0.1, // Near instant
+    destructionTimeHours: 0.1,
+    cost: {}, // Free for now
+  },
+  [BuildingType.BorderPost]: {
+    name: 'Border Post',
+    description: 'A territorial marker that expands tribe borders',
+    icon: '🚩',
+    dimensions: { width: 40, height: 40 },
+    constructionTimeHours: 0.2,
     destructionTimeHours: 0.1,
     cost: {}, // Free for now
   },
