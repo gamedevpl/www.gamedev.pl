@@ -5,7 +5,7 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { HUMAN_INTERACTION_RANGE, SUPPLY_PROXIMITY_THRESHOLD } from '../../../human-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
+import { areTribeRolesEffective, isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 
 export function createDemandBehavior(depth: number): BehaviorNode<HumanEntity> {
@@ -14,7 +14,7 @@ export function createDemandBehavior(depth: number): BehaviorNode<HumanEntity> {
       new ConditionNode(
         (human: HumanEntity, context) => {
           const isTribe = !!human.leaderId;
-          if (!isTribe) {
+          if (!isTribe || !areTribeRolesEffective(human, context.gameState)) {
             return false;
           }
 

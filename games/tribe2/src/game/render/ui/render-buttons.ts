@@ -27,7 +27,7 @@ import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActi
 import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity, findTribeMembers, getAvailablePlayerActions } from '../../utils/world-utils';
 import { areTribeRolesEffective } from '../../entities/tribe/tribe-role-utils.ts';
-import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
+import { TRIBE_ARMY_CONTROL_MIN_HEADCOUNT, TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -256,7 +256,10 @@ export function renderUIButtons(
         buttonAction: UIButtonActionType.OpenArmyControl,
         shortcut: 'V',
         name: 'Army Control',
-        condition: () => player.isAdult === true && player.leaderId === player.id,
+        condition: () =>
+          player.isAdult === true &&
+          player.leaderId === player.id &&
+          findTribeMembers(player.id, gameState).length > TRIBE_ARMY_CONTROL_MIN_HEADCOUNT,
       },
       {
         playerAction: PlayerActionType.TribeSplit,
