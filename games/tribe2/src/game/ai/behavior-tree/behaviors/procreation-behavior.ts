@@ -154,13 +154,18 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
       // Basic conditions to even consider procreating
       new ConditionNode(
         (human: HumanEntity) => {
-          if (!human.isAdult || (human.gender === 'female' && human.isPregnant))
+          if (!human.isAdult || (human.gender === 'female' && human.isPregnant)) {
             return [false, 'Not adult or pregnant'];
+          }
           if (
             human.age < HUMAN_MIN_PROCREATION_AGE ||
             (human.gender === 'female' && human.age > HUMAN_FEMALE_MAX_PROCREATION_AGE)
-          )
+          ) {
             return [false, 'Not fertile due to age or pregnancy status'];
+          }
+          if (human.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+            return [false, 'Too hungry'];
+          }
           return true;
         },
         'Is Fertile (age, not pregnant)',
