@@ -32,6 +32,7 @@ export enum PlayerActionType {
   AutopilotFeedChild = 'AutopilotFeedChild',
   AutopilotDeposit = 'AutopilotDeposit',
   AutopilotRetrieve = 'AutopilotRetrieve',
+  AutopilotBuildingPlacement = 'AutopilotBuildingPlacement',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -59,6 +60,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotFeedChild]: '👨‍👧',
   [PlayerActionType.AutopilotDeposit]: '📦',
   [PlayerActionType.AutopilotRetrieve]: '🎁',
+  [PlayerActionType.AutopilotBuildingPlacement]: '🏗️',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -86,6 +88,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotFeedChild]: 'Feed',
   [PlayerActionType.AutopilotDeposit]: 'Deposit',
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
+  [PlayerActionType.AutopilotBuildingPlacement]: 'Build',
 };
 
 export interface PlayerActionHint {

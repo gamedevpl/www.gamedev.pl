@@ -87,3 +87,13 @@ export const BUILDING_PLACEMENT_TRIG_CACHE_SIZE = 16; // Maximum number of angle
 // Leader Building Interaction Constants (Enemy Buildings)
 export const LEADER_BUILDING_INTERACTION_CHECK_INTERVAL_HOURS = 5; // How often leaders check for enemy buildings to take over or destroy
 export const LEADER_BUILDING_INTERACTION_RANGE = 600; // Detection range for finding enemy buildings
+
+// Building Placement Proximity Constants
+export const LEADER_BUILDING_PLACEMENT_PROXIMITY = 100; // Distance leader must be within to place buildings
+export const BORDER_POST_PLACEMENT_PROXIMITY = 100; // Distance warrior/leader must be within to place border posts
+
+// Border Post Quality Scoring Constants
+export const BORDER_POST_OPTIMAL_SPACING = 200; // Ideal distance between border posts for good coverage
+export const BORDER_POST_MAX_USEFUL_DISTANCE = 600; // Maximum useful distance from tribe center
+export const BORDER_POST_REPLACEMENT_THRESHOLD = 20; // Score improvement needed to justify replacing a post (out of 100)
+export const BORDER_POST_MIN_ISOLATION_DISTANCE = 100; // Minimum distance from other border posts

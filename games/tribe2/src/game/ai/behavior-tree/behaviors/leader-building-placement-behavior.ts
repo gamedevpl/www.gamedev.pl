@@ -18,9 +18,12 @@ import {
   LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE,
+  LEADER_BUILDING_PLACEMENT_PROXIMITY,
 } from '../../../ai-consts';
 import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../nodes';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
+import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
+import { Vector2D } from '../../../utils/math-types';
 
 /**
  * Factory function to create a leader building placement behavior node.
@@ -33,8 +36,8 @@ import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-con
  *   2. CachingNode: Analyze tribe (cached for performance)
  *   3. Condition: Tribe meets minimum size
  *   4. Selector (try each until one succeeds)
- *      a. Sequence: Try to place storage
- *      b. Sequence: Try to place planting zone
+ *      a. Sequence: Try to place storage (needs → find → move → place)
+ *      b. Sequence: Try to place planting zone (needs → find → move → place)
  *
  * @param depth The depth of this node in the behavior tree
  * @returns A new behavior tree for leader building placement
@@ -153,8 +156,8 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 2,
   );
 
-  // Action: Place storage
-  const placeStorageAction = new ActionNode<HumanEntity>(
+  // Action: Find storage placement location
+  const findStorageLocationAction = new ActionNode<HumanEntity>(
     (entity, context, blackboard) => {
       const existingStorageSpots = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingStorageSpots');
       if (existingStorageSpots === undefined) {
@@ -172,6 +175,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         context.gameState,
         LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
         minDistanceFromOtherTribes,
+        entity.position, // Prioritize locations near leader
       );
 
       if (!placementLocation) {
@@ -181,19 +185,84 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         ];
       }
 
-      createBuilding(placementLocation, BuildingType.StorageSpot, entity.id, context.gameState);
+      // Store location in blackboard
+      Blackboard.set(blackboard, 'buildingPlacement_storageTarget', placementLocation);
 
       return [
         NodeStatus.SUCCESS,
-        `Placed storage at (${placementLocation.x.toFixed(0)}, ${placementLocation.y.toFixed(0)})`,
+        `Found storage location at (${placementLocation.x.toFixed(0)}, ${placementLocation.y.toFixed(0)})`,
       ];
+    },
+    'Find Storage Location',
+    depth + 2,
+  );
+
+  // Action: Move to storage placement location
+  const moveToStorageLocationAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_storageTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance <= LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        // Close enough, proceed to placement
+        return [NodeStatus.SUCCESS, `Reached storage location (${distance.toFixed(0)}px away)`];
+      }
+
+      // Move towards target
+      entity.activeAction = 'moving';
+      entity.target = targetLocation;
+      entity.direction = dirToTarget(entity.position, targetLocation, context.gameState.mapDimensions);
+
+      return [NodeStatus.RUNNING, `Moving to storage location (${distance.toFixed(0)}px away)`];
+    },
+    'Move To Storage Location',
+    depth + 2,
+  );
+
+  // Action: Place storage
+  const placeStorageAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_storageTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      // Verify proximity one more time
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance > LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        return [NodeStatus.FAILURE, `Too far from placement location: ${distance.toFixed(0)}px`];
+      }
+
+      createBuilding(targetLocation, BuildingType.StorageSpot, entity.id, context.gameState);
+
+      // Clear blackboard
+      Blackboard.delete(blackboard, 'buildingPlacement_storageTarget');
+
+      return [NodeStatus.SUCCESS, `Placed storage at (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)})`];
     },
     'Place Storage',
     depth + 2,
   );
 
   const storageSequence = new Sequence<HumanEntity>(
-    [needsStorageCondition, placeStorageAction],
+    [needsStorageCondition, findStorageLocationAction, moveToStorageLocationAction, placeStorageAction],
     'Storage Sequence',
     depth + 1,
   );
@@ -246,15 +315,16 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 2,
   );
 
-  // Action: Place planting zone
-  const placePlantingZoneAction = new ActionNode<HumanEntity>(
-    (entity, context) => {
+  // Action: Find planting zone placement location
+  const findPlantingZoneLocationAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
       const placementLocation = findAdjacentBuildingPlacement(
         BuildingType.PlantingZone,
         entity.id,
         context.gameState,
         LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
         LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
+        entity.position, // Prioritize locations near leader
       );
 
       if (!placementLocation) {
@@ -264,11 +334,79 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         ];
       }
 
-      createBuilding(placementLocation, BuildingType.PlantingZone, entity.id, context.gameState);
+      // Store location in blackboard
+      Blackboard.set(blackboard, 'buildingPlacement_plantingTarget', placementLocation);
 
       return [
         NodeStatus.SUCCESS,
-        `Placed planting zone at (${placementLocation.x.toFixed(0)}, ${placementLocation.y.toFixed(0)})`,
+        `Found planting zone location at (${placementLocation.x.toFixed(0)}, ${placementLocation.y.toFixed(0)})`,
+      ];
+    },
+    'Find Planting Zone Location',
+    depth + 2,
+  );
+
+  // Action: Move to planting zone placement location
+  const moveToPlantingZoneLocationAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_plantingTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance <= LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        // Close enough, proceed to placement
+        return [NodeStatus.SUCCESS, `Reached planting zone location (${distance.toFixed(0)}px away)`];
+      }
+
+      // Move towards target
+      entity.activeAction = 'moving';
+      entity.target = targetLocation;
+      entity.direction = dirToTarget(entity.position, targetLocation, context.gameState.mapDimensions);
+
+      return [NodeStatus.RUNNING, `Moving to planting zone location (${distance.toFixed(0)}px away)`];
+    },
+    'Move To Planting Zone Location',
+    depth + 2,
+  );
+
+  // Action: Place planting zone
+  const placePlantingZoneAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_plantingTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      // Verify proximity one more time
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance > LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        return [NodeStatus.FAILURE, `Too far from placement location: ${distance.toFixed(0)}px`];
+      }
+
+      createBuilding(targetLocation, BuildingType.PlantingZone, entity.id, context.gameState);
+
+      // Clear blackboard
+      Blackboard.delete(blackboard, 'buildingPlacement_plantingTarget');
+
+      return [
+        NodeStatus.SUCCESS,
+        `Placed planting zone at (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)})`,
       ];
     },
     'Place Planting Zone',
@@ -276,7 +414,12 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   );
 
   const plantingZoneSequence = new Sequence<HumanEntity>(
-    [needsPlantingZoneCondition, placePlantingZoneAction],
+    [
+      needsPlantingZoneCondition,
+      findPlantingZoneLocationAction,
+      moveToPlantingZoneLocationAction,
+      placePlantingZoneAction,
+    ],
     'Planting Zone Sequence',
     depth + 1,
   );
@@ -288,7 +431,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 1,
   );
 
-  // Main sequence: Check leader -> Analyze tribe -> Check size -> Try to place building
+  // Main sequence: Check leader → Analyze tribe → Check size → Try to place building
   return new Sequence<HumanEntity>(
     [isLeaderCondition, cachedTribeAnalysis, hasMinimumTribeSizeCondition, buildingTypeSelector],
     'Leader Building Placement',

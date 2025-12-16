@@ -41,9 +41,24 @@ export function canPlaceBuilding(
   buildingType: BuildingType,
   ownerId: EntityId | undefined,
   gameState: GameWorldState,
+  humanPosition?: Vector2D,
+  maxDistance?: number,
 ): boolean {
   if (ownerId === undefined) {
     return false;
+  }
+
+  // Check proximity if humanPosition and maxDistance are provided
+  if (humanPosition && maxDistance !== undefined) {
+    const distance = calculateWrappedDistance(
+      humanPosition,
+      position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    if (distance > maxDistance) {
+      return false;
+    }
   }
 
   const dimensions = getBuildingDimensions(buildingType);
@@ -152,6 +167,7 @@ export function findAdjacentBuildingPlacement(
   gameState: GameWorldState,
   searchRadius: number,
   minDistanceFromOtherTribes: number,
+  humanPosition?: Vector2D,
 ): Vector2D | undefined {
   const startTime = performance.now();
   const stats: PlacementSearchStats = {
@@ -175,6 +191,11 @@ export function findAdjacentBuildingPlacement(
 
   if (tribeBuildings.length > 0) {
     // Use existing buildings as anchor points
+    // If human position is provided, prioritize searching near the human
+    if (humanPosition) {
+      anchorPoints.unshift(humanPosition);
+    }
+
     // Sort by distance from tribe center to prioritize central buildings
     const tribeCenter = getTribeCenter(ownerId, gameState);
     const sortedBuildings = [...tribeBuildings].sort((a, b) => {

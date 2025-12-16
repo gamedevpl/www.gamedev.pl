@@ -25,6 +25,7 @@ import {
 } from '../utils/building-placement-utils';
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { isSoilDepleted } from '../entities/plants/soil-depletion-update.ts';
+import { calculateWrappedDistance } from '../utils/math-utils.ts';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -193,10 +194,35 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
 
   // Handle building placement
   if (gameState.selectedBuildingType && gameState.selectedBuildingType !== 'removal') {
-    if (canPlaceBuilding(worldPos, gameState.selectedBuildingType as BuildingType, player.leaderId, gameState)) {
-      createBuilding(worldPos, gameState.selectedBuildingType as BuildingType, player.leaderId!, gameState);
-      // Clear selection after placement
-      gameState.selectedBuildingType = null;
+    const buildingType = gameState.selectedBuildingType as BuildingType;
+
+    // Check if player is within proximity to place building
+    const distance = calculateWrappedDistance(
+      player.position,
+      worldPos,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    // Use a reasonable proximity threshold (100px)
+    const placementProximity = 100;
+
+    if (distance <= placementProximity) {
+      // Player is close enough, place immediately
+      if (canPlaceBuilding(worldPos, buildingType, player.leaderId, gameState, player.position, placementProximity)) {
+        createBuilding(worldPos, buildingType, player.leaderId!, gameState);
+        gameState.selectedBuildingType = null;
+      }
+    } else {
+      // Player is too far, trigger movement to placement location
+      if (canPlaceBuilding(worldPos, buildingType, player.leaderId, gameState)) {
+        gameState.autopilotControls.activeAutopilotAction = {
+          action: PlayerActionType.AutopilotBuildingPlacement,
+          position: worldPos,
+          buildingType: buildingType,
+        };
+        gameState.selectedBuildingType = null;
+      }
     }
     return;
   }

@@ -1,4 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { canPlaceBuilding, createBuilding } from '../../../utils/building-placement-utils';
 // PreyEntity and PredatorEntity types used for type checking in switch cases
 import { UpdateContext, GameWorldState } from '../../../world-types';
 import { Entity } from '../../../entities/entities-types';
@@ -423,6 +424,46 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = targetBuilding.id;
               human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- BUILDING PLACEMENT ---
+            case PlayerActionType.AutopilotBuildingPlacement: {
+              const targetPosition = activeAction.position;
+              const buildingType = activeAction.buildingType;
+              
+              if (!buildingType) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const distance = calculateWrappedDistance(
+                human.position,
+                targetPosition,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              const placementProximity = 100;
+
+              if (distance <= placementProximity) {
+                // Close enough to place building
+                if (canPlaceBuilding(targetPosition, buildingType, human.leaderId, gameState, human.position, placementProximity)) {
+                  createBuilding(targetPosition, buildingType, human.leaderId!, gameState);
+                  gameState.autopilotControls.activeAutopilotAction = undefined;
+                  human.activeAction = 'idle';
+                  return NodeStatus.SUCCESS;
+                } else {
+                  // Cannot place building at this location
+                  gameState.autopilotControls.activeAutopilotAction = undefined;
+                  return NodeStatus.FAILURE;
+                }
+              }
+
+              // Move towards placement location
+              human.activeAction = 'moving';
+              human.target = targetPosition;
+              human.direction = dirToTarget(human.position, targetPosition, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 

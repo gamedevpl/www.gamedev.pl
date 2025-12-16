@@ -92,6 +92,11 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.RemoveEnemyBuilding;
       targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotBuildingPlacement;
+      position: Vector2D;
+      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost';
     };
 
 // Game State Interface
