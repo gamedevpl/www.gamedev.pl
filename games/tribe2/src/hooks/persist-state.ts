@@ -5,7 +5,18 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
   useEffect(() => {
     // This effect runs once when the component mounts
     const handleHashChange = () => {
-      const newState = document.location.hash === '#game' ? 'game' : 'intro';
+      const hash = document.location.hash;
+      let newState: AppState;
+      switch (hash) {
+        case '#game':
+          newState = 'game';
+          break;
+        case '#editor':
+          newState = 'editor';
+          break;
+        default:
+          newState = 'intro';
+      }
       setAppState(newState);
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -19,6 +30,8 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
     // This effect runs whenever appState changes
     if (appState === 'game') {
       document.location.hash = '#game';
+    } else if (appState === 'editor') {
+      document.location.hash = '#editor';
     } else if (appState === 'intro') {
       document.location.hash = '';
     }
