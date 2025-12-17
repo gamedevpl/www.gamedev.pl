@@ -21,6 +21,8 @@ import { getTribeCenter } from '../../../utils/spatial-utils';
  */
 const BORDER_EXPANSION_STEP_DISTANCE = 30; // Distance to move per step along border
 const BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT = 2; // Minimum army control weight to expand borders
+const MIN_DISTANCE_FROM_CENTER_FOR_RADIAL = 30; // Entities closer than this pick a random direction
+const EXPANSION_ANGLE_FALLBACKS = [15, -15, 30, -30, 45, -45]; // Degrees - smaller angles preferred for convex shape
 
 /**
  * Factory function to create a border expansion behavior node.
@@ -116,7 +118,7 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       // If entity is very close to the center, pick a random radial direction
       const distFromCenter = calculateWrappedDistance(entity.position, tribeCenter, worldWidth, worldHeight);
       let expansionDirection = radialDirection;
-      if (distFromCenter < 30) {
+      if (distFromCenter < MIN_DISTANCE_FROM_CENTER_FOR_RADIAL) {
         // Pick a random direction to start expanding
         const randomAngle = Math.random() * Math.PI * 2;
         expansionDirection = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
@@ -153,8 +155,7 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
       // 6. Can't expand in the radial direction - try adjacent angles to maintain convex shape
       // Scan +/- 45 degrees in small steps (closer to radial = more convex)
-      const angles = [15, -15, 30, -30, 45, -45]; // Degrees - smaller angles preferred for convex shape
-      for (const angleDeg of angles) {
+      for (const angleDeg of EXPANSION_ANGLE_FALLBACKS) {
         const angleRad = (angleDeg * Math.PI) / 180;
         const adjustedDirection = vectorRotate(expansionDirection, angleRad);
         let altTestPos = vectorAdd(entity.position, vectorScale(adjustedDirection, BORDER_EXPANSION_STEP_DISTANCE));
