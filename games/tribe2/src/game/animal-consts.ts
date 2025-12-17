@@ -12,7 +12,7 @@ export const PREY_INTERACTION_RANGE: number = 50; // Increased range for better 
 // Player interaction ranges for animal hunting/defending
 export const PREY_FLEE_DISTANCE: number = 100;
 export const PREY_MIN_PROCREATION_AGE: number = 2;
-export const PREY_MAX_PROCREATION_AGE: number = 3;
+export const PREY_MAX_PROCREATION_AGE: number = 8; // Extended from 3 to allow more breeding opportunities
 export const PREY_EATING_COOLDOWN_HOURS: number = 0.9;
 export const PREY_BERRY_BUSH_DAMAGE: number = 1; // Reduces berry bush lifespan
 export const PREY_HUNGER_THRESHOLD_SLOW: number = 50; // When prey start moving slower

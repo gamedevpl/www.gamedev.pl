@@ -100,8 +100,9 @@ export function createPredatorHuntBehavior(depth: number): BehaviorNode<Predator
             return [false, 'Not an adult'];
           }
 
-          // Only hunt if moderately hungry and not on cooldown
-          if (predator.hunger <= 50 || (predator.huntCooldown && predator.huntCooldown > 0)) {
+          // Only hunt if starting to get hungry and not on cooldown
+          // Lowered threshold from 50 to 30 to hunt earlier and avoid starvation
+          if (predator.hunger <= 30 || (predator.huntCooldown && predator.huntCooldown > 0)) {
             return false;
           }
 

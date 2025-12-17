@@ -252,23 +252,25 @@ export function emergencyPopulationBoost(gameState: GameWorldState): boolean {
   
   let interventionMade = false;
   
-  // Much more conservative thresholds for population boosts to let RL learn
-  if (preyCount > 0 && preyCount < 5) { // Reduced from 25 to 5 - only at extreme low levels
-    const boostAmount = Math.max(2, Math.floor(8 - preyCount));
+  // Emergency thresholds - boost when populations are dangerously low
+  // Threshold increased to 15 for prey to maintain healthier minimum population
+  if (preyCount > 0 && preyCount < 15) {
+    const boostAmount = Math.max(3, Math.floor(18 - preyCount));
     respawnPrey(gameState, boostAmount);
     interventionMade = true;
   }
   
-  if (predatorCount > 0 && predatorCount < 2) { // Reduced from 8 to 2 - only at extreme low levels
-    const boostAmount = Math.max(1, Math.floor(3 - predatorCount));
+  // Threshold increased to 5 for predators to prevent hunting population collapse
+  if (predatorCount > 0 && predatorCount < 5) {
+    const boostAmount = Math.max(2, Math.floor(6 - predatorCount));
     respawnPredators(gameState, boostAmount);
     interventionMade = true;
   }
   
-  // Boost bushes if very low - reduced threshold
-  if (bushCount < 5) { // Reduced from 30 to 5 - only when nearly extinct
+  // Boost bushes if low - threshold at 20 for adequate food security
+  if (bushCount < 20) {
     console.log(`🚨 Boosting bush count from ${bushCount} to help ecosystem`);
-    for (let i = 0; i < 5; i++) { // Reduced from 10 to 5
+    for (let i = 0; i < 10; i++) {
       const bushPosition = findBushSpawnLocation(indexedState);
       createBerryBush(gameState.entities, bushPosition, gameState.time);
     }

@@ -32,11 +32,11 @@ import {
 const ECOSYSTEM_BALANCER_INTERVAL = 1; // More frequent updates for better control
 
 // Q-learning hyperparameters
-const ALPHA = 0.3; // Learning rate - higher for faster learning
-const GAMMA = 0.8; // Discount factor - slightly lower for more immediate focus
-const INITIAL_EPSILON = 0.8; // Initial exploration rate - balanced exploration
-const EPSILON_DECAY = 0.99; // Epsilon decay rate - slower decay for more exploration
-const MIN_EPSILON = 0.05; // Minimum exploration rate - keep some exploration
+const ALPHA = 0.2; // Learning rate - reduced from 0.3 for more stable learning
+const GAMMA = 0.85; // Discount factor - increased for better long-term planning
+const INITIAL_EPSILON = 0.5; // Initial exploration rate - reduced from 0.8 for more consistent behavior
+const EPSILON_DECAY = 0.995; // Epsilon decay rate - slower decay for gradual exploitation shift
+const MIN_EPSILON = 0.1; // Minimum exploration rate - increased from 0.05 to maintain adaptability
 
 // Action definitions
 enum QLearningAction {
@@ -237,7 +237,7 @@ class QLearningAgent {
    * Apply action to game state
    */
   private applyAction(action: number, gameState: GameWorldState): void {
-    const stepSize = 0.2; // Larger adjustment for faster learning
+    const stepSize = 0.1; // Reduced from 0.2 for smoother, more stable adjustments
 
     switch (action) {
       case QLearningAction.INCREASE_PREY_GESTATION:
@@ -434,7 +434,7 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
       MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR +
       (MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR - MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR) * 0.3;
     gameState.ecosystem.berryBushSpreadChance =
-      MIN_BERRY_BUSH_SPREAD_CHANCE + (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE) * 0.7; // Higher spread chance = more food
+      MIN_BERRY_BUSH_SPREAD_CHANCE + (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE) * 0.5; // Balanced spread chance for ecosystem stability
   }
 
   // Apply Q-learning step
