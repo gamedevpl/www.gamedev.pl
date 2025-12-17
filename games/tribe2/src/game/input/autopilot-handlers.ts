@@ -26,6 +26,8 @@ import {
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { isSoilDepleted } from '../entities/plants/soil-depletion-update.ts';
 import { calculateWrappedDistance } from '../utils/math-utils.ts';
+import { checkTakeoverContiguity } from '../entities/tribe/territory-utils';
+import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 
 /**
  * Determines the appropriate autopilot action based on the entity or position under the mouse cursor.
@@ -95,7 +97,20 @@ export const determineHoveredAutopilotAction = (
         building.isConstructed
       ) {
         // Enemy building - only leaders can take over
-        determinedAction = { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
+        // Check if takeover is valid (must be adjacent to territory)
+        const contiguityCheck = checkTakeoverContiguity(
+          building.position,
+          TERRITORY_BUILDING_RADIUS,
+          player.id,
+          gameState,
+        );
+
+        if (contiguityCheck.valid) {
+          determinedAction = { action: PlayerActionType.TakeOverBuilding, targetEntityId: building.id };
+        } else {
+          // If not valid for takeover, default to move
+          determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+        }
       } else if (building.buildingType === 'storageSpot') {
         // Handle storage spot interactions
         const isPlayerTribeStorage = building.ownerId === player.leaderId;

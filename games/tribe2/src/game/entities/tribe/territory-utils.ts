@@ -140,6 +140,72 @@ export function checkTerritoryContiguity(
 }
 
 /**
+ * Checks if taking over a building at a position would maintain territory contiguity.
+ * This is similar to checkTerritoryContiguity but allows overwriting enemy territory.
+ * 
+ * Rules:
+ * 1. The area that would be claimed must touch existing territory of the taking tribe.
+ * 2. If the tribe has NO territory, takeover is not allowed (tribes must establish their own territory first).
+ *
+ * @param position The center of the building to take over
+ * @param radius The radius of territory the building claims
+ * @param takingTribeId The tribe leader ID attempting the takeover
+ * @param gameState The current game state
+ */
+export function checkTakeoverContiguity(
+  position: Vector2D,
+  radius: number,
+  takingTribeId: EntityId,
+  gameState: GameWorldState,
+): { valid: boolean; reason?: string } {
+  // First, check if the taking tribe has any territory at all
+  if (!tribeHasTerritory(takingTribeId, gameState)) {
+    return { valid: false, reason: 'Tribe must have territory before taking over buildings' };
+  }
+
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+  const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  let hasAdjacency = false;
+
+  // Scan the area that would be painted during takeover
+  for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
+    for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+
+      const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+      const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+
+      const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+
+      if (distance <= radius) {
+        const index = gridY * gridWidth + gridX;
+        const currentOwner = gameState.terrainOwnership[index];
+
+        // Check if this cell is already owned by the taking tribe
+        if (currentOwner === takingTribeId) {
+          hasAdjacency = true;
+          break;
+        }
+      }
+    }
+    if (hasAdjacency) break;
+  }
+
+  if (!hasAdjacency) {
+    return { valid: false, reason: 'Building must be adjacent to your existing territory' };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Checks if a position is valid for building placement based on territory rules.
  * - Must be inside or near the owner's territory (or no territory exists yet)
  * - Must not be inside another tribe's territory
@@ -268,15 +334,16 @@ export function constrainWanderToTerritory(
   return validPosition;
 }
 
-/**
- * Paints terrain ownership with a robust 4-step process to ensure
- * clean, solid shapes without holes, elbows, or pixel noise.
- */
-export function paintTerrainOwnership(
+type TerrainPaintOptions = {
+  allowOverwrite: boolean;
+};
+
+function applyTerrainOwnershipPaint(
   position: Vector2D,
   radius: number,
   ownerId: EntityId,
   gameState: GameWorldState,
+  { allowOverwrite }: TerrainPaintOptions,
 ): void {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
@@ -300,7 +367,10 @@ export function paintTerrainOwnership(
 
       if (distance <= radius) {
         const index = gridY * gridWidth + gridX;
-        if (gameState.terrainOwnership[index] === null || gameState.terrainOwnership[index] === ownerId) {
+        const currentOwner = gameState.terrainOwnership[index];
+        const canOverwrite = allowOverwrite || currentOwner === null || currentOwner === ownerId;
+
+        if (canOverwrite) {
           gameState.terrainOwnership[index] = ownerId;
         }
       }
@@ -462,6 +532,30 @@ export function paintTerrainOwnership(
     }
   }
   for (const index of cellsToPolish) gameState.terrainOwnership[index] = ownerId;
+}
+
+/**
+ * Paints terrain ownership with default, non-overwriting behavior.
+ */
+export function paintTerrainOwnership(
+  position: Vector2D,
+  radius: number,
+  ownerId: EntityId,
+  gameState: GameWorldState,
+): void {
+  applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: false });
+}
+
+/**
+ * Paints territory for a takeover, overwriting existing ownership.
+ */
+export function takeOverTerrainOwnership(
+  position: Vector2D,
+  radius: number,
+  ownerId: EntityId,
+  gameState: GameWorldState,
+): void {
+  applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: true });
 }
 
 /**

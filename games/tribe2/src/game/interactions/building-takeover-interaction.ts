@@ -4,6 +4,8 @@ import { BuildingEntity } from '../entities/buildings/building-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { addVisualEffect } from '../utils/visual-effects-utils';
+import { takeOverTerrainOwnership, checkTakeoverContiguity } from '../entities/tribe/territory-utils';
+import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 
 export const buildingTakeoverInteraction: InteractionDefinition<HumanEntity, BuildingEntity> = {
   id: 'human-takeover-building',
@@ -23,12 +25,31 @@ export const buildingTakeoverInteraction: InteractionDefinition<HumanEntity, Bui
     }
 
     // Must be an enemy building
-    return isEnemyBuilding(source, target, context.gameState);
+    if (!isEnemyBuilding(source, target, context.gameState)) {
+      return false;
+    }
+
+    // Check if the takeover would maintain territory contiguity
+    const contiguityCheck = checkTakeoverContiguity(
+      target.position,
+      TERRITORY_BUILDING_RADIUS,
+      source.id,
+      context.gameState,
+    );
+
+    if (!contiguityCheck.valid) {
+      return false;
+    }
+
+    return true;
   },
 
   perform: (source, target, context) => {
     // Transfer ownership
     target.ownerId = source.id;
+
+    // Paint the territory to reflect new ownership (overwrite previous owner)
+    takeOverTerrainOwnership(target.position, TERRITORY_BUILDING_RADIUS, source.id, context.gameState);
 
     // Reset/Repair the building fully
     target.constructionProgress = 1;
