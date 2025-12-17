@@ -9,6 +9,7 @@ import { BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding } from '../../../utils';
 import { getTribeCenter } from '../../../utils/spatial-utils';
 import { Vector2D } from '../../../utils/math-types';
+import { Blackboard } from '../behavior-tree-blackboard';
 
 /**
  * Constants for border expansion behavior
@@ -124,9 +125,11 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       // Get or initialize the facing direction from entity's blackboard
       // The facing direction is stored as the direction the entity is "walking" along the border
       let facingDirection: Vector2D;
+      const BORDER_FACING_KEY = 'borderFacingDirection';
 
-      if (entity.aiBlackboard?.borderFacingDirection) {
-        facingDirection = entity.aiBlackboard.borderFacingDirection as Vector2D;
+      const storedFacing = Blackboard.get<Vector2D>(entity.aiBlackboard, BORDER_FACING_KEY);
+      if (storedFacing) {
+        facingDirection = storedFacing;
       } else {
         // Initialize: face away from tribe center (outward direction)
         const tribeCenter = getTribeCenter(entity.leaderId, gameState);
@@ -142,8 +145,9 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
           facingDirection = { x: 1, y: 0 }; // Default direction
         }
         // Store in aiBlackboard
-        if (!entity.aiBlackboard) entity.aiBlackboard = {};
-        entity.aiBlackboard.borderFacingDirection = facingDirection;
+        if (entity.aiBlackboard) {
+          Blackboard.set(entity.aiBlackboard, BORDER_FACING_KEY, facingDirection);
+        }
       }
 
       // Right-hand wall following:
@@ -159,7 +163,9 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
         // Turn right and move
         const newFacing = rightDirection;
-        entity.aiBlackboard!.borderFacingDirection = newFacing;
+        if (entity.aiBlackboard) {
+          Blackboard.set(entity.aiBlackboard, BORDER_FACING_KEY, newFacing);
+        }
         entity.target = rightPos;
         entity.activeAction = 'moving';
         return [NodeStatus.RUNNING, 'Expanding territory - turning right into new area'];
@@ -186,7 +192,9 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
         if (canExpand(testPos)) {
           // Found a valid direction - update facing and move
-          entity.aiBlackboard!.borderFacingDirection = newFacing;
+          if (entity.aiBlackboard) {
+            Blackboard.set(entity.aiBlackboard, BORDER_FACING_KEY, newFacing);
+          }
           entity.target = testPos;
           entity.activeAction = 'moving';
           return [NodeStatus.RUNNING, `Turned left ${(attempts + 1) * 90}° to find path`];
@@ -196,7 +204,9 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
       // 5. Completely surrounded - can't move anywhere
       // Reset facing direction and try again next tick
-      delete entity.aiBlackboard!.borderFacingDirection;
+      if (entity.aiBlackboard) {
+        Blackboard.delete(entity.aiBlackboard, BORDER_FACING_KEY);
+      }
       return [NodeStatus.FAILURE, 'Completely surrounded - cannot expand'];
     },
     'Pioneer Expansion (Right-hand wall following)',
