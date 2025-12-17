@@ -25,3 +25,6 @@ export const TERRITORY_COLORS = [
   '#FFEB3B', // Yellow
   '#795548', // Brown
 ];
+
+/** Size of each terrain tile for ownership tracking (in pixels) */
+export const TERRITORY_OWNERSHIP_RESOLUTION = 20;

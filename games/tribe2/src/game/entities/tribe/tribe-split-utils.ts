@@ -30,8 +30,7 @@ import { IndexedWorldState } from '../../world-index/world-index-types.ts';
 import { BuildingEntity } from '../buildings/building-types.ts';
 import { BuildingType } from '../buildings/building-consts.ts';
 import { EntityId } from '../entities-types.ts';
-import { checkPositionInTerritory } from './territory-utils.ts';
-import { TribeTerritory } from './territory-types.ts';
+import { getOwnerOfPoint } from './territory-utils.ts';
 import { isPositionOccupied } from '../../utils/spatial-utils.ts';
 
 /**
@@ -173,11 +172,10 @@ function determineOptimalStrategy(human: HumanEntity, gameState: GameWorldState)
   if (!human.leaderId) return 'migration';
 
   const indexedState = gameState as IndexedWorldState;
-  const territories = indexedState.territories;
-  const ownTerritory = territories.get(human.leaderId);
+  const hasTerritory = getOwnerOfPoint(human.position.x, human.position.y, gameState) === human.leaderId;
 
   // If no territory (no buildings), migration is the only option
-  if (!ownTerritory) {
+  if (!hasTerritory) {
     return 'migration';
   }
 
@@ -233,36 +231,21 @@ export function planSplit(human: HumanEntity, gameState: GameWorldState): boolea
 /**
  * Helper function to check if a position is valid for migration target
  */
-function isValidMigrationTarget(
-  position: Vector2D,
-  leaderId: EntityId,
-  territories: Map<EntityId, TribeTerritory>,
-  gameState: GameWorldState,
-): boolean {
+function isValidMigrationTarget(position: Vector2D, leaderId: EntityId, gameState: GameWorldState): boolean {
   // Check if position is occupied by other entities
   const checkRadius = 30;
   if (isPositionOccupied(position, gameState, checkRadius)) {
     return false;
   }
+  const ownOwner = getOwnerOfPoint(position.x, position.y, gameState);
 
-  const ownTerritory = territories.get(leaderId);
-
-  // If own territory exists, ensure we're outside of it
-  if (ownTerritory) {
-    const ownCheck = checkPositionInTerritory(position, ownTerritory, gameState);
-    if (ownCheck.isInsideTerritory) {
-      return false;
-    }
+  if (ownOwner === leaderId) {
+    return false;
   }
 
-  // Check that position doesn't overlap with any other tribe's territory
-  for (const [otherId, otherTerritory] of territories) {
-    if (otherId === leaderId) continue;
-
-    const otherCheck = checkPositionInTerritory(position, otherTerritory, gameState);
-    if (otherCheck.isInsideTerritory) {
-      return false;
-    }
+  // If position is owned by someone else, it's not valid
+  if (ownOwner !== null && ownOwner !== leaderId) {
+    return false;
   }
 
   return true;
@@ -274,7 +257,6 @@ function isValidMigrationTarget(
 function planMigrationSplit(human: HumanEntity, gameState: GameWorldState): boolean {
   if (!human.aiBlackboard || !human.leaderId) return false;
 
-  const territories = (gameState as IndexedWorldState).territories;
   const worldWidth = gameState.mapDimensions.width;
   const worldHeight = gameState.mapDimensions.height;
 
@@ -304,7 +286,7 @@ function planMigrationSplit(human: HumanEntity, gameState: GameWorldState): bool
       };
 
       // Check if this position is valid
-      if (isValidMigrationTarget(wrappedPosition, human.leaderId, territories, gameState)) {
+      if (isValidMigrationTarget(wrappedPosition, human.leaderId, gameState)) {
         Blackboard.set(human.aiBlackboard, BB_SPLIT_TARGET_POSITION, wrappedPosition);
         return true;
       }

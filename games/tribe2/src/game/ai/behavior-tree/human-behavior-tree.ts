@@ -102,6 +102,29 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- TRIBE COMBAT (MEMBER) ---
       createTribeMemberCombatBehavior(2),
 
+      // --- COMBAT BEHAVIORS (ATTACK) ---
+      new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
+
+      // --- PERSONAL NEEDS (EAT) ---
+      createEatingBehavior(2),
+      createDemandBehavior(2),
+
+      // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
+      createStorageRetrieveBehavior(2),
+
+      // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
+      new AutopilotControlled(
+        new CachingNode(
+          createLeaderBuildingPlacementBehavior(4),
+          BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
+          'Cache Building Placement',
+          3,
+        ),
+        'build',
+        'Gated Leader Building Placement',
+        2,
+      ),
+
       // --- BORDER POST PLACEMENT (WARRIORS & LEADERS) ---
       new NonPlayerControlled(
         new CachingNode(
@@ -113,16 +136,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         'Gated Border Post Placement',
         2,
       ),
-
-      // --- COMBAT BEHAVIORS (ATTACK) ---
-      new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
-
-      // --- PERSONAL NEEDS (EAT) ---
-      createEatingBehavior(2),
-      createDemandBehavior(2),
-
-      // --- STORAGE RETRIEVE (WHEN HUNGRY) ---
-      createStorageRetrieveBehavior(2),
 
       // --- TRIBE MANAGEMENT (SPLIT) ---
       createTribeSplitBehavior(2),
@@ -180,19 +193,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
   const nonblockingNodes = new Parallel(
     [
-      // --- LEADER BUILDING PLACEMENT (INFRASTRUCTURE) ---
-      new AutopilotControlled(
-        new CachingNode(
-          createLeaderBuildingPlacementBehavior(4),
-          BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS,
-          'Cache Building Placement',
-          3,
-        ),
-        'build',
-        'Gated Leader Building Placement',
-        2,
-      ),
-
       // --- TRIBE ROLE ASSIGNMENT ---
       new Inverter(
         new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),

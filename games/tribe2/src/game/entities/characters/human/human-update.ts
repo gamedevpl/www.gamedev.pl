@@ -21,7 +21,7 @@ import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { findChildren, findHeir } from '../../../utils/world-utils';
+import { findChildren, findHeir, replaceOwnerInTerrainOwnership } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
@@ -188,6 +188,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             invadeEnemies: 5,
           },
         };
+        replaceOwnerInTerrainOwnership(gameState, entity.id, heir.id);
 
         // Update followers
         Object.values(gameState.entities.entities).forEach((e) => {
@@ -213,6 +214,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             building.ownerId = undefined;
           }
         });
+        replaceOwnerInTerrainOwnership(gameState, entity.id, null);
       }
     }
 

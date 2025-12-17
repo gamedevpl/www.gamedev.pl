@@ -5,152 +5,44 @@
 import { Vector2D } from '../../utils/math-types';
 import { EntityId } from '../entities-types';
 import { GameWorldState } from '../../world-types';
-import { IndexedWorldState } from '../../world-index/world-index-types';
-import { TribeTerritory, TerritoryCircle, TerritoryCheckResult } from './territory-types';
-import {
-  TERRITORY_BUILDING_RADIUS,
-  TERRITORY_BORDER_PLACEMENT_DISTANCE,
-  TERRITORY_MINIMUM_GAP,
-  TERRITORY_COLORS,
-  TERRITORY_WANDER_DISTANCE,
-} from './territory-consts';
-import { calculateWrappedDistance, getDirectionVectorOnTorus } from '../../utils/math-utils';
+import { TerritoryCheckResult } from './territory-types';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 
 /**
- * Calculates the territory for a specific tribe.
- * Territory is based on buildings owned by the tribe.
- * No buildings = no territory border.
+ * Helper to check if a point is within a specific territory.
+ * Uses the terrainOwnership grid to determine ownership.
  */
-function calculateTribeTerritory(
-  leaderId: EntityId,
-  gameState: GameWorldState,
-  tribeColorIndex: number = 0,
-): TribeTerritory | undefined {
-  const indexedState = gameState as IndexedWorldState;
-
-  // Get all buildings owned by this tribe
-  const buildings = indexedState.search.building.byProperty('ownerId', leaderId);
-
-  // No buildings means no territory
-  if (buildings.length === 0) {
-    return undefined;
-  }
-
-  // Get tribe members to calculate tribe center
-  const tribeMembers = indexedState.search.human.byProperty('leaderId', leaderId);
-
-  if (tribeMembers.length === 0) {
-    return undefined;
-  }
-
-  const circles: TerritoryCircle[] = [];
-
-  // Add circles around each building
-  for (const building of buildings) {
-    circles.push({
-      center: { ...building.position },
-      radius: TERRITORY_BUILDING_RADIUS,
-    });
-  }
-
-  // Get color for this tribe
-  const color = TERRITORY_COLORS[tribeColorIndex % TERRITORY_COLORS.length];
-
-  return {
-    leaderId,
-    circles,
-    color,
-  };
-}
-
-/**
- * Calculates territories for all tribes in the game.
- */
-export function calculateAllTerritories(gameState: GameWorldState): Map<EntityId, TribeTerritory> {
-  const indexedState = gameState as IndexedWorldState;
-  const territories = new Map<EntityId, TribeTerritory>();
-
-  // Find all unique leader IDs
-  const allHumans = indexedState.search.human.all();
-  const leaderIds = new Set<EntityId>();
-
-  for (const human of allHumans) {
-    if (human.leaderId) {
-      leaderIds.add(human.leaderId);
-    }
-  }
-
-  // Calculate territory for each tribe
-  let colorIndex = 0;
-  for (const leaderId of leaderIds) {
-    const territory = calculateTribeTerritory(leaderId, gameState, colorIndex);
-    if (territory) {
-      territories.set(leaderId, territory);
-      colorIndex++;
-    }
-  }
-
-  return territories;
-}
-
-/**
- * Gets the distance from a position to the edge of the nearest circle in a territory.
- * Returns negative values if inside, positive if outside.
- */
-function getDistanceToTerritoryEdge(
-  position: Vector2D,
-  territory: TribeTerritory,
-  worldWidth: number,
-  worldHeight: number,
-): number {
-  let minDistance = Infinity;
-
-  for (const circle of territory.circles) {
-    const distToCenter = calculateWrappedDistance(position, circle.center, worldWidth, worldHeight);
-    const distToEdge = distToCenter - circle.radius;
-
-    if (distToEdge < minDistance) {
-      minDistance = distToEdge;
-    }
-  }
-
-  return minDistance;
+export function getOwnerOfPoint(x: number, y: number, gameState: GameWorldState): EntityId | null {
+  const px = Math.floor(x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const py = Math.floor(y / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridWidth = Math.ceil(gameState.mapDimensions.width / TERRITORY_OWNERSHIP_RESOLUTION);
+  return gameState.terrainOwnership[py * gridWidth + px] || null;
 }
 
 /**
  * Checks if a position is within a territory or near its border.
+ * Simplified for grid-based territory system.
  */
 export function checkPositionInTerritory(
   position: Vector2D,
-  territory: TribeTerritory,
+  leaderId: EntityId,
   gameState: GameWorldState,
 ): TerritoryCheckResult {
-  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-
-  // Check if inside any circle
-  let isInside = (gameState as IndexedWorldState).search.territorySector
-    .byRect({
-      left: position.x,
-      top: position.y,
-      right: position.x,
-      bottom: position.y,
-    })
-    .some((sector) => sector.leaderId === territory.leaderId);
-
-  const distanceToEdge = getDistanceToTerritoryEdge(position, territory, worldWidth, worldHeight);
-  const isNearBorder = !isInside && distanceToEdge <= TERRITORY_BORDER_PLACEMENT_DISTANCE;
+  const owner = getOwnerOfPoint(position.x, position.y, gameState);
+  const isInside = owner === leaderId;
 
   return {
     isInsideTerritory: isInside,
-    isNearBorder,
-    distanceToEdge,
-    territory,
+    isNearBorder: false, // Grid system doesn't support near-border detection
+    distanceToEdge: 0, // Grid system doesn't support distance calculation
+    leaderId,
   };
 }
 
 /**
  * Checks if a position is valid for building placement based on territory rules.
- * - Must be inside or near the owner's territory
+ * - Must be inside or near the owner's territory (or no territory exists yet)
  * - Must not be inside another tribe's territory
  */
 export function canPlaceBuildingInTerritory(
@@ -158,37 +50,16 @@ export function canPlaceBuildingInTerritory(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): { canPlace: boolean; reason?: string } {
-  const territories = (gameState as IndexedWorldState).territories;
-  const ownerTerritory = territories.get(ownerId);
+  const positionOwner = getOwnerOfPoint(position.x, position.y, gameState);
 
-  // If the owner has no territory yet (first building), allow placement
-  if (!ownerTerritory) {
-    // But check it doesn't overlap with other territories
-    for (const [otherId, otherTerritory] of territories) {
-      if (otherId === ownerId) continue;
-
-      const checkResult = checkPositionInTerritory(position, otherTerritory, gameState);
-      if (checkResult.isInsideTerritory) {
-        return { canPlace: false, reason: "Position is inside another tribe's territory" };
-      }
-    }
+  // If the position is unowned or owned by the builder, allow placement
+  if (positionOwner === null || positionOwner === ownerId) {
     return { canPlace: true };
   }
 
-  // Check if position is within or near owner's territory
-  const ownerCheck = checkPositionInTerritory(position, ownerTerritory, gameState);
-  if (!ownerCheck.isInsideTerritory && !ownerCheck.isNearBorder) {
-    return { canPlace: false, reason: 'Position is too far from tribe territory' };
-  }
-
-  // Check that position doesn't overlap with other territories
-  for (const [otherId, otherTerritory] of territories) {
-    if (otherId === ownerId) continue;
-
-    const otherCheck = checkPositionInTerritory(position, otherTerritory, gameState);
-    if (otherCheck.isInsideTerritory || otherCheck.distanceToEdge < TERRITORY_MINIMUM_GAP) {
-      return { canPlace: false, reason: "Position is too close to another tribe's territory" };
-    }
+  // If owned by another tribe, deny placement
+  if (positionOwner !== ownerId) {
+    return { canPlace: false, reason: "Position is inside another tribe's territory" };
   }
 
   return { canPlace: true };
@@ -196,43 +67,23 @@ export function canPlaceBuildingInTerritory(
 
 /**
  * Checks if a position is valid for a tribe member to wander to.
- * Members should stay within territory or close to its edge.
+ * Members should stay within territory or in unowned areas.
  */
 export function isValidWanderPosition(position: Vector2D, leaderId: EntityId, gameState: GameWorldState): boolean {
-  const territories = (gameState as IndexedWorldState).territories;
-  const ownTerritory = territories.get(leaderId);
+  const owner = getOwnerOfPoint(position.x, position.y, gameState);
 
-  // If no territory, allow wandering anywhere
-  if (!ownTerritory) {
+  // Allow wandering in own territory or unowned areas
+  if (owner === null || owner === leaderId) {
     return true;
   }
 
-  const checkResult = checkPositionInTerritory(position, ownTerritory, gameState);
-
-  // Allow wandering inside territory or within TERRITORY_WANDER_DISTANCE of the edge
-  if (checkResult.isInsideTerritory) {
-    return true;
-  }
-
-  if (checkResult.distanceToEdge <= TERRITORY_WANDER_DISTANCE) {
-    // But not if it would enter another tribe's territory
-    for (const [otherId, otherTerritory] of territories) {
-      if (otherId === leaderId) continue;
-
-      const otherCheck = checkPositionInTerritory(position, otherTerritory, gameState);
-      if (otherCheck.isInsideTerritory) {
-        return false;
-      }
-    }
-    return true;
-  }
-
+  // Don't wander into other tribes' territories
   return false;
 }
 
 /**
  * Checks if a target position is within reasonable operating range for a tribe member.
- * This allows gathering/hunting slightly outside territory but not too far.
+ * This allows gathering/hunting slightly outside territory but not in enemy territory.
  * @param targetPosition The position to check
  * @param leaderId The leader ID of the tribe
  * @param gameState The current game state
@@ -243,44 +94,21 @@ export function isWithinOperatingRange(
   targetPosition: Vector2D,
   leaderId: EntityId,
   gameState: GameWorldState,
-  maxDistanceOutside: number = TERRITORY_WANDER_DISTANCE,
 ): boolean {
-  const territories = (gameState as IndexedWorldState).territories;
-  const ownTerritory = territories.get(leaderId);
+  const owner = getOwnerOfPoint(targetPosition.x, targetPosition.y, gameState);
 
-  // If no territory (no buildings), allow operating anywhere
-  if (!ownTerritory) {
+  // Inside own territory or unowned is always valid
+  if (owner === null || owner === leaderId) {
     return true;
   }
 
-  const checkResult = checkPositionInTerritory(targetPosition, ownTerritory, gameState);
-
-  // Inside territory is always valid
-  if (checkResult.isInsideTerritory) {
-    return true;
-  }
-
-  // Allow operating slightly outside territory
-  if (checkResult.distanceToEdge <= maxDistanceOutside) {
-    // But not if it's inside another tribe's territory
-    for (const [otherId, otherTerritory] of territories) {
-      if (otherId === leaderId) continue;
-
-      const otherCheck = checkPositionInTerritory(targetPosition, otherTerritory, gameState);
-      if (otherCheck.isInsideTerritory) {
-        return false;
-      }
-    }
-    return true;
-  }
-
+  // Don't operate in other tribes' territories
   return false;
 }
 
 /**
  * Constrains a wander target to be within territory bounds.
- * If the target is outside territory, returns a position on the territory edge
- * in the direction of the original target.
+ * If the target is outside territory, returns a position that is valid.
  */
 export function constrainWanderToTerritory(
   currentPosition: Vector2D,
@@ -288,20 +116,12 @@ export function constrainWanderToTerritory(
   leaderId: EntityId,
   gameState: GameWorldState,
 ): Vector2D {
-  const territories = (gameState as IndexedWorldState).territories;
-  const ownTerritory = territories.get(leaderId);
-
-  // If no territory, don't constrain
-  if (!ownTerritory) {
-    return targetPosition;
-  }
-
   // Check if target is valid
   if (isValidWanderPosition(targetPosition, leaderId, gameState)) {
     return targetPosition;
   }
 
-  // Find the closest point on territory edge in the direction of the target
+  // Find the closest valid position along the direction to the target
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const directionToTarget = getDirectionVectorOnTorus(currentPosition, targetPosition, worldWidth, worldHeight);
 
@@ -330,4 +150,208 @@ export function constrainWanderToTerritory(
   }
 
   return validPosition;
+}
+
+/**
+ * Paints terrain ownership in a circular area around a position.
+ * Used when buildings are placed to claim territory.
+ *
+ * @param position The center position of the territory to claim (typically a building position)
+ * @param radius The radius of the circular territory area (typically TERRITORY_BUILDING_RADIUS)
+ * @param ownerId The entity ID of the tribe leader claiming this territory
+ * @param gameState The current game state
+ */
+export function paintTerrainOwnership(
+  position: Vector2D,
+  radius: number,
+  ownerId: EntityId,
+  gameState: GameWorldState,
+): void {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // Calculate grid dimensions
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  // Calculate the bounding box of grid cells affected by the circular radius
+  // We need to check cells in a square area that encompasses the circle
+  const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  // Convert position to grid coordinates
+  const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  // Iterate through all grid cells in the bounding box
+  for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
+    for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
+      // Calculate grid coordinates with wrapping
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+
+      // Calculate the cell's center position in world coordinates
+      const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+      const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+
+      // Check if the cell center is within radius of the building position using wrapped distance
+      const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+
+      if (distance <= radius) {
+        // Calculate the 1D array index
+        const index = gridY * gridWidth + gridX;
+
+        // Only overwrite cells that are unowned or already owned by the same tribe
+        // This respects existing ownership from other tribes
+        if (gameState.terrainOwnership[index] === null || gameState.terrainOwnership[index] === ownerId) {
+          gameState.terrainOwnership[index] = ownerId;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Finds the nearest territory edge for a given tribe from a starting position.
+ * An edge is defined as a grid cell owned by the tribe that is adjacent to a cell NOT owned by the tribe.
+ *
+ * @param position The search start position
+ * @param tribeId The ID of the tribe
+ * @param gameState The current game state
+ * @returns The position of the nearest edge cell center, or null if not found (e.g., no territory or map full)
+ */
+export function findNearestTerritoryEdge(
+  position: Vector2D,
+  tribeId: EntityId,
+  gameState: GameWorldState,
+): Vector2D | null {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  const startGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const startGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  // Spiral search to find nearest edge
+  // Max search radius in cells (e.g., 50 cells = 1000px)
+  const maxRadius = 50;
+
+  for (let r = 0; r <= maxRadius; r++) {
+    // Check points on the perimeter of the square of radius r
+    // For r=0, it's just the center point
+    const minX = -r;
+    const maxX = r;
+    const minY = -r;
+    const maxY = r;
+
+    // Iterate through the perimeter
+    for (let dy = minY; dy <= maxY; dy++) {
+      for (let dx = minX; dx <= maxX; dx++) {
+        // Only check perimeter cells (skip internal ones unless r=0)
+        if (r > 0 && dx > minX && dx < maxX && dy > minY && dy < maxY) {
+          continue;
+        }
+
+        const gridX = (((startGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+        const gridY = (((startGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+        const index = gridY * gridWidth + gridX;
+
+        // Check if this cell belongs to the tribe
+        if (gameState.terrainOwnership[index] === tribeId) {
+          // Check neighbors to see if any are NOT owned by this tribe
+          let isEdge = false;
+
+          // Check 4-connectivity neighbors
+          const neighbors = [
+            { nx: 0, ny: -1 }, // Top
+            { nx: 1, ny: 0 }, // Right
+            { nx: 0, ny: 1 }, // Bottom
+            { nx: -1, ny: 0 }, // Left
+          ];
+
+          for (const { nx, ny } of neighbors) {
+            const nGridX = (((gridX + nx) % gridWidth) + gridWidth) % gridWidth;
+            const nGridY = (((gridY + ny) % gridHeight) + gridHeight) % gridHeight;
+            const nIndex = nGridY * gridWidth + nGridX;
+
+            if (gameState.terrainOwnership[nIndex] !== tribeId) {
+              isEdge = true;
+              break;
+            }
+          }
+
+          if (isEdge) {
+            // Found an edge cell! Return its center position.
+            return {
+              x: gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
+              y: gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Calculates the normal vector of the territory edge at a given position.
+ * The normal points OUT of the territory (towards unowned/other territory).
+ *
+ * @param position The position on the edge
+ * @param tribeId The ID of the tribe
+ * @param gameState The current game state
+ * @returns A normalized vector pointing away from the territory
+ */
+export function getTerritoryEdgeNormal(position: Vector2D, tribeId: EntityId, gameState: GameWorldState): Vector2D {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  const gridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  let normalX = 0;
+  let normalY = 0;
+
+  // Check 8 neighbors
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+
+      const nGridX = (((gridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const nGridY = (((gridY + dy) % gridHeight) + gridHeight) % gridHeight;
+      const nIndex = nGridY * gridWidth + nGridX;
+
+      // If neighbor is NOT owned by tribe, the normal points towards it
+      if (gameState.terrainOwnership[nIndex] !== tribeId) {
+        normalX += dx;
+        normalY += dy;
+      }
+    }
+  }
+
+  // If we found directions towards non-territory, normalize and return
+  if (normalX !== 0 || normalY !== 0) {
+    return vectorNormalize({ x: normalX, y: normalY });
+  }
+
+  // Fallback: if surrounded by own territory (shouldn't happen if called on edge), return zero vector
+  return { x: 0, y: 0 };
+}
+
+/**
+ * Replaces all occurrences of an old owner ID with a new owner ID in the terrain ownership grid.
+ * Used when a tribe is disbanded or changes leadership.
+ */
+export function replaceOwnerInTerrainOwnership(
+  gameState: GameWorldState,
+  oldOwnerId: EntityId,
+  newOwnerId: EntityId | null,
+): void {
+  const ownershipGrid = gameState.terrainOwnership;
+  for (let i = 0; i < ownershipGrid.length; i++) {
+    if (ownershipGrid[i] === oldOwnerId) {
+      ownershipGrid[i] = newOwnerId;
+    }
+  }
 }

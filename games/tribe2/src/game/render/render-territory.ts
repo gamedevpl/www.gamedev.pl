@@ -7,10 +7,7 @@ import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
 import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
 import { EntityId } from '../entities/entities-types';
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { TerritoryCircle } from '../entities/tribe/territory-types';
-import { IndexedWorldState, IndexType } from '../world-index/world-index-types';
-import { calculateWrappedDistance } from '../utils/math-utils';
+import { getOwnerOfPoint, getTribesInfo } from '../utils';
 
 /** Size of the border post flag */
 const BORDER_POST_FLAG_SIZE = 8;
@@ -56,33 +53,6 @@ function drawBorderPost(ctx: CanvasRenderingContext2D, x: number, y: number, col
 }
 
 /**
- * Helper to check if a point is within a specific territory.
- * Assumes territory object has a 'checkPoint' method or 'towers' array with radius.
- * Since the Territory type isn't fully defined in snippets, we use a generic radius check strategy
- * common to this genre.
- */
-function getOwnerOfPoint(
-  x: number,
-  y: number,
-  worldWidth: number,
-  worldHeight: number,
-  index: IndexType<{
-    circle: TerritoryCircle;
-    leaderId: EntityId;
-  }>,
-): EntityId | null {
-  const rects = index.byRect({ left: x, top: y, right: x, bottom: y });
-  for (const rect of rects) {
-    const { circle, leaderId } = rect;
-    const distance = calculateWrappedDistance({ x, y }, circle.center, worldWidth, worldHeight);
-    if (distance <= circle.radius) {
-      return leaderId;
-    }
-  }
-  return null;
-}
-
-/**
  * Renders all tribe territory borders.
  * This should be called before rendering entities to have borders appear behind them.
  * Note: The canvas context should already be translated to world coordinates.
@@ -95,35 +65,21 @@ export function renderAllTerritories(
   _time: number,
   playerLeaderId?: EntityId,
 ): void {
-  const territories = (gameState as IndexedWorldState).territories;
-
   // 1. Setup Badges & Colors
-  const tribeBadges = new Map<EntityId, string>();
-  for (const entityId of territories.keys()) {
-    const human = gameState.entities.entities[entityId] as HumanEntity;
-    if (human && human.leaderId && human.tribeBadge) {
-      tribeBadges.set(human.leaderId, human.tribeBadge);
-    }
-  }
-
-  // Assign colors (Priority to player)
-  const sortedTerritories = Array.from(territories.entries()).sort(([idA], [idB]) => {
-    if (idA === playerLeaderId) return 1;
-    if (idB === playerLeaderId) return -1;
-    return 0;
-  });
+  const tribesInfo = getTribesInfo(gameState, playerLeaderId);
 
   let colorIndex = 1;
   const territoryColors = new Map<EntityId, string>();
+  const tribeBadges = new Map<EntityId, string>();
 
-  for (const [leaderId, territory] of sortedTerritories) {
-    const isPlayerTribe = leaderId === playerLeaderId;
+  for (const tribe of tribesInfo) {
+    const isPlayerTribe = tribe.leaderId === playerLeaderId;
     const tribeColorIndex = isPlayerTribe ? 0 : colorIndex++;
     const color = TERRITORY_COLORS[tribeColorIndex % TERRITORY_COLORS.length];
 
     // Store back into map for easy lookup later
-    territory.color = color;
-    territoryColors.set(leaderId, color);
+    territoryColors.set(tribe.leaderId, color);
+    tribeBadges.set(tribe.leaderId, tribe.tribeBadge || '');
   }
 
   // 2. Calculate Viewport Bounds
@@ -141,21 +97,13 @@ export function renderAllTerritories(
   // 3. Marching Grid Algorithm (Edge Detection)
   // We check the owner of the current point, and compare it to the Right and Down neighbors.
 
-  const index = (gameState as IndexedWorldState).search.territorySector;
-
   for (let y = startY; y <= endY; y += TERRITORY_GRID_STEP) {
     for (let x = startX; x <= endX; x += TERRITORY_GRID_STEP) {
-      const currentOwner = getOwnerOfPoint(x, y, gameState.mapDimensions.width, gameState.mapDimensions.height, index);
+      const currentOwner = getOwnerOfPoint(x, y, gameState);
 
       // -- Check Horizontal Edge (Current vs Right) --
       const nextX = x + TERRITORY_GRID_STEP;
-      const rightOwner = getOwnerOfPoint(
-        nextX,
-        y,
-        gameState.mapDimensions.width,
-        gameState.mapDimensions.height,
-        index,
-      );
+      const rightOwner = getOwnerOfPoint(nextX, y, gameState);
       if (currentOwner !== rightOwner) {
         // If one is null and other is valid, draw the valid one's border
         // If both are valid (War border), we can draw one or both. Here we draw the one that "starts" the edge relative to scan direction
@@ -174,7 +122,7 @@ export function renderAllTerritories(
 
       // -- Check Vertical Edge (Current vs Down) --
       const nextY = y + TERRITORY_GRID_STEP;
-      const downOwner = getOwnerOfPoint(x, nextY, gameState.mapDimensions.width, gameState.mapDimensions.height, index);
+      const downOwner = getOwnerOfPoint(x, nextY, gameState);
 
       if (currentOwner !== downOwner) {
         const ownerToDraw = currentOwner || downOwner;

@@ -45,6 +45,7 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       performanceMetrics: worldState.performanceMetrics,
       lastAutosaveTime: worldState.lastAutosaveTime,
       plantingZoneConnections: worldState.plantingZoneConnections,
+      terrainOwnership: worldState.terrainOwnership,
     };
 
     await workerManager.saveGame(serialized);

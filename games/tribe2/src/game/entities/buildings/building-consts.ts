@@ -71,6 +71,7 @@ export const BUILDING_CONSTRUCTION_BAR_COLOR = '#FFA500'; // Orange
 export const BUILDING_DESTRUCTION_BAR_COLOR = '#FF4500'; // Red-Orange
 export const BUILDING_PROGRESS_BAR_HEIGHT = 4;
 export const BUILDING_PROGRESS_BAR_OFFSET = 10;
+export const BORDER_EXPANSION_PAINT_RADIUS = 60; // Radius of territory claimed by pioneer
 
 // Helper to get dimensions easily
 export function getBuildingDimensions(type: BuildingType): BuildingDimensions {

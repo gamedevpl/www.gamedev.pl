@@ -7,8 +7,6 @@ import { GameWorldState } from '../world-types';
 import { indexItems } from './world-index-utils';
 import { IndexedWorldState } from './world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { calculateAllTerritories } from '../utils';
-import { vectorSubtract } from '../utils/math-utils';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -35,24 +33,8 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       prey: indexItems(prey),
       predator: indexItems(predators),
       building: indexItems(buildings),
-      territorySector: indexItems([]), // populated below
     },
-    territories: new Map(), // populated below
   };
-
-  // territories
-  indexedWorldState.territories = calculateAllTerritories(indexedWorldState);
-  indexedWorldState.search.territorySector = indexItems(
-    [...indexedWorldState.territories.entries()].flatMap(([leaderId, territory]) =>
-      territory.circles.map((circle) => ({
-        position: vectorSubtract(circle.center, { x: circle.radius, y: circle.radius }),
-        width: circle.radius * 2,
-        height: circle.radius * 2,
-        circle,
-        leaderId,
-      })),
-    ),
-  );
 
   return indexedWorldState;
 }

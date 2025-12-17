@@ -6,8 +6,6 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { TerritorySector, TribeTerritory } from '../entities/tribe/territory-types';
-import { EntityId } from '../entities/entities-types';
 
 /**
  * Defines a rectangle for spatial queries.
@@ -68,6 +66,8 @@ export interface IndexType<T> {
  */
 export interface IndexedWorldState extends GameWorldState {
   search: {
+    // Note: Territory ownership is tracked in GameWorldState.terrainOwnership grid, not here.
+    
     // entities
     human: IndexType<HumanEntity>;
     berryBush: IndexType<BerryBushEntity>;
@@ -75,8 +75,5 @@ export interface IndexedWorldState extends GameWorldState {
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
     building: IndexType<BuildingEntity>;
-    // territory
-    territorySector: IndexType<TerritorySector>;
   };
-  territories: Map<EntityId, TribeTerritory>;
 }

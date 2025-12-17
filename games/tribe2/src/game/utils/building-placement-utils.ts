@@ -1,6 +1,10 @@
 import { Vector2D } from './math-types';
 import { GameWorldState } from '../world-types';
-import { BuildingType, getBuildingDimensions } from '../entities/buildings/building-consts';
+import {
+  BORDER_EXPANSION_PAINT_RADIUS,
+  BuildingType,
+  getBuildingDimensions,
+} from '../entities/buildings/building-consts';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
 import { createBuilding as createBuildingEntity } from '../entities/entities-update';
@@ -8,7 +12,8 @@ import { isPositionOccupied, getTribeCenter } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
-import { canPlaceBuildingInTerritory } from '../entities/tribe/territory-utils';
+import { canPlaceBuildingInTerritory, paintTerrainOwnership } from '../entities/tribe/territory-utils';
+import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 import { getDepletedSectorsInArea } from '../entities/plants/soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
 import {
@@ -16,6 +21,9 @@ import {
   BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS,
   BUILDING_PLACEMENT_TRIG_CACHE_SIZE,
 } from '../ai-consts';
+import { VisualEffectType } from '../visual-effects/visual-effect-types';
+import { addVisualEffect } from './visual-effects-utils';
+import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
 
 /**
  * Statistics for building placement search performance.
@@ -306,8 +314,18 @@ export function createBuilding(
   buildingType: BuildingType,
   ownerId: EntityId,
   gameState: GameWorldState,
-): BuildingEntity {
+): BuildingEntity | null {
+  if (buildingType === BuildingType.BorderPost) {
+    paintTerrainOwnership(position, BORDER_EXPANSION_PAINT_RADIUS, ownerId, gameState);
+    addVisualEffect(gameState, VisualEffectType.BorderClaim, position, EFFECT_DURATION_SHORT_HOURS, ownerId);
+    return null;
+  }
+
   const building = createBuildingEntity(gameState.entities, position, buildingType, ownerId);
+
+  // Paint terrain ownership for the new building
+  paintTerrainOwnership(position, TERRITORY_BUILDING_RADIUS, ownerId, gameState);
+
   // Update planting zone connections when a new planting zone is created
   if (buildingType === BuildingType.PlantingZone) {
     updatePlantingZoneConnections(gameState);

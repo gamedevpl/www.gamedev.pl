@@ -23,6 +23,7 @@ import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -232,6 +233,9 @@ export function initWorld(): GameWorldState {
     autosaveIntervalSeconds: 5,
     lastAutosaveTime: Date.now(),
     plantingZoneConnections: {},
+    terrainOwnership: new Array(
+      Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
+    ).fill(null),
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -366,6 +370,9 @@ export function initIntroWorld(): GameWorldState {
     soilDepletion: createSoilDepletionState(),
     lastAutosaveTime: 0,
     plantingZoneConnections: {},
+    terrainOwnership: new Array(
+      Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
+    ).fill(null),
   };
 
   return indexWorldState(initialWorldState);

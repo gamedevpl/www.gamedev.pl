@@ -152,6 +152,7 @@ export interface GameWorldState {
   // Map from planting zone entity ID to its connections to adjacent zones of the same tribe.
   // This is recalculated whenever planting zones change.
   plantingZoneConnections: Record<EntityId, PlantingZoneConnections>;
+  terrainOwnership: Array<EntityId | null>; // 1D array representing ownership of each terrain tile
 }
 
 export type UpdateContext = {
