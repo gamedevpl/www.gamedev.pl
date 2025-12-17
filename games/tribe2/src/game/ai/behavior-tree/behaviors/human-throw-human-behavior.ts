@@ -169,7 +169,7 @@ export function createHumanThrowHumanBehavior(depth: number): BehaviorNode<Human
           depth + 2,
         ),
         {
-          taskType: 'attack',
+          taskType: 'hunt',
           maxCapacity: MAX_TRIBE_ATTACKERS_PER_TARGET,
           getTargetId: (_entity, _context, blackboard) =>
             Blackboard.get<EntityId>(blackboard, THROW_COMBAT_TARGET_KEY) ?? null,
