@@ -114,10 +114,11 @@ export function exportScenarioAsTypeScript(config: ScenarioConfig): string {
     lines.push(`  // Create buildings`);
     for (const building of config.buildings) {
       const ownerVarName = `tribe_${sanitizeName(building.tribeId)}_leader`;
+      const buildingTypeKey = getBuildingTypeKey(building.type);
       lines.push(`  const building_${sanitizeName(building.id)} = createBuilding(`);
       lines.push(`    entities,`);
       lines.push(`    { x: ${building.position.x}, y: ${building.position.y} },`);
-      lines.push(`    BuildingType.${capitalizeFirst(building.type)},`);
+      lines.push(`    BuildingType.${buildingTypeKey},`);
       lines.push(`    ${ownerVarName}.id,`);
       lines.push(`  );`);
       if (building.isConstructed) {
@@ -127,15 +128,6 @@ export function exportScenarioAsTypeScript(config: ScenarioConfig): string {
       lines.push(``);
     }
   }
-
-  // Find the player entity (for potential future use in generated code)
-  const playerTribe = config.tribes.find((t) => t.id === config.playerTribeId);
-  const playerHuman = playerTribe?.humans.find((h) => h.isPlayer);
-  // Player variable name can be used in generated code for viewport centering
-  const _playerVarName = playerHuman?.isLeader
-    ? `tribe_${sanitizeName(config.playerTribeId || '')}_leader`
-    : `human_${sanitizeName(playerHuman?.id || '')}`;
-  void _playerVarName; // Mark as intentionally unused for now
 
   lines.push(`  // Return the initial world state (simplified - add remaining fields as needed)`);
   lines.push(`  return {`);
@@ -166,10 +158,15 @@ function sanitizeName(name: string): string {
 }
 
 /**
- * Capitalizes the first letter of a string.
+ * Maps building type values to their corresponding BuildingType enum keys.
  */
-function capitalizeFirst(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+function getBuildingTypeKey(buildingType: string): string {
+  const typeMap: Record<string, string> = {
+    storageSpot: 'StorageSpot',
+    plantingZone: 'PlantingZone',
+    borderPost: 'BorderPost',
+  };
+  return typeMap[buildingType] || buildingType;
 }
 
 /**
