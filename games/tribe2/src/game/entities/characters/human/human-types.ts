@@ -77,6 +77,10 @@ export interface HumanEntity extends CharacterEntity {
   attackCooldown?: number;
   attackTargetId?: EntityId;
 
+  /** Cooldown time before being able to throw a stone again (range attack). */
+  throwCooldown?: number;
+  throwTargetId?: EntityId;
+
   /** Cooldown for the leader's high-level strategic decision-making. */
   leaderMetaStrategyCooldown?: number;
 
@@ -114,7 +118,8 @@ export type HumanAction =
   | 'procreating' // Reproducing
   | 'feeding' // Giving food to a child
   | 'attacking' // Engaging in combat
-  | 'planting' // Sowing seeds or placing plants
+  | 'throwing' // Throwing a stone (range attack)
+  | 'planting' // Sowing seeds or placed plants
   | 'depositing' // Depositing resources into storage
   | 'retrieving' // Retrieving resources from storage
   | 'takingOverBuilding' // Taking over an enemy building

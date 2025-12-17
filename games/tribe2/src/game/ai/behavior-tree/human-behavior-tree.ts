@@ -34,6 +34,7 @@ import {
   createPlayerCommandBehavior,
   createDiplomacyBehavior,
   createHumanHuntPreyBehavior,
+  createHumanThrowPreyBehavior,
   createHumanDefendAgainstPredatorBehavior,
   createStorageDepositBehavior,
   createStorageRetrieveBehavior,
@@ -175,6 +176,9 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       createSeekingFoodFromParentBehavior(2),
 
       // --- HUNTING BEHAVIORS ---
+      // First try ranged attack (throwing) if available
+      new AutopilotControlled(createHumanThrowPreyBehavior(3), 'attack', 'Gated Throw at Prey', 2),
+      // Fall back to melee hunting if ranged is on cooldown or target is close
       new AutopilotControlled(createHumanHuntPreyBehavior(3), 'attack', 'Gated Hunt Prey', 2),
       // --- SOCIAL/DEFAULT BEHAVIOR (FOLLOW PATRIARCH) ---
       new NonPlayerControlled(createFollowPatriarchBehavior(2), 'Gated Follow Patriarch', 2),

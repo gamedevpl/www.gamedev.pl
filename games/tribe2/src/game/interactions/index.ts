@@ -7,6 +7,7 @@ import { humanGatherFoodInteractions } from './human-gather-food-interaction';
 import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
 import { predatorHuntPreyInteraction } from './predator-hunt-prey-interaction';
 import { humanHuntPreyInteraction } from './human-hunt-prey-interaction';
+import { humanThrowPreyInteraction } from './human-throw-prey-interaction';
 import { predatorAttackHumanInteraction } from './predator-attack-human-interaction';
 import { humanAttackPredatorInteraction } from './human-attack-predator-interaction';
 import { preyProcreationInteraction } from './prey-procreation-interaction';
@@ -41,6 +42,7 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   predatorEatCorpseInteraction, // Predators can eat from any corpse
   predatorHuntPreyInteraction,
   humanHuntPreyInteraction,
+  humanThrowPreyInteraction, // Humans can throw stones at prey (ranged attack)
   humanAttackPredatorInteraction, // Humans can defend against predators
   predatorAttackHumanInteraction,
   predatorAttackRivalInteraction,

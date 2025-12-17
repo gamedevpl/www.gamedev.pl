@@ -11,6 +11,8 @@ import {
   HUMAN_IDLE,
   HUMAN_ATTACKING,
   HumanAttackingStateData,
+  HUMAN_THROWING,
+  HumanThrowingStateData,
 } from './human-state-types';
 
 const MOVEMENT_THRESHOLD = 7.5; // Distance to consider "close enough" to target
@@ -31,6 +33,19 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
           attackTargetId: entity.attackTargetId,
           attackStartTime: updateContext.gameState.time,
         } as HumanAttackingStateData,
+      };
+    }
+
+    if (entity.activeAction === 'throwing' && entity.throwTargetId) {
+      return {
+        nextState: HUMAN_THROWING,
+        data: {
+          ...movingData,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_MOVING,
+          throwTargetId: entity.throwTargetId,
+          throwStartTime: updateContext.gameState.time,
+        } as HumanThrowingStateData,
       };
     }
 

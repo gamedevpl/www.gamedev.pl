@@ -24,6 +24,7 @@ export * from './desperate-attack-behavior';
 export * from './player-command-behavior';
 export * from './diplomacy-behavior';
 export * from './human-hunt-prey-behavior';
+export * from './human-throw-prey-behavior';
 export * from './human-defend-predator-behavior';
 export * from './tribe-role-assignment-behavior';
 export * from './tribe-role-management-behavior';

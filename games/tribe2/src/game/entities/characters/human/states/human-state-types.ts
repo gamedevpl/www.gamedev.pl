@@ -10,6 +10,7 @@ export const HUMAN_DEPOSITING = 'humanDepositing'; // When depositing resources 
 export const HUMAN_RETRIEVING = 'humanRetrieving'; // When retrieving resources from storage
 export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with another human
 export const HUMAN_ATTACKING = 'humanAttacking';
+export const HUMAN_THROWING = 'humanThrowing'; // When throwing a stone (range attack)
 export const HUMAN_PLANTING = 'humanPlanting';
 
 interface HumanIdleStateData extends StateData {
@@ -51,6 +52,11 @@ export interface HumanPlantingStateData extends StateData {
   plantingSpot: Vector2D;
 }
 
+export interface HumanThrowingStateData extends StateData {
+  throwTargetId: EntityId;
+  throwStartTime: number;
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
@@ -60,4 +66,5 @@ export type HumanStateData =
   | HumanRetrievingStateData
   | HumanProcreatingStateData
   | HumanAttackingStateData
+  | HumanThrowingStateData
   | HumanPlantingStateData;

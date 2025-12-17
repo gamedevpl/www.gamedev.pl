@@ -9,6 +9,8 @@ import {
   HUMAN_EATING,
   HUMAN_ATTACKING,
   HumanAttackingStateData,
+  HUMAN_THROWING,
+  HumanThrowingStateData,
   HUMAN_PLANTING,
   HumanPlantingStateData,
   HUMAN_DEPOSITING,
@@ -31,6 +33,19 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           attackTargetId: entity.attackTargetId,
           attackStartTime: updateContext.gameState.time,
         } as HumanAttackingStateData,
+      };
+    }
+
+    if (entity.activeAction === 'throwing' && entity.throwTargetId) {
+      return {
+        nextState: HUMAN_THROWING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          throwTargetId: entity.throwTargetId,
+          throwStartTime: updateContext.gameState.time,
+        } as HumanThrowingStateData,
       };
     }
 

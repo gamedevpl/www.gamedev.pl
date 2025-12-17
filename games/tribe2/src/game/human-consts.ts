@@ -60,5 +60,14 @@ export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
 export const HUMAN_PARRY_ANGLE_DEGREES = 45; // Angle in degrees for a successful parry
 export const HUMAN_PARRY_CHANCE = 0.05; // Chance (0-1) to parry if angle is correct
 
+// Human Range Attack Constants (Stone Throwing)
+export const HUMAN_THROW_RANGE = 150; // Range in pixels for throwing a stone
+export const HUMAN_THROW_DAMAGE = 25; // Damage dealt by a thrown stone (less than melee)
+export const HUMAN_THROW_COOLDOWN_HOURS: number = 8; // Longer cooldown than melee attack (8 game hours)
+export const HUMAN_THROW_BUILDUP_HOURS: number = 1; // Time in game hours for throw windup (must stop to throw)
+export const HUMAN_THROW_PROJECTILE_SPEED: number = 200; // Speed of the projectile in pixels per second
+export const HUMAN_THROW_MALE_DAMAGE_MODIFIER = 1.3; // Males throw harder
+export const HUMAN_THROW_PUSHBACK_FORCE: number = 3; // Force applied to target on hit (less than melee)
+
 // Supply Chain Constants
 export const SUPPLY_PROXIMITY_THRESHOLD: number = 200; // Distance in pixels at which demanders start engaging with approaching suppliers

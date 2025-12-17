@@ -20,6 +20,7 @@ export enum VisualEffectType {
   Seize,
   AutopilotMoveTarget,
   BorderClaim,
+  StoneThrow, // Visual effect for throwing a stone (range attack)
 }
 
 export interface VisualEffect {

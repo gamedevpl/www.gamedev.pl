@@ -8,6 +8,7 @@ export const allHumanStates = [
   humanRetrievingState,
   humanProcreatingState,
   humanAttackingState,
+  humanThrowingState,
   humanPlantingState,
 ];
 
@@ -20,4 +21,5 @@ import { humanDepositingState } from './human-depositing-state';
 import { humanRetrievingState } from './human-retrieving-state';
 import { humanProcreatingState } from './human-procreating-state';
 import { humanAttackingState } from './human-attacking-state';
+import { humanThrowingState } from './human-throwing-state';
 import { humanPlantingState } from './human-planting-state';

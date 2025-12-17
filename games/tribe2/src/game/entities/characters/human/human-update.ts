@@ -86,6 +86,11 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     if (entity.attackCooldown < 0) entity.attackCooldown = 0;
   }
 
+  if (entity.throwCooldown) {
+    entity.throwCooldown -= gameHoursDelta;
+    if (entity.throwCooldown < 0) entity.throwCooldown = 0;
+  }
+
   if (entity.feedParentCooldownTime) {
     entity.feedParentCooldownTime -= gameHoursDelta;
     if (entity.feedParentCooldownTime < 0) entity.feedParentCooldownTime = 0;
