@@ -12,6 +12,11 @@ import {
   PredatorAttackingStateData,
   PredatorEatingStateData,
 } from './predator-state-types';
+import {
+  SOIL_PATH_PREFERENCE_FORCE,
+  SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+} from '../../../plants/soil-depletion-consts';
+import { getPathPreferenceBias } from '../../../plants/soil-depletion-update';
 
 const MOVEMENT_THRESHOLD = 12; // Distance to consider "close enough" to target for predators
 
@@ -86,24 +91,32 @@ class PredatorMovingState implements State<PredatorEntity, PredatorStateData> {
       };
     }
 
-    const dirToTarget = getDirectionVectorOnTorus(
-      entity.position,
-      targetPosition,
-      context.updateContext.gameState.mapDimensions.width,
-      context.updateContext.gameState.mapDimensions.height,
-    );
+    const { width: worldWidth, height: worldHeight } = updateContext.gameState.mapDimensions;
+
+    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, worldWidth, worldHeight);
     entity.direction = vectorNormalize(dirToTarget);
+
+    // Apply small force towards depleted soil (more depleted = more force)
+    const pathBias = getPathPreferenceBias(
+      updateContext.gameState.soilDepletion,
+      entity.position,
+      entity.direction,
+      SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+      worldWidth,
+      worldHeight,
+    );
+
+    // Add force towards depleted soil - the bias is already weighted by depletion level
+    entity.forces.push({
+      x: pathBias.x * SOIL_PATH_PREFERENCE_FORCE,
+      y: pathBias.y * SOIL_PATH_PREFERENCE_FORCE,
+    });
 
     // Set acceleration based on effective speed
     entity.acceleration = getEffectivePredatorSpeed(entity);
 
     // Check if we've reached the target
-    const distance = calculateWrappedDistance(
-      entity.position,
-      targetPosition,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
-    );
+    const distance = calculateWrappedDistance(entity.position, targetPosition, worldWidth, worldHeight);
 
     if (distance < MOVEMENT_THRESHOLD) {
       // Close enough to target

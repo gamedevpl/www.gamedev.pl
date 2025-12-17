@@ -1,6 +1,6 @@
 import {
   SOIL_DEPLETED_SPEED_BONUS,
-  SOIL_PATH_PREFERENCE_STRENGTH,
+  SOIL_PATH_PREFERENCE_FORCE,
   SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
 } from '../../../plants/soil-depletion-consts';
 import { getSoilSpeedModifier, getPathPreferenceBias } from '../../../plants/soil-depletion-update';
@@ -78,25 +78,23 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     const { width: worldWidth, height: worldHeight } = updateContext.gameState.mapDimensions;
     
     const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, worldWidth, worldHeight);
-    let direction = vectorNormalize(dirToTarget);
+    entity.direction = vectorNormalize(dirToTarget);
 
-    // Apply subtle path preference bias towards depleted soil
+    // Apply small force towards depleted soil (more depleted = more force)
     const pathBias = getPathPreferenceBias(
       updateContext.gameState.soilDepletion,
       entity.position,
-      direction,
+      entity.direction,
       SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
       worldWidth,
       worldHeight,
     );
 
-    // Blend the bias into the direction
-    direction = vectorNormalize({
-      x: direction.x + pathBias.x * SOIL_PATH_PREFERENCE_STRENGTH,
-      y: direction.y + pathBias.y * SOIL_PATH_PREFERENCE_STRENGTH,
+    // Add force towards depleted soil - the bias is already weighted by depletion level
+    entity.forces.push({
+      x: pathBias.x * SOIL_PATH_PREFERENCE_FORCE,
+      y: pathBias.y * SOIL_PATH_PREFERENCE_FORCE,
     });
-
-    entity.direction = direction;
 
     // Get terrain speed modifier from soil depletion state
     const terrainSpeedModifier = getSoilSpeedModifier(
