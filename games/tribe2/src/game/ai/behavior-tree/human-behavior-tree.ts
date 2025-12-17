@@ -35,6 +35,8 @@ import {
   createDiplomacyBehavior,
   createHumanHuntPreyBehavior,
   createHumanThrowPreyBehavior,
+  createHumanThrowPredatorBehavior,
+  createHumanThrowHumanBehavior,
   createHumanDefendAgainstPredatorBehavior,
   createStorageDepositBehavior,
   createStorageRetrieveBehavior,
@@ -61,6 +63,13 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       // --- HIGHEST PRIORITY: SURVIVAL & IMMEDIATE DEFENSE ---
       createFleeingBehavior(2),
       createDefendFamilyBehavior(2),
+      // Ranged defense against predators (throw stones first)
+      new AutopilotControlled(
+        createHumanThrowPredatorBehavior(2),
+        'attack',
+        'Gated Throw at Predator',
+        2,
+      ),
       new AutopilotControlled(
         createHumanDefendAgainstPredatorBehavior(2),
         'attack',
@@ -101,6 +110,8 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       ),
 
       // --- TRIBE COMBAT (MEMBER) ---
+      // Ranged tribal combat first (throw stones at enemies)
+      new AutopilotControlled(createHumanThrowHumanBehavior(3), 'attack', 'Gated Throw at Enemy Human', 2),
       createTribeMemberCombatBehavior(2),
 
       // --- COMBAT BEHAVIORS (ATTACK) ---
