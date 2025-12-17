@@ -30,3 +30,7 @@ export const SOIL_VISIBLE_DEPLETION_THRESHOLD = 50; // Threshold for clearly vis
 
 // Movement bonus on depleted soil
 export const SOIL_DEPLETED_SPEED_BONUS = 1.25; // 25% faster movement on depleted paths
+
+// Path preference - force applied towards depleted soil during movement
+export const SOIL_PATH_PREFERENCE_FORCE = 0.05; // Force strength applied towards depleted soil (scales with depletion)
+export const SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE = 30; // Distance to sample for path preference

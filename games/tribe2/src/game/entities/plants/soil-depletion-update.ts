@@ -324,3 +324,62 @@ export function getSoilDepletionLevel(
   // health 0 -> depletion 1
   return (SOIL_HEALTH_MAX - health) / SOIL_HEALTH_MAX;
 }
+
+/**
+ * Calculates a direction bias towards nearby depleted soil.
+ * This creates a subtle preference for entities to move along existing paths.
+ * Samples positions around the entity and returns a weighted direction towards more depleted soil.
+ * 
+ * @param state The soil depletion state
+ * @param position Current entity position
+ * @param currentDirection Current movement direction (normalized)
+ * @param sampleDistance Distance to sample around the entity
+ * @param worldWidth World width for wrapping
+ * @param worldHeight World height for wrapping
+ * @returns A bias vector (not normalized) pointing towards depleted soil, or zero if no bias
+ */
+export function getPathPreferenceBias(
+  state: SoilDepletionState,
+  position: Vector2D,
+  currentDirection: Vector2D,
+  sampleDistance: number,
+  worldWidth: number,
+  worldHeight: number,
+): Vector2D {
+  // Sample 4 positions perpendicular to movement direction and slightly ahead
+  // This biases movement towards depleted soil while still heading towards target
+  const perpX = -currentDirection.y;
+  const perpY = currentDirection.x;
+  
+  // Sample positions: left, right, and forward-left, forward-right
+  const samples = [
+    { dx: perpX * sampleDistance, dy: perpY * sampleDistance }, // left
+    { dx: -perpX * sampleDistance, dy: -perpY * sampleDistance }, // right
+    { dx: currentDirection.x * sampleDistance * 0.5 + perpX * sampleDistance * 0.5, 
+      dy: currentDirection.y * sampleDistance * 0.5 + perpY * sampleDistance * 0.5 }, // forward-left
+    { dx: currentDirection.x * sampleDistance * 0.5 - perpX * sampleDistance * 0.5, 
+      dy: currentDirection.y * sampleDistance * 0.5 - perpY * sampleDistance * 0.5 }, // forward-right
+  ];
+  
+  let biasX = 0;
+  let biasY = 0;
+  
+  for (const sample of samples) {
+    const samplePos = {
+      x: ((position.x + sample.dx) % worldWidth + worldWidth) % worldWidth,
+      y: ((position.y + sample.dy) % worldHeight + worldHeight) % worldHeight,
+    };
+    
+    const depletion = getSoilDepletionLevel(state, samplePos, worldWidth, worldHeight);
+    
+    // Weight the direction towards this sample by its depletion level
+    // Normalize the sample offset direction
+    const dist = Math.sqrt(sample.dx * sample.dx + sample.dy * sample.dy);
+    if (dist > 0) {
+      biasX += (sample.dx / dist) * depletion;
+      biasY += (sample.dy / dist) * depletion;
+    }
+  }
+  
+  return { x: biasX, y: biasY };
+}

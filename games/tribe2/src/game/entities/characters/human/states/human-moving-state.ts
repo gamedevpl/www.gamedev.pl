@@ -1,5 +1,9 @@
-import { SOIL_DEPLETED_SPEED_BONUS } from '../../../plants/soil-depletion-consts';
-import { getSoilSpeedModifier } from '../../../plants/soil-depletion-update';
+import {
+  SOIL_DEPLETED_SPEED_BONUS,
+  SOIL_PATH_PREFERENCE_STRENGTH,
+  SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+} from '../../../plants/soil-depletion-consts';
+import { getSoilSpeedModifier, getPathPreferenceBias } from '../../../plants/soil-depletion-update';
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
 import { Vector2D } from '../../../../utils/math-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
@@ -71,20 +75,35 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       };
     }
 
-    const dirToTarget = getDirectionVectorOnTorus(
+    const { width: worldWidth, height: worldHeight } = updateContext.gameState.mapDimensions;
+    
+    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, worldWidth, worldHeight);
+    let direction = vectorNormalize(dirToTarget);
+
+    // Apply subtle path preference bias towards depleted soil
+    const pathBias = getPathPreferenceBias(
+      updateContext.gameState.soilDepletion,
       entity.position,
-      targetPosition,
-      context.updateContext.gameState.mapDimensions.width,
-      context.updateContext.gameState.mapDimensions.height,
+      direction,
+      SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+      worldWidth,
+      worldHeight,
     );
-    entity.direction = vectorNormalize(dirToTarget);
+
+    // Blend the bias into the direction
+    direction = vectorNormalize({
+      x: direction.x + pathBias.x * SOIL_PATH_PREFERENCE_STRENGTH,
+      y: direction.y + pathBias.y * SOIL_PATH_PREFERENCE_STRENGTH,
+    });
+
+    entity.direction = direction;
 
     // Get terrain speed modifier from soil depletion state
     const terrainSpeedModifier = getSoilSpeedModifier(
       updateContext.gameState.soilDepletion,
       entity.position,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
+      worldWidth,
+      worldHeight,
       SOIL_DEPLETED_SPEED_BONUS,
     );
 
@@ -92,12 +111,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     entity.acceleration = getEffectiveSpeed(entity, terrainSpeedModifier);
 
     // Check if we've reached the target
-    const distance = calculateWrappedDistance(
-      entity.position,
-      targetPosition,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
-    );
+    const distance = calculateWrappedDistance(entity.position, targetPosition, worldWidth, worldHeight);
 
     if (distance < MOVEMENT_THRESHOLD) {
       // Close enough to target

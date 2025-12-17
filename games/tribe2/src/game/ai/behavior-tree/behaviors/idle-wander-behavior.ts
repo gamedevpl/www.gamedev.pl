@@ -2,7 +2,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
-import { getRandomNearbyPositionPreferringPaths } from '../../../utils/spatial-utils';
+import { getRandomNearbyPosition } from '../../../utils/spatial-utils';
 import { vectorNormalize, calculateWrappedDistance } from '../../../utils/math-utils';
 import { isValidWanderPosition, constrainWanderToTerritory } from '../../../entities/tribe/territory-utils';
 import { HUMAN_AI_WANDER_RADIUS } from '../../../ai-consts';
@@ -12,8 +12,7 @@ const WANDER_COOLDOWN_HOURS = 0.5;
 
 /**
  * Creates the behavior for wandering within tribe territory. This is a fallback action.
- * The entity will move to random positions within their tribe's territory bounds,
- * with a subtle preference for already depleted soil to encourage path formation.
+ * The entity will move to random positions within their tribe's territory bounds.
  * @returns A behavior node representing the idle/wander behavior.
  */
 export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntity> {
@@ -34,13 +33,12 @@ export function createIdleWanderBehavior(depth: number): BehaviorNode<HumanEntit
         calculateWrappedDistance(human.position, wanderTarget, worldWidth, worldHeight) < 20;
 
       if (needsNewTarget) {
-        // Generate a random nearby position, preferring already depleted soil (existing paths)
-        const randomTarget = getRandomNearbyPositionPreferringPaths(
+        // Generate a random nearby position
+        const randomTarget = getRandomNearbyPosition(
           human.position,
           HUMAN_AI_WANDER_RADIUS,
           worldWidth,
           worldHeight,
-          gameState.soilDepletion,
         );
 
         // If the human has a tribe, constrain wandering to territory

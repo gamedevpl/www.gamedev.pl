@@ -4,6 +4,11 @@ import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } 
 import { PreyEntity } from '../prey-types';
 import { getEffectivePreySpeed } from '../prey-utils';
 import { PreyStateData, PREY_IDLE, PREY_MOVING } from './prey-state-types';
+import {
+  SOIL_PATH_PREFERENCE_STRENGTH,
+  SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+} from '../../../plants/soil-depletion-consts';
+import { getPathPreferenceBias } from '../../../plants/soil-depletion-update';
 
 const MOVEMENT_THRESHOLD = 10; // Distance to consider "close enough" to target for prey
 
@@ -51,24 +56,34 @@ class PreyMovingState implements State<PreyEntity, PreyStateData> {
       };
     }
 
-    const dirToTarget = getDirectionVectorOnTorus(
+    const { width: worldWidth, height: worldHeight } = updateContext.gameState.mapDimensions;
+
+    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, worldWidth, worldHeight);
+    let direction = vectorNormalize(dirToTarget);
+
+    // Apply subtle path preference bias towards depleted soil
+    const pathBias = getPathPreferenceBias(
+      updateContext.gameState.soilDepletion,
       entity.position,
-      targetPosition,
-      context.updateContext.gameState.mapDimensions.width,
-      context.updateContext.gameState.mapDimensions.height,
+      direction,
+      SOIL_PATH_PREFERENCE_SAMPLE_DISTANCE,
+      worldWidth,
+      worldHeight,
     );
-    entity.direction = vectorNormalize(dirToTarget);
+
+    // Blend the bias into the direction
+    direction = vectorNormalize({
+      x: direction.x + pathBias.x * SOIL_PATH_PREFERENCE_STRENGTH,
+      y: direction.y + pathBias.y * SOIL_PATH_PREFERENCE_STRENGTH,
+    });
+
+    entity.direction = direction;
 
     // Set acceleration based on effective speed
     entity.acceleration = getEffectivePreySpeed(entity);
 
     // Check if we've reached the target
-    const distance = calculateWrappedDistance(
-      entity.position,
-      targetPosition,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
-    );
+    const distance = calculateWrappedDistance(entity.position, targetPosition, worldWidth, worldHeight);
 
     if (distance < MOVEMENT_THRESHOLD) {
       // Close enough to target
