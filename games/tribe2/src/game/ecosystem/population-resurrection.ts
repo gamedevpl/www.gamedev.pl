@@ -3,7 +3,7 @@
  * Handles direct population intervention when species go extinct.
  */
 
-import { createPrey, createPredator, createBerryBush } from '../entities/entities-update';
+import { createPrey, createPredator, createBerryBush, createHuman } from '../entities/entities-update';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { generateRandomPreyGeneCode } from '../entities/characters/prey/prey-utils';
@@ -14,7 +14,12 @@ import {
 } from '../game-consts.ts';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
 import { Vector2D } from '../utils/math-types';
+import { generateTribeBadge } from '../utils/general-utils';
+
+// Minimum human population threshold for emergency intervention
+const MIN_HUMAN_POPULATION_THRESHOLD = 4;
 
 /**
  * Find a good spawn location for prey near bushes but away from predators and humans
@@ -189,6 +194,107 @@ function findBushSpawnLocation(indexedState: IndexedWorldState): Vector2D {
 }
 
 /**
+ * Find a good spawn location for humans near bushes but away from predators
+ */
+function findHumanSpawnLocation(indexedState: IndexedWorldState): Vector2D {
+  const bushes = indexedState.search.berryBush.byProperty('type', 'berryBush') as BerryBushEntity[];
+  const predators = indexedState.search.predator.byProperty('type', 'predator');
+  const existingHumans = indexedState.search.human.byProperty('type', 'human') as HumanEntity[];
+  
+  // Try to find location near bushes and away from predators
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let candidate: Vector2D;
+    
+    if (bushes.length > 0 && attempt < 15) {
+      // Try to spawn near a bush for food access
+      const randomBush = bushes[Math.floor(Math.random() * bushes.length)];
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = 50 + Math.random() * 100; // 50-150 pixels from bush
+      candidate = {
+        x: Math.max(50, Math.min(MAP_WIDTH - 50, randomBush.position.x + Math.cos(angle) * distance)),
+        y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomBush.position.y + Math.sin(angle) * distance))
+      };
+    } else if (existingHumans.length > 0 && attempt < 18) {
+      // If no bushes found, spawn near existing humans for grouping
+      const randomHuman = existingHumans[Math.floor(Math.random() * existingHumans.length)];
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = 30 + Math.random() * 70; // 30-100 pixels from human
+      candidate = {
+        x: Math.max(50, Math.min(MAP_WIDTH - 50, randomHuman.position.x + Math.cos(angle) * distance)),
+        y: Math.max(50, Math.min(MAP_HEIGHT - 50, randomHuman.position.y + Math.sin(angle) * distance))
+      };
+    } else {
+      // Fallback to random location away from edges
+      candidate = {
+        x: 50 + Math.random() * (MAP_WIDTH - 100),
+        y: 50 + Math.random() * (MAP_HEIGHT - 100)
+      };
+    }
+    
+    // Check if location is safe (not too close to predators)
+    let isSafe = true;
+    const minSafeDistance = 150;
+    
+    for (const predator of predators) {
+      const distance = Math.sqrt((candidate.x - predator.position.x) ** 2 + (candidate.y - predator.position.y) ** 2);
+      if (distance < minSafeDistance) {
+        isSafe = false;
+        break;
+      }
+    }
+    
+    if (isSafe) {
+      return candidate;
+    }
+  }
+  
+  // Fallback to center area if no safe location found
+  return {
+    x: MAP_WIDTH * 0.3 + Math.random() * MAP_WIDTH * 0.4,
+    y: MAP_HEIGHT * 0.3 + Math.random() * MAP_HEIGHT * 0.4
+  };
+}
+
+/**
+ * Respawn humans when population is critically low
+ * Creates a new tribe with a male leader and a female partner
+ */
+function respawnHumans(gameState: GameWorldState, count: number = 4): void {
+  console.log(`🚨 Respawning ${count} humans to prevent extinction`);
+  const indexedState = gameState as IndexedWorldState;
+  
+  // Create humans in pairs (male leader + female) to form a viable tribe
+  const pairsToCreate = Math.ceil(count / 2);
+  
+  for (let i = 0; i < pairsToCreate; i++) {
+    const spawnPosition = findHumanSpawnLocation(indexedState);
+    const tribeBadge = generateTribeBadge();
+    
+    // Create male as tribe leader
+    const male = createHuman(
+      gameState.entities,
+      { x: spawnPosition.x, y: spawnPosition.y },
+      gameState.time,
+      'male',
+      false, // isPlayer = false
+    );
+    male.leaderId = male.id; // Male is the leader
+    male.tribeBadge = tribeBadge;
+    
+    // Create female partner in the same tribe
+    const female = createHuman(
+      gameState.entities,
+      { x: spawnPosition.x + 30, y: spawnPosition.y },
+      gameState.time,
+      'female',
+      false, // isPlayer = false
+    );
+    female.leaderId = male.id; // Female joins the tribe
+    female.tribeBadge = tribeBadge;
+  }
+}
+
+/**
  * Respawn prey when they go extinct
  */
 function respawnPrey(gameState: GameWorldState, count: number = 4): void {
@@ -223,6 +329,7 @@ export function handlePopulationExtinction(gameState: GameWorldState): boolean {
   const indexedState = gameState as IndexedWorldState;
   const preyCount = indexedState.search.prey.count();
   const predatorCount = indexedState.search.predator.count();
+  const humanCount = indexedState.search.human.count();
   
   let interventionMade = false;
   
@@ -238,6 +345,12 @@ export function handlePopulationExtinction(gameState: GameWorldState): boolean {
     interventionMade = true;
   }
   
+  // Respawn humans if extinct (only if game is not over - don't resurrect player's lineage)
+  if (humanCount === 0 && !gameState.gameOver) {
+    respawnHumans(gameState, 4); // Respawn 2 pairs of humans
+    interventionMade = true;
+  }
+  
   return interventionMade;
 }
 
@@ -249,6 +362,7 @@ export function emergencyPopulationBoost(gameState: GameWorldState): boolean {
   const preyCount = indexedState.search.prey.count();
   const predatorCount = indexedState.search.predator.count();
   const bushCount = indexedState.search.berryBush.count();
+  const humanCount = indexedState.search.human.count();
   
   let interventionMade = false;
   
@@ -272,6 +386,13 @@ export function emergencyPopulationBoost(gameState: GameWorldState): boolean {
       const bushPosition = findBushSpawnLocation(indexedState);
       createBerryBush(gameState.entities, bushPosition, gameState.time);
     }
+    interventionMade = true;
+  }
+  
+  // Boost humans if population is critically low (only if game is not over)
+  if (humanCount > 0 && humanCount < MIN_HUMAN_POPULATION_THRESHOLD && !gameState.gameOver) {
+    const boostAmount = Math.max(2, MIN_HUMAN_POPULATION_THRESHOLD - humanCount);
+    respawnHumans(gameState, boostAmount);
     interventionMade = true;
   }
   
