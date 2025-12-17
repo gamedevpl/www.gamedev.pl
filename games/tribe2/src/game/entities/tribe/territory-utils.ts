@@ -61,15 +61,111 @@ export function checkPositionInTerritory(
 }
 
 /**
+ * Checks if a tribe has any territory at all.
+ * @param ownerId The tribe leader ID
+ * @param gameState The current game state
+ */
+export function tribeHasTerritory(ownerId: EntityId, gameState: GameWorldState): boolean {
+  // Fast native check
+  return gameState.terrainOwnership.includes(ownerId);
+}
+
+/**
+ * Checks if placing territory at a position with a given radius would maintain contiguity.
+ * Rules:
+ * 1. Must not overlap with another tribe's territory.
+ * 2. Must touch existing territory of the same tribe, OR
+ * 3. If the tribe has NO territory, it can be placed anywhere (that isn't owned by others).
+ *
+ * @param position The center of the new territory
+ * @param radius The radius of the new territory
+ * @param ownerId The tribe leader ID
+ * @param gameState The current game state
+ */
+export function checkTerritoryContiguity(
+  position: Vector2D,
+  radius: number,
+  ownerId: EntityId,
+  gameState: GameWorldState,
+): { valid: boolean; reason?: string } {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+  const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  let hasAdjacency = false;
+  let overlapsOtherTribe = false;
+
+  // Scan the area that would be painted
+  for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
+    for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+
+      const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+      const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+
+      const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+
+      if (distance <= radius) {
+        const index = gridY * gridWidth + gridX;
+        const currentOwner = gameState.terrainOwnership[index];
+
+        if (currentOwner === ownerId) {
+          hasAdjacency = true;
+        } else if (currentOwner !== null) {
+          overlapsOtherTribe = true;
+        }
+      }
+    }
+  }
+
+  if (overlapsOtherTribe) {
+    return { valid: false, reason: "Position overlaps with another tribe's territory" };
+  }
+
+  if (hasAdjacency) {
+    return { valid: true };
+  }
+
+  // If no adjacency found, check if it's the first territory
+  if (!tribeHasTerritory(ownerId, gameState)) {
+    return { valid: true };
+  }
+
+  return { valid: false, reason: 'Territory must be contiguous with existing territory' };
+}
+
+/**
  * Checks if a position is valid for building placement based on territory rules.
  * - Must be inside or near the owner's territory (or no territory exists yet)
  * - Must not be inside another tribe's territory
+ * - If radius is provided, checks for contiguity of the resulting territory
+ *
+ * @param position Position to check
+ * @param ownerId Owner of the building
+ * @param gameState Game state
+ * @param radius Optional radius of territory the building will claim. If > 0, strict contiguity check is performed.
  */
 export function canPlaceBuildingInTerritory(
   position: Vector2D,
   ownerId: EntityId,
   gameState: GameWorldState,
+  radius: number = 0,
 ): { canPlace: boolean; reason?: string } {
+  // If a radius is provided, perform the strict contiguity check
+  if (radius > 0) {
+    const contiguityCheck = checkTerritoryContiguity(position, radius, ownerId, gameState);
+    if (!contiguityCheck.valid) {
+      return { canPlace: false, reason: contiguityCheck.reason };
+    }
+    return { canPlace: true };
+  }
+
+  // Fallback to simple point check (legacy behavior or for 0 radius)
   const positionOwner = getOwnerOfPoint(position.x, position.y, gameState);
 
   // If the position is unowned or owned by the builder, allow placement
@@ -173,13 +269,8 @@ export function constrainWanderToTerritory(
 }
 
 /**
- * Paints terrain ownership in a circular area around a position.
- * Used when buildings are placed to claim territory.
- *
- * @param position The center position of the territory to claim (typically a building position)
- * @param radius The radius of the circular territory area (typically TERRITORY_BUILDING_RADIUS)
- * @param ownerId The entity ID of the tribe leader claiming this territory
- * @param gameState The current game state
+ * Paints terrain ownership with a robust 4-step process to ensure
+ * clean, solid shapes without holes, elbows, or pixel noise.
  */
 export function paintTerrainOwnership(
   position: Vector2D,
@@ -189,44 +280,188 @@ export function paintTerrainOwnership(
 ): void {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
-  // Calculate grid dimensions
+  // Grid config
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
 
-  // Calculate the bounding box of grid cells affected by the circular radius
-  // We need to check cells in a square area that encompasses the circle
+  // --- STEP 1: Paint the main circle (Standard) ---
   const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
-
-  // Convert position to grid coordinates
   const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
   const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
 
-  // Iterate through all grid cells in the bounding box
   for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
     for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
-      // Calculate grid coordinates with wrapping
       const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
       const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
-
-      // Calculate the cell's center position in world coordinates
       const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
       const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
 
-      // Check if the cell center is within radius of the building position using wrapped distance
       const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
 
       if (distance <= radius) {
-        // Calculate the 1D array index
         const index = gridY * gridWidth + gridX;
-
-        // Only overwrite cells that are unowned or already owned by the same tribe
-        // This respects existing ownership from other tribes
         if (gameState.terrainOwnership[index] === null || gameState.terrainOwnership[index] === ownerId) {
           gameState.terrainOwnership[index] = ownerId;
         }
       }
     }
   }
+
+  // --- STEP 2: Per-Pixel Bridge Filling ---
+  // Connects walls that are close to each other (fixes "elbows")
+  const BRIDGE_CHECK_DIST = 3;
+  const scanRange = radiusInCells + BRIDGE_CHECK_DIST + 2;
+  const cellsToBridge: number[] = [];
+
+  for (let dy = -scanRange; dy <= scanRange; dy++) {
+    for (let dx = -scanRange; dx <= scanRange; dx++) {
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+      const index = gridY * gridWidth + gridX;
+
+      if (gameState.terrainOwnership[index] === null) {
+        let isBridged = false;
+
+        // Check 4 Axes
+        const axes = [
+          { x: 1, y: 0 },
+          { x: 0, y: 1 },
+          { x: 1, y: 1 },
+          { x: 1, y: -1 },
+        ];
+
+        for (const axis of axes) {
+          let foundPositive = false;
+          let foundNegative = false;
+
+          for (let d = 1; d <= BRIDGE_CHECK_DIST; d++) {
+            const nGx = (((gridX + axis.x * d) % gridWidth) + gridWidth) % gridWidth;
+            const nGy = (((gridY + axis.y * d) % gridHeight) + gridHeight) % gridHeight;
+            const nIndex = nGy * gridWidth + nGx;
+            if (gameState.terrainOwnership[nIndex] === ownerId) {
+              foundPositive = true;
+              break;
+            }
+          }
+
+          if (foundPositive) {
+            for (let d = 1; d <= BRIDGE_CHECK_DIST; d++) {
+              const nGx = (((gridX - axis.x * d) % gridWidth) + gridWidth) % gridWidth;
+              const nGy = (((gridY - axis.y * d) % gridHeight) + gridHeight) % gridHeight;
+              const nIndex = nGy * gridWidth + nGx;
+              if (gameState.terrainOwnership[nIndex] === ownerId) {
+                foundNegative = true;
+                break;
+              }
+            }
+          }
+
+          if (foundPositive && foundNegative) {
+            isBridged = true;
+            break;
+          }
+        }
+
+        if (isBridged) {
+          cellsToBridge.push(index);
+        }
+      }
+    }
+  }
+  for (const index of cellsToBridge) gameState.terrainOwnership[index] = ownerId;
+
+  // --- STEP 3: Flood Fill Small Holes ---
+  // Fills enclosed lakes/donuts
+  const MAX_HOLE_SIZE = 250;
+  const processedIndices = new Set<number>();
+
+  for (let dy = -scanRange; dy <= scanRange; dy++) {
+    for (let dx = -scanRange; dx <= scanRange; dx++) {
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+      const index = gridY * gridWidth + gridX;
+
+      if (gameState.terrainOwnership[index] === null && !processedIndices.has(index)) {
+        const regionCells: number[] = [];
+        const queue: number[] = [index];
+        processedIndices.add(index);
+        regionCells.push(index);
+        let isSmallHole = true;
+        let head = 0;
+
+        while (head < queue.length) {
+          const currIndex = queue[head++];
+          if (regionCells.length > MAX_HOLE_SIZE) {
+            isSmallHole = false;
+            break;
+          }
+          const currGx = currIndex % gridWidth;
+          const currGy = Math.floor(currIndex / gridWidth);
+          const neighbors = [
+            { nx: 0, ny: -1 },
+            { nx: 1, ny: 0 },
+            { nx: 0, ny: 1 },
+            { nx: -1, ny: 0 },
+          ];
+
+          for (const { nx, ny } of neighbors) {
+            const nGx = (((currGx + nx) % gridWidth) + gridWidth) % gridWidth;
+            const nGy = (((currGy + ny) % gridHeight) + gridHeight) % gridHeight;
+            const nIndex = nGy * gridWidth + nGx;
+            if (gameState.terrainOwnership[nIndex] === null && !processedIndices.has(nIndex)) {
+              processedIndices.add(nIndex);
+              if (isSmallHole) {
+                regionCells.push(nIndex);
+                queue.push(nIndex);
+              }
+            }
+          }
+        }
+        if (isSmallHole && regionCells.length <= MAX_HOLE_SIZE) {
+          for (const cellIndex of regionCells) gameState.terrainOwnership[cellIndex] = ownerId;
+        }
+      }
+    }
+  }
+
+  // --- STEP 4: One-Cell Hole Filler (The Final Polish) ---
+  // Iterates one last time to remove single-pixel noise.
+  // Rule: If an empty cell has >= 5 friendly neighbors (out of 8), fill it.
+  const cellsToPolish: number[] = [];
+
+  for (let dy = -scanRange; dy <= scanRange; dy++) {
+    for (let dx = -scanRange; dx <= scanRange; dx++) {
+      const gridX = (((centerGridX + dx) % gridWidth) + gridWidth) % gridWidth;
+      const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
+      const index = gridY * gridWidth + gridX;
+
+      if (gameState.terrainOwnership[index] === null) {
+        let friendlyNeighbors = 0;
+
+        // Check 8 neighbors (Moore Neighborhood)
+        for (let ny = -1; ny <= 1; ny++) {
+          for (let nx = -1; nx <= 1; nx++) {
+            if (nx === 0 && ny === 0) continue;
+
+            const nGx = (((gridX + nx) % gridWidth) + gridWidth) % gridWidth;
+            const nGy = (((gridY + ny) % gridHeight) + gridHeight) % gridHeight;
+            const nIndex = nGy * gridWidth + nGx;
+
+            if (gameState.terrainOwnership[nIndex] === ownerId) {
+              friendlyNeighbors++;
+            }
+          }
+        }
+
+        // 5 is the magic number.
+        // 4 neighbors is a flat wall. 5 neighbors is a dent/hole.
+        if (friendlyNeighbors >= 5) {
+          cellsToPolish.push(index);
+        }
+      }
+    }
+  }
+  for (const index of cellsToPolish) gameState.terrainOwnership[index] = ownerId;
 }
 
 /**

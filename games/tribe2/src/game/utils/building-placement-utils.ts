@@ -124,7 +124,11 @@ export function canPlaceBuilding(
   }
 
   // 3. Check territory constraints - buildings can only be placed within or near tribe territory
-  const territoryCheck = canPlaceBuildingInTerritory(position, ownerId, gameState);
+  // Use the appropriate territory claim radius for the contiguity check
+  const territoryRadius =
+    buildingType === BuildingType.BorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
+
+  const territoryCheck = canPlaceBuildingInTerritory(position, ownerId, gameState, territoryRadius);
   if (!territoryCheck.canPlace) {
     return false;
   }

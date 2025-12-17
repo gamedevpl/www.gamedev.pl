@@ -9,7 +9,7 @@ import {
   canPlaceBuildingInTerritory,
 } from '../../../entities/tribe/territory-utils';
 import { vectorAdd, vectorRotate, vectorScale, calculateWrappedDistance } from '../../../utils/math-utils';
-import { BuildingType } from '../../../entities/buildings/building-consts';
+import { BORDER_EXPANSION_PAINT_RADIUS, BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding } from '../../../utils';
 
 /**
@@ -133,9 +133,14 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
         y: ((nextPos.y % worldHeight) + worldHeight) % worldHeight,
       };
 
-      // 5. Check validity (Is it blocked by another tribe?)
-      // We check if the NEW position is in another tribe's territory.
-      let validity = canPlaceBuildingInTerritory(nextPos, entity.leaderId, gameState);
+      // 5. Check validity (Is it blocked by another tribe? OR non-contiguous?)
+      // We check if the NEW position is in another tribe's territory AND if it maintains contiguity.
+      let validity = canPlaceBuildingInTerritory(
+        nextPos,
+        entity.leaderId,
+        gameState,
+        BORDER_EXPANSION_PAINT_RADIUS,
+      );
 
       if (!validity.canPlace) {
         // Blocked! Try scanning angles.
@@ -152,7 +157,10 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
             y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
           };
 
-          if (canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState).canPlace) {
+          if (
+            canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
+              .canPlace
+          ) {
             nextPos = testPos;
             found = true;
             break;
@@ -168,7 +176,10 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
             y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
           };
 
-          if (canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState).canPlace) {
+          if (
+            canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
+              .canPlace
+          ) {
             nextPos = testPos;
             found = true;
           }
@@ -176,7 +187,7 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
         if (!found) {
           // Completely blocked. Stop.
-          return [NodeStatus.FAILURE, 'Blocked by other territories'];
+          return [NodeStatus.FAILURE, 'Blocked by other territories or invalid placement'];
         }
       }
 
