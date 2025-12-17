@@ -9,15 +9,35 @@ import { TerritoryCheckResult } from './territory-types';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
 
+/** Converts a world position to territory grid coordinates. */
+export function convertPositionToTerritoryGrid(position: Vector2D): Vector2D {
+  const x = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+  const y = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+  return { x, y };
+}
+
+/** Converts a territory grid index back to world position (center of the grid cell). */
+export function convertTerritoryIndexToPosition(index: number, worldWidth: number): Vector2D {
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const x = (index % gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+  const y = Math.floor(index / gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+  return { x, y };
+}
+
+/** Converts a world position to a territory grid index. */
+export function convertPositionToTerritoryIndex(position: Vector2D, worldWidth: number): number {
+  const gridPos = convertPositionToTerritoryGrid(position);
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  return gridPos.y * gridWidth + gridPos.x;
+}
+
 /**
  * Helper to check if a point is within a specific territory.
  * Uses the terrainOwnership grid to determine ownership.
  */
 export function getOwnerOfPoint(x: number, y: number, gameState: GameWorldState): EntityId | null {
-  const px = Math.floor(x / TERRITORY_OWNERSHIP_RESOLUTION);
-  const py = Math.floor(y / TERRITORY_OWNERSHIP_RESOLUTION);
-  const gridWidth = Math.ceil(gameState.mapDimensions.width / TERRITORY_OWNERSHIP_RESOLUTION);
-  return gameState.terrainOwnership[py * gridWidth + px] || null;
+  const territoryIndex = convertPositionToTerritoryIndex({ x, y }, gameState.mapDimensions.width);
+  return gameState.terrainOwnership[territoryIndex] || null;
 }
 
 /**

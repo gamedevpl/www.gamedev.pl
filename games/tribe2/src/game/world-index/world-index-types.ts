@@ -67,7 +67,7 @@ export interface IndexType<T> {
 export interface IndexedWorldState extends GameWorldState {
   search: {
     // Note: Territory ownership is tracked in GameWorldState.terrainOwnership grid, not here.
-    
+
     // entities
     human: IndexType<HumanEntity>;
     berryBush: IndexType<BerryBushEntity>;
@@ -75,5 +75,6 @@ export interface IndexedWorldState extends GameWorldState {
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
     building: IndexType<BuildingEntity>;
+    terrainOwnership: IndexType<{ ownerId: number | null }>;
   };
 }

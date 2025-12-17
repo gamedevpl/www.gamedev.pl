@@ -7,6 +7,8 @@ import { GameWorldState } from '../world-types';
 import { indexItems } from './world-index-utils';
 import { IndexedWorldState } from './world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
+import { convertTerritoryIndexToPosition } from '../utils';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -33,6 +35,21 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       prey: indexItems(prey),
       predator: indexItems(predators),
       building: indexItems(buildings),
+      terrainOwnership: indexItems(
+        worldState.terrainOwnership
+          .map((ownerId, index) => {
+            if (ownerId === null) {
+              return null;
+            }
+            return {
+              position: convertTerritoryIndexToPosition(index, worldState.mapDimensions.width),
+              width: TERRITORY_OWNERSHIP_RESOLUTION,
+              height: TERRITORY_OWNERSHIP_RESOLUTION,
+              ownerId,
+            };
+          })
+          .filter((item) => item != null),
+      ),
     },
   };
 
