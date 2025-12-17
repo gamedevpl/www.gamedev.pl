@@ -4,25 +4,19 @@ import { Sequence, ConditionNode, ActionNode } from '../nodes';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { canPlaceBuildingInTerritory } from '../../../entities/tribe/territory-utils';
-import {
-  vectorAdd,
-  vectorRotate,
-  vectorScale,
-  calculateWrappedDistance,
-  vectorNormalize,
-  getDirectionVectorOnTorus,
-} from '../../../utils/math-utils';
+import { vectorAdd, vectorRotate, vectorScale } from '../../../utils/math-utils';
 import { BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding } from '../../../utils';
 import { getTribeCenter } from '../../../utils/spatial-utils';
+import { Vector2D } from '../../../utils/math-types';
 
 /**
  * Constants for border expansion behavior
  */
 const BORDER_EXPANSION_STEP_DISTANCE = 30; // Distance to move per step along border
 const BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT = 2; // Minimum army control weight to expand borders
-const MIN_DISTANCE_FROM_CENTER_FOR_RADIAL = 30; // Entities closer than this pick a random direction
-const EXPANSION_ANGLE_FALLBACKS = [15, -15, 30, -30, 45, -45]; // Degrees - smaller angles preferred for convex shape
+const RIGHT_HAND_TURN_ANGLE = Math.PI / 2; // 90 degrees - turn right
+const LEFT_HAND_TURN_ANGLE = -Math.PI / 2; // -90 degrees - turn left
 
 /**
  * Factory function to create a border expansion behavior node.
@@ -89,12 +83,14 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
     depth + 1,
   );
 
-  // Action: Pioneer Logic
-  // This action handles radial expansion from the tribe center to create convex territory.
-  // Instead of walking to any edge and expanding outward, we:
-  // 1. Calculate the radial direction FROM the tribe center TO the entity
-  // 2. Walk outward along that radial line to the territory edge
-  // 3. Place border posts to expand the territory radially, maintaining a convex shape
+  // Action: Pioneer Logic - Right-hand wall following algorithm
+  // Walk around the territory border while keeping your right hand on the border.
+  // This traces the perimeter and naturally creates a convex shape.
+  // Algorithm:
+  // 1. Find or remember current facing direction
+  // 2. Try to turn right (into territory) - if blocked, that's the wall
+  // 3. Try to go forward - if blocked, turn left until you can proceed
+  // 4. Place border posts where territory can be expanded (to your left)
   const pioneerAction = new ActionNode<HumanEntity>(
     (entity, context) => {
       if (!entity.leaderId) return [NodeStatus.FAILURE, 'No leader'];
@@ -103,109 +99,107 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       const worldWidth = gameState.mapDimensions.width;
       const worldHeight = gameState.mapDimensions.height;
 
-      // 1. Calculate tribe center
-      const tribeCenter = getTribeCenter(entity.leaderId, gameState);
+      // Helper to wrap position to world bounds
+      const wrapPosition = (pos: Vector2D): Vector2D => ({
+        x: ((pos.x % worldWidth) + worldWidth) % worldWidth,
+        y: ((pos.y % worldHeight) + worldHeight) % worldHeight,
+      });
 
-      // 2. Calculate radial direction from center to entity (this is our expansion direction)
-      const directionFromCenter = getDirectionVectorOnTorus(
-        tribeCenter,
-        entity.position,
-        worldWidth,
-        worldHeight,
-      );
-      const radialDirection = vectorNormalize(directionFromCenter);
+      // Helper to check if a position is valid for expansion
+      const canExpand = (pos: Vector2D): boolean => {
+        return canPlaceBuildingInTerritory(pos, entity.leaderId!, gameState).canPlace;
+      };
 
-      // If entity is very close to the center, pick a random radial direction
-      const distFromCenter = calculateWrappedDistance(entity.position, tribeCenter, worldWidth, worldHeight);
-      let expansionDirection = radialDirection;
-      if (distFromCenter < MIN_DISTANCE_FROM_CENTER_FOR_RADIAL) {
-        // Pick a random direction to start expanding
-        const randomAngle = Math.random() * Math.PI * 2;
-        expansionDirection = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
-      }
-
-      // 3. Find the territory edge in this radial direction by raymarching outward from center
-      // Start from current position and check if we're inside territory
-      const isInOwnTerritory = canPlaceBuildingInTerritory(entity.position, entity.leaderId, gameState).canPlace;
+      // Check if entity is inside territory
+      const isInOwnTerritory = canExpand(entity.position);
 
       if (!isInOwnTerritory) {
         // Entity is outside territory - move towards center first
+        const tribeCenter = getTribeCenter(entity.leaderId, gameState);
         entity.activeAction = 'moving';
         entity.target = tribeCenter;
         return [NodeStatus.RUNNING, 'Moving to tribe territory'];
       }
 
-      // 4. Check if entity is at the territory edge (next step would be outside or blocked)
-      const testPos = vectorAdd(entity.position, vectorScale(expansionDirection, BORDER_EXPANSION_STEP_DISTANCE));
-      const wrappedTestPos = {
-        x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
-        y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
-      };
+      // Get or initialize the facing direction from entity's blackboard
+      // The facing direction is stored as the direction the entity is "walking" along the border
+      let facingDirection: Vector2D;
 
-      const canExpandHere = canPlaceBuildingInTerritory(wrappedTestPos, entity.leaderId, gameState).canPlace;
+      if (entity.aiBlackboard?.borderFacingDirection) {
+        facingDirection = entity.aiBlackboard.borderFacingDirection as Vector2D;
+      } else {
+        // Initialize: face away from tribe center (outward direction)
+        const tribeCenter = getTribeCenter(entity.leaderId, gameState);
+        const toEntity = {
+          x: entity.position.x - tribeCenter.x,
+          y: entity.position.y - tribeCenter.y,
+        };
+        // Normalize and rotate 90 degrees to start walking along the edge (counterclockwise)
+        const magnitude = Math.sqrt(toEntity.x * toEntity.x + toEntity.y * toEntity.y);
+        if (magnitude > 0) {
+          facingDirection = vectorRotate({ x: toEntity.x / magnitude, y: toEntity.y / magnitude }, LEFT_HAND_TURN_ANGLE);
+        } else {
+          facingDirection = { x: 1, y: 0 }; // Default direction
+        }
+        // Store in aiBlackboard
+        if (!entity.aiBlackboard) entity.aiBlackboard = {};
+        entity.aiBlackboard.borderFacingDirection = facingDirection;
+      }
 
-      if (canExpandHere) {
-        // 5. We can expand! Place a border post at current position and move outward
+      // Right-hand wall following:
+      // 1. First, try to turn right (check if wall is still there on our right)
+      const rightDirection = vectorRotate(facingDirection, RIGHT_HAND_TURN_ANGLE);
+      const rightPos = wrapPosition(vectorAdd(entity.position, vectorScale(rightDirection, BORDER_EXPANSION_STEP_DISTANCE)));
+
+      // 2. Check if we can go right (into what should be the wall/outside territory)
+      if (canExpand(rightPos)) {
+        // The wall on our right is gone! This means we can expand the territory here.
+        // Place a border post and turn right to keep following the wall
         createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
 
-        entity.target = wrappedTestPos;
+        // Turn right and move
+        const newFacing = rightDirection;
+        entity.aiBlackboard!.borderFacingDirection = newFacing;
+        entity.target = rightPos;
         entity.activeAction = 'moving';
-        return [NodeStatus.RUNNING, 'Expanding territory radially'];
+        return [NodeStatus.RUNNING, 'Expanding territory - turning right into new area'];
       }
 
-      // 6. Can't expand in the radial direction - try adjacent angles to maintain convex shape
-      // Scan +/- 45 degrees in small steps (closer to radial = more convex)
-      for (const angleDeg of EXPANSION_ANGLE_FALLBACKS) {
-        const angleRad = (angleDeg * Math.PI) / 180;
-        const adjustedDirection = vectorRotate(expansionDirection, angleRad);
-        let altTestPos = vectorAdd(entity.position, vectorScale(adjustedDirection, BORDER_EXPANSION_STEP_DISTANCE));
-        altTestPos = {
-          x: ((altTestPos.x % worldWidth) + worldWidth) % worldWidth,
-          y: ((altTestPos.y % worldHeight) + worldHeight) % worldHeight,
-        };
+      // 3. Try to go forward
+      const forwardPos = wrapPosition(vectorAdd(entity.position, vectorScale(facingDirection, BORDER_EXPANSION_STEP_DISTANCE)));
 
-        if (canPlaceBuildingInTerritory(altTestPos, entity.leaderId, gameState).canPlace) {
-          // Found a valid direction - place post and move there
-          createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
-          entity.target = altTestPos;
+      if (canExpand(forwardPos)) {
+        // Can go forward - continue walking along the border
+        entity.target = forwardPos;
+        entity.activeAction = 'moving';
+        return [NodeStatus.RUNNING, 'Walking along border'];
+      }
+
+      // 4. Can't go forward - wall ahead, turn left
+      let newFacing = facingDirection;
+      let attempts = 0;
+      const maxAttempts = 4; // Maximum 360 degrees of turning (4 x 90 degrees)
+
+      while (attempts < maxAttempts) {
+        newFacing = vectorRotate(newFacing, LEFT_HAND_TURN_ANGLE);
+        const testPos = wrapPosition(vectorAdd(entity.position, vectorScale(newFacing, BORDER_EXPANSION_STEP_DISTANCE)));
+
+        if (canExpand(testPos)) {
+          // Found a valid direction - update facing and move
+          entity.aiBlackboard!.borderFacingDirection = newFacing;
+          entity.target = testPos;
           entity.activeAction = 'moving';
-          return [NodeStatus.RUNNING, `Expanding territory at angle ${angleDeg}°`];
+          return [NodeStatus.RUNNING, `Turned left ${(attempts + 1) * 90}° to find path`];
         }
+        attempts++;
       }
 
-      // 7. Can't expand at all from here - walk around the edge to find a better spot
-      // Move along the territory edge (perpendicular to radial direction)
-      const tangentDirection = { x: -expansionDirection.y, y: expansionDirection.x };
-      let edgeWalkPos = vectorAdd(entity.position, vectorScale(tangentDirection, BORDER_EXPANSION_STEP_DISTANCE));
-      edgeWalkPos = {
-        x: ((edgeWalkPos.x % worldWidth) + worldWidth) % worldWidth,
-        y: ((edgeWalkPos.y % worldHeight) + worldHeight) % worldHeight,
-      };
-
-      if (canPlaceBuildingInTerritory(edgeWalkPos, entity.leaderId, gameState).canPlace) {
-        entity.target = edgeWalkPos;
-        entity.activeAction = 'moving';
-        return [NodeStatus.RUNNING, 'Walking along edge to find expansion point'];
-      }
-
-      // Try the opposite tangent direction
-      const oppositeTangent = vectorScale(tangentDirection, -1);
-      edgeWalkPos = vectorAdd(entity.position, vectorScale(oppositeTangent, BORDER_EXPANSION_STEP_DISTANCE));
-      edgeWalkPos = {
-        x: ((edgeWalkPos.x % worldWidth) + worldWidth) % worldWidth,
-        y: ((edgeWalkPos.y % worldHeight) + worldHeight) % worldHeight,
-      };
-
-      if (canPlaceBuildingInTerritory(edgeWalkPos, entity.leaderId, gameState).canPlace) {
-        entity.target = edgeWalkPos;
-        entity.activeAction = 'moving';
-        return [NodeStatus.RUNNING, 'Walking along edge (reverse) to find expansion point'];
-      }
-
-      // Completely blocked
-      return [NodeStatus.FAILURE, 'Blocked by other territories'];
+      // 5. Completely surrounded - can't move anywhere
+      // Reset facing direction and try again next tick
+      delete entity.aiBlackboard!.borderFacingDirection;
+      return [NodeStatus.FAILURE, 'Completely surrounded - cannot expand'];
     },
-    'Pioneer Expansion',
+    'Pioneer Expansion (Right-hand wall following)',
     depth + 1,
   );
 
