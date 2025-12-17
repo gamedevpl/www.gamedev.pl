@@ -304,3 +304,23 @@ export function getSoilSpeedModifier(
 
   return 1.0;
 }
+
+/**
+ * Gets the soil depletion level at a position.
+ * Returns a value between 0 and 1, where 0 is fully healthy soil and 1 is fully depleted.
+ * Even slight depletion will return a value > 0, which can be used for path preference.
+ */
+export function getSoilDepletionLevel(
+  state: SoilDepletionState,
+  position: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+): number {
+  const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
+  const health = getSectorHealth(state, gridX, gridY);
+
+  // Convert health (0-100) to depletion level (0-1)
+  // health 100 -> depletion 0
+  // health 0 -> depletion 1
+  return (SOIL_HEALTH_MAX - health) / SOIL_HEALTH_MAX;
+}

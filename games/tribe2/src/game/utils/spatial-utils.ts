@@ -6,7 +6,14 @@ import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-
 import { Vector2D } from './math-types';
 import { findTribeMembers, getFamilyMembers } from '../entities/tribe/family-tribe-utils';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { isSoilDepleted } from '../entities/plants/soil-depletion-update';
+import { isSoilDepleted, getSoilDepletionLevel } from '../entities/plants/soil-depletion-update';
+import { SoilDepletionState } from '../entities/plants/soil-depletion-types';
+
+/** Number of candidate positions to generate when preferring paths */
+const PATH_PREFERENCE_CANDIDATES = 5;
+
+/** Weight multiplier for soil depletion when selecting wander positions */
+const SOIL_DEPLETION_WEIGHT = 3.0;
 
 export function getRandomNearbyPosition(
   center: Vector2D,
@@ -25,6 +32,46 @@ export function getRandomNearbyPosition(
     x: ((newPosition.x % worldWidth) + worldWidth) % worldWidth,
     y: ((newPosition.y % worldHeight) + worldHeight) % worldHeight,
   };
+}
+
+/**
+ * Gets a random nearby position with a preference for already depleted soil.
+ * This creates a subtle bias towards existing paths, making walk path formation more likely.
+ * Generates multiple candidate positions and weights selection towards those with more soil depletion.
+ */
+export function getRandomNearbyPositionPreferringPaths(
+  center: Vector2D,
+  radius: number,
+  worldWidth: number,
+  worldHeight: number,
+  soilState: SoilDepletionState,
+): Vector2D {
+  // Generate multiple candidate positions
+  const candidates: { position: Vector2D; weight: number }[] = [];
+
+  for (let i = 0; i < PATH_PREFERENCE_CANDIDATES; i++) {
+    const position = getRandomNearbyPosition(center, radius, worldWidth, worldHeight);
+    // Get depletion level (0-1, where 1 is fully depleted)
+    const depletionLevel = getSoilDepletionLevel(soilState, position, worldWidth, worldHeight);
+    // Weight = base weight (1) + bonus for depleted soil
+    // Even slight depletion (e.g., 0.05) gives a small bonus, creating subtle path preference
+    const weight = 1.0 + depletionLevel * SOIL_DEPLETION_WEIGHT;
+    candidates.push({ position, weight });
+  }
+
+  // Weighted random selection
+  const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
+  let randomValue = Math.random() * totalWeight;
+
+  for (const candidate of candidates) {
+    randomValue -= candidate.weight;
+    if (randomValue <= 0) {
+      return candidate.position;
+    }
+  }
+
+  // Fallback to last candidate (shouldn't normally happen)
+  return candidates[candidates.length - 1].position;
 }
 
 export function isPositionOccupied(
