@@ -17,6 +17,7 @@ import {
   useAutoPopulateActions,
   useExportActions,
   useCanvasInteraction,
+  useSimulationActions,
 } from './scenario-editor-hooks';
 
 export const ScenarioEditorScreen: React.FC = () => {
@@ -36,6 +37,9 @@ export const ScenarioEditorScreen: React.FC = () => {
 
   // Auto-populate actions
   const autoPopulateActions = useAutoPopulateActions(config, updateConfig, showToast);
+
+  // Simulation actions
+  const simulationActions = useSimulationActions(config, updateConfig, showToast);
 
   // Export actions
   const exportActions = useExportActions(config, showToast);
@@ -139,6 +143,9 @@ export const ScenarioEditorScreen: React.FC = () => {
         onAutoPopulateBushes={autoPopulateActions.handleAutoPopulateBushes}
         onAutoPopulatePrey={autoPopulateActions.handleAutoPopulatePrey}
         onAutoPopulatePredators={autoPopulateActions.handleAutoPopulatePredators}
+        onSimulate={simulationActions.handleSimulate}
+        isSimulating={simulationActions.isSimulating}
+        simulationProgress={simulationActions.simulationProgress}
         onExportJson={exportActions.handleExportJson}
         onExportTs={exportActions.handleExportTs}
       />

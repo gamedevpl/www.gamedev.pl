@@ -30,6 +30,10 @@ interface ScenarioEditorSidebarProps {
   onAutoPopulateBushes: (count: number) => void;
   onAutoPopulatePrey: (count: number) => void;
   onAutoPopulatePredators: (count: number) => void;
+  // Simulation callbacks
+  onSimulate: (durationGameHours: number) => void;
+  isSimulating: boolean;
+  simulationProgress: number;
   // Export callbacks
   onExportJson: () => void;
   onExportTs: () => void;
@@ -54,6 +58,9 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
   onAutoPopulateBushes,
   onAutoPopulatePrey,
   onAutoPopulatePredators,
+  onSimulate,
+  isSimulating,
+  simulationProgress,
   onExportJson,
   onExportTs,
 }) => {
@@ -84,6 +91,11 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
         onAutoPopulateBushes={onAutoPopulateBushes}
         onAutoPopulatePrey={onAutoPopulatePrey}
         onAutoPopulatePredators={onAutoPopulatePredators}
+      />
+      <SimulationSection
+        onSimulate={onSimulate}
+        isSimulating={isSimulating}
+        simulationProgress={simulationProgress}
       />
       <SummarySection config={config} />
       <ExportSection onExportJson={onExportJson} onExportTs={onExportTs} />
@@ -289,6 +301,32 @@ const AutoPopulateSection: React.FC<AutoPopulateSectionProps> = ({
     <S.SecondaryButton onClick={() => onAutoPopulateBushes(50)}>+50 Bushes</S.SecondaryButton>
     <S.SecondaryButton onClick={() => onAutoPopulatePrey(20)}>+20 Prey</S.SecondaryButton>
     <S.SecondaryButton onClick={() => onAutoPopulatePredators(4)}>+4 Predators</S.SecondaryButton>
+  </S.SidebarSection>
+);
+
+interface SimulationSectionProps {
+  onSimulate: (durationGameHours: number) => void;
+  isSimulating: boolean;
+  simulationProgress: number;
+}
+
+const SimulationSection: React.FC<SimulationSectionProps> = ({
+  onSimulate,
+  isSimulating,
+  simulationProgress,
+}) => (
+  <S.SidebarSection>
+    <S.SectionTitle>Simulation</S.SectionTitle>
+    <S.HelpText>Run the simulation to create a more organic state</S.HelpText>
+    <S.SecondaryButton onClick={() => onSimulate(24)} disabled={isSimulating}>
+      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Day'}
+    </S.SecondaryButton>
+    <S.SecondaryButton onClick={() => onSimulate(168)} disabled={isSimulating}>
+      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Week'}
+    </S.SecondaryButton>
+    <S.SecondaryButton onClick={() => onSimulate(720)} disabled={isSimulating}>
+      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Month'}
+    </S.SecondaryButton>
   </S.SidebarSection>
 );
 

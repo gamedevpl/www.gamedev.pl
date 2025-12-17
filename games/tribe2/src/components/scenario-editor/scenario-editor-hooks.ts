@@ -389,3 +389,71 @@ export function useCanvasInteraction(
     handleWheel,
   };
 }
+
+/**
+ * Hook for simulation actions.
+ */
+export function useSimulationActions(
+  config: ScenarioConfig,
+  updateConfig: (updates: Partial<ScenarioConfig>) => void,
+  showToast: (message: string) => void,
+) {
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationProgress, setSimulationProgress] = useState(0);
+
+  const handleSimulate = useCallback(
+    async (durationGameHours: number) => {
+      if (isSimulating) return;
+      
+      // Check if there's anything to simulate
+      const hasEntities = 
+        config.tribes.length > 0 || 
+        config.berryBushes.length > 0 || 
+        config.prey.length > 0 || 
+        config.predators.length > 0;
+        
+      if (!hasEntities) {
+        showToast('Add some entities first!');
+        return;
+      }
+
+      setIsSimulating(true);
+      setSimulationProgress(0);
+      showToast(`Simulating ${durationGameHours} game hours...`);
+
+      try {
+        // Dynamic import to avoid circular dependencies
+        const { runSimulationAsync } = await import('../../game/scenario-editor/scenario-simulation');
+        
+        const result = await runSimulationAsync(config, durationGameHours, (percent) => {
+          setSimulationProgress(percent);
+        });
+
+        // Update the config with the simulated result
+        updateConfig({
+          tribes: result.tribes,
+          berryBushes: result.berryBushes,
+          prey: result.prey,
+          predators: result.predators,
+          buildings: result.buildings,
+          description: result.description,
+        });
+
+        showToast(`Simulation complete!`);
+      } catch (error) {
+        console.error('Simulation error:', error);
+        showToast('Simulation failed');
+      } finally {
+        setIsSimulating(false);
+        setSimulationProgress(0);
+      }
+    },
+    [config, updateConfig, showToast, isSimulating],
+  );
+
+  return {
+    isSimulating,
+    simulationProgress,
+    handleSimulate,
+  };
+}
