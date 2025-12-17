@@ -3,21 +3,24 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
+import { canPlaceBuildingInTerritory } from '../../../entities/tribe/territory-utils';
 import {
-  findNearestTerritoryEdge,
-  getTerritoryEdgeNormal,
-  canPlaceBuildingInTerritory,
-} from '../../../entities/tribe/territory-utils';
-import { vectorAdd, vectorRotate, vectorScale, calculateWrappedDistance } from '../../../utils/math-utils';
+  vectorAdd,
+  vectorRotate,
+  vectorScale,
+  calculateWrappedDistance,
+  vectorNormalize,
+  getDirectionVectorOnTorus,
+} from '../../../utils/math-utils';
 import { BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding } from '../../../utils';
+import { getTribeCenter } from '../../../utils/spatial-utils';
 
 /**
  * Constants for border expansion behavior
  */
 const BORDER_EXPANSION_STEP_DISTANCE = 30; // Distance to move per step along border
 const BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT = 2; // Minimum army control weight to expand borders
-const EDGE_APPROACH_THRESHOLD = 40; // How close to be considered "at the edge"
 
 /**
  * Factory function to create a border expansion behavior node.
@@ -85,7 +88,11 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
   );
 
   // Action: Pioneer Logic
-  // This complex action handles finding the edge, navigating along it, and painting.
+  // This action handles radial expansion from the tribe center to create convex territory.
+  // Instead of walking to any edge and expanding outward, we:
+  // 1. Calculate the radial direction FROM the tribe center TO the entity
+  // 2. Walk outward along that radial line to the territory edge
+  // 3. Place border posts to expand the territory radially, maintaining a convex shape
   const pioneerAction = new ActionNode<HumanEntity>(
     (entity, context) => {
       if (!entity.leaderId) return [NodeStatus.FAILURE, 'No leader'];
@@ -94,100 +101,108 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       const worldWidth = gameState.mapDimensions.width;
       const worldHeight = gameState.mapDimensions.height;
 
-      // 1. Find nearest territory edge
-      const nearestEdge = findNearestTerritoryEdge(entity.position, entity.leaderId, gameState);
+      // 1. Calculate tribe center
+      const tribeCenter = getTribeCenter(entity.leaderId, gameState);
 
-      if (!nearestEdge) {
-        // Should not happen if hasTerritoryCondition passed, unless map is full or bug
-        return [NodeStatus.FAILURE, 'Could not find territory edge'];
+      // 2. Calculate radial direction from center to entity (this is our expansion direction)
+      const directionFromCenter = getDirectionVectorOnTorus(
+        tribeCenter,
+        entity.position,
+        worldWidth,
+        worldHeight,
+      );
+      const radialDirection = vectorNormalize(directionFromCenter);
+
+      // If entity is very close to the center, pick a random radial direction
+      const distFromCenter = calculateWrappedDistance(entity.position, tribeCenter, worldWidth, worldHeight);
+      let expansionDirection = radialDirection;
+      if (distFromCenter < 30) {
+        // Pick a random direction to start expanding
+        const randomAngle = Math.random() * Math.PI * 2;
+        expansionDirection = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
       }
 
-      // 2. Check distance to edge
-      const distToEdge = calculateWrappedDistance(entity.position, nearestEdge, worldWidth, worldHeight);
+      // 3. Find the territory edge in this radial direction by raymarching outward from center
+      // Start from current position and check if we're inside territory
+      const isInOwnTerritory = canPlaceBuildingInTerritory(entity.position, entity.leaderId, gameState).canPlace;
 
-      if (distToEdge > EDGE_APPROACH_THRESHOLD) {
-        // Too far, move towards edge
+      if (!isInOwnTerritory) {
+        // Entity is outside territory - move towards center first
         entity.activeAction = 'moving';
-        // Set target position for movement
-        entity.target = nearestEdge;
-        return [NodeStatus.RUNNING, `Approaching territory edge (${distToEdge.toFixed(0)}px)`];
+        entity.target = tribeCenter;
+        return [NodeStatus.RUNNING, 'Moving to tribe territory'];
       }
 
-      // 3. We are at the edge. Calculate expansion direction.
-      const normal = getTerritoryEdgeNormal(entity.position, entity.leaderId, gameState);
-
-      // Default: Turn 90 degrees (tangent). Let's say Clockwise (-90 deg)
-      // We can randomize this or store it in a temp property if we want persistence,
-      // but for now, let's try CW.
-      // If we want to support "try other direction", we need to know if we failed recently.
-      // For simplicity: Try CW. If blocked, try CCW.
-
-      let tangent = vectorRotate(normal, -Math.PI / 2); // CW
-
-      // 4. Calculate proposed next position
-      let nextPos = vectorAdd(entity.position, vectorScale(tangent, BORDER_EXPANSION_STEP_DISTANCE));
-
-      // Wrap nextPos
-      nextPos = {
-        x: ((nextPos.x % worldWidth) + worldWidth) % worldWidth,
-        y: ((nextPos.y % worldHeight) + worldHeight) % worldHeight,
+      // 4. Check if entity is at the territory edge (next step would be outside or blocked)
+      const testPos = vectorAdd(entity.position, vectorScale(expansionDirection, BORDER_EXPANSION_STEP_DISTANCE));
+      const wrappedTestPos = {
+        x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
+        y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
       };
 
-      // 5. Check validity (Is it blocked by another tribe?)
-      // We check if the NEW position is in another tribe's territory.
-      let validity = canPlaceBuildingInTerritory(nextPos, entity.leaderId, gameState);
+      const canExpandHere = canPlaceBuildingInTerritory(wrappedTestPos, entity.leaderId, gameState).canPlace;
 
-      if (!validity.canPlace) {
-        // Blocked! Try scanning angles.
-        // Scan +/- 30 degrees in 10 degree steps
-        let found = false;
-        const angles = [10, -10, 20, -20, 30, -30]; // Degrees
+      if (canExpandHere) {
+        // 5. We can expand! Place a border post at current position and move outward
+        createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
 
-        for (const angleDeg of angles) {
-          const angleRad = (angleDeg * Math.PI) / 180;
-          const adjustedTangent = vectorRotate(tangent, angleRad);
-          let testPos = vectorAdd(entity.position, vectorScale(adjustedTangent, BORDER_EXPANSION_STEP_DISTANCE));
-          testPos = {
-            x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
-            y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
-          };
+        entity.target = wrappedTestPos;
+        entity.activeAction = 'moving';
+        return [NodeStatus.RUNNING, 'Expanding territory radially'];
+      }
 
-          if (canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState).canPlace) {
-            nextPos = testPos;
-            found = true;
-            break;
-          }
-        }
+      // 6. Can't expand in the radial direction - try adjacent angles to maintain convex shape
+      // Scan +/- 45 degrees in small steps (closer to radial = more convex)
+      const angles = [15, -15, 30, -30, 45, -45]; // Degrees - smaller angles preferred for convex shape
+      for (const angleDeg of angles) {
+        const angleRad = (angleDeg * Math.PI) / 180;
+        const adjustedDirection = vectorRotate(expansionDirection, angleRad);
+        let altTestPos = vectorAdd(entity.position, vectorScale(adjustedDirection, BORDER_EXPANSION_STEP_DISTANCE));
+        altTestPos = {
+          x: ((altTestPos.x % worldWidth) + worldWidth) % worldWidth,
+          y: ((altTestPos.y % worldHeight) + worldHeight) % worldHeight,
+        };
 
-        if (!found) {
-          // Try reversing direction (CCW)
-          tangent = vectorRotate(normal, Math.PI / 2); // CCW
-          let testPos = vectorAdd(entity.position, vectorScale(tangent, BORDER_EXPANSION_STEP_DISTANCE));
-          testPos = {
-            x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
-            y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
-          };
-
-          if (canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState).canPlace) {
-            nextPos = testPos;
-            found = true;
-          }
-        }
-
-        if (!found) {
-          // Completely blocked. Stop.
-          return [NodeStatus.FAILURE, 'Blocked by other territories'];
+        if (canPlaceBuildingInTerritory(altTestPos, entity.leaderId, gameState).canPlace) {
+          // Found a valid direction - place post and move there
+          createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
+          entity.target = altTestPos;
+          entity.activeAction = 'moving';
+          return [NodeStatus.RUNNING, `Expanding territory at angle ${angleDeg}°`];
         }
       }
 
-      // 6. Move to the valid position
-      entity.target = nextPos;
+      // 7. Can't expand at all from here - walk around the edge to find a better spot
+      // Move along the territory edge (perpendicular to radial direction)
+      const tangentDirection = { x: -expansionDirection.y, y: expansionDirection.x };
+      let edgeWalkPos = vectorAdd(entity.position, vectorScale(tangentDirection, BORDER_EXPANSION_STEP_DISTANCE));
+      edgeWalkPos = {
+        x: ((edgeWalkPos.x % worldWidth) + worldWidth) % worldWidth,
+        y: ((edgeWalkPos.y % worldHeight) + worldHeight) % worldHeight,
+      };
 
-      createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
+      if (canPlaceBuildingInTerritory(edgeWalkPos, entity.leaderId, gameState).canPlace) {
+        entity.target = edgeWalkPos;
+        entity.activeAction = 'moving';
+        return [NodeStatus.RUNNING, 'Walking along edge to find expansion point'];
+      }
 
-      entity.activeAction = 'moving';
+      // Try the opposite tangent direction
+      const oppositeTangent = vectorScale(tangentDirection, -1);
+      edgeWalkPos = vectorAdd(entity.position, vectorScale(oppositeTangent, BORDER_EXPANSION_STEP_DISTANCE));
+      edgeWalkPos = {
+        x: ((edgeWalkPos.x % worldWidth) + worldWidth) % worldWidth,
+        y: ((edgeWalkPos.y % worldHeight) + worldHeight) % worldHeight,
+      };
 
-      return [NodeStatus.RUNNING, 'Expanding territory'];
+      if (canPlaceBuildingInTerritory(edgeWalkPos, entity.leaderId, gameState).canPlace) {
+        entity.target = edgeWalkPos;
+        entity.activeAction = 'moving';
+        return [NodeStatus.RUNNING, 'Walking along edge (reverse) to find expansion point'];
+      }
+
+      // Completely blocked
+      return [NodeStatus.FAILURE, 'Blocked by other territories'];
     },
     'Pioneer Expansion',
     depth + 1,
