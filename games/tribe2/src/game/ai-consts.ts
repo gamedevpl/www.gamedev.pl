@@ -5,14 +5,14 @@ import { MAP_WIDTH } from './game-consts';
 // Human AI Constants
 export const AI_UPDATE_INTERVAL = 1; // In game time
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 150 * 0.6; // AI decides to eat if hunger >= this and has food
-export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 150 * 0.25; // AI decides to gather if hunger >= this
+export const HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING: number = 150 * 0.15; // AI decides to gather if hunger >= this (lowered from 0.25 to prevent starvation)
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_PLANTING = 150 * 0.7; // AI decides to plant if hunger >= this
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_ATTACKING: number = 150 * 0.8; // AI decides to attack if hunger >= this
 export const AI_HUNTING_FOOD_SEARCH_RADIUS = 400; // Radius to search for other food before hunting
 export const AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER = 800; // Max distance from tribe center to chase prey
 export const HUMAN_AI_WANDER_RADIUS: number = 150; // Max radius for wandering
 export const FATHER_FOLLOW_STOP_DISTANCE = 300;
-export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number of berry bushes needed nearby for AI to consider procreation
+export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 1; // Minimum number of berry bushes needed nearby for AI to consider procreation (lowered from 2 to improve survival)
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 800; // Radius in pixels to search for food sources when considering procreation
 export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 500;
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 150 * 0.85;
