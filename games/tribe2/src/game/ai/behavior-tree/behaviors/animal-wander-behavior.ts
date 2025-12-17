@@ -7,12 +7,8 @@ import { PreyEntity } from '../../../entities/characters/prey/prey-types';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { getRandomNearbyPositionPreferringPaths } from '../../../utils/spatial-utils';
 
-/** Minimum wander distance for animals */
-const ANIMAL_WANDER_MIN_DISTANCE = 50;
-/** Maximum wander distance for animals */
-const ANIMAL_WANDER_MAX_DISTANCE = 150;
-/** Average wander radius for path preference calculation */
-const ANIMAL_WANDER_RADIUS = (ANIMAL_WANDER_MIN_DISTANCE + ANIMAL_WANDER_MAX_DISTANCE) / 2;
+/** Wander radius for animals - based on original range of 50-150 units */
+const ANIMAL_WANDER_RADIUS = 100;
 
 /**
  * Creates a behavior for animals to wander around when idle.

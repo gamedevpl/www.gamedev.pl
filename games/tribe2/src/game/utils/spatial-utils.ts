@@ -60,6 +60,7 @@ export function getRandomNearbyPositionPreferringPaths(
   }
 
   // Weighted random selection
+  // Note: totalWeight is always > 0 since each candidate has a minimum weight of 1.0
   const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
   let randomValue = Math.random() * totalWeight;
 
