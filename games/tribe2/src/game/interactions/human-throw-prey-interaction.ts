@@ -97,7 +97,7 @@ export const humanThrowPreyInteraction: InteractionDefinition<HumanEntity, PreyE
 
     // If prey is killed
     if (prey.hitpoints <= 0) {
-      playSoundAt(context, SoundType.HumanDeath, prey.position);
+      playSoundAt(context, SoundType.Attack, prey.position);
       addVisualEffect(context.gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
     } else {
       // Prey survives - hit effect and make it flee
