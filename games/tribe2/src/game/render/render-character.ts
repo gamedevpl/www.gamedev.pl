@@ -38,6 +38,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   procreating: 'procreate',
   idle: 'idle',
   attacking: 'attacking',
+  throwing: 'attacking', // Throwing uses same stance as attacking
   planting: 'gathering',
   depositing: 'gathering',
   retrieving: 'gathering',
