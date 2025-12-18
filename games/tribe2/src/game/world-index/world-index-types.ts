@@ -50,6 +50,14 @@ export interface IndexType<T> {
   byProperty(propertyName: keyof T, propertyValue: unknown): T[];
 
   /**
+   * Non-spatial query for entities matching a specific property path value (e.g., 'stats.health').
+   * @param propertyPath The dot-separated path of the property to query.
+   * @param propertyValue The value of the property to match.
+   * @returns An array of entities of type T that match the property value at the given path.
+   */
+  byPropertyPath(propertyPath: string, propertyValue: unknown): T[];
+
+  /**
    * Clears the internal cache for property queries.
    */
   resetPropertyCache(): void;

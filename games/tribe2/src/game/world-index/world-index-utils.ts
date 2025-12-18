@@ -8,6 +8,13 @@ interface IndexItem {
   height?: number;
 }
 
+/**
+ * Resolves a nested property value from an object using a dot-separated path.
+ */
+function getNestedProperty(obj: any, path: string): any {
+  return path.split('.').reduce((acc, part) => (acc && typeof acc === 'object' ? acc[part] : undefined), obj);
+}
+
 const indexCache: Record<string, IndexType<IndexItem>> = {};
 
 /**
@@ -27,6 +34,7 @@ export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): 
       byRect: () => [],
       byRadius: () => [],
       byProperty: () => [],
+      byPropertyPath: () => [],
       resetPropertyCache: () => {},
       count: () => 0,
     } as IndexType<T>;
@@ -34,6 +42,7 @@ export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): 
 
   const index = new Flatbush(items.length);
   const propertyCache = new Map<keyof T, Map<unknown, T[]>>();
+  const propertyByPathCache = new Map<string, Map<unknown, T[]>>();
 
   for (const item of items) {
     if (item.width !== undefined && item.height !== undefined) {
@@ -73,8 +82,24 @@ export function indexItems<T extends IndexItem>(items: T[], cacheKey?: string): 
       return propertyCache.get(propertyName)?.get(propertyValue) || [];
     },
 
+    byPropertyPath(propertyPath: string, propertyValue: unknown): T[] {
+      if (!propertyByPathCache.has(propertyPath)) {
+        const newCache = new Map<unknown, T[]>();
+        for (const item of items) {
+          const value = getNestedProperty(item, propertyPath);
+          if (!newCache.has(value)) {
+            newCache.set(value, []);
+          }
+          newCache.get(value)!.push(item);
+        }
+        propertyByPathCache.set(propertyPath, newCache);
+      }
+      return propertyByPathCache.get(propertyPath)?.get(propertyValue) || [];
+    },
+
     resetPropertyCache() {
       propertyCache.clear();
+      propertyByPathCache.clear();
     },
 
     count() {
