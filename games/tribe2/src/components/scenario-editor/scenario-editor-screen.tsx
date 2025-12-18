@@ -18,10 +18,11 @@ import {
   useExportActions,
   useCanvasInteraction,
   useSimulationActions,
+  useStartGameActions,
 } from './scenario-editor-hooks';
 
 export const ScenarioEditorScreen: React.FC = () => {
-  const { setAppState } = useGameContext();
+  const { setAppState, saveCurrentGame } = useGameContext();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [worldPos, setWorldPos] = useState<Vector2D>({ x: 0, y: 0 });
 
@@ -40,6 +41,9 @@ export const ScenarioEditorScreen: React.FC = () => {
 
   // Simulation actions
   const simulationActions = useSimulationActions(config, updateConfig, showToast);
+
+  // Start game actions
+  const startGameActions = useStartGameActions(config, showToast, saveCurrentGame, setAppState);
 
   // Export actions
   const exportActions = useExportActions(config, showToast);
@@ -144,8 +148,13 @@ export const ScenarioEditorScreen: React.FC = () => {
         onAutoPopulatePrey={autoPopulateActions.handleAutoPopulatePrey}
         onAutoPopulatePredators={autoPopulateActions.handleAutoPopulatePredators}
         onSimulate={simulationActions.handleSimulate}
+        onStartContinuousSimulation={simulationActions.handleStartContinuousSimulation}
+        onStopSimulation={simulationActions.handleStopSimulation}
         isSimulating={simulationActions.isSimulating}
+        isContinuousSimulation={simulationActions.isContinuousSimulation}
         simulationProgress={simulationActions.simulationProgress}
+        onStartGame={startGameActions.handleStartGame}
+        isStartingGame={startGameActions.isStarting}
         onExportJson={exportActions.handleExportJson}
         onExportTs={exportActions.handleExportTs}
       />

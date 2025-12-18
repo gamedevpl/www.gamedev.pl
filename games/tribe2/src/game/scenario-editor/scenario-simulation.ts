@@ -29,6 +29,10 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
+import { ClickableUIButton, UIButtonActionType } from '../ui/ui-types';
+import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from '../ui/ui-consts';
+import { NotificationType } from '../notifications/notification-types';
+import { findPlayerEntity } from '../utils';
 
 /**
  * Converts a ScenarioConfig into a GameWorldState for simulation.
@@ -183,6 +187,74 @@ export function scenarioConfigToGameState(config: ScenarioConfig): GameWorldStat
   };
 
   return indexWorldState(gameState);
+}
+
+/**
+ * Creates a playable game state from a scenario config.
+ * This includes UI buttons, notifications, and proper settings for actual gameplay.
+ */
+export function createPlayableGameState(config: ScenarioConfig): GameWorldState {
+  // Get base game state from scenario
+  const baseState = scenarioConfigToGameState(config);
+  
+  // Create UI buttons for the game
+  const uiButtons: ClickableUIButton[] = [
+    {
+      id: 'muteButton',
+      action: UIButtonActionType.ToggleMute,
+      currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: '',
+      backgroundColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+    {
+      id: 'pauseButton',
+      action: UIButtonActionType.TogglePause,
+      currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: '',
+      backgroundColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+    {
+      id: 'returnToIntroButton',
+      action: UIButtonActionType.ReturnToIntro,
+      currentWidth: UI_BUTTON_WIDTH,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      text: 'EXIT',
+      backgroundColor: '',
+      textColor: UI_BUTTON_TEXT_COLOR,
+    },
+  ];
+
+  // Find the player entity to center viewport and create welcome notification
+  const player = findPlayerEntity(baseState);
+  
+  const notifications = player ? [
+    {
+      id: 'welcome',
+      type: NotificationType.Hello,
+      message: `Welcome to ${config.name}!`,
+      duration: 50,
+      targetEntityIds: [player.id],
+      highlightedEntityIds: [player.id],
+      timestamp: 0,
+      isDismissed: false,
+      creationTime: Date.now(),
+    },
+  ] : [];
+
+  // Update the state with game-specific settings
+  return {
+    ...baseState,
+    uiButtons,
+    notifications,
+    isMuted: false, // Enable sound for actual gameplay
+    viewportCenter: player?.position || baseState.viewportCenter,
+    autosaveIntervalSeconds: 5,
+    lastAutosaveTime: Date.now(),
+  };
 }
 
 /**
@@ -381,5 +453,51 @@ export async function runSimulationAsync(
     
     // Start processing
     requestAnimationFrame(processChunk);
+  });
+}
+
+/**
+ * Runs continuous simulation that updates the scenario in real-time.
+ * The simulation runs indefinitely until stopped via the shouldStop callback.
+ * Uses setTimeout to allow browser to handle other tasks between batches.
+ */
+export async function runContinuousSimulation(
+  initialConfig: ScenarioConfig,
+  onUpdate: (result: ScenarioConfig) => void,
+  shouldStop: () => boolean,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let gameState = scenarioConfigToGameState(initialConfig);
+    
+    const SIMULATION_STEP_REAL_SECONDS = 0.1;
+    const STEPS_PER_UPDATE = 10; // Update the scenario every 10 steps
+    const BATCH_DELAY_MS = 16; // ~60fps, allows browser to handle other tasks
+    
+    const processStep = () => {
+      if (shouldStop() || gameState.gameOver) {
+        // Final update before stopping
+        onUpdate(gameStateToScenarioConfig(gameState, initialConfig.name));
+        resolve();
+        return;
+      }
+      
+      // Run simulation steps
+      for (let i = 0; i < STEPS_PER_UPDATE; i++) {
+        gameState = updateWorld(gameState, SIMULATION_STEP_REAL_SECONDS);
+        
+        if (gameState.gameOver) {
+          break;
+        }
+      }
+      
+      // Update the scenario config periodically
+      onUpdate(gameStateToScenarioConfig(gameState, initialConfig.name));
+      
+      // Schedule next batch with setTimeout to allow browser to breathe
+      setTimeout(processStep, BATCH_DELAY_MS);
+    };
+    
+    // Start processing
+    setTimeout(processStep, 0);
   });
 }

@@ -32,8 +32,14 @@ interface ScenarioEditorSidebarProps {
   onAutoPopulatePredators: (count: number) => void;
   // Simulation callbacks
   onSimulate: (durationGameHours: number) => void;
+  onStartContinuousSimulation: () => void;
+  onStopSimulation: () => void;
   isSimulating: boolean;
+  isContinuousSimulation: boolean;
   simulationProgress: number;
+  // Start game callback
+  onStartGame: () => void;
+  isStartingGame: boolean;
   // Export callbacks
   onExportJson: () => void;
   onExportTs: () => void;
@@ -59,8 +65,13 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
   onAutoPopulatePrey,
   onAutoPopulatePredators,
   onSimulate,
+  onStartContinuousSimulation,
+  onStopSimulation,
   isSimulating,
+  isContinuousSimulation,
   simulationProgress,
+  onStartGame,
+  isStartingGame,
   onExportJson,
   onExportTs,
 }) => {
@@ -94,9 +105,13 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
       />
       <SimulationSection
         onSimulate={onSimulate}
+        onStartContinuousSimulation={onStartContinuousSimulation}
+        onStopSimulation={onStopSimulation}
         isSimulating={isSimulating}
+        isContinuousSimulation={isContinuousSimulation}
         simulationProgress={simulationProgress}
       />
+      <StartGameSection onStartGame={onStartGame} isStartingGame={isStartingGame} />
       <SummarySection config={config} />
       <ExportSection onExportJson={onExportJson} onExportTs={onExportTs} />
     </S.Sidebar>
@@ -306,27 +321,58 @@ const AutoPopulateSection: React.FC<AutoPopulateSectionProps> = ({
 
 interface SimulationSectionProps {
   onSimulate: (durationGameHours: number) => void;
+  onStartContinuousSimulation: () => void;
+  onStopSimulation: () => void;
   isSimulating: boolean;
+  isContinuousSimulation: boolean;
   simulationProgress: number;
 }
 
 const SimulationSection: React.FC<SimulationSectionProps> = ({
   onSimulate,
+  onStartContinuousSimulation,
+  onStopSimulation,
   isSimulating,
+  isContinuousSimulation,
   simulationProgress,
 }) => (
   <S.SidebarSection>
     <S.SectionTitle>Simulation</S.SectionTitle>
     <S.HelpText>Run the simulation to create a more organic state</S.HelpText>
     <S.SecondaryButton onClick={() => onSimulate(24)} disabled={isSimulating}>
-      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Day'}
+      {isSimulating && !isContinuousSimulation ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Day'}
     </S.SecondaryButton>
     <S.SecondaryButton onClick={() => onSimulate(168)} disabled={isSimulating}>
-      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Week'}
+      {isSimulating && !isContinuousSimulation ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Week'}
     </S.SecondaryButton>
     <S.SecondaryButton onClick={() => onSimulate(720)} disabled={isSimulating}>
-      {isSimulating ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Month'}
+      {isSimulating && !isContinuousSimulation ? `Simulating... ${simulationProgress.toFixed(0)}%` : 'Simulate 1 Month'}
     </S.SecondaryButton>
+    <S.HelpText style={{ marginTop: '8px' }}>Or run continuously:</S.HelpText>
+    {isContinuousSimulation ? (
+      <S.ActionButton onClick={onStopSimulation} style={{ backgroundColor: '#c0392b' }}>
+        ⏹ Stop Simulation
+      </S.ActionButton>
+    ) : (
+      <S.SecondaryButton onClick={onStartContinuousSimulation} disabled={isSimulating}>
+        ▶ Run Continuously
+      </S.SecondaryButton>
+    )}
+  </S.SidebarSection>
+);
+
+interface StartGameSectionProps {
+  onStartGame: () => void;
+  isStartingGame: boolean;
+}
+
+const StartGameSection: React.FC<StartGameSectionProps> = ({ onStartGame, isStartingGame }) => (
+  <S.SidebarSection>
+    <S.SectionTitle>Play</S.SectionTitle>
+    <S.ActionButton onClick={onStartGame} disabled={isStartingGame} style={{ backgroundColor: '#27ae60' }}>
+      {isStartingGame ? 'Starting...' : '🎮 Start Game'}
+    </S.ActionButton>
+    <S.HelpText>Save scenario and start playing</S.HelpText>
   </S.SidebarSection>
 );
 

@@ -1,7 +1,7 @@
 /**
  * Custom hooks for the Scenario Editor state management.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   ScenarioEditorState,
   ScenarioConfig,
@@ -104,11 +104,17 @@ export function useEntityActions(
         return;
       }
 
+      // Check if this is the first leader being added - make them the player
+      const hasPlayer = config.tribes.some(tribe => 
+        tribe.humans.some(human => human.isPlayer)
+      );
+      const isPlayer = isLeader && !hasPlayer;
+
       const newHuman: ScenarioHuman = {
         id: generateScenarioId(),
         gender: humanGender,
         age: humanAge,
-        isPlayer: false,
+        isPlayer,
         isLeader,
         position,
         tribeId: selectedTribeId,
@@ -122,7 +128,11 @@ export function useEntityActions(
       });
 
       updateConfig({ tribes: updatedTribes });
-      showToast(`Human added to tribe`);
+      if (isPlayer) {
+        showToast(`Player (leader) added to tribe`);
+      } else {
+        showToast(`Human added to tribe`);
+      }
     },
     [selectedTribeId, config.tribes, updateConfig, showToast, humanAge, humanGender],
   );
@@ -399,7 +409,13 @@ export function useSimulationActions(
   showToast: (message: string) => void,
 ) {
   const [isSimulating, setIsSimulating] = useState(false);
+  const [isContinuousSimulation, setIsContinuousSimulation] = useState(false);
   const [simulationProgress, setSimulationProgress] = useState(0);
+  const stopRequestedRef = useRef(false);
+  const configRef = useRef(config);
+  
+  // Keep config ref updated
+  configRef.current = config;
 
   const handleSimulate = useCallback(
     async (durationGameHours: number) => {
@@ -418,7 +434,9 @@ export function useSimulationActions(
       }
 
       setIsSimulating(true);
+      setIsContinuousSimulation(false);
       setSimulationProgress(0);
+      stopRequestedRef.current = false;
       showToast(`Simulating ${durationGameHours} game hours...`);
 
       try {
@@ -451,9 +469,115 @@ export function useSimulationActions(
     [config, updateConfig, showToast, isSimulating],
   );
 
+  const handleStartContinuousSimulation = useCallback(async () => {
+    if (isSimulating) return;
+
+    // Check if there's anything to simulate
+    const hasEntities = 
+      config.tribes.length > 0 || 
+      config.berryBushes.length > 0 || 
+      config.prey.length > 0 || 
+      config.predators.length > 0;
+      
+    if (!hasEntities) {
+      showToast('Add some entities first!');
+      return;
+    }
+
+    setIsSimulating(true);
+    setIsContinuousSimulation(true);
+    stopRequestedRef.current = false;
+    showToast('Starting continuous simulation...');
+
+    try {
+      const { runContinuousSimulation } = await import('../../game/scenario-editor/scenario-simulation');
+      
+      await runContinuousSimulation(
+        configRef.current,
+        (result) => {
+          // Update the config with the simulated result (exclude non-entity properties)
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { name: _n, description: _d, mapWidth: _mw, mapHeight: _mh, ecosystemSettings: _es, playerStartPosition: _psp, playerTribeId: _pt, ...entityUpdates } = result;
+          updateConfig(entityUpdates);
+          // Update the ref with new config for next iteration
+          configRef.current = result;
+        },
+        () => stopRequestedRef.current,
+      );
+
+      showToast('Simulation stopped');
+    } catch (error) {
+      console.error('Continuous simulation error:', error);
+      showToast('Simulation failed');
+    } finally {
+      setIsSimulating(false);
+      setIsContinuousSimulation(false);
+    }
+  }, [config, updateConfig, showToast, isSimulating]);
+
+  const handleStopSimulation = useCallback(() => {
+    stopRequestedRef.current = true;
+    showToast('Stopping simulation...');
+  }, [showToast]);
+
   return {
     isSimulating,
+    isContinuousSimulation,
     simulationProgress,
     handleSimulate,
+    handleStartContinuousSimulation,
+    handleStopSimulation,
+  };
+}
+
+/**
+ * Hook for starting the game from a scenario.
+ */
+export function useStartGameActions(
+  config: ScenarioConfig,
+  showToast: (message: string) => void,
+  saveCurrentGame: (state: import('../../game/world-types').GameWorldState) => void,
+  setAppState: (state: 'intro' | 'game' | 'gameOver' | 'editor') => void,
+) {
+  const [isStarting, setIsStarting] = useState(false);
+
+  const handleStartGame = useCallback(async () => {
+    if (isStarting) return;
+
+    // Check if there's a player in the scenario
+    const hasPlayer = config.tribes.some(tribe => 
+      tribe.humans.some(human => human.isPlayer)
+    );
+
+    if (!hasPlayer) {
+      showToast('Add a player first! (SHIFT+click with +Human tool to add a leader)');
+      return;
+    }
+
+    setIsStarting(true);
+    showToast('Starting game...');
+
+    try {
+      // Dynamic import to avoid circular dependencies
+      const { createPlayableGameState } = await import('../../game/scenario-editor/scenario-simulation');
+      
+      // Create the playable game state
+      const gameState = createPlayableGameState(config);
+      
+      // Save the game state
+      saveCurrentGame(gameState);
+      
+      // Transition to game mode
+      setAppState('game');
+    } catch (error) {
+      console.error('Failed to start game:', error);
+      showToast('Failed to start game');
+      setIsStarting(false);
+    }
+  }, [config, showToast, saveCurrentGame, setAppState, isStarting]);
+
+  return {
+    isStarting,
+    handleStartGame,
   };
 }
