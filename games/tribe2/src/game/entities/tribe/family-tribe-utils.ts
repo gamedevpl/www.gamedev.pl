@@ -270,7 +270,10 @@ export function findTribeMembers(leaderId: EntityId, gameState: GameWorldState):
 }
 
 export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
-  const tribes: Map<EntityId, { leaderId: EntityId; tribeBadge: string; members: HumanEntity[] }> = new Map();
+  const tribes: Map<
+    EntityId,
+    { leaderId: EntityId; tribeInfo?: { tribeBadge: string; tribeColor: string }; members: HumanEntity[] }
+  > = new Map();
 
   const humans = Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[];
 
@@ -279,7 +282,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       if (!tribes.has(human.leaderId)) {
         tribes.set(human.leaderId, {
           leaderId: human.leaderId,
-          tribeBadge: human.tribeBadge || '?',
+          tribeInfo: human.tribeInfo,
           members: [],
         });
       }
@@ -298,7 +301,8 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
 
     return {
       leaderId: tribe.leaderId,
-      tribeBadge: tribe.tribeBadge,
+      tribeBadge: tribe?.tribeInfo?.tribeBadge || '',
+      tribeColor: tribe?.tribeInfo?.tribeColor || '',
       adultCount,
       childCount,
       isPlayerTribe: tribe.leaderId === playerLeaderId,
@@ -433,13 +437,13 @@ function executeTribeMerge(fromTribeLeaderId: EntityId, toTribeLeaderId: EntityI
 
   if (!targetLeader || !targetLeader.leaderId) return;
 
-  const oldTribeBadge = members.length > 0 ? members[0].tribeBadge : '?';
-  const newTribeBadge = targetLeader.tribeBadge;
+  const oldTribeBadge = members.length > 0 ? members[0].tribeInfo?.tribeBadge : '?';
+  const newTribeBadge = targetLeader.tribeInfo?.tribeBadge ?? '?';
 
   // Transfer members
   for (const member of members) {
     member.leaderId = toTribeLeaderId;
-    member.tribeBadge = newTribeBadge;
+    member.tribeInfo = targetLeader.tribeInfo;
     // Reset role, new leader will assign
     member.tribeRole = undefined;
   }
@@ -479,7 +483,7 @@ export function checkAndExecuteTribeMerges(gameState: GameWorldState): void {
       const members = findTribeMembers(orphanedTribeId, gameState);
       for (const member of members) {
         member.leaderId = undefined;
-        member.tribeBadge = undefined;
+        member.tribeInfo = undefined;
         member.tribeRole = undefined;
       }
 

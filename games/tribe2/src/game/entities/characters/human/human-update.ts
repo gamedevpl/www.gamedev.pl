@@ -165,7 +165,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       if (heir) {
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
-        heir.tribeBadge = entity.tribeBadge;
+        heir.tribeInfo = entity.tribeInfo;
         heir.tribeRole = TribeRole.Leader;
 
         // Initialize or transfer tribe control
@@ -204,7 +204,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
           if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
             const follower = e as HumanEntity;
             follower.leaderId = undefined;
-            follower.tribeBadge = undefined;
+            follower.tribeInfo = undefined;
           }
           if (e.type === 'building' && (e as BuildingEntity).ownerId === entity.id) {
             const building = e as BuildingEntity;

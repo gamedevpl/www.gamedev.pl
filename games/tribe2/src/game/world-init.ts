@@ -6,7 +6,7 @@ import {
   MIN_BERRY_BUSH_SPREAD_CHANCE,
 } from './entities/plants/berry-bush/berry-bush-consts.ts';
 import { INITIAL_MASTER_VOLUME } from './sound-consts.ts';
-import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR } from './ui/ui-consts.ts';
+import { UI_BUTTON_WIDTH, UI_BUTTON_TEXT_COLOR, TRIBE_BADGE_EMOJIS } from './ui/ui-consts.ts';
 import {
   INITIAL_PREY_COUNT,
   MAX_PREY_GESTATION_PERIOD,
@@ -23,7 +23,7 @@ import { NotificationType } from './notifications/notification-types';
 import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
-import { TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
+import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -54,7 +54,10 @@ export function initWorld(): GameWorldState {
     false, // isPlayer = false
   );
   partner.leaderId = player.id; // Partner joins player's tribe
-  partner.tribeBadge = '👑';
+  partner.tribeInfo = {
+    tribeBadge: '👑',
+    tribeColor: TERRITORY_COLORS[0],
+  };
 
   for (let i = 0; i < 5; i++) {
     const angle = (i / 5) * Math.PI * 2;
@@ -66,7 +69,6 @@ export function initWorld(): GameWorldState {
     };
 
     // Spawn other tribes - each pair forms a tribe with male as leader
-    const tribeBadges = ['🔥', '⭐', '🌙', '☀️', '🌿'];
     const male = createHuman(
       entities,
       { x: spawnPosition.x, y: spawnPosition.y },
@@ -75,7 +77,10 @@ export function initWorld(): GameWorldState {
       false, // isPlayer = false
     );
     male.leaderId = male.id; // Male is the leader
-    male.tribeBadge = tribeBadges[i];
+    male.tribeInfo = {
+      tribeBadge: TRIBE_BADGE_EMOJIS[i % TRIBE_BADGE_EMOJIS.length],
+      tribeColor: TERRITORY_COLORS[i % TERRITORY_COLORS.length],
+    };
 
     const female = createHuman(
       entities,
@@ -85,7 +90,7 @@ export function initWorld(): GameWorldState {
       false, // isPlayer = false
     );
     female.leaderId = male.id; // Female joins the tribe
-    female.tribeBadge = tribeBadges[i];
+    female.tribeInfo = male.tribeInfo;
   }
 
   // Spawn a pairs of prey at random positions

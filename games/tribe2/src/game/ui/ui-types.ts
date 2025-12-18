@@ -101,6 +101,7 @@ export interface PlayerActionHint {
 export interface TribeInfo {
   leaderId: EntityId;
   tribeBadge: string;
+  tribeColor: string;
   adultCount: number;
   childCount: number;
   isPlayerTribe: boolean;

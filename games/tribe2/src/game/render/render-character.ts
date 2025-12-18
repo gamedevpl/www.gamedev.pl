@@ -256,8 +256,8 @@ export function renderCharacter(
     drawCrown(ctx, position, currentCharacterRadius, crownSize, highlightColor);
   }
 
-  if (human.tribeBadge) {
-    drawTribeBadge(ctx, position, human.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
+  if (human.tribeInfo?.tribeBadge) {
+    drawTribeBadge(ctx, position, human.tribeInfo.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
   }
 
   const showDebug = isDebugOn && (gameState.debugCharacterId === undefined || human.id === gameState.debugCharacterId);

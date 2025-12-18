@@ -12,6 +12,7 @@ import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
 import { FoodType } from './entities/food-types.ts';
 import { btProfiler } from './ai/behavior-tree/bt-profiler';
+import { TERRITORY_COLORS } from './entities/tribe/territory-consts.ts';
 
 // Helper to find a human by ID, with proper type assertion
 const findHumanById = (gameState: GameWorldState, id: number): HumanEntity | undefined => {
@@ -118,7 +119,10 @@ describe('Tribe Formation via Splitting', () => {
     // 1. Create a leader for the initial tribe
     const leaderA = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', false, 30);
     leaderA.leaderId = leaderA.id;
-    leaderA.tribeBadge = generateTribeBadge();
+    leaderA.tribeInfo = {
+      tribeBadge: generateTribeBadge(),
+      tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
+    };
 
     // 2. Create a male who is part of the leader's tribe but not related
     const maleB = createHuman(
@@ -133,7 +137,7 @@ describe('Tribe Formation via Splitting', () => {
       undefined,
       [],
       leaderA.id,
-      leaderA.tribeBadge,
+      leaderA.tribeInfo,
     );
 
     // 3. Create a female who is also not related to the leader
@@ -155,9 +159,9 @@ describe('Tribe Formation via Splitting', () => {
     const updatedFemaleC = findHumanById(gameState, femaleC.id);
 
     expect(updatedMaleB?.leaderId).toBe(maleB.id); // Male B is the new leader
-    expect(updatedMaleB?.tribeBadge).not.toBe(leaderA.tribeBadge); // Has a new badge
+    expect(updatedMaleB?.tribeInfo?.tribeBadge).not.toBe(leaderA.tribeInfo?.tribeBadge); // Has a new badge
     expect(updatedFemaleC?.leaderId).toBe(maleB.id); // Female C joined the new tribe
-    expect(updatedFemaleC?.tribeBadge).toBe(updatedMaleB?.tribeBadge); // Shares the new badge
+    expect(updatedFemaleC?.tribeInfo?.tribeBadge).toBe(updatedMaleB?.tribeInfo?.tribeBadge); // Shares the new badge
   });
 
   it('should not form a new tribe if the male is related to the leader', () => {
@@ -167,7 +171,10 @@ describe('Tribe Formation via Splitting', () => {
     // 1. Create a leader for the initial tribe
     const leaderA = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'male', false, 40);
     leaderA.leaderId = leaderA.id;
-    leaderA.tribeBadge = '👑';
+    leaderA.tribeInfo = {
+      tribeBadge: '👑',
+      tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
+    };
 
     // 2. Create a female partner for the leader to have a child
     const femalePartner = createHuman(gameState.entities, { x: 110, y: 110 }, 0, 'female', false, 38);
@@ -198,7 +205,7 @@ describe('Tribe Formation via Splitting', () => {
     const finalFemaleC = findHumanById(gameState, femaleC.id);
 
     expect(finalMaleB?.leaderId).toBe(leaderA.id); // Male B is still in the same tribe
-    expect(finalMaleB?.tribeBadge).toBe(leaderA.tribeBadge);
+    expect(finalMaleB?.tribeInfo?.tribeBadge).toBe(leaderA.tribeInfo?.tribeBadge);
     expect(finalFemaleC?.leaderId).toBeUndefined(); // Female C does not join the tribe automatically in this case
   });
 });

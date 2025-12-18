@@ -57,7 +57,10 @@ export interface HumanEntity extends CharacterEntity {
   leaderId?: EntityId;
 
   /** Visual representation of the tribe badge. */
-  tribeBadge?: string;
+  tribeInfo?: {
+    tribeBadge: string;
+    tribeColor: string;
+  };
 
   /** Cooldown time for a parent to feed a child. */
   feedChildCooldownTime?: number;

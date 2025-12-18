@@ -32,6 +32,7 @@ import { BuildingType } from '../buildings/building-consts.ts';
 import { EntityId } from '../entities-types.ts';
 import { getOwnerOfPoint } from './territory-utils.ts';
 import { isPositionOccupied } from '../../utils/spatial-utils.ts';
+import { TERRITORY_COLORS } from './territory-consts.ts';
 
 /**
  * Blackboard keys for tribe split state management
@@ -404,10 +405,11 @@ export function executeSplit(human: HumanEntity, gameState: GameWorldState): boo
     : undefined;
 
   const newTribeBadge = generateTribeBadge();
+  const newTribeColor = TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)];
 
   // The founder becomes the new leader
   human.leaderId = human.id;
-  human.tribeBadge = newTribeBadge;
+  human.tribeInfo = { tribeBadge: newTribeBadge, tribeColor: newTribeColor };
   human.tribeRole = TribeRole.Leader;
   human.tribeControl = {
     roleWeights: {
@@ -438,7 +440,7 @@ export function executeSplit(human: HumanEntity, gameState: GameWorldState): boo
     if (!member || member.type !== 'human') continue;
 
     member.leaderId = human.id;
-    member.tribeBadge = newTribeBadge;
+    member.tribeInfo = { tribeBadge: newTribeBadge, tribeColor: newTribeColor };
   }
 
   // Handle strategy-specific actions

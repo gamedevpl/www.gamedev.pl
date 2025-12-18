@@ -119,7 +119,7 @@ export function createHuman(
   fatherId?: EntityId,
   ancestorIds: EntityId[] = [],
   leaderId?: EntityId,
-  tribeBadge?: string,
+  tribeInfo?: { tribeBadge: string; tribeColor: string },
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
@@ -148,7 +148,7 @@ export function createHuman(
     ancestorIds,
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
     leaderId,
-    tribeBadge,
+    tribeInfo,
     aiType: AIType.BehaviorTreeBased,
     aiBlackboard: Blackboard.create(),
   });
@@ -313,7 +313,7 @@ export function giveBirth(
     childAncestors,
     // Determine child's tribe: father's tribe first (medieval convention), then mother's
     father?.leaderId ?? mother.leaderId,
-    father?.tribeBadge ?? mother.tribeBadge,
+    father?.tribeInfo ?? mother.tribeInfo,
   );
 
   // Play birth sound

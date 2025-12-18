@@ -11,6 +11,7 @@ import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { generateTribeBadge, isLineage, canProcreate } from '../utils';
 import { TribeRole } from '../entities/tribe/tribe-types.ts';
+import { TERRITORY_COLORS } from '../entities/tribe/territory-consts.ts';
 
 /**
  * Defines an interaction for human procreation.
@@ -95,7 +96,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         // Form a new tribe by splitting
         const newTribeBadge = generateTribeBadge();
         male.leaderId = male.id; // The male becomes the leader of a new tribe
-        male.tribeBadge = newTribeBadge;
+        male.tribeInfo = {
+          tribeBadge: newTribeBadge,
+          tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
+        };
         male.tribeRole = TribeRole.Leader;
         male.tribeControl = {
           roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
@@ -103,7 +107,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
           armyControl: { protectHomeland: 5, expandBorders: 5, invadeEnemies: 5 },
         };
         female.leaderId = male.id; // The female joins the new tribe
-        female.tribeBadge = newTribeBadge;
+        female.tribeInfo = male.tribeInfo;
       }
     }
   } else if (!source.leaderId && !target.leaderId) {
@@ -111,7 +115,10 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     if (male && female) {
       const newTribeBadge = generateTribeBadge();
       male.leaderId = male.id; // The male becomes the leader
-      male.tribeBadge = newTribeBadge;
+      male.tribeInfo = {
+        tribeBadge: newTribeBadge,
+        tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
+      };
       male.tribeRole = TribeRole.Leader;
       male.tribeControl = {
         roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
@@ -119,7 +126,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         armyControl: { protectHomeland: 5, expandBorders: 5, invadeEnemies: 5 },
       };
       female.leaderId = male.id; // The female joins the new tribe
-      female.tribeBadge = newTribeBadge;
+      female.tribeInfo = male.tribeInfo;
     }
   }
 
