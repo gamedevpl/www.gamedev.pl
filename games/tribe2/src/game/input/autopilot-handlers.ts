@@ -182,7 +182,7 @@ export const determineHoveredAutopilotAction = (
     // --- POSITION-BASED ACTIONS ---
     if (
       player.food.filter((f) => f.type === FoodType.Berry).length >= BERRY_COST_FOR_PLANTING &&
-      (gameState.autopilotControls.isManuallyPlanting || isPositionInAnyPlantingZone(worldPos, player, gameState)) &&
+      (gameState.autopilotControls.isManuallyPlanting || isPositionInAnyPlantingZone(worldPos, gameState, player)) &&
       !isSoilDepleted(gameState.soilDepletion, worldPos, gameState.mapDimensions.width, gameState.mapDimensions.height)
     ) {
       determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };

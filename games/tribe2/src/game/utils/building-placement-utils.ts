@@ -84,7 +84,7 @@ export function canPlaceBuilding(
 
   // 2. For planting zones, check if soil is depleted
   if (buildingType === BuildingType.PlantingZone) {
-    const depletedSectors = getDepletedSectorsInArea(
+    const { depletedSectors } = getDepletedSectorsInArea(
       gameState.soilDepletion,
       position,
       dimensions.width,

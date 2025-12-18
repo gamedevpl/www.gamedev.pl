@@ -2,9 +2,13 @@ import { State, StateContext, StateTransition } from '../../../../state-machine/
 import { BerryBushEntity } from '../berry-bush-types';
 import { BushGrowingStateData, BUSH_DYING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../game-consts.ts';
-import { BERRY_BUSH_REGENERATION_HOURS } from '../berry-bush-consts.ts';
+import {
+  BERRY_BUSH_REGENERATION_HOURS,
+  BERRY_BUSH_GROWTH_RATE_PLANTING_ZONE_MULTIPLIER,
+} from '../berry-bush-consts.ts';
 import { FoodType } from '../../../food-types.ts';
 import { isSoilDepleted } from '../../soil-depletion-update.ts';
+import { isPositionInAnyPlantingZone } from '../../../tribe/tribe-food-utils';
 
 export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
   id: BUSH_GROWING,
@@ -26,7 +30,11 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
     );
 
     if (!soilDepleted) {
-      entity.timeSinceLastBerryRegen += gameHoursDelta;
+      const growthMultiplier = isPositionInAnyPlantingZone(entity.position, updateContext.gameState)
+        ? BERRY_BUSH_GROWTH_RATE_PLANTING_ZONE_MULTIPLIER
+        : 1;
+
+      entity.timeSinceLastBerryRegen += gameHoursDelta * growthMultiplier;
 
       if (entity.timeSinceLastBerryRegen >= BERRY_BUSH_REGENERATION_HOURS) {
         if (entity.food.length < entity.maxFood) {

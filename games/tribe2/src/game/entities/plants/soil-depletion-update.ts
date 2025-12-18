@@ -6,6 +6,7 @@
 
 import { Vector2D } from '../../utils/math-types';
 import { EntityId } from '../entities-types';
+import { GameWorldState } from '../../world-types';
 import {
   SoilDepletionState,
   SoilSector,
@@ -24,8 +25,10 @@ import {
   SOIL_RECOVERY_RATE_BASE,
   SOIL_RECOVERY_RATE_ADJACENT_BONUS,
   SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS,
+  SOIL_DEPLETION_PLANTING_ZONE_MULTIPLIER,
 } from './soil-depletion-consts';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts';
+import { isPositionInAnyPlantingZone } from '../tribe/tribe-food-utils';
 
 /**
  * Converts a world position to grid coordinates.
@@ -98,6 +101,7 @@ export function applySoilWalkDepletion(
   currentTime: number,
   worldWidth: number,
   worldHeight: number,
+  gameState: GameWorldState,
 ): void {
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const sector = getSector(state, gridX, gridY);
@@ -109,7 +113,10 @@ export function applySoilWalkDepletion(
   }
 
   // Apply depletion
-  sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - SOIL_DEPLETION_PER_WALK);
+  const multiplier = isPositionInAnyPlantingZone(position, gameState) ? SOIL_DEPLETION_PLANTING_ZONE_MULTIPLIER : 1;
+  const depletionAmount = SOIL_DEPLETION_PER_WALK * multiplier;
+
+  sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - depletionAmount);
   sector.lastWalkTime = currentTime;
   sector.lastAffectedBy[entityId] = currentTime;
 }
@@ -123,11 +130,15 @@ export function applySoilPlantDepletion(
   currentTime: number,
   worldWidth: number,
   worldHeight: number,
+  gameState: GameWorldState,
 ): void {
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const sector = getSector(state, gridX, gridY);
 
-  sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - SOIL_DEPLETION_PER_BUSH_PLANT);
+  const multiplier = isPositionInAnyPlantingZone(position, gameState) ? SOIL_DEPLETION_PLANTING_ZONE_MULTIPLIER : 1;
+  const depletionAmount = SOIL_DEPLETION_PER_BUSH_PLANT * multiplier;
+
+  sector.health = Math.max(SOIL_HEALTH_MIN, sector.health - depletionAmount);
   sector.lastPlantTime = currentTime;
 }
 
@@ -248,8 +259,8 @@ export function getDepletedSectorsInArea(
   height: number,
   worldWidth: number,
   worldHeight: number,
-): Array<{ gridX: number; gridY: number }> {
-  const result: Array<{ gridX: number; gridY: number }> = [];
+): { depletedSectors: Array<{ gridX: number; gridY: number }>; totalSectorsCount: number } {
+  const depletedSectors: Array<{ gridX: number; gridY: number }> = [];
 
   const halfWidth = width / 2;
   const halfHeight = height / 2;
@@ -261,26 +272,29 @@ export function getDepletedSectorsInArea(
   const maxY = centerPosition.y + halfHeight;
 
   const startGridX = Math.floor(minX / SOIL_SECTOR_SIZE);
-  const endGridX = Math.ceil(maxX / SOIL_SECTOR_SIZE);
+  // Use a small epsilon to avoid including the next sector if the coordinate is exactly on the boundary
+  const endGridX = Math.floor((maxX - 0.001) / SOIL_SECTOR_SIZE);
   const startGridY = Math.floor(minY / SOIL_SECTOR_SIZE);
-  const endGridY = Math.ceil(maxY / SOIL_SECTOR_SIZE);
+  const endGridY = Math.floor((maxY - 0.001) / SOIL_SECTOR_SIZE);
 
   const maxGridX = Math.ceil(worldWidth / SOIL_SECTOR_SIZE);
   const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
 
+  let totalSectorsCount = 0;
   for (let gx = startGridX; gx <= endGridX; gx++) {
     for (let gy = startGridY; gy <= endGridY; gy++) {
+      totalSectorsCount++;
       // Handle wrapping
       const wrappedGx = ((gx % maxGridX) + maxGridX) % maxGridX;
       const wrappedGy = ((gy % maxGridY) + maxGridY) % maxGridY;
 
       if (!isSoilViableAtGrid(state, wrappedGx, wrappedGy)) {
-        result.push({ gridX: wrappedGx, gridY: wrappedGy });
+        depletedSectors.push({ gridX: wrappedGx, gridY: wrappedGy });
       }
     }
   }
 
-  return result;
+  return { depletedSectors, totalSectorsCount };
 }
 
 /**
@@ -297,10 +311,5 @@ export function getSoilSpeedModifier(
   const { gridX, gridY } = positionToGridCoords(position, worldWidth, worldHeight);
   const health = getSectorHealth(state, gridX, gridY);
 
-  // If soil is depleted, apply speed bonus
-  if (health < SOIL_HEALTH_DEPLETED_THRESHOLD) {
-    return depletedSpeedBonus;
-  }
-
-  return 1.0;
+  return 1.0 + (depletedSpeedBonus - 1) * Math.sqrt(1 - health / SOIL_HEALTH_MAX); // Normalized speed modifier
 }

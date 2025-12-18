@@ -46,6 +46,7 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
           gameState.time,
           gameState.mapDimensions.width,
           gameState.mapDimensions.height,
+          gameState,
         );
       }
       // Transition back to idle

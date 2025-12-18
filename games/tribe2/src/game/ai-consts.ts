@@ -75,6 +75,7 @@ export const LEADER_BUILDING_SPIRAL_SEARCH_RADIUS = MAP_WIDTH / 2; // Max distan
 export const LEADER_BUILDING_MIN_TRIBE_SIZE = 2; // Minimum adult tribe members to consider building
 export const LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD = 0.7; // Build storage when 70% full
 export const LEADER_BUILDING_MIN_BUSHES_PER_MEMBER = 0.5; // Build planting zone when below this ratio
+export const LEADER_BUILDING_MIN_BUSHES = 10; // Minimum bushes a tribe should have
 export const LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE = 0.5; // Expected growth rate to factor into building decisions
 export const LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 400; // Min distance from other tribes for buildings
 export const LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER = 800; // Min distance for first storage (base establishment)

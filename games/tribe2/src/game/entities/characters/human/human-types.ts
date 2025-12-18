@@ -104,6 +104,9 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The current role assigned within the tribe, if any. */
   tribeRole?: TribeRole;
+
+  /** The direction of the border expansion orbit (1 for CW, -1 for CCW). */
+  pioneerOrbitDirection?: number;
 }
 
 export type HumanAction =

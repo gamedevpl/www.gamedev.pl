@@ -79,6 +79,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
       updateContext.gameState.time,
       updateContext.gameState.mapDimensions.width,
       updateContext.gameState.mapDimensions.height,
+      updateContext.gameState,
     );
   }
 

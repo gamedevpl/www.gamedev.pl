@@ -1,8 +1,19 @@
-import { SOIL_DEPLETED_SPEED_BONUS } from '../../../plants/soil-depletion-consts';
+import {
+  SOIL_DEPLETED_SPEED_BONUS,
+  SOIL_STEERING_SAMPLE_DISTANCE,
+  SOIL_STEERING_SAMPLE_ANGLE,
+} from '../../../plants/soil-depletion-consts';
 import { getSoilSpeedModifier } from '../../../plants/soil-depletion-update';
 import { State, StateContext } from '../../../../state-machine/state-machine-types';
 import { Vector2D } from '../../../../utils/math-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
+import {
+  calculateWrappedDistance,
+  getDirectionVectorOnTorus,
+  vectorNormalize,
+  vectorAdd,
+  vectorScale,
+  vectorRotate,
+} from '../../../../utils/math-utils';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import {
@@ -71,33 +82,10 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       };
     }
 
-    const dirToTarget = getDirectionVectorOnTorus(
-      entity.position,
-      targetPosition,
-      context.updateContext.gameState.mapDimensions.width,
-      context.updateContext.gameState.mapDimensions.height,
-    );
-    entity.direction = vectorNormalize(dirToTarget);
-
-    // Get terrain speed modifier from soil depletion state
-    const terrainSpeedModifier = getSoilSpeedModifier(
-      updateContext.gameState.soilDepletion,
-      entity.position,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
-      SOIL_DEPLETED_SPEED_BONUS,
-    );
-
-    // Set acceleration based on effective speed
-    entity.acceleration = getEffectiveSpeed(entity, terrainSpeedModifier);
+    const { width, height } = updateContext.gameState.mapDimensions;
 
     // Check if we've reached the target
-    const distance = calculateWrappedDistance(
-      entity.position,
-      targetPosition,
-      updateContext.gameState.mapDimensions.width,
-      updateContext.gameState.mapDimensions.height,
-    );
+    const distance = calculateWrappedDistance(entity.position, targetPosition, width, height);
 
     if (distance < MOVEMENT_THRESHOLD) {
       // Close enough to target
@@ -110,6 +98,65 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
         },
       };
     }
+
+    // --- Steering Logic ---
+    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, width, height);
+    const straightDir = vectorNormalize(dirToTarget);
+
+    if (distance > SOIL_STEERING_SAMPLE_DISTANCE) {
+      // Greedy Steering: Sample soil in 3 directions to find the fastest path
+      const leftDir = vectorRotate(straightDir, -SOIL_STEERING_SAMPLE_ANGLE);
+      const rightDir = vectorRotate(straightDir, SOIL_STEERING_SAMPLE_ANGLE);
+
+      const directions = [straightDir, leftDir, rightDir];
+      const scores = directions.map((dir, index) => {
+        // Calculate sample position with wrapping
+        const samplePos = vectorAdd(entity.position, vectorScale(dir, SOIL_STEERING_SAMPLE_DISTANCE));
+        const wrappedSamplePos = {
+          x: ((samplePos.x % width) + width) % width,
+          y: ((samplePos.y % height) + height) % height,
+        };
+
+        const speedModifier = getSoilSpeedModifier(
+          updateContext.gameState.soilDepletion,
+          wrappedSamplePos,
+          width,
+          height,
+          SOIL_DEPLETED_SPEED_BONUS,
+        );
+
+        // Score based on speed modifier and alignment with target
+        // alignment = cos(0) = 1.0 for straightDir, cos(30deg) ~= 0.866 for others
+        const angleDeviation = index === 0 ? 0 : SOIL_STEERING_SAMPLE_ANGLE;
+        const alignment = Math.cos(angleDeviation);
+        return speedModifier * alignment;
+      });
+
+      // Pick the best direction
+      let bestIndex = 0;
+      for (let i = 1; i < scores.length; i++) {
+        if (scores[i] > scores[bestIndex]) {
+          bestIndex = i;
+        }
+      }
+      entity.direction = directions[bestIndex];
+    } else {
+      // Too close to target, just move straight
+      entity.direction = straightDir;
+    }
+    // --- End Steering Logic ---
+
+    // Get terrain speed modifier from soil depletion state at current position
+    const terrainSpeedModifier = getSoilSpeedModifier(
+      updateContext.gameState.soilDepletion,
+      entity.position,
+      width,
+      height,
+      SOIL_DEPLETED_SPEED_BONUS,
+    );
+
+    // Set acceleration based on effective speed
+    entity.acceleration = getEffectiveSpeed(entity, terrainSpeedModifier);
 
     return { nextState: HUMAN_MOVING, data: movingData };
   }

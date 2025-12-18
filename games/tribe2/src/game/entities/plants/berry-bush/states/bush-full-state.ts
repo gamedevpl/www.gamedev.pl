@@ -2,7 +2,11 @@ import { State, StateContext, StateTransition } from '../../../../state-machine/
 import { BerryBushEntity } from '../berry-bush-types';
 import { BushFullStateData, BUSH_DYING, BUSH_SPREADING, BUSH_FULL, BUSH_GROWING } from './bush-state-types';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../game-consts';
-import { BERRY_BUSH_SPREAD_COOLDOWN_HOURS } from '../berry-bush-consts';
+import {
+  BERRY_BUSH_SPREAD_COOLDOWN_HOURS,
+  BERRY_BUSH_SPREAD_CHANCE_PLANTING_ZONE_MULTIPLIER,
+} from '../berry-bush-consts';
+import { isPositionInAnyPlantingZone } from '../../../tribe/tribe-food-utils';
 
 export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
   id: BUSH_FULL,
@@ -33,7 +37,12 @@ export const bushFullState: State<BerryBushEntity, BushFullStateData> = {
       const timeSinceHarvest = updateContext.gameState.time - entity.timeSinceLastHarvest;
       const hasBeenLeftAlone = timeSinceHarvest >= BERRY_BUSH_SPREAD_COOLDOWN_HOURS;
 
-      if (hasBeenLeftAlone && Math.random() < updateContext.gameState.ecosystem.berryBushSpreadChance) {
+      const spreadChanceMultiplier = isPositionInAnyPlantingZone(entity.position, updateContext.gameState)
+        ? BERRY_BUSH_SPREAD_CHANCE_PLANTING_ZONE_MULTIPLIER
+        : 1;
+      const effectiveSpreadChance = updateContext.gameState.ecosystem.berryBushSpreadChance * spreadChanceMultiplier;
+
+      if (hasBeenLeftAlone && Math.random() < effectiveSpreadChance) {
         return {
           nextState: BUSH_SPREADING,
           data: { ...data, enteredAt: updateContext.gameState.time, previousState: BUSH_FULL },

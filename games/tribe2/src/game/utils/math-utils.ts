@@ -91,8 +91,19 @@ export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth:
   return vectorLength(difference);
 }
 
-function vectorDot(v1: Vector2D, v2: Vector2D): number {
+export function vectorDot(v1: Vector2D, v2: Vector2D): number {
   return v1.x * v2.x + v1.y * v2.y;
+}
+
+export function vectorProject(v: Vector2D, onto: Vector2D): Vector2D {
+  const ontoLengthSq = onto.x * onto.x + onto.y * onto.y;
+  if (ontoLengthSq === 0) return { x: 0, y: 0 };
+  const dot = vectorDot(v, onto);
+  return vectorScale(onto, dot / ontoLengthSq);
+}
+
+export function vectorRejection(v: Vector2D, onto: Vector2D): Vector2D {
+  return vectorSubtract(v, vectorProject(v, onto));
 }
 
 export function vectorAngleBetween(v1: Vector2D, v2: Vector2D): number {

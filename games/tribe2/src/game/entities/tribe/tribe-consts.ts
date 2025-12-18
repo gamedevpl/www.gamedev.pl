@@ -1,8 +1,8 @@
 // Tribe and Family Constants
 
 // Tribe Split Constants
-export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 20;
-export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.2;
+export const TRIBE_SPLIT_MIN_TRIBE_HEADCOUNT = 30;
+export const TRIBE_SPLIT_MIN_FAMILY_HEADCOUNT_PERCENTAGE = 0.4;
 export const TRIBE_SPLIT_CHECK_INTERVAL_HOURS = 24;
 export const TRIBE_SPLIT_GATHER_RADIUS = 50; // Radius within which family members must gather
 export const TRIBE_SPLIT_CONCENTRATION_STORAGE_RADIUS = 100; // Radius to search for storage buildings

@@ -4,9 +4,10 @@ import { BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding, findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
 import {
   getStorageUtilization,
-  getProductiveBushDensity,
+  getProductiveBushes,
   getTribeStorageSpots,
   getTribePlantingZones,
+  isPlantingZoneViable,
 } from '../../../entities/tribe/tribe-food-utils';
 import { findChildren, getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -19,6 +20,7 @@ import {
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE,
   LEADER_BUILDING_PLACEMENT_PROXIMITY,
+  LEADER_BUILDING_MIN_BUSHES,
 } from '../../../ai-consts';
 import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../nodes';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
@@ -65,9 +67,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const tribeMembers = getTribeMembers(entity, context.gameState);
       const adultMembers = tribeMembers.filter((member) => member.isAdult);
       const existingStorageSpots = getTribeStorageSpots(entity.leaderId!, context.gameState);
-      const existingPlantingZones = getTribePlantingZones(entity, context.gameState);
+      const existingPlantingZones = getTribePlantingZones(entity, context.gameState).filter((zone) =>
+        isPlantingZoneViable(zone, context.gameState),
+      );
       const storageUtilization = getStorageUtilization(entity.leaderId!, context.gameState);
-      const bushDensity = getProductiveBushDensity(entity.leaderId!, context.gameState);
+      const { count: bushCount, ratio: bushDensity } = getProductiveBushes(entity.leaderId!, context.gameState);
       const zoneDensity = existingPlantingZones.length / Math.max(1, tribeMembers.length);
       const projectedAdultCount = Math.ceil(adultMembers.length * (1 + LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE));
 
@@ -76,13 +80,14 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       Blackboard.set(blackboard, 'tribeAnalysis_existingStorageSpots', existingStorageSpots.length);
       Blackboard.set(blackboard, 'tribeAnalysis_existingPlantingZones', existingPlantingZones.length);
       Blackboard.set(blackboard, 'tribeAnalysis_storageUtilization', storageUtilization);
+      Blackboard.set(blackboard, 'tribeAnalysis_bushCount', bushCount);
       Blackboard.set(blackboard, 'tribeAnalysis_bushDensity', bushDensity);
       Blackboard.set(blackboard, 'tribeAnalysis_zoneDensity', zoneDensity);
       Blackboard.set(blackboard, 'tribeAnalysis_projectedAdultCount', projectedAdultCount);
 
       return [
         NodeStatus.SUCCESS,
-        `Analyzed tribe: ${adultMembers.length} adults, ${existingStorageSpots.length} storage, ${existingPlantingZones.length} planting zones`,
+        `Analyzed tribe: ${adultMembers.length} adults, ${existingStorageSpots.length} storage, ${existingPlantingZones.length} viable planting zones`,
       ];
     },
     'Analyze Tribe',
@@ -275,6 +280,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount');
       const existingPlantingZones = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingPlantingZones');
       const bushDensity = Blackboard.get<number>(blackboard, 'tribeAnalysis_bushDensity');
+      const bushCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_bushCount');
       const zoneDensity = Blackboard.get<number>(blackboard, 'tribeAnalysis_zoneDensity');
       const projectedAdultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_projectedAdultCount');
 
@@ -282,6 +288,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         adultCount === undefined ||
         existingPlantingZones === undefined ||
         bushDensity === undefined ||
+        bushCount === undefined ||
         zoneDensity === undefined ||
         projectedAdultCount === undefined
       ) {
@@ -294,9 +301,14 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const needsPlantingZone =
         needsFirstPlantingZone ||
         bushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER ||
-        projectedBushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER;
+        projectedBushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER ||
+        (bushCount <= LEADER_BUILDING_MIN_BUSHES && existingPlantingZones <= LEADER_BUILDING_MIN_BUSHES);
 
-      if (needsPlantingZone && zoneDensity > projectedBushDensity) {
+      if (
+        needsPlantingZone &&
+        zoneDensity > projectedBushDensity &&
+        (bushCount > LEADER_BUILDING_MIN_BUSHES || existingPlantingZones > LEADER_BUILDING_MIN_BUSHES)
+      ) {
         return [
           false,
           `Planting zone density (${zoneDensity.toFixed(2)}) exceeds projected density (${projectedBushDensity.toFixed(
@@ -309,7 +321,12 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
         return [false, `Planting zones adequate: ${existingPlantingZones}, density: ${bushDensity.toFixed(1)}`];
       }
 
-      return [true, `Low bush density: ${bushDensity.toFixed(1)} (projected: ${projectedBushDensity.toFixed(1)})`];
+      return [
+        true,
+        `Low bush density: ${bushDensity.toFixed(
+          1,
+        )}, count: ${bushCount}/${existingPlantingZones} (projected: ${projectedBushDensity.toFixed(1)})`,
+      ];
     },
     'Needs Planting Zone',
     depth + 2,

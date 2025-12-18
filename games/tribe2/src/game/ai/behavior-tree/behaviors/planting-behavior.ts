@@ -1,11 +1,12 @@
 import { FoodType } from '../../../entities/food-types.ts';
 import { Vector2D } from '../../../utils/math-types';
 import { calculateWrappedDistance, dirToTarget, getDirectionVectorOnTorus, vectorAdd } from '../../../utils/math-utils';
-import { findOptimalPlantingZoneSpot, isPositionOccupied, getTribeMembers } from '../../../utils';
+import { isPositionOccupied, getTribeMembers } from '../../../utils';
 import {
   calculateTribeFoodSecurity,
-  getProductiveBushDensity,
+  getProductiveBushes,
   countTribeMembersWithAction,
+  findOptimalPlantingZoneSpot,
 } from '../../../entities/tribe/tribe-food-utils.ts';
 import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
@@ -21,6 +22,7 @@ import {
   BUSHES_PER_MEMBER_GROWTH,
   BUSHES_PER_MEMBER_MAINTENANCE,
   BUSHES_PER_MEMBER_ABUNDANCE,
+  LEADER_BUILDING_MIN_BUSHES,
 } from '../../../ai-consts.ts';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../human-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
@@ -204,7 +206,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
           }
 
           const foodSecurity = calculateTribeFoodSecurity(human, context.gameState);
-          const bushDensity = getProductiveBushDensity(human.leaderId, context.gameState);
+          const { count: bushCount, ratio: bushDensity } = getProductiveBushes(human.leaderId, context.gameState);
 
           // Determine required bushes per member based on food security
           let requiredBushesPerMember: number;
@@ -220,7 +222,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
             requiredBushesPerMember = BUSHES_PER_MEMBER_ABUNDANCE;
           }
 
-          const needsMoreBushes = bushDensity < requiredBushesPerMember;
+          const needsMoreBushes = bushDensity < requiredBushesPerMember || bushCount <= LEADER_BUILDING_MIN_BUSHES;
 
           return [
             needsMoreBushes,

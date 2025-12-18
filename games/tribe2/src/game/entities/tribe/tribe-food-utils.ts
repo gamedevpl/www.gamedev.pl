@@ -5,12 +5,11 @@ import { GameWorldState } from '../../world-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { getTribeMembers } from './family-tribe-utils';
 import { calculateWrappedDistance } from '../../utils/math-utils';
-import { getTribeCenter, isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils';
+import { isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../plants/berry-bush/berry-bush-consts';
 import { Vector2D } from '../../utils/math-types';
-import { isSoilDepleted } from '../plants/soil-depletion-update';
+import { isSoilDepleted, getDepletedSectorsInArea } from '../plants/soil-depletion-update';
 
-const TRIBE_BUSH_SEARCH_RADIUS = 500; // Radius to search for bushes near tribe center
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
 
 /**
@@ -125,15 +124,18 @@ export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldSt
  * @param gameState The current game state
  * @returns Bushes per member ratio
  */
-export function getProductiveBushDensity(leaderId: EntityId, gameState: GameWorldState): number {
+export function getProductiveBushes(leaderId: EntityId, gameState: GameWorldState): { count: number; ratio: number } {
   const tribeMembers = getTribeMembers({ leaderId } as HumanEntity, gameState);
 
   if (tribeMembers.length === 0) {
-    return 0;
+    return { count: 0, ratio: 0 };
   }
 
   const productiveBushCount = getProductiveBushCount(leaderId, gameState);
-  return productiveBushCount / tribeMembers.length;
+  return {
+    count: productiveBushCount,
+    ratio: productiveBushCount / tribeMembers.length,
+  };
 }
 
 /**
@@ -146,10 +148,13 @@ export function getProductiveBushDensity(leaderId: EntityId, gameState: GameWorl
  */
 function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
-  const tribeCenter = getTribeCenter(leaderId, gameState);
 
   // Find all bushes near the tribe center
-  const nearbyBushes = indexedState.search.berryBush.byRadius(tribeCenter, TRIBE_BUSH_SEARCH_RADIUS);
+  const nearbyBushes = indexedState.search.berryBush.all().filter((bush) => {
+    return indexedState.search.terrainOwnership
+      .byRadius(bush.position, bush.radius)
+      .some((territory) => territory.ownerId === leaderId);
+  });
 
   // Count bushes that are productive (not dying and have food)
   const productiveBushes = nearbyBushes.filter((bush) => {
@@ -158,7 +163,13 @@ function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): 
 
     // Check if bush has food (food is an array of FoodItem)
     const hasFood = bush.food.length > 0;
-    return !isDying && hasFood;
+    const isOnDepletedSoil = isSoilDepleted(
+      gameState.soilDepletion,
+      bush.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    return !isDying && hasFood && !isOnDepletedSoil;
   });
 
   return productiveBushes.length;
@@ -198,6 +209,36 @@ export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldSt
 
     return false;
   }) as BuildingEntity[];
+}
+
+/**
+ * Checks if a planting zone is still productive based on soil health.
+ * A zone is considered viable if less than 50% of its area is depleted.
+ *
+ * @param zone The planting zone building
+ * @param gameState The current game state
+ * @returns True if the zone is viable, false otherwise
+ */
+export function isPlantingZoneViable(zone: BuildingEntity, gameState: GameWorldState): boolean {
+  const { width, height, position } = zone;
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // Get depleted sectors and total sector count
+  const { depletedSectors, totalSectorsCount } = getDepletedSectorsInArea(
+    gameState.soilDepletion,
+    position,
+    width,
+    height,
+    worldWidth,
+    worldHeight,
+  );
+
+  if (totalSectorsCount === 0) {
+    return true;
+  }
+
+  // Consider viable if less than 50% depleted
+  return depletedSectors.length / totalSectorsCount < 0.25;
 }
 
 /**
@@ -465,25 +506,33 @@ export function findOptimalPlantingZoneSpot(
 
 /**
  * Checks if a position is inside any of the player's tribe's planting zones.
- * Also validates that the position has sufficient clearance from existing bushes.
  * @param position The position to check
  * @param player The player entity
  * @param gameState The current game state
- * @returns true if the position is in any planting zone and has clearance, false otherwise
+ * @returns true if the position is in any planting zone, false otherwise
  */
 export function isPositionInAnyPlantingZone(
   position: Vector2D,
-  player: HumanEntity,
   gameState: GameWorldState,
+  player: HumanEntity | undefined = undefined,
 ): boolean {
-  const zones = getTribePlantingZones(player, gameState);
-  const isInZone = zones.some((zone) => isPositionInZone(position, zone, gameState));
+  const zones = player
+    ? getTribePlantingZones(player, gameState)
+    : (gameState as IndexedWorldState).search.building.byProperty('buildingType', BuildingType.PlantingZone);
+  return zones.some((zone) => isPositionInZone(position, zone, gameState));
+}
 
-  // If not in any zone, return false immediately
-  if (!isInZone) {
+/**
+ * Checks if a position is inside any planting zone and has sufficient clearance from existing bushes.
+ */
+export function isValidPlantingSpotInZone(
+  position: Vector2D,
+  gameState: GameWorldState,
+  player: HumanEntity | undefined = undefined,
+): boolean {
+  if (!isPositionInAnyPlantingZone(position, gameState, player)) {
     return false;
   }
 
-  // Check if the position has sufficient clearance from existing bushes
   return !isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS);
 }

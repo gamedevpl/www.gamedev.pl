@@ -5,19 +5,29 @@ import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import {
   findNearestTerritoryEdge,
-  getTerritoryEdgeNormal,
   canPlaceBuildingInTerritory,
+  convertPositionToTerritoryGrid,
 } from '../../../entities/tribe/territory-utils';
-import { vectorAdd, vectorRotate, vectorScale, calculateWrappedDistance } from '../../../utils/math-utils';
+import {
+  vectorRotate,
+  calculateWrappedDistance,
+  getAveragePosition,
+  getDirectionVectorOnTorus,
+  vectorNormalize,
+  vectorDot,
+} from '../../../utils/math-utils';
 import { BORDER_EXPANSION_PAINT_RADIUS, BuildingType } from '../../../entities/buildings/building-consts';
 import { createBuilding } from '../../../utils';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
+import { Vector2D } from '../../../utils/math-types';
+import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../human-consts';
 
 /**
  * Constants for border expansion behavior
  */
-const BORDER_EXPANSION_STEP_DISTANCE = 30; // Distance to move per step along border
 const BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT = 2; // Minimum army control weight to expand borders
 const EDGE_APPROACH_THRESHOLD = 40; // How close to be considered "at the edge"
+const SEARCH_RADIUS_CELLS = 3; // Look 3 cells in every direction (7x7 grid)
 
 /**
  * Factory function to create a border expansion behavior node.
@@ -34,6 +44,12 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
   // Condition: Check if entity is a Warrior or Leader
   const isWarriorOrLeaderCondition = new ConditionNode<HumanEntity>(
     (entity) => {
+      if (!entity.isAdult) {
+        return [false, 'Not an adult'];
+      }
+      if (entity.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
+        return [false, `Too hungry (${entity.hunger.toFixed(1)})`];
+      }
       const isLeader = entity.leaderId === entity.id;
       const isWarrior = entity.tribeRole === TribeRole.Warrior;
 
@@ -113,92 +129,104 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
         return [NodeStatus.RUNNING, `Approaching territory edge (${distToEdge.toFixed(0)}px)`];
       }
 
-      // 3. We are at the edge. Calculate expansion direction.
-      const normal = getTerritoryEdgeNormal(entity.position, entity.leaderId, gameState);
+      // 3. Prepare expansion logic
+      const indexedState = gameState as IndexedWorldState;
+      const tribeBuildings = indexedState.search.building.byProperty('ownerId', entity.leaderId);
+      const tribeCenter = getAveragePosition(tribeBuildings.map((b) => b.position));
 
-      // Default: Turn 90 degrees (tangent). Let's say Clockwise (-90 deg)
-      // We can randomize this or store it in a temp property if we want persistence,
-      // but for now, let's try CW.
-      // If we want to support "try other direction", we need to know if we failed recently.
-      // For simplicity: Try CW. If blocked, try CCW.
+      // Initialize orbit direction (1 = CW, -1 = CCW)
+      if (entity.pioneerOrbitDirection === undefined) {
+        entity.pioneerOrbitDirection = 1;
+      }
 
-      let tangent = vectorRotate(normal, -Math.PI / 2); // CW
+      const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+      const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+      const currentGrid = convertPositionToTerritoryGrid(entity.position);
 
-      // 4. Calculate proposed next position
-      let nextPos = vectorAdd(entity.position, vectorScale(tangent, BORDER_EXPANSION_STEP_DISTANCE));
+      const candidates: { pos: Vector2D; gx: number; gy: number }[] = [];
 
-      // Wrap nextPos
-      nextPos = {
-        x: ((nextPos.x % worldWidth) + worldWidth) % worldWidth,
-        y: ((nextPos.y % worldHeight) + worldHeight) % worldHeight,
-      };
+      // 4. Scan neighbors for expansion candidates
+      for (let dy = -SEARCH_RADIUS_CELLS; dy <= SEARCH_RADIUS_CELLS; dy++) {
+        for (let dx = -SEARCH_RADIUS_CELLS; dx <= SEARCH_RADIUS_CELLS; dx++) {
+          if (dx === 0 && dy === 0) continue;
 
-      // 5. Check validity (Is it blocked by another tribe? OR non-contiguous?)
-      // We check if the NEW position is in another tribe's territory AND if it maintains contiguity.
-      let validity = canPlaceBuildingInTerritory(
-        nextPos,
-        entity.leaderId,
-        gameState,
-        BORDER_EXPANSION_PAINT_RADIUS,
-      );
+          const gx = (((currentGrid.x + dx) % gridWidth) + gridWidth) % gridWidth;
+          const gy = (((currentGrid.y + dy) % gridHeight) + gridHeight) % gridHeight;
+          const index = gy * gridWidth + gx;
 
-      if (!validity.canPlace) {
-        // Blocked! Try scanning angles.
-        // Scan +/- 30 degrees in 10 degree steps
-        let found = false;
-        const angles = [10, -10, 20, -20, 30, -30]; // Degrees
+          // Candidate must be unowned
+          if (gameState.terrainOwnership[index] !== null) continue;
 
-        for (const angleDeg of angles) {
-          const angleRad = (angleDeg * Math.PI) / 180;
-          const adjustedTangent = vectorRotate(tangent, angleRad);
-          let testPos = vectorAdd(entity.position, vectorScale(adjustedTangent, BORDER_EXPANSION_STEP_DISTANCE));
-          testPos = {
-            x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
-            y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
+          const candidatePos: Vector2D = {
+            x: gx * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
+            y: gy * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
           };
 
+          // Candidate must maintain contiguity
           if (
-            canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
+            canPlaceBuildingInTerritory(candidatePos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
               .canPlace
           ) {
-            nextPos = testPos;
-            found = true;
-            break;
+            candidates.push({ pos: candidatePos, gx, gy });
           }
-        }
-
-        if (!found) {
-          // Try reversing direction (CCW)
-          tangent = vectorRotate(normal, Math.PI / 2); // CCW
-          let testPos = vectorAdd(entity.position, vectorScale(tangent, BORDER_EXPANSION_STEP_DISTANCE));
-          testPos = {
-            x: ((testPos.x % worldWidth) + worldWidth) % worldWidth,
-            y: ((testPos.y % worldHeight) + worldHeight) % worldHeight,
-          };
-
-          if (
-            canPlaceBuildingInTerritory(testPos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
-              .canPlace
-          ) {
-            nextPos = testPos;
-            found = true;
-          }
-        }
-
-        if (!found) {
-          // Completely blocked. Stop.
-          return [NodeStatus.FAILURE, 'Blocked by other territories or invalid placement'];
         }
       }
 
-      // 6. Move to the valid position
-      entity.target = nextPos;
+      if (candidates.length === 0) {
+        // Stuck? Flip orbit direction and try again next tick
+        entity.pioneerOrbitDirection *= -1;
+        return [NodeStatus.RUNNING, 'Blocked, reversing orbit direction'];
+      }
 
+      // 5. Score candidates
+      const dirFromCenter = vectorNormalize(
+        getDirectionVectorOnTorus(tribeCenter, entity.position, worldWidth, worldHeight),
+      );
+      const orbitTangent = vectorRotate(dirFromCenter, entity.pioneerOrbitDirection * (Math.PI / 2));
+
+      let bestCandidate = candidates[0];
+      let maxScore = -Infinity;
+
+      for (const cand of candidates) {
+        // A. Convexity Score: Count friendly neighbors (fills holes)
+        let friendlyNeighbors = 0;
+        for (let ny = -1; ny <= 1; ny++) {
+          for (let nx = -1; nx <= 1; nx++) {
+            if (nx === 0 && ny === 0) continue;
+            const ngx = (((cand.gx + nx) % gridWidth) + gridWidth) % gridWidth;
+            const ngy = (((cand.gy + ny) % gridHeight) + gridHeight) % gridHeight;
+            if (gameState.terrainOwnership[ngy * gridWidth + ngx] === entity.leaderId) {
+              friendlyNeighbors++;
+            }
+          }
+        }
+
+        // B. Orbit Score: Alignment with tangent
+        const dirToCand = vectorNormalize(
+          getDirectionVectorOnTorus(entity.position, cand.pos, worldWidth, worldHeight),
+        );
+        const orbitScore = vectorDot(dirToCand, orbitTangent);
+
+        // C. Expansion Score: Distance from center
+        const distCand = calculateWrappedDistance(tribeCenter, cand.pos, worldWidth, worldHeight);
+        const distCurrent = calculateWrappedDistance(tribeCenter, entity.position, worldWidth, worldHeight);
+        const expansionScore = distCand > distCurrent ? 1 : 0;
+
+        // Weights: Convexity is king for nice shapes
+        const totalScore = friendlyNeighbors * 2.0 + orbitScore * 1.5 + expansionScore * 0.5;
+
+        if (totalScore > maxScore) {
+          maxScore = totalScore;
+          bestCandidate = cand;
+        }
+      }
+
+      // 6. Execute: Place building and move to next cell
       createBuilding(entity.position, BuildingType.BorderPost, entity.leaderId, gameState);
-
+      entity.target = bestCandidate.pos;
       entity.activeAction = 'moving';
 
-      return [NodeStatus.RUNNING, 'Expanding territory'];
+      return [NodeStatus.RUNNING, 'Expanding territory (cell-based)'];
     },
     'Pioneer Expansion',
     depth + 1,
