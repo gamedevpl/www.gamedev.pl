@@ -123,6 +123,7 @@ export const populationGrowthScript: ScenarioScript = {
       message: '👶 Your tribe has welcomed its first child! Keep growing!',
       duration: 24,
       triggerOnce: true,
+      // Triggers when tribe size increases (assumes initial tribe of 2, triggers at 3+)
       shouldTrigger: (state) => {
         const humans = getLivingHumans(state);
         const playerHuman = findPlayer(state);
@@ -131,7 +132,8 @@ export const populationGrowthScript: ScenarioScript = {
         const tribeMates = humans.filter(
           (h) => h.leaderId === playerHuman.leaderId || h.id === playerHuman.leaderId
         );
-        return tribeMates.length >= 3; // Started with 2, now have 3+
+        // Threshold of 3 works for typical starting conditions (1-2 members)
+        return tribeMates.length >= 3;
       },
     },
     {

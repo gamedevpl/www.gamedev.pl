@@ -322,22 +322,34 @@ export function createPlayerDeathFailCondition(): FailConditionFn {
 
 /**
  * Creates a fail condition that triggers when entire tribe is eliminated.
+ * Note: Tracks tribe by the original player's leaderId, not by badge.
  */
 export function createTribeEliminatedFailCondition(): FailConditionFn {
+  let playerLeaderId: EntityId | undefined;
+
   return (state: GameWorldState) => {
     const humans = getLivingHumans(state);
     const playerHuman = humans.find((h) => h.isPlayer);
 
-    // If player is dead and no tribe mates remain
-    if (!playerHuman) {
-      const formerPlayerTribe = humans.filter((h) => h.tribeBadge === '👑'); // Assumes player badge
-      if (formerPlayerTribe.length === 0) {
+    // Track the player's tribe leader ID when they're alive
+    if (playerHuman) {
+      playerLeaderId = playerHuman.leaderId || playerHuman.id;
+      return { triggered: false };
+    }
+
+    // Player is dead - check if any tribe mates remain
+    if (playerLeaderId) {
+      const survivingTribeMembers = humans.filter(
+        (h) => h.leaderId === playerLeaderId || h.id === playerLeaderId
+      );
+      if (survivingTribeMembers.length === 0) {
         return {
           triggered: true,
           message: 'Game Over! Your entire tribe has been eliminated.',
         };
       }
     }
+
     return { triggered: false };
   };
 }
@@ -538,7 +550,7 @@ export function createPredatorNearbyNotificationTrigger(warningDistance: number 
         if (e.type !== 'predator' || (e as PredatorEntity).hitpoints <= 0) return false;
         const dx = e.position.x - playerHuman.position.x;
         const dy = e.position.y - playerHuman.position.y;
-        return Math.sqrt(dx * dx + dy * dy) < 200;
+        return Math.sqrt(dx * dx + dy * dy) < warningDistance;
       });
 
       return nearbyPredators.map((p) => p.id);

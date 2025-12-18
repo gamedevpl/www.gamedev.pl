@@ -619,6 +619,14 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
+ * Escapes a string for use in generated single-quoted string literals.
+ * Escapes backslashes first, then single quotes.
+ */
+function escapeForSingleQuotedString(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
  * Exports the scenario as a full TypeScript scenario script with
  * win/fail conditions, progress tracking, and notification hooks.
  *
@@ -790,8 +798,8 @@ export function exportScenarioAsScriptTypeScript(config: ScenarioConfig): string
   lines.push(` */`);
   lines.push(`export const ${scenarioVarName}Script: ScenarioScript = {`);
   lines.push(`  id: '${scenarioVarName}',`);
-  lines.push(`  name: '${config.name.replace(/'/g, "\\'")}',`);
-  lines.push(`  description: '${(config.description || '').replace(/'/g, "\\'")}',`);
+  lines.push(`  name: '${escapeForSingleQuotedString(config.name)}',`);
+  lines.push(`  description: '${escapeForSingleQuotedString(config.description || '')}',`);
   lines.push(`  version: '1.0.0',`);
   lines.push(``);
   lines.push(`  // ========================================`);
@@ -886,7 +894,7 @@ export function exportScenarioAsScriptTypeScript(config: ScenarioConfig): string
   lines.push(`  onStart: (state) => {`);
   lines.push(`    addNotification(state, {`);
   lines.push(`      type: NotificationType.Hello,`);
-  lines.push(`      message: '🎮 ${config.name.replace(/'/g, "\\'")} has begun!',`);
+  lines.push(`      message: '🎮 ${escapeForSingleQuotedString(config.name)} has begun!',`);
   lines.push(`      duration: 48,`);
   lines.push(`    });`);
   lines.push(`  },`);
