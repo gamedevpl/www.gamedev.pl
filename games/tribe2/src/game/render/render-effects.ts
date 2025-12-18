@@ -1,5 +1,5 @@
 import { VisualEffect, VisualEffectType } from '../visual-effects/visual-effect-types';
-import { getDirectionVectorOnTorus } from '../utils/math-utils';
+import { GameWorldState } from '../world-types';
 
 const EFFECT_BASE_RADIUS = 15;
 
@@ -71,16 +71,34 @@ function drawStoneProjectile(
   ctx: CanvasRenderingContext2D,
   effect: VisualEffect,
   currentTime: number,
-  worldWidth: number,
-  worldHeight: number,
+  gameState: GameWorldState,
 ) {
-  if (!effect.targetPosition) return;
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
+  // Determine current target position (entity tracking or fallback)
+  let currentTargetPosition = effect.targetPosition;
+  if (effect.targetEntityId) {
+    const targetEntity = gameState.entities.entities[effect.targetEntityId];
+    if (targetEntity) {
+      currentTargetPosition = targetEntity.position;
+    }
+  }
+
+  if (!currentTargetPosition) return;
 
   const elapsedTime = currentTime - effect.startTime;
   const progress = Math.min(elapsedTime / effect.duration, 1);
 
-  // Calculate the shortest path vector on the torus
-  const movementVector = getDirectionVectorOnTorus(effect.position, effect.targetPosition, worldWidth, worldHeight);
+  // Calculate the shortest path vector on the torus robustly.
+  // We use Math.round(delta / size) to find the shortest wrap-around distance
+  // regardless of how much 'effect.position' has been shifted by renderWithWrapping.
+  let dx = currentTargetPosition.x - effect.position.x;
+  let dy = currentTargetPosition.y - effect.position.y;
+
+  dx = dx - Math.round(dx / worldWidth) * worldWidth;
+  dy = dy - Math.round(dy / worldHeight) * worldHeight;
+
+  const movementVector = { x: dx, y: dy };
 
   // Calculate current position by lerping along the shortest path
   const currentX = effect.position.x + movementVector.x * progress;
@@ -115,8 +133,7 @@ export function renderVisualEffect(
   ctx: CanvasRenderingContext2D,
   effect: VisualEffect,
   currentTime: number,
-  worldWidth: number,
-  worldHeight: number,
+  gameState: GameWorldState,
 ): void {
   switch (effect.type) {
     case VisualEffectType.Procreation:
@@ -165,7 +182,7 @@ export function renderVisualEffect(
       drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
       break;
     case VisualEffectType.StoneProjectile:
-      drawStoneProjectile(ctx, effect, currentTime, worldWidth, worldHeight);
+      drawStoneProjectile(ctx, effect, currentTime, gameState);
       break;
   }
 }

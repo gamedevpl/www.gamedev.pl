@@ -9,7 +9,15 @@ if (rootElement) {
   initSoundLoader().then(() => {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
-        <GameProvider initialAppState={document.location.hash === '#game' ? 'game' : 'intro'}>
+        <GameProvider
+          initialAppState={
+            document.location.hash === '#game'
+              ? 'game'
+              : document.location.hash === '#effects'
+              ? 'effects'
+              : 'intro'
+          }
+        >
           <App />
         </GameProvider>
       </React.StrictMode>,

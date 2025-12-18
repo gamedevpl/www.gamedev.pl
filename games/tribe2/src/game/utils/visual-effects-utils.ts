@@ -10,6 +10,7 @@ export function addVisualEffect(
   duration: number,
   entityId?: EntityId,
   targetPosition?: Vector2D,
+  targetEntityId?: EntityId,
 ): VisualEffectId {
   const newEffect: VisualEffect = {
     id: gameState.nextVisualEffectId,
@@ -19,6 +20,7 @@ export function addVisualEffect(
     duration,
     entityId,
     targetPosition,
+    targetEntityId,
   };
   gameState.visualEffects.push(newEffect);
   gameState.nextVisualEffectId++;

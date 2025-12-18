@@ -111,6 +111,7 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
         projectileDuration,
         undefined,
         prey.position,
+        prey.id,
       );
 
       // Play launch sound

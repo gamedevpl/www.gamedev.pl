@@ -5,8 +5,14 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
   useEffect(() => {
     // This effect runs once when the component mounts
     const handleHashChange = () => {
-      const newState = document.location.hash === '#game' ? 'game' : 'intro';
-      setAppState(newState);
+      const hash = document.location.hash;
+      if (hash === '#game') {
+        setAppState('game');
+      } else if (hash === '#effects') {
+        setAppState('effects');
+      } else {
+        setAppState('intro');
+      }
     };
     window.addEventListener('hashchange', handleHashChange);
     handleHashChange(); // Call it once to set the initial state
@@ -19,6 +25,8 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
     // This effect runs whenever appState changes
     if (appState === 'game') {
       document.location.hash = '#game';
+    } else if (appState === 'effects') {
+      document.location.hash = '#effects';
     } else if (appState === 'intro') {
       document.location.hash = '';
     }

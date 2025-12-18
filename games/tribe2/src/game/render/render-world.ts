@@ -135,7 +135,15 @@ export function renderWorld(
   );
 
   visibleVisualEffects.forEach((effect) => {
-    renderWithWrapping(ctx, worldWidth, worldHeight, renderVisualEffect, effect, gameState.time);
+    renderWithWrapping(
+      ctx,
+      worldWidth,
+      worldHeight,
+      renderVisualEffect,
+      effect,
+      gameState.time,
+      gameState,
+    );
   });
 
   // Render notification entity highlights

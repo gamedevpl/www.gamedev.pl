@@ -126,6 +126,7 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
         projectileDuration,
         undefined,
         predator.position,
+        predator.id,
       );
 
       // Play launch sound

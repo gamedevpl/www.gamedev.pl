@@ -148,6 +148,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
           projectileDuration,
           undefined,
           target.position,
+          target.id,
         );
 
         // Play launch sound

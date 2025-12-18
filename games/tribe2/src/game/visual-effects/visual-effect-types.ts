@@ -30,5 +30,6 @@ export interface VisualEffect {
   startTime: number; // Game time in hours
   duration: number; // Duration in game hours
   entityId?: EntityId; // Optional entity to attach the effect to
+  targetEntityId?: EntityId; // Optional target entity for projectiles to track
   targetPosition?: Vector2D; // Optional target position for projectiles
 }
