@@ -14,14 +14,6 @@ import { exportScenarioSchema, importScenarioFromJson } from './scenario-export'
 export type AIAvailability = 'readily' | 'after-download' | 'no' | 'unsupported';
 
 /**
- * Initial prompt message for the language model.
- */
-interface AILanguageModelPrompt {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-/**
  * AI session interface that works with the Chrome Prompt API.
  */
 interface AILanguageModelSession {
@@ -37,7 +29,7 @@ interface AILanguageModelSession {
 interface AILanguageModelCreateOptions {
   topK?: number;
   temperature?: number;
-  initialPrompts?: AILanguageModelPrompt[];
+  systemPrompt?: string;
 }
 
 /**
@@ -90,16 +82,11 @@ async function createAISession(): Promise<AILanguageModelSession | null> {
   }
 
   try {
-    // Create session with initial prompts using the correct Prompt API format
+    // Create session with system prompt using the correct Prompt API format
     return await window.ai.languageModel.create({
       temperature: 0.7,
       topK: 40,
-      initialPrompts: [
-        {
-          role: 'system',
-          content: getSystemPrompt(),
-        },
-      ],
+      systemPrompt: getSystemPrompt(),
     });
   } catch (error) {
     console.error('Error creating AI session:', error);
