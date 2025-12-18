@@ -46,7 +46,7 @@ export const ScenarioEditorScreen: React.FC = () => {
   const startGameActions = useStartGameActions(config, showToast, saveCurrentGame, setAppState);
 
   // Export actions
-  const exportActions = useExportActions(config, showToast);
+  const exportActions = useExportActions(config, showToast, updateConfig);
 
   // Canvas interaction (panning, zooming, coordinate conversion)
   const canvasInteraction = useCanvasInteraction(canvasRef, viewportCenter, zoom, setViewportCenter, setZoom);
@@ -157,6 +157,8 @@ export const ScenarioEditorScreen: React.FC = () => {
         isStartingGame={startGameActions.isStarting}
         onExportJson={exportActions.handleExportJson}
         onExportTs={exportActions.handleExportTs}
+        onExportSchema={exportActions.handleExportSchema}
+        onImportJson={exportActions.handleImportJson}
       />
 
       <S.ToastMessage $visible={!!toast}>{toast}</S.ToastMessage>

@@ -11,7 +11,7 @@ import {
   createInitialEditorState,
   generateScenarioId,
 } from '../../game/scenario-editor/scenario-types';
-import { exportScenarioAsJson, exportScenarioAsTypeScript, copyToClipboard } from '../../game/scenario-editor/scenario-export';
+import { exportScenarioAsJson, exportScenarioAsTypeScript, exportScenarioSchema, importScenarioFromJson, copyToClipboard } from '../../game/scenario-editor/scenario-export';
 import { Vector2D } from '../../game/utils/math-types';
 import { BuildingType } from '../../game/entities/buildings/building-types';
 
@@ -298,7 +298,7 @@ export function useAutoPopulateActions(
 /**
  * Hook for export actions.
  */
-export function useExportActions(config: ScenarioConfig, showToast: (message: string) => void) {
+export function useExportActions(config: ScenarioConfig, showToast: (message: string) => void, updateConfig: (updates: Partial<ScenarioConfig>) => void) {
   const handleExportJson = useCallback(async () => {
     const json = exportScenarioAsJson(config);
     const success = await copyToClipboard(json);
@@ -319,7 +319,38 @@ export function useExportActions(config: ScenarioConfig, showToast: (message: st
     }
   }, [config, showToast]);
 
-  return { handleExportJson, handleExportTs };
+  const handleExportSchema = useCallback(async () => {
+    const schema = exportScenarioSchema();
+    const success = await copyToClipboard(schema);
+    if (success) {
+      showToast('Schema copied! Paste it into ChatGPT/Gemini');
+    } else {
+      showToast('Failed to copy');
+    }
+  }, [showToast]);
+
+  const handleImportJson = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        showToast('Clipboard is empty');
+        return;
+      }
+
+      const result = importScenarioFromJson(text);
+      if (result.success) {
+        // Replace the entire config with the imported one
+        updateConfig({ ...result.config });
+        showToast(`Imported: ${result.config.name}`);
+      } else {
+        showToast(`Import failed: ${result.error}`);
+      }
+    } catch {
+      showToast('Failed to read clipboard. Try copying the JSON again.');
+    }
+  }, [showToast, updateConfig]);
+
+  return { handleExportJson, handleExportTs, handleExportSchema, handleImportJson };
 }
 
 /**

@@ -2,7 +2,7 @@
  * Utilities for exporting scenarios as JSON or TypeScript code.
  */
 
-import { ScenarioConfig } from './scenario-types';
+import { ScenarioConfig, AVAILABLE_BADGES } from './scenario-types';
 
 /**
  * Exports the scenario configuration as a formatted JSON string.
@@ -167,6 +167,438 @@ function getBuildingTypeKey(buildingType: string): string {
     borderPost: 'BorderPost',
   };
   return typeMap[buildingType] || buildingType;
+}
+
+/**
+ * Generates a JSON schema with descriptions for AI-assisted scenario generation.
+ * This schema can be pasted into ChatGPT or Gemini to help generate scenarios.
+ */
+export function exportScenarioSchema(): string {
+  const schema = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    title: 'Tribe2 Game Scenario',
+    description:
+      'A scenario configuration for the Tribe2 game. Use this schema to generate custom game scenarios with tribes, humans, animals, and buildings.',
+
+    type: 'object',
+    required: ['name', 'description', 'mapWidth', 'mapHeight', 'tribes', 'berryBushes', 'prey', 'predators', 'buildings'],
+
+    properties: {
+      name: {
+        type: 'string',
+        description: 'A short, descriptive name for the scenario (e.g., "The Last Tribe", "Survival Challenge")',
+        examples: ['The Lost Colony', 'Predator Dominance', 'Garden of Eden'],
+      },
+      description: {
+        type: 'string',
+        description:
+          'A detailed description of the scenario setting and objectives. Explain the story, challenges, and what makes this scenario unique.',
+        examples: [
+          'A lone survivor must rebuild civilization after a catastrophe',
+          'Two rival tribes compete for scarce resources in a harsh winter',
+        ],
+      },
+      mapWidth: {
+        type: 'number',
+        description: 'Width of the game map in pixels. Standard size is 4000. Larger maps = more exploration.',
+        minimum: 1000,
+        maximum: 10000,
+        default: 4000,
+      },
+      mapHeight: {
+        type: 'number',
+        description: 'Height of the game map in pixels. Standard size is 4000.',
+        minimum: 1000,
+        maximum: 10000,
+        default: 4000,
+      },
+      tribes: {
+        type: 'array',
+        description:
+          'List of tribes in the scenario. Each tribe has a badge (emoji), position, and list of human members. At least one tribe with one human marked as isPlayer:true is required for the game to be playable.',
+        items: {
+          type: 'object',
+          required: ['id', 'badge', 'position', 'humans'],
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique identifier for the tribe. Use format "tribe-1", "tribe-2", etc.',
+            },
+            badge: {
+              type: 'string',
+              description: `Emoji badge representing the tribe. Available badges: ${AVAILABLE_BADGES.join(', ')}`,
+              enum: AVAILABLE_BADGES,
+            },
+            position: {
+              $ref: '#/definitions/position',
+              description: 'Center position of the tribe on the map',
+            },
+            humans: {
+              type: 'array',
+              description:
+                'List of humans in the tribe. The first human marked as isLeader:true becomes the tribe leader. Exactly one human across all tribes should have isPlayer:true.',
+              items: {
+                type: 'object',
+                required: ['id', 'gender', 'age', 'position', 'tribeId'],
+                properties: {
+                  id: {
+                    type: 'string',
+                    description: 'Unique identifier for the human. Use format "human-1", "human-2", etc.',
+                  },
+                  gender: {
+                    type: 'string',
+                    enum: ['male', 'female'],
+                    description: 'Gender of the human. Affects reproduction.',
+                  },
+                  age: {
+                    type: 'number',
+                    description:
+                      'Age in years. Children (0-12), teens (13-17), adults (18-55), elderly (56+). Adults can work and reproduce.',
+                    minimum: 0,
+                    maximum: 100,
+                  },
+                  isPlayer: {
+                    type: 'boolean',
+                    description:
+                      'Set to true for exactly ONE human - this will be the player-controlled character. Usually the tribe leader.',
+                    default: false,
+                  },
+                  isLeader: {
+                    type: 'boolean',
+                    description: 'Set to true to make this human the tribe leader. Other tribe members will follow them.',
+                    default: false,
+                  },
+                  position: {
+                    $ref: '#/definitions/position',
+                    description: 'Position of the human on the map. Should be near the tribe position.',
+                  },
+                  tribeId: {
+                    type: 'string',
+                    description: 'ID of the tribe this human belongs to. Must match a tribe id.',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      berryBushes: {
+        type: 'array',
+        description:
+          'Berry bushes provide food for humans and prey animals. Distribute them across the map. 30-100 bushes is typical.',
+        items: {
+          type: 'object',
+          required: ['id', 'position'],
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique identifier. Use format "bush-1", "bush-2", etc.',
+            },
+            position: {
+              $ref: '#/definitions/position',
+              description: 'Position of the bush on the map',
+            },
+          },
+        },
+      },
+      prey: {
+        type: 'array',
+        description:
+          'Prey animals (deer-like) that humans can hunt for food. They eat berries and can reproduce. 10-30 prey is typical.',
+        items: {
+          type: 'object',
+          required: ['id', 'gender', 'position'],
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique identifier. Use format "prey-1", "prey-2", etc.',
+            },
+            gender: {
+              type: 'string',
+              enum: ['male', 'female'],
+              description: 'Gender affects reproduction. Include both for population growth.',
+            },
+            position: {
+              $ref: '#/definitions/position',
+              description: 'Position of the prey on the map',
+            },
+          },
+        },
+      },
+      predators: {
+        type: 'array',
+        description:
+          'Predators (wolf-like) that hunt prey and can attack humans. They add danger to the game. 2-6 predators is typical.',
+        items: {
+          type: 'object',
+          required: ['id', 'gender', 'position'],
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique identifier. Use format "predator-1", "predator-2", etc.',
+            },
+            gender: {
+              type: 'string',
+              enum: ['male', 'female'],
+              description: 'Gender affects reproduction. Include both for population growth.',
+            },
+            position: {
+              $ref: '#/definitions/position',
+              description: 'Position of the predator on the map. Place them away from human settlements.',
+            },
+          },
+        },
+      },
+      buildings: {
+        type: 'array',
+        description: 'Buildings constructed by tribes. Optional - tribes can build these during gameplay.',
+        items: {
+          type: 'object',
+          required: ['id', 'type', 'position', 'tribeId', 'isConstructed'],
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique identifier. Use format "building-1", "building-2", etc.',
+            },
+            type: {
+              type: 'string',
+              enum: ['storageSpot', 'plantingZone', 'borderPost'],
+              description:
+                'storageSpot: stores gathered resources. plantingZone: grows crops. borderPost: marks territory.',
+            },
+            position: {
+              $ref: '#/definitions/position',
+              description: 'Position of the building. Should be near the owning tribe.',
+            },
+            tribeId: {
+              type: 'string',
+              description: 'ID of the tribe that owns this building.',
+            },
+            isConstructed: {
+              type: 'boolean',
+              description: 'If true, building is complete. If false, it needs to be built by tribe members.',
+              default: true,
+            },
+          },
+        },
+      },
+      ecosystemSettings: {
+        type: 'object',
+        description: 'Optional ecosystem configuration. Usually leave empty for defaults.',
+        default: {},
+      },
+      playerStartPosition: {
+        $ref: '#/definitions/position',
+        description: 'Optional camera start position. If not set, camera centers on the player.',
+      },
+      playerTribeId: {
+        type: 'string',
+        description: "Optional. ID of the player's tribe. Usually determined automatically from isPlayer human.",
+      },
+    },
+
+    definitions: {
+      position: {
+        type: 'object',
+        required: ['x', 'y'],
+        properties: {
+          x: {
+            type: 'number',
+            description: 'X coordinate on the map. Range: 0 to mapWidth.',
+            minimum: 0,
+          },
+          y: {
+            type: 'number',
+            description: 'Y coordinate on the map. Range: 0 to mapHeight.',
+            minimum: 0,
+          },
+        },
+      },
+    },
+
+    examples: [
+      {
+        name: 'Lone Survivor',
+        description: 'Start as a single human in a world full of predators. Can you survive and build a tribe?',
+        mapWidth: 4000,
+        mapHeight: 4000,
+        tribes: [
+          {
+            id: 'tribe-1',
+            badge: '⭐',
+            position: { x: 2000, y: 2000 },
+            humans: [
+              {
+                id: 'human-1',
+                gender: 'male',
+                age: 25,
+                isPlayer: true,
+                isLeader: true,
+                position: { x: 2000, y: 2000 },
+                tribeId: 'tribe-1',
+              },
+            ],
+          },
+        ],
+        berryBushes: [
+          { id: 'bush-1', position: { x: 1800, y: 1900 } },
+          { id: 'bush-2', position: { x: 2100, y: 2100 } },
+        ],
+        prey: [
+          { id: 'prey-1', gender: 'female', position: { x: 1500, y: 1500 } },
+          { id: 'prey-2', gender: 'male', position: { x: 2500, y: 2500 } },
+        ],
+        predators: [
+          { id: 'predator-1', gender: 'male', position: { x: 500, y: 500 } },
+          { id: 'predator-2', gender: 'female', position: { x: 3500, y: 3500 } },
+        ],
+        buildings: [],
+        ecosystemSettings: {},
+      },
+    ],
+  };
+
+  return JSON.stringify(schema, null, 2);
+}
+
+/**
+ * Helper function to get a random gender.
+ */
+function getRandomGender(): 'male' | 'female' {
+  return Math.random() > 0.5 ? 'male' : 'female';
+}
+
+/**
+ * Validates and imports a scenario from JSON string.
+ * Returns the parsed config if valid, or an error message if invalid.
+ */
+export function importScenarioFromJson(jsonString: string): { success: true; config: ScenarioConfig } | { success: false; error: string } {
+  try {
+    const parsed = JSON.parse(jsonString);
+
+    // Validate required fields
+    if (!parsed.name || typeof parsed.name !== 'string') {
+      return { success: false, error: 'Missing or invalid "name" field' };
+    }
+    if (typeof parsed.description !== 'string') {
+      parsed.description = '';
+    }
+    if (!parsed.mapWidth || typeof parsed.mapWidth !== 'number') {
+      return { success: false, error: 'Missing or invalid "mapWidth" field' };
+    }
+    if (!parsed.mapHeight || typeof parsed.mapHeight !== 'number') {
+      return { success: false, error: 'Missing or invalid "mapHeight" field' };
+    }
+    if (!Array.isArray(parsed.tribes)) {
+      return { success: false, error: 'Missing or invalid "tribes" array' };
+    }
+    if (!Array.isArray(parsed.berryBushes)) {
+      parsed.berryBushes = [];
+    }
+    if (!Array.isArray(parsed.prey)) {
+      parsed.prey = [];
+    }
+    if (!Array.isArray(parsed.predators)) {
+      parsed.predators = [];
+    }
+    if (!Array.isArray(parsed.buildings)) {
+      parsed.buildings = [];
+    }
+
+    // Validate tribes have required structure
+    for (let i = 0; i < parsed.tribes.length; i++) {
+      const tribe = parsed.tribes[i];
+      if (!tribe.id) tribe.id = `tribe-${i + 1}`;
+      if (!tribe.badge) tribe.badge = AVAILABLE_BADGES[i % AVAILABLE_BADGES.length];
+      if (!tribe.position || typeof tribe.position.x !== 'number' || typeof tribe.position.y !== 'number') {
+        return { success: false, error: `Tribe ${i + 1} has invalid position` };
+      }
+      if (!Array.isArray(tribe.humans)) {
+        tribe.humans = [];
+      }
+
+      // Validate humans
+      for (let j = 0; j < tribe.humans.length; j++) {
+        const human = tribe.humans[j];
+        if (!human.id) human.id = `human-${i}-${j}`;
+        if (!human.gender) human.gender = 'male';
+        if (typeof human.age !== 'number') human.age = 25;
+        if (!human.position || typeof human.position.x !== 'number' || typeof human.position.y !== 'number') {
+          return { success: false, error: `Human ${j + 1} in tribe ${i + 1} has invalid position` };
+        }
+        if (!human.tribeId) human.tribeId = tribe.id;
+      }
+    }
+
+    // Validate berry bushes
+    for (let i = 0; i < parsed.berryBushes.length; i++) {
+      const bush = parsed.berryBushes[i];
+      if (!bush.id) bush.id = `bush-${i + 1}`;
+      if (!bush.position || typeof bush.position.x !== 'number' || typeof bush.position.y !== 'number') {
+        return { success: false, error: `Berry bush ${i + 1} has invalid position` };
+      }
+    }
+
+    // Validate prey
+    for (let i = 0; i < parsed.prey.length; i++) {
+      const p = parsed.prey[i];
+      if (!p.id) p.id = `prey-${i + 1}`;
+      if (!p.gender) p.gender = getRandomGender();
+      if (!p.position || typeof p.position.x !== 'number' || typeof p.position.y !== 'number') {
+        return { success: false, error: `Prey ${i + 1} has invalid position` };
+      }
+    }
+
+    // Validate predators
+    for (let i = 0; i < parsed.predators.length; i++) {
+      const p = parsed.predators[i];
+      if (!p.id) p.id = `predator-${i + 1}`;
+      if (!p.gender) p.gender = getRandomGender();
+      if (!p.position || typeof p.position.x !== 'number' || typeof p.position.y !== 'number') {
+        return { success: false, error: `Predator ${i + 1} has invalid position` };
+      }
+    }
+
+    // Validate buildings
+    for (let i = 0; i < parsed.buildings.length; i++) {
+      const b = parsed.buildings[i];
+      if (!b.id) b.id = `building-${i + 1}`;
+      if (!b.type) b.type = 'storageSpot';
+      if (!b.position || typeof b.position.x !== 'number' || typeof b.position.y !== 'number') {
+        return { success: false, error: `Building ${i + 1} has invalid position` };
+      }
+      if (!b.tribeId && parsed.tribes.length > 0) {
+        b.tribeId = parsed.tribes[0].id;
+      }
+      if (typeof b.isConstructed !== 'boolean') {
+        b.isConstructed = true;
+      }
+    }
+
+    // Set defaults for optional fields
+    if (!parsed.ecosystemSettings) {
+      parsed.ecosystemSettings = {};
+    }
+
+    const config: ScenarioConfig = {
+      name: parsed.name,
+      description: parsed.description || '',
+      mapWidth: parsed.mapWidth,
+      mapHeight: parsed.mapHeight,
+      tribes: parsed.tribes,
+      berryBushes: parsed.berryBushes,
+      prey: parsed.prey,
+      predators: parsed.predators,
+      buildings: parsed.buildings,
+      ecosystemSettings: parsed.ecosystemSettings,
+      playerStartPosition: parsed.playerStartPosition,
+      playerTribeId: parsed.playerTribeId,
+    };
+
+    return { success: true, config };
+  } catch (e) {
+    return { success: false, error: `Invalid JSON: ${e instanceof Error ? e.message : 'Parse error'}` };
+  }
 }
 
 /**

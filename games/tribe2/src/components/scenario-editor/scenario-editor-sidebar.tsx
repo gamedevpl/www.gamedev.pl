@@ -43,6 +43,8 @@ interface ScenarioEditorSidebarProps {
   // Export callbacks
   onExportJson: () => void;
   onExportTs: () => void;
+  onExportSchema: () => void;
+  onImportJson: () => void;
 }
 
 export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
@@ -74,6 +76,8 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
   isStartingGame,
   onExportJson,
   onExportTs,
+  onExportSchema,
+  onImportJson,
 }) => {
   return (
     <S.Sidebar>
@@ -113,7 +117,7 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
       />
       <StartGameSection onStartGame={onStartGame} isStartingGame={isStartingGame} />
       <SummarySection config={config} />
-      <ExportSection onExportJson={onExportJson} onExportTs={onExportTs} />
+      <ExportSection onExportJson={onExportJson} onExportTs={onExportTs} onExportSchema={onExportSchema} onImportJson={onImportJson} />
     </S.Sidebar>
   );
 };
@@ -402,12 +406,18 @@ const SummarySection: React.FC<SummarySectionProps> = ({ config }) => (
 interface ExportSectionProps {
   onExportJson: () => void;
   onExportTs: () => void;
+  onExportSchema: () => void;
+  onImportJson: () => void;
 }
 
-const ExportSection: React.FC<ExportSectionProps> = ({ onExportJson, onExportTs }) => (
+const ExportSection: React.FC<ExportSectionProps> = ({ onExportJson, onExportTs, onExportSchema, onImportJson }) => (
   <S.SidebarSection>
     <S.SectionTitle>Export</S.SectionTitle>
     <S.ActionButton onClick={onExportJson}>Copy as JSON</S.ActionButton>
     <S.ActionButton onClick={onExportTs}>Copy as TypeScript</S.ActionButton>
+    <S.SectionTitle style={{ marginTop: '16px' }}>AI Generation</S.SectionTitle>
+    <S.HelpText>Copy schema for ChatGPT/Gemini, then import the result</S.HelpText>
+    <S.SecondaryButton onClick={onExportSchema}>📋 Copy Schema for AI</S.SecondaryButton>
+    <S.SecondaryButton onClick={onImportJson}>📥 Import from JSON</S.SecondaryButton>
   </S.SidebarSection>
 );
