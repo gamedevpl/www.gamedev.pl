@@ -19,6 +19,7 @@ import {
   useCanvasInteraction,
   useSimulationActions,
   useStartGameActions,
+  useChromeAI,
 } from './scenario-editor-hooks';
 
 export const ScenarioEditorScreen: React.FC = () => {
@@ -47,6 +48,9 @@ export const ScenarioEditorScreen: React.FC = () => {
 
   // Export actions
   const exportActions = useExportActions(config, showToast, updateConfig);
+
+  // Chrome AI actions
+  const chromeAI = useChromeAI(updateConfig, showToast);
 
   // Canvas interaction (panning, zooming, coordinate conversion)
   const canvasInteraction = useCanvasInteraction(canvasRef, viewportCenter, zoom, setViewportCenter, setZoom);
@@ -159,6 +163,12 @@ export const ScenarioEditorScreen: React.FC = () => {
         onExportTs={exportActions.handleExportTs}
         onExportSchema={exportActions.handleExportSchema}
         onImportJson={exportActions.handleImportJson}
+        aiAvailability={chromeAI.aiAvailability}
+        aiStatusMessage={chromeAI.aiStatusMessage}
+        isGeneratingWithAI={chromeAI.isGenerating}
+        aiPromptInput={chromeAI.promptInput}
+        onSetAiPromptInput={chromeAI.setPromptInput}
+        onGenerateWithAI={chromeAI.handleGenerateWithAI}
       />
 
       <S.ToastMessage $visible={!!toast}>{toast}</S.ToastMessage>

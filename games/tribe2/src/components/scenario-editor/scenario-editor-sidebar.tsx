@@ -45,6 +45,13 @@ interface ScenarioEditorSidebarProps {
   onExportTs: () => void;
   onExportSchema: () => void;
   onImportJson: () => void;
+  // Chrome AI callbacks
+  aiAvailability: 'readily' | 'after-download' | 'no' | 'unsupported';
+  aiStatusMessage: string;
+  isGeneratingWithAI: boolean;
+  aiPromptInput: string;
+  onSetAiPromptInput: (value: string) => void;
+  onGenerateWithAI: () => void;
 }
 
 export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
@@ -78,6 +85,12 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
   onExportTs,
   onExportSchema,
   onImportJson,
+  aiAvailability,
+  aiStatusMessage,
+  isGeneratingWithAI,
+  aiPromptInput,
+  onSetAiPromptInput,
+  onGenerateWithAI,
 }) => {
   return (
     <S.Sidebar>
@@ -118,6 +131,14 @@ export const ScenarioEditorSidebar: React.FC<ScenarioEditorSidebarProps> = ({
       <StartGameSection onStartGame={onStartGame} isStartingGame={isStartingGame} />
       <SummarySection config={config} />
       <ExportSection onExportJson={onExportJson} onExportTs={onExportTs} onExportSchema={onExportSchema} onImportJson={onImportJson} />
+      <ChromeAISection
+        aiAvailability={aiAvailability}
+        aiStatusMessage={aiStatusMessage}
+        isGenerating={isGeneratingWithAI}
+        promptInput={aiPromptInput}
+        onSetPromptInput={onSetAiPromptInput}
+        onGenerate={onGenerateWithAI}
+      />
     </S.Sidebar>
   );
 };
@@ -419,5 +440,47 @@ const ExportSection: React.FC<ExportSectionProps> = ({ onExportJson, onExportTs,
     <S.HelpText>Copy schema for ChatGPT/Gemini, then import the result</S.HelpText>
     <S.SecondaryButton onClick={onExportSchema}>📋 Copy Schema for AI</S.SecondaryButton>
     <S.SecondaryButton onClick={onImportJson}>📥 Import from JSON</S.SecondaryButton>
+  </S.SidebarSection>
+);
+
+interface ChromeAISectionProps {
+  aiAvailability: 'readily' | 'after-download' | 'no' | 'unsupported';
+  aiStatusMessage: string;
+  isGenerating: boolean;
+  promptInput: string;
+  onSetPromptInput: (value: string) => void;
+  onGenerate: () => void;
+}
+
+const ChromeAISection: React.FC<ChromeAISectionProps> = ({
+  aiAvailability,
+  aiStatusMessage,
+  isGenerating,
+  promptInput,
+  onSetPromptInput,
+  onGenerate,
+}) => (
+  <S.SidebarSection>
+    <S.SectionTitle>🤖 Chrome AI (Built-in)</S.SectionTitle>
+    <S.HelpText>{aiStatusMessage}</S.HelpText>
+    {aiAvailability === 'readily' && (
+      <>
+        <S.TextArea
+          placeholder="Describe your scenario... e.g., 'A lone survivor starts in a desert with scarce resources, 2 small hostile tribes nearby'"
+          value={promptInput}
+          onChange={(e) => onSetPromptInput(e.target.value)}
+          disabled={isGenerating}
+          rows={3}
+        />
+        <S.ActionButton onClick={onGenerate} disabled={isGenerating || !promptInput.trim()}>
+          {isGenerating ? '⏳ Generating...' : '✨ Generate with AI'}
+        </S.ActionButton>
+      </>
+    )}
+    {aiAvailability === 'unsupported' && (
+      <S.HelpText style={{ fontSize: '11px' }}>
+        Enable in chrome://flags/#prompt-api-for-gemini-nano
+      </S.HelpText>
+    )}
   </S.SidebarSection>
 );

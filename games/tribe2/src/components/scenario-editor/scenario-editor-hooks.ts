@@ -1,7 +1,7 @@
 /**
  * Custom hooks for the Scenario Editor state management.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ScenarioEditorState,
   ScenarioConfig,
@@ -12,6 +12,7 @@ import {
   generateScenarioId,
 } from '../../game/scenario-editor/scenario-types';
 import { exportScenarioAsJson, exportScenarioAsTypeScript, exportScenarioSchema, importScenarioFromJson, copyToClipboard } from '../../game/scenario-editor/scenario-export';
+import { checkAIAvailability, generateScenarioWithChromeAI, getAIStatusMessage, AIAvailability } from '../../game/scenario-editor/chrome-ai';
 import { Vector2D } from '../../game/utils/math-types';
 import { BuildingType } from '../../game/entities/buildings/building-types';
 
@@ -351,6 +352,67 @@ export function useExportActions(config: ScenarioConfig, showToast: (message: st
   }, [showToast, updateConfig]);
 
   return { handleExportJson, handleExportTs, handleExportSchema, handleImportJson };
+}
+
+/**
+ * Hook for Chrome AI scenario generation.
+ */
+export function useChromeAI(
+  updateConfig: (updates: Partial<ScenarioConfig>) => void,
+  showToast: (message: string) => void,
+) {
+  const [aiAvailability, setAiAvailability] = useState<AIAvailability>('unsupported');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState('');
+  const [promptInput, setPromptInput] = useState('');
+
+  // Check AI availability on mount
+  useEffect(() => {
+    checkAIAvailability().then(setAiAvailability);
+  }, []);
+
+  const handleGenerateWithAI = useCallback(async () => {
+    if (!promptInput.trim()) {
+      showToast('Please enter a scenario description');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationProgress('Generating scenario...');
+
+    const PROGRESS_PREVIEW_LENGTH = 100;
+    try {
+      const result = await generateScenarioWithChromeAI(
+        promptInput,
+        (partial) => setGenerationProgress(partial.slice(0, PROGRESS_PREVIEW_LENGTH) + '...'),
+      );
+
+      if (result.success && result.config) {
+        updateConfig({ ...result.config });
+        showToast(`Generated: ${result.config.name}`);
+        setPromptInput('');
+      } else {
+        showToast(result.error || 'Generation failed');
+      }
+    } catch (error) {
+      showToast(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress('');
+    }
+  }, [promptInput, updateConfig, showToast]);
+
+  const aiStatusMessage = getAIStatusMessage(aiAvailability);
+
+  return {
+    aiAvailability,
+    aiStatusMessage,
+    isGenerating,
+    generationProgress,
+    promptInput,
+    setPromptInput,
+    handleGenerateWithAI,
+  };
 }
 
 /**
