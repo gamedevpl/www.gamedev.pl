@@ -11,7 +11,7 @@ import {
   createInitialEditorState,
   generateScenarioId,
 } from '../../game/scenario-editor/scenario-types';
-import { exportScenarioAsJson, exportScenarioAsTypeScript, exportScenarioSchema, importScenarioFromJson, copyToClipboard } from '../../game/scenario-editor/scenario-export';
+import { exportScenarioAsJson, exportScenarioAsTypeScript, exportScenarioAsScriptTypeScript, exportScenarioSchema, importScenarioFromJson, copyToClipboard } from '../../game/scenario-editor/scenario-export';
 import { checkAIAvailability, generateScenarioWithChromeAI, AIAvailability } from '../../game/scenario-editor/chrome-ai';
 import { Vector2D } from '../../game/utils/math-types';
 import { BuildingType } from '../../game/entities/buildings/building-types';
@@ -320,6 +320,16 @@ export function useExportActions(config: ScenarioConfig, showToast: (message: st
     }
   }, [config, showToast]);
 
+  const handleExportScriptTs = useCallback(async () => {
+    const ts = exportScenarioAsScriptTypeScript(config);
+    const success = await copyToClipboard(ts);
+    if (success) {
+      showToast('Scenario Script copied to clipboard!');
+    } else {
+      showToast('Failed to copy');
+    }
+  }, [config, showToast]);
+
   const handleExportSchema = useCallback(async () => {
     const schema = exportScenarioSchema();
     const success = await copyToClipboard(schema);
@@ -351,7 +361,7 @@ export function useExportActions(config: ScenarioConfig, showToast: (message: st
     }
   }, [showToast, updateConfig]);
 
-  return { handleExportJson, handleExportTs, handleExportSchema, handleImportJson };
+  return { handleExportJson, handleExportTs, handleExportScriptTs, handleExportSchema, handleImportJson };
 }
 
 /**

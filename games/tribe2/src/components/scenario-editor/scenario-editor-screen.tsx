@@ -161,6 +161,7 @@ export const ScenarioEditorScreen: React.FC = () => {
         isStartingGame={startGameActions.isStarting}
         onExportJson={exportActions.handleExportJson}
         onExportTs={exportActions.handleExportTs}
+        onExportScriptTs={exportActions.handleExportScriptTs}
         onExportSchema={exportActions.handleExportSchema}
         onImportJson={exportActions.handleImportJson}
         aiAvailability={chromeAI.aiAvailability}
