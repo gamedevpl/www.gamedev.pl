@@ -14,31 +14,51 @@ import { exportScenarioSchema, importScenarioFromJson } from './scenario-export'
 export type AIAvailability = 'readily' | 'after-download' | 'no' | 'unsupported';
 
 /**
- * AI session interface that works with both old and new Chrome AI APIs.
+ * Initial prompt message for the language model.
  */
-interface AISession {
-  prompt(input: string): Promise<string>;
-  promptStreaming?(input: string): AsyncIterable<string>;
-  destroy(): void;
+interface AILanguageModelPrompt {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
 /**
- * Extended window interface for Chrome AI APIs.
+ * AI session interface that works with the Chrome Prompt API.
+ */
+interface AILanguageModelSession {
+  prompt(input: string): Promise<string>;
+  promptStreaming(input: string): ReadableStream<string>;
+  destroy(): void;
+  clone(): Promise<AILanguageModelSession>;
+}
+
+/**
+ * Options for creating a language model session.
+ */
+interface AILanguageModelCreateOptions {
+  topK?: number;
+  temperature?: number;
+  initialPrompts?: AILanguageModelPrompt[];
+}
+
+/**
+ * Capabilities returned by the language model.
+ */
+interface AILanguageModelCapabilities {
+  available: 'readily' | 'after-download' | 'no';
+  defaultTopK?: number;
+  maxTopK?: number;
+  defaultTemperature?: number;
+}
+
+/**
+ * Extended window interface for Chrome AI Prompt API.
  */
 declare global {
   interface Window {
     ai?: {
-      // Legacy API (Chrome < 130)
-      canCreateTextSession?: () => Promise<'readily' | 'after-download' | 'no'>;
-      createTextSession?: (options?: { topK?: number; temperature?: number }) => Promise<AISession>;
-      // New API (Chrome 130+)
-      assistant?: {
-        capabilities: () => Promise<{ available: 'readily' | 'after-download' | 'no' }>;
-        create: (options?: { topK?: number; temperature?: number }) => Promise<AISession>;
-      };
       languageModel?: {
-        capabilities: () => Promise<{ available: 'readily' | 'after-download' | 'no' }>;
-        create: (options?: { topK?: number; temperature?: number; systemPrompt?: string }) => Promise<AISession>;
+        capabilities: () => Promise<AILanguageModelCapabilities>;
+        create: (options?: AILanguageModelCreateOptions) => Promise<AILanguageModelSession>;
       };
     };
   }
@@ -48,29 +68,13 @@ declare global {
  * Checks if Chrome AI (Prompt API) is available in this browser.
  */
 export async function checkAIAvailability(): Promise<AIAvailability> {
-  if (!window.ai) {
+  if (!window.ai || !window.ai.languageModel) {
     return 'unsupported';
   }
 
   try {
-    // Try new languageModel API first (latest Chrome versions)
-    if (window.ai.languageModel?.capabilities) {
-      const capabilities = await window.ai.languageModel.capabilities();
-      return capabilities.available;
-    }
-
-    // Try assistant API (Chrome 130+)
-    if (window.ai.assistant?.capabilities) {
-      const capabilities = await window.ai.assistant.capabilities();
-      return capabilities.available;
-    }
-
-    // Try legacy API (Chrome < 130)
-    if (window.ai.canCreateTextSession) {
-      return await window.ai.canCreateTextSession();
-    }
-
-    return 'unsupported';
+    const capabilities = await window.ai.languageModel.capabilities();
+    return capabilities.available;
   } catch (error) {
     console.error('Error checking AI availability:', error);
     return 'unsupported';
@@ -78,40 +82,25 @@ export async function checkAIAvailability(): Promise<AIAvailability> {
 }
 
 /**
- * Creates an AI session using the available API.
+ * Creates an AI session using the Chrome Prompt API.
  */
-async function createAISession(): Promise<AISession | null> {
-  if (!window.ai) {
+async function createAISession(): Promise<AILanguageModelSession | null> {
+  if (!window.ai || !window.ai.languageModel) {
     return null;
   }
 
   try {
-    // Try new languageModel API first (latest Chrome versions)
-    if (window.ai.languageModel?.create) {
-      return await window.ai.languageModel.create({
-        temperature: 0.7,
-        topK: 40,
-        systemPrompt: getSystemPrompt(),
-      });
-    }
-
-    // Try assistant API (Chrome 130+)
-    if (window.ai.assistant?.create) {
-      return await window.ai.assistant.create({
-        temperature: 0.7,
-        topK: 40,
-      });
-    }
-
-    // Try legacy API (Chrome < 130)
-    if (window.ai.createTextSession) {
-      return await window.ai.createTextSession({
-        temperature: 0.7,
-        topK: 40,
-      });
-    }
-
-    return null;
+    // Create session with initial prompts using the correct Prompt API format
+    return await window.ai.languageModel.create({
+      temperature: 0.7,
+      topK: 40,
+      initialPrompts: [
+        {
+          role: 'system',
+          content: getSystemPrompt(),
+        },
+      ],
+    });
   } catch (error) {
     console.error('Error creating AI session:', error);
     return null;
@@ -206,12 +195,22 @@ export async function generateScenarioWithChromeAI(
     const prompt = getUserPrompt(userRequest);
     let response: string;
 
-    // Try streaming if available and callback provided
-    if (onProgress && session.promptStreaming) {
+    // Try streaming if callback provided
+    if (onProgress) {
       response = '';
-      for await (const chunk of session.promptStreaming(prompt)) {
-        response = chunk; // The API gives cumulative response, not deltas
-        onProgress(response);
+      const stream = session.promptStreaming(prompt);
+      const reader = stream.getReader();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          // The API returns cumulative text chunks
+          response = value;
+          onProgress(response);
+        }
+      } finally {
+        reader.releaseLock();
       }
     } else {
       response = await session.prompt(prompt);
