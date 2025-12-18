@@ -12,6 +12,7 @@ import { updateEcosystemBalancer } from './ecosystem';
 import { saveGame } from './persistence/persistence-utils';
 import { updateUI } from './ui/ui-utils.ts';
 import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
+import { scheduledEventsUpdate } from './scheduled-events-update';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -64,6 +65,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);
+
+    // Process scheduled events (e.g. ranged impacts)
+    scheduledEventsUpdate({ gameState: indexedState, deltaTime: deltaTime });
 
     // Entities update
     entitiesUpdate({

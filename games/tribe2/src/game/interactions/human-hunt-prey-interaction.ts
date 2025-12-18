@@ -68,11 +68,13 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
   },
 
   perform: (human, prey, context) => {
+    const { gameState } = context;
+
     const distance = calculateWrappedDistance(
       human.position,
       prey.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
     );
     const isRanged = distance > HUMAN_ATTACK_MELEE_RANGE;
 
@@ -84,64 +86,65 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
       damage *= 1.3; // Males are more effective hunters
     }
 
-    // Deal damage to prey
-    prey.hitpoints -= damage;
-
-    // Apply pushback force to prey
-    const pushDirection = getDirectionVectorOnTorus(
-      human.position,
-      prey.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
-    );
-    const pushForceAmount = isRanged ? HUMAN_ATTACK_RANGED_PUSHBACK_FORCE : 6; // 6 is the original melee pushback
-    const pushForce = vectorScale(pushDirection, pushForceAmount);
-    prey.forces.push(pushForce);
-
-    // Set attack cooldown
-    human.attackCooldown = {
-      melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS,
-      ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS,
-    };
-
-    // If prey is killed, create corpse (meat gathering handled separately)
-    if (prey.hitpoints <= 0) {
-      // Play death sound
-      playSoundAt(context, SoundType.HumanDeath, prey.position); // Reuse human death sound
-
-      // Add hit effect on prey
-      addVisualEffect(context.gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
-    } else {
-      // Prey survives, just add hit effect and make it flee
-      addVisualEffect(context.gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
-      prey.fleeCooldown = 8; // 8 hours of fleeing from humans (longer than predators)
-
-      playSoundAt(context, SoundType.Attack, human.position);
-    }
-
     if (isRanged) {
       const projectileDuration = distance / HUMAN_ATTACK_STONE_SPEED;
+
+      // Schedule Ranged Impact
+      gameState.scheduledEvents.push({
+        id: gameState.nextScheduledEventId++,
+        type: 'ranged-impact',
+        scheduledTime: gameState.time + projectileDuration,
+        data: {
+          attackerId: human.id,
+          targetId: prey.id,
+          damage,
+          pushbackForce: HUMAN_ATTACK_RANGED_PUSHBACK_FORCE,
+          attackerPosition: { ...human.position },
+        },
+      });
+
+      // Add visual projectile
       addVisualEffect(
-        context.gameState,
+        gameState,
         VisualEffectType.StoneProjectile,
         human.position,
         projectileDuration,
         undefined,
         prey.position,
       );
+
+      // Play launch sound
+      playSoundAt(context, SoundType.Attack, human.position);
     } else {
-      // Add attack effect on human
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Attack,
+      // Melee Attack Hits Immediately
+      prey.hitpoints -= damage;
+
+      // Apply pushback force to prey
+      const pushDirection = getDirectionVectorOnTorus(
         human.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        human.id,
+        prey.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
       );
+      const pushForce = vectorScale(pushDirection, 6); // 6 is the original melee pushback
+      prey.forces.push(pushForce);
+
+      if (prey.hitpoints <= 0) {
+        playSoundAt(context, SoundType.HumanDeath, prey.position);
+        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
+      } else {
+        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
+        prey.fleeCooldown = 8;
+        playSoundAt(context, SoundType.Attack, human.position);
+      }
+
+      // Add melee attack effect on human
+      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
     }
 
-    // Reset the attacker's action to idle after the attack
+    // Set attack cooldown and reset attack start time
+    human.attackCooldown = { melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS, ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS };
     const attackData = human.stateMachine![1] as HumanAttackingStateData;
-    attackData.attackStartTime = context.gameState.time;
+    attackData.attackStartTime = gameState.time;
   },
 };

@@ -86,9 +86,23 @@ function drawStoneProjectile(
   const currentX = effect.position.x + movementVector.x * progress;
   const currentY = effect.position.y + movementVector.y * progress;
 
+  // 1. Parabolic arc
+  const arcHeight = -Math.sin(progress * Math.PI) * 40;
+
   ctx.save();
+
+  // 2. Draw shadow
   ctx.beginPath();
-  ctx.arc(currentX, currentY, 3, 0, Math.PI * 2);
+  ctx.ellipse(currentX, currentY, 4, 2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.fill();
+
+  // 3. Draw the stone with arc and rotation
+  ctx.translate(currentX, currentY + arcHeight);
+  ctx.rotate(progress * Math.PI * 4);
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 3, 0, Math.PI * 2);
   ctx.fillStyle = '#888';
   ctx.fill();
   ctx.strokeStyle = '#444';

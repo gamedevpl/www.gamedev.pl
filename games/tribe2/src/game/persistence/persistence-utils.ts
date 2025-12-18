@@ -16,6 +16,8 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       entities: worldState.entities,
       visualEffects: worldState.visualEffects,
       nextVisualEffectId: worldState.nextVisualEffectId,
+      scheduledEvents: worldState.scheduledEvents,
+      nextScheduledEventId: worldState.nextScheduledEventId,
       mapDimensions: worldState.mapDimensions,
       generationCount: worldState.generationCount,
       gameOver: worldState.gameOver,

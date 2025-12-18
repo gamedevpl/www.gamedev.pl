@@ -68,11 +68,13 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
   },
 
   perform: (human, predator, context) => {
+    const { gameState } = context;
+
     const distance = calculateWrappedDistance(
       human.position,
       predator.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
     );
     const isRanged = distance > HUMAN_ATTACK_MELEE_RANGE;
 
@@ -85,7 +87,7 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
     }
 
     // Group fighting bonus - if other humans are nearby fighting, increase damage
-    const nearbyFightingHumans = Object.values(context.gameState.entities.entities)
+    const nearbyFightingHumans = Object.values(gameState.entities.entities)
       .filter((e) => e.type === 'human' && e.id !== human.id)
       .filter((h) => {
         const otherHuman = h as HumanEntity;
@@ -99,77 +101,72 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
       damage *= 1 + nearbyFightingHumans * 0.2; // 20% bonus per nearby ally
     }
 
-    // Deal damage to predator
-    predator.hitpoints -= damage;
-
-    // Apply pushback force to predator
-    const pushDirection = getDirectionVectorOnTorus(
-      human.position,
-      predator.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
-    );
-    const pushForceAmount = isRanged ? HUMAN_ATTACK_RANGED_PUSHBACK_FORCE : 8; // 8 is the original melee pushback
-    const pushForce = vectorScale(pushDirection, pushForceAmount);
-    predator.forces.push(pushForce);
-
-    // Set attack cooldown
-    human.attackCooldown = { melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS, ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS };
-
-    // If predator is killed, no special rewards (unlike hunting prey)
-    if (predator.hitpoints <= 0) {
-      // Play death sound
-      playSoundAt(context, SoundType.HumanDeath, predator.position); // Reuse human death sound
-
-      // Add hit effect on predator
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Hit,
-        predator.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        predator.id,
-      );
-    } else {
-      // Predator survives, just add hit effect and make it potentially flee or become more aggressive
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Hit,
-        predator.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        predator.id,
-      );
-
-      // Wounded predators might become more desperate and aggressive
-      if (predator.hitpoints < predator.maxHitpoints * 0.3) {
-        predator.hunger += 20; // Desperation increases hunger drive
-      }
-
-      playSoundAt(context, SoundType.Attack, human.position);
-    }
-
     if (isRanged) {
       const projectileDuration = distance / HUMAN_ATTACK_STONE_SPEED;
+
+      // Schedule Ranged Impact
+      gameState.scheduledEvents.push({
+        id: gameState.nextScheduledEventId++,
+        type: 'ranged-impact',
+        scheduledTime: gameState.time + projectileDuration,
+        data: {
+          attackerId: human.id,
+          targetId: predator.id,
+          damage,
+          pushbackForce: HUMAN_ATTACK_RANGED_PUSHBACK_FORCE,
+          attackerPosition: { ...human.position },
+        },
+      });
+
+      // Add visual projectile
       addVisualEffect(
-        context.gameState,
+        gameState,
         VisualEffectType.StoneProjectile,
         human.position,
         projectileDuration,
         undefined,
         predator.position,
       );
+
+      // Play launch sound
+      playSoundAt(context, SoundType.Attack, human.position);
     } else {
-      // Add attack effect on human
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Attack,
+      // Melee Attack Hits Immediately
+      predator.hitpoints -= damage;
+
+      // Apply pushback force to predator
+      const pushDirection = getDirectionVectorOnTorus(
         human.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        human.id,
+        predator.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
       );
+      const pushForce = vectorScale(pushDirection, 8); // 8 is the original melee pushback
+      predator.forces.push(pushForce);
+
+      if (predator.hitpoints <= 0) {
+        playSoundAt(context, SoundType.HumanDeath, predator.position);
+        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, predator.id);
+      } else {
+        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, predator.id);
+
+        // Wounded predators might become more desperate and aggressive
+        if (predator.hitpoints < predator.maxHitpoints * 0.3) {
+          predator.hunger += 20;
+        }
+
+        playSoundAt(context, SoundType.Attack, human.position);
+      }
+
+      // Add melee attack effect on human
+      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
     }
 
-    // Reset the attacker's action to idle after the attack
+    // Set attack cooldown
+    human.attackCooldown = { melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS, ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS };
+
+    // Reset attack start time
     const attackData = human.stateMachine![1] as HumanAttackingStateData;
-    attackData.attackStartTime = context.gameState.time;
+    attackData.attackStartTime = gameState.time;
   },
 };

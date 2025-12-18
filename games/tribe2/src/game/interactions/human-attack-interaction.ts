@@ -73,11 +73,13 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   },
 
   perform: (source, target, context) => {
+    const { gameState } = context;
+
     const distance = calculateWrappedDistance(
       source.position,
       target.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
     );
 
     const isRanged = distance > HUMAN_ATTACK_MELEE_RANGE;
@@ -86,8 +88,8 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
     const toTarget = getDirectionVectorOnTorus(
       source.position,
       target.position,
-      context.gameState.mapDimensions.width,
-      context.gameState.mapDimensions.height,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
     );
     const angle = vectorAngleBetween(vectorNormalize(toTarget), target.direction);
     const isFacing = Math.abs(angle) < (HUMAN_PARRY_ANGLE_DEGREES * Math.PI) / 180;
@@ -95,7 +97,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
     if (isFacing && Math.random() < HUMAN_PARRY_CHANCE) {
       // Attack Parried
       addVisualEffect(
-        context.gameState,
+        gameState,
         VisualEffectType.AttackDeflected,
         target.position,
         EFFECT_DURATION_SHORT_HOURS,
@@ -121,69 +123,75 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
         damage *= HUMAN_VULNERABLE_DAMAGE_MODIFIER;
       }
 
-      // Attack Hits
-      target.hitpoints -= damage;
+      if (isRanged) {
+        const projectileDuration = distance / HUMAN_ATTACK_STONE_SPEED;
 
-      // Apply movement slowdown
-      target.movementSlowdown = {
-        modifier: HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
-        endTime: context.gameState.time + HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
-      };
+        // Schedule Ranged Impact
+        gameState.scheduledEvents.push({
+          id: gameState.nextScheduledEventId++,
+          type: 'ranged-impact',
+          scheduledTime: gameState.time + projectileDuration,
+          data: {
+            attackerId: source.id,
+            targetId: target.id,
+            damage,
+            pushbackForce: HUMAN_ATTACK_RANGED_PUSHBACK_FORCE,
+            attackerPosition: { ...source.position },
+          },
+        });
 
-      addVisualEffect(context.gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
+        // Add visual projectile
+        addVisualEffect(
+          gameState,
+          VisualEffectType.StoneProjectile,
+          source.position,
+          projectileDuration,
+          undefined,
+          target.position,
+        );
 
-      // Apply push-back force
-      const pushDirection = getDirectionVectorOnTorus(
-        source.position,
-        target.position,
-        context.gameState.mapDimensions.width,
-        context.gameState.mapDimensions.height,
-      );
-      const pushForceAmount = isRanged ? HUMAN_ATTACK_RANGED_PUSHBACK_FORCE : HUMAN_ATTACK_PUSHBACK_FORCE;
-      const pushForce = vectorScale(pushDirection, pushForceAmount);
-      target.forces.push(pushForce);
-
-      if (target.hitpoints <= 0) {
-        // isKilled will be handled in human-update
-        playSoundAt(context, SoundType.HumanDeath, target.position);
-      } else {
+        // Play launch sound
         playSoundAt(context, SoundType.Attack, source.position);
+      } else {
+        // Melee Attack Hits Immediately
+        target.hitpoints -= damage;
+
+        // Apply movement slowdown
+        target.movementSlowdown = {
+          modifier: HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER,
+          endTime: gameState.time + HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
+        };
+
+        addVisualEffect(gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
+
+        // Apply push-back force
+        const pushDirection = getDirectionVectorOnTorus(
+          source.position,
+          target.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
+        const pushForce = vectorScale(pushDirection, HUMAN_ATTACK_PUSHBACK_FORCE);
+        target.forces.push(pushForce);
+
+        if (target.hitpoints <= 0) {
+          playSoundAt(context, SoundType.HumanDeath, target.position);
+        } else {
+          playSoundAt(context, SoundType.Attack, source.position);
+        }
+
+        // Add melee attack effect on source
+        addVisualEffect(gameState, VisualEffectType.Attack, source.position, EFFECT_DURATION_SHORT_HOURS, source.id);
       }
     }
 
-    // Set the attacker's cooldown
-    if (isRanged) {
-      source.attackCooldown = {
-        melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS,
-        ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS,
-      };
+    // Cooldown and state reset
+    source.attackCooldown = {
+      melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS,
+      ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS,
+    };
 
-      const projectileDuration = distance / HUMAN_ATTACK_STONE_SPEED;
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.StoneProjectile,
-        source.position,
-        projectileDuration,
-        undefined,
-        target.position,
-      );
-    } else {
-      source.attackCooldown = {
-        melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS,
-        ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS,
-      };
-      // Add visual effect for the attack itself (on the attacker)
-      addVisualEffect(
-        context.gameState,
-        VisualEffectType.Attack,
-        source.position,
-        EFFECT_DURATION_SHORT_HOURS,
-        source.id,
-      );
-    }
-
-    // Reset the attacker's action to idle after the attack
     const attackData = source.stateMachine![1] as HumanAttackingStateData;
-    attackData.attackStartTime = context.gameState.time;
+    attackData.attackStartTime = gameState.time;
   },
 };

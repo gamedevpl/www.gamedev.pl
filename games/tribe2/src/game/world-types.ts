@@ -99,12 +99,29 @@ export type HoveredAutopilotAction =
       buildingType: 'storageSpot' | 'plantingZone' | 'borderPost';
     };
 
+export type ScheduledEventType = 'ranged-impact';
+
+export interface ScheduledEvent {
+  id: number;
+  type: ScheduledEventType;
+  scheduledTime: number;
+  data: {
+    attackerId: EntityId;
+    targetId: EntityId;
+    damage: number;
+    pushbackForce: number;
+    attackerPosition: Vector2D;
+  };
+}
+
 // Game State Interface
 export interface GameWorldState {
   time: number; // Total game hours passed since the start of the game, float
   entities: Entities;
   visualEffects: VisualEffect[];
   nextVisualEffectId: VisualEffectId;
+  scheduledEvents: ScheduledEvent[];
+  nextScheduledEventId: number;
   mapDimensions: {
     width: number;
     height: number;
