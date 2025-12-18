@@ -77,9 +77,6 @@ export interface HumanEntity extends CharacterEntity {
   attackCooldown?: number;
   attackTargetId?: EntityId;
 
-  /** Cooldown for the leader's high-level strategic decision-making. */
-  leaderMetaStrategyCooldown?: number;
-
   /** Target for 'moving' action, either a position or entity. */
   target?: { x: number; y: number } | EntityId; // Target for 'moving' action. Set by player input or AI decision.
 
