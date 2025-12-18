@@ -16,7 +16,7 @@ export const PROCREATION_MIN_NEARBY_BERRY_BUSHES: number = 2; // Minimum number 
 export const PROCREATION_FOOD_SEARCH_RADIUS: number = 800; // Radius in pixels to search for food sources when considering procreation
 export const PROCREATION_PARTNER_SEARCH_RADIUS_LONG: number = 500;
 export const AI_ATTACK_HUNGER_THRESHOLD: number = 150 * 0.85;
-export const AI_TRIBE_BATTLE_RADIUS = 100; // Radius for tribe members to engage in battle around their leader
+export const AI_TRIBE_BATTLE_RADIUS = 150; // Radius for tribe members to engage in battle around their leader
 export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe members that should ideally attack a single target
 
 export const BLACKBOARD_ENTRY_MAX_AGE_HOURS = 24; // Time in game hours to keep BT node history

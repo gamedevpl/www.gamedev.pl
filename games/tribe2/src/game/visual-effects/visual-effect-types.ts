@@ -20,6 +20,7 @@ export enum VisualEffectType {
   Seize,
   AutopilotMoveTarget,
   BorderClaim,
+  StoneProjectile,
 }
 
 export interface VisualEffect {
@@ -29,4 +30,5 @@ export interface VisualEffect {
   startTime: number; // Game time in hours
   duration: number; // Duration in game hours
   entityId?: EntityId; // Optional entity to attach the effect to
+  targetPosition?: Vector2D; // Optional target position for projectiles
 }

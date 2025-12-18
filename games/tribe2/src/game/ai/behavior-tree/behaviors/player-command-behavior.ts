@@ -8,7 +8,12 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { AUTOPILOT_ACTION_PROXIMITY, AUTOPILOT_MOVE_DISTANCE_THRESHOLD } from '../../../ai-consts.ts';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../entities/plants/berry-bush/berry-bush-consts.ts';
-import { HUMAN_INTERACTION_PROXIMITY, HUMAN_INTERACTION_RANGE } from '../../../human-consts.ts';
+import {
+  HUMAN_INTERACTION_PROXIMITY,
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_ATTACK_MELEE_RANGE,
+  HUMAN_ATTACK_RANGED_RANGE,
+} from '../../../human-consts.ts';
 import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
@@ -47,7 +52,10 @@ function handleAutopilotAttack(
     gameState.mapDimensions.height,
   );
 
-  if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
+  const rangedReady = (human.attackCooldown?.ranged ?? 0) <= 0;
+  const effectiveRange = rangedReady ? HUMAN_ATTACK_RANGED_RANGE : HUMAN_ATTACK_MELEE_RANGE;
+
+  if (distance <= effectiveRange) {
     human.activeAction = 'attacking';
     human.attackTargetId = target.id;
     gameState.autopilotControls.activeAutopilotAction = undefined;
@@ -431,7 +439,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
             case PlayerActionType.AutopilotBuildingPlacement: {
               const targetPosition = activeAction.position;
               const buildingType = activeAction.buildingType;
-              
+
               if (!buildingType) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
@@ -448,7 +456,16 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
               if (distance <= placementProximity) {
                 // Close enough to place building
-                if (canPlaceBuilding(targetPosition, buildingType, human.leaderId, gameState, human.position, placementProximity)) {
+                if (
+                  canPlaceBuilding(
+                    targetPosition,
+                    buildingType,
+                    human.leaderId,
+                    gameState,
+                    human.position,
+                    placementProximity,
+                  )
+                ) {
                   createBuilding(targetPosition, buildingType, human.leaderId!, gameState);
                   gameState.autopilotControls.activeAutopilotAction = undefined;
                   human.activeAction = 'idle';

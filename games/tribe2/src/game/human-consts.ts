@@ -45,11 +45,17 @@ export const HUMAN_CORPSE_INITIAL_FOOD: number = 10; // Initial food amount on a
 
 // Human Attack Constants
 export const HUMAN_MAX_HITPOINTS = 100;
-export const HUMAN_ATTACK_DAMAGE = 35;
-export const HUMAN_ATTACK_RANGE = 30; // Range in pixels for attack interaction
-export const HUMAN_ATTACK_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
-export const HUMAN_ATTACK_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
+export const HUMAN_ATTACK_MELEE_DAMAGE = 35;
+export const HUMAN_ATTACK_MELEE_RANGE = 30; // Range in pixels for attack interaction
+export const HUMAN_ATTACK_MELEE_BUILDUP_HOURS: number = 0.5; // Time in game hours for attack to build up
+export const HUMAN_ATTACK_MELEE_COOLDOWN_HOURS: number = 2.5; // Cooldown in game hours for a human after attacking
+export const HUMAN_ATTACK_RANGED_DAMAGE = 20;
+export const HUMAN_ATTACK_RANGED_RANGE = 250;
+export const HUMAN_ATTACK_RANGED_BUILDUP_HOURS: number = 0.4;
+export const HUMAN_ATTACK_STONE_SPEED = 500; // pixels per game hour
+export const HUMAN_ATTACK_RANGED_COOLDOWN_HOURS: number = 6; // Cooldown in game hours for a human after ranged attack
 export const HUMAN_ATTACK_PUSHBACK_FORCE: number = 5; // Force applied to target on successful attack
+export const HUMAN_ATTACK_RANGED_PUSHBACK_FORCE = 2;
 export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER = 0.5; // 50% speed reduction
 export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS = 1.5; // in game hours
 export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 0.1;

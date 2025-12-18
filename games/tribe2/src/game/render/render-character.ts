@@ -21,7 +21,7 @@ import {
   TRIBE_BADGE_SIZE,
   CHARACTER_CHILD_RADIUS,
 } from '../ui/ui-consts.js';
-import { HUMAN_ATTACK_BUILDUP_HOURS, HUMAN_ATTACK_COOLDOWN_HOURS } from '../human-consts';
+import { HUMAN_ATTACK_MELEE_BUILDUP_HOURS, HUMAN_ATTACK_MELEE_COOLDOWN_HOURS } from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar, renderSupplyChainHighlights } from './render-ui';
@@ -152,7 +152,7 @@ function renderAttackProgress(ctx: CanvasRenderingContext2D, human: HumanEntity,
   if (human.stateMachine?.[0] === HUMAN_ATTACKING) {
     const attackData = human.stateMachine[1] as HumanAttackingStateData;
     const timeSinceAttackStart = currentTime - attackData.attackStartTime;
-    const buildupProgress = Math.min(timeSinceAttackStart / HUMAN_ATTACK_BUILDUP_HOURS, 1);
+    const buildupProgress = Math.min(timeSinceAttackStart / HUMAN_ATTACK_MELEE_BUILDUP_HOURS, 1);
 
     drawProgressBar(
       ctx,
@@ -166,8 +166,8 @@ function renderAttackProgress(ctx: CanvasRenderingContext2D, human: HumanEntity,
     );
   }
   // Render attack cooldown
-  else if (human.attackCooldown && human.attackCooldown > 0) {
-    const cooldownProgress = 1 - human.attackCooldown / HUMAN_ATTACK_COOLDOWN_HOURS;
+  else if (human.attackCooldown?.melee && human.attackCooldown.melee > 0) {
+    const cooldownProgress = 1 - human.attackCooldown.melee / HUMAN_ATTACK_MELEE_COOLDOWN_HOURS;
     drawProgressBar(
       ctx,
       barX,

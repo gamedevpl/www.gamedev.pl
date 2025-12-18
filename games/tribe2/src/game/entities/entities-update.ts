@@ -139,7 +139,10 @@ export function createHuman(
     isPregnant: false,
     gestationTime: 0,
     procreationCooldown: 0,
-    attackCooldown: 0,
+    attackCooldown: {
+      melee: 0,
+      ranged: 0,
+    },
     motherId,
     fatherId,
     ancestorIds,

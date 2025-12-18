@@ -1,5 +1,5 @@
 import { BERRY_COST_FOR_PLANTING } from '../entities/plants/berry-bush/berry-bush-consts.ts';
-import { HUMAN_ATTACK_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import { HUMAN_ATTACK_RANGED_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
@@ -102,11 +102,11 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
 
   // Check for Attacking
   const attackTarget =
-    findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
+    findClosestEntity<HumanEntity>(player, gameState, 'human', HUMAN_ATTACK_RANGED_RANGE, (h) =>
       isHostile(player, h as HumanEntity, gameState),
     ) ??
-    findClosestEntity<PredatorEntity>(player, gameState, 'predator', HUMAN_ATTACK_RANGE) ??
-    findClosestEntity<PreyEntity>(player, gameState, 'prey', HUMAN_ATTACK_RANGE);
+    findClosestEntity<PredatorEntity>(player, gameState, 'predator', HUMAN_ATTACK_RANGED_RANGE) ??
+    findClosestEntity<PreyEntity>(player, gameState, 'prey', HUMAN_ATTACK_RANGED_RANGE);
   if (attackTarget) {
     actions.push({ type: PlayerActionType.Attack, action: 'attacking', key: 'q', targetEntity: attackTarget });
   }

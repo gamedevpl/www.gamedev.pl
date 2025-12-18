@@ -21,6 +21,7 @@ import { createBuilding } from '../../../utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { Vector2D } from '../../../utils/math-types';
 import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../human-consts';
+import { Blackboard } from '../behavior-tree-blackboard';
 
 /**
  * Constants for border expansion behavior
@@ -103,7 +104,7 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
   // Action: Pioneer Logic
   // This complex action handles finding the edge, navigating along it, and painting.
   const pioneerAction = new ActionNode<HumanEntity>(
-    (entity, context) => {
+    (entity, context, blackboard) => {
       if (!entity.leaderId) return [NodeStatus.FAILURE, 'No leader'];
 
       const gameState = context.gameState;
@@ -135,8 +136,8 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       const tribeCenter = getAveragePosition(tribeBuildings.map((b) => b.position));
 
       // Initialize orbit direction (1 = CW, -1 = CCW)
-      if (entity.pioneerOrbitDirection === undefined) {
-        entity.pioneerOrbitDirection = 1;
+      if (Blackboard.get<number>(blackboard, 'pioneerOrbitDirection') === undefined) {
+        Blackboard.set<number>(blackboard, 'pioneerOrbitDirection', 1);
       }
 
       const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
@@ -174,7 +175,11 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
 
       if (candidates.length === 0) {
         // Stuck? Flip orbit direction and try again next tick
-        entity.pioneerOrbitDirection *= -1;
+        Blackboard.set(
+          blackboard,
+          'pioneerOrbitDirection',
+          -Blackboard.get<number>(blackboard, 'pioneerOrbitDirection')!,
+        );
         return [NodeStatus.RUNNING, 'Blocked, reversing orbit direction'];
       }
 
@@ -182,7 +187,10 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       const dirFromCenter = vectorNormalize(
         getDirectionVectorOnTorus(tribeCenter, entity.position, worldWidth, worldHeight),
       );
-      const orbitTangent = vectorRotate(dirFromCenter, entity.pioneerOrbitDirection * (Math.PI / 2));
+      const orbitTangent = vectorRotate(
+        dirFromCenter,
+        Blackboard.get<number>(blackboard, 'pioneerOrbitDirection')! * (Math.PI / 2),
+      );
 
       let bestCandidate = candidates[0];
       let maxScore = -Infinity;

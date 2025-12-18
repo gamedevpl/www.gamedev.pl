@@ -1,7 +1,7 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
-import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGE } from '../human-consts.ts';
+import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGED_RANGE } from '../human-consts.ts';
 import { BERRY_BUSH_SPREAD_RADIUS } from '../entities/plants/berry-bush/berry-bush-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
@@ -173,11 +173,11 @@ export const handlePlayerActionKeyDown = (
       return;
     }
     const target =
-      findClosestEntity<HumanEntity>(playerEntity, gameState, 'human', HUMAN_ATTACK_RANGE, (h) =>
+      findClosestEntity<HumanEntity>(playerEntity, gameState, 'human', HUMAN_ATTACK_RANGED_RANGE, (h) =>
         isHostile(playerEntity, h as HumanEntity, gameState),
       ) ??
-      findClosestEntity<HumanEntity>(playerEntity, gameState, 'predator', HUMAN_ATTACK_RANGE) ??
-      findClosestEntity<PreyEntity>(playerEntity, gameState, 'prey', HUMAN_ATTACK_RANGE);
+      findClosestEntity<HumanEntity>(playerEntity, gameState, 'predator', HUMAN_ATTACK_RANGED_RANGE) ??
+      findClosestEntity<PreyEntity>(playerEntity, gameState, 'prey', HUMAN_ATTACK_RANGED_RANGE);
 
     if (target) {
       playerEntity.activeAction = 'attacking';

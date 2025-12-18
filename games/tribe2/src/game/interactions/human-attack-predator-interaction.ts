@@ -1,14 +1,25 @@
 import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
-import { HUMAN_ATTACK_RANGE, HUMAN_ATTACK_DAMAGE, HUMAN_ATTACK_COOLDOWN_HOURS } from '../human-consts.ts';
+import {
+  HUMAN_ATTACK_MELEE_RANGE,
+  HUMAN_ATTACK_MELEE_DAMAGE,
+  HUMAN_ATTACK_MELEE_COOLDOWN_HOURS,
+  HUMAN_ATTACK_RANGED_COOLDOWN_HOURS,
+  HUMAN_ATTACK_RANGED_RANGE,
+  HUMAN_ATTACK_RANGED_DAMAGE,
+  HUMAN_ATTACK_RANGED_BUILDUP_HOURS,
+  HUMAN_ATTACK_MELEE_BUILDUP_HOURS,
+  HUMAN_ATTACK_RANGED_PUSHBACK_FORCE,
+  HUMAN_ATTACK_STONE_SPEED,
+} from '../human-consts.ts';
 import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts.ts';
 import { addVisualEffect } from '../utils/visual-effects-utils';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { getDirectionVectorOnTorus, vectorScale } from '../utils/math-utils';
-import { HUMAN_ATTACKING } from '../entities/characters/human/states/human-state-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorScale } from '../utils/math-utils';
+import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 
 /**
  * Interaction for humans attacking predators in self-defense.
@@ -18,24 +29,55 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
   id: 'human-attack-predator',
   sourceType: 'human',
   targetType: 'predator',
-  maxDistance: HUMAN_ATTACK_RANGE,
+  maxDistance: HUMAN_ATTACK_RANGED_RANGE,
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  checker: (human, predator, _context) => {
-    return !!(
-      (
-        human.stateMachine?.[0] === HUMAN_ATTACKING &&
-        human.attackTargetId === predator.id &&
-        (!human.attackCooldown || human.attackCooldown <= 0) &&
-        predator.hitpoints > 0 && // Target must be alive
-        human.isAdult
-      ) // Only adults can fight predators
+  checker: (human, predator, context) => {
+    if (
+      human.stateMachine?.[0] !== HUMAN_ATTACKING ||
+      human.attackTargetId !== predator.id ||
+      predator.hitpoints <= 0 ||
+      !human.isAdult
+    ) {
+      return false;
+    }
+
+    const distance = calculateWrappedDistance(
+      human.position,
+      predator.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
     );
+
+    const isMelee = distance <= HUMAN_ATTACK_MELEE_RANGE;
+    const isRanged = !isMelee && distance <= HUMAN_ATTACK_RANGED_RANGE;
+
+    if (!isMelee && !isRanged) {
+      return false;
+    }
+
+    const cooldown = isMelee ? human.attackCooldown?.melee || 0 : human.attackCooldown?.ranged || 0;
+    if (cooldown > 0) {
+      return false;
+    }
+
+    const buildup = isMelee ? HUMAN_ATTACK_MELEE_BUILDUP_HOURS : HUMAN_ATTACK_RANGED_BUILDUP_HOURS;
+    const attackData = human.stateMachine[1] as HumanAttackingStateData;
+    const timeSinceAttackStart = context.gameState.time - attackData.attackStartTime;
+
+    return timeSinceAttackStart >= buildup;
   },
 
   perform: (human, predator, context) => {
+    const distance = calculateWrappedDistance(
+      human.position,
+      predator.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+    const isRanged = distance > HUMAN_ATTACK_MELEE_RANGE;
+
     // Calculate damage (humans are less effective against predators than prey)
-    let damage = HUMAN_ATTACK_DAMAGE * 0.8; // 20% less effective against predators
+    let damage = (isRanged ? HUMAN_ATTACK_RANGED_DAMAGE : HUMAN_ATTACK_MELEE_DAMAGE) * 0.8; // 20% less effective against predators
 
     // Male damage modifier (men are better fighters)
     if (human.gender === 'male') {
@@ -47,10 +89,10 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
       .filter((e) => e.type === 'human' && e.id !== human.id)
       .filter((h) => {
         const otherHuman = h as HumanEntity;
-        const distance = Math.sqrt(
+        const dist = Math.sqrt(
           Math.pow(otherHuman.position.x - human.position.x, 2) + Math.pow(otherHuman.position.y - human.position.y, 2),
         );
-        return distance < 100 && otherHuman.activeAction === 'attacking' && otherHuman.attackTargetId === predator.id;
+        return dist < 100 && otherHuman.activeAction === 'attacking' && otherHuman.attackTargetId === predator.id;
       }).length;
 
     if (nearbyFightingHumans > 0) {
@@ -67,11 +109,12 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
       context.gameState.mapDimensions.width,
       context.gameState.mapDimensions.height,
     );
-    const pushForce = vectorScale(pushDirection, 8); // Stronger pushback than prey
+    const pushForceAmount = isRanged ? HUMAN_ATTACK_RANGED_PUSHBACK_FORCE : 8; // 8 is the original melee pushback
+    const pushForce = vectorScale(pushDirection, pushForceAmount);
     predator.forces.push(pushForce);
 
     // Set attack cooldown
-    human.attackCooldown = HUMAN_ATTACK_COOLDOWN_HOURS;
+    human.attackCooldown = { melee: HUMAN_ATTACK_MELEE_COOLDOWN_HOURS, ranged: HUMAN_ATTACK_RANGED_COOLDOWN_HOURS };
 
     // If predator is killed, no special rewards (unlike hunting prey)
     if (predator.hitpoints <= 0) {
@@ -104,7 +147,29 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
       playSoundAt(context, SoundType.Attack, human.position);
     }
 
-    // Add attack effect on human
-    addVisualEffect(context.gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
+    if (isRanged) {
+      const projectileDuration = distance / HUMAN_ATTACK_STONE_SPEED;
+      addVisualEffect(
+        context.gameState,
+        VisualEffectType.StoneProjectile,
+        human.position,
+        projectileDuration,
+        undefined,
+        predator.position,
+      );
+    } else {
+      // Add attack effect on human
+      addVisualEffect(
+        context.gameState,
+        VisualEffectType.Attack,
+        human.position,
+        EFFECT_DURATION_SHORT_HOURS,
+        human.id,
+      );
+    }
+
+    // Reset the attacker's action to idle after the attack
+    const attackData = human.stateMachine![1] as HumanAttackingStateData;
+    attackData.attackStartTime = context.gameState.time;
   },
 };

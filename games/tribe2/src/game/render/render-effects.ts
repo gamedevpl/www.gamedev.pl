@@ -1,4 +1,5 @@
 import { VisualEffect, VisualEffectType } from '../visual-effects/visual-effect-types';
+import { getDirectionVectorOnTorus } from '../utils/math-utils';
 
 const EFFECT_BASE_RADIUS = 15;
 
@@ -66,7 +67,43 @@ function drawEmoji(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentT
   ctx.restore();
 }
 
-export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number): void {
+function drawStoneProjectile(
+  ctx: CanvasRenderingContext2D,
+  effect: VisualEffect,
+  currentTime: number,
+  worldWidth: number,
+  worldHeight: number,
+) {
+  if (!effect.targetPosition) return;
+
+  const elapsedTime = currentTime - effect.startTime;
+  const progress = Math.min(elapsedTime / effect.duration, 1);
+
+  // Calculate the shortest path vector on the torus
+  const movementVector = getDirectionVectorOnTorus(effect.position, effect.targetPosition, worldWidth, worldHeight);
+
+  // Calculate current position by lerping along the shortest path
+  const currentX = effect.position.x + movementVector.x * progress;
+  const currentY = effect.position.y + movementVector.y * progress;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(currentX, currentY, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#888';
+  ctx.fill();
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function renderVisualEffect(
+  ctx: CanvasRenderingContext2D,
+  effect: VisualEffect,
+  currentTime: number,
+  worldWidth: number,
+  worldHeight: number,
+): void {
   switch (effect.type) {
     case VisualEffectType.Procreation:
       drawEmoji(ctx, effect, currentTime, '❤️');
@@ -112,6 +149,9 @@ export function renderVisualEffect(ctx: CanvasRenderingContext2D, effect: Visual
       break;
     case VisualEffectType.Seize:
       drawExpandingRing(ctx, effect, currentTime, 'rgba(148, 0, 211, 0.8)', 4); // Purple
+      break;
+    case VisualEffectType.StoneProjectile:
+      drawStoneProjectile(ctx, effect, currentTime, worldWidth, worldHeight);
       break;
   }
 }

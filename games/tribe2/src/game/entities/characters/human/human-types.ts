@@ -74,7 +74,10 @@ export interface HumanEntity extends CharacterEntity {
   gatheringCooldownTime?: number;
 
   /** Cooldown time before being able to attack again. */
-  attackCooldown?: number;
+  attackCooldown?: {
+    melee: number;
+    ranged: number;
+  };
   attackTargetId?: EntityId;
 
   /** Target for 'moving' action, either a position or entity. */
@@ -101,9 +104,6 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The current role assigned within the tribe, if any. */
   tribeRole?: TribeRole;
-
-  /** The direction of the border expansion orbit (1 for CW, -1 for CCW). */
-  pioneerOrbitDirection?: number;
 }
 
 export type HumanAction =

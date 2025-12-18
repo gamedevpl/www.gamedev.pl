@@ -1,6 +1,6 @@
 import { State } from '../../../../state-machine/state-machine-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../../../utils/math-utils';
-import { HUMAN_ATTACK_RANGE } from '../../../../human-consts.ts';
+import { HUMAN_ATTACK_MELEE_RANGE, HUMAN_ATTACK_RANGED_RANGE } from '../../../../human-consts.ts';
 import { HumanEntity } from '../human-types';
 import { getEffectiveSpeed } from '../human-utils';
 import { HUMAN_ATTACKING, HumanAttackingStateData, HUMAN_IDLE } from './human-state-types';
@@ -37,12 +37,14 @@ export const humanAttackingState: State<HumanEntity, HumanAttackingStateData> = 
       context.updateContext.gameState.mapDimensions.height,
     );
     context.entity.direction = vectorNormalize(dirToTarget);
-    if (distanceToTarget > HUMAN_ATTACK_RANGE) {
-      context.entity.acceleration = getEffectiveSpeed(context.entity);
-    } else {
+    
+    if (distanceToTarget <= HUMAN_ATTACK_MELEE_RANGE) {
       context.entity.acceleration = 0;
+    } else if (distanceToTarget <= HUMAN_ATTACK_RANGED_RANGE && (context.entity.attackCooldown?.ranged ?? 0) <= 0) {
+      context.entity.acceleration = 0;
+    } else {
+      context.entity.acceleration = getEffectiveSpeed(context.entity);
     }
-    // If the target is out of range, return to idle state
     return { nextState: HUMAN_ATTACKING, data };
   },
 };
