@@ -322,6 +322,7 @@ const BuildingSettingsSection: React.FC<BuildingSettingsSectionProps> = ({ build
         <option value="borderPost">Border Post</option>
       </S.Select>
     </S.InputGroup>
+    <S.HelpText>Buildings claim territory (80px radius) for their tribe. Use Border Posts to expand territory.</S.HelpText>
   </S.SidebarSection>
 );
 

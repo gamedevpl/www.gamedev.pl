@@ -351,7 +351,7 @@ export function exportScenarioSchema(): string {
       },
       buildings: {
         type: 'array',
-        description: 'Buildings constructed by tribes. Optional - tribes can build these during gameplay.',
+        description: 'Buildings constructed by tribes. IMPORTANT: Buildings define tribe territory! Each constructed building claims a circular territory (80px radius) around it for its tribe. Place multiple buildings to expand territory. Tribes operate primarily within their claimed territory.',
         items: {
           type: 'object',
           required: ['id', 'type', 'position', 'tribeId', 'isConstructed'],
@@ -364,19 +364,19 @@ export function exportScenarioSchema(): string {
               type: 'string',
               enum: ['storageSpot', 'plantingZone', 'borderPost'],
               description:
-                'storageSpot: stores gathered resources. plantingZone: grows crops. borderPost: marks territory.',
+                'storageSpot: stores gathered resources, claims territory. plantingZone: grows crops, claims territory. borderPost: specifically for marking territory borders (80px radius each). Use multiple borderPosts to create a contiguous territory.',
             },
             position: {
               $ref: '#/definitions/position',
-              description: 'Position of the building. Should be near the owning tribe.',
+              description: 'Position of the building. Each building claims an 80px radius territory around it. Place buildings close together (within 160px) to create connected territory.',
             },
             tribeId: {
               type: 'string',
-              description: 'ID of the tribe that owns this building.',
+              description: 'ID of the tribe that owns this building and its territory.',
             },
             isConstructed: {
               type: 'boolean',
-              description: 'If true, building is complete. If false, it needs to be built by tribe members.',
+              description: 'If true, building is complete and claims territory. If false, it needs to be built and does not claim territory yet.',
               default: true,
             },
           },
@@ -452,7 +452,11 @@ export function exportScenarioSchema(): string {
           { id: 'predator-1', gender: 'male', position: { x: 500, y: 500 } },
           { id: 'predator-2', gender: 'female', position: { x: 3500, y: 3500 } },
         ],
-        buildings: [],
+        buildings: [
+          { id: 'building-1', type: 'storageSpot', position: { x: 2000, y: 2000 }, tribeId: 'tribe-1', isConstructed: true },
+          { id: 'building-2', type: 'borderPost', position: { x: 1920, y: 2000 }, tribeId: 'tribe-1', isConstructed: true },
+          { id: 'building-3', type: 'borderPost', position: { x: 2080, y: 2000 }, tribeId: 'tribe-1', isConstructed: true },
+        ],
         ecosystemSettings: {},
       },
     ],

@@ -10,7 +10,8 @@ import { updateWorld } from '../world-update';
 import { indexWorldState } from '../world-index/world-state-index';
 import { createTutorial, createTutorialState } from '../tutorial';
 import { createSoilDepletionState } from '../entities/plants/soil-depletion-types';
-import { TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION, TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
+import { paintTerrainOwnership } from '../entities/tribe/territory-utils';
 import { INITIAL_MASTER_VOLUME } from '../sound-consts';
 import { generateRandomPreyGeneCode } from '../entities/characters/prey/prey-utils';
 import { generateRandomPredatorGeneCode } from '../entities/characters/predator/predator-utils';
@@ -97,6 +98,7 @@ export function scenarioConfigToGameState(config: ScenarioConfig): GameWorldStat
   }
 
   // Create buildings
+  const buildingsToClaimTerritory: { position: { x: number; y: number }; ownerId: EntityId }[] = [];
   for (const building of config.buildings) {
     const leaderId = tribeLeaderMap[building.tribeId];
     if (leaderId) {
@@ -104,6 +106,8 @@ export function scenarioConfigToGameState(config: ScenarioConfig): GameWorldStat
       if (building.isConstructed) {
         b.isConstructed = true;
         b.constructionProgress = 1;
+        // Store building info to paint territory after game state is created
+        buildingsToClaimTerritory.push({ position: building.position, ownerId: leaderId });
       }
     }
   }
@@ -185,6 +189,12 @@ export function scenarioConfigToGameState(config: ScenarioConfig): GameWorldStat
       Math.ceil(config.mapWidth / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(config.mapHeight / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
   };
+
+  // Paint territory for all constructed buildings
+  // This must be done after terrainOwnership array is created
+  for (const buildingInfo of buildingsToClaimTerritory) {
+    paintTerrainOwnership(buildingInfo.position, TERRITORY_BUILDING_RADIUS, buildingInfo.ownerId, gameState);
+  }
 
   return indexWorldState(gameState);
 }

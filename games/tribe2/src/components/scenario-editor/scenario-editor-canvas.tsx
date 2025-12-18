@@ -6,6 +6,7 @@ import React, { useEffect } from 'react';
 import { ScenarioConfig, EditorTool } from '../../game/scenario-editor/scenario-types';
 import { Vector2D } from '../../game/utils/math-types';
 import { CHILD_TO_ADULT_AGE } from '../../game/human-consts';
+import { TERRITORY_BUILDING_RADIUS, TERRITORY_COLORS } from '../../game/entities/tribe/territory-consts';
 import * as S from './scenario-editor-styles';
 
 interface ScenarioEditorCanvasProps {
@@ -110,6 +111,28 @@ export const ScenarioEditorCanvas: React.FC<ScenarioEditorCanvasProps> = ({
         ctx.beginPath();
         ctx.arc(pred.position.x, pred.position.y, 12, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Draw territory zones around buildings (behind buildings)
+      // Assign colors to tribes based on order
+      const tribeColorMap = new Map<string, string>();
+      config.tribes.forEach((tribe, index) => {
+        tribeColorMap.set(tribe.id, TERRITORY_COLORS[index % TERRITORY_COLORS.length]);
+      });
+
+      for (const building of config.buildings) {
+        if (building.isConstructed) {
+          const color = tribeColorMap.get(building.tribeId) || '#4CAF50';
+          ctx.fillStyle = color + '33'; // Add transparency (33 = 20% opacity)
+          ctx.beginPath();
+          ctx.arc(building.position.x, building.position.y, TERRITORY_BUILDING_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw territory border
+          ctx.strokeStyle = color + '66'; // Add transparency (66 = 40% opacity)
+          ctx.lineWidth = 2 / zoom;
+          ctx.stroke();
+        }
       }
 
       // Draw buildings
