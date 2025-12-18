@@ -46,7 +46,7 @@ interface ScenarioEditorSidebarProps {
   onExportSchema: () => void;
   onImportJson: () => void;
   // Chrome AI callbacks
-  aiAvailability: 'readily' | 'after-download' | 'no' | 'unsupported';
+  aiAvailability: 'available' | 'downloadable' | 'downloading' | 'unavailable';
   aiStatusMessage: string;
   isGeneratingWithAI: boolean;
   aiPromptInput: string;
@@ -445,7 +445,7 @@ const ExportSection: React.FC<ExportSectionProps> = ({ onExportJson, onExportTs,
 );
 
 interface ChromeAISectionProps {
-  aiAvailability: 'readily' | 'after-download' | 'no' | 'unsupported';
+  aiAvailability: 'available' | 'downloadable' | 'downloading' | 'unavailable';
   aiStatusMessage: string;
   isGenerating: boolean;
   promptInput: string;
@@ -464,7 +464,7 @@ const ChromeAISection: React.FC<ChromeAISectionProps> = ({
   <S.SidebarSection>
     <S.SectionTitle>🤖 Chrome AI (Built-in)</S.SectionTitle>
     <S.HelpText>{aiStatusMessage}</S.HelpText>
-    {aiAvailability === 'readily' && (
+    {aiAvailability === 'available' && (
       <>
         <S.TextArea
           placeholder="Describe your scenario... e.g., 'A lone survivor starts in a desert with scarce resources, 2 small hostile tribes nearby'"
@@ -478,7 +478,7 @@ const ChromeAISection: React.FC<ChromeAISectionProps> = ({
         </S.ActionButton>
       </>
     )}
-    {aiAvailability === 'unsupported' && (
+    {aiAvailability === 'unavailable' && (
       <S.HelpText style={{ fontSize: '11px' }}>
         Enable in chrome://flags/#prompt-api-for-gemini-nano
       </S.HelpText>

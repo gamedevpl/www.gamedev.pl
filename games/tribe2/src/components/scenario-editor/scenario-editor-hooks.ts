@@ -12,7 +12,7 @@ import {
   generateScenarioId,
 } from '../../game/scenario-editor/scenario-types';
 import { exportScenarioAsJson, exportScenarioAsTypeScript, exportScenarioSchema, importScenarioFromJson, copyToClipboard } from '../../game/scenario-editor/scenario-export';
-import { checkAIAvailability, generateScenarioWithChromeAI, getAIStatusMessage, AIAvailability } from '../../game/scenario-editor/chrome-ai';
+import { checkAIAvailability, generateScenarioWithChromeAI, AIAvailability } from '../../game/scenario-editor/chrome-ai';
 import { Vector2D } from '../../game/utils/math-types';
 import { BuildingType } from '../../game/entities/buildings/building-types';
 
@@ -361,7 +361,7 @@ export function useChromeAI(
   updateConfig: (updates: Partial<ScenarioConfig>) => void,
   showToast: (message: string) => void,
 ) {
-  const [aiAvailability, setAiAvailability] = useState<AIAvailability>('unsupported');
+  const [aiAvailability, setAiAvailability] = useState<AIAvailability>('unavailable');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState('');
   const [promptInput, setPromptInput] = useState('');
@@ -402,7 +402,17 @@ export function useChromeAI(
     }
   }, [promptInput, updateConfig, showToast]);
 
-  const aiStatusMessage = getAIStatusMessage(aiAvailability);
+  const getStatusMessage = (status: AIAvailability): string => {
+    switch (status) {
+      case 'downloadable': return 'AI model needs to be downloaded first.';
+      case 'downloading': return 'AI model is currently downloading...';
+      case 'unavailable': return 'Chrome Prompt API is not available or unsupported.';
+      case 'available': return 'Chrome AI is ready.';
+      default: return 'AI is ready.';
+    }
+  };
+
+  const aiStatusMessage = getStatusMessage(aiAvailability);
 
   return {
     aiAvailability,
