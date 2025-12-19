@@ -27,7 +27,7 @@ import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 import { TribeRole } from '../../tribe/tribe-types';
-import { checkAndExecuteTribeMerges } from '../../tribe/family-tribe-utils';
+import { checkAndExecuteTribeMerges, findDescendants } from '../../tribe/family-tribe-utils';
 import { BuildingEntity } from '../../buildings/building-types.ts';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
@@ -186,6 +186,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
           },
         };
         replaceOwnerInTerrainOwnership(gameState, entity.id, heir.id);
+        for (const member of findDescendants(heir, gameState)) {
+          member.leaderId = heir.id;
+          member.tribeInfo = heir.tribeInfo;
+        }
 
         // Update followers
         Object.values(gameState.entities.entities).forEach((e) => {
