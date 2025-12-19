@@ -18,3 +18,7 @@ export const TREE_FOLIAGE_COLOR_MAIN = '#76a331';
 export const TREE_FOLIAGE_COLOR_LIGHT = '#a6c44a';
 
 export const TREE_SHADOW_COLOR = 'rgba(0, 0, 0, 0.25)';
+
+export const TREE_SPREAD_RADIUS = 60;
+export const TREE_SPREAD_COOLDOWN_HOURS = 24 * 7; // 1 week
+export const TREE_SPREAD_CHANCE = 0.1; // 10% chance to spread when cooldown is up

@@ -51,7 +51,7 @@ import { BuildingEntity, BuildingType } from './buildings/building-types';
 import { getBuildingDimensions } from './buildings/building-consts.ts';
 import { STORAGE_SPOT_CAPACITY } from './buildings/storage-spot-consts.ts';
 import { TreeEntity } from './plants/tree/tree-types';
-import { TREE_LIFESPAN_GAME_HOURS, TREE_RADIUS } from './plants/tree/tree-consts';
+import { TREE_LIFESPAN_GAME_HOURS, TREE_RADIUS, TREE_SPREAD_RADIUS } from './plants/tree/tree-consts';
 import { TREE_GROWING } from './plants/tree/states/tree-state-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
@@ -123,6 +123,8 @@ export function createTree(
     lifespan: TREE_LIFESPAN_GAME_HOURS,
     swayOffset: Math.random() * Math.PI * 2,
     variant: Math.floor(Math.random() * 3),
+    timeSinceLastSpreadAttempt: 0,
+    spreadRadius: TREE_SPREAD_RADIUS,
     stateMachine: [TREE_GROWING, { enteredAt: currentTime, previousState: undefined }],
   });
   return tree;

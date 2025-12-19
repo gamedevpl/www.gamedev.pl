@@ -13,4 +13,9 @@ export interface TreeEntity extends PlantEntity {
    * Visual variant index (e.g., 0-3) to provide variety in tree appearance.
    */
   variant: number;
+
+  /** Game hours passed since the last spread attempt. */
+  timeSinceLastSpreadAttempt: number;
+  /** The maximum radius (in pixels) from the parent tree where a new tree can spawn. */
+  spreadRadius: number;
 }
