@@ -6,6 +6,7 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { GameWorldState } from '../world-types';
 import { Vector2D } from '../utils/math-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 
 /**
  * Defines a rectangle for spatial queries.
@@ -83,6 +84,7 @@ export interface IndexedWorldState extends GameWorldState {
     prey: IndexType<PreyEntity>;
     predator: IndexType<PredatorEntity>;
     building: IndexType<BuildingEntity>;
+    tree: IndexType<TreeEntity>;
     terrainOwnership: IndexType<{ ownerId: number | null }>;
   };
 }

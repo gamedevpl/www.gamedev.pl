@@ -2,7 +2,12 @@ import { InteractionDefinition } from './interactions-types';
 import { humanProcreationInteraction } from './human-procreation-interaction'; // Added import
 import { humanChildFeedingInteraction } from './human-child-feeding-interaction'; // New import
 import { humanAttackInteraction } from './human-attack-interaction';
-import { humanCollisionInteraction } from './collision-interaction';
+import {
+  humanCollisionInteraction,
+  humanTreeCollisionInteraction,
+  preyTreeCollisionInteraction,
+  predatorTreeCollisionInteraction,
+} from './collision-interaction';
 import { humanGatherFoodInteractions } from './human-gather-food-interaction';
 import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
 import { predatorHuntPreyInteraction } from './predator-hunt-prey-interaction';
@@ -24,6 +29,9 @@ import { supplyTransferInteraction } from './supply-transfer-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
+  humanTreeCollisionInteraction,
+  preyTreeCollisionInteraction,
+  predatorTreeCollisionInteraction,
   ...humanGatherFoodInteractions,
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction

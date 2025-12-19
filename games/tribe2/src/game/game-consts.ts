@@ -1,5 +1,4 @@
 // Core Game Constants
-
 export const HOURS_PER_GAME_DAY: number = 24;
 export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Constants
 
@@ -16,5 +15,7 @@ export const INTRO_SCREEN_VIEWPORT_SWITCH_INTERVAL_MS: number = 5000;
 export const ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION = 100;
 export const ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION = 20;
 export const ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT = 60;
+
+export const INITIAL_TREE_COUNT = 200;
 
 export const PERFORMANCE_METRICS_BUFFER_SIZE = 1000;

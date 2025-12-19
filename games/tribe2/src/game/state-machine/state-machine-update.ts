@@ -10,6 +10,7 @@ import { allBerryBushStates } from '../entities/plants/berry-bush/states'; // Ad
 import { allHumanStates } from '../entities/characters/human/states'; // Added import for human states
 import { allPreyStates } from '../entities/characters/prey/states'; // Added import for prey states
 import { allPredatorStates } from '../entities/characters/predator/states'; // Added import for predator states
+import { allTreeStates } from '../entities/plants/tree/states'; // Added import for tree states
 
 // Combine all states
 const STATES = [
@@ -17,6 +18,7 @@ const STATES = [
   ...allHumanStates, // Added human states
   ...allPreyStates, // Added prey states
   ...allPredatorStates, // Added predator states
+  ...allTreeStates, // Added tree states
   // TODO: add other states
 ] as unknown as State<Entity, StateData>[];
 

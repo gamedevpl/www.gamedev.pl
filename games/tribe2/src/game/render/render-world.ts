@@ -29,6 +29,8 @@ import { renderBuilding } from './render-building.ts';
 import { BuildingEntity } from '../entities/buildings/building-types.ts';
 import { renderPlantingZonesMetaball } from './render-planting-zones.ts';
 import { BuildingType } from '../entities/buildings/building-consts.ts';
+import { renderTree } from './render-tree';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -78,6 +80,8 @@ export function renderWorld(
         player,
         gameState.time,
       );
+    } else if (entity.type === 'tree') {
+      renderWithWrapping(ctx, worldWidth, worldHeight, renderTree, entity as TreeEntity, gameState.time);
     } else if (entity.type === 'human') {
       const human = entity as HumanEntity;
       const isPlayer = human.id === player?.id;

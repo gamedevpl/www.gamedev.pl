@@ -1,6 +1,6 @@
-import { createEntities, createBerryBush, createHuman, createPrey, createPredator } from './entities/entities-update';
+import { createEntities, createBerryBush, createHuman, createPrey, createPredator, createTree } from './entities/entities-update';
 import { DebugPanelType, GameWorldState } from './world-types';
-import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS } from './game-consts.ts';
+import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS, INITIAL_TREE_COUNT } from './game-consts.ts';
 import {
   INITIAL_BERRY_BUSH_COUNT,
   MIN_BERRY_BUSH_SPREAD_CHANCE,
@@ -24,6 +24,7 @@ import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-util
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
+import { TREE_GROWTH_TIME_GAME_HOURS } from './entities/plants/tree/tree-consts';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -38,9 +39,29 @@ export function initWorld(): GameWorldState {
     createBerryBush(entities, randomPosition, initialTime);
   }
 
+  // Spawn initial trees (randomly distributed)
+  for (let i = 0; i < INITIAL_TREE_COUNT; i++) {
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    createTree(entities, randomPosition, initialTime);
+  }
+
   // Define the center of the map for character spawning
   const centerX = MAP_WIDTH / 2;
   const centerY = MAP_HEIGHT / 2;
+
+  // Spawn some mature trees near the player spawn for immediate visibility
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const radius = 100 + Math.random() * 100; // 100-200 pixels from center
+    const spawnPosition = {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    };
+    createTree(entities, spawnPosition, initialTime, TREE_GROWTH_TIME_GAME_HOURS);
+  }
 
   // Spawn player character (male) at center - player is their own tribe leader
   const player = createHuman(entities, { x: centerX - 25, y: centerY }, initialTime, 'male', true);
@@ -263,6 +284,28 @@ export function initIntroWorld(): GameWorldState {
       y: Math.random() * MAP_HEIGHT,
     };
     createBerryBush(entities, randomPosition, initialTime);
+  }
+
+  // Spawn initial trees (randomly distributed)
+  for (let i = 0; i < INITIAL_TREE_COUNT; i++) {
+    const randomPosition = {
+      x: Math.random() * MAP_WIDTH,
+      y: Math.random() * MAP_HEIGHT,
+    };
+    createTree(entities, randomPosition, initialTime);
+  }
+
+  // Spawn some mature trees near the map center for intro screen interest
+  const centerX = MAP_WIDTH / 2;
+  const centerY = MAP_HEIGHT / 2;
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const radius = 100 + Math.random() * 100;
+    const spawnPosition = {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    };
+    createTree(entities, spawnPosition, initialTime, TREE_GROWTH_TIME_GAME_HOURS);
   }
 
   // Spawn initial AI humans

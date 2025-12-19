@@ -9,6 +9,7 @@ import { IndexedWorldState } from './world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
 import { convertTerritoryIndexToPosition } from '../utils';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -25,6 +26,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   const prey = allEntities.filter((e) => e.type === 'prey') as PreyEntity[];
   const predators = allEntities.filter((e) => e.type === 'predator') as PredatorEntity[];
   const buildings = allEntities.filter((e) => e.type === 'building') as BuildingEntity[];
+  const trees = allEntities.filter((e) => e.type === 'tree') as TreeEntity[];
 
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
@@ -35,6 +37,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       prey: indexItems(prey),
       predator: indexItems(predators),
       building: indexItems(buildings),
+      tree: indexItems(trees),
       terrainOwnership: indexItems(
         worldState.terrainOwnership
           .map((ownerId, index) => {

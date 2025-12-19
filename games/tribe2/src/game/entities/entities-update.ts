@@ -50,6 +50,9 @@ import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { BuildingEntity, BuildingType } from './buildings/building-types';
 import { getBuildingDimensions } from './buildings/building-consts.ts';
 import { STORAGE_SPOT_CAPACITY } from './buildings/storage-spot-consts.ts';
+import { TreeEntity } from './plants/tree/tree-types';
+import { TREE_LIFESPAN_GAME_HOURS, TREE_RADIUS } from './plants/tree/tree-consts';
+import { TREE_GROWING } from './plants/tree/states/tree-state-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -105,6 +108,24 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
     stateMachine: [BUSH_GROWING, { enteredAt: currentTime, previousState: undefined }],
   });
   return bush;
+}
+
+export function createTree(
+  state: Entities,
+  initialPosition: Vector2D,
+  currentTime: number,
+  initialAge: number = 0,
+): TreeEntity {
+  const tree = createEntity<TreeEntity>(state, 'tree', {
+    position: initialPosition,
+    radius: TREE_RADIUS,
+    age: initialAge,
+    lifespan: TREE_LIFESPAN_GAME_HOURS,
+    swayOffset: Math.random() * Math.PI * 2,
+    variant: Math.floor(Math.random() * 3),
+    stateMachine: [TREE_GROWING, { enteredAt: currentTime, previousState: undefined }],
+  });
+  return tree;
 }
 
 export function createHuman(

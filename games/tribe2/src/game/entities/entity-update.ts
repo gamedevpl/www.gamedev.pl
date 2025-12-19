@@ -15,6 +15,8 @@ import { preyAIUpdate, predatorAIUpdate } from '../ai/animal-ai-update';
 import { buildingUpdate } from './buildings/building-update';
 import { BuildingEntity } from './buildings/building-types';
 import { applySoilWalkDepletion } from './plants/soil-depletion-update';
+import { treeUpdate } from './plants/tree/tree-update';
+import { TreeEntity } from './plants/tree/tree-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -95,6 +97,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'building') {
     buildingUpdate(entity as BuildingEntity, updateContext);
+  } else if (entity.type === 'tree') {
+    treeUpdate(entity as TreeEntity, updateContext);
   }
 
   // AI decision making for all humans (player and non-player)
