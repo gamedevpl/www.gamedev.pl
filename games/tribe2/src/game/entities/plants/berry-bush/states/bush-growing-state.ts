@@ -38,7 +38,7 @@ export const bushGrowingState: State<BerryBushEntity, BushGrowingStateData> = {
 
       if (entity.timeSinceLastBerryRegen >= BERRY_BUSH_REGENERATION_HOURS) {
         if (entity.food.length < entity.maxFood) {
-          entity.food.push({ type: FoodType.Berry });
+          entity.food.push({ itemType: 'food', type: FoodType.Berry });
           entity.timeSinceLastBerryRegen = 0;
         }
       }

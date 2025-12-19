@@ -45,6 +45,7 @@ import {
   createDemandBehavior,
   createSupplyBehavior,
   createTribeRoleManagementBehavior,
+  createChoppingBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -162,6 +163,14 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         new AutopilotControlled(createGatheringBehavior(4), 'gathering', 'Gated Gathering', 3),
         BT_ACTION_TIMEOUT_HOURS,
         'Timeout Gathering',
+        2,
+      ),
+
+      // --- RESOURCE MANAGEMENT (CHOP) ---
+      new TimeoutNode(
+        new AutopilotControlled(createChoppingBehavior(4), 'chopping', 'Gated Chopping', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Chopping',
         2,
       ),
 

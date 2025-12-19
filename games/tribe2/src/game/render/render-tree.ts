@@ -8,18 +8,21 @@ import {
   TREE_FOLIAGE_COLOR_LIGHT,
   TREE_SHADOW_COLOR,
 } from '../entities/plants/tree/tree-consts';
+import { TREE_FALLEN, TREE_STUMP } from '../entities/plants/tree/states/tree-state-types';
 
 const SWAY_SPEED = 0.001;
 const SWAY_AMPLITUDE = 0.05; // Radians
 
 export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time: number): void {
   const { position, age, swayOffset } = tree;
+  const [state] = tree.stateMachine ?? [];
 
   // 1. Calculate growth scale
   const growthScale = Math.min(1, Math.max(0.4, age / TREE_GROWTH_TIME_GAME_HOURS));
 
   // 2. Calculate sway
-  const swayAngle = Math.sin(time * SWAY_SPEED + swayOffset) * SWAY_AMPLITUDE;
+  const isStanding = state !== TREE_FALLEN && state !== TREE_STUMP;
+  const swayAngle = isStanding ? Math.sin(time * SWAY_SPEED + swayOffset) * SWAY_AMPLITUDE : 0;
 
   ctx.save();
   ctx.translate(position.x, position.y);
@@ -35,13 +38,29 @@ export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time
   ctx.fill();
   ctx.restore();
 
-  // Apply sway rotation for the tree parts
-  ctx.rotate(swayAngle);
+  // 4. Draw Trunk and Canopy based on state
+  if (state === TREE_STUMP) {
+    drawTrunk(ctx, 10, 8); // Just the base
+  } else if (state === TREE_FALLEN) {
+    ctx.rotate(Math.PI / 2); // Lie down
+    drawTrunk(ctx, 10, 30);
+    ctx.translate(0, -25);
+    drawCanopy(ctx, 40, 20, 40, 15);
+  } else {
+    // Standing tree
+    ctx.rotate(swayAngle);
+    drawTrunk(ctx, 10, 30);
 
-  // 4. Draw Trunk
-  const trunkWidth = 10;
-  const trunkHeight = 30;
+    // Canopy
+    ctx.translate(0, -25);
+    ctx.rotate(swayAngle * 0.5);
+    drawCanopy(ctx, 40, 20, 40, 15);
+  }
 
+  ctx.restore();
+}
+
+function drawTrunk(ctx: CanvasRenderingContext2D, trunkWidth: number, trunkHeight: number) {
   // Dark part (Left)
   ctx.fillStyle = TREE_TRUNK_COLOR_DARK;
   ctx.beginPath();
@@ -61,27 +80,23 @@ export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time
   ctx.lineTo(0, -trunkHeight);
   ctx.closePath();
   ctx.fill();
+}
 
-  // 5. Draw Canopy (Pentagonal / Trapezoid + Triangle)
-  // Shift up to top of trunk
-  ctx.translate(0, -trunkHeight + 5);
-  // Sway canopy slightly more for effect? Let's keep it rigid with trunk for now as per simple 2D asset logic often used.
-  // Or maybe a slight extra sway.
-  ctx.rotate(swayAngle * 0.5);
-
-  const canopyBaseWidth = 40;
-  const canopyTopWidth = 20;
-  const canopyHeight = 40;
-  const canopyPeakHeight = 15;
-
+function drawCanopy(
+  ctx: CanvasRenderingContext2D,
+  baseWidth: number,
+  topWidth: number,
+  height: number,
+  peakHeight: number,
+) {
   // Draw Canopy Border (Largest)
   ctx.fillStyle = TREE_FOLIAGE_COLOR_BORDER;
-  drawCanopyShape(ctx, canopyBaseWidth + 4, canopyTopWidth + 4, canopyHeight + 2, canopyPeakHeight + 2);
+  drawCanopyShape(ctx, baseWidth + 4, topWidth + 4, height + 2, peakHeight + 2);
 
   // Draw Main Foliage
   ctx.translate(0, -2); // Slight offset up
   ctx.fillStyle = TREE_FOLIAGE_COLOR_MAIN;
-  drawCanopyShape(ctx, canopyBaseWidth, canopyTopWidth, canopyHeight, canopyPeakHeight);
+  drawCanopyShape(ctx, baseWidth, topWidth, height, peakHeight);
 
   // Draw Highlights (Simple Shapes)
   ctx.fillStyle = TREE_FOLIAGE_COLOR_LIGHT;
@@ -98,8 +113,6 @@ export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time
   ctx.lineTo(15, -20);
   ctx.lineTo(5, -20);
   ctx.fill();
-
-  ctx.restore();
 }
 
 function drawCanopyShape(

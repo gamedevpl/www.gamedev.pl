@@ -1,11 +1,17 @@
 import { BERRY_COST_FOR_PLANTING } from '../entities/plants/berry-bush/berry-bush-consts.ts';
-import { HUMAN_ATTACK_RANGED_RANGE, HUMAN_FOOD_HUNGER_REDUCTION, HUMAN_INTERACTION_RANGE } from '../human-consts.ts';
+import {
+  HUMAN_ATTACK_RANGED_RANGE,
+  HUMAN_FOOD_HUNGER_REDUCTION,
+  HUMAN_INTERACTION_RANGE,
+  HUMAN_CHOPPING_RANGE,
+} from '../human-consts.ts';
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { GameWorldState } from '../world-types';
@@ -129,9 +135,9 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
           building.buildingType === 'storageSpot' &&
           building.ownerId === player.leaderId &&
           building.isConstructed &&
-          building.storedFood !== undefined &&
+          building.storedItems.length > 0 &&
           building.storageCapacity !== undefined &&
-          building.storedFood.length < building.storageCapacity
+          building.storedItems.length < building.storageCapacity
         );
       },
     );
@@ -158,8 +164,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
           building.buildingType === 'storageSpot' &&
           building.ownerId === player.leaderId &&
           building.isConstructed &&
-          building.storedFood !== undefined &&
-          building.storedFood.length > 0
+          building.storedItems.length > 0
         );
       },
     );
@@ -176,6 +181,20 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
   // Check for Tribe Split
   if (canSplitTribe(player, gameState).canSplit) {
     actions.push({ type: PlayerActionType.TribeSplit, action: 'idle', key: 'k' });
+  }
+
+  // Check for Chopping
+  if (!player.heldItem) {
+    const treeTarget = findClosestEntity<TreeEntity>(
+      player,
+      gameState,
+      'tree',
+      HUMAN_CHOPPING_RANGE,
+      (t) => t.wood && t.wood.length > 0,
+    );
+    if (treeTarget) {
+      actions.push({ type: PlayerActionType.Chop, action: 'chopping', key: 'c', targetEntity: treeTarget });
+    }
   }
 
   return actions;

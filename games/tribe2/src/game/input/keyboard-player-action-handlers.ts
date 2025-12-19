@@ -1,7 +1,7 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { findClosestEntity, findValidPlantingSpot, performTribeSplit, isHostile, canProcreate } from '../utils';
-import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGED_RANGE } from '../human-consts.ts';
+import { HUMAN_INTERACTION_RANGE, HUMAN_ATTACK_RANGED_RANGE, HUMAN_CHOPPING_RANGE } from '../human-consts.ts';
 import { BERRY_BUSH_SPREAD_RADIUS } from '../entities/plants/berry-bush/berry-bush-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
@@ -10,6 +10,7 @@ import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types'
 import { CorpseEntity } from '../entities/characters/corpse-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { STORAGE_INTERACTION_RANGE } from '../entities/buildings/storage-spot-consts.ts';
 
@@ -30,7 +31,7 @@ export const handlePlayerActionKeyDown = (
 ): void => {
   const updateContext = { gameState, deltaTime: 0 };
 
-  if (shiftKey && ['e', 'b', 'r', 'h'].includes(key)) {
+  if (shiftKey && ['e', 'b', 'r', 'h', 'c'].includes(key)) {
     gameState.hasPlayerEnabledAutopilot++;
   }
 
@@ -216,9 +217,8 @@ export const handlePlayerActionKeyDown = (
           building.buildingType === 'storageSpot' &&
           building.ownerId === playerEntity.leaderId &&
           building.isConstructed &&
-          building.storedFood !== undefined &&
           building.storageCapacity !== undefined &&
-          building.storedFood.length < building.storageCapacity
+          building.storedItems.length < building.storageCapacity
         );
       },
     );
@@ -246,8 +246,7 @@ export const handlePlayerActionKeyDown = (
           building.buildingType === 'storageSpot' &&
           building.ownerId === playerEntity.leaderId &&
           building.isConstructed &&
-          building.storedFood !== undefined &&
-          building.storedFood.length > 0
+          building.storedItems.length > 0
         );
       },
     );
@@ -270,6 +269,23 @@ export const handlePlayerActionKeyDown = (
     if (shiftKey) {
       gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
       return;
+    }
+  } else if (key === 'c') {
+    if (shiftKey) {
+      gameState.autopilotControls.behaviors.chopping = !gameState.autopilotControls.behaviors.chopping;
+      return;
+    }
+    const treeTarget = findClosestEntity<TreeEntity>(
+      playerEntity,
+      gameState,
+      'tree',
+      HUMAN_CHOPPING_RANGE,
+      (t) => t.wood && t.wood.length > 0 && !playerEntity.heldItem,
+    );
+
+    if (treeTarget) {
+      playerEntity.activeAction = 'chopping';
+      playerEntity.target = treeTarget.id;
     }
   }
 };
@@ -326,6 +342,9 @@ export const handlePlayerActionKeyUp = (
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('h') && playerEntity.activeAction === 'feeding') {
+    playerEntity.activeAction = 'idle';
+  }
+  if (!keysPressed.current.has('c') && playerEntity.activeAction === 'chopping') {
     playerEntity.activeAction = 'idle';
   }
 };

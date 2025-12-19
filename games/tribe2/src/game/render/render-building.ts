@@ -14,7 +14,8 @@ import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping } from './render-utils';
 import { Entity } from '../entities/entities-types';
-import { FOOD_TYPE_EMOJIS } from '../entities/food-types';
+import { FOOD_TYPE_EMOJIS, FoodType } from '../entities/food-types';
+import { ITEM_TYPE_EMOJIS, ItemType } from '../entities/item-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
 
@@ -123,15 +124,15 @@ function drawStoneRect(
 }
 
 /**
- * Renders the contents of a storage spot as miniature food item icons
+ * Renders the contents of a storage spot as miniature item icons
  * scattered around the building.
  */
 function renderStorageContents(ctx: CanvasRenderingContext2D, building: BuildingEntity): void {
-  if (!building.storedFood || building.storedFood.length === 0) {
+  if (!building.storedItems || building.storedItems.length === 0) {
     return;
   }
 
-  const { position, storedFood } = building;
+  const { position, storedItems } = building;
 
   ctx.save();
   ctx.font = `${STORAGE_ITEM_ICON_SIZE}px Arial`;
@@ -142,13 +143,14 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur = 2;
 
-  storedFood.forEach((foodItem) => {
-    const emoji = FOOD_TYPE_EMOJIS[foodItem.item.type];
+  storedItems.forEach((storedItem) => {
+    const type = storedItem.item.type;
+    const emoji = (FOOD_TYPE_EMOJIS[type as FoodType] || ITEM_TYPE_EMOJIS[type as ItemType]) ?? '?';
 
     // Use stored position if available, otherwise calculate fallback
     const renderPos: Vector2D = {
-      x: position.x + foodItem.positionOffset.x,
-      y: position.y + foodItem.positionOffset.y,
+      x: position.x + storedItem.positionOffset.x,
+      y: position.y + storedItem.positionOffset.y,
     };
 
     ctx.fillText(emoji, renderPos.x, renderPos.y);
@@ -239,7 +241,7 @@ export function renderBuilding(
     );
   }
 
-  // 4. Render storage contents as miniature food items
+  // 4. Render storage contents as miniature items
   // This is called after ctx.restore() to ensure clean transform state
   if (building.buildingType === 'storageSpot' && isConstructed) {
     renderStorageContents(ctx, building);

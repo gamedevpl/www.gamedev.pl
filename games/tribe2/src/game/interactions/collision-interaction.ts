@@ -62,6 +62,11 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
   targetType: 'tree',
   maxDistance: CHARACTER_RADIUS * 0.6 + TREE_RADIUS * 0.4,
   checker: (source, target, { gameState }) => {
+    const state = target.stateMachine?.[0];
+    if (state === 'fallen' || state === 'stump') {
+      return false;
+    }
+
     const trunkRadius = target.radius * 0.25;
     const effectiveSourceRadius = source.radius * 0.4;
     const distance = calculateWrappedDistance(

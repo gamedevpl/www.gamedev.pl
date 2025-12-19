@@ -26,6 +26,7 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar, renderSupplyChainHighlights } from './render-ui';
 import { DebugPanelType, GameWorldState } from '../world-types.js';
+import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -43,6 +44,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   retrieving: 'gathering',
   takingOverBuilding: 'attacking',
   destroyingBuilding: 'attacking',
+  chopping: 'gathering',
 };
 
 /**
@@ -258,6 +260,23 @@ export function renderCharacter(
 
   if (human.tribeInfo?.tribeBadge) {
     drawTribeBadge(ctx, position, human.tribeInfo.tribeBadge, human.isAdult ?? false, crownSize ?? 0);
+  }
+
+  if (human.heldItem) {
+    const itemEmoji = ITEM_TYPE_EMOJIS[human.heldItem.type];
+    const badgeOffset = human.tribeInfo?.tribeBadge ? TRIBE_BADGE_SIZE : 0;
+    ctx.save();
+    ctx.font = `${TRIBE_BADGE_SIZE}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const y =
+      position.y -
+      (human.isAdult ? CHARACTER_RADIUS : CHARACTER_CHILD_RADIUS) -
+      TRIBE_BADGE_SIZE -
+      (crownSize ?? 0) -
+      badgeOffset;
+    ctx.fillText(itemEmoji, position.x, y);
+    ctx.restore();
   }
 
   const showDebug = isDebugOn && (gameState.debugCharacterId === undefined || human.id === gameState.debugCharacterId);

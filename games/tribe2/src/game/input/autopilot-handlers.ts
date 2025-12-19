@@ -1,7 +1,9 @@
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionType } from '../ui/ui-types';
+import { TREE_GROWING, TREE_FULL, TREE_SPREADING, TREE_FALLEN } from '../entities/plants/tree/states/tree-state-types';
 import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
   BERRY_COST_FOR_PLANTING,
@@ -114,11 +116,9 @@ export const determineHoveredAutopilotAction = (
       } else if (building.buildingType === 'storageSpot') {
         // Handle storage spot interactions
         const isPlayerTribeStorage = building.ownerId === player.leaderId;
-        const hasStoredFood = building.storedFood !== undefined && building.storedFood.length > 0;
+        const hasStoredFood = building.storedItems.length > 0;
         const hasStorageSpace =
-          building.storedFood !== undefined &&
-          building.storageCapacity !== undefined &&
-          building.storedFood.length < building.storageCapacity;
+          building.storageCapacity !== undefined && building.storedItems.length < building.storageCapacity;
 
         // SHIFT key pressed: prioritize RETRIEVE/STEAL if storage has food
         if (shiftKey && building.isConstructed && hasStoredFood && player.food.length < player.maxFood) {
@@ -174,6 +174,18 @@ export const determineHoveredAutopilotAction = (
         )
       ) {
         determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
+      } else {
+        determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
+      }
+    } else if (hoveredEntity.type === 'tree') {
+      const tree = hoveredEntity as TreeEntity;
+      const [treeState] = tree.stateMachine ?? [];
+      const isStanding = treeState === TREE_GROWING || treeState === TREE_FULL || treeState === TREE_SPREADING;
+
+      if (player.isAdult && !player.heldItem && isStanding) {
+        determinedAction = { action: PlayerActionType.AutopilotChop, targetEntityId: tree.id };
+      } else if (player.isAdult && !player.heldItem && treeState === TREE_FALLEN && tree.wood.length > 0) {
+        determinedAction = { action: PlayerActionType.AutopilotGather, targetEntityId: tree.id };
       } else {
         determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
       }
@@ -261,7 +273,8 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
     gameState.autopilotControls.activeAutopilotAction = hoveredAction;
     if (
       hoveredAction.action === PlayerActionType.AutopilotMove ||
-      hoveredAction.action === PlayerActionType.AutopilotGather
+      hoveredAction.action === PlayerActionType.AutopilotGather ||
+      hoveredAction.action === PlayerActionType.AutopilotChop
     ) {
       gameState.hasPlayerMovedEver = true;
     }

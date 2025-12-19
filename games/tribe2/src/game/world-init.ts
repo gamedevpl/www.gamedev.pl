@@ -1,4 +1,11 @@
-import { createEntities, createBerryBush, createHuman, createPrey, createPredator, createTree } from './entities/entities-update';
+import {
+  createEntities,
+  createBerryBush,
+  createHuman,
+  createPrey,
+  createPredator,
+  createTree,
+} from './entities/entities-update';
 import { DebugPanelType, GameWorldState } from './world-types';
 import { MAP_WIDTH, MAP_HEIGHT, INTRO_SCREEN_INITIAL_HUMANS, INITIAL_TREE_COUNT } from './game-consts.ts';
 import {
@@ -204,6 +211,7 @@ export function initWorld(): GameWorldState {
         feedChildren: true,
         build: false,
         roleManagement: true,
+        chopping: false,
       },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,
@@ -378,6 +386,7 @@ export function initIntroWorld(): GameWorldState {
         feedChildren: true,
         build: false,
         roleManagement: true,
+        chopping: false,
       },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,

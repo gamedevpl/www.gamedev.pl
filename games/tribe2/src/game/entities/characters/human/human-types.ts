@@ -2,6 +2,7 @@ import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../food-types';
 import { CharacterEntity } from '../character-types';
 import { TribeControl, TribeRole } from '../../tribe/tribe-types';
+import { Item } from '../../item-types';
 
 /**
  * Represents a human entity in the game.
@@ -107,6 +108,9 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The current role assigned within the tribe, if any. */
   tribeRole?: TribeRole;
+
+  /** The non-food item currently held by the human. Only one item can be held at a time. */
+  heldItem?: Item;
 }
 
 export type HumanAction =
@@ -121,7 +125,8 @@ export type HumanAction =
   | 'depositing' // Depositing resources into storage
   | 'retrieving' // Retrieving resources from storage
   | 'takingOverBuilding' // Taking over an enemy building
-  | 'destroyingBuilding'; // Destroying an enemy building
+  | 'destroyingBuilding' // Destroying an enemy building
+  | 'chopping'; // Extracting wood from trees
 
 export type HumanActionPayload = {
   amount: number;

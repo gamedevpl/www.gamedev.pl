@@ -9,6 +9,9 @@ import { isPositionOccupied, isPositionInZone } from '../../utils/spatial-utils'
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../plants/berry-bush/berry-bush-consts';
 import { Vector2D } from '../../utils/math-types';
 import { isSoilDepleted, getDepletedSectorsInArea } from '../plants/soil-depletion-update';
+import { ItemType } from '../item-types';
+import { FoodType } from '../food-types';
+import { BUILDING_DEFINITIONS } from '../buildings/building-consts';
 
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
 
@@ -54,7 +57,10 @@ function getTribeTotalFood(leaderId: EntityId, gameState: GameWorldState): numbe
 
   // Sum food from storage spots
   const storageFood = storageSpots.reduce((sum, storage) => {
-    return sum + (storage.storedFood?.length || 0);
+    const foodItems = storage.storedItems?.filter(
+      (si) => si.item.type === FoodType.Berry || si.item.type === FoodType.Meat,
+    );
+    return sum + (foodItems?.length || 0);
   }, 0);
 
   return memberFood + storageFood;
@@ -100,8 +106,8 @@ export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldSt
     return 0;
   }
 
-  const totalStorageFood = storageSpots.reduce((sum, storage) => {
-    return sum + (storage.storedFood?.length || 0);
+  const totalStorageItems = storageSpots.reduce((sum, storage) => {
+    return sum + (storage.storedItems?.length || 0);
   }, 0);
 
   const totalStorageCapacity = storageSpots.reduce((sum, storage) => {
@@ -112,7 +118,50 @@ export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldSt
     return 0;
   }
 
-  return Math.min(1, totalStorageFood / totalStorageCapacity);
+  return Math.min(1, totalStorageItems / totalStorageCapacity);
+}
+
+/**
+ * Calculates the amount of wood the tribe currently needs.
+ * This includes wood required for active construction projects plus a maintenance buffer.
+ *
+ * @param leaderId The ID of the tribe leader
+ * @param gameState The current game state
+ * @returns Total wood units needed
+ */
+export function getTribeWoodNeed(leaderId: EntityId, gameState: GameWorldState): number {
+  const tribeMembers = getTribeMembers({ leaderId } as HumanEntity, gameState);
+  const buffer = 0;
+
+  // Calculate wood needed for current construction projects
+  const indexedState = gameState as IndexedWorldState;
+  const tribeBuildings = indexedState.search.building.all().filter((b) => {
+    if (!b.ownerId) return false;
+    const owner = gameState.entities.entities[b.ownerId] as HumanEntity | undefined;
+    return owner && owner.leaderId === leaderId;
+  });
+
+  const constructionWoodNeeded = tribeBuildings.reduce((sum, b) => {
+    if (b.isConstructed) return sum;
+    const woodCost = BUILDING_DEFINITIONS[b.buildingType].cost.wood || 0;
+    return sum + woodCost;
+  }, 0);
+
+  // Calculate current wood in stock
+  const storageSpots = getTribeStorageSpots(leaderId, gameState);
+  const storedWood = storageSpots.reduce((sum, storage) => {
+    const woodItems = storage.storedItems?.filter((si) => si.item.type === ItemType.Wood);
+    return sum + (woodItems?.length || 0);
+  }, 0);
+
+  const heldWood = tribeMembers.reduce((sum, member) => {
+    return sum + (member.heldItem?.type === ItemType.Wood ? 1 : 0);
+  }, 0);
+
+  const totalInStock = storedWood + heldWood;
+  const totalNeeded = constructionWoodNeeded + buffer;
+
+  return Math.max(0, totalNeeded - totalInStock);
 }
 
 /**
@@ -281,7 +330,7 @@ function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): num
 
 /**
  * Gets detailed distribution information for all tribe storage spots.
- * For each storage, calculates capacity, current food, assigned depositors, and distance.
+ * For each storage, calculates capacity, current items, assigned depositors, and distance.
  *
  * @param human A member of the tribe
  * @param gameState The current game state
@@ -293,7 +342,7 @@ function getStorageSpotDistribution(
 ): Array<{
   storage: BuildingEntity;
   capacity: number;
-  currentFood: number;
+  currentItems: number;
   assignedDepositors: number;
   distance: number;
 }> {
@@ -306,7 +355,7 @@ function getStorageSpotDistribution(
 
   return storageSpots.map((storage) => {
     const capacity = storage.storageCapacity || 0;
-    const currentFood = storage.storedFood?.length || 0;
+    const currentItems = storage.storedItems?.length || 0;
 
     // Count tribe members currently depositing to this storage
     const assignedDepositors = tribeMembers.filter((member) => {
@@ -340,7 +389,7 @@ function getStorageSpotDistribution(
     return {
       storage,
       capacity,
-      currentFood,
+      currentItems,
       assignedDepositors,
       distance,
     };
@@ -365,7 +414,7 @@ export function assignStorageSpot(human: HumanEntity, gameState: GameWorldState)
 
   // Filter out full storage and those too far away
   const availableStorage = distribution.filter((d) => {
-    const hasCapacity = d.currentFood < d.capacity;
+    const hasCapacity = d.currentItems < d.capacity;
     const isNearby = d.distance <= STORAGE_SEARCH_RADIUS;
     return hasCapacity && isNearby;
   });
@@ -376,8 +425,8 @@ export function assignStorageSpot(human: HumanEntity, gameState: GameWorldState)
 
   // Sort by fill ratio (ascending), then by assigned depositors (ascending), then by distance (ascending)
   availableStorage.sort((a, b) => {
-    const fillRatioA = a.currentFood / a.capacity;
-    const fillRatioB = b.currentFood / b.capacity;
+    const fillRatioA = a.currentItems / a.capacity;
+    const fillRatioB = b.currentItems / b.capacity;
 
     // Prioritize emptier storage
     if (Math.abs(fillRatioA - fillRatioB) > 0.1) {

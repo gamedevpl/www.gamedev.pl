@@ -4,6 +4,7 @@ export enum FoodType {
 }
 
 export interface FoodItem {
+  itemType: 'food';
   type: FoodType;
 }
 

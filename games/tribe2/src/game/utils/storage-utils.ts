@@ -42,9 +42,8 @@ export function hasNearbyNonFullStorage(
       buildingEntity.buildingType === 'storageSpot' &&
       buildingEntity.ownerId === human.leaderId &&
       buildingEntity.isConstructed &&
-      buildingEntity.storedFood &&
       buildingEntity.storageCapacity &&
-      buildingEntity.storedFood.length < buildingEntity.storageCapacity
+      buildingEntity.storedItems.length < buildingEntity.storageCapacity
     );
   });
 }
@@ -73,8 +72,7 @@ export function findNearbyTribeStorageWithFood(
         buildingEntity.buildingType === 'storageSpot' &&
         buildingEntity.ownerId === human.leaderId &&
         buildingEntity.isConstructed &&
-        buildingEntity.storedFood &&
-        buildingEntity.storedFood.length > 0
+        buildingEntity.storedItems.filter((si) => si.item.itemType === 'food').length > 0
       );
     })
     .filter((buildingEntity) => {
@@ -155,8 +153,8 @@ export function findClosestStorage(
 }
 
 /** Calculates the position offset for a food item within a storage building */
-export function calculateStorageFoodPosition(storage: BuildingEntity): Vector2D {
-  const itemCount = storage.storedFood ? storage.storedFood.length : 0;
+export function calculateStorageItemPosition(storage: BuildingEntity): Vector2D {
+  const itemCount = storage.storedItems.filter((si) => si.item.itemType === 'food').length;
   const angle = pseudoRandom(itemCount + storage.id) * 2 * Math.PI;
   const radius = pseudoRandom(itemCount + storage.id + 1) * STORAGE_ITEM_SCATTER_RADIUS;
 

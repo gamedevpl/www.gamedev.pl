@@ -26,6 +26,7 @@ export const ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER = 600; // Max distance a huma
 export const BT_PROCREATION_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a procreation partner
 export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
 export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
+export const BT_CHOPPING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a tree
 
 export const BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS = 2; // Cooldown for searching for prey
 // Behavior Tree Decorator Node Constants
@@ -44,6 +45,7 @@ export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a p
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
 export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
 export const AI_GATHERING_SEARCH_RADIUS = 600; // Radius for AI to search for food sources
+export const AI_CHOPPING_SEARCH_RADIUS = 600; // Radius for AI to search for trees
 
 // AI Fleeing Constants
 export const AI_FLEE_HEALTH_THRESHOLD = 0.15; // representing 15% of max health

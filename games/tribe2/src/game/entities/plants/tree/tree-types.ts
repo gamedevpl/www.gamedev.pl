@@ -1,4 +1,5 @@
 import { PlantEntity } from '../plant-types';
+import { WoodItem } from '../../item-types';
 
 /**
  * Represents a tree entity in the game world.
@@ -18,4 +19,8 @@ export interface TreeEntity extends PlantEntity {
   timeSinceLastSpreadAttempt: number;
   /** The maximum radius (in pixels) from the parent tree where a new tree can spawn. */
   spreadRadius: number;
+  /** The wood items contained within the tree, which can be extracted by chopping. */
+  wood: WoodItem[];
+  /** Whether the wood items have been initialized for this tree. */
+  woodGenerated?: boolean;
 }

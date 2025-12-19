@@ -1,8 +1,14 @@
 import { Entity, EntityId } from '../entities-types';
 import { BuildingType } from './building-consts';
 import { FoodItem } from '../food-types';
+import { Item } from '../item-types';
 
 export { BuildingType };
+
+export type StoredItem = {
+  item: FoodItem | Item;
+  positionOffset: { x: number; y: number };
+};
 
 /**
  * Represents a building entity in the game world.
@@ -34,14 +40,11 @@ export interface BuildingEntity extends Entity {
   height: number;
 
   // Storage-related properties (for StorageSpot buildings)
-  /** Array of food items stored in the building. */
-  storedFood?: {
-    item: FoodItem;
-    positionOffset: { x: number; y: number };
-  }[];
+  /** Array of items (food, wood, etc.) stored in the building. */
+  storedItems: StoredItem[];
 
-  /** Maximum capacity for stored food. */
-  storageCapacity?: number;
+  /** Maximum capacity for stored items. */
+  storageCapacity: number;
 
   /** Game time of last deposit (for cooldown). */
   lastDepositTime?: number;

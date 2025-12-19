@@ -9,6 +9,7 @@ export const allHumanStates = [
   humanProcreatingState,
   humanAttackingState,
   humanPlantingState,
+  humanChoppingState,
 ];
 
 // Import necessary types and constants
@@ -21,3 +22,4 @@ import { humanRetrievingState } from './human-retrieving-state';
 import { humanProcreatingState } from './human-procreating-state';
 import { humanAttackingState } from './human-attacking-state';
 import { humanPlantingState } from './human-planting-state';
+import { humanChoppingState } from './human-chopping-state';

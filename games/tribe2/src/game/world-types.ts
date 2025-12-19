@@ -97,6 +97,10 @@ export type HoveredAutopilotAction =
       action: PlayerActionType.AutopilotBuildingPlacement;
       position: Vector2D;
       buildingType: 'storageSpot' | 'plantingZone' | 'borderPost';
+    }
+  | {
+      action: PlayerActionType.AutopilotChop;
+      targetEntityId: EntityId;
     };
 
 export type ScheduledEventType = 'ranged-impact';
@@ -193,6 +197,7 @@ export type AutopilotControls = {
     feedChildren: boolean;
     build: boolean;
     roleManagement: boolean;
+    chopping: boolean;
   };
   hoveredAutopilotAction?: HoveredAutopilotAction;
   activeAutopilotAction?: HoveredAutopilotAction;

@@ -10,7 +10,6 @@ export const treeFullState: State<TreeEntity, StateData> = {
     const { entity, updateContext } = context;
     const gameHoursDelta = updateContext.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
-    entity.age += gameHoursDelta;
     if (entity.age >= entity.lifespan) {
       return {
         nextState: TREE_DYING,

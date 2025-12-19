@@ -23,6 +23,7 @@ export enum PlayerActionType {
   TakeOverBuilding = 'TakeOverBuilding',
   RemoveEnemyBuilding = 'RemoveEnemyBuilding',
   ArmyControl = 'ArmyControl',
+  Chop = 'Chop',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -33,6 +34,7 @@ export enum PlayerActionType {
   AutopilotDeposit = 'AutopilotDeposit',
   AutopilotRetrieve = 'AutopilotRetrieve',
   AutopilotBuildingPlacement = 'AutopilotBuildingPlacement',
+  AutopilotChop = 'AutopilotChop',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -52,6 +54,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.TakeOverBuilding]: '🏴',
   [PlayerActionType.RemoveEnemyBuilding]: '🧨',
   [PlayerActionType.ArmyControl]: '🎖️',
+  [PlayerActionType.Chop]: '🪓',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -61,6 +64,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotDeposit]: '📦',
   [PlayerActionType.AutopilotRetrieve]: '🎁',
   [PlayerActionType.AutopilotBuildingPlacement]: '🏗️',
+  [PlayerActionType.AutopilotChop]: '🪓',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -80,6 +84,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.TakeOverBuilding]: 'Take Over',
   [PlayerActionType.RemoveEnemyBuilding]: 'Destroy Enemy Building',
   [PlayerActionType.ArmyControl]: 'Army Control',
+  [PlayerActionType.Chop]: 'Chop Tree',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -89,6 +94,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotDeposit]: 'Deposit',
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
   [PlayerActionType.AutopilotBuildingPlacement]: 'Build',
+  [PlayerActionType.AutopilotChop]: 'Chop',
 };
 
 export interface PlayerActionHint {
@@ -161,6 +167,7 @@ export enum UIButtonActionType {
   ToggleFeedChildBehavior = 'ToggleFeedChildBehavior',
   TogglePlantingBehavior = 'TogglePlantingBehavior',
   ToggleGatheringBehavior = 'ToggleGatheringBehavior',
+  ToggleChoppingBehavior = 'ToggleChoppingBehavior',
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',

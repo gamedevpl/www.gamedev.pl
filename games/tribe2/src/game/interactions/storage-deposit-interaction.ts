@@ -6,7 +6,9 @@ import { STORAGE_INTERACTION_RANGE, STORAGE_DEPOSIT_COOLDOWN } from '../entities
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';
-import { calculateStorageFoodPosition } from '../utils/storage-utils';
+import { calculateStorageItemPosition } from '../utils/storage-utils';
+import { Item } from '../entities/item-types';
+import { FoodItem } from '../entities/food-types';
 
 /**
  * Interaction for depositing food into a storage spot.
@@ -33,19 +35,14 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
       return false;
     }
 
-    // Source must have food to deposit
-    if (source.food.length === 0) {
+    // Source must have food or a held item (like wood) to deposit
+    if (source.food.length === 0 && !source.heldItem) {
       return false;
-    }
-
-    // Initialize storage arrays if needed
-    if (!target.storedFood) {
-      target.storedFood = [];
     }
 
     // Check storage capacity
     const capacity = target.storageCapacity ?? 0;
-    if (target.storedFood.length >= capacity) {
+    if (target.storedItems.length >= capacity) {
       return false;
     }
 
@@ -64,17 +61,19 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
   },
 
   perform: (source: HumanEntity, target: BuildingEntity, context: UpdateContext): void => {
-    // Ensure storage array exists
-    if (!target.storedFood) {
-      target.storedFood = [];
+    // Transfer one item from source to storage (prioritize held item)
+    let itemToStore: FoodItem | Item | null = null;
+    if (source.heldItem) {
+      itemToStore = source.heldItem;
+      source.heldItem = undefined;
+    } else {
+      itemToStore = source.food.pop() ?? null;
     }
 
-    // Transfer one food item from source to storage
-    const foodItem = source.food.pop();
-    if (foodItem) {
-      target.storedFood.push({
-        item: foodItem,
-        positionOffset: calculateStorageFoodPosition(target),
+    if (itemToStore) {
+      target.storedItems.push({
+        item: itemToStore,
+        positionOffset: calculateStorageItemPosition(target),
       });
     }
 

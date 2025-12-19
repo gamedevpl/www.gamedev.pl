@@ -15,7 +15,7 @@ import { allTreeStates } from '../entities/plants/tree/states'; // Added import 
 // Combine all states
 const STATES = [
   ...allBerryBushStates, // Added berry bush states
-  ...allHumanStates, // Added human states
+  ...allHumanStates, // Includes humanChoppingState
   ...allPreyStates, // Added prey states
   ...allPredatorStates, // Added predator states
   ...allTreeStates, // Added tree states

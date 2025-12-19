@@ -2,7 +2,7 @@ import { Entity, EntityId, EntityType } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { calculateWrappedDistance, vectorDistance } from './math-utils';
+import { calculateWrappedDistance } from './math-utils';
 import { Vector2D } from './math-types';
 
 export function findClosestEntity<T extends Entity>(
@@ -101,6 +101,7 @@ export function findEntityAtPosition(
   gameState: GameWorldState,
   entityType?: EntityType,
 ): Entity | undefined {
+  const { width, height } = gameState.mapDimensions;
   // Iterate in reverse to find the top-most entity first (assuming entities are sorted by y-pos for rendering)
   const entities = Object.values(gameState.entities.entities).reverse();
 
@@ -109,8 +110,9 @@ export function findEntityAtPosition(
       continue;
     }
 
-    const distance = vectorDistance(position, entity.position);
-    if (distance < entity.radius) {
+    const distance = calculateWrappedDistance(position, entity.position, width, height);
+    const hoverRadius = entity.type === 'tree' ? entity.radius * 2 : entity.radius;
+    if (distance < hoverRadius) {
       return entity;
     }
   }

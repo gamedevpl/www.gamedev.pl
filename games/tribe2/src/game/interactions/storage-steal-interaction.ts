@@ -41,7 +41,7 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
     }
 
     // Storage must have food to steal
-    if (!target.storedFood || target.storedFood.length === 0) {
+    if (target.storedItems.length === 0) {
       return false;
     }
 
@@ -98,13 +98,13 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
 
   perform: (source: HumanEntity, target: BuildingEntity, context: UpdateContext): void => {
     // Ensure storage array exists
-    if (!target.storedFood || target.storedFood.length === 0) {
+    if (target.storedItems.length === 0) {
       return;
     }
 
     // Transfer one food item from storage to thief
-    const foodItem = target.storedFood.pop();
-    if (foodItem) {
+    const foodItem = target.storedItems.pop();
+    if (foodItem?.item.itemType === 'food') {
       source.food.push(foodItem.item);
     }
 

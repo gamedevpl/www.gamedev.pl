@@ -135,7 +135,7 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                   return [NodeStatus.FAILURE, 'Storage entity missing'];
                 }
 
-                if ((assignedStorage.storedFood?.length ?? 0) >= (assignedStorage.storageCapacity ?? 0)) {
+                if ((assignedStorage.storedItems?.length ?? 0) >= (assignedStorage.storageCapacity ?? 0)) {
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
                   return [NodeStatus.FAILURE, 'Storage full'];
                 }

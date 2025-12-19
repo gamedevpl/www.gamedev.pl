@@ -13,10 +13,18 @@ import {
   HUMAN_INTERACTION_RANGE,
   HUMAN_ATTACK_MELEE_RANGE,
   HUMAN_ATTACK_RANGED_RANGE,
+  HUMAN_CHOPPING_PROXIMITY,
 } from '../../../human-consts.ts';
 import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-spot-consts.ts';
 import { PlayerActionType } from '../../../ui/ui-types';
 import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
+import { TreeEntity } from '../../../entities/plants/tree/tree-types';
+import {
+  TREE_GROWING,
+  TREE_FULL,
+  TREE_SPREADING,
+  TREE_FALLEN,
+} from '../../../entities/plants/tree/states/tree-state-types';
 import { canProcreate, isPositionOccupied, isEnemyBuilding } from '../../../utils';
 import { BuildingEntity } from '../../../entities/buildings/building-types.ts';
 
@@ -125,31 +133,84 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- GATHER ---
             case PlayerActionType.AutopilotGather: {
-              const targetBush = gameState.entities.entities[activeAction.targetEntityId] as
-                | BerryBushEntity
-                | undefined;
+              const target = gameState.entities.entities[activeAction.targetEntityId];
 
-              if (!targetBush || targetBush.food.length === 0) {
+              if (!target) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              let isDepleted = false;
+              if (target.type === 'berryBush') {
+                isDepleted = (target as BerryBushEntity).food.length === 0;
+              } else if (target.type === 'corpse') {
+                isDepleted = (target as any).food.length === 0;
+              } else if (target.type === 'tree') {
+                const tree = target as TreeEntity;
+                isDepleted = tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0;
+              } else {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              if (isDepleted) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
               }
 
               const distance = calculateWrappedDistance(
                 human.position,
-                targetBush.position,
+                target.position,
                 gameState.mapDimensions.width,
                 gameState.mapDimensions.height,
               );
 
               if (distance > HUMAN_INTERACTION_PROXIMITY) {
                 human.activeAction = 'moving';
-                human.target = targetBush.id;
-                human.direction = dirToTarget(human.position, targetBush.position, gameState.mapDimensions);
+                human.target = target.id;
+                human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
                 return NodeStatus.RUNNING;
               }
 
               human.activeAction = 'gathering';
-              human.target = targetBush.id;
+              human.target = target.id;
+              gameState.autopilotControls.activeAutopilotAction = undefined;
+              return NodeStatus.SUCCESS;
+            }
+
+            // --- CHOP ---
+            case PlayerActionType.AutopilotChop: {
+              const tree = gameState.entities.entities[activeAction.targetEntityId] as TreeEntity | undefined;
+
+              if (!tree || tree.type !== 'tree') {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const [treeState] = tree.stateMachine ?? [];
+              const isStanding = treeState === TREE_GROWING || treeState === TREE_FULL || treeState === TREE_SPREADING;
+
+              if (!isStanding || human.heldItem) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const distance = calculateWrappedDistance(
+                human.position,
+                tree.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (distance > HUMAN_CHOPPING_PROXIMITY) {
+                human.activeAction = 'moving';
+                human.target = tree.id;
+                human.direction = dirToTarget(human.position, tree.position, gameState.mapDimensions);
+                return NodeStatus.RUNNING;
+              }
+
+              human.activeAction = 'chopping';
+              human.target = tree.id;
               gameState.autopilotControls.activeAutopilotAction = undefined;
               return NodeStatus.SUCCESS;
             }
@@ -263,7 +324,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
               // Check if storage has capacity
               const capacity = targetBuilding.storageCapacity ?? 0;
-              const currentStored = targetBuilding.storedFood?.length ?? 0;
+              const currentStored = targetBuilding.storedItems.length;
               if (currentStored >= capacity) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
@@ -312,8 +373,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
                 !targetBuilding ||
                 targetBuilding.buildingType !== 'storageSpot' ||
                 !targetBuilding.isConstructed ||
-                !targetBuilding.storedFood ||
-                targetBuilding.storedFood.length === 0
+                targetBuilding.storedItems.length === 0
               ) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;

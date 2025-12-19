@@ -3,16 +3,13 @@ import { TreeEntity } from '../tree-types';
 import { TREE_FULL, TREE_SPREADING, TREE_DYING } from './tree-state-types';
 import { isPositionOccupied, getRandomNearbyPosition } from '../../../../utils/world-utils';
 import { createTree } from '../../../entities-update';
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../../game-consts';
 
 export const treeSpreadingState: State<TreeEntity, StateData> = {
   id: TREE_SPREADING,
   update: (data, context: StateContext<TreeEntity>): StateTransition => {
     const { entity, updateContext } = context;
     const { gameState } = updateContext;
-    const gameHoursDelta = updateContext.deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
-    entity.age += gameHoursDelta;
     if (entity.age >= entity.lifespan) {
       return { nextState: TREE_DYING, data: { ...data, enteredAt: gameState.time, previousState: TREE_SPREADING } };
     }

@@ -88,7 +88,10 @@ export function calculateFoodMetrics(leaderId: EntityId, gameState: GameWorldSta
   // Sum food from all storage spots
   const buildings = search.building.byProperty('ownerId', leaderId);
   const storageSpots = buildings.filter((b) => b.buildingType === BuildingType.StorageSpot);
-  const totalStorageFood = storageSpots.reduce((sum, storage) => sum + (storage.storedFood?.length || 0), 0);
+  const totalStorageFood = storageSpots.reduce(
+    (sum, storage) => sum + (storage.storedItems.filter((si) => si.item.itemType === 'food').length || 0),
+    0,
+  );
 
   return {
     totalBushFood,

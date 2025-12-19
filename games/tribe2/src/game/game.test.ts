@@ -214,7 +214,7 @@ describe('Planting bushes', () => {
   it('a human with 5 berries can plant a bush', () => {
     let gameState = initGame();
     const human = createHuman(gameState.entities, { x: 100, y: 100 }, 0, 'female', true, 25);
-    human.food = Array.from({ length: 10 }, () => ({ type: FoodType.Berry, id: Math.random() }));
+    human.food = Array.from({ length: 10 }, () => ({ itemType: 'food', type: FoodType.Berry, id: Math.random() }));
 
     const initialBushCount = Object.values(gameState.entities.entities).filter((e) => e.type === 'berryBush').length;
 

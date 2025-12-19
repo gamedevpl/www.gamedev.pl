@@ -20,7 +20,7 @@ interface BuildingDimensions {
 
 interface BuildingCost {
   food?: { type: FoodType; amount: number }[];
-  // Future: wood, stone, etc.
+  wood?: number;
 }
 
 // Building Definitions
@@ -61,7 +61,7 @@ export const BUILDING_DEFINITIONS: Record<
     dimensions: { width: 40, height: 40 },
     constructionTimeHours: 0.2,
     destructionTimeHours: 0.1,
-    cost: {}, // Free for now
+    cost: { wood: 2 },
   },
 };
 

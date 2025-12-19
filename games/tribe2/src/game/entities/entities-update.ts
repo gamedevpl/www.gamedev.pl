@@ -47,12 +47,19 @@ import { SoundType } from '../sound/sound-types';
 import { FoodItem, FoodType } from './food-types.ts';
 import { AIType } from '../ai/ai-types';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
-import { BuildingEntity, BuildingType } from './buildings/building-types';
+import { BuildingEntity, BuildingType, StoredItem } from './buildings/building-types';
 import { getBuildingDimensions } from './buildings/building-consts.ts';
 import { STORAGE_SPOT_CAPACITY } from './buildings/storage-spot-consts.ts';
 import { TreeEntity } from './plants/tree/tree-types';
-import { TREE_LIFESPAN_GAME_HOURS, TREE_RADIUS, TREE_SPREAD_RADIUS } from './plants/tree/tree-consts';
+import {
+  TREE_LIFESPAN_GAME_HOURS,
+  TREE_RADIUS,
+  TREE_SPREAD_RADIUS,
+  TREE_GROWTH_TIME_GAME_HOURS,
+  TREE_MAX_WOOD,
+} from './plants/tree/tree-consts';
 import { TREE_GROWING } from './plants/tree/states/tree-state-types';
+import { ItemType } from './item-types';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -94,7 +101,10 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
   const bush = createEntity<BerryBushEntity>(state, 'berryBush', {
     position: initialPosition,
     radius: BERRY_BUSH_SPREAD_RADIUS,
-    food: Array.from({ length: BERRY_BUSH_INITIAL_FOOD }, () => ({ type: FoodType.Berry })).map((f) => ({
+    food: Array.from(
+      { length: BERRY_BUSH_INITIAL_FOOD },
+      () => ({ itemType: 'food', type: FoodType.Berry } as const),
+    ).map((f) => ({
       ...f,
       id: state.nextEntityId++,
     })),
@@ -116,6 +126,7 @@ export function createTree(
   currentTime: number,
   initialAge: number = 0,
 ): TreeEntity {
+  const isMature = initialAge >= TREE_GROWTH_TIME_GAME_HOURS;
   const tree = createEntity<TreeEntity>(state, 'tree', {
     position: initialPosition,
     radius: TREE_RADIUS,
@@ -126,6 +137,14 @@ export function createTree(
     timeSinceLastSpreadAttempt: 0,
     spreadRadius: TREE_SPREAD_RADIUS,
     stateMachine: [TREE_GROWING, { enteredAt: currentTime, previousState: undefined }],
+    wood: isMature
+      ? Array.from({ length: TREE_MAX_WOOD }, () => ({
+          itemType: 'item',
+          type: ItemType.Wood,
+          id: state.nextEntityId++,
+        }))
+      : [],
+    woodGenerated: isMature,
   });
   return tree;
 }
@@ -226,7 +245,7 @@ function createCorpse(
         {
           length: Math.max((initialFood * Math.max(hungerThreshold - hunger, 0)) / hungerThreshold, 0),
         },
-        () => ({ type: FoodType.Meat }),
+        () => ({ itemType: 'food', type: FoodType.Meat } as const),
       ),
       ...carriedFood,
     ].map((f) => ({ ...f, id: state.nextEntityId++ })),
@@ -432,7 +451,11 @@ export function createBuilding(
   ownerId: EntityId,
 ): BuildingEntity {
   const dimensions = getBuildingDimensions(buildingType);
-  const buildingBase = {
+
+  const initialState: Omit<
+    BuildingEntity,
+    'id' | 'velocity' | 'type' | 'forces' | 'direction' | 'acceleration' | 'debuffs'
+  > = {
     position,
     radius: Math.max(dimensions.width, dimensions.height) / 2,
     buildingType,
@@ -443,18 +466,14 @@ export function createBuilding(
     destructionProgress: 0,
     isConstructed: false,
     isBeingDestroyed: false,
+    storedItems: [] as StoredItem[],
+    storageCapacity: STORAGE_SPOT_CAPACITY,
+    lastDepositTime: 0,
+    lastRetrieveTime: 0,
+    lastStealTime: 0,
   };
 
   // Add storage-specific properties for storage spots
-  const building = createEntity<BuildingEntity>(state, 'building', {
-    ...buildingBase,
-    ...(buildingType === BuildingType.StorageSpot && {
-      storedFood: [],
-      storageCapacity: STORAGE_SPOT_CAPACITY,
-      lastDepositTime: 0,
-      lastRetrieveTime: 0,
-      lastStealTime: 0,
-    }),
-  });
+  const building = createEntity<BuildingEntity>(state, 'building', initialState);
   return building;
 }
