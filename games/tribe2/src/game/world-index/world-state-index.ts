@@ -54,16 +54,18 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
     }
   }
 
+  const mapDimensions = worldState.mapDimensions;
+
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
     search: {
-      human: indexItems(humans),
-      berryBush: indexItems(berryBushes),
-      corpse: indexItems(corpses),
-      prey: indexItems(prey),
-      predator: indexItems(predators),
-      building: indexItems(buildings),
-      tree: indexItems(trees),
+      human: indexItems(humans, mapDimensions),
+      berryBush: indexItems(berryBushes, mapDimensions),
+      corpse: indexItems(corpses, mapDimensions),
+      prey: indexItems(prey, mapDimensions),
+      predator: indexItems(predators, mapDimensions),
+      building: indexItems(buildings, mapDimensions),
+      tree: indexItems(trees, mapDimensions),
       terrainOwnership: indexItems(
         worldState.terrainOwnership
           .map((ownerId, index) => {
@@ -77,7 +79,8 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
               ownerId,
             };
           })
-          .filter((item) => item != null),
+          .filter((item) => item !== null),
+        mapDimensions,
       ),
     },
   };
