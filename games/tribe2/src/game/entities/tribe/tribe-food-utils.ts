@@ -237,26 +237,10 @@ export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldSt
   }
 
   const indexedState = gameState as IndexedWorldState;
-  const allBuildings = indexedState.search.building.all();
+  const tribeBuildings = indexedState.search.building.byProperty('ownerId', human.leaderId);
 
-  return allBuildings.filter((building) => {
-    // Must be a planting zone
-    if (building.buildingType !== BuildingType.PlantingZone) {
-      return false;
-    }
-
-    // Must be constructed
-    if (!building.isConstructed) {
-      return false;
-    }
-
-    // Must be owned by a tribe member
-    if (building.ownerId) {
-      const owner = gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
-      return owner && owner.leaderId === human.leaderId;
-    }
-
-    return false;
+  return tribeBuildings.filter((building) => {
+    return building.buildingType === BuildingType.PlantingZone && building.isConstructed;
   }) as BuildingEntity[];
 }
 
@@ -565,10 +549,18 @@ export function isPositionInAnyPlantingZone(
   gameState: GameWorldState,
   player: HumanEntity | undefined = undefined,
 ): boolean {
-  const zones = player
-    ? getTribePlantingZones(player, gameState)
-    : (gameState as IndexedWorldState).search.building.byProperty('buildingType', BuildingType.PlantingZone);
-  return zones.some((zone) => isPositionInZone(position, zone, gameState));
+  if (player) {
+    const zones = getTribePlantingZones(player, gameState);
+    return zones.some((zone) => isPositionInZone(position, zone, gameState));
+  }
+
+  const indexedState = gameState as IndexedWorldState;
+  // Using spatial search to find nearby planting zones instead of checking all planting zones in the world.
+  // The search radius 60 covers the maximum dimension of a planting zone.
+  const nearbyBuildings = indexedState.search.building.byRadius(position, 60);
+  return nearbyBuildings.some(
+    (building) => building.buildingType === BuildingType.PlantingZone && isPositionInZone(position, building, gameState),
+  );
 }
 
 /**
