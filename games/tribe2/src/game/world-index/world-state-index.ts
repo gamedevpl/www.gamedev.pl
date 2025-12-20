@@ -20,13 +20,39 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   // entities
   const allEntities = Object.values(worldState.entities.entities);
 
-  const humans = allEntities.filter((e) => e.type === 'human') as HumanEntity[];
-  const berryBushes = allEntities.filter((e) => e.type === 'berryBush') as BerryBushEntity[];
-  const corpses = allEntities.filter((e) => e.type === 'corpse') as CorpseEntity[];
-  const prey = allEntities.filter((e) => e.type === 'prey') as PreyEntity[];
-  const predators = allEntities.filter((e) => e.type === 'predator') as PredatorEntity[];
-  const buildings = allEntities.filter((e) => e.type === 'building') as BuildingEntity[];
-  const trees = allEntities.filter((e) => e.type === 'tree') as TreeEntity[];
+  const humans: HumanEntity[] = [];
+  const berryBushes: BerryBushEntity[] = [];
+  const corpses: CorpseEntity[] = [];
+  const prey: PreyEntity[] = [];
+  const predators: PredatorEntity[] = [];
+  const buildings: BuildingEntity[] = [];
+  const trees: TreeEntity[] = [];
+
+  for (const entity of allEntities) {
+    switch (entity.type) {
+      case 'human':
+        humans.push(entity as HumanEntity);
+        break;
+      case 'berryBush':
+        berryBushes.push(entity as BerryBushEntity);
+        break;
+      case 'corpse':
+        corpses.push(entity as CorpseEntity);
+        break;
+      case 'prey':
+        prey.push(entity as PreyEntity);
+        break;
+      case 'predator':
+        predators.push(entity as PredatorEntity);
+        break;
+      case 'building':
+        buildings.push(entity as BuildingEntity);
+        break;
+      case 'tree':
+        trees.push(entity as TreeEntity);
+        break;
+    }
+  }
 
   const indexedWorldState: IndexedWorldState = {
     ...worldState,
