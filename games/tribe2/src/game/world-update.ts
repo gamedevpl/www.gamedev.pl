@@ -55,13 +55,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     updateEcosystemBalancer(indexedState);
 
     // Update soil depletion recovery
-    updateSoilRecovery(
-      indexedState.soilDepletion,
-      indexedState.time,
-      deltaTime,
-      indexedState.mapDimensions.width,
-      indexedState.mapDimensions.height,
-    );
+    updateSoilRecovery(indexedState);
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);

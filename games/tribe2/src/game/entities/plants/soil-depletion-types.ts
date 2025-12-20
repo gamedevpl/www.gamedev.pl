@@ -24,6 +24,9 @@ export interface SoilSector {
  * Uses a sparse grid representation - only sectors that have been affected are stored.
  */
 export interface SoilDepletionState {
+  /** Game time when the soil was last updated */
+  lastUpdateTime: number;
+
   /**
    * Sparse map of soil sectors, keyed by "x,y" grid coordinates.
    * Only sectors with non-default values are stored.
@@ -63,6 +66,7 @@ export function createDefaultSector(): SoilSector {
  */
 export function createSoilDepletionState(): SoilDepletionState {
   return {
+    lastUpdateTime: 0,
     sectors: {},
   };
 }

@@ -37,3 +37,6 @@ export const SOIL_STEERING_SAMPLE_ANGLE = Math.PI / 6; // 30 degrees
 
 // Depletion modifier for planting zones
 export const SOIL_DEPLETION_PLANTING_ZONE_MULTIPLIER = 0.5;
+
+// Soil update interval
+export const SOIL_UPDATE_INTERVAL_HOURS = 1;

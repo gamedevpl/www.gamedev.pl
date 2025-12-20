@@ -26,8 +26,8 @@ import {
   SOIL_RECOVERY_RATE_ADJACENT_BONUS,
   SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS,
   SOIL_DEPLETION_PLANTING_ZONE_MULTIPLIER,
+  SOIL_UPDATE_INTERVAL_HOURS,
 } from './soil-depletion-consts';
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts';
 import { isPositionInAnyPlantingZone } from '../tribe/tribe-food-utils';
 
 /**
@@ -176,14 +176,17 @@ function countViableAdjacentSectors(
  * Updates soil recovery for all affected sectors.
  * Called once per frame from the main world update.
  */
-export function updateSoilRecovery(
-  state: SoilDepletionState,
-  currentTime: number,
-  deltaTimeSeconds: number,
-  worldWidth: number,
-  worldHeight: number,
-): void {
-  const gameHoursDelta = deltaTimeSeconds * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+export function updateSoilRecovery({
+  soilDepletion: state,
+  time: currentTime,
+  mapDimensions: { width: worldWidth, height: worldHeight },
+}: GameWorldState): void {
+  if (currentTime - state.lastUpdateTime < SOIL_UPDATE_INTERVAL_HOURS) {
+    return;
+  }
+  const gameHoursDelta = currentTime - state.lastUpdateTime;
+  state.lastUpdateTime = currentTime;
+
   const maxGridX = Math.ceil(worldWidth / SOIL_SECTOR_SIZE);
   const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
 
