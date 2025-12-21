@@ -27,6 +27,7 @@ export const BT_PROCREATION_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching
 export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
 export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
 export const BT_CHOPPING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a tree
+export const BT_CLEANUP_TREES_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for trees in planting zones
 
 export const BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS = 2; // Cooldown for searching for prey
 // Behavior Tree Decorator Node Constants

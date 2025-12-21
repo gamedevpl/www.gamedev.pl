@@ -57,7 +57,16 @@ export function findFamilyMemberUnderAttack(
     for (const aggressor of potentialAggressors) {
       // An aggressor is from a different tribe (or has no tribe if defender has one)
       if (aggressor.leaderId !== human.leaderId) {
-        return { familyMember, aggressor };
+        const distanceToAggressor = calculateWrappedDistance(
+          human.position,
+          aggressor.position,
+          gameState.mapDimensions.width,
+          gameState.mapDimensions.height,
+        );
+
+        if (distanceToAggressor <= radius) {
+          return { familyMember, aggressor };
+        }
       }
     }
   }

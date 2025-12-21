@@ -28,6 +28,7 @@ export * from './human-defend-predator-behavior';
 export * from './tribe-role-assignment-behavior';
 export * from './tribe-role-management-behavior';
 export * from './chopping-behavior';
+export * from './cleanup-trees-behavior';
 
 // Animal-specific behaviors
 export * from './prey-flee-behavior';

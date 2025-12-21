@@ -46,6 +46,7 @@ import {
   createSupplyBehavior,
   createTribeRoleManagementBehavior,
   createChoppingBehavior,
+  createCleanupTreesBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -151,6 +152,14 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       new AutopilotControlled(createProcreationBehavior(3), 'procreation', 'Gated Procreation', 2),
 
       // --- RESOURCE MANAGEMENT (PLANT) ---
+      // --- RESOURCE MANAGEMENT (CLEANUP) ---
+      new TimeoutNode(
+        new AutopilotControlled(createCleanupTreesBehavior(4), 'chopping', 'Gated Cleanup Trees', 3),
+        BT_ACTION_TIMEOUT_HOURS,
+        'Timeout Cleanup Trees',
+        2,
+      ),
+
       new TimeoutNode(
         new AutopilotControlled(createPlantingBehavior(4), 'planting', 'Gated Planting', 3),
         BT_ACTION_TIMEOUT_HOURS,

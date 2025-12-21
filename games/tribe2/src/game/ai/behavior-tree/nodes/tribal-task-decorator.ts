@@ -11,7 +11,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 /**
  * Task types that can be coordinated
  */
-type TribalTaskType = 'gather' | 'hunt' | 'plant' | 'storage' | 'procreation' | 'chop';
+type TribalTaskType = 'gather' | 'hunt' | 'plant' | 'storage' | 'procreation' | 'chop' | 'cleanup_tree';
 
 /**
  * Configuration for different task types

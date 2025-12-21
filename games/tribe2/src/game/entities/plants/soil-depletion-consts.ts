@@ -17,7 +17,7 @@ export const SOIL_DEPLETION_PER_WALK = 1.0; // Soil health lost per walk step
 export const SOIL_WALK_DEPLETION_COOLDOWN_HOURS = 0.15; // Short cooldown for frequent depletion
 
 // Recovery rates (per game hour)
-export const SOIL_RECOVERY_RATE_BASE = 0.1; // Base recovery rate when not in use
+export const SOIL_RECOVERY_RATE_BASE = 0.5; // Base recovery rate when not in use
 export const SOIL_RECOVERY_RATE_ADJACENT_BONUS = 0.01; // Additional recovery when adjacent to viable soil
 export const SOIL_RECOVERY_INACTIVE_THRESHOLD_HOURS = 24; // Time without activity before recovery starts
 

@@ -17,6 +17,7 @@ import {
 import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
 import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui/ui-consts.ts';
 import { HumanEntity } from './human-types';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
@@ -27,8 +28,7 @@ import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 import { TribeRole } from '../../tribe/tribe-types';
-import { checkAndExecuteTribeMerges, findDescendants } from '../../tribe/family-tribe-utils';
-import { BuildingEntity } from '../../buildings/building-types.ts';
+import { findDescendants } from '../../tribe/family-tribe-utils';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -185,42 +185,34 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
             invadeEnemies: 5,
           },
         };
+
+        const indexedState = gameState as IndexedWorldState;
+
+        // Update territory ownership
         replaceOwnerInTerrainOwnership(gameState, entity.id, heir.id);
-        for (const member of findDescendants(heir, gameState)) {
+
+        // Update tribe members efficiently using index
+        const members = indexedState.search.human.byProperty('leaderId', entity.id);
+        for (const member of members) {
           member.leaderId = heir.id;
           member.tribeInfo = heir.tribeInfo;
         }
 
-        // Update followers
-        Object.values(gameState.entities.entities).forEach((e) => {
-          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
-            const follower = e as HumanEntity;
-            follower.leaderId = heir.id; // Follow the new leader
-          }
-          if (e.type === 'building' && (e as BuildingEntity).ownerId === entity.id) {
-            const building = e as BuildingEntity;
-            building.ownerId = heir.id; // Transfer building ownership
-          }
-        });
-      } else {
-        // No heir, tribe dissolves
-        Object.values(gameState.entities.entities).forEach((e) => {
-          if (e.type === 'human' && (e as HumanEntity).leaderId === entity.id) {
-            const follower = e as HumanEntity;
-            follower.leaderId = undefined;
-            follower.tribeInfo = undefined;
-          }
-          if (e.type === 'building' && (e as BuildingEntity).ownerId === entity.id) {
-            const building = e as BuildingEntity;
-            building.ownerId = undefined;
-          }
-        });
-        replaceOwnerInTerrainOwnership(gameState, entity.id, null);
-      }
-    }
+        // Update buildings efficiently using index
+        const buildings = indexedState.search.building.byProperty('ownerId', entity.id);
+        for (const building of buildings) {
+          building.ownerId = heir.id;
+        }
 
-    // Check if this death created orphaned tribes and trigger merges
-    checkAndExecuteTribeMerges(gameState);
+        // Ensure descendants are correctly linked (robustness for complex structures)
+        for (const member of findDescendants(heir, gameState)) {
+          member.leaderId = heir.id;
+          member.tribeInfo = heir.tribeInfo;
+        }
+      }
+      // If no heir is found, we no longer manually dissolve the tribe here.
+      // The global checkAndExecuteTribeMerges will handle dynastic rescue or dissolution.
+    }
 
     if (entity.isPlayer) {
       const oldestOffspring = findHeir(findChildren(gameState, entity));

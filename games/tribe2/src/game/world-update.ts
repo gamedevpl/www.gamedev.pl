@@ -13,6 +13,7 @@ import { saveGame } from './persistence/persistence-utils';
 import { updateUI } from './ui/ui-utils.ts';
 import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 import { scheduledEventsUpdate } from './scheduled-events-update';
+import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -71,6 +72,12 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Process entity interactions
     interactionsUpdate({ gameState: indexedState, deltaTime: deltaTime });
+
+    // Global tribe management: check for orphaned tribes and execute merges/dissolutions
+    // We run this once per game hour to maintain performance and avoid UI churn
+    if (Math.floor(indexedState.time) > Math.floor(indexedState.time - gameHoursDelta)) {
+      checkAndExecuteTribeMerges(indexedState);
+    }
 
     // Process visual effects
     visualEffectsUpdate(indexedState);

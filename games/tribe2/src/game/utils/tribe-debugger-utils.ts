@@ -4,6 +4,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { BuildingType } from '../entities/buildings/building-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { HUMAN_OLD_AGE_THRESHOLD } from '../human-consts';
+import { getTopLivingAncestor } from '../entities/tribe/family-tribe-utils';
 
 /**
  * Population breakdown statistics
@@ -115,59 +116,11 @@ export function findTopFamilies(leaderId: EntityId, gameState: GameWorldState, l
   // Cache to store the resolved ancestor ID for each human to prevent O(N^2) lookups
   const ancestorCache = new Map<EntityId, EntityId>();
 
-  /**
-   * Recursive helper to find the top-most living ancestor.
-   * If a father is dead or missing, the current entity is considered the root.
-   */
-  const getTopLivingAncestor = (entityId: EntityId, visited = new Set<EntityId>()): EntityId => {
-    // 1. Check Cache
-    if (ancestorCache.has(entityId)) {
-      return ancestorCache.get(entityId)!;
-    }
-
-    // 2. Cycle detection (safety for malformed trees)
-    if (visited.has(entityId)) {
-      return entityId;
-    }
-    visited.add(entityId);
-
-    const entity = allEntities[entityId] as HumanEntity | undefined;
-
-    // 3. If entity is missing (dead), we can't trace up.
-    // In the context of a child calling this, it means the child is the new root.
-    if (!entity) return entityId;
-
-    // 4. Trace up: If female and has living male partner, join his family
-    if (entity.gender === 'female' && entity.partnerIds?.length) {
-      const malePartnerId = entity.partnerIds.find((id) => {
-        const partner = allEntities[id] as HumanEntity | undefined;
-        return partner && partner.gender === 'male';
-      });
-
-      if (malePartnerId) {
-        const rootAncestor = getTopLivingAncestor(malePartnerId, visited);
-        ancestorCache.set(entityId, rootAncestor);
-        return rootAncestor;
-      }
-    }
-
-    // 5. Trace up: If father exists and is ALIVE (in entities), recurse.
-    if (entity.fatherId && allEntities[entity.fatherId]) {
-      const rootAncestor = getTopLivingAncestor(entity.fatherId, visited);
-      ancestorCache.set(entityId, rootAncestor);
-      return rootAncestor;
-    }
-
-    // 6. No living father found; this entity is the patriarch.
-    ancestorCache.set(entityId, entityId);
-    return entityId;
-  };
-
   // Group humans by their calculated top ancestor
   const familyGroups = new Map<EntityId, HumanEntity[]>();
 
   for (const human of humans) {
-    const patriarchId = getTopLivingAncestor(human.id);
+    const patriarchId = getTopLivingAncestor(human.id, gameState, ancestorCache);
 
     if (!familyGroups.has(patriarchId)) {
       familyGroups.set(patriarchId, []);
