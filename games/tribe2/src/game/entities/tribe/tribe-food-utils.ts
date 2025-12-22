@@ -12,6 +12,14 @@ import { isSoilDepleted, getDepletedSectorsInArea } from '../plants/soil-depleti
 import { ItemType } from '../item-types';
 import { FoodType } from '../food-types';
 import { BUILDING_DEFINITIONS } from '../buildings/building-consts';
+import {
+  BONFIRE_FUEL_PER_WOOD,
+  BONFIRE_MAX_FUEL,
+  BONFIRE_REFUEL_THRESHOLD_RATIO,
+  BONFIRE_STORAGE_CAPACITY,
+} from '../../temperature/temperature-consts';
+import { isWithinOperatingRange } from './territory-utils';
+import { TREE_FALLEN } from '../plants/tree/states/tree-state-types';
 
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
 
@@ -147,6 +155,22 @@ export function getTribeWoodNeed(leaderId: EntityId, gameState: GameWorldState):
     return sum + woodCost;
   }, 0);
 
+  // Calculate wood needed for refueling bonfires
+  const bonfires = getTribeBonfires(leaderId, gameState);
+  const fuelWoodNeeded = bonfires.reduce((sum, b) => {
+    const fuelDeficit = (b.maxFuelLevel || 0) - (b.fuelLevel || 0);
+    if (fuelDeficit <= 0) return sum;
+
+    // Calculate how many wood units are needed to top off the fuel
+    const unitsNeeded = Math.ceil(fuelDeficit / BONFIRE_FUEL_PER_WOOD);
+
+    // Subtract wood already in bonfire's local storage "queue"
+    const woodInBonfire = b.storedItems.filter((si) => si.item.type === ItemType.Wood).length;
+    const netNeeded = Math.max(0, unitsNeeded - woodInBonfire);
+
+    return sum + netNeeded;
+  }, 0);
+
   // Calculate current wood in stock
   const storageSpots = getTribeStorageSpots(leaderId, gameState);
   const storedWood = storageSpots.reduce((sum, storage) => {
@@ -159,9 +183,32 @@ export function getTribeWoodNeed(leaderId: EntityId, gameState: GameWorldState):
   }, 0);
 
   const totalInStock = storedWood + heldWood;
-  const totalNeeded = constructionWoodNeeded + buffer;
+  const totalNeeded = constructionWoodNeeded + fuelWoodNeeded + buffer;
 
   return Math.max(0, totalNeeded - totalInStock);
+}
+
+/**
+ * Calculates the total amount of wood units available on the ground (from fallen trees)
+ * within the tribe's operating range.
+ *
+ * @param leaderId The ID of the tribe leader
+ * @param gameState The current game state
+ * @returns Total wood units available on the ground
+ */
+export function getTribeAvailableWoodOnGround(leaderId: EntityId, gameState: GameWorldState): number {
+  const indexedState = gameState as IndexedWorldState;
+
+  const fallenTrees = indexedState.search.tree.all().filter((tree) => {
+    // Check if tree is fallen
+    const isFallen = tree.stateMachine?.[0] === TREE_FALLEN;
+    if (!isFallen || tree.wood.length === 0) return false;
+
+    // Check if tree is within tribe's operating range
+    return isWithinOperatingRange(tree.position, leaderId, gameState);
+  });
+
+  return fallenTrees.reduce((sum, tree) => sum + tree.wood.length, 0);
 }
 
 /**
@@ -430,6 +477,65 @@ export function assignStorageSpot(human: HumanEntity, gameState: GameWorldState)
 }
 
 /**
+ * Assigns a human to the most suitable target for depositing wood.
+ * Prioritizes bonfires that need fuel, then fallback to general storage.
+ *
+ * @param human The human holding wood
+ * @param gameState The current game state
+ * @returns The assigned target building, or null if no suitable target exists
+ */
+export function assignWoodDepositTarget(human: HumanEntity, gameState: GameWorldState): BuildingEntity | null {
+  if (!human.leaderId) {
+    return null;
+  }
+
+  const bonfires = getTribeBonfires(human.leaderId, gameState);
+
+  // Filter bonfires that have room in their storage queue
+  const availableBonfires = bonfires.filter((b) => {
+    const capacity = b.storageCapacity || BONFIRE_STORAGE_CAPACITY;
+    return b.storedItems.length < capacity;
+  });
+
+  if (availableBonfires.length > 0) {
+    // 1. Prioritize bonfires that need fuel (below threshold)
+    const needyBonfires = availableBonfires.filter((b) => {
+      const fuelLevel = b.fuelLevel ?? 0;
+      const maxFuel = b.maxFuelLevel ?? BONFIRE_MAX_FUEL;
+      return fuelLevel < maxFuel * BONFIRE_REFUEL_THRESHOLD_RATIO;
+    });
+
+    if (needyBonfires.length > 0) {
+      // Pick the one with the lowest fuel level
+      needyBonfires.sort((a, b) => (a.fuelLevel ?? 0) - (b.fuelLevel ?? 0));
+      return needyBonfires[0];
+    }
+
+    // 2. If no bonfire urgently needs fuel, pick the closest one with room
+    availableBonfires.sort((a, b) => {
+      const distA = calculateWrappedDistance(
+        human.position,
+        a.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      );
+      const distB = calculateWrappedDistance(
+        human.position,
+        b.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      );
+      return distA - distB;
+    });
+
+    return availableBonfires[0];
+  }
+
+  // 3. Fallback to general storage if no suitable bonfire found
+  return assignStorageSpot(human, gameState);
+}
+
+/**
  * Counts how many tribe members are currently performing a specific action.
  *
  * @param leaderId The ID of the tribe leader
@@ -461,6 +567,38 @@ export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldSta
   return allBuildings.filter((building) => {
     // Must be a storage spot
     if (building.buildingType !== BuildingType.StorageSpot) {
+      return false;
+    }
+
+    // Must be constructed
+    if (!building.isConstructed) {
+      return false;
+    }
+
+    // Must be owned by a tribe member
+    if (building.ownerId) {
+      const owner = gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
+      return owner && owner.leaderId === leaderId;
+    }
+
+    return false;
+  }) as BuildingEntity[];
+}
+
+/**
+ * Gets all constructed bonfires owned by tribe members.
+ *
+ * @param leaderId The ID of the tribe leader
+ * @param gameState The current game state
+ * @returns Array of bonfire buildings
+ */
+export function getTribeBonfires(leaderId: EntityId, gameState: GameWorldState): BuildingEntity[] {
+  const indexedState = gameState as IndexedWorldState;
+  const allBuildings = indexedState.search.building.all();
+
+  return allBuildings.filter((building) => {
+    // Must be a bonfire
+    if (building.buildingType !== BuildingType.Bonfire) {
       return false;
     }
 
@@ -559,7 +697,8 @@ export function isPositionInAnyPlantingZone(
   // The search radius 60 covers the maximum dimension of a planting zone.
   const nearbyBuildings = indexedState.search.building.byRadius(position, 60);
   return nearbyBuildings.some(
-    (building) => building.buildingType === BuildingType.PlantingZone && isPositionInZone(position, building, gameState),
+    (building) =>
+      building.buildingType === BuildingType.PlantingZone && isPositionInZone(position, building, gameState),
   );
 }
 

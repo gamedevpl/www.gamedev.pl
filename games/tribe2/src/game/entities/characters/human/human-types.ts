@@ -126,8 +126,7 @@ export type HumanAction =
   | 'retrieving' // Retrieving resources from storage
   | 'takingOverBuilding' // Taking over an enemy building
   | 'destroyingBuilding' // Destroying an enemy building
-  | 'chopping' // Extracting wood from trees
-  | 'refueling'; // Adding wood to a bonfire
+  | 'chopping'; // Extracting wood from trees
 
 export type HumanActionPayload = {
   amount: number;

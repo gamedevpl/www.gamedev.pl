@@ -29,3 +29,15 @@ export const BONFIRE_MAX_FUEL = 100;
 
 /** Amount of fuel added to a bonfire per unit of wood. */
 export const BONFIRE_FUEL_PER_WOOD = 25;
+
+/** Fuel level ratio below which a demand for wood is registered for a bonfire. */
+export const BONFIRE_REFUEL_THRESHOLD_RATIO = 0.5;
+
+/** Temperature at tribe center below which a leader decides to build a new bonfire. */
+export const BONFIRE_PLACEMENT_TEMP_THRESHOLD = 15;
+
+/** Maximum number of wood items a bonfire can hold in its "queue". */
+export const BONFIRE_STORAGE_CAPACITY = 4;
+
+/** Fuel level ratio below which the bonfire will consume a wood item from its storage. */
+export const BONFIRE_REFUEL_THRESHOLD = 0.75;

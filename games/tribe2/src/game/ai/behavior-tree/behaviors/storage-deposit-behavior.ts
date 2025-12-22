@@ -8,6 +8,7 @@ import { STORAGE_INTERACTION_RANGE } from '../../../entities/buildings/storage-s
 import {
   getStorageUtilization,
   assignStorageSpot,
+  assignWoodDepositTarget,
   countTribeMembersWithAction,
 } from '../../../entities/tribe/tribe-food-utils';
 import { getTribeMembers } from '../../../utils';
@@ -20,6 +21,7 @@ import {
 import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
+import { ItemType } from '../../../entities/item-types';
 import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { TribeRole } from '../../../entities/tribe/tribe-types';
@@ -41,20 +43,7 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
           // Check if human has excess food and storage is available (with adaptive threshold)
           new ConditionNode<HumanEntity>(
             (human: HumanEntity, context: UpdateContext, blackboard: BlackboardData) => {
-              if (
-                !isTribeRole(human, TribeRole.Gatherer, context.gameState) &&
-                !isTribeRole(human, TribeRole.Mover, context.gameState) &&
-                !isTribeRole(human, TribeRole.Hunter, context.gameState)
-              ) {
-                return [false, 'Not a Gatherer/Mover/Hunter'];
-              }
-
-              // Check cooldown
-              const lastDepositTime = Blackboard.get<number>(blackboard, LAST_DEPOSIT_TIME_KEY) || 0;
-              const timeSinceDeposit = context.gameState.time - lastDepositTime;
-              if (timeSinceDeposit < DEPOSIT_COOLDOWN_HOURS) {
-                return [false, `Cooldown: ${(DEPOSIT_COOLDOWN_HOURS - timeSinceDeposit).toFixed(1)}h remaining`];
-              }
+              const isHoldingWood = human.heldItem?.type === ItemType.Wood;
 
               // Must be an adult
               if (!human.isAdult) {
@@ -66,39 +55,60 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 return [false, 'No tribe'];
               }
 
-              // Calculate storage utilization and determine threshold
-              const storageUtil = getStorageUtilization(human.leaderId, context.gameState);
-              let depositThreshold: number;
+              let assignedStorage: BuildingEntity | null = null;
+              let debugReason = '';
 
-              if (storageUtil < 0.3) {
-                depositThreshold = DEPOSIT_THRESHOLD_LOW_STORAGE; // 0.4 - deposit more aggressively
-              } else if (storageUtil < 0.7) {
-                depositThreshold = DEPOSIT_THRESHOLD_MID_STORAGE; // 0.6 - balanced
+              if (isHoldingWood) {
+                assignedStorage = assignWoodDepositTarget(human, context.gameState);
+                debugReason = 'Holding wood';
               } else {
-                depositThreshold = DEPOSIT_THRESHOLD_HIGH_STORAGE; // 0.8 - only deposit when very full
-              }
+                // Food deposit logic
+                if (
+                  !isTribeRole(human, TribeRole.Gatherer, context.gameState) &&
+                  !isTribeRole(human, TribeRole.Mover, context.gameState) &&
+                  !isTribeRole(human, TribeRole.Hunter, context.gameState)
+                ) {
+                  return [false, 'Not a Gatherer/Mover/Hunter and not holding wood'];
+                }
 
-              const personalFoodRatio = human.food.length / human.maxFood;
-              if (personalFoodRatio <= depositThreshold) {
-                return [
-                  false,
-                  `Food ${(personalFoodRatio * 100).toFixed(0)}% < threshold ${(depositThreshold * 100).toFixed(0)}%`,
-                ];
+                // Check cooldown
+                const lastDepositTime = Blackboard.get<number>(blackboard, LAST_DEPOSIT_TIME_KEY) || 0;
+                const timeSinceDeposit = context.gameState.time - lastDepositTime;
+                if (timeSinceDeposit < DEPOSIT_COOLDOWN_HOURS) {
+                  return [false, `Cooldown: ${(DEPOSIT_COOLDOWN_HOURS - timeSinceDeposit).toFixed(1)}h remaining`];
+                }
+
+                // Calculate storage utilization and determine threshold
+                const storageUtil = getStorageUtilization(human.leaderId, context.gameState);
+                let depositThreshold: number;
+                if (storageUtil < 0.3) {
+                  depositThreshold = DEPOSIT_THRESHOLD_LOW_STORAGE; // 0.4 - deposit more aggressively
+                } else if (storageUtil < 0.7) {
+                  depositThreshold = DEPOSIT_THRESHOLD_MID_STORAGE; // 0.6 - balanced
+                } else {
+                  depositThreshold = DEPOSIT_THRESHOLD_HIGH_STORAGE; // 0.8 - only deposit when very full
+                }
+
+                const personalFoodRatio = human.food.length / human.maxFood;
+                if (personalFoodRatio <= depositThreshold) {
+                  return [
+                    false,
+                    `Food ${(personalFoodRatio * 100).toFixed(0)}% < threshold ${(depositThreshold * 100).toFixed(0)}%`,
+                  ];
+                }
+
+                assignedStorage = assignStorageSpot(human, context.gameState);
+                debugReason = `Storage util: ${(storageUtil * 100).toFixed(0)}%, Personal: ${(personalFoodRatio * 100).toFixed(0)}%`;
               }
 
               // Check if storage is available
-              const assignedStorage = assignStorageSpot(human, context.gameState);
               if (!assignedStorage) {
                 return [false, 'No available tribe storage nearby'];
               }
 
               // Store the assigned storage in blackboard for the decorator and action
               Blackboard.set(blackboard, ASSIGNED_STORAGE_KEY, assignedStorage.id);
-
-              return [
-                true,
-                `Storage util: ${(storageUtil * 100).toFixed(0)}%, Personal: ${(personalFoodRatio * 100).toFixed(0)}%`,
-              ];
+              return [true, debugReason];
             },
             'Check for Excess Food and Storage',
             depth + 1,
@@ -156,8 +166,9 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                   // Set last deposit time and clear assigned storage
                   Blackboard.set(blackboard, LAST_DEPOSIT_TIME_KEY, context.gameState.time);
                   Blackboard.delete(blackboard, ASSIGNED_STORAGE_KEY);
-
-                  return [NodeStatus.SUCCESS, 'Depositing food'];
+                  
+                  const isHoldingWood = human.heldItem?.type === ItemType.Wood;
+                  return [NodeStatus.SUCCESS, isHoldingWood ? 'Depositing wood' : 'Depositing food'];
                 }
 
                 // Navigate toward storage

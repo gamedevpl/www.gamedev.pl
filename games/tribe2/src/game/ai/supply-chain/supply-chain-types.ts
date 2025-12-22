@@ -1,6 +1,6 @@
 import { EntityId } from '../../entities/entities-types';
 
-export type SupplyChainResourceType = 'food'; // Currently only food is supported
+export type SupplyChainResourceType = 'food' | 'wood';
 
 export type TribeDemand = {
   requesterId: EntityId;

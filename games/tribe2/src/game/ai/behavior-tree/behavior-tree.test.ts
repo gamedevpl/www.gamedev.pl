@@ -9,7 +9,8 @@ import { GameWorldState } from '../../world-types';
 import { CachingNode, TimeoutNode } from './nodes';
 import { CharacterEntity } from '../../entities/characters/character-types';
 
-// --- Mocks and Helpers ---\n
+// --- Mocks and Helpers ---
+
 const mockHuman = {} as HumanEntity;
 const mockContext = {
   deltaTime: 1,

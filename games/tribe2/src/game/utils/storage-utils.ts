@@ -152,9 +152,9 @@ export function findClosestStorage(
   return closestStorage ? { storage: closestStorage, distance: closestDistance } : null;
 }
 
-/** Calculates the position offset for a food item within a storage building */
+/** Calculates the position offset for an item within a storage building */
 export function calculateStorageItemPosition(storage: BuildingEntity): Vector2D {
-  const itemCount = storage.storedItems.filter((si) => si.item.itemType === 'food').length;
+  const itemCount = storage.storedItems.length;
   const angle = pseudoRandom(itemCount + storage.id) * 2 * Math.PI;
   const radius = pseudoRandom(itemCount + storage.id + 1) * STORAGE_ITEM_SCATTER_RADIUS;
 

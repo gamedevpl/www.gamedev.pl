@@ -167,6 +167,12 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         2,
       ),
 
+      // --- STORAGE DEPOSIT (EXCESS FOOD) ---
+      new AutopilotControlled(createStorageDepositBehavior(3), 'gathering', 'Gated Storage Deposit', 2),
+
+      // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
+      new AutopilotControlled(createFeedingChildBehavior(3), 'feedChildren', 'Gated Feed Child', 2),
+
       // --- RESOURCE MANAGEMENT (GATHER) ---
       new TimeoutNode(
         new AutopilotControlled(createGatheringBehavior(4), 'gathering', 'Gated Gathering', 3),
@@ -182,12 +188,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
         'Timeout Chopping',
         2,
       ),
-
-      // --- STORAGE DEPOSIT (EXCESS FOOD) ---
-      new AutopilotControlled(createStorageDepositBehavior(3), 'gathering', 'Gated Storage Deposit', 2),
-
-      // --- FAMILY/SOCIAL NEEDS (FEED CHILD) ---
-      new AutopilotControlled(createFeedingChildBehavior(3), 'feedChildren', 'Gated Feed Child', 2),
 
       // --- CHILD NEEDS (SEEK FOOD) ---
       createSeekingFoodFromParentBehavior(2),

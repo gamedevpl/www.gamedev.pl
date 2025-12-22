@@ -24,6 +24,7 @@ import {
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { addVisualEffect } from './visual-effects-utils';
 import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
+import { BONFIRE_STORAGE_CAPACITY } from '../temperature/temperature-consts';
 
 /**
  * Statistics for building placement search performance.
@@ -326,6 +327,11 @@ export function createBuilding(
   }
 
   const building = createBuildingEntity(gameState.entities, position, buildingType, ownerId);
+
+  if (buildingType === BuildingType.Bonfire) {
+    building.storageCapacity = BONFIRE_STORAGE_CAPACITY;
+    building.storedItems = [];
+  }
 
   // Paint terrain ownership for the new building
   paintTerrainOwnership(position, TERRITORY_BUILDING_RADIUS, ownerId, gameState);

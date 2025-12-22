@@ -11,6 +11,8 @@ import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode } from '../nodes';
 import { Blackboard } from '../behavior-tree-blackboard';
 import { EntityId } from '../../../entities/entities-types';
+import { ItemType } from '../../../entities/item-types';
+import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
 
 // Supply chain phase constants
 const PHASE_FINDING_DEMAND = 'FINDING_DEMAND';
@@ -26,6 +28,7 @@ type SupplyPhase =
 const BB_KEY_SUPPLY_PHASE = 'supply_phase';
 const BB_KEY_TARGET_DEMANDER_ID = 'supply_targetDemanderId';
 const BB_KEY_TARGET_STORAGE_ID = 'supply_targetStorageId';
+const BB_KEY_TARGET_RESOURCE_TYPE = 'supply_targetResourceType';
 
 /**
  * Cleans up all supply-related blackboard keys
@@ -36,6 +39,7 @@ function cleanupSupplyState(human: HumanEntity): void {
   Blackboard.delete(human.aiBlackboard, BB_KEY_SUPPLY_PHASE);
   Blackboard.delete(human.aiBlackboard, BB_KEY_TARGET_DEMANDER_ID);
   Blackboard.delete(human.aiBlackboard, BB_KEY_TARGET_STORAGE_ID);
+  Blackboard.delete(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE);
 }
 
 export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
@@ -95,29 +99,44 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
 
         // Store demander ID and transition to next phase
         Blackboard.set(human.aiBlackboard, BB_KEY_TARGET_DEMANDER_ID, demand.requesterId);
+        Blackboard.set(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE, demand.resourceType);
         Blackboard.set(human.aiBlackboard, BB_KEY_SUPPLY_PHASE, PHASE_RETRIEVING_FROM_STORAGE);
 
-        return [NodeStatus.RUNNING, `Claimed demand for ${demand.requesterId}, moving to retrieval phase`];
+        return [
+          NodeStatus.RUNNING,
+          `Claimed ${demand.resourceType} demand for ${demand.requesterId}, moving to retrieval phase`,
+        ];
       }
 
       // ===== PHASE 2: RETRIEVING_FROM_STORAGE =====
       if (currentPhase === PHASE_RETRIEVING_FROM_STORAGE) {
-        // Check if we already have food (retrieval completed)
-        if (human.food.length > 0) {
+        const resourceType = Blackboard.get<string>(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE);
+
+        // Check if we already have the resource (retrieval completed)
+        const hasFood = resourceType === 'food' && human.food.length > 0;
+        const hasWood = resourceType === 'wood' && human.heldItem?.type === ItemType.Wood;
+
+        if (hasFood || hasWood) {
           Blackboard.set(human.aiBlackboard, BB_KEY_SUPPLY_PHASE, PHASE_DELIVERING_TO_DEMANDER);
-          return [NodeStatus.RUNNING, 'Food retrieved, moving to delivery phase'];
+          return [NodeStatus.RUNNING, `${resourceType} retrieved, moving to delivery phase`];
         }
 
-        // Find storage with food
+        // Find storage with the required resource
         const storages = findNearbyTribeStorage(
           human,
           context.gameState,
           400, // search radius
-        );
+        ).filter((s) => {
+          if (resourceType === 'food') {
+            return s.storedItems.some((si) => si.item.itemType === 'food');
+          } else if (resourceType === 'wood') {
+            return s.storedItems.some((si) => si.item.type === ItemType.Wood);
+          }
+          return false;
+        });
 
         if (storages.length === 0) {
-          // TODO: import part of gathering behavior here and use it to gather food if no storage with food is found nearby
-          return [NodeStatus.FAILURE, 'No storage found nearby'];
+          return [NodeStatus.FAILURE, `No storage with ${resourceType} found nearby`];
         }
 
         // Find closest storage
@@ -147,6 +166,8 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
 
       // ===== PHASE 3: DELIVERING_TO_DEMANDER =====
       if (currentPhase === PHASE_DELIVERING_TO_DEMANDER) {
+        const resourceType = Blackboard.get<string>(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE) || 'food';
+
         // Get demander ID from blackboard
         const demanderId = Blackboard.get<EntityId>(human.aiBlackboard, BB_KEY_TARGET_DEMANDER_ID);
         if (!demanderId) {
@@ -154,28 +175,26 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
           return [NodeStatus.FAILURE, 'Demander ID not found in blackboard'];
         }
 
-        const demand = getDemandById(
-          leader.aiBlackboard,
-          demanderId,
-          'food', // Assuming food for now; could be extended for other resources
-        );
+        const demand = getDemandById(leader.aiBlackboard, demanderId, resourceType as any);
 
         if (!demand || demand.claimedBy !== human.id) {
           cleanupSupplyState(human);
           return [NodeStatus.FAILURE, 'Demand not found'];
         }
 
-        // Get demander entity
-        const demander = context.gameState.entities.entities[demanderId] as HumanEntity | undefined;
-        if (!demander || demander.type !== 'human') {
+        // Get demander entity (Human or Building)
+        const demander = context.gameState.entities.entities[demanderId];
+        if (!demander) {
           cleanupSupplyState(human);
-          return [NodeStatus.FAILURE, 'Demander not found or invalid'];
+          return [NodeStatus.FAILURE, 'Demander not found'];
         }
 
-        // Check if food was transferred (delivery completed)
-        if (human.food.length === 0) {
+        // Check if resource was transferred (delivery completed)
+        const isDeliveryComplete = resourceType === 'food' ? human.food.length === 0 : !human.heldItem;
+
+        if (isDeliveryComplete) {
           cleanupSupplyState(human);
-          return [NodeStatus.SUCCESS, `Successfully delivered food to ${demanderId}`];
+          return [NodeStatus.SUCCESS, `Successfully delivered ${resourceType} to ${demanderId}`];
         }
 
         // Calculate distance to demander
@@ -186,12 +205,21 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
           context.gameState.mapDimensions.height,
         );
 
+        const interactionRange =
+          demander.type === 'building' && (demander as BuildingEntity).buildingType === BuildingType.Bonfire
+            ? STORAGE_INTERACTION_RANGE
+            : HUMAN_INTERACTION_RANGE;
+
         // If close enough, start depositing
-        if (distance <= HUMAN_INTERACTION_RANGE) {
+        if (distance <= interactionRange) {
           human.activeAction = 'depositing';
+          if (resourceType === 'food') {
+            human.activeActionPayload = {
+              amount: Math.min((demander as any).maxFood / 2 || 1, human.food.length || 1),
+            };
+          }
           human.target = demander.id;
-          human.activeActionPayload = { amount: Math.min(demander.maxFood / 2, human.food.length) };
-          return [NodeStatus.RUNNING, `Depositing to demander ${demander.id}`];
+          return [NodeStatus.RUNNING, `Delivering to demander ${demander.id}`];
         }
 
         // Otherwise, move toward demander

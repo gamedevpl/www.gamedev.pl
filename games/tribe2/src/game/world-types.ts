@@ -102,10 +102,6 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotChop;
       targetEntityId: EntityId;
-    }
-  | {
-      action: PlayerActionType.AutopilotRefuel;
-      targetEntityId: EntityId;
     };
 
 export type ScheduledEventType = 'ranged-impact';

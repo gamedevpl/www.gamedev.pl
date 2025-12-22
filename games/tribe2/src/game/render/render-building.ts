@@ -249,7 +249,10 @@ export function renderBuilding(
 
   // 4. Render storage contents as miniature items
   // This is called after ctx.restore() to ensure clean transform state
-  if (building.buildingType === 'storageSpot' && isConstructed) {
+  if (
+    (building.buildingType === BuildingType.StorageSpot || building.buildingType === BuildingType.Bonfire) &&
+    isConstructed
+  ) {
     renderStorageContents(ctx, building);
   }
 }

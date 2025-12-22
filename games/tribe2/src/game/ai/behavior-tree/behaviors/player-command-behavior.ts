@@ -109,6 +109,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
           switch (activeAction.action) {
             // --- MOVE ---
             case PlayerActionType.AutopilotMove: {
+              if (!('position' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetPosition = activeAction.position;
               const distance = calculateWrappedDistance(
                 human.position,
@@ -134,6 +138,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- GATHER ---
             case PlayerActionType.AutopilotGather: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const target = gameState.entities.entities[activeAction.targetEntityId];
 
               if (!target) {
@@ -181,6 +189,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- CHOP ---
             case PlayerActionType.AutopilotChop: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const tree = gameState.entities.entities[activeAction.targetEntityId] as TreeEntity | undefined;
 
               if (!tree || tree.type !== 'tree') {
@@ -218,12 +230,20 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- ATTACK ---
             case PlayerActionType.AutopilotAttack: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               // Generic attack that works with any attackable entity
               return handleAutopilotAttack(gameState, human, activeAction);
             }
 
             // --- PROCREATE ---
             case PlayerActionType.AutopilotProcreate: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
               if (!target || target.type !== 'human' || !canProcreate(human, target, context.gameState)) {
@@ -256,6 +276,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
                 return NodeStatus.RUNNING;
               }
 
+              if (!('position' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const plantTarget = activeAction.position;
               if (isPositionOccupied(plantTarget, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
@@ -285,6 +309,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- FEED CHILD ---
             case PlayerActionType.AutopilotFeedChild: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
               if (!target || target.type !== 'human' || target.isAdult || human.food.length === 0) {
@@ -313,12 +341,21 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- DEPOSIT ---
             case PlayerActionType.AutopilotDeposit: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
                 | BuildingEntity
                 | undefined;
 
-              // Validate building exists and is a constructed storage spot
-              if (!targetBuilding || targetBuilding.buildingType !== 'storageSpot' || !targetBuilding.isConstructed) {
+              // Validate building exists and is a constructed storage spot or bonfire
+              if (
+                !targetBuilding ||
+                (targetBuilding.buildingType !== BuildingType.StorageSpot &&
+                  targetBuilding.buildingType !== BuildingType.Bonfire) ||
+                !targetBuilding.isConstructed
+              ) {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;
               }
@@ -337,10 +374,22 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
                 return NodeStatus.FAILURE;
               }
 
-              // Check if human has food to deposit
-              if (human.food.length === 0) {
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.FAILURE;
+              // Check if human has something to deposit
+              const hasFood = human.food.length > 0;
+              const hasHeldItem = !!human.heldItem;
+
+              if (targetBuilding.buildingType === BuildingType.Bonfire) {
+                // Bonfires only accept wood
+                if (human.heldItem?.type !== ItemType.Wood) {
+                  gameState.autopilotControls.activeAutopilotAction = undefined;
+                  return NodeStatus.FAILURE;
+                }
+              } else {
+                // Storage spots accept food or held items
+                if (!hasFood && !hasHeldItem) {
+                  gameState.autopilotControls.activeAutopilotAction = undefined;
+                  return NodeStatus.FAILURE;
+                }
               }
 
               const depositDistance = calculateWrappedDistance(
@@ -365,6 +414,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- RETRIEVE ---
             case PlayerActionType.AutopilotRetrieve: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
                 | BuildingEntity
                 | undefined;
@@ -372,7 +425,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               // Validate building exists, is a constructed storage spot, and has food
               if (
                 !targetBuilding ||
-                targetBuilding.buildingType !== 'storageSpot' ||
+                targetBuilding.buildingType !== BuildingType.StorageSpot ||
                 !targetBuilding.isConstructed ||
                 targetBuilding.storedItems.length === 0
               ) {
@@ -414,6 +467,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- TAKE OVER BUILDING ---
             case PlayerActionType.TakeOverBuilding: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
                 | BuildingEntity
                 | undefined;
@@ -456,6 +513,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- REMOVE ENEMY BUILDING ---
             case PlayerActionType.RemoveEnemyBuilding: {
+              if (!('targetEntityId' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as
                 | BuildingEntity
                 | undefined;
@@ -498,6 +559,10 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
 
             // --- BUILDING PLACEMENT ---
             case PlayerActionType.AutopilotBuildingPlacement: {
+              if (!('position' in activeAction) || !('buildingType' in activeAction)) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
               const targetPosition = activeAction.position;
               const buildingType = activeAction.buildingType;
 
@@ -542,40 +607,6 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = targetPosition;
               human.direction = dirToTarget(human.position, targetPosition, gameState.mapDimensions);
-              return NodeStatus.RUNNING;
-            }
-
-            // --- REFUEL ---
-            case PlayerActionType.AutopilotRefuel: {
-              const bonfire = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
-
-              if (
-                !bonfire ||
-                bonfire.buildingType !== BuildingType.Bonfire ||
-                !bonfire.isConstructed ||
-                human.heldItem?.type !== ItemType.Wood
-              ) {
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.FAILURE;
-              }
-
-              const distance = calculateWrappedDistance(
-                human.position,
-                bonfire.position,
-                gameState.mapDimensions.width,
-                gameState.mapDimensions.height,
-              );
-
-              if (distance <= STORAGE_INTERACTION_RANGE) {
-                human.activeAction = 'refueling';
-                human.target = bonfire.id;
-                gameState.autopilotControls.activeAutopilotAction = undefined;
-                return NodeStatus.SUCCESS;
-              }
-
-              human.activeAction = 'moving';
-              human.target = bonfire.id;
-              human.direction = dirToTarget(human.position, bonfire.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 

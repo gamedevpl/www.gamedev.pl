@@ -149,7 +149,7 @@ export const determineHoveredAutopilotAction = (
         }
         // Normal behavior (no SHIFT): deposit/retrieve based on player's inventory
         else if (isPlayerTribeStorage && building.isConstructed) {
-          if (player.food.length > 0 && hasStorageSpace) {
+          if ((player.food.length > 0 || player.heldItem) && hasStorageSpace) {
             // Can deposit
             determinedAction = { action: PlayerActionType.AutopilotDeposit, targetEntityId: hoveredEntity.id };
           } else if (player.food.length < player.maxFood && hasStoredFood) {
@@ -179,11 +179,9 @@ export const determineHoveredAutopilotAction = (
         building.buildingType === BuildingType.Bonfire &&
         player.heldItem?.type === ItemType.Wood &&
         building.isConstructed &&
-        building.fuelLevel !== undefined &&
-        building.maxFuelLevel !== undefined &&
-        building.fuelLevel < building.maxFuelLevel
+        building.storedItems.length < (building.storageCapacity || 0)
       ) {
-        determinedAction = { action: PlayerActionType.AutopilotRefuel, targetEntityId: building.id };
+        determinedAction = { action: PlayerActionType.AutopilotDeposit, targetEntityId: building.id };
       } else {
         determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
       }
@@ -284,8 +282,7 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
     if (
       hoveredAction.action === PlayerActionType.AutopilotMove ||
       hoveredAction.action === PlayerActionType.AutopilotGather ||
-      hoveredAction.action === PlayerActionType.AutopilotChop ||
-      hoveredAction.action === PlayerActionType.AutopilotRefuel
+      hoveredAction.action === PlayerActionType.AutopilotChop
     ) {
       gameState.hasPlayerMovedEver = true;
     }

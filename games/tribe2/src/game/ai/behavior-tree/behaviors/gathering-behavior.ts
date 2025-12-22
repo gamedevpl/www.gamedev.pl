@@ -24,6 +24,7 @@ import {
 import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
+import { getTribeWoodNeed } from '../../../entities/tribe/tribe-food-utils';
 
 type ResourceSource = BerryBushEntity | CorpseEntity | TreeEntity;
 const BLACKBOARD_KEY = 'resourceSource';
@@ -43,6 +44,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
   const findResourceAction = new ActionNode<HumanEntity>(
     (human, context, blackboard) => {
       const leader = getTribeLeaderForCoordination(human, context.gameState);
+      const woodNeed = leader ? getTribeWoodNeed(leader.id, context.gameState) : 0;
 
       const isHungryEnough = human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING;
       const hungryChildren = findChildren(context.gameState, human).filter(
@@ -140,6 +142,8 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       // Prioritization logic
       if (needsFood && human.food.length < human.maxFood) {
         resource = findFood();
+      } else if (woodNeed > 0 && !human.heldItem) {
+        resource = findWood();
       } else if (isGatherer) {
         // Gatherers look for wood first if not hungry, then food for storage
         if (!human.heldItem) {
@@ -230,6 +234,9 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       // 1. Initial condition checks.
       new ConditionNode(
         (human, context) => {
+          const leader = getTribeLeaderForCoordination(human, context.gameState);
+          const woodNeed = leader ? getTribeWoodNeed(leader.id, context.gameState) : 0;
+
           const hasFoodCapacity = human.food.length < human.maxFood;
           const hasWoodCapacity = !human.heldItem;
           const isHungryEnough = human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_GATHERING;
@@ -242,13 +249,15 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
 
           const canGatherFood =
             hasFoodCapacity && (isHungryEnough || hungryChildren.length > 0 || (isGatherer && hasNonFullStorage));
-          const canGatherWood = hasWoodCapacity && isGatherer && hasNonFullStorage;
+          const canGatherWood = hasWoodCapacity && (woodNeed > 0 || (isGatherer && hasNonFullStorage));
 
           return [
             (human.isAdult && (canGatherFood || canGatherWood)) ?? false,
             `${isHungryEnough ? 'Hungry ' : ''}${
               hungryChildren.length > 0 ? 'Children(' + hungryChildren.length + ') ' : ''
-            }${canGatherWood ? 'Wood ' : ''}${hasNonFullStorage ? 'Storage' : ''}`,
+            }${woodNeed > 0 ? 'WoodNeed(' + woodNeed + ') ' : ''}${
+              canGatherWood && woodNeed <= 0 ? 'Wood ' : ''
+            }${hasNonFullStorage ? 'Storage' : ''}`,
           ];
         },
         'Should Gather Resources',

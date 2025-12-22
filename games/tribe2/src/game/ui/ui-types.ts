@@ -24,7 +24,6 @@ export enum PlayerActionType {
   RemoveEnemyBuilding = 'RemoveEnemyBuilding',
   ArmyControl = 'ArmyControl',
   Chop = 'Chop',
-  Refuel = 'Refuel',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -36,7 +35,6 @@ export enum PlayerActionType {
   AutopilotRetrieve = 'AutopilotRetrieve',
   AutopilotBuildingPlacement = 'AutopilotBuildingPlacement',
   AutopilotChop = 'AutopilotChop',
-  AutopilotRefuel = 'AutopilotRefuel',
 }
 
 export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
@@ -57,7 +55,6 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.RemoveEnemyBuilding]: '🧨',
   [PlayerActionType.ArmyControl]: '🎖️',
   [PlayerActionType.Chop]: '🪓',
-  [PlayerActionType.Refuel]: '🪵',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -68,7 +65,6 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotRetrieve]: '🎁',
   [PlayerActionType.AutopilotBuildingPlacement]: '🏗️',
   [PlayerActionType.AutopilotChop]: '🪓',
-  [PlayerActionType.AutopilotRefuel]: '🪵',
 };
 
 export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
@@ -89,7 +85,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.RemoveEnemyBuilding]: 'Destroy Enemy Building',
   [PlayerActionType.ArmyControl]: 'Army Control',
   [PlayerActionType.Chop]: 'Chop Tree',
-  [PlayerActionType.Refuel]: 'Refuel',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -100,7 +95,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.AutopilotRetrieve]: 'Retrieve',
   [PlayerActionType.AutopilotBuildingPlacement]: 'Build',
   [PlayerActionType.AutopilotChop]: 'Chop',
-  [PlayerActionType.AutopilotRefuel]: 'Refuel',
 };
 
 export interface PlayerActionHint {

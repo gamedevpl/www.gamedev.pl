@@ -8,6 +8,7 @@ import {
   getTribeStorageSpots,
   getTribePlantingZones,
   isPlantingZoneViable,
+  getTribeBonfires,
 } from '../../../entities/tribe/tribe-food-utils';
 import { findChildren, getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { Blackboard } from '../behavior-tree-blackboard';
@@ -26,6 +27,13 @@ import { Sequence, Selector, ConditionNode, ActionNode, CachingNode } from '../n
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 import { calculateWrappedDistance, dirToTarget } from '../../../utils/math-utils';
 import { Vector2D } from '../../../utils/math-types';
+import { getTribeCenter } from '../../../utils';
+import { getTemperatureAt } from '../../../temperature/temperature-update';
+import {
+  BONFIRE_PLACEMENT_TEMP_THRESHOLD,
+  BONFIRE_REFUEL_THRESHOLD_RATIO,
+} from '../../../temperature/temperature-consts';
+import { registerDemand } from '../../supply-chain/tribe-logistics-utils';
 
 /**
  * Factory function to create a leader building placement behavior node.
@@ -39,7 +47,8 @@ import { Vector2D } from '../../../utils/math-types';
  *   3. Condition: Tribe meets minimum size
  *   4. Selector (try each until one succeeds)
  *      a. Sequence: Try to place storage (needs → find → move → place)
- *      b. Sequence: Try to place planting zone (needs → find → move → place)
+ *      b. Sequence: Try to place bonfire (needs → find → move → place)
+ *      c. Sequence: Try to place planting zone (needs → find → move → place)
  *
  * @param depth The depth of this node in the behavior tree
  * @returns A new behavior tree for leader building placement
@@ -75,10 +84,24 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const zoneDensity = existingPlantingZones.length / Math.max(1, tribeMembers.length);
       const projectedAdultCount = Math.ceil(adultMembers.length * (1 + LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE));
 
+      // Bonfire monitoring: Check fuel levels and register demands
+      const bonfires = getTribeBonfires(entity.leaderId!, context.gameState);
+      bonfires.forEach((bonfire) => {
+        if (
+          bonfire.isConstructed &&
+          bonfire.fuelLevel !== undefined &&
+          bonfire.maxFuelLevel !== undefined &&
+          bonfire.fuelLevel < bonfire.maxFuelLevel * BONFIRE_REFUEL_THRESHOLD_RATIO
+        ) {
+          registerDemand(blackboard, bonfire.id, 'wood', context.gameState.time);
+        }
+      });
+
       // Store individual values as primitives instead of a complex object
       Blackboard.set(blackboard, 'tribeAnalysis_adultCount', adultMembers.length);
       Blackboard.set(blackboard, 'tribeAnalysis_existingStorageSpots', existingStorageSpots.length);
       Blackboard.set(blackboard, 'tribeAnalysis_existingPlantingZones', existingPlantingZones.length);
+      Blackboard.set(blackboard, 'tribeAnalysis_existingBonfires', bonfires.length);
       Blackboard.set(blackboard, 'tribeAnalysis_storageUtilization', storageUtilization);
       Blackboard.set(blackboard, 'tribeAnalysis_bushCount', bushCount);
       Blackboard.set(blackboard, 'tribeAnalysis_bushDensity', bushDensity);
@@ -87,7 +110,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
 
       return [
         NodeStatus.SUCCESS,
-        `Analyzed tribe: ${adultMembers.length} adults, ${existingStorageSpots.length} storage, ${existingPlantingZones.length} viable planting zones`,
+        `Analyzed tribe: ${adultMembers.length} adults, ${existingStorageSpots.length} storage, ${existingPlantingZones.length} viable planting zones, ${bonfires.length} bonfires`,
       ];
     },
     'Analyze Tribe',
@@ -272,6 +295,134 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 1,
   );
 
+  // --- Bonfire Building Branch ---
+
+  // Condition: Needs bonfire
+  const needsBonfireCondition = new ConditionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      if (!entity.leaderId) return [false, 'No tribe'];
+
+      const existingBonfires = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingBonfires') || 0;
+      const tribeCenter = getTribeCenter(entity.leaderId, context.gameState);
+      const currentTemp = getTemperatureAt(
+        context.gameState.temperature,
+        tribeCenter,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      const needsBonfire = currentTemp < BONFIRE_PLACEMENT_TEMP_THRESHOLD && existingBonfires === 0;
+
+      if (!needsBonfire) {
+        return [false, `Temperature adequate: ${currentTemp.toFixed(1)}°C or bonfire exists`];
+      }
+
+      return [true, `Cold at tribe center: ${currentTemp.toFixed(1)}°C`];
+    },
+    'Needs Bonfire',
+    depth + 2,
+  );
+
+  // Action: Find bonfire placement location
+  const findBonfireLocationAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const placementLocation = findAdjacentBuildingPlacement(
+        BuildingType.Bonfire,
+        entity.id,
+        context.gameState,
+        LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
+        LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
+        entity.position, // Prioritize locations near leader
+      );
+
+      if (!placementLocation) {
+        return [
+          NodeStatus.FAILURE,
+          `No valid location found for bonfire within ${LEADER_BUILDING_SPIRAL_SEARCH_RADIUS}px`,
+        ];
+      }
+
+      // Store location in blackboard
+      Blackboard.set(blackboard, 'buildingPlacement_bonfireTarget', placementLocation);
+
+      return [
+        NodeStatus.SUCCESS,
+        `Found bonfire location at (${placementLocation.x.toFixed(0)}, ${placementLocation.y.toFixed(0)})`,
+      ];
+    },
+    'Find Bonfire Location',
+    depth + 2,
+  );
+
+  // Action: Move to bonfire placement location
+  const moveToBonfireLocationAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_bonfireTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance <= LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        return [NodeStatus.SUCCESS, `Reached bonfire location (${distance.toFixed(0)}px away)`];
+      }
+
+      // Move towards target
+      entity.activeAction = 'moving';
+      entity.target = targetLocation;
+      entity.direction = dirToTarget(entity.position, targetLocation, context.gameState.mapDimensions);
+
+      return [NodeStatus.RUNNING, `Moving to bonfire location (${distance.toFixed(0)}px away)`];
+    },
+    'Move To Bonfire Location',
+    depth + 2,
+  );
+
+  // Action: Place bonfire
+  const placeBonfireAction = new ActionNode<HumanEntity>(
+    (entity, context, blackboard) => {
+      const targetLocation = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_bonfireTarget');
+
+      if (!targetLocation) {
+        return [NodeStatus.FAILURE, 'No target location in blackboard'];
+      }
+
+      // Verify proximity one more time
+      const distance = calculateWrappedDistance(
+        entity.position,
+        targetLocation,
+        context.gameState.mapDimensions.width,
+        context.gameState.mapDimensions.height,
+      );
+
+      if (distance > LEADER_BUILDING_PLACEMENT_PROXIMITY) {
+        return [NodeStatus.FAILURE, `Too far from placement location: ${distance.toFixed(0)}px`];
+      }
+
+      createBuilding(targetLocation, BuildingType.Bonfire, entity.id, context.gameState);
+
+      // Clear blackboard
+      Blackboard.delete(blackboard, 'buildingPlacement_bonfireTarget');
+
+      return [NodeStatus.SUCCESS, `Placed bonfire at (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)})`];
+    },
+    'Place Bonfire',
+    depth + 2,
+  );
+
+  const bonfireSequence = new Sequence<HumanEntity>(
+    [needsBonfireCondition, findBonfireLocationAction, moveToBonfireLocationAction, placeBonfireAction],
+    'Bonfire Sequence',
+    depth + 1,
+  );
+
   // --- Planting Zone Building Branch ---
 
   // Condition: Needs planting zone
@@ -441,9 +592,9 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     depth + 1,
   );
 
-  // Selector: Try storage first, then planting zone
+  // Selector: Try storage first, then bonfire, then planting zone
   const buildingTypeSelector = new Selector<HumanEntity>(
-    [storageSequence, plantingZoneSequence],
+    [storageSequence, bonfireSequence, plantingZoneSequence],
     'Building Type Selector',
     depth + 1,
   );

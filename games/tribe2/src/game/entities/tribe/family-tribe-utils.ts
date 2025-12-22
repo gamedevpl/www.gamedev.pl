@@ -474,7 +474,8 @@ export function getTribeMembers(human: HumanEntity, gameState: GameWorldState): 
   return indexedState.search.human.byProperty('leaderId', human.leaderId);
 }
 
-// --- New functions for Dynamic Heir Recalculation and Peaceful Tribe Merging ---\n
+// --- New functions for Dynamic Heir Recalculation and Peaceful Tribe Merging ---
+
 export function detectOrphanedTribes(gameState: GameWorldState): EntityId[] {
   const orphanedTribeLeaderIds: Set<EntityId> = new Set();
 
@@ -498,7 +499,9 @@ export function detectOrphanedTribes(gameState: GameWorldState): EntityId[] {
 
     const leader = gameState.entities.entities[leaderId] as HumanEntity | undefined;
 
-    // A tribe is orphaned if:\n    // 1. The leader doesn't exist (died)\n    // 2. The leader exists but has joined another tribe (leaderId !== id)
+    // A tribe is orphaned if:
+    // 1. The leader doesn't exist (died)
+    // 2. The leader exists but has joined another tribe (leaderId !== id)
     const isLeaderDead = !leader;
     const isLeaderInAnotherTribe = leader && leader.leaderId !== leaderId;
 

@@ -6,7 +6,12 @@ import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts.
 import { paintTerrainOwnership } from '../tribe/territory-utils';
 import { TERRITORY_BUILDING_RADIUS } from '../tribe/territory-consts';
 import { updatePlantingZoneConnections } from '../../utils/planting-zone-connections-utils';
-import { BONFIRE_FUEL_CONSUMPTION_PER_HOUR } from '../../temperature/temperature-consts';
+import {
+  BONFIRE_FUEL_CONSUMPTION_PER_HOUR,
+  BONFIRE_REFUEL_THRESHOLD,
+  BONFIRE_FUEL_PER_WOOD,
+} from '../../temperature/temperature-consts';
+import { ItemType } from '../item-types';
 
 /**
  * Updates the state of a building entity.
@@ -72,6 +77,17 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     if (building.fuelLevel !== undefined) {
       building.fuelLevel -= gameHoursDelta * BONFIRE_FUEL_CONSUMPTION_PER_HOUR;
       if (building.fuelLevel < 0) building.fuelLevel = 0;
+
+      // Internal Refueling: Consume wood from storage if fuel is low
+      if (building.fuelLevel < (building.maxFuelLevel || 0) * BONFIRE_REFUEL_THRESHOLD) {
+        const woodItemIndex = building.storedItems.findIndex(
+          (si) => si.item.itemType === 'item' && si.item.type === ItemType.Wood,
+        );
+        if (woodItemIndex !== -1) {
+          building.storedItems.splice(woodItemIndex, 1);
+          building.fuelLevel = Math.min(building.maxFuelLevel || 0, building.fuelLevel + BONFIRE_FUEL_PER_WOOD);
+        }
+      }
     }
   }
 }

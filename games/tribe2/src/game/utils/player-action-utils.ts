@@ -179,7 +179,7 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
     }
   }
 
-  // Check for Refuel (bonfire)
+  // Check for Deposit (bonfire)
   if (player.heldItem?.type === ItemType.Wood) {
     const bonfire = findClosestEntity<BuildingEntity>(
       player,
@@ -191,16 +191,14 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
         return (
           building.buildingType === BuildingType.Bonfire &&
           building.isConstructed &&
-          building.fuelLevel !== undefined &&
-          building.maxFuelLevel !== undefined &&
-          building.fuelLevel < building.maxFuelLevel
+          building.storedItems.length < (building.storageCapacity || 0)
         );
       },
     );
     if (bonfire) {
       actions.push({
-        type: PlayerActionType.Refuel,
-        action: 'refueling',
+        type: PlayerActionType.Deposit,
+        action: 'depositing',
         key: 'x',
         targetEntity: bonfire,
       });

@@ -1,13 +1,15 @@
 import { InteractionDefinition } from './interactions-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { BuildingEntity } from '../entities/buildings/building-types';
+import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { UpdateContext } from '../world-types';
 import { STORAGE_INTERACTION_RANGE, STORAGE_DEPOSIT_COOLDOWN } from '../entities/buildings/storage-spot-consts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';
 import { calculateStorageItemPosition } from '../utils/storage-utils';
-import { Item } from '../entities/item-types';
+import { Item, ItemType } from '../entities/item-types';
+import { fulfillDemand } from '../ai/supply-chain/tribe-logistics-utils';
+import { getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
 import { FoodItem } from '../entities/food-types';
 
 /**
@@ -21,11 +23,15 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
   maxDistance: STORAGE_INTERACTION_RANGE,
 
   checker: (source: HumanEntity, target: BuildingEntity, context: UpdateContext): boolean => {
-    // Check if target is a storage spot
-    if (target.buildingType !== 'storageSpot') {
+    const isStorage = target.buildingType === BuildingType.StorageSpot;
+    const isBonfire = target.buildingType === BuildingType.Bonfire;
+
+    // Check if target is a valid storage-like building
+    if (!isStorage && !isBonfire) {
       return false;
     }
 
+    // Source must be in depositing state
     if (source.stateMachine?.[0] !== HUMAN_DEPOSITING) {
       return false;
     }
@@ -35,8 +41,15 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
       return false;
     }
 
-    // Source must have food or a held item (like wood) to deposit
-    if (source.food.length === 0 && !source.heldItem) {
+    // Check if source has something valid to deposit
+    const hasFood = source.food.length > 0;
+    const hasWood = source.heldItem?.type === ItemType.Wood;
+
+    if (isBonfire && !hasWood) {
+      return false;
+    }
+
+    if (!hasFood && !hasWood) {
       return false;
     }
 
@@ -63,11 +76,19 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
   perform: (source: HumanEntity, target: BuildingEntity, context: UpdateContext): void => {
     // Transfer one item from source to storage (prioritize held item)
     let itemToStore: FoodItem | Item | null = null;
-    if (source.heldItem) {
-      itemToStore = source.heldItem;
-      source.heldItem = undefined;
+
+    if (target.buildingType === BuildingType.Bonfire) {
+      if (source.heldItem?.type === ItemType.Wood) {
+        itemToStore = source.heldItem;
+        source.heldItem = undefined;
+      }
     } else {
-      itemToStore = source.food.pop() ?? null;
+      if (source.heldItem) {
+        itemToStore = source.heldItem;
+        source.heldItem = undefined;
+      } else {
+        itemToStore = source.food.pop() ?? null;
+      }
     }
 
     if (itemToStore) {
@@ -75,6 +96,13 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
         item: itemToStore,
         positionOffset: calculateStorageItemPosition(target),
       });
+
+      if (target.buildingType === BuildingType.Bonfire) {
+        const leader = getTribeLeaderForCoordination(source, context.gameState);
+        if (leader && leader.aiBlackboard) {
+          fulfillDemand(leader.aiBlackboard, target.id, 'wood');
+        }
+      }
     }
 
     // Update cooldown timestamp

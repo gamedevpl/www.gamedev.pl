@@ -15,7 +15,7 @@ import {
   TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../entities/tribe/tribe-task-utils';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
-import { getTribeWoodNeed } from '../../../entities/tribe/tribe-food-utils';
+import { getTribeWoodNeed, getTribeAvailableWoodOnGround } from '../../../entities/tribe/tribe-food-utils';
 
 const BLACKBOARD_KEY = 'treeTarget';
 
@@ -138,8 +138,13 @@ export function createChoppingBehavior(depth: number): BehaviorNode<HumanEntity>
         (human, context) => {
           const leader = getTribeLeaderForCoordination(human, context.gameState);
           if (!leader) return [false, 'No leader for coordination'];
-          const need = getTribeWoodNeed(leader.id, context.gameState);
-          return [need > 0, `Wood need: ${need}`];
+          const woodNeed = getTribeWoodNeed(leader.id, context.gameState);
+          if (woodNeed <= 0) return [false, 'No wood need'];
+
+          const availableOnGround = getTribeAvailableWoodOnGround(leader.id, context.gameState);
+          const shouldChopMore = woodNeed > availableOnGround;
+
+          return [shouldChopMore, `Wood need: ${woodNeed}, Available on ground: ${availableOnGround}`];
         },
         'Need Wood?',
         depth + 1,

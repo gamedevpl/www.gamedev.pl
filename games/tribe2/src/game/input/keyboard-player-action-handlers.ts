@@ -222,15 +222,13 @@ export const handlePlayerActionKeyDown = (
         return (
           building.buildingType === BuildingType.Bonfire &&
           building.isConstructed &&
-          building.fuelLevel !== undefined &&
-          building.maxFuelLevel !== undefined &&
-          building.fuelLevel < building.maxFuelLevel
+          building.storedItems.length < (building.storageCapacity || 0)
         );
       },
     );
 
     if (playerEntity.heldItem?.type === ItemType.Wood && bonfire) {
-      playerEntity.activeAction = 'refueling';
+      playerEntity.activeAction = 'depositing';
       playerEntity.target = bonfire.id;
       playSoundAt(updateContext, SoundType.StorageDeposit, playerEntity.position);
       return;
@@ -372,9 +370,6 @@ export const handlePlayerActionKeyUp = (
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('h') && playerEntity.activeAction === 'feeding') {
-    playerEntity.activeAction = 'idle';
-  }
-  if (!keysPressed.current.has('x') && playerEntity.activeAction === 'refueling') {
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('c') && playerEntity.activeAction === 'chopping') {
