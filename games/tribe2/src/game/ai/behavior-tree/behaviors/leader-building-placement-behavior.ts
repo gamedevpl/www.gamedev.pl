@@ -138,9 +138,9 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Condition: Needs storage
   const needsStorageCondition = new ConditionNode<HumanEntity>(
     (_entity, _context, blackboard) => {
-      // Prevent multiple concurrent placements
+      // If a placement is already in progress, consider the need "met" (succeeded) so the sequence continues
       if (Blackboard.has(blackboard, 'buildingPlacement_storageTarget')) {
-        return [false, 'Placement already in progress'];
+        return [true, 'Placement already in progress'];
       }
 
       const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount');
@@ -184,6 +184,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Find storage placement location
   const findStorageLocationAction = new ActionNode<HumanEntity>(
     (entity, context, blackboard) => {
+      // If we already have a target, skip search
+      if (Blackboard.has(blackboard, 'buildingPlacement_storageTarget')) {
+        return [NodeStatus.SUCCESS, 'Using existing storage placement target'];
+      }
+
       const existingStorageSpots = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingStorageSpots');
       if (existingStorageSpots === undefined) {
         return [NodeStatus.FAILURE, 'No tribe analysis available'];
@@ -304,9 +309,9 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     (entity, context, blackboard) => {
       if (!entity.leaderId) return [false, 'No tribe'];
 
-      // Prevent multiple concurrent placements
+      // If a placement is already in progress, consider the need "met" (succeeded) so the sequence continues
       if (Blackboard.has(blackboard, 'buildingPlacement_bonfireTarget')) {
-        return [false, 'Placement already in progress'];
+        return [true, 'Placement already in progress'];
       }
 
       const existingBonfires = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingBonfires') || 0;
@@ -389,6 +394,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Find bonfire placement location
   const findBonfireLocationAction = new ActionNode<HumanEntity>(
     (entity, context, blackboard) => {
+      // If we already have a target, skip search
+      if (Blackboard.has(blackboard, 'buildingPlacement_bonfireTarget')) {
+        return [NodeStatus.SUCCESS, 'Using existing bonfire placement target'];
+      }
+
       const coldClusterPos = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_coldClusterPos');
 
       const placementLocation = findAdjacentBuildingPlacement(
@@ -498,9 +508,9 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Condition: Needs planting zone
   const needsPlantingZoneCondition = new ConditionNode<HumanEntity>(
     (_entity, _context, blackboard) => {
-      // Prevent multiple concurrent placements
+      // If a placement is already in progress, consider the need "met" (succeeded) so the sequence continues
       if (Blackboard.has(blackboard, 'buildingPlacement_plantingTarget')) {
-        return [false, 'Placement already in progress'];
+        return [true, 'Placement already in progress'];
       }
 
       const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount');
@@ -561,6 +571,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Find planting zone placement location
   const findPlantingZoneLocationAction = new ActionNode<HumanEntity>(
     (entity, context, blackboard) => {
+      // If we already have a target, skip search
+      if (Blackboard.has(blackboard, 'buildingPlacement_plantingTarget')) {
+        return [NodeStatus.SUCCESS, 'Using existing planting zone placement target'];
+      }
+
       const placementLocation = findAdjacentBuildingPlacement(
         BuildingType.PlantingZone,
         entity.id,

@@ -13,6 +13,7 @@ import {
   HUMAN_YEAR_IN_REAL_SECONDS,
   HUMAN_BASE_HITPOINT_REGEN_PER_HOUR,
   HITPOINT_REGEN_HUNGER_MODIFIER,
+  HUMAN_HUNGER_HEALTH_DRAIN_PER_HOUR,
 } from '../../../human-consts.ts';
 import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
 import { CHARACTER_CHILD_RADIUS, CHARACTER_RADIUS } from '../../../ui/ui-consts.ts';
@@ -62,13 +63,23 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   // --- Hitpoint Regeneration -- -
-  if (entity.hitpoints < entity.maxHitpoints) {
+  if (entity.hitpoints < entity.maxHitpoints && entity.hunger < HUMAN_HUNGER_DEATH) {
     const hungerFactor = 1 - (entity.hunger / HUMAN_HUNGER_DEATH) * HITPOINT_REGEN_HUNGER_MODIFIER;
     const regeneration = HUMAN_BASE_HITPOINT_REGEN_PER_HOUR * hungerFactor * gameHoursDelta;
     entity.hitpoints = Math.min(entity.maxHitpoints, entity.hitpoints + regeneration);
   }
 
   entity.hunger += deltaTime * (HUMAN_HUNGER_INCREASE_PER_HOUR / (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS));
+
+  if (entity.hunger >= HUMAN_HUNGER_DEATH) {
+    if (entity.food.length > 0 && entity.isAdult) {
+      entity.food.pop();
+      entity.hunger = Math.max(0, entity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
+    } else {
+      const hungerDrain = HUMAN_HUNGER_HEALTH_DRAIN_PER_HOUR * gameHoursDelta;
+      entity.hitpoints -= hungerDrain;
+    }
+  }
 
   entity.age += deltaTime / HUMAN_YEAR_IN_REAL_SECONDS;
 
@@ -165,13 +176,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   let causeOfDeath: string | undefined = undefined;
   if (entity.hitpoints <= 0) {
-    causeOfDeath = localTemp < COLD_THRESHOLD ? 'hypothermia' : 'killed';
-  } else if (entity.hunger >= HUMAN_HUNGER_DEATH) {
-    if (entity.food.length > 0 && entity.isAdult) {
-      entity.food.pop();
-      entity.hunger = Math.max(0, entity.hunger - HUMAN_FOOD_HUNGER_REDUCTION);
-    } else {
+    if (localTemp < COLD_THRESHOLD) {
+      causeOfDeath = 'hypothermia';
+    } else if (entity.hunger >= HUMAN_HUNGER_DEATH) {
       causeOfDeath = 'hunger';
+    } else {
+      causeOfDeath = 'killed';
     }
   } else if (entity.age >= entity.maxAge) {
     causeOfDeath = 'oldAge';

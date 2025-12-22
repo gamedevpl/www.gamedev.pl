@@ -5,6 +5,7 @@ import {
   PREY_MAX_AGE_YEARS,
   PREY_INITIAL_HUNGER,
   PREY_MIN_PROCREATION_AGE,
+  ANIMAL_HUNGER_HEALTH_DRAIN_PER_HOUR,
 } from '../../../animal-consts.ts';
 import { EFFECT_DURATION_MEDIUM_HOURS } from '../../../effect-consts.ts';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../game-consts.ts';
@@ -36,6 +37,11 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
   }
 
   prey.hunger += hungerIncrease;
+
+  if (prey.hunger >= PREY_HUNGER_DEATH) {
+    const hungerDrain = ANIMAL_HUNGER_HEALTH_DRAIN_PER_HOUR * gameHoursDelta;
+    prey.hitpoints -= hungerDrain;
+  }
 
   // Handle gestation for pregnant females
   if (prey.isPregnant && prey.gestationTime !== undefined) {
@@ -129,10 +135,6 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
 
   // Check for death conditions
   let shouldDie = false;
-
-  if (prey.hunger >= PREY_HUNGER_DEATH) {
-    shouldDie = true;
-  }
 
   if (prey.hitpoints <= 0) {
     shouldDie = true;

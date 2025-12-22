@@ -62,6 +62,7 @@ export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_MODIFIER = 0.5; // 50% speed reducti
 export const HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS = 1.5; // in game hours
 export const HUMAN_BASE_HITPOINT_REGEN_PER_HOUR = 1;
 export const HITPOINT_REGEN_HUNGER_MODIFIER = 0.5; // Regeneration is 50% slower at max hunger
+export const HUMAN_HUNGER_HEALTH_DRAIN_PER_HOUR = 1;
 export const HUMAN_MALE_DAMAGE_MODIFIER = 1.5;
 export const HUMAN_CHILD_DAMAGE_MODIFIER = 0.25;
 export const HUMAN_VULNERABLE_DAMAGE_MODIFIER = 2.5;
