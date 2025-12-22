@@ -62,12 +62,19 @@ export function renderGame(
   const player = findPlayerEntity(gameState);
 
   // Render territory borders (before world entities so they appear behind)
-  renderAllTerritories(ctx, gameState, viewportCenter, canvasDimensions, gameState.time, player?.leaderId);
+  const borderLights = renderAllTerritories(ctx, gameState, viewportCenter, canvasDimensions, player?.leaderId);
 
   // Render depleted soil patches (under entities)
   renderDepletedSoil(ctx, gameState, viewportCenter, canvasDimensions);
 
-  renderWorld(ctx, gameState, gameState.debugPanel === DebugPanelType.General, viewportCenter, canvasDimensions);
+  renderWorld(
+    ctx,
+    gameState,
+    gameState.debugPanel === DebugPanelType.General,
+    viewportCenter,
+    canvasDimensions,
+    borderLights,
+  );
 
   // Render ghost building preview
   if (

@@ -47,6 +47,8 @@ import {
   createTribeRoleManagementBehavior,
   createChoppingBehavior,
   createCleanupTreesBehavior,
+  createGatherAtBonfireBehavior,
+  createTribeLogisticsManagementBehavior,
 } from './behaviors';
 import { createTribeSplitGatherBehavior } from './behaviors/tribe-split-gather-behavior';
 import { HumanEntity } from '../../entities/characters/human/human-types';
@@ -108,6 +110,7 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
       new AutopilotControlled(createAttackingBehavior(3), 'attack', 'Gated Attacking', 2),
 
       // --- PERSONAL NEEDS (EAT) ---
+      createGatherAtBonfireBehavior(2),
       createEatingBehavior(2),
       createDemandBehavior(2),
 
@@ -233,6 +236,13 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
+
+      // --- TRIBE LOGISTICS MANAGEMENT (LEADER) ---
+      new NonPlayerControlled(
+        createTribeLogisticsManagementBehavior(2),
+        'Gated Logistics Management',
+        2,
+      ),
     ],
     'Non blocking',
     1,

@@ -158,7 +158,8 @@ export function getTribeWoodNeed(leaderId: EntityId, gameState: GameWorldState):
   // Calculate wood needed for refueling bonfires
   const bonfires = getTribeBonfires(leaderId, gameState);
   const fuelWoodNeeded = bonfires.reduce((sum, b) => {
-    const fuelDeficit = (b.maxFuelLevel || 0) - (b.fuelLevel || 0);
+    const maxFuel = b.maxFuelLevel || BONFIRE_MAX_FUEL;
+    const fuelDeficit = maxFuel - (b.fuelLevel || 0);
     if (fuelDeficit <= 0) return sum;
 
     // Calculate how many wood units are needed to top off the fuel
@@ -498,7 +499,7 @@ export function assignWoodDepositTarget(human: HumanEntity, gameState: GameWorld
   });
 
   if (availableBonfires.length > 0) {
-    // 1. Prioritize bonfires that need fuel (below threshold)
+    // 1. Prioritize bonfires that need fuel (critically low < 25%, then needy < threshold)
     const needyBonfires = availableBonfires.filter((b) => {
       const fuelLevel = b.fuelLevel ?? 0;
       const maxFuel = b.maxFuelLevel ?? BONFIRE_MAX_FUEL;
@@ -506,8 +507,27 @@ export function assignWoodDepositTarget(human: HumanEntity, gameState: GameWorld
     });
 
     if (needyBonfires.length > 0) {
-      // Pick the one with the lowest fuel level
-      needyBonfires.sort((a, b) => (a.fuelLevel ?? 0) - (b.fuelLevel ?? 0));
+      // Sort by fuel level ascending (most needy first)
+      needyBonfires.sort((a, b) => {
+        const fuelA = a.fuelLevel ?? 0;
+        const fuelB = b.fuelLevel ?? 0;
+        const maxA = a.maxFuelLevel ?? BONFIRE_MAX_FUEL;
+        const maxB = b.maxFuelLevel ?? BONFIRE_MAX_FUEL;
+
+        const ratioA = fuelA / maxA;
+        const ratioB = fuelB / maxB;
+
+        // Prioritize critical fuel level (< 25%)
+        const isCriticalA = ratioA < 0.25;
+        const isCriticalB = ratioB < 0.25;
+
+        if (isCriticalA !== isCriticalB) {
+          return isCriticalA ? -1 : 1;
+        }
+
+        // Then prioritize absolute lowest fuel
+        return fuelA - fuelB;
+      });
       return needyBonfires[0];
     }
 
@@ -554,13 +574,18 @@ export function countTribeMembersWithAction(
 }
 
 /**
- * Gets all constructed storage spots owned by tribe members.
+ * Gets storage spots owned by tribe members.
  *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
+ * @param includeUnconstructed Whether to include buildings still under construction
  * @returns Array of storage spot buildings
  */
-export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldState): BuildingEntity[] {
+export function getTribeStorageSpots(
+  leaderId: EntityId,
+  gameState: GameWorldState,
+  includeUnconstructed: boolean = false,
+): BuildingEntity[] {
   const indexedState = gameState as IndexedWorldState;
   const allBuildings = indexedState.search.building.all();
 
@@ -571,7 +596,7 @@ export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldSta
     }
 
     // Must be constructed
-    if (!building.isConstructed) {
+    if (!includeUnconstructed && !building.isConstructed) {
       return false;
     }
 
@@ -586,13 +611,18 @@ export function getTribeStorageSpots(leaderId: EntityId, gameState: GameWorldSta
 }
 
 /**
- * Gets all constructed bonfires owned by tribe members.
+ * Gets bonfires owned by tribe members.
  *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
+ * @param includeUnconstructed Whether to include buildings still under construction
  * @returns Array of bonfire buildings
  */
-export function getTribeBonfires(leaderId: EntityId, gameState: GameWorldState): BuildingEntity[] {
+export function getTribeBonfires(
+  leaderId: EntityId,
+  gameState: GameWorldState,
+  includeUnconstructed: boolean = false,
+): BuildingEntity[] {
   const indexedState = gameState as IndexedWorldState;
   const allBuildings = indexedState.search.building.all();
 
@@ -603,7 +633,7 @@ export function getTribeBonfires(leaderId: EntityId, gameState: GameWorldState):
     }
 
     // Must be constructed
-    if (!building.isConstructed) {
+    if (!includeUnconstructed && !building.isConstructed) {
       return false;
     }
 

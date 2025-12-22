@@ -5,10 +5,12 @@ import {
   TEMPERATURE_SECTOR_SIZE,
   BONFIRE_HEAT_RADIUS,
   BONFIRE_HEAT_INTENSITY,
+  TEMPERATURE_CYCLE_AMPLITUDE,
 } from './temperature-consts';
 import { getTemperatureSectorKey, TemperatureState, TemperatureSector } from './temperature-types';
 import { calculateWrappedDistance } from '../utils/math-utils';
 import { BuildingEntity } from '../entities/buildings/building-types';
+import { getDaylightFactor } from '../utils/time-utils';
 
 /**
  * Converts a world position to temperature grid coordinates.
@@ -32,6 +34,7 @@ function positionToTemperatureGridCoords(
  * Gets the temperature at a specific world position.
  * @param state The current temperature state.
  * @param position The position to check.
+ * @param time The current game time.
  * @param worldWidth The width of the game world.
  * @param worldHeight The height of the game world.
  * @returns The temperature in degrees Celsius.
@@ -39,6 +42,7 @@ function positionToTemperatureGridCoords(
 export function getTemperatureAt(
   state: TemperatureState,
   position: Vector2D,
+  time: number,
   worldWidth: number,
   worldHeight: number,
 ): number {
@@ -46,7 +50,12 @@ export function getTemperatureAt(
   const key = getTemperatureSectorKey(gridX, gridY);
   const sector = state.sectors[key];
 
-  return sector ? sector.currentTemperature : BASE_TEMPERATURE_DEFAULT;
+  const baseTemp = sector ? sector.currentTemperature : BASE_TEMPERATURE_DEFAULT;
+
+  const daylightFactor = getDaylightFactor(time);
+  const cycleTempOffset = (daylightFactor * 2 - 1) * TEMPERATURE_CYCLE_AMPLITUDE;
+
+  return baseTemp + cycleTempOffset;
 }
 
 /**
@@ -57,21 +66,27 @@ export function updateTemperature(gameState: GameWorldState): void {
   const { sectors } = gameState.temperature;
   const { width, height } = gameState.mapDimensions;
 
+  const cols = Math.ceil(width / TEMPERATURE_SECTOR_SIZE);
+  const rows = Math.ceil(height / TEMPERATURE_SECTOR_SIZE);
+
   // 1. Reset currentTemperature to baseTemperature
   for (const key in sectors) {
-    sectors[key].currentTemperature = sectors[key].baseTemperature;
+    const sector = sectors[key];
+    sector.currentTemperature = sector.baseTemperature;
   }
 
   // 2. Apply heat from bonfires
-  const cols = Math.ceil(width / TEMPERATURE_SECTOR_SIZE);
-  const rows = Math.ceil(height / TEMPERATURE_SECTOR_SIZE);
   const sectorSearchRadius = Math.ceil(BONFIRE_HEAT_RADIUS / TEMPERATURE_SECTOR_SIZE);
 
   Object.values(gameState.entities.entities).forEach((entity) => {
     if (entity.type === 'building') {
       const building = entity as BuildingEntity;
       // Using string literal 'bonfire' as BuildingType.Bonfire might not be defined yet in consts
-      if (building.buildingType === ('bonfire' as any) && building.isConstructed && (building as any).fuelLevel > 0) {
+      if (
+        building.buildingType === 'bonfire' &&
+        building.isConstructed &&
+        (building as BuildingEntity).fuelLevel! > 0
+      ) {
         const bonfireCoords = positionToTemperatureGridCoords(building.position, width, height);
 
         // Iterate through sectors in a neighborhood around the bonfire
@@ -122,14 +137,14 @@ export function initTemperatureState(worldWidth: number, worldHeight: number): T
       // Start with base temperature
       let temp = BASE_TEMPERATURE_DEFAULT;
 
-      // Add a simple gradient variation (colder in the \"north\" / top of map)
+      // Add a simple gradient variation (colder in the "north" / top of map)
       const gradientFactor = (y / rows) * 10 - 5; // -5 to +5 degrees
       temp += gradientFactor;
 
       // Add some random local variance
       temp += Math.random() * 4 - 2; // +/- 2 degrees
 
-      // Occasionally add a \"cold spot\"
+      // Occasionally add a "cold spot"
       if (Math.random() < 0.05) {
         temp -= 10;
       }

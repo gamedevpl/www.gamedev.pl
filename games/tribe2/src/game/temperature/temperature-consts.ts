@@ -13,7 +13,7 @@ export const BASE_TEMPERATURE_DEFAULT = 20;
 export const COLD_THRESHOLD = 10;
 
 /** Health points lost per hour for each degree Celsius below the COLD_THRESHOLD. */
-export const HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD = 0.2;
+export const HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD = 0.5;
 
 /** Radius in pixels within which a bonfire emits heat. */
 export const BONFIRE_HEAT_RADIUS = 150;
@@ -22,7 +22,7 @@ export const BONFIRE_HEAT_RADIUS = 150;
 export const BONFIRE_HEAT_INTENSITY = 25;
 
 /** Amount of fuel consumed by a bonfire per game hour. */
-export const BONFIRE_FUEL_CONSUMPTION_PER_HOUR = 0.1;
+export const BONFIRE_FUEL_CONSUMPTION_PER_HOUR = 0.5;
 
 /** Maximum fuel capacity for a bonfire. */
 export const BONFIRE_MAX_FUEL = 100;
@@ -41,3 +41,15 @@ export const BONFIRE_STORAGE_CAPACITY = 4;
 
 /** Fuel level ratio below which the bonfire will consume a wood item from its storage. */
 export const BONFIRE_REFUEL_THRESHOLD = 0.75;
+
+/** Maximum temperature variation caused by the day/night cycle. */
+export const TEMPERATURE_CYCLE_AMPLITUDE = 15;
+
+/** Maximum number of humans that can gather around a single bonfire. */
+export const BONFIRE_MAX_USERS = 8;
+
+/** Number of tribe members per bonfire before a leader considers building another one. */
+export const BONFIRE_TRIBE_SIZE_RATIO = 12;
+
+/** Frequency at which the leader checks for fuel levels and registers demands. */
+export const BONFIRE_LOGISTICS_CHECK_INTERVAL_HOURS = 0.5;

@@ -7,11 +7,14 @@ import {
   TREE_FOLIAGE_COLOR_MAIN,
   TREE_FOLIAGE_COLOR_LIGHT,
   TREE_SHADOW_COLOR,
+  TREE_MAX_WOOD,
 } from '../entities/plants/tree/tree-consts';
 import { TREE_FALLEN, TREE_STUMP } from '../entities/plants/tree/states/tree-state-types';
+import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
 
 const SWAY_SPEED = 0.001;
 const SWAY_AMPLITUDE = 0.05; // Radians
+const WOOD_ICON_SIZE = 12;
 
 export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time: number): void {
   const { position, age, swayOffset } = tree;
@@ -58,6 +61,28 @@ export function renderTree(ctx: CanvasRenderingContext2D, tree: TreeEntity, time
   }
 
   ctx.restore();
+
+  // 5. Render available wood items around the tree base if it's fallen or a stump
+  if ((state === TREE_FALLEN || state === TREE_STUMP) && tree.wood && tree.wood.length > 0) {
+    ctx.save();
+    ctx.font = `${WOOD_ICON_SIZE}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const scatterRadius = tree.radius * 1.1;
+    const angleStep = (Math.PI * 2) / (TREE_MAX_WOOD - 1);
+
+    tree.wood.forEach((item, i) => {
+      const dist = i === 0 ? 0 : scatterRadius;
+      const angle = i === 0 ? 0 : (i - 1) * angleStep;
+      const x = position.x + dist * Math.cos(angle);
+      const y = position.y + dist * Math.sin(angle);
+      const emoji = ITEM_TYPE_EMOJIS[item.type];
+      ctx.fillText(emoji, x, y);
+    });
+
+    ctx.restore();
+  }
 }
 
 function drawTrunk(ctx: CanvasRenderingContext2D, trunkWidth: number, trunkHeight: number) {

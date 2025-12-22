@@ -31,9 +31,10 @@ import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
 import {
   BONFIRE_PLACEMENT_TEMP_THRESHOLD,
-  BONFIRE_REFUEL_THRESHOLD_RATIO,
+  BONFIRE_TRIBE_SIZE_RATIO,
+  COLD_THRESHOLD,
+  BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
-import { registerDemand } from '../../supply-chain/tribe-logistics-utils';
 
 /**
  * Factory function to create a leader building placement behavior node.
@@ -75,7 +76,8 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     (entity, context, blackboard) => {
       const tribeMembers = getTribeMembers(entity, context.gameState);
       const adultMembers = tribeMembers.filter((member) => member.isAdult);
-      const existingStorageSpots = getTribeStorageSpots(entity.leaderId!, context.gameState);
+      // includeUnconstructed = true to prevent redundant placements
+      const existingStorageSpots = getTribeStorageSpots(entity.leaderId!, context.gameState, true);
       const existingPlantingZones = getTribePlantingZones(entity, context.gameState).filter((zone) =>
         isPlantingZoneViable(zone, context.gameState),
       );
@@ -84,18 +86,8 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const zoneDensity = existingPlantingZones.length / Math.max(1, tribeMembers.length);
       const projectedAdultCount = Math.ceil(adultMembers.length * (1 + LEADER_BUILDING_PROJECTED_TRIBE_GROWTH_RATE));
 
-      // Bonfire monitoring: Check fuel levels and register demands
-      const bonfires = getTribeBonfires(entity.leaderId!, context.gameState);
-      bonfires.forEach((bonfire) => {
-        if (
-          bonfire.isConstructed &&
-          bonfire.fuelLevel !== undefined &&
-          bonfire.maxFuelLevel !== undefined &&
-          bonfire.fuelLevel < bonfire.maxFuelLevel * BONFIRE_REFUEL_THRESHOLD_RATIO
-        ) {
-          registerDemand(blackboard, bonfire.id, 'wood', context.gameState.time);
-        }
-      });
+      // Bonfire monitoring: includeUnconstructed = true to prevent redundant placements
+      const bonfires = getTribeBonfires(entity.leaderId!, context.gameState, true);
 
       // Store individual values as primitives instead of a complex object
       Blackboard.set(blackboard, 'tribeAnalysis_adultCount', adultMembers.length);
@@ -146,6 +138,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Condition: Needs storage
   const needsStorageCondition = new ConditionNode<HumanEntity>(
     (_entity, _context, blackboard) => {
+      // Prevent multiple concurrent placements
+      if (Blackboard.has(blackboard, 'buildingPlacement_storageTarget')) {
+        return [false, 'Placement already in progress'];
+      }
+
       const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount');
       const existingStorageSpots = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingStorageSpots');
       const storageUtilization = Blackboard.get<number>(blackboard, 'tribeAnalysis_storageUtilization');
@@ -283,6 +280,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       // Clear blackboard
       Blackboard.delete(blackboard, 'buildingPlacement_storageTarget');
 
+      // Invalidate cache
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_status');
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_timestamp');
+      delete blackboard.nodeExecutionData['Cached Tribe Analysis'];
+
       return [NodeStatus.SUCCESS, `Placed storage at (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)})`];
     },
     'Place Storage',
@@ -302,22 +304,83 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
     (entity, context, blackboard) => {
       if (!entity.leaderId) return [false, 'No tribe'];
 
+      // Prevent multiple concurrent placements
+      if (Blackboard.has(blackboard, 'buildingPlacement_bonfireTarget')) {
+        return [false, 'Placement already in progress'];
+      }
+
       const existingBonfires = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingBonfires') || 0;
+      const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount') || 0;
       const tribeCenter = getTribeCenter(entity.leaderId, context.gameState);
       const currentTemp = getTemperatureAt(
         context.gameState.temperature,
         tribeCenter,
+        context.gameState.time,
         context.gameState.mapDimensions.width,
         context.gameState.mapDimensions.height,
       );
 
-      const needsBonfire = currentTemp < BONFIRE_PLACEMENT_TEMP_THRESHOLD && existingBonfires === 0;
+      // 1. Basic need: cold at center and no bonfire
+      const needsFirstBonfire = currentTemp < BONFIRE_PLACEMENT_TEMP_THRESHOLD && existingBonfires === 0;
 
-      if (!needsBonfire) {
-        return [false, `Temperature adequate: ${currentTemp.toFixed(1)}°C or bonfire exists`];
+      // 2. Supplemental need: tribe has grown beyond current bonfire capacity
+      const needsByRatio = existingBonfires > 0 && existingBonfires < Math.ceil(adultCount / BONFIRE_TRIBE_SIZE_RATIO);
+
+      // 3. Supplemental need: clusters of cold members far from existing heat sources
+      const tribeMembers = getTribeMembers(entity, context.gameState);
+      const bonfires = getTribeBonfires(entity.leaderId, context.gameState);
+
+      const coldMembers = tribeMembers.filter((m) => {
+        const localTemp = getTemperatureAt(
+          context.gameState.temperature,
+          m.position,
+          context.gameState.time,
+          context.gameState.mapDimensions.width,
+          context.gameState.mapDimensions.height,
+        );
+
+        const isCold = localTemp < COLD_THRESHOLD + 5;
+        if (!isCold) return false;
+
+        // Far from any existing bonfire
+        const farFromHeat = bonfires.every((b) => {
+          const dist = calculateWrappedDistance(
+            m.position,
+            b.position,
+            context.gameState.mapDimensions.width,
+            context.gameState.mapDimensions.height,
+          );
+          return dist > BONFIRE_HEAT_RADIUS * 1.5;
+        });
+
+        return farFromHeat;
+      });
+
+      const needsByCluster = coldMembers.length >= 3;
+
+      if (needsFirstBonfire || needsByRatio || needsByCluster) {
+        if (needsByCluster) {
+          // Store the average position of cold members for placement
+          const avgPos = coldMembers.reduce((acc, m) => ({ x: acc.x + m.position.x, y: acc.y + m.position.y }), {
+            x: 0,
+            y: 0,
+          });
+          avgPos.x /= coldMembers.length;
+          avgPos.y /= coldMembers.length;
+          Blackboard.set(blackboard, 'buildingPlacement_coldClusterPos', avgPos);
+        } else {
+          Blackboard.delete(blackboard, 'buildingPlacement_coldClusterPos');
+        }
+
+        let reason = '';
+        if (needsFirstBonfire) reason = `Cold at center: ${currentTemp.toFixed(1)}°C`;
+        else if (needsByRatio) reason = `Tribe size: ${adultCount}/${existingBonfires} fires`;
+        else reason = `Cold cluster: ${coldMembers.length} members`;
+
+        return [true, reason];
       }
 
-      return [true, `Cold at tribe center: ${currentTemp.toFixed(1)}°C`];
+      return [false, `Adequate heating: ${existingBonfires} fires for ${adultCount} adults`];
     },
     'Needs Bonfire',
     depth + 2,
@@ -326,13 +389,15 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Action: Find bonfire placement location
   const findBonfireLocationAction = new ActionNode<HumanEntity>(
     (entity, context, blackboard) => {
+      const coldClusterPos = Blackboard.get<Vector2D>(blackboard, 'buildingPlacement_coldClusterPos');
+
       const placementLocation = findAdjacentBuildingPlacement(
         BuildingType.Bonfire,
         entity.id,
         context.gameState,
         LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
         LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
-        entity.position, // Prioritize locations near leader
+        coldClusterPos || entity.position, // Prioritize locations near cluster or leader
       );
 
       if (!placementLocation) {
@@ -411,6 +476,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       // Clear blackboard
       Blackboard.delete(blackboard, 'buildingPlacement_bonfireTarget');
 
+      // Invalidate cache
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_status');
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_timestamp');
+      delete blackboard.nodeExecutionData['Cached Tribe Analysis'];
+
       return [NodeStatus.SUCCESS, `Placed bonfire at (${targetLocation.x.toFixed(0)}, ${targetLocation.y.toFixed(0)})`];
     },
     'Place Bonfire',
@@ -428,6 +498,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
   // Condition: Needs planting zone
   const needsPlantingZoneCondition = new ConditionNode<HumanEntity>(
     (_entity, _context, blackboard) => {
+      // Prevent multiple concurrent placements
+      if (Blackboard.has(blackboard, 'buildingPlacement_plantingTarget')) {
+        return [false, 'Placement already in progress'];
+      }
+
       const adultCount = Blackboard.get<number>(blackboard, 'tribeAnalysis_adultCount');
       const existingPlantingZones = Blackboard.get<number>(blackboard, 'tribeAnalysis_existingPlantingZones');
       const bushDensity = Blackboard.get<number>(blackboard, 'tribeAnalysis_bushDensity');
@@ -571,6 +646,11 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
 
       // Clear blackboard
       Blackboard.delete(blackboard, 'buildingPlacement_plantingTarget');
+
+      // Invalidate cache
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_status');
+      Blackboard.delete(blackboard, 'caching_Cached Tribe Analysis_timestamp');
+      delete blackboard.nodeExecutionData['Cached Tribe Analysis'];
 
       return [
         NodeStatus.SUCCESS,

@@ -45,12 +45,14 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   const localTemp = getTemperatureAt(
     gameState.temperature,
     entity.position,
+    gameState.time,
     gameState.mapDimensions.width,
     gameState.mapDimensions.height,
   );
 
   if (localTemp < COLD_THRESHOLD) {
-    const healthDrain = (COLD_THRESHOLD - localTemp) * HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD * gameHoursDelta;
+    const healthDrain =
+      (COLD_THRESHOLD - localTemp) * HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD * gameHoursDelta;
     entity.hitpoints -= healthDrain;
   }
 
@@ -61,7 +63,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   // --- Hitpoint Regeneration -- -
   if (entity.hitpoints < entity.maxHitpoints) {
-    const hungerFactor = 1 - (entity.hunger / 100) * HITPOINT_REGEN_HUNGER_MODIFIER;
+    const hungerFactor = 1 - (entity.hunger / HUMAN_HUNGER_DEATH) * HITPOINT_REGEN_HUNGER_MODIFIER;
     const regeneration = HUMAN_BASE_HITPOINT_REGEN_PER_HOUR * hungerFactor * gameHoursDelta;
     entity.hitpoints = Math.min(entity.maxHitpoints, entity.hitpoints + regeneration);
   }

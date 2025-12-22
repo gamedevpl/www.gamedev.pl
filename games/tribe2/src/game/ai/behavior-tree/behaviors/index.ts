@@ -29,6 +29,8 @@ export * from './tribe-role-assignment-behavior';
 export * from './tribe-role-management-behavior';
 export * from './chopping-behavior';
 export * from './cleanup-trees-behavior';
+export * from './gather-at-bonfire-behavior';
+export * from './tribe-logistics-management-behavior';
 
 // Animal-specific behaviors
 export * from './prey-flee-behavior';

@@ -10,6 +10,7 @@ import {
   assignStorageSpot,
   assignWoodDepositTarget,
   countTribeMembersWithAction,
+  getTribeBonfires,
 } from '../../../entities/tribe/tribe-food-utils';
 import { getTribeMembers } from '../../../utils';
 import {
@@ -60,7 +61,7 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
 
               if (isHoldingWood) {
                 assignedStorage = assignWoodDepositTarget(human, context.gameState);
-                debugReason = 'Holding wood';
+                debugReason = `Holding wood${assignedStorage ? ` (Target: ${assignedStorage.id})` : ''}`;
               } else {
                 // Food deposit logic
                 if (
@@ -121,7 +122,8 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
 
               const activeDepositors = countTribeMembersWithAction(human.leaderId, context.gameState, 'depositing');
               const tribeMembers = getTribeMembers(human, context.gameState);
-              const maxDepositors = Math.max(1, Math.ceil(tribeMembers.length * 0.4)); // Max 40% of tribe
+              const existingBonfires = getTribeBonfires(human.leaderId, context.gameState).length;
+              const maxDepositors = Math.max(2, Math.ceil(tribeMembers.length * 0.4) + existingBonfires);
 
               return [activeDepositors < maxDepositors, `Active depositors: ${activeDepositors}/${maxDepositors}`];
             },

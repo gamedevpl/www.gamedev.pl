@@ -56,15 +56,15 @@ function drawBorderPost(ctx: CanvasRenderingContext2D, x: number, y: number, col
  * Renders all tribe territory borders.
  * This should be called before rendering entities to have borders appear behind them.
  * Note: The canvas context should already be translated to world coordinates.
+ * @returns Array of world positions where border posts were rendered, to be used as light sources.
  */
 export function renderAllTerritories(
   ctx: CanvasRenderingContext2D,
   gameState: GameWorldState,
   viewportCenter: Vector2D,
   canvasDimensions: { width: number; height: number },
-  _time: number,
   playerLeaderId?: EntityId,
-): void {
+): Vector2D[] {
   // 1. Setup Badges & Colors
   const tribesInfo = getTribesInfo(gameState, playerLeaderId);
 
@@ -81,6 +81,8 @@ export function renderAllTerritories(
     territoryColors.set(tribe.leaderId, color);
     tribeBadges.set(tribe.leaderId, tribe.tribeBadge || '');
   }
+
+  const borderPostPositions: Vector2D[] = [];
 
   // 2. Calculate Viewport Bounds
   // We only iterate the visible area + padding to ensure borders don't pop in/out
@@ -110,13 +112,16 @@ export function renderAllTerritories(
         const ownerToDraw = currentOwner || rightOwner;
 
         if (ownerToDraw) {
+          const posX = x + TERRITORY_GRID_STEP / 2;
+          const posY = y;
           drawBorderPost(
             ctx,
-            x + TERRITORY_GRID_STEP / 2, // Draw at midpoint
-            y,
+            posX,
+            posY,
             territoryColors.get(ownerToDraw) || '#000',
             tribeBadges.get(ownerToDraw) || '',
           );
+          borderPostPositions.push({ x: posX, y: posY });
         }
       }
 
@@ -128,15 +133,20 @@ export function renderAllTerritories(
         const ownerToDraw = currentOwner || downOwner;
 
         if (ownerToDraw) {
+          const posX = x;
+          const posY = y + TERRITORY_GRID_STEP / 2;
           drawBorderPost(
             ctx,
-            x,
-            y + TERRITORY_GRID_STEP / 2, // Draw at midpoint
+            posX,
+            posY,
             territoryColors.get(ownerToDraw) || '#000',
             tribeBadges.get(ownerToDraw) || '',
           );
+          borderPostPositions.push({ x: posX, y: posY });
         }
       }
     }
   }
+
+  return borderPostPositions;
 }
