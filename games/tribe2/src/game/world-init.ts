@@ -32,6 +32,7 @@ import { generateRandomPredatorGeneCode } from './entities/characters/predator/p
 import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
 import { TREE_GROWTH_TIME_GAME_HOURS } from './entities/plants/tree/tree-consts';
+import { initTemperatureState } from './temperature/temperature-update';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -266,6 +267,7 @@ export function initWorld(): GameWorldState {
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
     soilDepletion: createSoilDepletionState(),
+    temperature: initTemperatureState(MAP_WIDTH, MAP_HEIGHT),
     autosaveIntervalSeconds: 5,
     lastAutosaveTime: Date.now(),
     plantingZoneConnections: {},
@@ -429,6 +431,7 @@ export function initIntroWorld(): GameWorldState {
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
     },
     soilDepletion: createSoilDepletionState(),
+    temperature: initTemperatureState(MAP_WIDTH, MAP_HEIGHT),
     lastAutosaveTime: 0,
     plantingZoneConnections: {},
     terrainOwnership: new Array(

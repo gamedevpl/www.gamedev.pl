@@ -175,6 +175,12 @@ export function renderBuilding(
     building;
   const definition = BUILDING_DEFINITIONS[building.buildingType];
 
+  // Determine icon based on state (e.g., Bonfire fuel)
+  let icon = definition.icon;
+  if (building.buildingType === BuildingType.Bonfire && isConstructed) {
+    icon = (building.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+  }
+
   // Check hostility
   const player = findPlayerEntity(indexedWorld);
   const isHostile = player && isEnemyBuilding(player, building, indexedWorld);
@@ -205,7 +211,7 @@ export function renderBuilding(
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur = 4;
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(definition.icon, 0, 0);
+  ctx.fillText(icon, 0, 0);
 
   // Clean up shadow for other draws
   ctx.shadowBlur = 0;

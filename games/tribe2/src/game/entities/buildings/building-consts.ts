@@ -9,6 +9,7 @@ export const BuildingType = {
   StorageSpot: 'storageSpot',
   PlantingZone: 'plantingZone',
   BorderPost: 'borderPost',
+  Bonfire: 'bonfire',
 } as const;
 
 export type BuildingType = (typeof BuildingType)[keyof typeof BuildingType];
@@ -62,6 +63,15 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.2,
     destructionTimeHours: 0.1,
     cost: { wood: 2 },
+  },
+  [BuildingType.Bonfire]: {
+    name: 'Bonfire',
+    description: 'A shared tribe building that provides warmth.',
+    icon: '🔥',
+    dimensions: { width: 40, height: 40 },
+    constructionTimeHours: 0.5,
+    destructionTimeHours: 0.2,
+    cost: { wood: 5 },
   },
 };
 

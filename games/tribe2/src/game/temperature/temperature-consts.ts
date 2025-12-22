@@ -1,0 +1,31 @@
+/**
+ * Constants for the temperature system.
+ * Defines sector size, default temperatures, and health impact thresholds.
+ */
+
+/** Size of each temperature sector in pixels. */
+export const TEMPERATURE_SECTOR_SIZE = 100;
+
+/** Default base temperature for the world in degrees Celsius. */
+export const BASE_TEMPERATURE_DEFAULT = 20;
+
+/** Temperature threshold below which humans start losing health (degrees Celsius). */
+export const COLD_THRESHOLD = 10;
+
+/** Health points lost per hour for each degree Celsius below the COLD_THRESHOLD. */
+export const HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD = 0.2;
+
+/** Radius in pixels within which a bonfire emits heat. */
+export const BONFIRE_HEAT_RADIUS = 150;
+
+/** Maximum temperature increase at the center of a bonfire (degrees Celsius). */
+export const BONFIRE_HEAT_INTENSITY = 25;
+
+/** Amount of fuel consumed by a bonfire per game hour. */
+export const BONFIRE_FUEL_CONSUMPTION_PER_HOUR = 0.1;
+
+/** Maximum fuel capacity for a bonfire. */
+export const BONFIRE_MAX_FUEL = 100;
+
+/** Amount of fuel added to a bonfire per unit of wood. */
+export const BONFIRE_FUEL_PER_WOOD = 25;

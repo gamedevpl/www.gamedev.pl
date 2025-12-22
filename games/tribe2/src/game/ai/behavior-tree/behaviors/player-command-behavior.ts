@@ -26,7 +26,8 @@ import {
   TREE_FALLEN,
 } from '../../../entities/plants/tree/states/tree-state-types';
 import { canProcreate, isPositionOccupied, isEnemyBuilding } from '../../../utils';
-import { BuildingEntity } from '../../../entities/buildings/building-types.ts';
+import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
+import { ItemType } from '../../../entities/item-types';
 
 /**
  * Shared autopilot attack behavior logic used by multiple action types.
@@ -541,6 +542,40 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               human.activeAction = 'moving';
               human.target = targetPosition;
               human.direction = dirToTarget(human.position, targetPosition, gameState.mapDimensions);
+              return NodeStatus.RUNNING;
+            }
+
+            // --- REFUEL ---
+            case PlayerActionType.AutopilotRefuel: {
+              const bonfire = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
+
+              if (
+                !bonfire ||
+                bonfire.buildingType !== BuildingType.Bonfire ||
+                !bonfire.isConstructed ||
+                human.heldItem?.type !== ItemType.Wood
+              ) {
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.FAILURE;
+              }
+
+              const distance = calculateWrappedDistance(
+                human.position,
+                bonfire.position,
+                gameState.mapDimensions.width,
+                gameState.mapDimensions.height,
+              );
+
+              if (distance <= STORAGE_INTERACTION_RANGE) {
+                human.activeAction = 'refueling';
+                human.target = bonfire.id;
+                gameState.autopilotControls.activeAutopilotAction = undefined;
+                return NodeStatus.SUCCESS;
+              }
+
+              human.activeAction = 'moving';
+              human.target = bonfire.id;
+              human.direction = dirToTarget(human.position, bonfire.position, gameState.mapDimensions);
               return NodeStatus.RUNNING;
             }
 

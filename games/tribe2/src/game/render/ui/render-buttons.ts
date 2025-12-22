@@ -368,17 +368,24 @@ export function renderUIButtons(
           name: 'Planting Zone',
         },
         {
+          id: 'buildMenu_bonfire',
+          action: UIButtonActionType.SelectBonfire,
+          icon: '🔥',
+          shortcut: '4',
+          name: 'Bonfire',
+        },
+        {
           id: 'buildMenu_borderPost',
           action: UIButtonActionType.SelectBorderPost,
           icon: '🚩',
-          shortcut: '4',
-          name: 'Remove Building',
+          shortcut: '5',
+          name: 'Border Post',
         },
         {
           id: 'buildMenu_removal',
           action: UIButtonActionType.SelectRemovalTool,
           icon: '🔨',
-          shortcut: '3',
+          shortcut: '6',
           name: 'Remove Building',
         },
       ];
@@ -400,6 +407,7 @@ export function renderUIButtons(
             gameState.selectedBuildingType === 'plantingZone') ||
           (buildButton.action === UIButtonActionType.SelectBorderPost &&
             gameState.selectedBuildingType === 'borderPost') ||
+          (buildButton.action === UIButtonActionType.SelectBonfire && gameState.selectedBuildingType === 'bonfire') ||
           (buildButton.action === UIButtonActionType.SelectRemovalTool && gameState.selectedBuildingType === 'removal');
 
         const button: ClickableUIButton = {

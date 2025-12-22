@@ -29,12 +29,30 @@ import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
 import { TribeRole } from '../../tribe/tribe-types';
 import { findDescendants } from '../../tribe/family-tribe-utils';
+import { getTemperatureAt } from '../../../temperature/temperature-update';
+import {
+  COLD_THRESHOLD,
+  HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD,
+} from '../../../temperature/temperature-consts';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
   const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
 
   entity.isAdult = entity.age >= CHILD_TO_ADULT_AGE;
+
+  // --- Temperature Impact ---
+  const localTemp = getTemperatureAt(
+    gameState.temperature,
+    entity.position,
+    gameState.mapDimensions.width,
+    gameState.mapDimensions.height,
+  );
+
+  if (localTemp < COLD_THRESHOLD) {
+    const healthDrain = (COLD_THRESHOLD - localTemp) * HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD * gameHoursDelta;
+    entity.hitpoints -= healthDrain;
+  }
 
   // --- Movement Slowdown Cooldown ---
   if (entity.movementSlowdown && gameState.time > entity.movementSlowdown.endTime) {
@@ -145,7 +163,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
 
   let causeOfDeath: string | undefined = undefined;
   if (entity.hitpoints <= 0) {
-    causeOfDeath = 'killed';
+    causeOfDeath = localTemp < COLD_THRESHOLD ? 'hypothermia' : 'killed';
   } else if (entity.hunger >= HUMAN_HUNGER_DEATH) {
     if (entity.food.length > 0 && entity.isAdult) {
       entity.food.pop();

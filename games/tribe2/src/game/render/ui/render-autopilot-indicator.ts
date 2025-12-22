@@ -70,7 +70,7 @@ export function renderAutopilotIndicator(ctx: CanvasRenderingContext2D, gameStat
       const targetEntity = gameState.entities.entities[activeAction.targetEntityId];
       if (targetEntity) {
         targetPosition = targetEntity.position;
-        targetRadius = (targetEntity as Entity).radius || 30;
+        targetRadius = (targetEntity as Entity).radius || (targetEntity.type === 'building' ? 20 : 30);
       }
     }
 

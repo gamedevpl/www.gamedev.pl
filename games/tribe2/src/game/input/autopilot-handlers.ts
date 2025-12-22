@@ -3,6 +3,7 @@ import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionType } from '../ui/ui-types';
+import { ItemType } from '../entities/item-types';
 import { TREE_GROWING, TREE_FULL, TREE_SPREADING, TREE_FALLEN } from '../entities/plants/tree/states/tree-state-types';
 import {
   BERRY_BUSH_PLANTING_CLEARANCE_RADIUS,
@@ -174,6 +175,15 @@ export const determineHoveredAutopilotAction = (
         )
       ) {
         determinedAction = { action: PlayerActionType.AutopilotPlant, position: worldPos };
+      } else if (
+        building.buildingType === BuildingType.Bonfire &&
+        player.heldItem?.type === ItemType.Wood &&
+        building.isConstructed &&
+        building.fuelLevel !== undefined &&
+        building.maxFuelLevel !== undefined &&
+        building.fuelLevel < building.maxFuelLevel
+      ) {
+        determinedAction = { action: PlayerActionType.AutopilotRefuel, targetEntityId: building.id };
       } else {
         determinedAction = { action: PlayerActionType.AutopilotMove, position: worldPos };
       }
@@ -274,7 +284,8 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
     if (
       hoveredAction.action === PlayerActionType.AutopilotMove ||
       hoveredAction.action === PlayerActionType.AutopilotGather ||
-      hoveredAction.action === PlayerActionType.AutopilotChop
+      hoveredAction.action === PlayerActionType.AutopilotChop ||
+      hoveredAction.action === PlayerActionType.AutopilotRefuel
     ) {
       gameState.hasPlayerMovedEver = true;
     }

@@ -54,4 +54,10 @@ export interface BuildingEntity extends Entity {
 
   /** Game time of last steal attempt (for cooldown). */
   lastStealTime?: number;
+
+  /** Current fuel level (for buildings like Bonfire). */
+  fuelLevel?: number;
+
+  /** Maximum fuel level (for buildings like Bonfire). */
+  maxFuelLevel?: number;
 }

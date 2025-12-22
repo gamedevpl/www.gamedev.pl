@@ -14,6 +14,7 @@ import { updateUI } from './ui/ui-utils.ts';
 import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
+import { updateTemperature } from './temperature/temperature-update';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -57,6 +58,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update soil depletion recovery
     updateSoilRecovery(indexedState);
+
+    // Update world temperature
+    updateTemperature(indexedState);
 
     // Update notification effects (e.g., highlighting)
     updateNotificationEffects(indexedState);

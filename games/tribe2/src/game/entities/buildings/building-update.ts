@@ -6,6 +6,7 @@ import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts.
 import { paintTerrainOwnership } from '../tribe/territory-utils';
 import { TERRITORY_BUILDING_RADIUS } from '../tribe/territory-consts';
 import { updatePlantingZoneConnections } from '../../utils/planting-zone-connections-utils';
+import { BONFIRE_FUEL_CONSUMPTION_PER_HOUR } from '../../temperature/temperature-consts';
 
 /**
  * Updates the state of a building entity.
@@ -63,6 +64,14 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       if (building.buildingType === BuildingType.PlantingZone) {
         updatePlantingZoneConnections(gameState);
       }
+    }
+  }
+
+  // Handle Bonfire Fuel Consumption
+  if (building.buildingType === BuildingType.Bonfire && building.isConstructed && !building.isBeingDestroyed) {
+    if (building.fuelLevel !== undefined) {
+      building.fuelLevel -= gameHoursDelta * BONFIRE_FUEL_CONSUMPTION_PER_HOUR;
+      if (building.fuelLevel < 0) building.fuelLevel = 0;
     }
   }
 }

@@ -137,6 +137,9 @@ export const handleUIButtonClick = (
     case UIButtonActionType.SelectBorderPost:
       gameState.selectedBuildingType = 'borderPost';
       break;
+    case UIButtonActionType.SelectBonfire:
+      gameState.selectedBuildingType = 'bonfire';
+      break;
     case UIButtonActionType.ToggleDiplomacy:
       if (player && player.leaderId && button.targetTribeId) {
         const playerTribeId = player.leaderId;

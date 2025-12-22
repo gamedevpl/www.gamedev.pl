@@ -4,6 +4,12 @@ import { calculateWrappedDistance } from '../utils/math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { InteractionDefinition } from './interactions-types';
 import { EntityType } from '../entities/entities-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
+import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
+import { STORAGE_INTERACTION_RANGE } from '../entities/buildings/storage-spot-consts.ts';
+import { BONFIRE_FUEL_PER_WOOD } from '../temperature/temperature-consts';
+import { playSoundAt } from '../sound/sound-manager';
+import { SoundType } from '../sound/sound-types';
 
 interface InteractionGroup {
   sourceType: EntityType;
@@ -39,6 +45,36 @@ export function interactionsUpdate(context: UpdateContext): void {
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
   const { width: mapWidth, height: mapHeight } = gameState.mapDimensions;
+
+  // Handle Human-specific active actions (like refueling)
+  const humans = indexedState.search.human.all() as HumanEntity[];
+  humans.forEach((human) => {
+    if (human.activeAction === 'refueling' && human.target) {
+      const targetEntity = gameState.entities.entities[human.target as any] as BuildingEntity;
+      if (
+        targetEntity &&
+        targetEntity.type === 'building' &&
+        targetEntity.buildingType === BuildingType.Bonfire
+      ) {
+        const distance = calculateWrappedDistance(human.position, targetEntity.position, mapWidth, mapHeight);
+        if (distance <= STORAGE_INTERACTION_RANGE) {
+          // Refuel logic
+          if (targetEntity.fuelLevel !== undefined && targetEntity.maxFuelLevel !== undefined) {
+            targetEntity.fuelLevel = Math.min(
+              targetEntity.fuelLevel + BONFIRE_FUEL_PER_WOOD,
+              targetEntity.maxFuelLevel
+            );
+            
+            human.heldItem = undefined;
+            human.activeAction = 'idle';
+            human.target = undefined;
+            
+            playSoundAt(context, SoundType.StorageDeposit, human.position);
+          }
+        }
+      }
+    }
+  });
 
   for (const group of interactionsDefinitionsGroups) {
     // Get all entities that can be the source of interactions in this group

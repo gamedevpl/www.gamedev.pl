@@ -11,7 +11,8 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
-import { BuildingEntity } from '../entities/buildings/building-types';
+import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
+import { ItemType } from '../entities/item-types';
 import { STORAGE_INTERACTION_RANGE } from '../entities/buildings/storage-spot-consts.ts';
 
 /**
@@ -45,12 +46,16 @@ export const handlePlayerActionKeyDown = (
       gameState.selectedBuildingType = 'plantingZone';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
-    } else if (key === '3') {
-      gameState.selectedBuildingType = 'removal';
+    } else if (key === '4') {
+      gameState.selectedBuildingType = 'bonfire';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
-    } else if (key === '4') {
+    } else if (key === '5') {
       gameState.selectedBuildingType = 'borderPost';
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
+    } else if (key === '6') {
+      gameState.selectedBuildingType = 'removal';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
     }
@@ -206,6 +211,31 @@ export const handlePlayerActionKeyDown = (
       return;
     }
 
+    // Check for refueling bonfire first
+    const bonfire = findClosestEntity<BuildingEntity>(
+      playerEntity,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === BuildingType.Bonfire &&
+          building.isConstructed &&
+          building.fuelLevel !== undefined &&
+          building.maxFuelLevel !== undefined &&
+          building.fuelLevel < building.maxFuelLevel
+        );
+      },
+    );
+
+    if (playerEntity.heldItem?.type === ItemType.Wood && bonfire) {
+      playerEntity.activeAction = 'refueling';
+      playerEntity.target = bonfire.id;
+      playSoundAt(updateContext, SoundType.StorageDeposit, playerEntity.position);
+      return;
+    }
+
     const storageSpot = findClosestEntity<BuildingEntity>(
       playerEntity,
       gameState,
@@ -214,7 +244,7 @@ export const handlePlayerActionKeyDown = (
       (b) => {
         const building = b as BuildingEntity;
         return (
-          building.buildingType === 'storageSpot' &&
+          building.buildingType === BuildingType.StorageSpot &&
           building.ownerId === playerEntity.leaderId &&
           building.isConstructed &&
           building.storageCapacity !== undefined &&
@@ -342,6 +372,9 @@ export const handlePlayerActionKeyUp = (
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('h') && playerEntity.activeAction === 'feeding') {
+    playerEntity.activeAction = 'idle';
+  }
+  if (!keysPressed.current.has('x') && playerEntity.activeAction === 'refueling') {
     playerEntity.activeAction = 'idle';
   }
   if (!keysPressed.current.has('c') && playerEntity.activeAction === 'chopping') {

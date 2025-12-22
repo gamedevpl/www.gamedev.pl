@@ -60,6 +60,7 @@ import {
 } from './plants/tree/tree-consts';
 import { TREE_GROWING } from './plants/tree/states/tree-state-types';
 import { ItemType } from './item-types';
+import { BONFIRE_MAX_FUEL } from '../temperature/temperature-consts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
@@ -471,6 +472,8 @@ export function createBuilding(
     lastDepositTime: 0,
     lastRetrieveTime: 0,
     lastStealTime: 0,
+    fuelLevel: buildingType === BuildingType.Bonfire ? BONFIRE_MAX_FUEL : undefined,
+    maxFuelLevel: buildingType === BuildingType.Bonfire ? BONFIRE_MAX_FUEL : undefined,
   };
 
   // Add storage-specific properties for storage spots

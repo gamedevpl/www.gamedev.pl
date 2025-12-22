@@ -11,6 +11,7 @@ import { VisualEffect, VisualEffectId } from './visual-effects/visual-effect-typ
 import { Notification, Rect } from './notifications/notification-types';
 import { EcosystemState } from './ecosystem';
 import { SoilDepletionState } from './entities/plants/soil-depletion-types';
+import { TemperatureState } from './temperature/temperature-types';
 
 /**
  * Describes which edges of a planting zone are connected to adjacent zones of the same tribe.
@@ -96,10 +97,14 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotBuildingPlacement;
       position: Vector2D;
-      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost';
+      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire';
     }
   | {
       action: PlayerActionType.AutopilotChop;
+      targetEntityId: EntityId;
+    }
+  | {
+      action: PlayerActionType.AutopilotRefuel;
       targetEntityId: EntityId;
     };
 
@@ -140,7 +145,7 @@ export interface GameWorldState {
   buildMenuOpen: boolean;
   roleManagerOpen: boolean;
   armyControlOpen: boolean;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'removal' | null;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;
@@ -162,6 +167,7 @@ export interface GameWorldState {
   };
   ecosystem: EcosystemState;
   soilDepletion: SoilDepletionState; // Tracks soil health across the world grid
+  temperature: TemperatureState; // Tracks regional temperature across the world grid
   debugPanel: DebugPanelType;
   debugPanelScroll: Vector2D;
   isDraggingDebugPanel: boolean;

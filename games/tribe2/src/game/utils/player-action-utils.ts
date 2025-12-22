@@ -10,8 +10,9 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
-import { BuildingEntity } from '../entities/buildings/building-types';
+import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
+import { ItemType } from '../entities/item-types';
 import { FoodType } from '../entities/food-types.ts';
 import { PlayerActionHint, PlayerActionType } from '../ui/ui-types';
 import { GameWorldState } from '../world-types';
@@ -174,6 +175,34 @@ export function getAvailablePlayerActions(gameState: GameWorldState, player: Hum
         action: 'idle',
         key: 'z',
         targetEntity: storageSpot,
+      });
+    }
+  }
+
+  // Check for Refuel (bonfire)
+  if (player.heldItem?.type === ItemType.Wood) {
+    const bonfire = findClosestEntity<BuildingEntity>(
+      player,
+      gameState,
+      'building',
+      STORAGE_INTERACTION_RANGE,
+      (b) => {
+        const building = b as BuildingEntity;
+        return (
+          building.buildingType === BuildingType.Bonfire &&
+          building.isConstructed &&
+          building.fuelLevel !== undefined &&
+          building.maxFuelLevel !== undefined &&
+          building.fuelLevel < building.maxFuelLevel
+        );
+      },
+    );
+    if (bonfire) {
+      actions.push({
+        type: PlayerActionType.Refuel,
+        action: 'refueling',
+        key: 'x',
+        targetEntity: bonfire,
       });
     }
   }
