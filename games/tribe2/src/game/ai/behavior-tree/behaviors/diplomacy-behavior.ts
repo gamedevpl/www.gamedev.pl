@@ -25,7 +25,11 @@ export function createDiplomacyBehavior(depth: number): BehaviorNode<HumanEntity
       const playerTribe = findTribeMembers(leader.id, gameState);
       const playerTribeStrength = calculateTribeStrength(playerTribe);
       const leaderTribeCenter = getTribeCenter(leader.id, gameState);
-      const playerTribeAdults = playerTribe.filter((m) => m.isAdult).length;
+      // Count adults without creating a new array
+      let playerTribeAdults = 0;
+      for (const m of playerTribe) {
+        if (m.isAdult) playerTribeAdults++;
+      }
 
       const otherTribes = getTribesInfo(gameState).filter((t) => t.leaderId !== leader.id);
 
