@@ -31,9 +31,8 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
           );
 
           if (stranger) {
-            // Don't attack tribe leaders - this would weaken the tribe
-            // Only attack strangers from other tribes or independent humans
-            if (human.leaderId && stranger.id === human.leaderId) {
+            // Don't attack tribe members - this would weaken the tribe
+            if (human.leaderId && stranger.leaderId === human.leaderId) {
               return [false, 'Stranger is in same tribe - no attack'];
             }
 

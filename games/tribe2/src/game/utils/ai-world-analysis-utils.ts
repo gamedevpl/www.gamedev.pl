@@ -76,6 +76,7 @@ export function findFamilyMemberUnderAttack(
 
 /**
  * Finds the closest, weakest, non-family human to attack out of desperation.
+ * Only considers targets outside the attacker's tribe to prevent fratricide.
  * @returns The target entity, otherwise undefined.
  */
 export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWorldState): HumanEntity | undefined {
@@ -90,7 +91,9 @@ export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWor
       target.id === human.id ||
       target.hitpoints <= 0 ||
       target.hitpoints / target.maxHitpoints > AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT ||
-      areFamily(human, target, gameState)
+      areFamily(human, target, gameState) ||
+      // Don't attack members of the same tribe
+      (human.leaderId && target.leaderId === human.leaderId)
     ) {
       continue;
     }
