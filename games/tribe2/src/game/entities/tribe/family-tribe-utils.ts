@@ -409,8 +409,25 @@ export function findInternalSuccessor(members: HumanEntity[], gameState: GameWor
     }
   }
 
-  if (!bestPatriarchId) return null;
-  return (gameState.entities.entities[bestPatriarchId] as HumanEntity) || null;
+  if (bestPatriarchId) {
+    const patriarch = gameState.entities.entities[bestPatriarchId] as HumanEntity | undefined;
+    if (patriarch) return patriarch;
+  }
+
+  // Fallback: If no patriarch found, promote the oldest adult male, or oldest adult female
+  const adultMembers = members.filter((m) => m.isAdult);
+  if (adultMembers.length === 0) return null;
+
+  // Prefer males for leadership succession
+  const adultMales = adultMembers.filter((m) => m.gender === 'male');
+  if (adultMales.length > 0) {
+    adultMales.sort((a, b) => b.age - a.age);
+    return adultMales[0];
+  }
+
+  // Fall back to oldest adult female
+  adultMembers.sort((a, b) => b.age - a.age);
+  return adultMembers[0];
 }
 
 export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
