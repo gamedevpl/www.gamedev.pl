@@ -36,7 +36,9 @@ export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expe
 
 // Leader Meta AI Strategy Constants
 export const AI_DIPLOMACY_CHECK_INTERVAL_HOURS = 24; // How often the AI leader re-evaluates diplomacy
-export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 3.0; // How much stronger our tribe must be to consider attacking another for their habitat
+export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat
+export const AI_DIPLOMACY_HOSTILITY_DISTANCE_THRESHOLD = 500; // Maximum distance between tribe centers for hostility to be considered (prevents aggression towards distant tribes)
+export const AI_DIPLOMACY_MIN_TRIBE_SIZE_FOR_HOSTILITY = 6; // Minimum adult tribe members required before considering hostility (prevents small struggling tribes from attacking)
 
 // Social AI Constants
 export const AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS = 150; // Radius to detect partner procreating with another
