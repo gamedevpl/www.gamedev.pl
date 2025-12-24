@@ -1,11 +1,7 @@
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence, TribalTaskDecorator } from '../nodes';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import {
-  COLD_THRESHOLD,
-  BONFIRE_HEAT_RADIUS,
-  BONFIRE_MAX_USERS,
-} from '../../../temperature/temperature-consts';
+import { COLD_THRESHOLD, BONFIRE_HEAT_RADIUS, BONFIRE_MAX_USERS } from '../../../temperature/temperature-consts';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
 import { findClosestEntity } from '../../../utils';
 import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
@@ -67,6 +63,8 @@ export function createGatherAtBonfireBehavior(depth: number): BehaviorNode<Human
 
               if (!isFueledBonfire) return false;
 
+              if (b.ownerId !== human.leaderId) return false;
+
               // Check capacity via TribalTask coordination
               if (leader && leader.aiBlackboard) {
                 const taskKey = `tribal_warmth_${b.id}`;
@@ -104,8 +102,7 @@ export function createGatherAtBonfireBehavior(depth: number): BehaviorNode<Human
         new ActionNode(
           (human, context, blackboard) => {
             const bonfireId = Blackboard.get<EntityId>(blackboard, BONFIRE_TARGET_KEY);
-            const bonfire =
-              bonfireId && (context.gameState.entities.entities[bonfireId] as BuildingEntity | undefined);
+            const bonfire = bonfireId && (context.gameState.entities.entities[bonfireId] as BuildingEntity | undefined);
 
             if (!bonfire || (bonfire.fuelLevel ?? 0) <= 0 || !bonfire.isConstructed) {
               Blackboard.delete(blackboard, BONFIRE_TARGET_KEY);
@@ -125,12 +122,7 @@ export function createGatherAtBonfireBehavior(depth: number): BehaviorNode<Human
               y: (bonfire.position.y + Math.sin(angle) * radius + worldHeight) % worldHeight,
             };
 
-            const distanceToSpot = calculateWrappedDistance(
-              human.position,
-              personalSpot,
-              worldWidth,
-              worldHeight,
-            );
+            const distanceToSpot = calculateWrappedDistance(human.position, personalSpot, worldWidth, worldHeight);
 
             if (distanceToSpot > 10) {
               human.activeAction = 'moving';
