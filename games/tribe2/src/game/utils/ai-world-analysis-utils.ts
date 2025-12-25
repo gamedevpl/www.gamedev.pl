@@ -8,27 +8,6 @@ import { areFamily, getFamilyMembers } from '../entities/tribe/family-tribe-util
 import { isHostile } from './world-utils';
 
 /**
- * Checks if a human's primary partner is procreating with another human nearby.
- * @returns The stranger the partner is procreating with, otherwise undefined.
- */
-export function findPartnerProcreatingWithStranger(
-  human: HumanEntity,
-  gameState: IndexedWorldState,
-  radius: number,
-): HumanEntity | undefined {
-  const potentialTargets = gameState.search.human.byRadius(human.position, radius).filter((target) => {
-    return (
-      target.activeAction === 'procreating' &&
-      target.gender === human.gender &&
-      typeof target.target === 'number' &&
-      human.partnerIds?.includes(target.target)
-    );
-  });
-
-  return potentialTargets[0];
-}
-
-/**
  * Finds a close family member (parent, partner, child) who is under attack by an outsider.
  * @returns An object containing the family member and the aggressor, otherwise undefined.
  */
@@ -90,7 +69,8 @@ export function findWeakCannibalismTarget(human: HumanEntity, gameState: GameWor
       target.id === human.id ||
       target.hitpoints <= 0 ||
       target.hitpoints / target.maxHitpoints > AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT ||
-      areFamily(human, target, gameState)
+      areFamily(human, target, gameState) ||
+      (human.leaderId === target.leaderId && !!human.leaderId)
     ) {
       continue;
     }

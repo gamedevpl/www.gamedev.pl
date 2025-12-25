@@ -1,6 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { findPartnerProcreatingWithStranger } from '../../../utils';
 import { AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS } from '../../../ai-consts.ts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
@@ -24,17 +23,27 @@ export function createJealousyAttackBehavior(depth: number): BehaviorNode<HumanE
             return [false, 'Not an adult'];
           }
 
-          const stranger = findPartnerProcreatingWithStranger(
-            human,
-            context.gameState as IndexedWorldState,
-            AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS,
-          );
+          if (human.gender !== 'male') {
+            return [false, 'Not male'];
+          }
+
+          const strangers =
+            human.partnerIds
+              ?.map(
+                (partnerId) =>
+                  (context.gameState.entities.entities[partnerId] as HumanEntity | undefined)?.pregnancyFatherId,
+              )
+              ?.filter((id) => !!id && id !== human.id) ?? [];
+
+          const stranger = (context.gameState as IndexedWorldState).search.human
+            .byRadius(human.position, AI_JEALOUSY_PROCREATION_TRIGGER_RADIUS)
+            .find((otherHuman) => strangers.includes(otherHuman.id));
 
           if (stranger) {
             // Don't attack tribe leaders - this would weaken the tribe
             // Only attack strangers from other tribes or independent humans
             if (human.leaderId && stranger.id === human.leaderId) {
-              return [false, 'Stranger is in same tribe - no attack'];
+              return [false, 'Stranger is the tribe leader - no attack'];
             }
 
             Blackboard.set(blackboard, JEALOUSY_TARGET_KEY, stranger.id);

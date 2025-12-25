@@ -59,6 +59,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     {
       partnerId: target.id,
       previousState: source.stateMachine?.[0],
+      procreationEndTime: context.gameState.time + 1,
     } as HumanProcreatingStateData,
   ];
 
@@ -67,6 +68,7 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
     {
       partnerId: source.id,
       previousState: target.stateMachine?.[0],
+      procreationEndTime: context.gameState.time + 1,
     } as HumanProcreatingStateData,
   ];
 

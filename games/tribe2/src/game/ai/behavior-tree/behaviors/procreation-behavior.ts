@@ -275,7 +275,10 @@ export function createProcreationBehavior(depth: number): BehaviorNode<HumanEnti
           if (
             potentialPartner &&
             potentialPartner.partnerIds?.length &&
-            !potentialPartner.partnerIds.includes(human.id)
+            !potentialPartner.partnerIds.includes(human.id) &&
+            // tribe leaders can ignore this rule
+            human.leaderId !== human.id &&
+            !!human.leaderId
           ) {
             if (
               potentialPartner.partnerIds

@@ -609,7 +609,7 @@ function executeTribeMerge(fromTribeLeaderId: EntityId, toTribeLeaderId: EntityI
 
   if (!targetLeader) return;
 
-  if (targetLeader.leaderId) {
+  if (targetLeader.leaderId && gameState.entities.entities[targetLeader.leaderId]) {
     toTribeLeaderId = targetLeader.leaderId;
     targetLeader = gameState.entities.entities[toTribeLeaderId] as HumanEntity | undefined;
   }

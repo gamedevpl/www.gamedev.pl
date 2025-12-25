@@ -44,7 +44,7 @@ export const AI_DEFEND_FAMILY_TRIGGER_RADIUS = 200; // Radius for a human to det
 export const AI_DESPERATE_ATTACK_HUNGER_THRESHOLD = 100; // Hunger level (out of 150) to trigger a desperate attack
 export const AI_DESPERATE_ATTACK_TARGET_MAX_HP_PERCENT = 0.7; // Max HP % of a potential target to be considered weak enough for a desperate attack
 export const AI_DESPERATE_ATTACK_SEARCH_RADIUS = 300; // Radius to search for a weak target
-export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 100; // If a potential mate's primary partner is within this radius, avoid procreating
+export const AI_PROCREATION_AVOID_PARTNER_PROXIMITY = 400; // If a potential mate's primary partner is within this radius, avoid procreating
 export const AI_GATHERING_SEARCH_RADIUS = 600; // Radius for AI to search for food sources
 export const AI_CHOPPING_SEARCH_RADIUS = 600; // Radius for AI to search for trees
 
