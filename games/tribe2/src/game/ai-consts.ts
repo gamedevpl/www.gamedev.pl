@@ -101,3 +101,6 @@ export const BORDER_POST_OPTIMAL_SPACING = 200; // Ideal distance between border
 export const BORDER_POST_MAX_USEFUL_DISTANCE = 600; // Maximum useful distance from tribe center
 export const BORDER_POST_REPLACEMENT_THRESHOLD = 20; // Score improvement needed to justify replacing a post (out of 100)
 export const BORDER_POST_MIN_ISOLATION_DISTANCE = 100; // Minimum distance from other border posts
+
+// Takeover Safety Constants
+export const TAKEOVER_SAFETY_RADIUS = 150; // Distance within which enemies block takeover/border pushing

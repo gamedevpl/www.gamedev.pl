@@ -23,7 +23,7 @@ import { UpdateContext } from '../../../world-types';
 import { createHumanCorpse, removeEntity } from '../../entities-update';
 import { giveBirth } from '../../entities-update';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { findChildren, findHeir, replaceOwnerInTerrainOwnership } from '../../../utils/world-utils';
+import { findChildren, findHeir, replaceOwnerInTerrainOwnership, getTribesInfo } from '../../../utils/world-utils';
 import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
@@ -238,6 +238,19 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         for (const member of findDescendants(heir, gameState)) {
           member.leaderId = heir.id;
           member.tribeInfo = heir.tribeInfo;
+        }
+
+        // Update other tribes' diplomacy records to point to the new leader
+        const otherTribes = getTribesInfo(gameState).filter((t) => t.leaderId !== heir.id && t.leaderId !== entity.id);
+        for (const otherTribeInfo of otherTribes) {
+          const otherLeader = gameState.entities.entities[otherTribeInfo.leaderId] as HumanEntity | undefined;
+          if (otherLeader?.tribeControl?.diplomacy) {
+            const status = otherLeader.tribeControl.diplomacy[entity.id];
+            if (status !== undefined) {
+              otherLeader.tribeControl.diplomacy[heir.id] = status;
+              delete otherLeader.tribeControl.diplomacy[entity.id];
+            }
+          }
         }
       }
       // If no heir is found, we no longer manually dissolve the tribe here.

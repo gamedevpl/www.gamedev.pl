@@ -22,6 +22,7 @@ import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territor
 import { Vector2D } from '../../../utils/math-types';
 import { HUMAN_HUNGER_THRESHOLD_SLOW } from '../../../human-consts';
 import { Blackboard } from '../behavior-tree-blackboard';
+import { isTribeHostile } from '../../../utils/human-utils';
 
 /**
  * Constants for border expansion behavior
@@ -155,18 +156,26 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
           const gy = (((currentGrid.y + dy) % gridHeight) + gridHeight) % gridHeight;
           const index = gy * gridWidth + gx;
 
-          // Candidate must be unowned
-          if (gameState.terrainOwnership[index] !== null) continue;
+          const currentOwner = gameState.terrainOwnership[index];
+          // Candidate must be unowned OR owned by a hostile tribe
+          const isHostileTerritory = currentOwner !== null && isTribeHostile(entity.leaderId, currentOwner, gameState);
+          if (currentOwner !== null && !isHostileTerritory) continue;
 
           const candidatePos: Vector2D = {
             x: gx * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
             y: gy * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2,
           };
 
-          // Candidate must maintain contiguity
+          // Candidate must maintain contiguity (pass takeover flags)
           if (
-            canPlaceBuildingInTerritory(candidatePos, entity.leaderId, gameState, BORDER_EXPANSION_PAINT_RADIUS)
-              .canPlace
+            canPlaceBuildingInTerritory(
+              candidatePos,
+              entity.leaderId,
+              gameState,
+              BORDER_EXPANSION_PAINT_RADIUS,
+              true, // allowHostileOverwrite
+              entity.leaderId, // takingTribeId
+            ).canPlace
           ) {
             candidates.push({ pos: candidatePos, gx, gy });
           }

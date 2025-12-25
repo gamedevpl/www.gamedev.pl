@@ -29,9 +29,11 @@ export function createDiplomacyBehavior(depth: number): BehaviorNode<HumanEntity
         const otherTribeStrength = calculateTribeStrength(otherTribeMembers);
 
         const currentStatus = leader.tribeControl?.diplomacy?.[otherTribeInfo.leaderId] || DiplomacyStatus.Friendly;
+        const otherLeader = gameState.entities.entities[otherTribeInfo.leaderId] as HumanEntity | undefined;
+        const isOtherHostile = otherLeader?.tribeControl?.diplomacy?.[leader.id] === DiplomacyStatus.Hostile;
 
-        // Simple logic: Become hostile if much stronger, otherwise become friendly.
-        if (playerTribeStrength > otherTribeStrength * LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD) {
+        // Become hostile if they are hostile to us OR if we are much stronger.
+        if (isOtherHostile || playerTribeStrength > otherTribeStrength * LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD) {
           if (currentStatus !== DiplomacyStatus.Hostile && leader.tribeControl?.diplomacy) {
             leader.tribeControl.diplomacy[otherTribeInfo.leaderId] = DiplomacyStatus.Hostile;
           }

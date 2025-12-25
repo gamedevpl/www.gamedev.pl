@@ -12,7 +12,11 @@ import { isPositionOccupied, getTribeCenter } from './spatial-utils';
 import { calculateWrappedDistance } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
-import { canPlaceBuildingInTerritory, paintTerrainOwnership } from '../entities/tribe/territory-utils';
+import {
+  canPlaceBuildingInTerritory,
+  paintTerrainOwnership,
+  takeOverTerrainOwnership,
+} from '../entities/tribe/territory-utils';
 import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 import { getDepletedSectorsInArea } from '../entities/plants/soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
@@ -126,10 +130,18 @@ export function canPlaceBuilding(
 
   // 3. Check territory constraints - buildings can only be placed within or near tribe territory
   // Use the appropriate territory claim radius for the contiguity check
-  const territoryRadius =
-    buildingType === BuildingType.BorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
+  const isBorderPost = buildingType === BuildingType.BorderPost;
+  const territoryRadius = isBorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
 
-  const territoryCheck = canPlaceBuildingInTerritory(position, ownerId, gameState, territoryRadius);
+  const territoryCheck = canPlaceBuildingInTerritory(
+    position,
+    ownerId,
+    gameState,
+    territoryRadius,
+    isBorderPost, // allowHostileOverwrite
+    ownerId, // takingTribeId
+  );
+
   if (!territoryCheck.canPlace) {
     return false;
   }
@@ -321,7 +333,7 @@ export function createBuilding(
   gameState: GameWorldState,
 ): BuildingEntity | null {
   if (buildingType === BuildingType.BorderPost) {
-    paintTerrainOwnership(position, BORDER_EXPANSION_PAINT_RADIUS, ownerId, gameState);
+    takeOverTerrainOwnership(position, BORDER_EXPANSION_PAINT_RADIUS, ownerId, gameState);
     addVisualEffect(gameState, VisualEffectType.BorderClaim, position, EFFECT_DURATION_SHORT_HOURS, ownerId);
     return null;
   }

@@ -8,6 +8,10 @@ import { GameWorldState } from '../../world-types';
 import { TerritoryCheckResult } from './territory-types';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
 import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
+import { isTribeHostile } from '../../utils/human-utils';
+import { IndexedWorldState } from '../../world-index/world-index-types';
+import { HumanEntity } from '../characters/human/human-types';
+import { TAKEOVER_SAFETY_RADIUS } from '../../ai-consts';
 
 /** Converts a world position to territory grid coordinates. */
 export function convertPositionToTerritoryGrid(position: Vector2D): Vector2D {
@@ -25,10 +29,13 @@ export function convertTerritoryIndexToPosition(index: number, worldWidth: numbe
 }
 
 /** Converts a world position to a territory grid index. */
-export function convertPositionToTerritoryIndex(position: Vector2D, worldWidth: number): number {
-  const gridPos = convertPositionToTerritoryGrid(position);
+export function convertPositionToTerritoryIndex(position: Vector2D, worldWidth: number, worldHeight: number): number {
+  const wrappedX = ((position.x % worldWidth) + worldWidth) % worldWidth;
+  const wrappedY = ((position.y % worldHeight) + worldHeight) % worldHeight;
+  const gridX = Math.floor(wrappedX / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridY = Math.floor(wrappedY / TERRITORY_OWNERSHIP_RESOLUTION);
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
-  return gridPos.y * gridWidth + gridPos.x;
+  return gridY * gridWidth + gridX;
 }
 
 /**
@@ -36,7 +43,7 @@ export function convertPositionToTerritoryIndex(position: Vector2D, worldWidth: 
  * Uses the terrainOwnership grid to determine ownership.
  */
 export function getOwnerOfPoint(x: number, y: number, gameState: GameWorldState): EntityId | null {
-  const territoryIndex = convertPositionToTerritoryIndex({ x, y }, gameState.mapDimensions.width);
+  const territoryIndex = convertPositionToTerritoryIndex({ x, y }, gameState.mapDimensions.width, gameState.mapDimensions.height);
   return gameState.terrainOwnership[territoryIndex] || null;
 }
 
@@ -71,6 +78,27 @@ export function tribeHasTerritory(ownerId: EntityId, gameState: GameWorldState):
 }
 
 /**
+ * Helper function to check if there are any hostile humans within a certain radius.
+ * Used to prevent territory takeover or expansion while enemies are nearby.
+ */
+function hasHostileHumansNearby(
+  position: Vector2D,
+  tribeId: EntityId,
+  gameState: GameWorldState,
+  radius: number,
+): boolean {
+  const indexedState = gameState as IndexedWorldState;
+  // Check if spatial index for humans is available
+  if (!indexedState.search?.human) return false;
+
+  // Find all humans within the radius
+  const nearbyHumans = indexedState.search.human.byRadius(position, radius) as HumanEntity[];
+
+  // Return true if any of them belong to a hostile tribe
+  return nearbyHumans.some((h) => isTribeHostile(tribeId, h.leaderId, gameState));
+}
+
+/**
  * Checks if placing territory at a position with a given radius would maintain contiguity.
  * Rules:
  * 1. Must not overlap with another tribe's territory.
@@ -87,7 +115,18 @@ export function checkTerritoryContiguity(
   radius: number,
   ownerId: EntityId,
   gameState: GameWorldState,
+  allowHostileOverwrite: boolean = false,
+  takingTribeId?: EntityId,
 ): { valid: boolean; reason?: string } {
+  // If we are trying to overwrite hostile territory (pioneer behavior), check for nearby enemies
+  if (
+    allowHostileOverwrite &&
+    takingTribeId &&
+    hasHostileHumansNearby(position, takingTribeId, gameState, TAKEOVER_SAFETY_RADIUS)
+  ) {
+    return { valid: false, reason: 'Cannot expand into hostile territory while enemies are nearby' };
+  }
+
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
@@ -117,6 +156,13 @@ export function checkTerritoryContiguity(
         if (currentOwner === ownerId) {
           hasAdjacency = true;
         } else if (currentOwner !== null) {
+          // If overwriting is allowed, check if the owner is hostile
+          if (allowHostileOverwrite && takingTribeId && isTribeHostile(takingTribeId, currentOwner, gameState)) {
+            // This cell is owned by a hostile tribe, and we are allowed to overwrite it.
+            // We don't mark it as an 'overlap' that blocks placement.
+            continue;
+          }
+
           overlapsOtherTribe = true;
         }
       }
@@ -142,7 +188,7 @@ export function checkTerritoryContiguity(
 /**
  * Checks if taking over a building at a position would maintain territory contiguity.
  * This is similar to checkTerritoryContiguity but allows overwriting enemy territory.
- * 
+ *
  * Rules:
  * 1. The area that would be claimed must touch existing territory of the taking tribe.
  * 2. If the tribe has NO territory, takeover is not allowed (tribes must establish their own territory first).
@@ -161,6 +207,10 @@ export function checkTakeoverContiguity(
   // First, check if the taking tribe has any territory at all
   if (!tribeHasTerritory(takingTribeId, gameState)) {
     return { valid: false, reason: 'Tribe must have territory before taking over buildings' };
+  }
+  // Check for nearby enemies before allowing takeover
+  if (hasHostileHumansNearby(position, takingTribeId, gameState, TAKEOVER_SAFETY_RADIUS)) {
+    return { valid: false, reason: 'Cannot take over building while enemies are nearby' };
   }
 
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
@@ -221,10 +271,19 @@ export function canPlaceBuildingInTerritory(
   ownerId: EntityId,
   gameState: GameWorldState,
   radius: number = 0,
+  allowHostileOverwrite: boolean = false,
+  takingTribeId?: EntityId,
 ): { canPlace: boolean; reason?: string } {
   // If a radius is provided, perform the strict contiguity check
   if (radius > 0) {
-    const contiguityCheck = checkTerritoryContiguity(position, radius, ownerId, gameState);
+    const contiguityCheck = checkTerritoryContiguity(
+      position,
+      radius,
+      ownerId,
+      gameState,
+      allowHostileOverwrite,
+      takingTribeId,
+    );
     if (!contiguityCheck.valid) {
       return { canPlace: false, reason: contiguityCheck.reason };
     }
@@ -236,6 +295,11 @@ export function canPlaceBuildingInTerritory(
 
   // If the position is unowned or owned by the builder, allow placement
   if (positionOwner === null || positionOwner === ownerId) {
+    return { canPlace: true };
+  }
+
+  // If owned by another tribe and overwriting is allowed, check hostility
+  if (allowHostileOverwrite && takingTribeId && isTribeHostile(takingTribeId, positionOwner, gameState)) {
     return { canPlace: true };
   }
 
