@@ -78,7 +78,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
       const adultMembers = tribeMembers.filter((member) => member.isAdult);
       // includeUnconstructed = true to prevent redundant placements
       const existingStorageSpots = getTribeStorageSpots(entity.leaderId!, context.gameState, true);
-      const existingPlantingZones = getTribePlantingZones(entity, context.gameState).filter((zone) =>
+      const existingPlantingZones = getTribePlantingZones(entity, context.gameState, true).filter((zone) =>
         isPlantingZoneViable(zone, context.gameState),
       );
       const storageUtilization = getStorageUtilization(entity.leaderId!, context.gameState);
@@ -333,7 +333,7 @@ export function createLeaderBuildingPlacementBehavior(depth: number): BehaviorNo
 
       // 3. Supplemental need: clusters of cold members far from existing heat sources
       const tribeMembers = getTribeMembers(entity, context.gameState);
-      const bonfires = getTribeBonfires(entity.leaderId, context.gameState);
+      const bonfires = getTribeBonfires(entity.leaderId, context.gameState, true);
 
       const coldMembers = tribeMembers.filter((m) => {
         const localTemp = getTemperatureAt(

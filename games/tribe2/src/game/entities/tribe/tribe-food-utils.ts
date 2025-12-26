@@ -273,13 +273,18 @@ function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): 
 }
 
 /**
- * Gets all constructed planting zones owned by tribe members.
+ * Gets planting zones owned by tribe members.
  *
  * @param human A member of the tribe
  * @param gameState The current game state
+ * @param includeUnconstructed Whether to include buildings still under construction
  * @returns Array of planting zone buildings
  */
-export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldState): BuildingEntity[] {
+export function getTribePlantingZones(
+  human: HumanEntity,
+  gameState: GameWorldState,
+  includeUnconstructed: boolean = false,
+): BuildingEntity[] {
   if (!human.leaderId) {
     return [];
   }
@@ -288,7 +293,13 @@ export function getTribePlantingZones(human: HumanEntity, gameState: GameWorldSt
   const tribeBuildings = indexedState.search.building.byProperty('ownerId', human.leaderId);
 
   return tribeBuildings.filter((building) => {
-    return building.buildingType === BuildingType.PlantingZone && building.isConstructed;
+    if (building.buildingType !== BuildingType.PlantingZone) {
+      return false;
+    }
+    if (!includeUnconstructed && !building.isConstructed) {
+      return false;
+    }
+    return true;
   }) as BuildingEntity[];
 }
 
