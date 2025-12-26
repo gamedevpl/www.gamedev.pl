@@ -293,11 +293,6 @@ export const handlePlayerActionKeyDown = (
     }
     gameState.buildMenuOpen = !gameState.buildMenuOpen;
     playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-  } else if (key === 'u') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
-      return;
-    }
   } else if (key === 'c') {
     if (shiftKey) {
       gameState.autopilotControls.behaviors.chopping = !gameState.autopilotControls.behaviors.chopping;

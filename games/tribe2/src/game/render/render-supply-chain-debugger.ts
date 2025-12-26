@@ -5,7 +5,6 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { getTribeDemands } from '../ai/supply-chain/tribe-logistics-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { renderEntityHighlight } from './render-highlights';
-import { TribeRole } from '../entities/tribe/tribe-types';
 
 /**
  * Renders the supply chain debugger panel showing registered demands and their status
@@ -290,19 +289,6 @@ export function renderSupplyChainHighlights(
       human,
       human.radius + 15,
       '#ff6644', // Red/orange for demanders
-      3,
-      2.0,
-      gameState.time,
-    );
-  }
-
-  // Render highlights for movers (green)
-  if (human.tribeRole === TribeRole.Mover) {
-    renderEntityHighlight(
-      ctx,
-      human,
-      human.radius + 15,
-      '#44ff44', // Green for movers
       3,
       2.0,
       gameState.time,

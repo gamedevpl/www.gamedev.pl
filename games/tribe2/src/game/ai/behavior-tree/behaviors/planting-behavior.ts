@@ -174,7 +174,7 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
     [
       // 1. Basic conditions: Check if the AI is in a state to plant.
       new ConditionNode(
-        (human, context) => {
+        (human) => {
           // With task-based system, any adult can plant when needed
           if (!human.leaderId) {
             return [false, 'No tribe'];
