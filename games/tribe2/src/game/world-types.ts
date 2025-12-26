@@ -139,8 +139,6 @@ export interface GameWorldState {
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
-  roleManagerOpen: boolean;
-  armyControlOpen: boolean;
   selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
@@ -198,7 +196,6 @@ export type AutopilotControls = {
     attack: boolean;
     feedChildren: boolean;
     build: boolean;
-    roleManagement: boolean;
     chopping: boolean;
   };
   hoveredAutopilotAction?: HoveredAutopilotAction;

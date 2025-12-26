@@ -5,29 +5,26 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { HUMAN_INTERACTION_RANGE, SUPPLY_PROXIMITY_THRESHOLD } from '../../../human-consts';
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { ActionNode, ConditionNode, Sequence } from '../nodes';
-import { areTribeRolesEffective, isTribeRole } from '../../../entities/tribe/tribe-role-utils';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
 
 export function createDemandBehavior(depth: number): BehaviorNode<HumanEntity> {
   const sequence = new Sequence(
     [
       new ConditionNode(
         (human: HumanEntity, context) => {
+          // With task-based system, any tribe member can request food when needed
           const isTribe = !!human.leaderId;
-          if (!isTribe || !areTribeRolesEffective(human, context.gameState)) {
+          if (!isTribe) {
             return false;
           }
 
           const isTribeLeader = human.id === human.leaderId;
-          const isEligibleRole =
-            isTribeRole(human, TribeRole.Warrior, context.gameState) ||
-            isTribeRole(human, TribeRole.Hunter, context.gameState);
           const isOrphan =
             !human.isAdult &&
             (!human.fatherId || !context.gameState.entities.entities[human.fatherId]) &&
             (!human.motherId || !context.gameState.entities.entities[human.motherId]);
 
-          return isTribeLeader || isEligibleRole || isOrphan;
+          // Leaders, adults, and orphaned children can create demands
+          return isTribeLeader || human.isAdult || isOrphan;
         },
         'Demand eligible?',
         depth + 1,

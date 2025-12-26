@@ -25,8 +25,6 @@ export * from './player-command-behavior';
 export * from './diplomacy-behavior';
 export * from './human-hunt-prey-behavior';
 export * from './human-defend-predator-behavior';
-export * from './tribe-role-assignment-behavior';
-export * from './tribe-role-management-behavior';
 export * from './chopping-behavior';
 export * from './cleanup-trees-behavior';
 export * from './gather-at-bonfire-behavior';

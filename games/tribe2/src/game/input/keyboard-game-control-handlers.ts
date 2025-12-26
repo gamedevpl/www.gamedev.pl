@@ -65,26 +65,6 @@ export const handleGameControlKeyDown = (
         }
       }
       break;
-    case 'u':
-      const player = findPlayerEntity(gameState);
-      if (player && player.isAdult && player.leaderId === player.id) {
-        if (event.shiftKey) {
-          // Toggle roleManagement autopilot behavior
-          gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
-        } else {
-          // Toggle role manager UI
-          gameState.roleManagerOpen = !gameState.roleManagerOpen;
-        }
-      }
-      break;
-    case 'v': {
-      const playerForArmy = findPlayerEntity(gameState);
-      if (playerForArmy && playerForArmy.isAdult && playerForArmy.leaderId === playerForArmy.id) {
-        // Toggle army control UI
-        gameState.armyControlOpen = !gameState.armyControlOpen;
-      }
-      break;
-    }
     case 'm':
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);

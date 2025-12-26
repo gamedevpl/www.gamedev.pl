@@ -14,14 +14,13 @@ import {
 } from '../../../ai-consts.ts';
 import { MAX_HUNTERS_PER_PREY } from '../../../entities/tribe/tribe-task-utils.ts';
 import { EntityId } from '../../../entities/entities-types';
-import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
 
 const HUNT_TARGET_KEY = 'huntTarget';
 
 /**
- * Creates a behavior tree branch for humans hunting prey
+ * Creates a behavior tree branch for humans hunting prey.
+ * With task-based system, any adult in a tribe can hunt when needed.
  */
 export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEntity> {
   const huntSequence = new Sequence(
@@ -38,10 +37,7 @@ export function createHumanHuntPreyBehavior(depth: number): BehaviorNode<HumanEn
               return [false, 'Not in a tribe'];
             }
 
-            if (!isTribeRole(human, TribeRole.Hunter, context.gameState)) {
-              return [false, 'Not a Hunter'];
-            }
-
+            // With task-based system, any adult can hunt when needed
             const nearbyPrey = findClosestEntity<PreyEntity>(
               human.position,
               context.gameState,

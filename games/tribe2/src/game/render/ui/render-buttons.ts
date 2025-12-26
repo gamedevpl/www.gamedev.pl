@@ -26,8 +26,7 @@ import { AutopilotControls, GameWorldState } from '../../world-types.js';
 import { ClickableUIButton, PlayerActionType, PLAYER_ACTION_EMOJIS, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity, findTribeMembers, getAvailablePlayerActions } from '../../utils/world-utils';
-import { areTribeRolesEffective } from '../../entities/tribe/tribe-role-utils.ts';
-import { TRIBE_ARMY_CONTROL_MIN_HEADCOUNT, TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
+import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../entities/tribe/tribe-consts.ts';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -252,16 +251,6 @@ export function renderUIButtons(
         condition: () => player.isAdult === true && player.leaderId === player.id,
       },
       {
-        playerAction: PlayerActionType.ArmyControl,
-        buttonAction: UIButtonActionType.OpenArmyControl,
-        shortcut: 'V',
-        name: 'Army Control',
-        condition: () =>
-          player.isAdult === true &&
-          player.leaderId === player.id &&
-          findTribeMembers(player.id, gameState).length > TRIBE_ARMY_CONTROL_MIN_HEADCOUNT,
-      },
-      {
         playerAction: PlayerActionType.TribeSplit,
         buttonAction: UIButtonActionType.CommandTribeSplit,
         shortcut: 'K',
@@ -278,15 +267,6 @@ export function renderUIButtons(
           player.isAdult === true &&
           player.leaderId === player.id &&
           findTribeMembers(player.id, gameState).length > TRIBE_BUILDINGS_MIN_HEADCOUNT,
-      },
-      {
-        playerAction: PlayerActionType.Build, // Reuse this for now
-        buttonAction: UIButtonActionType.OpenRoleManager,
-        shortcut: 'U',
-        name: 'Roles',
-        toggleKey: 'roleManagement',
-        condition: () =>
-          player.isAdult === true && player.leaderId === player.id && areTribeRolesEffective(player, gameState),
       },
     ];
 
@@ -320,32 +300,20 @@ export function renderUIButtons(
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
       const backgroundColor =
-        isBehaviorActive ||
-        isBuildMenuOpen ||
-        (behavior.buttonAction === UIButtonActionType.OpenRoleManager &&
-          (gameState.roleManagerOpen || gameState.autopilotControls.behaviors.roleManagement))
-          ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
-          : UI_BUTTON_BACKGROUND_COLOR;
+        isBehaviorActive || isBuildMenuOpen ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
 
       const button: ClickableUIButton = {
         id: `commandButton_${behavior.name}`,
         action: behavior.buttonAction,
         rect: { x: buttonX, y: buttonY, width: UI_AUTOPILOT_BUTTON_SIZE, height: UI_AUTOPILOT_BUTTON_SIZE },
-        icon:
-          behavior.buttonAction === UIButtonActionType.OpenRoleManager
-            ? '📋'
-            : PLAYER_ACTION_EMOJIS[behavior.playerAction],
+        icon: PLAYER_ACTION_EMOJIS[behavior.playerAction],
         text: behavior.shortcut,
         backgroundColor: backgroundColor,
         textColor: UI_BUTTON_TEXT_COLOR,
         currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
         tooltip: tooltipText,
         isDisabled,
-        activated:
-          isBehaviorActive ||
-          (behavior.buttonAction === UIButtonActionType.CommandBuild && isBuildMenuOpen) ||
-          (behavior.buttonAction === UIButtonActionType.OpenRoleManager &&
-            (gameState.roleManagerOpen || gameState.autopilotControls.behaviors.roleManagement)),
+        activated: isBehaviorActive || (behavior.buttonAction === UIButtonActionType.CommandBuild && isBuildMenuOpen),
       };
       gameState.uiButtons.push(button);
     });

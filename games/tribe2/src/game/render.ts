@@ -31,8 +31,6 @@ import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
 import { renderGhostBuilding } from './render/render-building';
 import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
-import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
-import { renderArmyControl } from './render/ui/render-army-control.ts';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
 import { renderSupplyChainDebugger } from './render/render-supply-chain-debugger.ts';
@@ -232,18 +230,6 @@ export function renderGame(
       case DebugPanelType.General:
         renderBehaviorTreeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
-    }
-
-    // --- Tribe Role Manager ---
-    if (gameState.roleManagerOpen && player && player.leaderId === player.id) {
-      const roleManagerButtons = renderTribeRoleManager(ctx, gameState, player);
-      gameState.uiButtons.push(...roleManagerButtons);
-    }
-
-    // --- Army Control Dialog ---
-    if (gameState.armyControlOpen && player && player.leaderId === player.id) {
-      const armyControlButtons = renderArmyControl(ctx, gameState, player);
-      gameState.uiButtons.push(...armyControlButtons);
     }
 
     if (gameState.isPaused && gameState.exitConfirmation !== 'pending') {

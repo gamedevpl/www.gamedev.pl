@@ -21,8 +21,6 @@ import {
   TribalTaskData,
   TRIBAL_TASK_TIMEOUT_HOURS,
 } from '../../../entities/tribe/tribe-task-utils';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../entities/tribe/territory-utils';
 import { getTribeWoodNeed } from '../../../entities/tribe/tribe-food-utils';
 
@@ -51,7 +49,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
         (child) => child.hunger > CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
       );
       const needsFood = isHungryEnough || hungryChildren.length > 0;
-      const isGatherer = isTribeRole(human, TribeRole.Gatherer, context.gameState);
+      const hasNonFullStorage = hasNearbyNonFullStorage(human, context.gameState);
 
       // Search for food sources (bushes or corpses)
       const findFood = () => {
@@ -139,13 +137,13 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
 
       let resource: ResourceSource | null = null;
 
-      // Prioritization logic
+      // Prioritization logic - with task-based system, any adult can gather
       if (needsFood && human.food.length < human.maxFood) {
         resource = findFood();
       } else if (woodNeed > 0 && !human.heldItem) {
         resource = findWood();
-      } else if (isGatherer) {
-        // Gatherers look for wood first if not hungry, then food for storage
+      } else if (hasNonFullStorage) {
+        // Anyone can gather for storage when there's capacity
         if (!human.heldItem) {
           resource = findWood();
         }
@@ -244,12 +242,12 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
             (child) => child.hunger > CHILD_HUNGER_THRESHOLD_FOR_REQUESTING_FOOD,
           );
 
-          const isGatherer = isTribeRole(human, TribeRole.Gatherer, context.gameState);
           const hasNonFullStorage = hasNearbyNonFullStorage(human, context.gameState);
 
+          // With task-based system, any adult can gather when needed
           const canGatherFood =
-            hasFoodCapacity && (isHungryEnough || hungryChildren.length > 0 || (isGatherer && hasNonFullStorage));
-          const canGatherWood = hasWoodCapacity && (woodNeed > 0 || (isGatherer && hasNonFullStorage));
+            hasFoodCapacity && (isHungryEnough || hungryChildren.length > 0 || hasNonFullStorage);
+          const canGatherWood = hasWoodCapacity && (woodNeed > 0 || hasNonFullStorage);
 
           return [
             (human.isAdult && (canGatherFood || canGatherWood)) ?? false,

@@ -10,7 +10,6 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { SoundType } from '../sound/sound-types';
 import { playSoundAt } from '../sound/sound-manager';
 import { generateTribeBadge, isLineage, canProcreate } from '../utils';
-import { TribeRole } from '../entities/tribe/tribe-types.ts';
 import { TERRITORY_COLORS } from '../entities/tribe/territory-consts.ts';
 
 /**
@@ -102,11 +101,8 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
           tribeBadge: newTribeBadge,
           tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
         };
-        male.tribeRole = TribeRole.Leader;
         male.tribeControl = {
-          roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
           diplomacy: {},
-          armyControl: { protectHomeland: 5, expandBorders: 5, invadeEnemies: 5 },
         };
         female.leaderId = male.id; // The female joins the new tribe
         female.tribeInfo = male.tribeInfo;
@@ -121,11 +117,8 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
         tribeBadge: newTribeBadge,
         tribeColor: TERRITORY_COLORS[Math.floor(Math.random() * TERRITORY_COLORS.length)],
       };
-      male.tribeRole = TribeRole.Leader;
       male.tribeControl = {
-        roleWeights: { gatherer: 1, planter: 1, hunter: 1, mover: 1, warrior: 1, leader: 0 },
         diplomacy: {},
-        armyControl: { protectHomeland: 5, expandBorders: 5, invadeEnemies: 5 },
       };
       female.leaderId = male.id; // The female joins the new tribe
       female.tribeInfo = male.tribeInfo;

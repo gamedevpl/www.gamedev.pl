@@ -2,12 +2,7 @@ import { ClickableUIButton, UIButtonActionType } from '../ui/ui-types';
 import { DiplomacyStatus, GameWorldState } from '../world-types';
 import { setMasterVolume } from '../sound/sound-loader';
 import { updateWorld } from '../world-update';
-import {
-  FAST_FORWARD_AMOUNT_SECONDS,
-  DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
-  DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
-  DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
-} from '../entities/tribe/tribe-consts.ts';
+import { FAST_FORWARD_AMOUNT_SECONDS } from '../entities/tribe/tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
 import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';
@@ -49,7 +44,6 @@ export const handleUIButtonClick = (
       UIButtonActionType.CommandPlant,
       UIButtonActionType.ToggleProcreationBehavior,
       UIButtonActionType.CommandBuild,
-      UIButtonActionType.OpenRoleManager,
     ].includes(button.action)
   ) {
     gameState.hasPlayerEnabledAutopilot++;
@@ -156,72 +150,6 @@ export const handleUIButtonClick = (
 
           playerDiplomacy[otherTribeId] = newStatus;
           otherDiplomacy[playerTribeId] = newStatus;
-        }
-      }
-      break;
-    case UIButtonActionType.OpenRoleManager:
-      if (shift) {
-        // Toggle roleManagement autopilot behavior
-        behaviors.roleManagement = !behaviors.roleManagement;
-      } else {
-        // Open role manager UI
-        gameState.roleManagerOpen = true;
-      }
-      break;
-    case UIButtonActionType.CloseRoleManager:
-      gameState.roleManagerOpen = false;
-      break;
-    case UIButtonActionType.IncreaseRoleWeight:
-      if (player && player.tribeControl && button.targetRole) {
-        const currentWeight = player.tribeControl.roleWeights[button.targetRole] || 0;
-        if (currentWeight < 10) {
-          player.tribeControl.roleWeights[button.targetRole] = currentWeight + 1;
-        }
-      }
-      break;
-    case UIButtonActionType.DecreaseRoleWeight:
-      if (player && player.tribeControl && button.targetRole) {
-        const currentWeight = player.tribeControl.roleWeights[button.targetRole] || 0;
-        if (currentWeight > 0) {
-          player.tribeControl.roleWeights[button.targetRole] = currentWeight - 1;
-        }
-      }
-      break;
-    case UIButtonActionType.OpenArmyControl:
-      gameState.armyControlOpen = true;
-      break;
-    case UIButtonActionType.CloseArmyControl:
-      gameState.armyControlOpen = false;
-      break;
-    case UIButtonActionType.IncreaseArmyObjective:
-      if (player && player.tribeControl && button.targetArmyObjective) {
-        // Initialize armyControl if it doesn't exist
-        if (!player.tribeControl.armyControl) {
-          player.tribeControl.armyControl = {
-            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
-            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
-            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
-          };
-        }
-        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
-        if (currentWeight < 10) {
-          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight + 1;
-        }
-      }
-      break;
-    case UIButtonActionType.DecreaseArmyObjective:
-      if (player && player.tribeControl && button.targetArmyObjective) {
-        // Initialize armyControl if it doesn't exist
-        if (!player.tribeControl.armyControl) {
-          player.tribeControl.armyControl = {
-            protectHomeland: DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND,
-            expandBorders: DEFAULT_ARMY_CONTROL_EXPAND_BORDERS,
-            invadeEnemies: DEFAULT_ARMY_CONTROL_INVADE_ENEMIES,
-          };
-        }
-        const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
-        if (currentWeight > 0) {
-          player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight - 1;
         }
       }
       break;

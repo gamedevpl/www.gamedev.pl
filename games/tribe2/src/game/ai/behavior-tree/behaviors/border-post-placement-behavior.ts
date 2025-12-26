@@ -1,7 +1,6 @@
 import { BehaviorNode, NodeStatus } from '../behavior-tree-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Sequence, ConditionNode, ActionNode } from '../nodes';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import {
   findNearestTerritoryEdge,
@@ -27,24 +26,22 @@ import { isTribeHostile } from '../../../utils/human-utils';
 /**
  * Constants for border expansion behavior
  */
-const BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT = 2; // Minimum army control weight to expand borders
 const EDGE_APPROACH_THRESHOLD = 40; // How close to be considered "at the edge"
 const SEARCH_RADIUS_CELLS = 3; // Look 3 cells in every direction (7x7 grid)
 
 /**
  * Factory function to create a border expansion behavior node.
- * This behavior allows Warriors and Leaders to autonomously expand territory ("Pioneer" behavior).
+ * This behavior allows any adult tribe member to autonomously expand territory ("Pioneer" behavior).
  *
  * The behavior tree structure:
  * - Sequence
- *   1. Condition: Is Warrior or Leader
- *   2. Condition: Has Army Control with expandBorders weight > threshold
- *   3. Condition: Tribe has buildings (territory exists)
- *   4. Action: Pioneer Logic (Find edge, walk along it, paint territory)
+ *   1. Condition: Is adult and in a tribe
+ *   2. Condition: Tribe has buildings (territory exists)
+ *   3. Action: Pioneer Logic (Find edge, walk along it, paint territory)
  */
 export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<HumanEntity> {
-  // Condition: Check if entity is a Warrior or Leader
-  const isWarriorOrLeaderCondition = new ConditionNode<HumanEntity>(
+  // Condition: Check if entity is an adult in a tribe
+  const isAdultInTribeCondition = new ConditionNode<HumanEntity>(
     (entity) => {
       if (!entity.isAdult) {
         return [false, 'Not an adult'];
@@ -52,38 +49,12 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
       if (entity.hunger > HUMAN_HUNGER_THRESHOLD_SLOW) {
         return [false, `Too hungry (${entity.hunger.toFixed(1)})`];
       }
-      const isLeader = entity.leaderId === entity.id;
-      const isWarrior = entity.tribeRole === TribeRole.Warrior;
-
-      if (!isLeader && !isWarrior) {
-        return [false, `Not a Warrior or Leader (role: ${entity.tribeRole || 'none'})`];
+      if (!entity.leaderId) {
+        return [false, 'Not in a tribe'];
       }
-      return [true, isLeader ? 'Is Leader' : 'Is Warrior'];
+      return [true, 'Adult in tribe'];
     },
-    'Is Warrior or Leader',
-    depth + 1,
-  );
-
-  // Condition: Check if Army Control has expandBorders weight set high enough
-  const hasExpandBordersWeightCondition = new ConditionNode<HumanEntity>(
-    (entity) => {
-      if (entity.leaderId !== entity.id) {
-        // Warriors follow leader's strategy.
-        // In a real implementation, we might check the leader's blackboard or tribe settings.
-        // For now, assuming warriors are enabled if the behavior is active.
-        return [true, 'Warrior follows leader strategy'];
-      }
-
-      const expandBordersWeight = entity.tribeControl?.armyControl?.expandBorders ?? 0;
-      if (expandBordersWeight < BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT) {
-        return [
-          false,
-          `Expand borders weight too low: ${expandBordersWeight}/${BORDER_POST_MIN_EXPAND_BORDERS_WEIGHT}`,
-        ];
-      }
-      return [true, `Expand borders weight: ${expandBordersWeight}`];
-    },
-    'Has Expand Borders Weight',
+    'Is Adult in Tribe',
     depth + 1,
   );
 
@@ -250,7 +221,7 @@ export function createBorderPostPlacementBehavior(depth: number): BehaviorNode<H
   );
 
   return new Sequence<HumanEntity>(
-    [isWarriorOrLeaderCondition, hasExpandBordersWeightCondition, hasTerritoryCondition, pioneerAction],
+    [isAdultInTribeCondition, hasTerritoryCondition, pioneerAction],
     'Border Expansion',
     depth,
   );

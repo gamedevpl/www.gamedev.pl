@@ -1,6 +1,4 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { areTribeRolesEffective, isTribeRole } from '../../../entities/tribe/tribe-role-utils';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
 import { getTribeLeaderForCoordination } from '../../../entities/tribe/tribe-task-utils';
 import { getUnclaimedDemands, claimDemand, getDemandById } from '../../supply-chain/tribe-logistics-utils';
 import { calculateWrappedDistance } from '../../../utils/math-utils';
@@ -45,15 +43,9 @@ function cleanupSupplyState(human: HumanEntity): void {
 export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new ActionNode(
     (human: HumanEntity, context) => {
-      if (!areTribeRolesEffective(human, context.gameState)) {
+      if (!human.isAdult) {
         cleanupSupplyState(human);
-        return [NodeStatus.FAILURE, 'Tribe roles not effective'];
-      }
-
-      // Check if human has Mover role
-      if (!isTribeRole(human, TribeRole.Mover, context.gameState)) {
-        cleanupSupplyState(human);
-        return [NodeStatus.FAILURE, 'Not a Mover'];
+        return [NodeStatus.FAILURE, 'Not an adult'];
       }
 
       // Get tribe leader for coordination

@@ -30,8 +30,6 @@ import { ActionNode, ConditionNode, CooldownNode, Selector, Sequence, TribalTask
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Blackboard } from '../behavior-tree-blackboard.ts';
 import { EntityId } from '../../../entities/entities-types';
-import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 import { isSoilDepleted } from '../../../entities/plants/soil-depletion-update.ts';
 
 const BLACKBOARD_KEY = 'plantingSpot';
@@ -177,8 +175,9 @@ export function createPlantingBehavior(depth: number): BehaviorNode<HumanEntity>
       // 1. Basic conditions: Check if the AI is in a state to plant.
       new ConditionNode(
         (human, context) => {
-          if (!isTribeRole(human, TribeRole.Planter, context.gameState)) {
-            return [false, 'Not a Planter'];
+          // With task-based system, any adult can plant when needed
+          if (!human.leaderId) {
+            return [false, 'No tribe'];
           }
 
           const hasEnoughBerries =

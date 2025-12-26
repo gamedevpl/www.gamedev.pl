@@ -1,7 +1,7 @@
 import { EntityId } from '../../entities-types';
 import { FoodItem } from '../../food-types';
 import { CharacterEntity } from '../character-types';
-import { TribeControl, TribeRole } from '../../tribe/tribe-types';
+import { TribeControl } from '../../tribe/tribe-types';
 import { Item } from '../../item-types';
 
 /**
@@ -105,9 +105,6 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The tribe settings available only for tribe leaders. */
   tribeControl?: TribeControl;
-
-  /** The current role assigned within the tribe, if any. */
-  tribeRole?: TribeRole;
 
   /** The non-food item currently held by the human. Only one item can be held at a time. */
   heldItem?: Item;

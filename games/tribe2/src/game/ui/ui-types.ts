@@ -1,10 +1,6 @@
 import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
-import { TribeRole } from '../entities/tribe/tribe-types';
 import { DiplomacyStatus } from '../world-types';
-
-/** Army control objective keys for use in UI buttons */
-export type ArmyControlObjective = 'protectHomeland' | 'expandBorders' | 'invadeEnemies';
 
 export enum PlayerActionType {
   Gather = 'Gather',
@@ -22,7 +18,6 @@ export enum PlayerActionType {
   Retrieve = 'Retrieve',
   TakeOverBuilding = 'TakeOverBuilding',
   RemoveEnemyBuilding = 'RemoveEnemyBuilding',
-  ArmyControl = 'ArmyControl',
   Chop = 'Chop',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
@@ -53,7 +48,6 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.Retrieve]: '🎁',
   [PlayerActionType.TakeOverBuilding]: '🏴',
   [PlayerActionType.RemoveEnemyBuilding]: '🧨',
-  [PlayerActionType.ArmyControl]: '🎖️',
   [PlayerActionType.Chop]: '🪓',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
@@ -83,7 +77,6 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.Retrieve]: 'Retrieve',
   [PlayerActionType.TakeOverBuilding]: 'Take Over',
   [PlayerActionType.RemoveEnemyBuilding]: 'Destroy Enemy Building',
-  [PlayerActionType.ArmyControl]: 'Army Control',
   [PlayerActionType.Chop]: 'Chop Tree',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
@@ -172,18 +165,6 @@ export enum UIButtonActionType {
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',
-
-  // --- Tribe Role Manager ---
-  OpenRoleManager = 'OpenRoleManager',
-  CloseRoleManager = 'CloseRoleManager',
-  IncreaseRoleWeight = 'IncreaseRoleWeight',
-  DecreaseRoleWeight = 'DecreaseRoleWeight',
-
-  // --- Army Control ---
-  OpenArmyControl = 'OpenArmyControl',
-  CloseArmyControl = 'CloseArmyControl',
-  IncreaseArmyObjective = 'IncreaseArmyObjective',
-  DecreaseArmyObjective = 'DecreaseArmyObjective',
 }
 
 export interface ClickableUIButton {
@@ -200,6 +181,4 @@ export interface ClickableUIButton {
   lastActivated?: number;
   activated?: boolean;
   targetTribeId?: EntityId;
-  targetRole?: TribeRole;
-  targetArmyObjective?: ArmyControlObjective;
 }

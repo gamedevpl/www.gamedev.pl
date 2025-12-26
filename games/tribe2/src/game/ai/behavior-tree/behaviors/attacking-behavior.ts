@@ -8,8 +8,6 @@ import { calculateWrappedDistance } from '../../../utils/math-utils';
 import { findClosestEntity, getFamilyCenter, getFamilyMembers, getTribeCenter, isHostile } from '../../../utils';
 import { Vector2D } from '../../../utils/math-types';
 import { EntityId } from '../../../entities/entities-types.ts';
-import { TribeRole } from '../../../entities/tribe/tribe-types.ts';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils.ts';
 
 const ATTACK_TARGET_KEY = 'attackTarget';
 const HOME_CENTER_KEY = 'homeCenter';
@@ -18,6 +16,7 @@ const ATTACK_RANGE = 150; // The maximum distance to initiate an attack
 /**
  * Creates a behavior tree branch for attacking enemies, but with a leash to home territory.
  * The behavior is a sequence that finds a target, checks distance from home, and then executes the attack.
+ * With task-based system, any adult can attack when needed.
  */
 export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity> {
   return new Sequence(
@@ -57,10 +56,7 @@ export function createAttackingBehavior(depth: number): BehaviorNode<HumanEntity
             }
           }
 
-          if (!isTribeRole(human, TribeRole.Warrior, gameState)) {
-            return [false, 'Not a Warrior'];
-          }
-
+          // With task-based system, any adult can attack when needed
           // Find a new target if not currently engaged.
           const enemy = findClosestEntity<HumanEntity>(
             human,

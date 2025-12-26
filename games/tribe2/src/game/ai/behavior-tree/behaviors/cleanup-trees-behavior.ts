@@ -16,14 +16,12 @@ import {
 import { getTribePlantingZones } from '../../../entities/tribe/tribe-food-utils';
 import { isPositionInZone } from '../../../utils/spatial-utils';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
 
 const BLACKBOARD_KEY = 'cleanupTreeTarget';
 
 /**
  * Creates a behavior tree for cleaning up trees that grow on planting zones.
- * Planters and Gatherers are responsible for this task.
+ * With task-based system, any adult can perform this task when needed.
  */
 export function createCleanupTreesBehavior(depth: number): BehaviorNode<HumanEntity> {
   // Action to find a tree inside a planting zone and store it in the blackboard.
@@ -156,14 +154,12 @@ export function createCleanupTreesBehavior(depth: number): BehaviorNode<HumanEnt
   return new Sequence(
     [
       new ConditionNode(
-        (human, context) => {
-          const isPlanter = isTribeRole(human, TribeRole.Planter, context.gameState);
-          const isGatherer = isTribeRole(human, TribeRole.Gatherer, context.gameState);
+        (human) => {
           const hasCapacity = !human.heldItem;
 
           return [
-            human.isAdult && (isPlanter || isGatherer) && hasCapacity ? true : false,
-            `${!hasCapacity ? 'Holding item' : 'Planter/Gatherer role eligible'}`,
+            human.isAdult && hasCapacity ? true : false,
+            `${!hasCapacity ? 'Holding item' : 'Adult eligible'}`,
           ];
         },
         'Should Cleanup Zone?',

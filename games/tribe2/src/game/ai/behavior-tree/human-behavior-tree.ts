@@ -7,12 +7,10 @@ import { BehaviorNode } from './behavior-tree-types';
 import {
   AutopilotControlled,
   CachingNode,
-  Inverter,
   ManualControl,
   NonPlayerControlled,
   Parallel,
   Selector,
-  Succeeder,
   TimeoutNode,
 } from './nodes';
 import {
@@ -41,10 +39,8 @@ import {
   createTakeOverBuildingBehavior,
   createRemoveEnemyBuildingBehavior,
   createBorderPostPlacementBehavior,
-  createTribeRoleAssignmentBehavior,
   createDemandBehavior,
   createSupplyBehavior,
-  createTribeRoleManagementBehavior,
   createChoppingBehavior,
   createCleanupTreesBehavior,
   createGatherAtBonfireBehavior,
@@ -214,26 +210,6 @@ export function buildHumanBehaviorTree(): BehaviorNode<HumanEntity> {
 
   const nonblockingNodes = new Parallel(
     [
-      // --- TRIBE ROLE ASSIGNMENT ---
-      new Inverter(
-        new Succeeder(createTribeRoleAssignmentBehavior(4), 'Role Assignment Success', 3),
-        'Role Assignment Gate',
-        2,
-      ),
-
-      // --- TRIBE ROLE MANAGEMENT (LEADER) ---
-      new AutopilotControlled(
-        new CachingNode(
-          createTribeRoleManagementBehavior(4),
-          BT_EXPENSIVE_OPERATION_CACHE_HOURS,
-          'Cache Role Management',
-          3,
-        ),
-        'roleManagement',
-        'Gated Role Management',
-        2,
-      ),
-
       // --- DIPLOMACY (LEADER) ---
       new NonPlayerControlled(createDiplomacyBehavior(3), 'Gated Diplomacy', 2),
 

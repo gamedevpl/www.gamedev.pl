@@ -24,8 +24,6 @@ import { EntityId } from '../../../entities/entities-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { ItemType } from '../../../entities/item-types';
 import { MAX_USERS_PER_STORAGE } from '../../../entities/tribe/tribe-task-utils';
-import { isTribeRole } from '../../../entities/tribe/tribe-role-utils';
-import { TribeRole } from '../../../entities/tribe/tribe-types';
 
 const LAST_DEPOSIT_TIME_KEY = 'lastDepositTime';
 const ASSIGNED_STORAGE_KEY = 'assignedStorageSpot';
@@ -63,14 +61,7 @@ export function createStorageDepositBehavior(depth: number): BehaviorNode<HumanE
                 assignedStorage = assignWoodDepositTarget(human, context.gameState);
                 debugReason = `Holding wood${assignedStorage ? ` (Target: ${assignedStorage.id})` : ''}`;
               } else {
-                // Food deposit logic
-                if (
-                  !isTribeRole(human, TribeRole.Gatherer, context.gameState) &&
-                  !isTribeRole(human, TribeRole.Mover, context.gameState) &&
-                  !isTribeRole(human, TribeRole.Hunter, context.gameState)
-                ) {
-                  return [false, 'Not a Gatherer/Mover/Hunter and not holding wood'];
-                }
+                // Food deposit logic - with task-based system, any adult can deposit
 
                 // Check cooldown
                 const lastDepositTime = Blackboard.get<number>(blackboard, LAST_DEPOSIT_TIME_KEY) || 0;

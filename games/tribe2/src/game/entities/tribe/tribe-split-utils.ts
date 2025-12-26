@@ -22,7 +22,6 @@ import {
   findLivingFamilyRoot,
 } from './family-tribe-utils';
 import { generateTribeBadge } from '../../utils/general-utils.ts';
-import { TribeRole } from './tribe-types.ts';
 import { Blackboard, BlackboardData } from '../../ai/behavior-tree/behavior-tree-blackboard.ts';
 import { Vector2D } from '../../utils/math-types.ts';
 import { calculateWrappedDistance } from '../../utils/math-utils.ts';
@@ -410,22 +409,8 @@ export function executeSplit(human: HumanEntity, gameState: GameWorldState): boo
   // The founder becomes the new leader
   human.leaderId = human.id;
   human.tribeInfo = { tribeBadge: newTribeBadge, tribeColor: newTribeColor };
-  human.tribeRole = TribeRole.Leader;
   human.tribeControl = {
-    roleWeights: {
-      gatherer: 1,
-      planter: 1,
-      hunter: 1,
-      mover: 1,
-      warrior: 1,
-      leader: 0,
-    },
     diplomacy: {},
-    armyControl: {
-      protectHomeland: 5,
-      expandBorders: 5,
-      invadeEnemies: 5,
-    },
   };
 
   // Set diplomacy with previous leader
