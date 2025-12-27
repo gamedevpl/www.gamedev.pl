@@ -5,6 +5,8 @@ import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 import { UpdateContext } from '../world-types';
 import { buildPreyBehaviorTree } from './behavior-tree/prey-behavior-tree';
 import { buildPredatorBehaviorTree } from './behavior-tree/predator-behavior-tree';
+import { AIType } from './ai-types';
+import { updateAnimalTaskAI } from './task/animals/animal-task-update';
 
 export const preyBehaviorTree = buildPreyBehaviorTree();
 
@@ -13,15 +15,17 @@ export const preyBehaviorTree = buildPreyBehaviorTree();
  * This function "ticks" the root of the tree, causing it to be evaluated.
  */
 export function preyAIUpdate(prey: PreyEntity, context: UpdateContext): void {
-  if (prey.aiBlackboard) {
-    // The behavior tree system is designed for HumanEntity but works with any entity
-    // that has compatible properties. We cast to work around the type limitation
-    // while maintaining type safety through the interface constraints.
-    updateBehaviorTreeAI(prey as unknown as HumanEntity, context, preyBehaviorTree);
-  } else {
-    // Fallback if the tree is missing
-    console.warn(`Behavior Tree AI ticked for prey ${prey.id}, but the tree or blackboard was missing.`);
-    prey.activeAction = 'idle';
+  // The behavior tree system is designed for HumanEntity but works with any entity
+  // that has compatible properties. We cast to work around the type limitation
+  // while maintaining type safety through the interface constraints.
+  switch (prey.aiType) {
+    case AIType.TaskBased:
+      updateAnimalTaskAI(prey, context);
+      break;
+    case AIType.BehaviorTreeBased:
+    default:
+      updateBehaviorTreeAI(prey as unknown as HumanEntity, context, preyBehaviorTree);
+      break;
   }
 }
 
@@ -32,14 +36,13 @@ export const predatorBehaviorTree = buildPredatorBehaviorTree();
  * This function "ticks" the root of the tree, causing it to be evaluated.
  */
 export function predatorAIUpdate(predator: PredatorEntity, context: UpdateContext): void {
-  if (predator.aiBlackboard) {
-    // The behavior tree system is designed for HumanEntity but works with any entity
-    // that has compatible properties. We cast to work around the type limitation
-    // while maintaining type safety through the interface constraints.
-    updateBehaviorTreeAI(predator as unknown as HumanEntity, context, predatorBehaviorTree);
-  } else {
-    // Fallback if the tree is missing
-    console.warn(`Behavior Tree AI ticked for predator ${predator.id}, but the tree or blackboard was missing.`);
-    predator.activeAction = 'idle';
+  switch (predator.aiType) {
+    case AIType.TaskBased:
+      updateAnimalTaskAI(predator, context);
+      break;
+    case AIType.BehaviorTreeBased:
+    default:
+      updateBehaviorTreeAI(predator as unknown as HumanEntity, context, predatorBehaviorTree);
+      break;
   }
 }
