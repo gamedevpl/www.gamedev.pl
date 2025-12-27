@@ -3,7 +3,6 @@ import { UpdateContext } from '../world-types';
 import { AIType } from './ai-types';
 import { updateBehaviorTreeAI } from './behavior-tree/behavior-tree-update';
 import { buildHumanBehaviorTree } from './behavior-tree/human-behavior-tree';
-import { updateHumanTaskAI } from './task/humans/human-task-update';
 
 export const humanBehaviorTree = buildHumanBehaviorTree();
 
@@ -15,9 +14,6 @@ export function humanAIUpdate(human: HumanEntity, context: UpdateContext): void 
   const startTime = performance.now();
 
   switch (human.aiType) {
-    case AIType.TaskBased:
-      updateHumanTaskAI(human, context);
-      break;
     case AIType.BehaviorTreeBased:
     default:
       updateBehaviorTreeAI(human, context, humanBehaviorTree);

@@ -49,7 +49,6 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       plantingZoneConnections: worldState.plantingZoneConnections,
       terrainOwnership: worldState.terrainOwnership,
       temperature: worldState.temperature,
-      tasks: worldState.tasks,
     };
 
     await workerManager.saveGame(serialized);

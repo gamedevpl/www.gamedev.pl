@@ -274,7 +274,6 @@ export function initWorld(): GameWorldState {
     terrainOwnership: new Array(
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
-    tasks: {},
   };
 
   const indexedWorldState = indexWorldState(initialWorldState);
@@ -438,7 +437,6 @@ export function initIntroWorld(): GameWorldState {
     terrainOwnership: new Array(
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
-    tasks: {},
   };
 
   return indexWorldState(initialWorldState);

@@ -14,9 +14,9 @@ export interface CharacterEntity extends Entity {
   /** The current hunger level of the character (0-100). */
   hunger: number;
   /** The type of AI used by this character. */
-  aiType: AIType;
+  aiType?: AIType;
   /** The blackboard for the behavior tree AI. */
-  aiBlackboard: BlackboardData;
+  aiBlackboard?: BlackboardData;
   /** Current active action. Set by player input or AI decision. */
   activeAction?: string;
 }
