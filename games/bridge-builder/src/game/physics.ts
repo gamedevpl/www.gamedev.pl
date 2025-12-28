@@ -253,17 +253,19 @@ export function buildWorldFromDesign(nodes: Node[], beams: Beam[]): WorldSimulat
     return chassis;
   }
 
-  const startX = LEVEL.gapStart - 4.4;
-  const startY = LEVEL.platformY + 0.9;
+  const startX = LEVEL.gapStart - 6.0;
+  const startY = LEVEL.platformY + 0.5;
+  const carSpacing = 2.0; // Distance between car centers
   const loco = addCar(startX, startY, true);
-  const car1 = addCar(startX - 2.2, startY, false);
-  const car2 = addCar(startX - 4.4, startY, false);
+  const car1 = addCar(startX - carSpacing, startY, false);
+  const car2 = addCar(startX - carSpacing * 2, startY, false);
 
-  // Couplers
+  // Couplers - connect cars with proper length matching spacing
+  const couplerLength = carSpacing - 1.8; // Car width is ~1.8m, so coupler is the gap between
   train.joints.push(
     world.createJoint(
       planck.DistanceJoint(
-        { frequencyHz: 2.8, dampingRatio: 0.8, length: 2.0, collideConnected: false },
+        { frequencyHz: 4.0, dampingRatio: 0.9, length: couplerLength, collideConnected: false },
         loco,
         car1,
         loco.getWorldPoint(Vec2(-0.9, 0)),
@@ -274,7 +276,7 @@ export function buildWorldFromDesign(nodes: Node[], beams: Beam[]): WorldSimulat
   train.joints.push(
     world.createJoint(
       planck.DistanceJoint(
-        { frequencyHz: 2.8, dampingRatio: 0.8, length: 2.0, collideConnected: false },
+        { frequencyHz: 4.0, dampingRatio: 0.9, length: couplerLength, collideConnected: false },
         car1,
         car2,
         car1.getWorldPoint(Vec2(-0.9, 0)),

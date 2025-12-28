@@ -154,10 +154,14 @@ export function beamExists(beams: Beam[], a: string, b: string): boolean {
 }
 
 export function getInitialNodes(): Node[] {
-  const left: Node = { id: 'L', x: 6.0, y: 2.9, anchor: true };
-  const right: Node = { id: 'R', x: 18.0, y: 2.9, anchor: true };
-  const mid1: Node = { id: 'M1', x: snap((left.x + right.x) / 2 - 3, GRID), y: snap(left.y, GRID), anchor: false };
-  const mid2: Node = { id: 'M2', x: snap((left.x + right.x) / 2 + 3, GRID), y: snap(left.y, GRID), anchor: false };
+  // Position nodes so road plank top surface (plank half-height is 0.06) is flush with platform (y=2.6)
+  const roadNodeY = 2.6 - 0.06; // Plank center should be below platform so top is flush
+  // Extend anchors slightly onto the platform for smooth transition
+  const left: Node = { id: 'L', x: 5.5, y: roadNodeY, anchor: true };
+  const right: Node = { id: 'R', x: 18.5, y: roadNodeY, anchor: true };
+  // Keep mid nodes at same Y level as anchors for a flat deck, only snap X
+  const mid1: Node = { id: 'M1', x: snap((left.x + right.x) / 2 - 3, GRID), y: roadNodeY, anchor: false };
+  const mid2: Node = { id: 'M2', x: snap((left.x + right.x) / 2 + 3, GRID), y: roadNodeY, anchor: false };
   return [left, right, mid1, mid2];
 }
 
