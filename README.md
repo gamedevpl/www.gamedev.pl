@@ -6,6 +6,7 @@ On Gamedev.pl, we create indie games which are open source.
 
 ## List of Games
 
+- [bridge-builder](./games/bridge-builder): A physics-based bridge building game where you must construct a bridge strong enough to survive a train crossing, with limited budget and pixel art graphics.
 - [hungry-lion](./games/hungry-lion): Hungry Lion is a 2D top-down survival sandbox game where you take on the role of a lion surviving in the African savanna. Hunt prey, defend your territory, and survive against natural elements and other predators.
 - [masterplan](./games/masterplan): A 2D strategy game, prepare a battle plan, and start the battle. The AI will learn from the battle and propose a better plan.
 - [monster-steps](./games/monster-steps): Monster Steps is a strategic puzzle game created for the js13k 2024 competition. Players navigate through a grid-based world, avoiding monsters that appear every 13 steps while trying to reach their goal.

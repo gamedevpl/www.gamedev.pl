@@ -1,0 +1,32 @@
+{
+  "name": "bridge-builder",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Bridge Builder - A physics-based bridge building game where you must build a bridge to survive a train crossing",
+  "dependencies": {
+    "planck": "^1.0.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-use": "^17.5.1",
+    "styled-components": "^6.1.13"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.6.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^8.54.0",
+    "typescript": "^5.6.2",
+    "vite": "^6.4.1",
+    "vite-plugin-checker": "^0.8.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "vite",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "author": "gtanczyk",
+  "license": "ISC"
+}
