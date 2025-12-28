@@ -54,23 +54,27 @@ const perform = (source: HumanEntity, target: HumanEntity, context: UpdateContex
 
   // Both entities are initiators now, confirmed by the checker.
   // Set both entities to the procreating state
-  source.stateMachine = [
-    HUMAN_PROCREATING,
-    {
-      partnerId: target.id,
-      previousState: source.stateMachine?.[0],
-      procreationEndTime: context.gameState.time + 1,
-    } as HumanProcreatingStateData,
-  ];
+  if (source.stateMachine?.[0] !== HUMAN_PROCREATING) {
+    source.stateMachine = [
+      HUMAN_PROCREATING,
+      {
+        partnerId: target.id,
+        previousState: source.stateMachine?.[0],
+        procreationEndTime: context.gameState.time + 1,
+      } as HumanProcreatingStateData,
+    ];
+  }
 
-  target.stateMachine = [
-    HUMAN_PROCREATING,
-    {
-      partnerId: source.id,
-      previousState: target.stateMachine?.[0],
-      procreationEndTime: context.gameState.time + 1,
-    } as HumanProcreatingStateData,
-  ];
+  if (target.stateMachine?.[0] !== HUMAN_PROCREATING) {
+    target.stateMachine = [
+      HUMAN_PROCREATING,
+      {
+        partnerId: source.id,
+        previousState: target.stateMachine?.[0],
+        procreationEndTime: context.gameState.time + 1,
+      } as HumanProcreatingStateData,
+    ];
+  }
 
   // Update partnerIds for both entities
   if (!source.partnerIds) {

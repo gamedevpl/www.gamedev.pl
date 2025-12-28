@@ -12,6 +12,10 @@ export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
       return null;
     }
 
+    if (!human.isAdult) {
+      return null;
+    }
+
     const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
     if (!bush || bush.type !== 'berryBush' || bush.food.length === 0) {
       return null;

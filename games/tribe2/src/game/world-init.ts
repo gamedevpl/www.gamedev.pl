@@ -33,6 +33,7 @@ import { createSoilDepletionState } from './entities/plants/soil-depletion-types
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
 import { TREE_GROWTH_TIME_GAME_HOURS } from './entities/plants/tree/tree-consts';
 import { initTemperatureState } from './temperature/temperature-update';
+import { AIType } from './ai/ai-types.ts';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -87,6 +88,8 @@ export function initWorld(): GameWorldState {
     tribeBadge: '👑',
     tribeColor: TERRITORY_COLORS[0],
   };
+  player.aiType = AIType.TaskBased;
+  partner.aiType = AIType.TaskBased;
 
   for (let i = 0; i < 5; i++) {
     const angle = (i / 5) * Math.PI * 2;

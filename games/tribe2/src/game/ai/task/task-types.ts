@@ -6,6 +6,9 @@ export enum TaskType {
   HumanGatherBerries,
   HumanGatherMeat,
   HumanEat,
+  HumanProcreateFemale,
+  HumanProcreateMale,
+  HumanFeedChild,
 }
 
 export enum TaskPriority {
@@ -36,6 +39,9 @@ export type Task = {
 
   // Target
   target?: EntityId | Vector2D | Rect2D | Circle2D;
+
+  // Valid until time
+  validUntilTime: number;
 };
 
 export type TaskDefinition<T extends Entity> = {

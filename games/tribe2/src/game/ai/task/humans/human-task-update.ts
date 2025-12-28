@@ -65,6 +65,11 @@ function pickTaskForHuman(human: HumanEntity, context: UpdateContext): string | 
   let bestScore = -Infinity;
 
   for (const task of Object.values(context.gameState.tasks)) {
+    if (task.validUntilTime < context.gameState.time) {
+      delete context.gameState.tasks[task.id];
+      continue;
+    }
+
     // Skip tasks already claimed by others
     if (task.claimedByEntityId && task.claimedByEntityId !== human.id) {
       continue;

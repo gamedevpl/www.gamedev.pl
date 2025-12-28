@@ -12,6 +12,10 @@ export const humanGatherMeatDefinition: TaskDefinition<HumanEntity> = {
       return null;
     }
 
+    if (!human.isAdult) {
+      return null;
+    }
+
     const corpse = context.gameState.entities.entities[task.target] as CorpseEntity | undefined;
     if (!corpse || corpse.type !== 'corpse' || corpse.food.length === 0) {
       return null;
