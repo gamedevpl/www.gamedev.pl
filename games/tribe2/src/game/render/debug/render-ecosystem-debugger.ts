@@ -1,14 +1,14 @@
-import { GameWorldState } from '../world-types';
-import { getEcosystemBalancerStats } from '../ecosystem/ecosystem-balancer';
+import { GameWorldState } from '../../world-types';
+import { getEcosystemBalancerStats } from '../../ecosystem/ecosystem-balancer';
 import {
   ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   MAP_WIDTH,
   MAP_HEIGHT,
-} from '../game-consts.ts';
-import { IndexedWorldState } from '../world-index/world-index-types';
-import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts.ts';
+} from '../../game-consts.ts';
+import { IndexedWorldState } from '../../world-index/world-index-types';
+import { UI_FONT_SIZE, UI_PADDING } from '../../ui/ui-consts.ts';
 
 interface PopulationHistory {
   time: number;

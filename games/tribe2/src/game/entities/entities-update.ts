@@ -163,6 +163,7 @@ export function createHuman(
   ancestorIds: EntityId[] = [],
   leaderId?: EntityId,
   tribeInfo?: { tribeBadge: string; tribeColor: string },
+  aiType: AIType = AIType.BehaviorTreeBased,
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 
@@ -192,7 +193,7 @@ export function createHuman(
     stateMachine: [HUMAN_IDLE, { enteredAt: currentTime, previousState: undefined }],
     leaderId,
     tribeInfo,
-    aiType: AIType.BehaviorTreeBased,
+    aiType,
     aiBlackboard: Blackboard.create(),
   });
 
@@ -357,6 +358,7 @@ export function giveBirth(
     // Determine child's tribe: father's tribe first (medieval convention), then mother's
     father?.leaderId ?? mother.leaderId,
     father?.tribeInfo ?? mother.tribeInfo,
+    mother.aiType,
   );
 
   // Play birth sound
@@ -380,6 +382,7 @@ export function createPrey(
   geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
+  aiType: AIType = AIType.BehaviorTreeBased,
 ): PreyEntity {
   const isAdult = initialAge >= PREY_MIN_PROCREATION_AGE;
   const currentTime = Date.now(); // Use current timestamp for state machine
@@ -401,7 +404,7 @@ export function createPrey(
     motherId,
     fatherId,
     stateMachine: [PREY_IDLE, { enteredAt: currentTime, previousState: undefined }],
-    aiType: AIType.BehaviorTreeBased,
+    aiType,
     aiBlackboard: Blackboard.create(),
   });
 
@@ -417,6 +420,7 @@ export function createPredator(
   geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
+  aiType: AIType = AIType.BehaviorTreeBased,
 ): PredatorEntity {
   const isAdult = initialAge >= PREDATOR_MIN_PROCREATION_AGE;
   const currentTime = Date.now(); // Use current timestamp for state machine
@@ -438,7 +442,7 @@ export function createPredator(
     motherId,
     fatherId,
     stateMachine: [PREDATOR_IDLE, { enteredAt: currentTime, previousState: undefined }],
-    aiType: AIType.BehaviorTreeBased,
+    aiType,
     aiBlackboard: Blackboard.create(),
   });
 

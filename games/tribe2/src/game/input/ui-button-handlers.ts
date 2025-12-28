@@ -14,6 +14,8 @@ import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
+import { AIType } from '../ai/ai-types';
+import { CharacterEntity } from '../entities/characters/character-types';
 
 /**
  * Handles the logic for a UI button click event.
@@ -222,6 +224,15 @@ export const handleUIButtonClick = (
         const currentWeight = player.tribeControl.armyControl[button.targetArmyObjective] || 0;
         if (currentWeight > 0) {
           player.tribeControl.armyControl[button.targetArmyObjective] = currentWeight - 1;
+        }
+      }
+      break;
+    case UIButtonActionType.SwitchAIType:
+      if (gameState.debugCharacterId) {
+        const character = gameState.entities.entities[gameState.debugCharacterId] as CharacterEntity | undefined;
+        if (character) {
+          character.aiType =
+            character.aiType === AIType.BehaviorTreeBased ? AIType.TaskBased : AIType.BehaviorTreeBased;
         }
       }
       break;

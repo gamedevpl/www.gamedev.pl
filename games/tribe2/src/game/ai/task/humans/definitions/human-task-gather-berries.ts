@@ -1,0 +1,69 @@
+import { HumanEntity } from '../../../../entities/characters/human/human-types';
+import { BerryBushEntity } from '../../../../entities/plants/berry-bush/berry-bush-types';
+import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
+import { calculateWrappedDistance } from '../../../../utils/math-utils';
+import { UpdateContext } from '../../../../world-types';
+import { Task, TaskDefinition, TaskResult, TaskType } from '../../task-types';
+
+export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
+  type: TaskType.HumanGatherBerries,
+  scorer: (human: HumanEntity, task: Task, context: UpdateContext) => {
+    if (typeof task.target !== 'number') {
+      return null;
+    }
+
+    const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
+    if (!bush || bush.type !== 'berryBush' || bush.food.length === 0) {
+      return null;
+    }
+
+    if (human.isPlayer && !context.gameState.autopilotControls.behaviors.gathering) {
+      return null;
+    }
+
+    const distance = calculateWrappedDistance(
+      human.position,
+      bush.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+
+    // Distance factor: closer is better (0 to 1)
+    const distanceFactor = 1 / (1 + distance / 500);
+
+    // Hunger factor: hungrier humans prioritize food gathering more
+    const hungerFactor = human.hunger / HUMAN_HUNGER_DEATH;
+
+    // Base score + hunger weight
+    return distanceFactor * (0.2 + hungerFactor);
+  },
+  executor: (task: Task, human: HumanEntity, context: UpdateContext) => {
+    if (typeof task.target !== 'number') {
+      return TaskResult.Failure;
+    }
+
+    const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
+    if (!bush || bush.type !== 'berryBush' || bush.food.length === 0 || human.food.length >= human.maxFood) {
+      return TaskResult.Success; // Task is "done" if bush is gone or empty
+    }
+
+    const distance = calculateWrappedDistance(
+      human.position,
+      bush.position,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+    if (distance > HUMAN_INTERACTION_RANGE) {
+      human.target = bush.position;
+      human.activeAction = 'moving';
+      return TaskResult.Running;
+    }
+
+    // At the bush, start gathering
+    human.direction = { x: 0, y: 0 };
+    human.target = bush.id;
+    human.activeAction = 'gathering';
+
+    return TaskResult.Running;
+  },
+};

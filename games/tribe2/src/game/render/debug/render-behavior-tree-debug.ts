@@ -1,5 +1,5 @@
-import { AI_UPDATE_INTERVAL } from '../ai-consts.ts';
-import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../game-consts.ts';
+import { AI_UPDATE_INTERVAL } from '../../ai-consts.ts';
+import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY } from '../../game-consts.ts';
 import {
   UI_BT_DEBUG_FONT_SIZE,
   UI_BT_DEBUG_HEATMAP_COLD_COLOR,
@@ -17,13 +17,13 @@ import {
   UI_BT_DEBUG_STATUS_SUCCESS_COLOR,
   UI_FONT_SIZE,
   UI_PADDING,
-} from '../ui/ui-consts.ts';
-import { BehaviorNode, NodeStatus } from '../ai/behavior-tree/behavior-tree-types';
-import { lerpColor } from '../utils/math-utils';
-import { CharacterEntity } from '../entities/characters/character-types';
-import { humanBehaviorTree } from '../ai/human-ai-update.ts';
-import { predatorBehaviorTree, preyBehaviorTree } from '../ai/animal-ai-update.ts';
-import { GameWorldState } from '../world-types.ts';
+} from '../../ui/ui-consts.ts';
+import { BehaviorNode, NodeStatus } from '../../ai/behavior-tree/behavior-tree-types.ts';
+import { lerpColor } from '../../utils/math-utils.ts';
+import { CharacterEntity } from '../../entities/characters/character-types.ts';
+import { humanBehaviorTree } from '../../ai/human-ai-update.ts';
+import { predatorBehaviorTree, preyBehaviorTree } from '../../ai/animal-ai-update.ts';
+import { GameWorldState } from '../../world-types.ts';
 
 /**
  * Renders the behavior tree debugger panel.

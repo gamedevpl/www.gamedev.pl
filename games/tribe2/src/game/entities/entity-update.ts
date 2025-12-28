@@ -17,6 +17,9 @@ import { BuildingEntity } from './buildings/building-types';
 import { applySoilWalkDepletion } from './plants/soil-depletion-update';
 import { treeUpdate } from './plants/tree/tree-update';
 import { TreeEntity } from './plants/tree/tree-types';
+import { updatePlantTaskAI } from '../ai/task/plants/plant-task-update';
+import { updateCorpseTaskAI } from '../ai/task/corpse/corpse-task-update';
+import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -91,6 +94,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'corpse') {
     corpseUpdate(entity as CorpseEntity, updateContext);
+    updateCorpseTaskAI(entity as CorpseEntity, updateContext);
   } else if (entity.type === 'prey') {
     preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'predator') {
@@ -99,6 +103,8 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     buildingUpdate(entity as BuildingEntity, updateContext);
   } else if (entity.type === 'tree') {
     treeUpdate(entity as TreeEntity, updateContext);
+  } else if (entity.type === 'berryBush') {
+    updatePlantTaskAI(entity as BerryBushEntity, updateContext);
   }
 
   // AI decision making for all humans (player and non-player)

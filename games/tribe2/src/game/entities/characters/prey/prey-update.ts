@@ -87,6 +87,7 @@ export function preyUpdate(prey: PreyEntity, updateContext: UpdateContext, delta
         childGeneCode, // Combined genetic code
         prey.id, // Mother ID
         prey.fatherId, // Father ID from pregnancy
+        prey.aiType, // Inherit AI type
       );
 
       // Birth creates new life - child variable is used for entity creation

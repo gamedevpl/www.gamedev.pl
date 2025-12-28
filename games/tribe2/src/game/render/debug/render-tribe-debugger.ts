@@ -1,9 +1,9 @@
-import { GameWorldState } from '../world-types';
-import { calculatePopulationBreakdown, calculateFoodMetrics, findTopFamilies } from '../utils/tribe-debugger-utils';
-import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts';
-import { canSplitTribe } from '../utils';
-import { getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
-import { IndexedWorldState } from '../world-index/world-index-types';
+import { GameWorldState } from '../../world-types';
+import { calculatePopulationBreakdown, calculateFoodMetrics, findTopFamilies } from '../../utils/tribe-debugger-utils';
+import { UI_FONT_SIZE, UI_PADDING } from '../../ui/ui-consts';
+import { canSplitTribe } from '../../utils';
+import { getTribeLeaderForCoordination } from '../../entities/tribe/tribe-task-utils';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 
 interface PopulationHistory {
   time: number;

@@ -65,13 +65,6 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
-      // Check for debug panel interaction first
-      const debugResult = handleDebugPanelMouseDown(event, gameStateRef.current);
-      gameStateRef.current = debugResult.newState;
-      if (debugResult.handled) {
-        return;
-      }
-
       // Check for notification click first, as they overlay other UI
       const notificationClicked = handleNotificationClick(gameStateRef.current, mouseX, mouseY);
       if (notificationClicked) {
@@ -89,6 +82,13 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
 
       if (clickedButton) {
         gameStateRef.current = handleUIButtonClick(clickedButton, event.shiftKey, gameStateRef.current, returnToIntro);
+        return;
+      }
+
+      // Check for debug panel interaction
+      const debugResult = handleDebugPanelMouseDown(event, gameStateRef.current);
+      gameStateRef.current = debugResult.newState;
+      if (debugResult.handled) {
         return;
       }
 

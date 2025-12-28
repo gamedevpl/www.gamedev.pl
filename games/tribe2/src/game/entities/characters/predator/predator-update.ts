@@ -87,6 +87,7 @@ export function predatorUpdate(predator: PredatorEntity, updateContext: UpdateCo
         childGeneCode, // Combined genetic code
         predator.id, // Mother ID
         predator.pregnancyFatherId, // Father ID from pregnancy
+        predator.aiType, // Inherit AI type
       );
 
       // Birth creates new life - child variable is used for entity creation

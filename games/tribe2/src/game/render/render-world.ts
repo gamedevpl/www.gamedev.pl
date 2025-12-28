@@ -114,7 +114,7 @@ function addWrappedLightSources(
       // Check if the light influence area is visible
       if (
         isEntityInView(
-          { position: wrappedPos, radius: radius } as any,
+          { position: wrappedPos, radius: radius } as Entity,
           viewportCenter,
           canvasDimensions,
           mapDimensions,

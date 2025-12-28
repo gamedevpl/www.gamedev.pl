@@ -22,9 +22,8 @@ import { renderWorld } from './render/render-world';
 import { renderTopLeftPanel } from './render/ui/render-top-left-panel';
 import { renderAutopilotHints } from './render/ui/render-autopilot-hints';
 import { renderAutopilotIndicator } from './render/ui/render-autopilot-indicator';
-import { renderEcosystemDebugger } from './render/render-ecosystem-debugger';
-import { renderTribeDebugger } from './render/render-tribe-debugger';
-import { renderBehaviorTreeDebugger } from './render/render-behavior-tree-debug';
+import { renderEcosystemDebugger } from './render/debug/render-ecosystem-debugger';
+import { renderTribeDebugger } from './render/debug/render-tribe-debugger';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
@@ -35,7 +34,8 @@ import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts
 import { renderArmyControl } from './render/ui/render-army-control.ts';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
-import { renderSupplyChainDebugger } from './render/render-supply-chain-debugger.ts';
+import { renderSupplyChainDebugger } from './render/debug/render-supply-chain-debugger.ts';
+import { renderAiDebugger } from './render/debug/render-ai-debug.ts';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -230,7 +230,7 @@ export function renderGame(
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
         break;
       case DebugPanelType.General:
-        renderBehaviorTreeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
+        renderAiDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
     }
 

@@ -1,11 +1,11 @@
-import { GameWorldState } from '../world-types';
-import { UI_FONT_SIZE, UI_PADDING } from '../ui/ui-consts';
-import { getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
-import { IndexedWorldState } from '../world-index/world-index-types';
-import { getTribeDemands } from '../ai/supply-chain/tribe-logistics-utils';
-import { HumanEntity } from '../entities/characters/human/human-types';
-import { renderEntityHighlight } from './render-highlights';
-import { TribeRole } from '../entities/tribe/tribe-types';
+import { GameWorldState } from '../../world-types';
+import { UI_FONT_SIZE, UI_PADDING } from '../../ui/ui-consts';
+import { getTribeLeaderForCoordination } from '../../entities/tribe/tribe-task-utils';
+import { IndexedWorldState } from '../../world-index/world-index-types';
+import { getTribeDemands } from '../../ai/supply-chain/tribe-logistics-utils';
+import { HumanEntity } from '../../entities/characters/human/human-types';
+import { renderEntityHighlight } from '../render-highlights';
+import { TribeRole } from '../../entities/tribe/tribe-types';
 
 /**
  * Renders the supply chain debugger panel showing registered demands and their status
