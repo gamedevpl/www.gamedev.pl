@@ -67,6 +67,6 @@ export const LEVEL = {
   gapStart: 6.0,
   gapEnd: 18.0,
   floorY: 0.0,
-  worldMinX: -2,
+  worldMinX: -8,  // Extended left for train starting area
   worldMaxX: 26,
 } as const;

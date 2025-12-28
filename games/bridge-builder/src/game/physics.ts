@@ -253,7 +253,8 @@ export function buildWorldFromDesign(nodes: Node[], beams: Beam[]): WorldSimulat
     return chassis;
   }
 
-  const startX = LEVEL.gapStart - 6.0;
+  // Train starts further back to ensure all cars are on the platform with some runway
+  const startX = LEVEL.gapStart - 4.0;  // Locomotive position (gives ~4m runway to bridge)
   const startY = LEVEL.platformY + 0.5;
   const carSpacing = 2.0; // Distance between car centers
   const loco = addCar(startX, startY, true);
