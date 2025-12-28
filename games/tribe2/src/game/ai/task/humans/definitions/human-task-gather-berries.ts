@@ -21,6 +21,10 @@ export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
       return null;
     }
 
+    if (human.food.length >= human.maxFood) {
+      return null;
+    }
+
     const distance = calculateWrappedDistance(
       human.position,
       bush.position,
