@@ -28,6 +28,7 @@ import { ItemType } from '../../../../entities/item-types';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { defineHumanTask } from '../../task-utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
+import { CorpseEntity } from '../../../../entities/characters/corpse-types';
 
 /**
  * Shared autopilot attack task logic.
@@ -159,7 +160,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         if (target.type === 'berryBush') {
           isDepleted = (target as BerryBushEntity).food.length === 0;
         } else if (target.type === 'corpse') {
-          isDepleted = (target as any).food.length === 0;
+          isDepleted = (target as CorpseEntity).food.length === 0;
         } else if (target.type === 'tree') {
           const tree = target as TreeEntity;
           isDepleted = tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0;

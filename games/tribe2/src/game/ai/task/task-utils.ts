@@ -138,3 +138,22 @@ export function defineHumanTask<T extends HumanEntity>(options: {
     executor: wrappedExecutor,
   };
 }
+
+export function produceEntityTasks<T extends Entity>(
+  entity: T,
+  context: UpdateContext,
+  taskDefiniitions: TaskDefinition<T>[],
+) {
+  for (const definition of taskDefiniitions) {
+    if (definition && definition.producer) {
+      const newTasks = definition.producer(entity, context);
+      for (const [taskId, task] of Object.entries(newTasks)) {
+        const currentTask = context.gameState.tasks[taskId];
+        context.gameState.tasks[taskId] = task;
+        if (currentTask) {
+          context.gameState.tasks[taskId].claimedByEntityId = currentTask.claimedByEntityId;
+        }
+      }
+    }
+  }
+}

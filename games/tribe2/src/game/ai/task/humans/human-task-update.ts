@@ -1,7 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { TaskType } from '../task-types';
-import { executeTask, getCurrentTask, setCurrentTask } from '../task-utils';
+import { executeTask, getCurrentTask, produceEntityTasks, setCurrentTask } from '../task-utils';
 import { humanTaskDefinitions } from './definitions';
 
 export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): void {
@@ -18,7 +18,7 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     return;
   }
 
-  produceHumanTasks(human, context);
+  produceEntityTasks<HumanEntity>(human, context, Object.values(humanTaskDefinitions));
 
   let currentTaskId = getCurrentTask(human);
 
@@ -67,20 +67,6 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
   if (!getCurrentTask(human)) {
     // No current task assigned
     human.activeAction = 'idle';
-  }
-}
-
-function produceHumanTasks(human: HumanEntity, context: UpdateContext): void {
-  for (const definition of Object.values(humanTaskDefinitions)) {
-    if (definition.producer) {
-      const tasks = definition.producer(human, context);
-      for (const [taskId, task] of Object.entries(tasks)) {
-        // Human-produced tasks are often self-targeted, but we put them in the global pool
-        if (!context.gameState.tasks[taskId]) {
-          context.gameState.tasks[taskId] = task;
-        }
-      }
-    }
   }
 }
 
