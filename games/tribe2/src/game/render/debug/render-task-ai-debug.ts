@@ -1,7 +1,12 @@
 import { CharacterEntity } from '../../entities/characters/character-types';
 import { GameWorldState } from '../../world-types';
 import { UI_FONT_SIZE, UI_PADDING } from '../../ui/ui-consts';
-import { getCurrentTask } from '../../ai/task/task-utils';
+import {
+  getCurrentTask,
+  BLACKBOARD_LAST_TASK_RESULT,
+  BLACKBOARD_LAST_TASK_MESSAGE,
+  BLACKBOARD_TASK_HISTORY,
+} from '../../ai/task/task-utils';
 import { TaskResult, TaskType, TaskHistoryEntry } from '../../ai/task/task-types';
 import { humanTaskDefinitions } from '../../ai/task/humans/definitions';
 import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
@@ -120,7 +125,8 @@ export function renderTaskAiDebugger(
 
   ctx.font = `${UI_TASK_DEBUG_FONT_SIZE}px monospace`;
   if (currentTask) {
-    const lastTaskResult = Blackboard.get<TaskResult>(debuggedEntity.aiBlackboard, 'lastTaskResult');
+    const lastTaskResult = Blackboard.get<TaskResult>(debuggedEntity.aiBlackboard, BLACKBOARD_LAST_TASK_RESULT);
+    const lastTaskMessage = Blackboard.get<string>(debuggedEntity.aiBlackboard, BLACKBOARD_LAST_TASK_MESSAGE);
     const statusString = lastTaskResult !== undefined ? TaskResult[lastTaskResult] : 'N/A';
 
     ctx.fillStyle = 'white';
@@ -134,6 +140,12 @@ export function renderTaskAiDebugger(
     ctx.fillStyle = getTaskResultColor(lastTaskResult);
     ctx.fillText(`Status: ${statusString}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
     currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+
+    if (lastTaskMessage) {
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`Message: ${lastTaskMessage}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
+      currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+    }
   } else {
     ctx.fillStyle = '#888';
     ctx.fillText('No active task.', leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
@@ -147,7 +159,7 @@ export function renderTaskAiDebugger(
   ctx.fillText('📜 Recent Task History (Last 5)', leftMargin, currentY);
   currentY += UI_TASK_DEBUG_LINE_HEIGHT * 1.5;
 
-  const taskHistory = Blackboard.get<TaskHistoryEntry[]>(debuggedEntity.aiBlackboard, 'taskHistory') || [];
+  const taskHistory = Blackboard.get<TaskHistoryEntry[]>(debuggedEntity.aiBlackboard, BLACKBOARD_TASK_HISTORY) || [];
 
   if (taskHistory.length === 0) {
     ctx.fillStyle = '#888';
@@ -168,9 +180,19 @@ export function renderTaskAiDebugger(
 
       ctx.fillStyle = '#666';
       const resultWidth = ctx.measureText(`(${resultText}) `).width;
-      ctx.fillText(`@ ${entry.completedAtTick.toFixed(1)}h`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE + typeWidth + resultWidth, currentY);
+      ctx.fillText(
+        `@ ${entry.completedAtTick.toFixed(1)}h`,
+        leftMargin + UI_TASK_DEBUG_INDENT_SIZE + typeWidth + resultWidth,
+        currentY,
+      );
 
       currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+
+      if (entry.message) {
+        ctx.fillStyle = '#888';
+        ctx.fillText(`  └ ${entry.message}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
+        currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+      }
     }
   }
   currentY += UI_TASK_DEBUG_LINE_HEIGHT;

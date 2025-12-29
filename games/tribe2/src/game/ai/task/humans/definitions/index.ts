@@ -16,6 +16,11 @@ import { humanPlantBushDefinition } from './human-task-plant-bush';
 import { humanStockpileDefinition } from './human-task-stockpile';
 import { humanFuelBonfireDefinition } from './human-task-fuel-bonfire';
 import { humanRetrieveDefinition } from './human-task-retrieve';
+import { humanChopTreeDefinition } from './human-task-chop-tree';
+import { humanGatherWoodDefinition } from './human-task-gather-wood';
+import { humanHuntPreyDefinition } from './human-task-hunt-prey';
+import { humanHuntPredatorDefinition } from './human-task-hunt-predator';
+import { humanPlayerCommandDefinition } from './human-task-player-command';
 
 export const humanTaskDefinitions: Record<TaskType, TaskDefinition<HumanEntity>> = [
   humanEatDefinition,
@@ -32,6 +37,11 @@ export const humanTaskDefinitions: Record<TaskType, TaskDefinition<HumanEntity>>
   humanStockpileDefinition,
   humanFuelBonfireDefinition,
   humanRetrieveDefinition,
+  humanChopTreeDefinition,
+  humanGatherWoodDefinition,
+  humanHuntPreyDefinition,
+  humanHuntPredatorDefinition,
+  humanPlayerCommandDefinition,
 ].reduce<Record<TaskType, TaskDefinition<HumanEntity>>>((acc, def) => {
   acc[def.type] = def;
   return acc;

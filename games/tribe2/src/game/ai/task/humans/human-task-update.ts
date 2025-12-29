@@ -1,9 +1,23 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
+import { TaskType } from '../task-types';
 import { executeTask, getCurrentTask, setCurrentTask } from '../task-utils';
 import { humanTaskDefinitions } from './definitions';
 
 export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): void {
+  // 1. Manual Control Override
+  if (human.isPlayer && context.gameState.autopilotControls.isManuallyMoving) {
+    const currentTaskId = getCurrentTask(human);
+    if (currentTaskId) {
+      const task = context.gameState.tasks[currentTaskId];
+      if (task && task.claimedByEntityId === human.id) {
+        task.claimedByEntityId = undefined;
+      }
+      setCurrentTask(human, null);
+    }
+    return;
+  }
+
   produceHumanTasks(human, context);
 
   let currentTaskId = getCurrentTask(human);
@@ -17,15 +31,25 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     }
   }
 
-  // Try to pick a new task if idle
-  if (!currentTaskId) {
-    currentTaskId = pickTaskForHuman(human, context);
-    if (currentTaskId) {
+  // 2. Task Interruption / Picking
+  const bestTaskId = pickTaskForHuman(human, context);
+  if (bestTaskId && bestTaskId !== currentTaskId) {
+    const bestTask = context.gameState.tasks[bestTaskId];
+    // Interrupt if no current task OR if the new task is a high-priority player command
+    if (!currentTaskId || (bestTask && bestTask.type === TaskType.HumanPlayerCommand)) {
+      // Unclaim old task
+      if (currentTaskId) {
+        const oldTask = context.gameState.tasks[currentTaskId];
+        if (oldTask && oldTask.claimedByEntityId === human.id) {
+          oldTask.claimedByEntityId = undefined;
+        }
+      }
+
+      // Claim new task
+      currentTaskId = bestTaskId;
       setCurrentTask(human, currentTaskId);
-      // Mark as claimed
-      const task = context.gameState.tasks[currentTaskId];
-      if (task) {
-        task.claimedByEntityId = human.id;
+      if (bestTask) {
+        bestTask.claimedByEntityId = human.id;
       }
     }
   }

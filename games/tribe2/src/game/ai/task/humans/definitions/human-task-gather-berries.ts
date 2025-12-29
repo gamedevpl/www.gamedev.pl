@@ -41,12 +41,12 @@ export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {
-      return TaskResult.Failure;
+      return [TaskResult.Failure, 'Invalid target'];
     }
 
     const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
     if (!bush || bush.type !== 'berryBush' || bush.food.length === 0 || human.food.length >= human.maxFood) {
-      return TaskResult.Success; // Task is "done" if bush is gone or empty
+      return [TaskResult.Success, 'Bush is empty']; // Task is "done" if bush is gone or empty
     }
 
     const distance = calculateWrappedDistance(
@@ -58,7 +58,7 @@ export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
     if (distance > HUMAN_INTERACTION_RANGE) {
       human.target = bush.position;
       human.activeAction = 'moving';
-      return TaskResult.Running;
+      return [TaskResult.Running, 'Moving to bush'];
     }
 
     // At the bush, start gathering
@@ -66,6 +66,6 @@ export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
     human.target = bush.id;
     human.activeAction = 'gathering';
 
-    return TaskResult.Running;
+    return [TaskResult.Running, 'Gathering berries'];
   },
 });

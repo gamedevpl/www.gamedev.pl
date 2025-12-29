@@ -3,6 +3,7 @@ import { TaskDefinition, TaskType } from '../../task-types';
 import { plantingZoneTaskPlantProducer } from './planting-zone-task-plant';
 import { storageStockpileProducer } from './storage-task-stockpile';
 import { bonfireFuelProducer } from './bonfire-task-fuel';
+import { storageRetrieveProducer } from './storage-task-retrieve';
 
 export const buildingTaskDefinitions: Partial<Record<TaskType, TaskDefinition<BuildingEntity>>> = {
   [TaskType.HumanPlantBush]: {
@@ -16,5 +17,9 @@ export const buildingTaskDefinitions: Partial<Record<TaskType, TaskDefinition<Bu
   [TaskType.HumanFuelBonfire]: {
     type: TaskType.HumanFuelBonfire,
     producer: bonfireFuelProducer,
+  },
+  [TaskType.HumanRetrieve]: {
+    type: TaskType.HumanRetrieve,
+    producer: storageRetrieveProducer,
   },
 };

@@ -4,7 +4,8 @@ import {
   getStorageUtilization,
   getTribeStorageSpots,
   getTribeBonfires,
-  getProductiveBushes,
+  getTribePlantingZones,
+  calculatePlantingZoneCapacity,
 } from '../../../entities/tribe/tribe-food-utils';
 import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
@@ -15,6 +16,7 @@ import {
   LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
   LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
+  LEADER_BUILDING_MIN_BUSHES,
 } from '../../../ai-consts';
 import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
@@ -67,7 +69,7 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     // --- STORAGE ---
     if (!hasActiveTask(TaskType.HumanPlaceStorage)) {
       const existingStorage = getTribeStorageSpots(leaderId, gameState, true);
-      const utilization = getStorageUtilization(leaderId, gameState);
+      const utilization = getStorageUtilization(leaderId, gameState, true);
       const needsStorage = existingStorage.length === 0 || utilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD;
 
       if (needsStorage) {
@@ -155,8 +157,14 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
 
     // --- PLANTING ZONE ---
     if (!hasActiveTask(TaskType.HumanPlacePlantingZone)) {
-      const { ratio: bushDensity } = getProductiveBushes(leaderId, gameState);
-      if (bushDensity < LEADER_BUILDING_MIN_BUSHES_PER_MEMBER) {
+      const existingZones = getTribePlantingZones(leaderId, gameState, true);
+      const currentCapacity = existingZones.reduce((sum, zone) => sum + calculatePlantingZoneCapacity(zone), 0);
+      const targetBushes = Math.max(
+        LEADER_BUILDING_MIN_BUSHES,
+        adultMembers.length * LEADER_BUILDING_MIN_BUSHES_PER_MEMBER,
+      );
+
+      if (currentCapacity < targetBushes) {
         const spot = findAdjacentBuildingPlacement(
           BuildingType.PlantingZone,
           leaderId,

@@ -3,10 +3,8 @@ import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { BuildingEntity, BuildingType } from '../../../../entities/buildings/building-types';
 import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
-import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
-import { Task, TaskResult, TaskType } from '../../task-types';
+import { TaskResult, TaskType } from '../../task-types';
 import { defineHumanTask, getDistanceScore } from '../../task-utils';
-import { IndexedWorldState } from '../../../../world-index/world-index-types';
 
 /**
  * Task definition for humans to retrieve food from storage spots.
@@ -15,56 +13,12 @@ export const humanRetrieveDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanRetrieve,
   requireAdult: false,
   autopilotBehavior: 'gathering',
-  producer: (human, context) => {
-    const tasks: Record<string, Task> = {};
-
-    // Only produce if hungry and has no food
-    if (human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING && human.food.length === 0) {
-      const indexedState = context.gameState as IndexedWorldState;
-
-      // Find tribe storage spots with food
-      const storageSpots = indexedState.search.building
-        .all()
-        .filter(
-          (b) =>
-            b.buildingType === BuildingType.StorageSpot &&
-            b.isConstructed &&
-            b.ownerId === human.leaderId &&
-            b.storedItems.some((si) => si.item.itemType === 'food'),
-        );
-
-      if (storageSpots.length > 0) {
-        // Find closest one to target
-        let closest = storageSpots[0];
-        let minDist = Infinity;
-
-        for (const spot of storageSpots) {
-          const dist = calculateWrappedDistance(
-            human.position,
-            spot.position,
-            context.gameState.mapDimensions.width,
-            context.gameState.mapDimensions.height,
-          );
-          if (dist < minDist) {
-            minDist = dist;
-            closest = spot;
-          }
-        }
-
-        const taskId = `retrieve-${human.id}-${closest.id}`;
-        tasks[taskId] = {
-          id: taskId,
-          type: TaskType.HumanRetrieve,
-          creatorEntityId: human.id,
-          target: closest.id,
-          validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,
-        };
-      }
+  scorer: (human, task, context) => {
+    // Only consider retrieving if hungry and has no food
+    if (human.hunger <= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING || human.food.length > 0) {
+      return null;
     }
 
-    return tasks;
-  },
-  scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;
     }

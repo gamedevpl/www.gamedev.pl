@@ -105,10 +105,11 @@ function getTribeTotalCapacity(leaderId: EntityId, gameState: GameWorldState): n
  *
  * @param leaderId The ID of the tribe leader
  * @param gameState The current game state
+ * @param includeUnconstructed Whether to include buildings still under construction
  * @returns Storage utilization (0-1), or 0 if no storage exists
  */
-export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldState): number {
-  const storageSpots = getTribeStorageSpots(leaderId, gameState);
+export function getStorageUtilization(leaderId: EntityId, gameState: GameWorldState, includeUnconstructed: boolean = false): number {
+  const storageSpots = getTribeStorageSpots(leaderId, gameState, includeUnconstructed);
 
   if (storageSpots.length === 0) {
     return 0;
@@ -275,31 +276,35 @@ function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): 
 /**
  * Gets planting zones owned by tribe members.
  *
- * @param human A member of the tribe
+ * @param leaderIdOrHuman A member of the tribe or the leader ID
  * @param gameState The current game state
  * @param includeUnconstructed Whether to include buildings still under construction
  * @returns Array of planting zone buildings
  */
 export function getTribePlantingZones(
-  human: HumanEntity,
+  leaderIdOrHuman: EntityId | HumanEntity,
   gameState: GameWorldState,
   includeUnconstructed: boolean = false,
 ): BuildingEntity[] {
-  if (!human.leaderId) {
+  const leaderId = typeof leaderIdOrHuman === 'object' ? leaderIdOrHuman.leaderId : leaderIdOrHuman;
+  if (!leaderId) {
     return [];
   }
 
-  const indexedState = gameState as IndexedWorldState;
-  const tribeBuildings = indexedState.search.building.byProperty('ownerId', human.leaderId);
+  const allBuildings = Object.values(gameState.entities.entities).filter(e => e.type === 'building') as BuildingEntity[];
 
-  return tribeBuildings.filter((building) => {
+  return allBuildings.filter((building) => {
     if (building.buildingType !== BuildingType.PlantingZone) {
       return false;
     }
     if (!includeUnconstructed && !building.isConstructed) {
       return false;
     }
-    return true;
+    if (building.ownerId) {
+      const owner = gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
+      return owner && owner.leaderId === leaderId;
+    }
+    return false;
   }) as BuildingEntity[];
 }
 
@@ -597,8 +602,7 @@ export function getTribeStorageSpots(
   gameState: GameWorldState,
   includeUnconstructed: boolean = false,
 ): BuildingEntity[] {
-  const indexedState = gameState as IndexedWorldState;
-  const allBuildings = indexedState.search.building.all();
+  const allBuildings = Object.values(gameState.entities.entities).filter(e => e.type === 'building') as BuildingEntity[];
 
   return allBuildings.filter((building) => {
     // Must be a storage spot
@@ -634,8 +638,7 @@ export function getTribeBonfires(
   gameState: GameWorldState,
   includeUnconstructed: boolean = false,
 ): BuildingEntity[] {
-  const indexedState = gameState as IndexedWorldState;
-  const allBuildings = indexedState.search.building.all();
+  const allBuildings = Object.values(gameState.entities.entities).filter(e => e.type === 'building') as BuildingEntity[];
 
   return allBuildings.filter((building) => {
     // Must be a bonfire

@@ -49,7 +49,7 @@ export const TEMPERATURE_CYCLE_AMPLITUDE = 15;
 export const BONFIRE_MAX_USERS = 8;
 
 /** Number of tribe members per bonfire before a leader considers building another one. */
-export const BONFIRE_TRIBE_SIZE_RATIO = 12;
+export const BONFIRE_TRIBE_SIZE_RATIO = 20;
 
 /** Frequency at which the leader checks for fuel levels and registers demands. */
 export const BONFIRE_LOGISTICS_CHECK_INTERVAL_HOURS = 0.5;

@@ -8,6 +8,8 @@ export const berryBushGatherProducer: TaskDefinition<BerryBushEntity> = {
   producer: (bush: BerryBushEntity, context: UpdateContext) => {
     const tasks: Record<string, Task> = {};
 
+    if (bush.type !== 'berryBush') return tasks;
+
     if (bush.food.length > 0) {
       const taskId = `gather-berries-${bush.id}`;
       tasks[taskId] = {

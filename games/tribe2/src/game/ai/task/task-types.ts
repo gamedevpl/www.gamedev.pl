@@ -17,6 +17,11 @@ export enum TaskType {
   HumanStockpile,
   HumanFuelBonfire,
   HumanRetrieve,
+  HumanChopTree,
+  HumanGatherWood,
+  HumanHuntPrey,
+  HumanHuntPredator,
+  HumanPlayerCommand,
 }
 
 export enum TaskPriority {
@@ -50,17 +55,21 @@ export type Task = {
 
   // Valid until time
   validUntilTime: number;
+
+  // Next task in the chain (static chaining)
+  nextTask?: Task;
 };
 
 export type TaskDefinition<T extends Entity> = {
   type: TaskType;
   producer?: (entity: T, context: UpdateContext) => Record<string, Task>;
   scorer?: (entity: T, task: Task, context: UpdateContext) => number | null;
-  executor?: (task: Task, entity: T, context: UpdateContext) => TaskResult;
+  executor?: (task: Task, entity: T, context: UpdateContext) => [TaskResult, string?, Task?] | TaskResult;
 };
 
 export type TaskHistoryEntry = {
   type: TaskType;
   result: TaskResult;
   completedAtTick: number;
+  message?: string;
 };
