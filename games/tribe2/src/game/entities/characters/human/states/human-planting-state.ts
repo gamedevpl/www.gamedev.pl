@@ -50,6 +50,7 @@ export const humanPlantingState: State<HumanEntity, HumanPlantingStateData> = {
         );
       }
       // Transition back to idle
+      entity.activeAction = 'idle';
       return {
         nextState: HUMAN_IDLE,
         data: {

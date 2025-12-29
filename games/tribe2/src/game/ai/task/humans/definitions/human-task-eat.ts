@@ -2,10 +2,12 @@ import { HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING } from '../../../../ai-consts';
 import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { HUMAN_HUNGER_DEATH } from '../../../../human-consts';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
-import { Task, TaskDefinition, TaskResult, TaskType } from '../../task-types';
+import { Task, TaskResult, TaskType } from '../../task-types';
+import { defineHumanTask } from '../../task-utils';
 
-export const humanEatDefinition: TaskDefinition<HumanEntity> = {
+export const humanEatDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanEat,
+  requireAdult: false,
   producer: (human, context) => {
     const tasks: Record<string, Task> = {};
 
@@ -23,7 +25,7 @@ export const humanEatDefinition: TaskDefinition<HumanEntity> = {
 
     return tasks;
   },
-  scorer: (human: HumanEntity, task: Task) => {
+  scorer: (human, task) => {
     if (task.target !== human.id) {
       return null;
     }
@@ -32,7 +34,7 @@ export const humanEatDefinition: TaskDefinition<HumanEntity> = {
     }
     return human.hunger / HUMAN_HUNGER_DEATH;
   },
-  executor: (task: Task, human: HumanEntity) => {
+  executor: (task, human) => {
     if (task.target !== human.id) {
       return TaskResult.Empty;
     }
@@ -42,12 +44,10 @@ export const humanEatDefinition: TaskDefinition<HumanEntity> = {
     if (human.food.length === 0) {
       return TaskResult.Failure;
     }
-    if (human.food.length > 0 && human.hunger > HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING) {
-      human.direction = { x: 0, y: 0 };
-      human.target = undefined;
-      human.activeAction = 'eating';
-      return TaskResult.Running;
-    }
-    return TaskResult.Success;
+
+    human.direction = { x: 0, y: 0 };
+    human.target = undefined;
+    human.activeAction = 'eating';
+    return TaskResult.Running;
   },
-};
+});

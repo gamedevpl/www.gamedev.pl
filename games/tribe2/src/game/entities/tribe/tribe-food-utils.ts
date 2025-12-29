@@ -340,7 +340,7 @@ export function isPlantingZoneViable(zone: BuildingEntity, gameState: GameWorldS
  * @param zone The planting zone building
  * @returns Maximum number of bushes
  */
-function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
+export function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
   const diameter = BERRY_BUSH_PLANTING_CLEARANCE_RADIUS * 2;
   const bushesPerRow = Math.floor(zone.width / diameter);
   const bushesPerColumn = Math.floor(zone.height / diameter);
@@ -354,7 +354,7 @@ function calculatePlantingZoneCapacity(zone: BuildingEntity): number {
  * @param gameState The current game state
  * @returns Count of bushes in the zone
  */
-function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
+export function countBushesInZone(zone: BuildingEntity, gameState: GameWorldState): number {
   const indexedState = gameState as IndexedWorldState;
 
   // Get all bushes near the zone center

@@ -6,17 +6,18 @@ import {
   HUMAN_MIN_PROCREATION_AGE,
 } from '../../../../human-consts';
 import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-utils';
-import { UpdateContext } from '../../../../world-types';
-import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
-import { Task, TaskDefinition, TaskResult, TaskType } from '../../task-types';
+import { TASK_DEFAULT_VALIDITY_DURATION, TASK_PROCREATION_SCORE_MULTIPLIER } from '../../task-consts';
+import { Task, TaskResult, TaskType } from '../../task-types';
+import { defineHumanTask, getDistanceScore } from '../../task-utils';
 
-export const humanProcreateFemaleDefinition: TaskDefinition<HumanEntity> = {
+export const humanProcreateFemaleDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanProcreateFemale,
+  requireAdult: true,
+  autopilotBehavior: 'procreation',
   producer: (human, context) => {
     const tasks: Record<string, Task> = {};
 
     const isFertile =
-      human.isAdult &&
       human.gender === 'female' &&
       !human.isPregnant &&
       human.age >= HUMAN_MIN_PROCREATION_AGE &&
@@ -37,9 +38,9 @@ export const humanProcreateFemaleDefinition: TaskDefinition<HumanEntity> = {
 
     return tasks;
   },
-  scorer: (male: HumanEntity, task: Task, context: UpdateContext) => {
+  scorer: (male, task, context) => {
     // Only males can claim this task
-    if (male.gender !== 'male' || !male.isAdult) {
+    if (male.gender !== 'male') {
       return null;
     }
 
@@ -49,11 +50,6 @@ export const humanProcreateFemaleDefinition: TaskDefinition<HumanEntity> = {
       male.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
       (male.procreationCooldown || 0) > 0
     ) {
-      return null;
-    }
-
-    // Check autopilot if player
-    if (male.isPlayer && !context.gameState.autopilotControls.behaviors.procreation) {
       return null;
     }
 
@@ -75,12 +71,12 @@ export const humanProcreateFemaleDefinition: TaskDefinition<HumanEntity> = {
     );
 
     // Distance factor: closer is better (0 to 1)
-    const distanceFactor = 1 / (1 + distance / 500);
+    const distanceFactor = getDistanceScore(distance);
 
     // Base score for procreation
-    return distanceFactor * 0.8;
+    return distanceFactor * TASK_PROCREATION_SCORE_MULTIPLIER;
   },
-  executor: (task: Task, male: HumanEntity, context: UpdateContext) => {
+  executor: (task, male, context) => {
     const female = context.gameState.entities.entities[task.creatorEntityId] as HumanEntity | undefined;
 
     // If female is gone or no longer eligible, fail the task
@@ -113,4 +109,4 @@ export const humanProcreateFemaleDefinition: TaskDefinition<HumanEntity> = {
 
     return TaskResult.Running;
   },
-};
+});

@@ -2,26 +2,20 @@ import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { BerryBushEntity } from '../../../../entities/plants/berry-bush/berry-bush-types';
 import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
-import { UpdateContext } from '../../../../world-types';
-import { Task, TaskDefinition, TaskResult, TaskType } from '../../task-types';
+import { TaskResult, TaskType } from '../../task-types';
+import { defineHumanTask, getDistanceScore } from '../../task-utils';
 
-export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
+export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherBerries,
-  scorer: (human: HumanEntity, task: Task, context: UpdateContext) => {
+  requireAdult: true,
+  autopilotBehavior: 'gathering',
+  scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
-      return null;
-    }
-
-    if (!human.isAdult) {
       return null;
     }
 
     const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
     if (!bush || bush.type !== 'berryBush' || bush.food.length === 0) {
-      return null;
-    }
-
-    if (human.isPlayer && !context.gameState.autopilotControls.behaviors.gathering) {
       return null;
     }
 
@@ -37,15 +31,15 @@ export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
     );
 
     // Distance factor: closer is better (0 to 1)
-    const distanceFactor = 1 / (1 + distance / 500);
+    const distanceFactor = getDistanceScore(distance);
 
     // Hunger factor: hungrier humans prioritize food gathering more
     const hungerFactor = human.hunger / HUMAN_HUNGER_DEATH;
 
-    // Base score + hunger weight
-    return distanceFactor * (0.2 + hungerFactor);
+    // Base score + hunger weight (normalized 0-1)
+    return (distanceFactor + hungerFactor) / 2;
   },
-  executor: (task: Task, human: HumanEntity, context: UpdateContext) => {
+  executor: (task, human, context) => {
     if (typeof task.target !== 'number') {
       return TaskResult.Failure;
     }
@@ -74,4 +68,4 @@ export const humanGatherBerriesDefinition: TaskDefinition<HumanEntity> = {
 
     return TaskResult.Running;
   },
-};
+});

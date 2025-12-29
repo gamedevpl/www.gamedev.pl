@@ -12,6 +12,7 @@ import {
   BONFIRE_FUEL_PER_WOOD,
 } from '../../temperature/temperature-consts';
 import { ItemType } from '../item-types';
+import { updateBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
 
 /**
  * Updates the state of a building entity.
@@ -90,4 +91,6 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       }
     }
   }
+
+  updateBuildingTaskAI(building, updateContext);
 }

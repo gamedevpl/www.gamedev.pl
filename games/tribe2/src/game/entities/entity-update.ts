@@ -20,6 +20,7 @@ import { TreeEntity } from './plants/tree/tree-types';
 import { updatePlantTaskAI } from '../ai/task/plants/plant-task-update';
 import { updateCorpseTaskAI } from '../ai/task/corpse/corpse-task-update';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
+import { updateBuildingTaskAI } from '../ai/task/buildings/building-task-update';
 
 export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
@@ -101,6 +102,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'building') {
     buildingUpdate(entity as BuildingEntity, updateContext);
+    updateBuildingTaskAI(entity as BuildingEntity, updateContext);
   } else if (entity.type === 'tree') {
     treeUpdate(entity as TreeEntity, updateContext);
   } else if (entity.type === 'berryBush') {

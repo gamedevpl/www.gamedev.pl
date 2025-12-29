@@ -15,6 +15,7 @@ import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
 import { updateTemperature } from './temperature/temperature-update';
+import { produceTribeBuildingTasks } from './ai/task/tribes/tribe-building-task-producer';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -81,6 +82,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     // We run this once per game hour to maintain performance and avoid UI churn
     if (Math.floor(indexedState.time) > Math.floor(indexedState.time - gameHoursDelta)) {
       checkAndExecuteTribeMerges(indexedState);
+      produceTribeBuildingTasks({ gameState: indexedState, deltaTime });
     }
 
     // Process visual effects

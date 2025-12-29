@@ -5,12 +5,14 @@ import {
   PARENT_FEEDING_RANGE,
 } from '../../../../human-consts';
 import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-utils';
-import { UpdateContext } from '../../../../world-types';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
-import { Task, TaskDefinition, TaskResult, TaskType } from '../../task-types';
+import { Task, TaskResult, TaskType } from '../../task-types';
+import { defineHumanTask, getDistanceScore } from '../../task-utils';
 
-export const humanFeedChildDefinition: TaskDefinition<HumanEntity> = {
+export const humanFeedChildDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanFeedChild,
+  requireAdult: true,
+  autopilotBehavior: 'feedChildren',
   producer: (child, context) => {
     const tasks: Record<string, Task> = {};
 
@@ -27,14 +29,9 @@ export const humanFeedChildDefinition: TaskDefinition<HumanEntity> = {
 
     return tasks;
   },
-  scorer: (adult: HumanEntity, task: Task, context: UpdateContext) => {
+  scorer: (adult, task, context) => {
     // Only adults with food can claim this task
-    if (!adult.isAdult || adult.food.length === 0 || (adult.feedChildCooldownTime || 0) > 0) {
-      return null;
-    }
-
-    // Check autopilot if player
-    if (adult.isPlayer && !context.gameState.autopilotControls.behaviors.feedChildren) {
+    if (adult.food.length === 0 || (adult.feedChildCooldownTime || 0) > 0) {
       return null;
     }
 
@@ -57,15 +54,15 @@ export const humanFeedChildDefinition: TaskDefinition<HumanEntity> = {
     );
 
     // Distance factor: closer is better (0 to 1)
-    const distanceFactor = 1 / (1 + distance / 500);
+    const distanceFactor = getDistanceScore(distance);
 
     // Child hunger factor: hungrier children get higher priority
     const hungerFactor = child.hunger / HUMAN_HUNGER_DEATH;
 
-    // Base score for feeding child
-    return distanceFactor * (0.5 + hungerFactor);
+    // Base score for feeding child (normalized 0-1)
+    return (distanceFactor + hungerFactor) / 2;
   },
-  executor: (task: Task, adult: HumanEntity, context: UpdateContext) => {
+  executor: (task, adult, context) => {
     const child = context.gameState.entities.entities[task.creatorEntityId] as HumanEntity | undefined;
 
     // If child is gone, grown up, or adult ran out of food, fail/complete the task
@@ -99,4 +96,4 @@ export const humanFeedChildDefinition: TaskDefinition<HumanEntity> = {
 
     return TaskResult.Running;
   },
-};
+});

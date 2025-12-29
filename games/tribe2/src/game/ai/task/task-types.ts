@@ -9,6 +9,14 @@ export enum TaskType {
   HumanProcreateFemale,
   HumanProcreateMale,
   HumanFeedChild,
+  HumanPlaceStorage,
+  HumanPlaceBonfire,
+  HumanPlacePlantingZone,
+  HumanPlaceBorderPost,
+  HumanPlantBush,
+  HumanStockpile,
+  HumanFuelBonfire,
+  HumanRetrieve,
 }
 
 export enum TaskPriority {
