@@ -71,14 +71,12 @@ export const humanHuntPreyDefinition = defineHumanTask<HumanEntity>({
       context.gameState.mapDimensions.height,
     );
 
-    if (distance > HUMAN_INTERACTION_RANGE) {
-      human.target = prey.position;
-      human.activeAction = 'moving';
-      return [TaskResult.Running, 'Chasing prey'];
-    }
-
     human.activeAction = 'attacking';
     human.attackTargetId = prey.id;
-    return [TaskResult.Running, 'Hunting prey'];
+    if (distance > HUMAN_INTERACTION_RANGE) {
+      return [TaskResult.Running, 'Chasing prey'];
+    } else {
+      return [TaskResult.Running, 'Attacking prey'];
+    }
   },
 });

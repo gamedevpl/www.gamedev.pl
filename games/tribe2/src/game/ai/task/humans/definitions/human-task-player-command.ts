@@ -265,10 +265,18 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           gameState.mapDimensions.height,
         );
 
+        if (target.isPregnant || human.isPregnant) {
+          if (human.gender === 'male' && target.pregnancyFatherId !== human.id) {
+            return [TaskResult.Failure, 'Target is pregnant by another'];
+          } else {
+            return TaskResult.Success;
+          }
+        }
+
         if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
           human.activeAction = 'procreating';
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Success;
+          return TaskResult.Running;
         }
 
         human.activeAction = 'moving';

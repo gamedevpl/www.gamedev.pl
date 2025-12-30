@@ -21,7 +21,7 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
     // Warriors and Hunters prioritize predators
     const isWarrior = human.leaderId && isTribeRole(human, TribeRole.Warrior, context.gameState);
     const isHunter = human.leaderId && isTribeRole(human, TribeRole.Hunter, context.gameState);
-    
+
     if (human.leaderId && !isWarrior && !isHunter) return null;
 
     // Predators are threats, so check range
@@ -38,7 +38,7 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
 
     const distanceFactor = getDistanceScore(distance);
     // Predators are high priority targets regardless of hunger
-    return (distanceFactor + 1) / 2; 
+    return (distanceFactor + 1) / 2;
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') return [TaskResult.Failure, 'Invalid target'];
@@ -57,14 +57,13 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
       context.gameState.mapDimensions.height,
     );
 
-    if (distance > HUMAN_INTERACTION_RANGE) {
-      human.target = predator.position;
-      human.activeAction = 'moving';
-      return [TaskResult.Running, 'Chasing predator'];
-    }
-
     human.activeAction = 'attacking';
     human.attackTargetId = predator.id;
-    return [TaskResult.Running, 'Fighting predator'];
+
+    if (distance > HUMAN_INTERACTION_RANGE) {
+      return [TaskResult.Running, 'Chasing predator'];
+    } else {
+      return [TaskResult.Running, 'Fighting predator'];
+    }
   },
 });

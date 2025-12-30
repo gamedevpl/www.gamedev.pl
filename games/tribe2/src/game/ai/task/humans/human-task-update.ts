@@ -59,14 +59,12 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     const task = context.gameState.tasks[currentTaskId];
     if (task) {
       executeTask(human, task, context, humanTaskDefinitions);
+      if (!getCurrentTask(human)) {
+        human.activeAction = 'idle';
+      }
     } else {
       setCurrentTask(human, null);
     }
-  }
-
-  if (!getCurrentTask(human)) {
-    // No current task assigned
-    human.activeAction = 'idle';
   }
 }
 
