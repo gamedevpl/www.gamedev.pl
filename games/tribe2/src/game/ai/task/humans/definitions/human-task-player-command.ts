@@ -26,9 +26,10 @@ import { canProcreate, isPositionOccupied, isEnemyBuilding } from '../../../../u
 import { BuildingEntity, BuildingType } from '../../../../entities/buildings/building-types';
 import { ItemType } from '../../../../entities/item-types';
 import { Task, TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { CorpseEntity } from '../../../../entities/characters/corpse-types';
+import { getWaitTask } from '../../task-utils';
 
 /**
  * Shared autopilot attack task logic.
@@ -109,7 +110,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
 
     // Should always be true due to the preceding scorer/producer, but as a safeguard:
     if (!activeAction) {
-      return TaskResult.Failure;
+      return [TaskResult.Failure, 'No active autopilot action'];
     }
 
     // Use a switch to handle the various player commands
@@ -134,26 +135,26 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
             human.activeAction = 'idle';
             human.target = undefined;
           }
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Reached target position'];
         }
 
         human.activeAction = 'moving';
         human.target = targetPosition;
         human.direction = dirToTarget(human.position, targetPosition, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to target'];
       }
 
       // --- GATHER ---
       case PlayerActionType.AutopilotGather: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const target = gameState.entities.entities[activeAction.targetEntityId];
 
         if (!target) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Target entity not found'];
         }
 
         let isDepleted = false;
@@ -166,12 +167,12 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           isDepleted = tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0;
         } else {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target type'];
         }
 
         if (isDepleted) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Target is depleted'];
         }
 
         const distance = calculateWrappedDistance(
@@ -185,26 +186,26 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'moving';
           human.target = target.id;
           human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
-          return TaskResult.Running;
+          return [TaskResult.Running, 'Moving to gather target'];
         }
 
         human.activeAction = 'gathering';
         human.target = target.id;
         gameState.autopilotControls.activeAutopilotAction = undefined;
-        return TaskResult.Success;
+        return [TaskResult.Success, 'At target, gathering', getWaitTask(human.id, gameState.time)];
       }
 
       // --- CHOP ---
       case PlayerActionType.AutopilotChop: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const tree = gameState.entities.entities[activeAction.targetEntityId] as TreeEntity | undefined;
 
         if (!tree || tree.type !== 'tree') {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target entity'];
         }
 
         const [treeState] = tree.stateMachine ?? [];
@@ -212,7 +213,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
 
         if (!isStanding || human.heldItem) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Tree is not standing or human is holding an item'];
         }
 
         const distance = calculateWrappedDistance(
@@ -226,13 +227,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'moving';
           human.target = tree.id;
           human.direction = dirToTarget(human.position, tree.position, gameState.mapDimensions);
-          return TaskResult.Running;
+          return [TaskResult.Running, 'Moving to tree'];
         }
 
         human.activeAction = 'chopping';
         human.target = tree.id;
         gameState.autopilotControls.activeAutopilotAction = undefined;
-        return TaskResult.Success;
+        return [TaskResult.Success, 'At tree, chopping', getWaitTask(human.id, gameState.time)];
       }
 
       // --- ATTACK ---
@@ -249,13 +250,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
       case PlayerActionType.AutopilotProcreate: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
         if (!target || target.type !== 'human' || !canProcreate(human, target, gameState)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target for procreation'];
         }
 
         const distance = calculateWrappedDistance(
@@ -269,36 +270,36 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           if (human.gender === 'male' && target.pregnancyFatherId !== human.id) {
             return [TaskResult.Failure, 'Target is pregnant by another'];
           } else {
-            return TaskResult.Success;
+            return [TaskResult.Success, 'Procreation conditions met'];
           }
         }
 
         if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
           human.activeAction = 'procreating';
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Running;
+          return [TaskResult.Running, 'Procreating'];
         }
 
         human.activeAction = 'moving';
         human.target = target.id;
         human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to procreation target'];
       }
 
       // --- PLANT ---
       case PlayerActionType.AutopilotPlant: {
         if (human.activeAction === 'planting') {
-          return TaskResult.Running;
+          return [TaskResult.Running, 'Planting'];
         }
 
         if (!('position' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No position specified'];
         }
         const plantTarget = activeAction.position;
         if (isPositionOccupied(plantTarget, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS, human.id)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Position is occupied'];
         }
 
         const distance = calculateWrappedDistance(
@@ -313,26 +314,26 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.target = plantTarget;
           gameState.autopilotControls.activeAutopilotAction = undefined;
           gameState.hasPlayerPlantedBush = true;
-          return TaskResult.Running;
+          return [TaskResult.Running, 'Planting'];
         }
 
         human.activeAction = 'moving';
         human.target = plantTarget;
         human.direction = dirToTarget(human.position, plantTarget, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to planting target'];
       }
 
       // --- FEED CHILD ---
       case PlayerActionType.AutopilotFeedChild: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const target = gameState.entities.entities[activeAction.targetEntityId] as HumanEntity | undefined;
 
         if (!target || target.type !== 'human' || target.isAdult || human.food.length === 0) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target for feeding child'];
         }
 
         const distance = calculateWrappedDistance(
@@ -345,20 +346,20 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         if (distance <= AUTOPILOT_ACTION_PROXIMITY) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
           human.activeAction = 'feeding';
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Feeding child'];
         }
 
         human.activeAction = 'moving';
         human.target = target.id;
         human.direction = dirToTarget(human.position, target.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to feeding target'];
       }
 
       // --- DEPOSIT ---
       case PlayerActionType.AutopilotDeposit: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
 
@@ -370,7 +371,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           !targetBuilding.isConstructed
         ) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target building'];
         }
 
         // Check if storage has capacity
@@ -378,13 +379,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         const currentStored = targetBuilding.storedItems.length;
         if (currentStored >= capacity) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Storage is full'];
         }
 
         // Check if human belongs to the same tribe
         if (human.leaderId !== targetBuilding.ownerId) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Human does not belong to the same tribe as the building'];
         }
 
         // Check if human has something to deposit
@@ -395,13 +396,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           // Bonfires only accept wood
           if (human.heldItem?.type !== ItemType.Wood) {
             gameState.autopilotControls.activeAutopilotAction = undefined;
-            return TaskResult.Failure;
+            return [TaskResult.Failure, 'Bonfires only accept wood'];
           }
         } else {
           // Storage spots accept food or held items
           if (!hasFood && !hasHeldItem) {
             gameState.autopilotControls.activeAutopilotAction = undefined;
-            return TaskResult.Failure;
+            return [TaskResult.Failure, 'No items to deposit'];
           }
         }
 
@@ -416,20 +417,20 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'depositing';
           human.target = undefined;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Depositing items', getWaitTask(human.id, gameState.time)];
         }
 
         human.activeAction = 'moving';
         human.target = targetBuilding.id;
         human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to deposit target'];
       }
 
       // --- RETRIEVE ---
       case PlayerActionType.AutopilotRetrieve: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
 
@@ -441,19 +442,19 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           targetBuilding.storedItems.length === 0
         ) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target building'];
         }
 
         // Check if human belongs to the same tribe
         if (human.leaderId !== targetBuilding.ownerId) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Human does not belong to the same tribe as the building'];
         }
 
         // Check if human has inventory space
         if (human.food.length >= human.maxFood) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Storage is full'];
         }
 
         const retrieveDistance = calculateWrappedDistance(
@@ -467,20 +468,20 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'retrieving';
           human.target = undefined;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Retrieving items', getWaitTask(human.id, gameState.time)];
         }
 
         human.activeAction = 'moving';
         human.target = targetBuilding.id;
         human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to retrieve target'];
       }
 
       // --- TAKE OVER BUILDING ---
       case PlayerActionType.TakeOverBuilding: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
 
@@ -491,13 +492,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           !isEnemyBuilding(human, targetBuilding, gameState)
         ) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target building'];
         }
 
         // Only leaders can take over buildings
         if (human.leaderId !== human.id) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Only leaders can take over buildings'];
         }
 
         const takeoverDistance = calculateWrappedDistance(
@@ -511,20 +512,20 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'takingOverBuilding';
           human.target = targetBuilding.id;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Taking over building'];
         }
 
         human.activeAction = 'moving';
         human.target = targetBuilding.id;
         human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to takeover target'];
       }
 
       // --- REMOVE ENEMY BUILDING ---
       case PlayerActionType.RemoveEnemyBuilding: {
         if (!('targetEntityId' in activeAction)) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No target entity ID'];
         }
         const targetBuilding = gameState.entities.entities[activeAction.targetEntityId] as BuildingEntity | undefined;
 
@@ -535,13 +536,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           !isEnemyBuilding(human, targetBuilding, gameState)
         ) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Invalid target building'];
         }
 
         // Only leaders can remove enemy buildings
         if (human.leaderId !== human.id) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'Only leaders can remove enemy buildings'];
         }
 
         const removalDistance = calculateWrappedDistance(
@@ -555,13 +556,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'destroyingBuilding';
           human.target = targetBuilding.id;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Success;
+          return [TaskResult.Success, 'Removing enemy building'];
         }
 
         human.activeAction = 'moving';
         human.target = targetBuilding.id;
         human.direction = dirToTarget(human.position, targetBuilding.position, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to removal target'];
       }
 
       // --- BUILDING PLACEMENT ---
@@ -575,7 +576,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
 
         if (!buildingType) {
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return TaskResult.Failure;
+          return [TaskResult.Failure, 'No building type specified'];
         }
 
         const distance = calculateWrappedDistance(
@@ -602,11 +603,11 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
             createBuilding(targetPosition, buildingType, human.leaderId!, gameState);
             gameState.autopilotControls.activeAutopilotAction = undefined;
             human.activeAction = 'idle';
-            return TaskResult.Success;
+            return [TaskResult.Success, 'Building placed'];
           } else {
             // Cannot place building at this location
             gameState.autopilotControls.activeAutopilotAction = undefined;
-            return TaskResult.Failure;
+            return [TaskResult.Failure, 'Cannot place building at this location'];
           }
         }
 
@@ -614,13 +615,13 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         human.activeAction = 'moving';
         human.target = targetPosition;
         human.direction = dirToTarget(human.position, targetPosition, gameState.mapDimensions);
-        return TaskResult.Running;
+        return [TaskResult.Running, 'Moving to placement target'];
       }
 
       default:
         // Unknown or unhandled action, clear it.
         gameState.autopilotControls.activeAutopilotAction = undefined;
-        return TaskResult.Failure;
+        return [TaskResult.Failure, 'Unknown or unhandled action'];
     }
   },
 });

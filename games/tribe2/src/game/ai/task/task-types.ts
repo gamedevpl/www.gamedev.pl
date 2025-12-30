@@ -3,6 +3,7 @@ import { Circle2D, Rect2D, Vector2D } from '../../utils/math-types';
 import { UpdateContext } from '../../world-types';
 
 export enum TaskType {
+  Wait,
   HumanGatherBerries,
   HumanGatherMeat,
   HumanEat,
@@ -23,6 +24,7 @@ export enum TaskType {
   HumanHuntPredator,
   HumanPlayerCommand,
   HumanAttackHuman,
+  HumanSeekWarmth,
 }
 
 export enum TaskPriority {

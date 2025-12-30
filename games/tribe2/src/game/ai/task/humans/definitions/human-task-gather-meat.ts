@@ -3,7 +3,8 @@ import { CorpseEntity } from '../../../../entities/characters/corpse-types';
 import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 export const humanGatherMeatDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherMeat,

@@ -1,8 +1,7 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
-import { TaskType } from '../task-types';
 import { executeTask, getCurrentTask, produceEntityTasks, setCurrentTask } from '../task-utils';
-import { humanTaskDefinitions } from './definitions';
+import { humanTaskDefinitions, humanTaskDefinitionList } from './definitions';
 
 export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): void {
   // 1. Manual Control Override
@@ -18,7 +17,7 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     return;
   }
 
-  produceEntityTasks<HumanEntity>(human, context, Object.values(humanTaskDefinitions));
+  produceEntityTasks<HumanEntity>(human, context, humanTaskDefinitionList);
 
   let currentTaskId = getCurrentTask(human);
 
@@ -31,19 +30,12 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     }
   }
 
-  // 2. Task Interruption / Picking
-  const bestTaskId = pickTaskForHuman(human, context);
-  if (bestTaskId && bestTaskId !== currentTaskId) {
-    const bestTask = context.gameState.tasks[bestTaskId];
+  // 2. Task Picking
+  if (!currentTaskId) {
+    const bestTaskId = pickTaskForHuman(human, context);
     // Interrupt if no current task OR if the new task is a high-priority player command
-    if (!currentTaskId || (bestTask && bestTask.type === TaskType.HumanPlayerCommand)) {
-      // Unclaim old task
-      if (currentTaskId) {
-        const oldTask = context.gameState.tasks[currentTaskId];
-        if (oldTask && oldTask.claimedByEntityId === human.id) {
-          oldTask.claimedByEntityId = undefined;
-        }
-      }
+    if (bestTaskId && context.gameState.tasks[bestTaskId]) {
+      const bestTask = context.gameState.tasks[bestTaskId];
 
       // Claim new task
       currentTaskId = bestTaskId;
@@ -59,9 +51,6 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     const task = context.gameState.tasks[currentTaskId];
     if (task) {
       executeTask(human, task, context, humanTaskDefinitions);
-      if (!getCurrentTask(human)) {
-        human.activeAction = 'idle';
-      }
     } else {
       setCurrentTask(human, null);
     }
@@ -72,8 +61,9 @@ function pickTaskForHuman(human: HumanEntity, context: UpdateContext): string | 
   let bestTaskId: string | null = null;
   let bestScore = -Infinity;
 
-  for (const task of Object.values(context.gameState.tasks)) {
-    if (task.validUntilTime < context.gameState.time) {
+  for (const taskId in context.gameState.tasks) {
+    const task = context.gameState.tasks[taskId];
+    if (!task || task.validUntilTime < context.gameState.time) {
       delete context.gameState.tasks[task.id];
       continue;
     }

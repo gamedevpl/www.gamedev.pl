@@ -3,7 +3,8 @@ import { BerryBushEntity } from '../../../../entities/plants/berry-bush/berry-bu
 import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherBerries,

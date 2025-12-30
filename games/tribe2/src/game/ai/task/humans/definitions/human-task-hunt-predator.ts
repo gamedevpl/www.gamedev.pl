@@ -3,7 +3,8 @@ import { PredatorEntity } from '../../../../entities/characters/predator/predato
 import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { TribeRole } from '../../../../entities/tribe/tribe-types';
 import { isTribeRole } from '../../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';

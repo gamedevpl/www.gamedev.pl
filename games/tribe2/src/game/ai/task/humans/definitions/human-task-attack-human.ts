@@ -2,9 +2,8 @@ import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
-import { TribeRole } from '../../../../entities/tribe/tribe-types';
-import { isTribeRole } from '../../../../entities/tribe/tribe-role-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { getOwnerOfPoint, isHostile } from '../../../../utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 
@@ -55,13 +54,7 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
       return null;
     }
 
-    // Warriors and Hunters prioritize defense/attack
-    const isWarrior = isTribeRole(attacker, TribeRole.Warrior, gameState);
-    const isHunter = isTribeRole(attacker, TribeRole.Hunter, gameState);
-
     let baseScore = 0.5;
-    if (isWarrior) baseScore = 0.9;
-    else if (isHunter) baseScore = 0.7;
 
     const distance = calculateWrappedDistance(
       attacker.position,

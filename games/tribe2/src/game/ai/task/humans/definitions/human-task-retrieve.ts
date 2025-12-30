@@ -4,7 +4,8 @@ import { BuildingEntity, BuildingType } from '../../../../entities/buildings/bui
 import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 /**
  * Task definition for humans to retrieve food from storage spots.

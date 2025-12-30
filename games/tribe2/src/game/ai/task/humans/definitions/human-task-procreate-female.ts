@@ -8,7 +8,8 @@ import {
 import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-utils';
 import { TASK_DEFAULT_VALIDITY_DURATION, TASK_PROCREATION_SCORE_MULTIPLIER } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 export const humanProcreateFemaleDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanProcreateFemale,

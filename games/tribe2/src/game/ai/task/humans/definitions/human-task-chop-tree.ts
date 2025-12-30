@@ -3,10 +3,16 @@ import { TreeEntity } from '../../../../entities/plants/tree/tree-types';
 import { HUMAN_CHOPPING_PROXIMITY } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { getTribeLeaderForCoordination } from '../../../../entities/tribe/tribe-task-utils';
 import { getTribeWoodNeed, getTribeAvailableWoodOnGround } from '../../../../entities/tribe/tribe-food-utils';
-import { TREE_GROWING, TREE_FULL, TREE_SPREADING, TREE_FALLEN } from '../../../../entities/plants/tree/states/tree-state-types';
+import {
+  TREE_GROWING,
+  TREE_FULL,
+  TREE_SPREADING,
+  TREE_FALLEN,
+} from '../../../../entities/plants/tree/states/tree-state-types';
 
 export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanChopTree,

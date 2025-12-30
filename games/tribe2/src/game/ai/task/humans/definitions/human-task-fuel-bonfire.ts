@@ -4,7 +4,8 @@ import { ItemType } from '../../../../entities/item-types';
 import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { BONFIRE_STORAGE_CAPACITY } from '../../../../temperature/temperature-consts';
 
 /**

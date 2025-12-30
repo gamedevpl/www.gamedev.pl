@@ -22,8 +22,9 @@ import { humanHuntPreyDefinition } from './human-task-hunt-prey';
 import { humanHuntPredatorDefinition } from './human-task-hunt-predator';
 import { humanPlayerCommandDefinition } from './human-task-player-command';
 import { humanAttackHumanDefinition } from './human-task-attack-human';
+import { humanSeekWarmthDefinition } from './human-task-seek-warmth';
 
-export const humanTaskDefinitions: Record<TaskType, TaskDefinition<HumanEntity>> = [
+export const humanTaskDefinitions = [
   humanEatDefinition,
   humanGatherBerriesDefinition,
   humanGatherMeatDefinition,
@@ -44,7 +45,10 @@ export const humanTaskDefinitions: Record<TaskType, TaskDefinition<HumanEntity>>
   humanHuntPredatorDefinition,
   humanPlayerCommandDefinition,
   humanAttackHumanDefinition,
+  humanSeekWarmthDefinition,
 ].reduce<Record<TaskType, TaskDefinition<HumanEntity>>>((acc, def) => {
   acc[def.type] = def;
   return acc;
 }, {} as Record<TaskType, TaskDefinition<HumanEntity>>);
+
+export const humanTaskDefinitionList = Object.values(humanTaskDefinitions);

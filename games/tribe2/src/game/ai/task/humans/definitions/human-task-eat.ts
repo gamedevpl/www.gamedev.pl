@@ -3,7 +3,7 @@ import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { HUMAN_HUNGER_DEATH } from '../../../../human-consts';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
-import { defineHumanTask } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 export const humanEatDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanEat,

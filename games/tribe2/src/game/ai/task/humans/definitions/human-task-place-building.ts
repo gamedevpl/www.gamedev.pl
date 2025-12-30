@@ -6,7 +6,8 @@ import { createBuilding } from '../../../../utils/building-placement-utils';
 import { BuildingType } from '../../../../entities/buildings/building-consts';
 import { LEADER_BUILDING_PLACEMENT_PROXIMITY, BORDER_POST_PLACEMENT_PROXIMITY } from '../../../../ai-consts';
 import { Vector2D } from '../../../../utils/math-types';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 
 /**
  * Common scorer for building placement tasks.

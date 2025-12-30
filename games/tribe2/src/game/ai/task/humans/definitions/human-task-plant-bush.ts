@@ -6,7 +6,8 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Vector2D } from '../../../../utils/math-types';
 import { BuildingEntity } from '../../../../entities/buildings/building-types';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../../human-consts';
-import { defineHumanTask, getDistanceScore } from '../../task-utils';
+import { getDistanceScore } from '../../task-utils';
+import { defineHumanTask } from '../human-task-utils';
 import { TASK_PLANTING_COMPLETION_RADIUS } from '../../task-consts';
 
 export const humanPlantBushDefinition = defineHumanTask<HumanEntity>({

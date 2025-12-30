@@ -16,6 +16,7 @@ import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
 import { updateTemperature } from './temperature/temperature-update';
 import { produceTribeBuildingTasks } from './ai/task/tribes/tribe-building-task-producer';
+import { cleanupExpiredTasks } from './ai/task/task-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -53,6 +54,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update notifications (removes expired ones)
     updateNotifications(indexedState);
+
+    // Update tasks (removes expired ones)
+    cleanupExpiredTasks(indexedState);
 
     // Update ecosystem balancer
     updateEcosystemBalancer(indexedState);

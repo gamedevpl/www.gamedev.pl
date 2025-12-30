@@ -1,9 +1,8 @@
-import { Entity } from '../../entities/entities-types';
-import { HumanEntity } from '../../entities/characters/human/human-types';
-import { UpdateContext, AutopilotControls } from '../../world-types';
+import { Entity, EntityId } from '../../entities/entities-types';
+import { UpdateContext, GameWorldState } from '../../world-types';
 import { Blackboard, BlackboardData } from '../behavior-tree/behavior-tree-blackboard';
 import { Task, TaskDefinition, TaskResult, TaskType, TaskHistoryEntry } from './task-types';
-import { TASK_DISTANCE_SCORE_BASE } from './task-consts';
+import { TASK_DEFAULT_VALIDITY_DURATION, TASK_DISTANCE_SCORE_BASE } from './task-consts';
 
 export const BLACKBOARD_TASK_ID = 'currentAiTask';
 export const BLACKBOARD_LAST_TASK_RESULT = 'lastTaskResult';
@@ -19,6 +18,17 @@ export function setCurrentTask({ aiBlackboard }: { aiBlackboard: BlackboardData 
     Blackboard.set<string>(aiBlackboard, BLACKBOARD_TASK_ID, taskId);
   } else {
     Blackboard.delete(aiBlackboard, BLACKBOARD_TASK_ID);
+  }
+}
+
+/**
+ * Cleans up tasks that have expired based on the current game time.
+ */
+export function cleanupExpiredTasks(gameState: GameWorldState): void {
+  for (const taskId in gameState.tasks) {
+    if (gameState.tasks[taskId].validUntilTime < gameState.time) {
+      delete gameState.tasks[taskId];
+    }
   }
 }
 
@@ -39,7 +49,7 @@ export function executeTask<T extends Entity>(
   context: UpdateContext,
   definitions: Record<TaskType, TaskDefinition<T>>,
 ): TaskResult | undefined {
-  const definition = definitions[task.type];
+  const definition = task.type === TaskType.Wait ? waitTask : definitions[task.type];
   let executionResult: [TaskResult, string?, Task?] | TaskResult | undefined;
 
   if (definition && definition.executor) {
@@ -89,71 +99,41 @@ export function getDistanceScore(distance: number): number {
   return 1 / (1 + distance / TASK_DISTANCE_SCORE_BASE);
 }
 
-/**
- * A wrapper for defining human tasks that standardizes common checks.
- * Handles isAdult and autopilot behavior checks automatically.
- */
-export function defineHumanTask<T extends HumanEntity>(options: {
-  type: TaskType;
-  requireAdult?: boolean;
-  autopilotBehavior?: keyof AutopilotControls['behaviors'];
-  producer?: (entity: T, context: UpdateContext) => Record<string, Task>;
-  scorer?: (entity: T, task: Task, context: UpdateContext) => number | null;
-  executor?: (task: Task, entity: T, context: UpdateContext) => [TaskResult, string?, Task?] | TaskResult;
-}): TaskDefinition<T> {
-  const { type, requireAdult, autopilotBehavior, producer, scorer, executor } = options;
-
-  const wrappedScorer = scorer
-    ? (entity: T, task: Task, context: UpdateContext): number | null => {
-        if (requireAdult && !entity.isAdult) {
-          return null;
-        }
-
-        if (autopilotBehavior && entity.isPlayer && !context.gameState.autopilotControls.behaviors[autopilotBehavior]) {
-          return null;
-        }
-
-        return scorer(entity, task, context);
-      }
-    : undefined;
-
-  const wrappedExecutor = executor
-    ? (task: Task, entity: T, context: UpdateContext): [TaskResult, string?, Task?] | TaskResult => {
-        if (requireAdult && !entity.isAdult) {
-          return TaskResult.Failure;
-        }
-
-        if (autopilotBehavior && entity.isPlayer && !context.gameState.autopilotControls.behaviors[autopilotBehavior]) {
-          return TaskResult.Failure;
-        }
-
-        return executor(task, entity, context);
-      }
-    : undefined;
-
-  return {
-    type,
-    producer,
-    scorer: wrappedScorer,
-    executor: wrappedExecutor,
-  };
-}
-
 export function produceEntityTasks<T extends Entity>(
   entity: T,
   context: UpdateContext,
   taskDefiniitions: TaskDefinition<T>[],
-) {
-  for (const definition of taskDefiniitions) {
-    if (definition && definition.producer) {
-      const newTasks = definition.producer(entity, context);
-      for (const [taskId, task] of Object.entries(newTasks)) {
-        const currentTask = context.gameState.tasks[taskId];
-        context.gameState.tasks[taskId] = task;
-        if (currentTask) {
-          context.gameState.tasks[taskId].claimedByEntityId = currentTask.claimedByEntityId;
-        }
+): void {
+  for (let i = 0; i < taskDefiniitions.length; i++) {
+    const definition = taskDefiniitions[i];
+    if (!definition.producer) {
+      continue;
+    }
+    const newTasks = definition.producer(entity, context);
+    for (const taskId in newTasks) {
+      const task = newTasks[taskId];
+      const currentTask = context.gameState.tasks[taskId];
+      context.gameState.tasks[taskId] = task;
+      if (currentTask) {
+        context.gameState.tasks[taskId].claimedByEntityId = currentTask.claimedByEntityId;
       }
     }
   }
 }
+
+export const getWaitTask = (entityId: EntityId, currentTime: number): Task => ({
+  id: `wait-${entityId}`,
+  type: TaskType.Wait,
+  creatorEntityId: entityId,
+  validUntilTime: currentTime + TASK_DEFAULT_VALIDITY_DURATION,
+});
+
+export const waitTask: TaskDefinition<Entity> = {
+  type: TaskType.Wait,
+  executor: (task: Task, _entity: Entity, context: UpdateContext): TaskResult | [TaskResult, string] => {
+    if (context.gameState.time >= task.validUntilTime - 1) {
+      return [TaskResult.Success, 'Wait complete'];
+    }
+    return [TaskResult.Running, 'Waiting'];
+  },
+};
