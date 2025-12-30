@@ -83,6 +83,20 @@ export const humanSeekWarmthDefinition = defineHumanTask<HumanEntity>({
       return TaskResult.Failure;
     }
 
+    const temp = getTemperatureAt(
+      context.gameState.temperature,
+      human.position,
+      context.gameState.time,
+      context.gameState.mapDimensions.width,
+      context.gameState.mapDimensions.height,
+    );
+
+    // Comfort zone: don't seek warmth if it's already warm enough (Comfort threshold = COLD_THRESHOLD + 5)
+    const comfortThreshold = COLD_THRESHOLD + 5;
+    if (temp >= comfortThreshold) {
+      return [TaskResult.Success, 'Comfortable temperature reached'];
+    }
+
     // Calculate personal spot around the bonfire to prevent clustering
     // Use entity ID to derive a stable angle
     const angle = ((human.id * 137) % 360) * (Math.PI / 180);
