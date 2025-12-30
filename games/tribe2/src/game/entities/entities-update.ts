@@ -163,7 +163,7 @@ export function createHuman(
   ancestorIds: EntityId[] = [],
   leaderId?: EntityId,
   tribeInfo?: { tribeBadge: string; tribeColor: string },
-  aiType: AIType = AIType.BehaviorTreeBased,
+  aiType: AIType = AIType.TaskBased,
 ): HumanEntity {
   const isAdult = initialAge >= CHILD_TO_ADULT_AGE;
 

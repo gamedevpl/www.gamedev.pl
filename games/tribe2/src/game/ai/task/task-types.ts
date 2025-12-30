@@ -22,6 +22,7 @@ export enum TaskType {
   HumanHuntPrey,
   HumanHuntPredator,
   HumanPlayerCommand,
+  HumanAttackHuman,
 }
 
 export enum TaskPriority {

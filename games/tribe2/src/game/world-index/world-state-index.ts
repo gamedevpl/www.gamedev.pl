@@ -83,6 +83,11 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
         mapDimensions,
       ),
     },
+    cache: {
+      distances: {},
+      tribeWoodNeeds: {},
+      tribeAvailableWoodOnGround: {},
+    },
   };
 
   return indexedWorldState;
