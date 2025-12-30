@@ -5,8 +5,6 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
-import { TribeRole } from '../../../../entities/tribe/tribe-types';
-import { isTribeRole } from '../../../../entities/tribe/tribe-role-utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 
 export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
@@ -16,14 +14,13 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') return null;
 
+    // Don't start hunting predators if injured
+    if (human.hitpoints < human.maxHitpoints * 0.3) {
+      return null;
+    }
+
     const predator = context.gameState.entities.entities[task.target] as PredatorEntity | undefined;
     if (!predator || predator.type !== 'predator' || predator.hitpoints <= 0) return null;
-
-    // Warriors and Hunters prioritize predators
-    const isWarrior = human.leaderId && isTribeRole(human, TribeRole.Warrior, context.gameState);
-    const isHunter = human.leaderId && isTribeRole(human, TribeRole.Hunter, context.gameState);
-
-    if (human.leaderId && !isWarrior && !isHunter) return null;
 
     // Predators are threats, so check range
     if (human.leaderId && !isWithinOperatingRange(predator.position, human.leaderId, context.gameState)) {
@@ -38,11 +35,18 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
     );
 
     const distanceFactor = getDistanceScore(distance);
-    // Predators are high priority targets regardless of hunger
-    return (distanceFactor + 1) / 2;
+    // Predators are high priority targets but slightly reduced to balance with survival/gathering
+    return (distanceFactor + 0.3) / 1.3;
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') return [TaskResult.Failure, 'Invalid target'];
+
+    // Abandon hunt if health drops too low
+    if (human.hitpoints < human.maxHitpoints * 0.2) {
+      human.activeAction = 'idle';
+      human.attackTargetId = undefined;
+      return [TaskResult.Failure, 'Too injured to continue'];
+    }
 
     const predator = context.gameState.entities.entities[task.target] as PredatorEntity | undefined;
     if (!predator || predator.hitpoints <= 0) {

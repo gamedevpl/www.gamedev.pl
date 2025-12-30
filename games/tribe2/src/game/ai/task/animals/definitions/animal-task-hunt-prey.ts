@@ -5,17 +5,18 @@ import { MAX_HUNTERS_PER_PREY } from '../../../../entities/tribe/tribe-task-util
 
 export const animalHuntPreyProducer = (entity: PreyEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
-  
+
   for (let i = 0; i < MAX_HUNTERS_PER_PREY; i++) {
     const taskId = `hunt-prey-${entity.id}-${i}`;
     tasks[taskId] = {
       id: taskId,
       type: TaskType.HumanHuntPrey,
+      position: entity.position,
       creatorEntityId: entity.id,
       target: entity.id,
       validUntilTime: context.gameState.time + 1,
     };
   }
-  
+
   return tasks;
 };

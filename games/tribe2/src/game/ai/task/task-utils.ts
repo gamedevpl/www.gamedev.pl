@@ -1,4 +1,4 @@
-import { Entity, EntityId } from '../../entities/entities-types';
+import { Entity } from '../../entities/entities-types';
 import { UpdateContext, GameWorldState } from '../../world-types';
 import { Blackboard, BlackboardData } from '../behavior-tree/behavior-tree-blackboard';
 import { Task, TaskDefinition, TaskResult, TaskType, TaskHistoryEntry } from './task-types';
@@ -121,10 +121,11 @@ export function produceEntityTasks<T extends Entity>(
   }
 }
 
-export const getWaitTask = (entityId: EntityId, currentTime: number): Task => ({
-  id: `wait-${entityId}`,
+export const getWaitTask = (entity: Entity, currentTime: number): Task => ({
+  id: `wait-${entity.id}`,
+  position: entity.position,
   type: TaskType.Wait,
-  creatorEntityId: entityId,
+  creatorEntityId: entity.id,
   validUntilTime: currentTime + TASK_DEFAULT_VALIDITY_DURATION,
 });
 

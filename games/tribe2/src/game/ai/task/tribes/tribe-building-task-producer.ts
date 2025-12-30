@@ -199,6 +199,7 @@ function createPlacementTask(leaderId: EntityId, type: TaskType, target: Vector2
   const taskId = `${TaskType[type]}-${leaderId}-${gameState.time.toFixed(2)}`;
   gameState.tasks[taskId] = {
     id: taskId,
+    position: target,
     type,
     creatorEntityId: leaderId,
     target,

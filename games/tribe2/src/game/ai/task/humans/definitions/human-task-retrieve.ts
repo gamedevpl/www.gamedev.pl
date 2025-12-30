@@ -49,9 +49,10 @@ export const humanRetrieveDefinition = defineHumanTask<HumanEntity>({
 
     const distanceFactor = getDistanceScore(distance);
     const hungerFactor = human.hunger / HUMAN_HUNGER_DEATH;
+    const emptyFoodSlotsFactor = 1 - human.food.length / human.maxFood;
 
     // Prioritize based on hunger and proximity
-    return (distanceFactor + hungerFactor) / 2;
+    return (distanceFactor + hungerFactor + emptyFoodSlotsFactor) / 3;
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {

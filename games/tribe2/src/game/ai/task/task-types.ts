@@ -25,6 +25,7 @@ export enum TaskType {
   HumanPlayerCommand,
   HumanAttackHuman,
   HumanSeekWarmth,
+  HumanFlee,
 }
 
 export enum TaskPriority {
@@ -46,6 +47,9 @@ export type Task = {
 
   // Type of the task
   type: TaskType;
+
+  // Position of the task
+  position: Vector2D;
 
   // ID of the entity that created the task
   creatorEntityId: EntityId;

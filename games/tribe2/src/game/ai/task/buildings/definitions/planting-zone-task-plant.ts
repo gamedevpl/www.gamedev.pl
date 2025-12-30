@@ -56,6 +56,7 @@ export const plantingZoneTaskPlantProducer = (
       const task: Task = {
         id: taskId,
         type: TaskType.HumanPlantBush,
+        position: position,
         creatorEntityId: building.id,
         target: position,
         validUntilTime: gameState.time + TASK_PLANTING_VALIDITY_TICKS,

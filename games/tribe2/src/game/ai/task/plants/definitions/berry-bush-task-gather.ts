@@ -15,6 +15,7 @@ export const berryBushGatherProducer: TaskDefinition<BerryBushEntity> = {
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanGatherBerries,
+        position: bush.position,
         creatorEntityId: bush.id,
         target: bush.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

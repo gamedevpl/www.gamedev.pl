@@ -34,7 +34,7 @@ export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
       return null;
     }
 
-    if (human.heldItem) {
+    if (human.heldItem || human.food.length === 0) {
       return null;
     }
 
@@ -80,6 +80,7 @@ export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
       const gatherTask: Task = {
         id: `gather-wood-${human.id}-${context.gameState.time}`,
         type: TaskType.HumanGatherWood,
+        position: tree.position,
         creatorEntityId: human.id,
         target: tree.id,
         validUntilTime: context.gameState.time + 1,

@@ -19,6 +19,7 @@ export const treeChopProducer: TaskDefinition<TreeEntity> = {
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanChopTree,
+        position: tree.position,
         creatorEntityId: tree.id,
         target: tree.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

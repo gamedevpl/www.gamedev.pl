@@ -27,6 +27,7 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanAttackHuman,
+        position: human.position,
         creatorEntityId: human.id,
         target: human.id,
         validUntilTime: gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

@@ -17,6 +17,7 @@ export const humanEatDefinition = defineHumanTask<HumanEntity>({
       tasks[eatTaskId] = {
         id: eatTaskId,
         type: TaskType.HumanEat,
+        position: human.position,
         creatorEntityId: human.id,
         target: human.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

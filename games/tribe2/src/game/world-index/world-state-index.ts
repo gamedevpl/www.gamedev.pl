@@ -82,6 +82,7 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
           .filter((item) => item !== null),
         mapDimensions,
       ),
+      tasks: indexItems([], mapDimensions),
     },
     cache: {
       distances: {},
@@ -91,4 +92,8 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   };
 
   return indexedWorldState;
+}
+
+export function indexTasks(worldState: IndexedWorldState) {
+  worldState.search.tasks = indexItems(Object.values(worldState.tasks), worldState.mapDimensions);
 }

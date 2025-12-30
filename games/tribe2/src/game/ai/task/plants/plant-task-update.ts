@@ -8,6 +8,6 @@ import { plantTaskDefinitions } from './definitions';
  * Iterates through all plant task definitions and allows the entity to produce tasks
  * if a producer is defined for that task type.
  */
-export function updatePlantTaskAI(entity: PlantEntity, context: UpdateContext): void {
+export function preparePlantTaskAI(entity: PlantEntity, context: UpdateContext): void {
   produceEntityTasks<PlantEntity>(entity, context, Object.values(plantTaskDefinitions));
 }

@@ -8,10 +8,7 @@ import { BONFIRE_MAX_USERS } from '../../../../temperature/temperature-consts';
  * Producer for bonfire warmth-seeking tasks.
  * Generates tasks for tribe members to gather around fueled bonfires.
  */
-export const bonfireWarmthProducer = (
-  building: BuildingEntity,
-  context: UpdateContext,
-): Record<string, Task> => {
+export const bonfireWarmthProducer = (building: BuildingEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
 
   if (
@@ -26,6 +23,7 @@ export const bonfireWarmthProducer = (
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanSeekWarmth,
+        position: building.position,
         creatorEntityId: building.id,
         target: building.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

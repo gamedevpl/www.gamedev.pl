@@ -8,6 +8,7 @@ import { Vector2D } from '../utils/math-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { EntityId } from '../entities/entities-types';
+import { Task } from '../ai/task/task-types';
 
 /**
  * Defines a rectangle for spatial queries.
@@ -85,6 +86,7 @@ export interface IndexedWorldState extends GameWorldState {
     building: IndexType<BuildingEntity>;
     tree: IndexType<TreeEntity>;
     terrainOwnership: IndexType<{ ownerId: number | null }>;
+    tasks: IndexType<Task>;
   };
   cache: {
     distances: Record<EntityId, Record<EntityId, number>>;

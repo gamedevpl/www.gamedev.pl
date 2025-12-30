@@ -19,6 +19,7 @@ export const treeGatherWoodProducer: TaskDefinition<TreeEntity> = {
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanGatherWood,
+        position: tree.position,
         creatorEntityId: tree.id,
         target: tree.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

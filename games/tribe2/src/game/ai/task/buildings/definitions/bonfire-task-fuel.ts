@@ -4,10 +4,7 @@ import { Task, TaskType } from '../../task-types';
 import { UpdateContext } from '../../../../world-types';
 import { BONFIRE_REFUEL_THRESHOLD_RATIO } from '../../../../temperature/temperature-consts';
 
-export const bonfireFuelProducer = (
-  building: BuildingEntity,
-  context: UpdateContext,
-): Record<string, Task> => {
+export const bonfireFuelProducer = (building: BuildingEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
 
   if (
@@ -22,6 +19,7 @@ export const bonfireFuelProducer = (
     tasks[taskId] = {
       id: taskId,
       type: TaskType.HumanFuelBonfire,
+      position: building.position,
       creatorEntityId: building.id,
       target: building.id,
       validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

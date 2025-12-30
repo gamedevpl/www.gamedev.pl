@@ -1,6 +1,6 @@
 import { Entities, Entity, EntityId, EntityType } from './entities-types';
 import { UpdateContext } from '../world-types';
-import { entityUpdate } from './entity-update';
+import { entityUpdate, EntityUpdatePhase } from './entity-update';
 import { Vector2D } from '../utils/math-types';
 import { vectorAdd } from '../utils/math-utils';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
@@ -61,13 +61,26 @@ import {
 import { TREE_GROWING } from './plants/tree/states/tree-state-types';
 import { ItemType } from './item-types';
 import { BONFIRE_MAX_FUEL } from '../temperature/temperature-consts';
+import { indexTasks } from '../world-index/world-state-index.ts';
+import { IndexedWorldState } from '../world-index/world-index-types.ts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
   const state = updateContext.gameState.entities;
-  // First handle prey-to-carrion conversion
-  Object.values(state.entities).forEach((entity) => {
-    entityUpdate(entity, updateContext);
-  });
+  const allEntities = Object.values(state.entities);
+  // Mechanic update
+  for (const entity of allEntities) {
+    entityUpdate(entity, updateContext, EntityUpdatePhase.Physics);
+  }
+  // AI prepare
+  for (const entity of allEntities) {
+    entityUpdate(entity, updateContext, EntityUpdatePhase.PrepareAI);
+  }
+  // Index tasks
+  indexTasks(updateContext.gameState as IndexedWorldState);
+  // AI execute
+  for (const entity of allEntities) {
+    entityUpdate(entity, updateContext, EntityUpdatePhase.ExecuteAI);
+  }
 }
 
 export function createEntities(): Entities {

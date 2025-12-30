@@ -8,6 +8,6 @@ import { corpseTaskDefinitions } from './definitions';
  * Iterates through all corpse task definitions and allows the entity to produce tasks
  * if a producer is defined for that task type.
  */
-export function updateCorpseTaskAI(entity: CorpseEntity, context: UpdateContext): void {
+export function prepareCorpseTaskAI(entity: CorpseEntity, context: UpdateContext): void {
   produceEntityTasks<CorpseEntity>(entity, context, Object.values(corpseTaskDefinitions));
 }

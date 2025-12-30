@@ -6,8 +6,15 @@ import { MAX_TRIBE_ATTACKERS_PER_TARGET } from '../../../../ai-consts';
 export const animalHuntPredatorProducer = (entity: PredatorEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
 
-  if (entity.activeAction !== 'attacking') {
-    // do not touch predators that are not attacking anyone
+  if (entity.hitpoints <= 0) {
+    return tasks;
+  }
+
+  const targetEntity = entity.attackTargetId ? context.gameState.entities.entities[entity.attackTargetId] : undefined;
+  const isAttackingHuman = targetEntity?.type === 'human';
+
+  // A predator is a threat if it's attacking a human or is near the tribe's territory/members
+  if (!isAttackingHuman) {
     return tasks;
   }
 
@@ -16,6 +23,7 @@ export const animalHuntPredatorProducer = (entity: PredatorEntity, context: Upda
     tasks[taskId] = {
       id: taskId,
       type: TaskType.HumanHuntPredator,
+      position: entity.position,
       creatorEntityId: entity.id,
       target: entity.id,
       validUntilTime: context.gameState.time + 1,

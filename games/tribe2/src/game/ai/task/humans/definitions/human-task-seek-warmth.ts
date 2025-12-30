@@ -7,6 +7,7 @@ import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
 import { Vector2D } from '../../../../utils/math-types';
+import { getDaylightFactor } from '../../../../utils/time-utils';
 
 /**
  * Human task definition for seeking warmth at a bonfire.
@@ -19,8 +20,17 @@ export const humanSeekWarmthDefinition = defineHumanTask<HumanEntity>({
       return null;
     }
 
+    if (getDaylightFactor(context.gameState.time) > 0.5) {
+      return null;
+    }
+
     const building = context.gameState.entities.entities[task.target] as BuildingEntity | undefined;
-    if (!building || building.buildingType !== BuildingType.Bonfire || !building.isConstructed) {
+    if (
+      !building ||
+      building.buildingType !== BuildingType.Bonfire ||
+      !building.isConstructed ||
+      (building.fuelLevel ?? 0) <= 0
+    ) {
       return null;
     }
 

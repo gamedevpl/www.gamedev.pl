@@ -29,6 +29,7 @@ export const humanProcreateMaleDefinition = defineHumanTask<HumanEntity>({
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanProcreateMale,
+        position: human.position,
         creatorEntityId: human.id,
         target: human.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

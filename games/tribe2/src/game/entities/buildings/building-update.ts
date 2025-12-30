@@ -12,7 +12,7 @@ import {
   BONFIRE_FUEL_PER_WOOD,
 } from '../../temperature/temperature-consts';
 import { ItemType } from '../item-types';
-import { updateBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
+import { prepareBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
 
 /**
  * Updates the state of a building entity.
@@ -60,12 +60,12 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     if (building.constructionProgress >= 1) {
       building.constructionProgress = 1;
       building.isConstructed = true;
-      
+
       // Paint terrain ownership when construction completes
       if (building.ownerId) {
         paintTerrainOwnership(building.position, TERRITORY_BUILDING_RADIUS, building.ownerId, gameState);
       }
-      
+
       // Update planting zone connections when a planting zone completes construction
       if (building.buildingType === BuildingType.PlantingZone) {
         updatePlantingZoneConnections(gameState);
@@ -92,5 +92,5 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     }
   }
 
-  updateBuildingTaskAI(building, updateContext);
+  prepareBuildingTaskAI(building, updateContext);
 }

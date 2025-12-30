@@ -5,8 +5,6 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
-import { TribeRole } from '../../../../entities/tribe/tribe-types';
-import { isTribeRole } from '../../../../entities/tribe/tribe-role-utils';
 import { AI_HUNTING_MAX_CHASE_DISTANCE_FROM_CENTER } from '../../../../ai-consts';
 import { getTribeCenter } from '../../../../utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
@@ -20,11 +18,6 @@ export const humanHuntPreyDefinition = defineHumanTask<HumanEntity>({
 
     const prey = context.gameState.entities.entities[task.target] as PreyEntity | undefined;
     if (!prey || prey.type !== 'prey' || prey.hitpoints <= 0) return null;
-
-    // Only hunters should hunt by default unless desperate (handled by high-level AI)
-    if (human.leaderId && !isTribeRole(human, TribeRole.Hunter, context.gameState)) {
-      return null;
-    }
 
     // Check operating range
     if (human.leaderId && !isWithinOperatingRange(prey.position, human.leaderId, context.gameState)) {
@@ -53,7 +46,8 @@ export const humanHuntPreyDefinition = defineHumanTask<HumanEntity>({
     const distanceFactor = getDistanceScore(distance);
     const hungerFactor = human.hunger / HUMAN_HUNGER_DEATH;
 
-    return (distanceFactor + hungerFactor) / 2;
+    // Multiply by 0.6 to lower priority compared to gathering
+    return ((distanceFactor + hungerFactor) / 2) * 0.6;
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') return [TaskResult.Failure, 'Invalid target'];

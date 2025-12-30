@@ -3,10 +3,7 @@ import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { Task, TaskType } from '../../task-types';
 import { UpdateContext } from '../../../../world-types';
 
-export const storageStockpileProducer = (
-  building: BuildingEntity,
-  context: UpdateContext,
-): Record<string, Task> => {
+export const storageStockpileProducer = (building: BuildingEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
 
   if (
@@ -19,6 +16,7 @@ export const storageStockpileProducer = (
     tasks[taskId] = {
       id: taskId,
       type: TaskType.HumanStockpile,
+      position: building.position,
       creatorEntityId: building.id,
       target: building.id,
       validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

@@ -1,7 +1,12 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { UpdateContext } from '../../../world-types';
 import { executeTask, getCurrentTask, produceEntityTasks, setCurrentTask } from '../task-utils';
 import { humanTaskDefinitions, humanTaskDefinitionList } from './definitions';
+
+export function prepareHumanTaskAI(entity: HumanEntity, context: UpdateContext): void {
+  produceEntityTasks<HumanEntity>(entity, context, humanTaskDefinitionList);
+}
 
 export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): void {
   // 1. Manual Control Override
@@ -16,8 +21,6 @@ export function updateHumanTaskAI(human: HumanEntity, context: UpdateContext): v
     }
     return;
   }
-
-  produceEntityTasks<HumanEntity>(human, context, humanTaskDefinitionList);
 
   let currentTaskId = getCurrentTask(human);
 
@@ -61,10 +64,10 @@ function pickTaskForHuman(human: HumanEntity, context: UpdateContext): string | 
   let bestTaskId: string | null = null;
   let bestScore = -Infinity;
 
-  for (const taskId in context.gameState.tasks) {
-    const task = context.gameState.tasks[taskId];
-    if (!task || task.validUntilTime < context.gameState.time) {
-      delete context.gameState.tasks[task.id];
+  const closeTasks = (context.gameState as IndexedWorldState).search.tasks.byRadius(human.position, 800);
+
+  for (let task of closeTasks) {
+    if (!task) {
       continue;
     }
 

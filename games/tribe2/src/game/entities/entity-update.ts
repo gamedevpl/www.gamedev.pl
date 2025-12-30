@@ -17,19 +17,40 @@ import { BuildingEntity } from './buildings/building-types';
 import { applySoilWalkDepletion } from './plants/soil-depletion-update';
 import { treeUpdate } from './plants/tree/tree-update';
 import { TreeEntity } from './plants/tree/tree-types';
-import { updatePlantTaskAI } from '../ai/task/plants/plant-task-update';
-import { updateCorpseTaskAI } from '../ai/task/corpse/corpse-task-update';
-import { updateAnimalTaskAI } from '../ai/task/animals/animal-task-update';
+import { preparePlantTaskAI } from '../ai/task/plants/plant-task-update';
+import { prepareCorpseTaskAI } from '../ai/task/corpse/corpse-task-update';
+import { prepareAnimalTaskAI } from '../ai/task/animals/animal-task-update';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
-import { updateBuildingTaskAI } from '../ai/task/buildings/building-task-update';
+import { prepareBuildingTaskAI } from '../ai/task/buildings/building-task-update';
+import { prepareHumanTaskAI } from '../ai/task/humans/human-task-update';
+import { Blackboard, BlackboardData } from '../ai/behavior-tree/behavior-tree-blackboard';
+import { AI_UPDATE_INTERVAL } from '../ai-consts';
 
-export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
+export enum EntityUpdatePhase {
+  Physics,
+  PrepareAI,
+  ExecuteAI,
+}
+
+export function entityUpdate(entity: Entity, updateContext: UpdateContext, phase: EntityUpdatePhase) {
+  switch (phase) {
+    case EntityUpdatePhase.Physics:
+      entityPhysicsUpdate(entity, updateContext);
+      break;
+    case EntityUpdatePhase.PrepareAI:
+      prepareEntityAIUpdate(entity, updateContext);
+      break;
+    case EntityUpdatePhase.ExecuteAI:
+      if ('aiBlackboard' in entity) {
+        executeEntityAIUpdate(entity as Entity & { aiBlackboard: BlackboardData }, updateContext);
+      }
+      break;
+  }
+}
+
+function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
   // Apply friction/damping
   entity.forces.push(vectorScale(entity.velocity, -0.1));
-
-  // Boundary forces are removed as the world now wraps
-  // const boundaryForce = calculateBoundaryForce(entity.position, BOUNDARY_FORCE_RANGE, BOUNDARY_FORCE_STRENGTH);
-  // entity.forces.push(boundaryForce);
 
   // Apply acceleration force based on direction
   const accelerationForce = vectorScale(vectorNormalize(entity.direction), entity.acceleration);
@@ -96,37 +117,67 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext) {
     humanUpdate(entity as HumanEntity, updateContext, updateContext.deltaTime);
   } else if (entity.type === 'corpse') {
     corpseUpdate(entity as CorpseEntity, updateContext);
-    updateCorpseTaskAI(entity as CorpseEntity, updateContext);
   } else if (entity.type === 'prey') {
     preyUpdate(entity as PreyEntity, updateContext, updateContext.deltaTime);
-    updateAnimalTaskAI(entity as PreyEntity, updateContext);
   } else if (entity.type === 'predator') {
     predatorUpdate(entity as PredatorEntity, updateContext, updateContext.deltaTime);
-    updateAnimalTaskAI(entity as PredatorEntity, updateContext);
   } else if (entity.type === 'building') {
     buildingUpdate(entity as BuildingEntity, updateContext);
-    updateBuildingTaskAI(entity as BuildingEntity, updateContext);
   } else if (entity.type === 'tree') {
     treeUpdate(entity as TreeEntity, updateContext);
-    updatePlantTaskAI(entity as TreeEntity, updateContext);
   } else if (entity.type === 'berryBush') {
-    updatePlantTaskAI(entity as BerryBushEntity, updateContext);
-  }
-
-  // AI decision making for all humans (player and non-player)
-  if (entity.type === 'human') {
-    humanAIUpdate(entity as HumanEntity, updateContext);
-  }
-
-  // AI decision making for animals
-  if (entity.type === 'prey') {
-    preyAIUpdate(entity as PreyEntity, updateContext);
-  } else if (entity.type === 'predator') {
-    predatorAIUpdate(entity as PredatorEntity, updateContext);
+    // no physics update needed for berry bush, handled by state machine
   }
 
   // Update state machine if present
   if (entity.stateMachine) {
     entity.stateMachine = stateUpdate(...entity.stateMachine, { entity, updateContext });
   }
+}
+
+function prepareEntityAIUpdate(entity: Entity, updateContext: UpdateContext) {
+  if (entity.type === 'human') {
+    prepareHumanTaskAI(entity as HumanEntity, updateContext);
+  } else if (entity.type === 'corpse') {
+    prepareCorpseTaskAI(entity as CorpseEntity, updateContext);
+  } else if (entity.type === 'prey') {
+    prepareAnimalTaskAI(entity as PreyEntity, updateContext);
+  } else if (entity.type === 'predator') {
+    prepareAnimalTaskAI(entity as PredatorEntity, updateContext);
+  } else if (entity.type === 'building') {
+    prepareBuildingTaskAI(entity as BuildingEntity, updateContext);
+  } else if (entity.type === 'tree') {
+    preparePlantTaskAI(entity as TreeEntity, updateContext);
+  } else if (entity.type === 'berryBush') {
+    preparePlantTaskAI(entity as BerryBushEntity, updateContext);
+  }
+}
+
+function executeEntityAIUpdate(entity: Entity & { aiBlackboard: BlackboardData }, updateContext: UpdateContext) {
+  const lastAiUpdateTime: number = Blackboard.get(entity.aiBlackboard, 'lastAiUpdateTime') ?? 0;
+  if (
+    updateContext.gameState.time - lastAiUpdateTime + ((Math.random() - Math.random()) * AI_UPDATE_INTERVAL) / 10 <=
+    AI_UPDATE_INTERVAL
+  ) {
+    return;
+  }
+
+  Blackboard.cleanupOldEntries(entity.aiBlackboard, updateContext.gameState.time);
+
+  if (entity.type === 'human') {
+    humanAIUpdate(entity as HumanEntity, updateContext);
+  } else if (entity.type === 'corpse') {
+    // Corpses currently have no active AI execution phase
+  } else if (entity.type === 'prey') {
+    preyAIUpdate(entity as PreyEntity, updateContext);
+  } else if (entity.type === 'predator') {
+    predatorAIUpdate(entity as PredatorEntity, updateContext);
+  } else if (entity.type === 'building') {
+    // Buildings currently have no active AI execution phase
+  } else if (entity.type === 'tree') {
+    // Trees currently have no active AI execution phase
+  } else if (entity.type === 'berryBush') {
+    // Berry bushes currently have no active AI execution phase
+  }
+  Blackboard.set(entity.aiBlackboard, 'lastAiUpdateTime', updateContext.gameState.time);
 }

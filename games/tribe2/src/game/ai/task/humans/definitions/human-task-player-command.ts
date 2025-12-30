@@ -90,6 +90,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanPlayerCommand,
+        position: human.position,
         creatorEntityId: human.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,
       };
@@ -192,7 +193,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         human.activeAction = 'gathering';
         human.target = target.id;
         gameState.autopilotControls.activeAutopilotAction = undefined;
-        return [TaskResult.Success, 'At target, gathering', getWaitTask(human.id, gameState.time)];
+        return [TaskResult.Success, 'At target, gathering', getWaitTask(human, gameState.time)];
       }
 
       // --- CHOP ---
@@ -233,7 +234,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
         human.activeAction = 'chopping';
         human.target = tree.id;
         gameState.autopilotControls.activeAutopilotAction = undefined;
-        return [TaskResult.Success, 'At tree, chopping', getWaitTask(human.id, gameState.time)];
+        return [TaskResult.Success, 'At tree, chopping', getWaitTask(human, gameState.time)];
       }
 
       // --- ATTACK ---
@@ -417,7 +418,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'depositing';
           human.target = undefined;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return [TaskResult.Success, 'Depositing items', getWaitTask(human.id, gameState.time)];
+          return [TaskResult.Success, 'Depositing items', getWaitTask(human, gameState.time)];
         }
 
         human.activeAction = 'moving';
@@ -468,7 +469,7 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           human.activeAction = 'retrieving';
           human.target = undefined;
           gameState.autopilotControls.activeAutopilotAction = undefined;
-          return [TaskResult.Success, 'Retrieving items', getWaitTask(human.id, gameState.time)];
+          return [TaskResult.Success, 'Retrieving items', getWaitTask(human, gameState.time)];
         }
 
         human.activeAction = 'moving';

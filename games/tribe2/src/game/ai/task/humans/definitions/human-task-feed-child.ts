@@ -22,6 +22,7 @@ export const humanFeedChildDefinition = defineHumanTask<HumanEntity>({
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanFeedChild,
+        position: child.position,
         creatorEntityId: child.id,
         target: child.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

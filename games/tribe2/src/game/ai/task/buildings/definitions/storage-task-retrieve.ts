@@ -6,10 +6,7 @@ import { UpdateContext } from '../../../../world-types';
 /**
  * Produces a retrieval task if the storage spot has food.
  */
-export const storageRetrieveProducer = (
-  building: BuildingEntity,
-  context: UpdateContext,
-): Record<string, Task> => {
+export const storageRetrieveProducer = (building: BuildingEntity, context: UpdateContext): Record<string, Task> => {
   const tasks: Record<string, Task> = {};
 
   if (
@@ -22,6 +19,7 @@ export const storageRetrieveProducer = (
     tasks[taskId] = {
       id: taskId,
       type: TaskType.HumanRetrieve,
+      position: building.position,
       creatorEntityId: building.id,
       target: building.id,
       validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

@@ -12,6 +12,7 @@ export const corpseGatherProducer: TaskDefinition<CorpseEntity> = {
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanGatherMeat,
+        position: corpse.position,
         creatorEntityId: corpse.id,
         target: corpse.id,
         validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,

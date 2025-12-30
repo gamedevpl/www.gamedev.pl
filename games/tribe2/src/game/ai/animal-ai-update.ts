@@ -6,7 +6,7 @@ import { UpdateContext } from '../world-types';
 import { buildPreyBehaviorTree } from './behavior-tree/prey-behavior-tree';
 import { buildPredatorBehaviorTree } from './behavior-tree/predator-behavior-tree';
 import { AIType } from './ai-types';
-import { updateAnimalTaskAI } from './task/animals/animal-task-update';
+import { prepareAnimalTaskAI } from './task/animals/animal-task-update';
 
 export const preyBehaviorTree = buildPreyBehaviorTree();
 
@@ -20,7 +20,7 @@ export function preyAIUpdate(prey: PreyEntity, context: UpdateContext): void {
   // while maintaining type safety through the interface constraints.
   switch (prey.aiType) {
     case AIType.TaskBased:
-      updateAnimalTaskAI(prey, context);
+      prepareAnimalTaskAI(prey, context);
       break;
     case AIType.BehaviorTreeBased:
     default:
@@ -38,7 +38,7 @@ export const predatorBehaviorTree = buildPredatorBehaviorTree();
 export function predatorAIUpdate(predator: PredatorEntity, context: UpdateContext): void {
   switch (predator.aiType) {
     case AIType.TaskBased:
-      updateAnimalTaskAI(predator, context);
+      prepareAnimalTaskAI(predator, context);
       break;
     case AIType.BehaviorTreeBased:
     default:

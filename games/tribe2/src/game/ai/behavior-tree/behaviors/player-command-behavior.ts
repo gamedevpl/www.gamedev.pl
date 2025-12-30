@@ -28,6 +28,7 @@ import {
 import { canProcreate, isPositionOccupied, isEnemyBuilding } from '../../../utils';
 import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
 import { ItemType } from '../../../entities/item-types';
+import { CorpseEntity } from '../../../entities/characters/corpse-types.ts';
 
 /**
  * Shared autopilot attack behavior logic used by multiple action types.
@@ -153,7 +154,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
               if (target.type === 'berryBush') {
                 isDepleted = (target as BerryBushEntity).food.length === 0;
               } else if (target.type === 'corpse') {
-                isDepleted = (target as any).food.length === 0;
+                isDepleted = (target as CorpseEntity).food.length === 0;
               } else if (target.type === 'tree') {
                 const tree = target as TreeEntity;
                 isDepleted = tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0;

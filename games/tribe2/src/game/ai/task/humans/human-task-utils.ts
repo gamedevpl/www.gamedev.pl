@@ -53,6 +53,7 @@ export function defineHumanTask<T extends HumanEntity>(options: {
             {
               id: `player-command-${entity.id}`,
               type: TaskType.HumanPlayerCommand,
+              position: entity.position,
               creatorEntityId: entity.id,
               validUntilTime: context.gameState.time + TASK_DEFAULT_VALIDITY_DURATION,
             },
