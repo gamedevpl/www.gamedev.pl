@@ -18,7 +18,7 @@ import {
   BONFIRE_REFUEL_THRESHOLD_RATIO,
   BONFIRE_STORAGE_CAPACITY,
 } from '../../temperature/temperature-consts';
-import { isWithinOperatingRange } from './territory-utils';
+import { isWithinOperatingRange, getOwnerOfPoint } from './territory-utils';
 import { TREE_FALLEN } from '../plants/tree/states/tree-state-types';
 
 const STORAGE_SEARCH_RADIUS = 500; // Max distance for storage spot assignment
@@ -212,7 +212,7 @@ export function getTribeAvailableWoodOnGround(leaderId: EntityId, gameState: Gam
 
   const fallenTrees = indexedState.search.tree.all().filter((tree) => {
     // Check if tree is fallen
-    const isFallen = tree.stateMachine?.[0] === TREE_FALLEN;
+    const isFallen = tree.stateMachine[0] === TREE_FALLEN;
     if (!isFallen || tree.wood.length === 0) return false;
 
     // Check if tree is within tribe's operating range
@@ -262,9 +262,7 @@ function getProductiveBushCount(leaderId: EntityId, gameState: GameWorldState): 
 
   // Find all bushes near the tribe center
   const nearbyBushes = indexedState.search.berryBush.all().filter((bush) => {
-    return indexedState.search.terrainOwnership
-      .byRadius(bush.position, bush.radius)
-      .some((territory) => territory.ownerId === leaderId);
+    return getOwnerOfPoint(bush.position.x, bush.position.y, gameState) === leaderId;
   });
 
   // Count bushes that are productive (not dying and have food)

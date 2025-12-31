@@ -157,7 +157,7 @@ export function createPlayerCommandBehavior(depth: number): BehaviorNode<HumanEn
                 isDepleted = (target as CorpseEntity).food.length === 0;
               } else if (target.type === 'tree') {
                 const tree = target as TreeEntity;
-                isDepleted = tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0;
+                isDepleted = tree.stateMachine[0] !== TREE_FALLEN || tree.wood.length === 0;
               } else {
                 gameState.autopilotControls.activeAutopilotAction = undefined;
                 return NodeStatus.FAILURE;

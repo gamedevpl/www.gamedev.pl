@@ -121,7 +121,7 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
       // Search for wood sources (fallen trees)
       const findWood = () => {
         return findClosestEntity<TreeEntity>(human, context.gameState, 'tree', AI_GATHERING_SEARCH_RADIUS, (tree) => {
-          if (tree.stateMachine?.[0] !== TREE_FALLEN || tree.wood.length === 0) return false;
+          if (tree.stateMachine[0] !== TREE_FALLEN || tree.wood.length === 0) return false;
           if (human.leaderId && !isWithinOperatingRange(tree.position, human.leaderId, context.gameState)) return false;
           if (leader && leader.aiBlackboard) {
             const taskKey = `tribal_gather_${tree.id}`;
@@ -255,9 +255,9 @@ export function createGatheringBehavior(depth: number): BehaviorNode<HumanEntity
             (human.isAdult && (canGatherFood || canGatherWood)) ?? false,
             `${isHungryEnough ? 'Hungry ' : ''}${
               hungryChildren.length > 0 ? 'Children(' + hungryChildren.length + ') ' : ''
-            }${woodNeed > 0 ? 'WoodNeed(' + woodNeed + ') ' : ''}${
-              canGatherWood && woodNeed <= 0 ? 'Wood ' : ''
-            }${hasNonFullStorage ? 'Storage' : ''}`,
+            }${woodNeed > 0 ? 'WoodNeed(' + woodNeed + ') ' : ''}${canGatherWood && woodNeed <= 0 ? 'Wood ' : ''}${
+              hasNonFullStorage ? 'Storage' : ''
+            }`,
           ];
         },
         'Should Gather Resources',

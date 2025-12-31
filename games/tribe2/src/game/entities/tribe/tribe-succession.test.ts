@@ -3,6 +3,7 @@ import { HumanEntity } from '../characters/human/human-types';
 import { GameWorldState } from '../../world-types';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { checkAndExecuteTribeMerges, getTribesInfo } from './family-tribe-utils';
+import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
 
 // Mock territory utils
 vi.mock('./territory-utils', async () => {
@@ -37,15 +38,15 @@ describe('Tribe Succession', () => {
     indexedState.search = {
       human: {
         all: () => Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[],
-        byProperty: (prop: string, value: any) =>
+        byProperty: (prop: string, value: unknown) =>
           Object.values(gameState.entities.entities).filter(
-            (e) => e.type === 'human' && (e as any)[prop] === value,
+            (e) => e.type === 'human' && (e as Record<string, unknown>)[prop] === value,
           ) as HumanEntity[],
       },
       building: {
         byProperty: () => [],
       },
-    } as any;
+    } as unknown as IndexedWorldState['search'];
   });
 
   function addHuman(human: Partial<HumanEntity>): HumanEntity {
@@ -55,6 +56,16 @@ describe('Tribe Succession', () => {
       partnerIds: [],
       food: [],
       isAdult: true,
+      hitpoints: 100,
+      maxHitpoints: 100,
+      gender: 'male',
+      stateMachine: [
+        '',
+        {
+          enteredAt: 0,
+        },
+      ],
+      aiBlackboard: Blackboard.create(),
       ...human,
     } as HumanEntity;
     gameState.entities.entities[h.id] = h;

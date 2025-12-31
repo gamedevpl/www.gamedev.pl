@@ -13,7 +13,7 @@ export const TRIBE_SPLIT_COOLDOWN_AFTER_FAILURE_HOURS = 72; // Cooldown after a 
 export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 
 // Tribe control constants
-export const TRIBE_BUILDINGS_MIN_HEADCOUNT = 5; // Minimum headcount to allow building placement
+export const TRIBE_BUILDINGS_MIN_HEADCOUNT = 2; // Minimum headcount to allow building placement
 export const TRIBE_ROLES_EFFECTIVE_MIN_HEADCOUNT = 10; // Minimum headcount for roles to be effective
 export const TRIBE_ARMY_CONTROL_MIN_HEADCOUNT = 15; // Minimum headcount to enable army control
 

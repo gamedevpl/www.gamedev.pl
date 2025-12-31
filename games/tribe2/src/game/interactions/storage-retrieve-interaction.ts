@@ -24,7 +24,7 @@ export const storageRetrieveInteraction: InteractionDefinition<HumanEntity, Buil
       return false;
     }
 
-    if (source.stateMachine?.[0] !== HUMAN_RETRIEVING) {
+    if (source.stateMachine[0] !== HUMAN_RETRIEVING) {
       return false;
     }
 

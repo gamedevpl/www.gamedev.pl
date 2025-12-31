@@ -65,21 +65,24 @@ import { indexTasks } from '../world-index/world-state-index.ts';
 import { IndexedWorldState } from '../world-index/world-index-types.ts';
 
 export function entitiesUpdate(updateContext: UpdateContext): void {
-  const state = updateContext.gameState.entities;
-  const allEntities = Object.values(state.entities);
+  const entities = updateContext.gameState.entities.entities;
+
   // Mechanic update
-  for (const entity of allEntities) {
-    entityUpdate(entity, updateContext, EntityUpdatePhase.Physics);
+  for (const id in entities) {
+    entityUpdate(entities[id], updateContext, EntityUpdatePhase.Physics);
   }
+
   // AI prepare
-  for (const entity of allEntities) {
-    entityUpdate(entity, updateContext, EntityUpdatePhase.PrepareAI);
+  for (const id in entities) {
+    entityUpdate(entities[id], updateContext, EntityUpdatePhase.PrepareAI);
   }
+
   // Index tasks
   indexTasks(updateContext.gameState as IndexedWorldState);
+
   // AI execute
-  for (const entity of allEntities) {
-    entityUpdate(entity, updateContext, EntityUpdatePhase.ExecuteAI);
+  for (const id in entities) {
+    entityUpdate(entities[id], updateContext, EntityUpdatePhase.ExecuteAI);
   }
 }
 
@@ -95,7 +98,19 @@ function createEntity<T extends Entity>(
   state: Entities,
   type: EntityType,
   initialState: Partial<Entity> &
-    Omit<T, 'id' | 'type' | 'velocity' | 'forces' | 'direction' | 'targetDirection' | 'acceleration' | 'debuffs'>,
+    Omit<
+      T,
+      | 'id'
+      | 'type'
+      | 'velocity'
+      | 'forces'
+      | 'direction'
+      | 'targetDirection'
+      | 'acceleration'
+      | 'debuffs'
+      | 'stateMachine'
+      | 'aiBlackboard'
+    >,
 ): T {
   const entity: Entity = {
     id: state.nextEntityId++,
@@ -105,6 +120,8 @@ function createEntity<T extends Entity>(
     acceleration: 0,
     forces: [],
     debuffs: [],
+    stateMachine: [],
+    aiBlackboard: Blackboard.create(),
     ...initialState,
   };
   state.entities[entity.id] = entity;
@@ -129,6 +146,7 @@ export function createBerryBush(state: Entities, initialPosition: Vector2D, curr
     timeSinceLastBerryRegen: 0,
     timeSinceLastSpreadAttempt: 0,
     timeSinceLastHarvest: 0,
+    aiBlackboard: Blackboard.create(),
     stateMachine: [BUSH_GROWING, { enteredAt: currentTime, previousState: undefined }],
   });
   return bush;
@@ -151,6 +169,7 @@ export function createTree(
     timeSinceLastSpreadAttempt: 0,
     spreadRadius: TREE_SPREAD_RADIUS,
     stateMachine: [TREE_GROWING, { enteredAt: currentTime, previousState: undefined }],
+    aiBlackboard: Blackboard.create(),
     wood: isMature
       ? Array.from({ length: TREE_MAX_WOOD }, () => ({
           itemType: 'item',
@@ -266,6 +285,7 @@ function createCorpse(
     ].map((f) => ({ ...f, id: state.nextEntityId++ })),
     // Corpses don't have these properties, so set to default/null values
     stateMachine: undefined,
+    aiBlackboard: Blackboard.create(),
   });
   return corpse;
 }
@@ -491,6 +511,8 @@ export function createBuilding(
     lastStealTime: 0,
     fuelLevel: buildingType === BuildingType.Bonfire ? BONFIRE_MAX_FUEL : undefined,
     maxFuelLevel: buildingType === BuildingType.Bonfire ? BONFIRE_MAX_FUEL : undefined,
+    aiBlackboard: Blackboard.create(),
+    stateMachine: ['', { enteredAt: 0 }],
   };
 
   // Add storage-specific properties for storage spots

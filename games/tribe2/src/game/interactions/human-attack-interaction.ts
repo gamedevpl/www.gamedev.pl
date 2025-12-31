@@ -42,7 +42,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
   maxDistance: HUMAN_ATTACK_RANGED_RANGE,
 
   checker: (source, target, context) => {
-    if (source.stateMachine?.[0] !== HUMAN_ATTACKING || source.attackTargetId !== target.id) {
+    if (source.stateMachine[0] !== HUMAN_ATTACKING || source.attackTargetId !== target.id) {
       return false;
     }
 

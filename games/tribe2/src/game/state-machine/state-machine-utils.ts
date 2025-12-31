@@ -58,5 +58,7 @@ export function isStateTransitionNeeded(currentStateType: StateType, nextStateTy
  * @param stateType State type that was not found
  */
 export function logStateHandlerNotFound(stateType: StateType): void {
-  console.warn(`No handler found for state: ${stateType}`);
+  if (stateType) {
+    console.warn(`No handler found for state: ${stateType}`);
+  }
 }

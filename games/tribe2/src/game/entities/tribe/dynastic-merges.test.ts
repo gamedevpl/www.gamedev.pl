@@ -38,15 +38,15 @@ describe('Dynastic Tribe Merges', () => {
     indexedState.search = {
       human: {
         all: () => Object.values(gameState.entities.entities).filter((e) => e.type === 'human') as HumanEntity[],
-        byProperty: (prop: string, value: any) =>
+        byProperty: (prop: string, value: unknown) =>
           Object.values(gameState.entities.entities).filter(
-            (e) => e.type === 'human' && (e as any)[prop] === value,
+            (e) => e.type === 'human' && (e as Record<string, unknown>)[prop] === value,
           ) as HumanEntity[],
       },
       building: {
         byProperty: () => [],
       },
-    } as any;
+    } as unknown as IndexedWorldState['search'];
   });
 
   function addHuman(human: Partial<HumanEntity>): HumanEntity {
@@ -154,7 +154,7 @@ describe('Dynastic Tribe Merges', () => {
 
     // Case 2: Tribe is empty -> Dissolution
     delete gameState.entities.entities[11]; // Member dies, tribe is now extinct
-    
+
     checkAndExecuteTribeMerges(gameState);
     // Should dissolve (clear territory)
     expect(territoryUtils.replaceOwnerInTerrainOwnership).toHaveBeenCalledWith(gameState, 1, null);

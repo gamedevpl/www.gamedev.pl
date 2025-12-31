@@ -4,7 +4,7 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
-import { getOwnerOfPoint, isHostile } from '../../../../utils';
+import { getOwnerOfPoint, isHostile, isTribeHostile } from '../../../../utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 
 export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
@@ -15,9 +15,9 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
     const { gameState } = context;
     const tasks: Record<string, Task> = {};
 
-    // 1. Trespassing check
+    // 1. Trespassing check - only care if the owner is hostile
     const ownerId = getOwnerOfPoint(human.position.x, human.position.y, gameState);
-    const isTrespassing = ownerId !== null && ownerId !== human.leaderId;
+    const isTrespassing = ownerId !== null && ownerId !== human.leaderId && isTribeHostile(human.leaderId, ownerId, gameState);
 
     // 2. Aggression check (attacking someone else)
     const isAggressive = human.activeAction === 'attacking' && human.attackTargetId !== undefined;
@@ -50,8 +50,10 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
     // Check if we have a reason to attack
     const isTargetHostile = isHostile(attacker, target, gameState);
     const isTargetTrespassing = getOwnerOfPoint(target.position.x, target.position.y, gameState) === attacker.leaderId;
+    const isTargetAggressive = target.activeAction === 'attacking' && target.attackTargetId !== undefined;
 
-    if (!isTargetHostile && !isTargetTrespassing) {
+    // Only attack if hostile or aggressive. Peaceful trespassers from non-hostile tribes are ignored.
+    if (!isTargetHostile && !isTargetAggressive) {
       return null;
     }
 
@@ -66,8 +68,8 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
 
     const distanceFactor = getDistanceScore(distance);
 
-    // If trespassing in our territory, high priority
-    if (isTargetTrespassing) {
+    // If trespassing in our territory AND hostile, high priority
+    if (isTargetTrespassing && isTargetHostile) {
       baseScore += 0.1;
     }
 

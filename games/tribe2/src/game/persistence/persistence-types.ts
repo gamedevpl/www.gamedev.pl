@@ -34,7 +34,7 @@ export type StrictJson<T> =
   T extends { toJSON(): infer R }
     ? StrictJson<R>
     : // 2. Primitives are allowed
-    T extends string | number | boolean | null
+    T extends string | number | boolean | null | undefined
     ? T
     : // 3. Tuples: Check for fixed-length arrays BEFORE generic arrays
     // (Add more lines here if you have longer tuples)

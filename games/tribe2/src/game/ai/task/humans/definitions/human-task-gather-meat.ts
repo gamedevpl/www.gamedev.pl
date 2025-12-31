@@ -5,6 +5,7 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
+import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 
 export const humanGatherMeatDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherMeat,
@@ -17,6 +18,11 @@ export const humanGatherMeatDefinition = defineHumanTask<HumanEntity>({
 
     const corpse = context.gameState.entities.entities[task.target] as CorpseEntity | undefined;
     if (!corpse || corpse.type !== 'corpse' || corpse.food.length === 0) {
+      return null;
+    }
+
+    // Check operating range
+    if (human.leaderId && !isWithinOperatingRange(corpse.position, human.leaderId, context.gameState)) {
       return null;
     }
 

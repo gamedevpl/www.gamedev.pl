@@ -2,8 +2,9 @@ import { Entity, EntityId, EntityType } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { calculateWrappedDistance } from './math-utils';
+import { calculateWrappedDistance, calculateWrappedDistanceSq } from './math-utils';
 import { Vector2D } from './math-types';
+import { getTribeCenter } from './spatial-utils';
 
 export function findClosestEntity<T extends Entity>(
   sourceEntityOrPosition: Entity | Vector2D,
@@ -93,7 +94,7 @@ export function findClosestAggressor(targetId: EntityId, gameState: GameWorldSta
 }
 
 export function findAllHumans(gameState: GameWorldState): HumanEntity[] {
-  return Object.values(gameState.entities.entities).filter((entity) => entity.type === 'human') as HumanEntity[];
+  return (gameState as IndexedWorldState).search.human.all();
 }
 
 export function findEntityAtPosition(
@@ -128,42 +129,42 @@ export function isLocationTooCloseToOtherTribes(
   myLeaderId: EntityId | undefined,
   minDistance: number,
   gameState: GameWorldState,
+  otherTribeCenters?: Vector2D[],
 ): boolean {
-  const humans = findAllHumans(gameState);
-  const otherTribeCenters: Record<string, { sumX: number; sumY: number; count: number }> = {};
+  const { width, height } = gameState.mapDimensions;
+  const minDistanceSq = minDistance * minDistance;
 
-  // Group humans by tribe to calculate approximate centers
-  for (const human of humans) {
-    if (!human.leaderId || human.leaderId === myLeaderId) continue;
-
-    if (!otherTribeCenters[human.leaderId]) {
-      otherTribeCenters[human.leaderId] = { sumX: 0, sumY: 0, count: 0 };
+  if (otherTribeCenters) {
+    for (let i = 0; i < otherTribeCenters.length; i++) {
+      const distSq = calculateWrappedDistanceSq(location, otherTribeCenters[i], width, height);
+      if (distSq < minDistanceSq) {
+        return true;
+      }
     }
-    // Note: Using simple average for center calculation.
-    // This is an approximation that might be slightly off for tribes spanning the world seam,
-    // but sufficient for general proximity checks.
-    otherTribeCenters[human.leaderId].sumX += human.position.x;
-    otherTribeCenters[human.leaderId].sumY += human.position.y;
-    otherTribeCenters[human.leaderId].count++;
+    return false;
   }
 
-  for (const tribeId in otherTribeCenters) {
-    const data = otherTribeCenters[tribeId];
-    const center: Vector2D = {
-      x: data.sumX / data.count,
-      y: data.sumY / data.count,
-    };
+  const humans = findAllHumans(gameState);
+  const leaderIds = new Set<EntityId>();
 
-    const dist = calculateWrappedDistance(
-      location,
-      center,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
+  for (let i = 0; i < humans.length; i++) {
+    const human = humans[i];
+    if (human.leaderId && human.leaderId !== myLeaderId) {
+      leaderIds.add(human.leaderId);
+    }
+  }
 
-    if (dist < minDistance) {
+  const it = leaderIds.values();
+  let result = it.next();
+  while (!result.done) {
+    const leaderId = result.value;
+    const center = getTribeCenter(leaderId, gameState);
+    const distSq = calculateWrappedDistanceSq(location, center, width, height);
+
+    if (distSq < minDistanceSq) {
       return true;
     }
+    result = it.next();
   }
 
   return false;

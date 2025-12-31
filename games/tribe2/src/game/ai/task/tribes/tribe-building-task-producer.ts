@@ -1,13 +1,8 @@
 import { UpdateContext, GameWorldState } from '../../../world-types';
-import { TaskType } from '../task-types';
+import { TaskType, Task } from '../task-types';
 import {
-  getStorageUtilization,
-  getTribeStorageSpots,
-  getTribeBonfires,
-  getTribePlantingZones,
   calculatePlantingZoneCapacity,
 } from '../../../entities/tribe/tribe-food-utils';
-import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 import { findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
 import { BuildingType } from '../../../entities/buildings/building-consts';
 import {
@@ -33,6 +28,7 @@ import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { EntityId } from '../../../entities/entities-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Vector2D } from '../../../utils/math-types';
+import { BuildingEntity } from '../../../entities/buildings/building-types';
 
 /**
  * Produces building placement tasks at the tribe level.
@@ -43,38 +39,104 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
 
-  // Identify all unique tribe leaders
+  // 1. Group humans by leaderId and identify leaders
   const allHumans = indexedState.search.human.all();
+  const tribeMembersMap = new Map<EntityId, HumanEntity[]>();
   const leaderIds = new Set<EntityId>();
-  for (const human of allHumans) {
-    if (human.leaderId && human.leaderId === human.id) {
-      leaderIds.add(human.id);
+
+  for (let i = 0; i < allHumans.length; i++) {
+    const human = allHumans[i];
+    if (human.leaderId) {
+      if (!tribeMembersMap.has(human.leaderId)) {
+        tribeMembersMap.set(human.leaderId, []);
+      }
+      tribeMembersMap.get(human.leaderId)!.push(human);
+
+      if (human.leaderId === human.id) {
+        leaderIds.add(human.id);
+      }
     }
   }
 
+  // 2. Group tasks by creatorEntityId
+  const allTasks = Object.values(gameState.tasks);
+  const tasksByCreator = new Map<EntityId, Task[]>();
+  for (let i = 0; i < allTasks.length; i++) {
+    const task = allTasks[i];
+    if (task.creatorEntityId) {
+      if (!tasksByCreator.has(task.creatorEntityId)) {
+        tasksByCreator.set(task.creatorEntityId, []);
+      }
+      tasksByCreator.get(task.creatorEntityId)!.push(task);
+    }
+  }
+
+  // 3. Group buildings by tribe leader (ownerId)
+  const allBuildings = indexedState.search.building.all();
+  const buildingsByTribe = new Map<EntityId, BuildingEntity[]>();
+  for (let i = 0; i < allBuildings.length; i++) {
+    const building = allBuildings[i];
+    if (building.ownerId) {
+      const owner = gameState.entities.entities[building.ownerId] as HumanEntity | undefined;
+      const leaderId = owner?.leaderId;
+      if (leaderId) {
+        if (!buildingsByTribe.has(leaderId)) {
+          buildingsByTribe.set(leaderId, []);
+        }
+        buildingsByTribe.get(leaderId)!.push(building);
+      }
+    }
+  }
+
+  // 4. Pre-calculate all tribe centers (leveraging cache in getTribeCenter)
+  const tribeCenters = new Map<EntityId, Vector2D>();
+  for (const leaderId of leaderIds) {
+    tribeCenters.set(leaderId, getTribeCenter(leaderId, gameState));
+  }
+
+  // 5. Iterate through leaders and evaluate needs
   for (const leaderId of leaderIds) {
     const leader = gameState.entities.entities[leaderId] as HumanEntity;
     if (!leader) continue;
 
-    const tribeMembers = getTribeMembers(leader, gameState);
+    const tribeMembers = tribeMembersMap.get(leaderId) || [];
     if (tribeMembers.length < TRIBE_BUILDINGS_MIN_HEADCOUNT) continue;
 
     const adultMembers = tribeMembers.filter((m) => m.isAdult);
     if (adultMembers.length === 0) continue;
 
-    // Check existing tasks for this tribe to avoid duplicates
-    const existingTasks = Object.values(gameState.tasks).filter((t) => t.creatorEntityId === leaderId);
+    const existingTasks = tasksByCreator.get(leaderId) || [];
     const hasActiveTask = (type: TaskType) => existingTasks.some((t) => t.type === type);
+
+    const tribeBuildings = buildingsByTribe.get(leaderId) || [];
+
+    // Prepare other tribe centers for placement optimization
+    const otherTribeCenters: Vector2D[] = [];
+    for (const [tid, center] of tribeCenters.entries()) {
+      if (tid !== leaderId) {
+        otherTribeCenters.push(center);
+      }
+    }
 
     // --- STORAGE ---
     if (!hasActiveTask(TaskType.HumanPlaceStorage)) {
-      const existingStorage = getTribeStorageSpots(leaderId, gameState, true);
-      const utilization = getStorageUtilization(leaderId, gameState, true);
-      const needsStorage = existingStorage.length === 0 || utilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD;
+      const storageSpots = tribeBuildings.filter(b => b.buildingType === BuildingType.StorageSpot);
+      
+      // Calculate utilization
+      let totalItems = 0;
+      let totalCapacity = 0;
+      for (let i = 0; i < storageSpots.length; i++) {
+        const s = storageSpots[i];
+        totalItems += s.storedItems?.length || 0;
+        totalCapacity += s.storageCapacity || 0;
+      }
+      const utilization = totalCapacity > 0 ? totalItems / totalCapacity : 0;
+      
+      const needsStorage = storageSpots.length === 0 || utilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD;
 
       if (needsStorage) {
         const minDistance =
-          existingStorage.length === 0
+          storageSpots.length === 0
             ? LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER
             : LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER;
 
@@ -85,6 +147,7 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
           LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
           minDistance,
           leader.position,
+          otherTribeCenters,
         );
 
         if (spot) {
@@ -95,8 +158,8 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
 
     // --- BONFIRE ---
     if (!hasActiveTask(TaskType.HumanPlaceBonfire)) {
-      const bonfires = getTribeBonfires(leaderId, gameState, true);
-      const tribeCenter = getTribeCenter(leaderId, gameState);
+      const bonfires = tribeBuildings.filter(b => b.buildingType === BuildingType.Bonfire);
+      const tribeCenter = tribeCenters.get(leaderId)!;
       const currentTemp = getTemperatureAt(
         gameState.temperature,
         tribeCenter,
@@ -148,6 +211,7 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
           LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
           LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
           coldClusterPos || leader.position,
+          otherTribeCenters,
         );
         if (spot) {
           createPlacementTask(leaderId, TaskType.HumanPlaceBonfire, spot, gameState);
@@ -157,8 +221,8 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
 
     // --- PLANTING ZONE ---
     if (!hasActiveTask(TaskType.HumanPlacePlantingZone)) {
-      const existingZones = getTribePlantingZones(leaderId, gameState, true);
-      const currentCapacity = existingZones.reduce((sum, zone) => sum + calculatePlantingZoneCapacity(zone), 0);
+      const plantingZones = tribeBuildings.filter(b => b.buildingType === BuildingType.PlantingZone);
+      const currentCapacity = plantingZones.reduce((sum, zone) => sum + calculatePlantingZoneCapacity(zone), 0);
       const targetBushes = Math.max(
         LEADER_BUILDING_MIN_BUSHES,
         adultMembers.length * LEADER_BUILDING_MIN_BUSHES_PER_MEMBER,
@@ -172,6 +236,7 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
           LEADER_BUILDING_SPIRAL_SEARCH_RADIUS,
           LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
           leader.position,
+          otherTribeCenters,
         );
         if (spot) {
           createPlacementTask(leaderId, TaskType.HumanPlacePlantingZone, spot, gameState);

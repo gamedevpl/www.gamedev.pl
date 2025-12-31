@@ -85,7 +85,6 @@ export interface IndexedWorldState extends GameWorldState {
     predator: IndexType<PredatorEntity>;
     building: IndexType<BuildingEntity>;
     tree: IndexType<TreeEntity>;
-    terrainOwnership: IndexType<{ ownerId: number | null }>;
     tasks: IndexType<Task>;
   };
   cache: {

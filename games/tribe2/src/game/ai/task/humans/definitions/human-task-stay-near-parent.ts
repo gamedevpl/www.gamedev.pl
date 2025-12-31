@@ -6,6 +6,7 @@ import {
 import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import { findFamilyPatriarch } from '../../../../entities/tribe/family-tribe-utils';
 import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-utils';
+import { getOwnerOfPoint, tribeHasTerritory } from '../../../../utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { defineHumanTask } from '../human-task-utils';
@@ -31,6 +32,14 @@ export const humanStayNearParentDefinition = defineHumanTask<HumanEntity>({
       return tasks;
     }
 
+    // Children should not follow parent who is outside of tribe territory
+    if (child.leaderId && tribeHasTerritory(child.leaderId, gameState)) {
+      const parentOwner = getOwnerOfPoint(parent.position.x, parent.position.y, gameState);
+      if (parentOwner !== child.leaderId) {
+        return tasks;
+      }
+    }
+
     const taskId = `stay-near-parent-${child.id}`;
     tasks[taskId] = {
       id: taskId,
@@ -48,6 +57,14 @@ export const humanStayNearParentDefinition = defineHumanTask<HumanEntity>({
 
     const parent = findFamilyPatriarch(child, context.gameState);
     if (!parent || parent.id !== task.target) return null;
+
+    // Children should not follow parent who is outside of tribe territory
+    if (child.leaderId && tribeHasTerritory(child.leaderId, context.gameState)) {
+      const parentOwner = getOwnerOfPoint(parent.position.x, parent.position.y, context.gameState);
+      if (parentOwner !== child.leaderId) {
+        return null;
+      }
+    }
 
     const distance = calculateWrappedDistance(
       child.position,

@@ -5,6 +5,7 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
+import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 
 export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherBerries,
@@ -17,6 +18,11 @@ export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
 
     const bush = context.gameState.entities.entities[task.target] as BerryBushEntity | undefined;
     if (!bush || bush.type !== 'berryBush' || bush.food.length === 0) {
+      return null;
+    }
+
+    // Check operating range
+    if (human.leaderId && !isWithinOperatingRange(bush.position, human.leaderId, context.gameState)) {
       return null;
     }
 

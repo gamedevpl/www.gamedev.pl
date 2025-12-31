@@ -148,3 +148,36 @@ export function pseudoRandom(seed: number): number {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
 }
+
+/**
+ * Snaps a value to the nearest step.
+ * @param value The value to snap.
+ * @param steps The number of steps (e.g., 12 for animation frames).
+ * @returns The snapped value.
+ */
+export function snapToStep(value: number, steps: number): number {
+  return Math.round(value * steps) / steps;
+}
+
+/**
+ * Discretizes a direction vector into a step index.
+ * @param direction The 2D direction vector.
+ * @param steps The number of directions (e.g., 8 for cardinal/intercardinal).
+ * @returns An integer step index from 0 to steps - 1.
+ */
+export function discretizeDirection(direction: Vector2D, steps: number = 8): number {
+  const angle = Math.atan2(direction.y, direction.x);
+  const normalizedAngle = (angle + Math.PI * 2) % (Math.PI * 2);
+  return Math.round((normalizedAngle / (Math.PI * 2)) * steps) % steps;
+}
+
+/**
+ * Converts a discretized direction step back into a unit vector.
+ * @param step The step index.
+ * @param steps The total number of steps.
+ * @returns A unit vector [x, y].
+ */
+export function getDiscretizedDirectionVector(step: number, steps: number = 8): [number, number] {
+  const angle = (step / steps) * Math.PI * 2;
+  return [Math.cos(angle), Math.sin(angle)];
+}

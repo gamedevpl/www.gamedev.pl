@@ -7,7 +7,12 @@ import { EntityId } from '../entities-types';
 import { GameWorldState } from '../../world-types';
 import { TerritoryCheckResult } from './territory-types';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
-import { calculateWrappedDistance, getDirectionVectorOnTorus, vectorNormalize } from '../../utils/math-utils';
+import {
+  calculateWrappedDistance,
+  calculateWrappedDistanceSq,
+  getDirectionVectorOnTorus,
+  vectorNormalize,
+} from '../../utils/math-utils';
 import { isTribeHostile } from '../../utils/human-utils';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { HumanEntity } from '../characters/human/human-types';
@@ -131,6 +136,7 @@ export function checkTerritoryContiguity(
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
   const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
+  const radiusSq = radius * radius;
 
   const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
   const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
@@ -147,9 +153,14 @@ export function checkTerritoryContiguity(
       const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
       const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
 
-      const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+      const distanceSq = calculateWrappedDistanceSq(
+        position,
+        { x: cellCenterX, y: cellCenterY },
+        worldWidth,
+        worldHeight,
+      );
 
-      if (distance <= radius) {
+      if (distanceSq <= radiusSq) {
         const index = gridY * gridWidth + gridX;
         const currentOwner = gameState.terrainOwnership[index];
 
@@ -217,6 +228,7 @@ export function checkTakeoverContiguity(
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
   const radiusInCells = Math.ceil(radius / TERRITORY_OWNERSHIP_RESOLUTION);
+  const radiusSq = radius * radius;
 
   const centerGridX = Math.floor(position.x / TERRITORY_OWNERSHIP_RESOLUTION);
   const centerGridY = Math.floor(position.y / TERRITORY_OWNERSHIP_RESOLUTION);
@@ -232,9 +244,14 @@ export function checkTakeoverContiguity(
       const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
       const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
 
-      const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+      const distanceSq = calculateWrappedDistanceSq(
+        position,
+        { x: cellCenterX, y: cellCenterY },
+        worldWidth,
+        worldHeight,
+      );
 
-      if (distance <= radius) {
+      if (distanceSq <= radiusSq) {
         const index = gridY * gridWidth + gridX;
         const currentOwner = gameState.terrainOwnership[index];
 
@@ -348,7 +365,12 @@ export function isWithinOperatingRange(
     return true;
   }
 
-  // Don't operate in other tribes' territories
+  // Allow operating in non-hostile territories
+  if (!isTribeHostile(leaderId, owner, gameState)) {
+    return true;
+  }
+
+  // Don't operate in hostile tribes' territories
   return false;
 }
 

@@ -23,7 +23,7 @@ import { prepareAnimalTaskAI } from '../ai/task/animals/animal-task-update';
 import { BerryBushEntity } from './plants/berry-bush/berry-bush-types';
 import { prepareBuildingTaskAI } from '../ai/task/buildings/building-task-update';
 import { prepareHumanTaskAI } from '../ai/task/humans/human-task-update';
-import { Blackboard, BlackboardData } from '../ai/behavior-tree/behavior-tree-blackboard';
+import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { AI_UPDATE_INTERVAL } from '../ai-consts';
 
 export enum EntityUpdatePhase {
@@ -41,9 +41,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext, phase
       prepareEntityAIUpdate(entity, updateContext);
       break;
     case EntityUpdatePhase.ExecuteAI:
-      if ('aiBlackboard' in entity) {
-        executeEntityAIUpdate(entity as Entity & { aiBlackboard: BlackboardData }, updateContext);
-      }
+      executeEntityAIUpdate(entity, updateContext);
       break;
   }
 }
@@ -136,6 +134,10 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
 }
 
 function prepareEntityAIUpdate(entity: Entity, updateContext: UpdateContext) {
+  if (!shouldUpdateAI(entity, updateContext)) {
+    return;
+  }
+
   if (entity.type === 'human') {
     prepareHumanTaskAI(entity as HumanEntity, updateContext);
   } else if (entity.type === 'corpse') {
@@ -153,12 +155,8 @@ function prepareEntityAIUpdate(entity: Entity, updateContext: UpdateContext) {
   }
 }
 
-function executeEntityAIUpdate(entity: Entity & { aiBlackboard: BlackboardData }, updateContext: UpdateContext) {
-  const lastAiUpdateTime: number = Blackboard.get(entity.aiBlackboard, 'lastAiUpdateTime') ?? 0;
-  if (
-    updateContext.gameState.time - lastAiUpdateTime + ((Math.random() - Math.random()) * AI_UPDATE_INTERVAL) / 10 <=
-    AI_UPDATE_INTERVAL
-  ) {
+function executeEntityAIUpdate(entity: Entity, updateContext: UpdateContext) {
+  if (!shouldUpdateAI(entity, updateContext)) {
     return;
   }
 
@@ -179,5 +177,14 @@ function executeEntityAIUpdate(entity: Entity & { aiBlackboard: BlackboardData }
   } else if (entity.type === 'berryBush') {
     // Berry bushes currently have no active AI execution phase
   }
+
   Blackboard.set(entity.aiBlackboard, 'lastAiUpdateTime', updateContext.gameState.time);
+}
+
+function shouldUpdateAI(entity: Entity, updateContext: UpdateContext): boolean {
+  const lastAiUpdateTime: number = Blackboard.get(entity.aiBlackboard, 'lastAiUpdateTime') ?? 0;
+  return (
+    updateContext.gameState.time - lastAiUpdateTime + ((Math.random() - Math.random()) * AI_UPDATE_INTERVAL) / 10 >
+    AI_UPDATE_INTERVAL
+  );
 }

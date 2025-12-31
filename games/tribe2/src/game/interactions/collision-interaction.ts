@@ -62,7 +62,7 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
   targetType: 'tree',
   maxDistance: CHARACTER_RADIUS * 0.6 + TREE_RADIUS * 0.4,
   checker: (source, target, { gameState }) => {
-    const state = target.stateMachine?.[0];
+    const state = target.stateMachine[0];
     if (state === 'fallen' || state === 'stump') {
       return false;
     }

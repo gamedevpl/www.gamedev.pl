@@ -21,7 +21,7 @@ export const humanTreeChopInteraction: InteractionDefinition<HumanEntity, TreeEn
     return (
       (human.isAdult &&
         isStanding &&
-        human.stateMachine?.[0] === HUMAN_CHOPPING &&
+        human.stateMachine[0] === HUMAN_CHOPPING &&
         !human.heldItem &&
         (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)) ||
       false
@@ -31,7 +31,7 @@ export const humanTreeChopInteraction: InteractionDefinition<HumanEntity, TreeEn
     const { gameState } = context;
 
     // 1. Transition tree to TREE_FALLEN state
-    tree.stateMachine = [TREE_FALLEN, { enteredAt: gameState.time, previousState: tree.stateMachine?.[0] }];
+    tree.stateMachine = [TREE_FALLEN, { enteredAt: gameState.time, previousState: tree.stateMachine[0] }];
 
     // 2. If woodGenerated is false, generate wood based on age
     if (!tree.woodGenerated) {

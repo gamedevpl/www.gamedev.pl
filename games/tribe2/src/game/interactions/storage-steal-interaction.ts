@@ -31,7 +31,7 @@ export const storageStealInteraction: InteractionDefinition<HumanEntity, Buildin
       return false;
     }
 
-    if (source.stateMachine?.[0] !== HUMAN_GATHERING) {
+    if (source.stateMachine[0] !== HUMAN_GATHERING) {
       return false;
     }
 

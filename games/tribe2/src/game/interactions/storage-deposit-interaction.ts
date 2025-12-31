@@ -32,7 +32,7 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
     }
 
     // Source must be in depositing state
-    if (source.stateMachine?.[0] !== HUMAN_DEPOSITING) {
+    if (source.stateMachine[0] !== HUMAN_DEPOSITING) {
       return false;
     }
 

@@ -1,7 +1,5 @@
 // AI and Behavior Tree Constants
 
-import { MAP_WIDTH } from './game-consts';
-
 // Human AI Constants
 export const AI_UPDATE_INTERVAL = 1; // In game time
 export const HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING: number = 150 * 0.6; // AI decides to eat if hunger >= this and has food
@@ -74,7 +72,7 @@ export const DEPOSIT_THRESHOLD_HIGH_STORAGE = 0.8; // Deposit when personal food
 
 // Leader Building Placement Constants
 export const BT_LEADER_BUILDING_PLACEMENT_COOLDOWN_HOURS = 2; // How often to check for building needs
-export const LEADER_BUILDING_SPIRAL_SEARCH_RADIUS = MAP_WIDTH / 2; // Max distance to search for building placement
+export const LEADER_BUILDING_SPIRAL_SEARCH_RADIUS = 800; // Max distance to search for building placement
 export const LEADER_BUILDING_MIN_TRIBE_SIZE = 2; // Minimum adult tribe members to consider building
 export const LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD = 0.7; // Build storage when 70% full
 export const LEADER_BUILDING_MIN_BUSHES_PER_MEMBER = 0.5; // Build planting zone when below this ratio

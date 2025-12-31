@@ -1,8 +1,8 @@
-import { EntityId } from '../entities/entities-types';
+import { Entity, EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
-import { calculateWrappedDistance, getAveragePosition, vectorAdd } from './math-utils';
+import { calculateWrappedDistanceSq, getAveragePosition, vectorAdd } from './math-utils';
 import { Vector2D } from './math-types';
 import { findTribeMembers, getFamilyMembers } from '../entities/tribe/family-tribe-utils';
 import { BuildingEntity } from '../entities/buildings/building-types';
@@ -34,6 +34,7 @@ export function isPositionOccupied(
   ignoreEntityId?: EntityId, // New optional parameter
 ): boolean {
   const indexedState = gameState as IndexedWorldState;
+  const { width, height } = gameState.mapDimensions;
   const searchRect = {
     left: position.x - checkRadius,
     top: position.y - checkRadius,
@@ -41,29 +42,28 @@ export function isPositionOccupied(
     bottom: position.y + checkRadius,
   };
 
-  const potentialOccupants = [
-    ...indexedState.search.human.byRect(searchRect),
-    ...indexedState.search.berryBush.byRect(searchRect),
-    ...indexedState.search.corpse.byRect(searchRect),
-  ];
+  const check = (entities: Entity[]) => {
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      // Ignore the specified entity if provided
+      if (ignoreEntityId !== undefined && entity.id === ignoreEntityId) {
+        continue;
+      }
 
-  for (const entity of potentialOccupants) {
-    // Ignore the specified entity if provided
-    if (ignoreEntityId !== undefined && entity.id === ignoreEntityId) {
-      continue;
+      const distSq = calculateWrappedDistanceSq(position, entity.position, width, height);
+      const combinedRadius = checkRadius + entity.radius;
+      if (distSq < combinedRadius * combinedRadius) {
+        return true;
+      }
     }
+    return false;
+  };
 
-    const distance = calculateWrappedDistance(
-      position,
-      entity.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-    if (distance < checkRadius + entity.radius) {
-      return true;
-    }
-  }
-  return false;
+  return (
+    check(indexedState.search.human.byRect(searchRect)) ||
+    check(indexedState.search.berryBush.byRect(searchRect)) ||
+    check(indexedState.search.corpse.byRect(searchRect))
+  );
 }
 
 export function findValidPlantingSpot(

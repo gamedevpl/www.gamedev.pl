@@ -12,12 +12,14 @@ import {
 import { Vector2D } from '../utils/math-types';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
-import { renderWithWrapping, getOffscreenCanvas, pseudoRandom } from './render-utils';
+import { renderWithWrapping, pseudoRandom } from './render-utils';
 import { Entity } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS, FoodType } from '../entities/food-types';
 import { ITEM_TYPE_EMOJIS, ItemType } from '../entities/item-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
+import { SpriteCache } from './sprite-cache';
+import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -35,8 +37,7 @@ const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
 // Caching logic
-const buildingSpriteCache = new Map<string, HTMLCanvasElement>();
-const MAX_BUILDING_CACHE_SIZE = 200;
+const spriteCache = new SpriteCache(200);
 const SPRITE_PADDING = 20;
 
 /**
@@ -67,67 +68,51 @@ function getBuildingSprite(
   isValid: boolean = true,
 ): HTMLCanvasElement {
   const key = getBuildingSpriteKey(building, isHostile, isGhost, isValid);
-  const cached = buildingSpriteCache.get(key);
-  if (cached) {
-    // Move to end for LRU
-    buildingSpriteCache.delete(key);
-    buildingSpriteCache.set(key, cached);
-    return cached;
-  }
-
-  const { buildingType, width, height, id } = building;
-  const definition = BUILDING_DEFINITIONS[buildingType];
-  const isConstructed = 'isConstructed' in building ? building.isConstructed : true;
-
+  const { width, height, id, buildingType } = building;
   const canvasWidth = width + SPRITE_PADDING * 2;
   const canvasHeight = height + SPRITE_PADDING * 2;
-  const { canvas, ctx } = getOffscreenCanvas(canvasWidth, canvasHeight);
 
-  ctx.translate(canvasWidth / 2, canvasHeight / 2);
+  return spriteCache.getOrRender(key, canvasWidth, canvasHeight, (ctx) => {
+    const definition = BUILDING_DEFINITIONS[buildingType];
+    const isConstructed = 'isConstructed' in building ? building.isConstructed : true;
 
-  if (isGhost) {
-    const ghostColor = isValid ? '#4CAF50' : '#F44336';
-    drawStoneRect(ctx, width, height, 9999, ghostColor);
+    ctx.translate(canvasWidth / 2, canvasHeight / 2);
 
-    ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ghostColor;
-    ctx.fillText(definition.icon, 0, 0);
-  } else {
-    const b = building as BuildingEntity;
-    let icon = definition.icon;
-    if (b.buildingType === BuildingType.Bonfire && isConstructed) {
-      icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
-    }
+    if (isGhost) {
+      const ghostColor = isValid ? '#4CAF50' : '#F44336';
+      drawStoneRect(ctx, width, height, 9999, ghostColor);
 
-    // 1. Draw the Stone Border
-    if (isHostile) {
-      drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+      ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = ghostColor;
+      ctx.fillText(definition.icon, 0, 0);
     } else {
-      drawStoneRect(ctx, width, height, id);
+      const b = building as BuildingEntity;
+      let icon = definition.icon;
+      if (b.buildingType === BuildingType.Bonfire && isConstructed) {
+        icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+      }
+
+      // 1. Draw the Stone Border
+      if (isHostile) {
+        drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+      } else {
+        drawStoneRect(ctx, width, height, id);
+      }
+
+      // 2. Draw Icon
+      ctx.globalAlpha = 0.5;
+      ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(icon, 0, 0);
     }
-
-    // 2. Draw Icon
-    ctx.globalAlpha = 0.5;
-    ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(icon, 0, 0);
-  }
-
-  // Manage cache size (LRU)
-  if (buildingSpriteCache.size >= MAX_BUILDING_CACHE_SIZE) {
-    const firstKey = buildingSpriteCache.keys().next().value;
-    if (firstKey) buildingSpriteCache.delete(firstKey);
-  }
-  buildingSpriteCache.set(key, canvas);
-
-  return canvas;
+  });
 }
 
 /**
@@ -348,6 +333,13 @@ export function renderGhostBuilding(
     forces: [],
     velocity: { x: 0, y: 0 },
     debuffs: [],
+    stateMachine: [
+      '',
+      {
+        enteredAt: 0,
+      },
+    ],
+    aiBlackboard: Blackboard.create(),
   };
 
   renderWithWrapping(

@@ -2,6 +2,8 @@ import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
+import { SpriteCache } from './sprite-cache';
+import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
@@ -13,6 +15,9 @@ const predatorStanceMap: Record<string, string> = {
   idle: 'idle',
 };
 
+// Caching logic
+const predatorCache = new SpriteCache(200);
+
 /**
  * Renders debug information for a predator entity.
  * @param ctx Canvas rendering context
@@ -20,7 +25,7 @@ const predatorStanceMap: Record<string, string> = {
  */
 function renderPredatorDebugInfo(ctx: CanvasRenderingContext2D, predator: PredatorEntity): void {
   const { radius, position, activeAction = 'idle' } = predator;
-  const stateName = predator.stateMachine?.[0] || 'N/A';
+  const stateName = predator.stateMachine[0] || 'N/A';
   const yOffset = predator.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
 
   ctx.save();
@@ -59,24 +64,31 @@ export function renderPredator(
 
   const stance = predatorStanceMap[activeAction] || 'idle';
 
-  // Use asset generator to render the predator sprite
-  TribePredator2D.render(
-    ctx,
-    position.x - currentRadius,
-    position.y - currentRadius,
-    currentRadius * 2,
-    currentRadius * 2,
-    predator.animationProgress || 0,
-    stance,
-    {
+  // Discretize state for caching
+  const animStep = snapToStep(predator.animationProgress || 0, 12);
+  const dirStep = discretizeDirection(predator.direction || { x: 1, y: 0 }, 8);
+  const ageStep = Math.floor(predator.age);
+  const hungerStep = snapToStep(predator.hunger / 100, 5) * 100;
+
+  const key = `${stance}_${ageStep}_${dirStep}_${animStep}_${predator.isPregnant ?? false}_${hungerStep}_${
+    predator.geneCode
+  }_${currentRadius}`;
+  const size = Math.ceil(currentRadius * 2) + 4;
+
+  const sprite = predatorCache.getOrRender(key, size, size, (cacheCtx) => {
+    cacheCtx.translate(size / 2, size / 2);
+    const discreteDir = getDiscretizedDirectionVector(dirStep, 8);
+    TribePredator2D.render(cacheCtx, -size / 2 + 2, -size / 2 + 2, size - 4, size - 4, animStep, stance, {
       gender: predator.gender,
-      age: predator.age,
-      direction: [predator.direction?.x || 1, predator.direction?.y || 0],
+      age: ageStep,
+      direction: discreteDir,
       isPregnant: predator.isPregnant ?? false,
-      hungryLevel: predator.hunger,
-      geneCode: predator.geneCode, // Use actual genetic code
-    },
-  );
+      hungryLevel: hungerStep,
+      geneCode: predator.geneCode,
+    });
+  });
+
+  ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
 
   // Health bar if injured
   if (predator.hitpoints < predator.maxHitpoints) {

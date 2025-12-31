@@ -27,6 +27,8 @@ import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters
 import { drawProgressBar, renderSupplyChainHighlights } from './render-ui';
 import { DebugPanelType, GameWorldState } from '../world-types.js';
 import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
+import { SpriteCache } from './sprite-cache';
+import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -47,6 +49,9 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
   chopping: 'gathering',
 };
 
+// Caching logic
+const characterCache = new SpriteCache(500);
+
 /**
  * Renders debug information for a human character.
  * @param ctx Canvas rendering context
@@ -54,7 +59,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
  */
 function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): void {
   const { radius, position, activeAction = 'idle' } = human;
-  const stateName = human.stateMachine?.[0] || 'N/A';
+  const stateName = human.stateMachine[0] || 'N/A';
   const yOffset = human.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
 
   ctx.save();
@@ -151,7 +156,7 @@ function renderAttackProgress(ctx: CanvasRenderingContext2D, human: HumanEntity,
   const barY = position.y - radius - UI_ATTACK_PROGRESS_BAR_Y_OFFSET;
 
   // Render attack buildup
-  if (human.stateMachine?.[0] === HUMAN_ATTACKING) {
+  if (human.stateMachine[0] === HUMAN_ATTACKING) {
     const attackData = human.stateMachine[1] as HumanAttackingStateData;
     const timeSinceAttackStart = currentTime - attackData.attackStartTime;
     const buildupProgress = Math.min(timeSinceAttackStart / HUMAN_ATTACK_MELEE_BUILDUP_HOURS, 1);
@@ -207,20 +212,37 @@ export function renderCharacter(
 
   const stance: Stance = actionToStanceMap[activeAction] || 'idle';
 
-  TribeHuman2D.render(
-    ctx,
-    position.x - currentCharacterRadius,
-    position.y - currentCharacterRadius,
-    currentCharacterRadius * 2,
-    currentCharacterRadius * 2,
-    human.animationProgress || 0,
-    stance,
-    human.gender,
-    human.age,
-    [human.direction.x, human.direction.y],
-    human.isPregnant ?? false,
-    human.hunger,
-  );
+  // Discretize state for caching
+  const animStep = snapToStep(human.animationProgress || 0, 12);
+  const dirStep = discretizeDirection(human.direction, 8);
+  const ageStep = Math.floor(human.age);
+  const hungerStep = snapToStep(human.hunger / 100, 5) * 100;
+
+  const key = `${stance}_${human.gender}_${ageStep}_${dirStep}_${animStep}_${
+    human.isPregnant ?? false
+  }_${hungerStep}_${currentCharacterRadius}`;
+  const size = Math.ceil(currentCharacterRadius * 2) + 4;
+
+  const sprite = characterCache.getOrRender(key, size, size, (cacheCtx) => {
+    cacheCtx.translate(size / 2, size / 2);
+    const discreteDir = getDiscretizedDirectionVector(dirStep, 8);
+    TribeHuman2D.render(
+      cacheCtx,
+      -size / 2 + 2,
+      -size / 2 + 2,
+      size - 4,
+      size - 4,
+      animStep,
+      stance,
+      human.gender,
+      ageStep,
+      discreteDir,
+      human.isPregnant ?? false,
+      hungerStep,
+    );
+  });
+
+  ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
 
   // Draw attack target highlight
   if (isPlayerAttackTarget) {

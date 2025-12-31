@@ -12,6 +12,7 @@ import { humanTaskDefinitions } from '../../ai/task/humans/definitions';
 import { Blackboard } from '../../ai/behavior-tree/behavior-tree-blackboard';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { Vector2D } from '../../utils/math-types';
+import { IndexedWorldState } from '../../world-index/world-index-types';
 
 // Style constants
 const UI_TASK_DEBUG_FONT_SIZE = 12;
@@ -214,7 +215,7 @@ export function renderTaskAiDebugger(
   const scrollY = gameState.debugPanelScroll?.y ?? 0;
   ctx.translate(0, -scrollY);
 
-  const allTasks = Object.values(gameState.tasks);
+  const allTasks = (gameState as IndexedWorldState).search.tasks.byRadius(character.position, 800);
   let maxContentWidth = 0;
 
   if (allTasks.length === 0) {
@@ -223,16 +224,25 @@ export function renderTaskAiDebugger(
     ctx.fillText('No tasks available in the world.', leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
     currentY += UI_TASK_DEBUG_LINE_HEIGHT;
   } else {
-    for (const task of allTasks) {
+    const allTasksScored = allTasks.map((task) => {
       const definition = humanTaskDefinitions[task.type];
       // Note: We currently only have humanTaskDefinitions.
       // Animals use a different task system but we can still show scores if they were humans.
       // For actual animal task debugging, we'd need animalTaskDefinitions here.
-      const score =
-        definition && definition.scorer && debuggedEntity.type === 'human'
-          ? definition.scorer(debuggedEntity as HumanEntity, task, { gameState, deltaTime: 0 })
-          : null;
-
+      return {
+        task,
+        score:
+          definition && definition.scorer && debuggedEntity.type === 'human'
+            ? definition.scorer(debuggedEntity as HumanEntity, task, { gameState, deltaTime: 0 })
+            : null,
+      };
+    });
+    allTasksScored.sort((a, b) => {
+      const scoreA = a.score !== null ? a.score : -Infinity;
+      const scoreB = b.score !== null ? b.score : -Infinity;
+      return scoreB - scoreA;
+    });
+    for (const { task, score } of allTasksScored) {
       let claimStatus = 'Unclaimed';
       let claimColor = '#888';
       if (task.claimedByEntityId) {

@@ -33,7 +33,7 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
 
   checker: (human, prey, context) => {
     if (
-      human.stateMachine?.[0] !== HUMAN_ATTACKING ||
+      human.stateMachine[0] !== HUMAN_ATTACKING ||
       human.attackTargetId !== prey.id ||
       prey.hitpoints <= 0 ||
       !human.isAdult

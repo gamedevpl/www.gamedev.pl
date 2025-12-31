@@ -21,7 +21,7 @@ const humanBerryBushGatherInteraction: InteractionDefinition<HumanEntity, BerryB
     return (
       (human.isAdult &&
         berryBush.food.length > 0 &&
-        human.stateMachine?.[0] === HUMAN_GATHERING &&
+        human.stateMachine[0] === HUMAN_GATHERING &&
         human.food.length < human.maxFood &&
         (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)) ||
       false
@@ -53,7 +53,7 @@ const corpseGatherInteraction: InteractionDefinition<HumanEntity, CorpseEntity> 
     return (
       (human.isAdult &&
         corpse.food.length > 0 &&
-        human.stateMachine?.[0] === HUMAN_GATHERING &&
+        human.stateMachine[0] === HUMAN_GATHERING &&
         human.food.length < human.maxFood &&
         (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)) ||
       false
@@ -79,9 +79,9 @@ const humanGatherWoodInteraction: InteractionDefinition<HumanEntity, TreeEntity>
   checker: (human: HumanEntity, tree: TreeEntity, context): boolean => {
     return (
       (human.isAdult &&
-        tree.stateMachine?.[0] === TREE_FALLEN &&
+        tree.stateMachine[0] === TREE_FALLEN &&
         tree.wood.length > 0 &&
-        human.stateMachine?.[0] === HUMAN_GATHERING &&
+        human.stateMachine[0] === HUMAN_GATHERING &&
         !human.heldItem &&
         (!human.gatheringCooldownTime || human.gatheringCooldownTime < context.gameState.time)) ||
       false

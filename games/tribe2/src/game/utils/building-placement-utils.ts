@@ -9,7 +9,7 @@ import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
 import { createBuilding as createBuildingEntity } from '../entities/entities-update';
 import { isPositionOccupied, getTribeCenter } from './spatial-utils';
-import { calculateWrappedDistance } from './math-utils';
+import { calculateWrappedDistanceSq } from './math-utils';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { updatePlantingZoneConnections } from './planting-zone-connections-utils';
 import {
@@ -61,15 +61,12 @@ export function canPlaceBuilding(
     return false;
   }
 
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+
   // Check proximity if humanPosition and maxDistance are provided
   if (humanPosition && maxDistance !== undefined) {
-    const distance = calculateWrappedDistance(
-      humanPosition,
-      position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-    if (distance > maxDistance) {
+    const distanceSq = calculateWrappedDistanceSq(humanPosition, position, worldWidth, worldHeight);
+    if (distanceSq > maxDistance * maxDistance) {
       return false;
     }
   }
@@ -94,8 +91,8 @@ export function canPlaceBuilding(
       position,
       dimensions.width,
       dimensions.height,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
+      worldWidth,
+      worldHeight,
     );
     if (depletedSectors.length > 0) {
       return false; // Cannot place planting zone on depleted soil
@@ -111,19 +108,14 @@ export function canPlaceBuilding(
   for (const building of nearbyBuildings) {
     // Simple circle-circle collision for now.
     // Ideally, this should be AABB (Axis-Aligned Bounding Box) collision considering wrapping.
-    const dist = calculateWrappedDistance(
-      position,
-      building.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
+    const distSq = calculateWrappedDistanceSq(position, building.position, worldWidth, worldHeight);
 
     // Calculate minimum distance needed to avoid overlap
     // This is an approximation. For exact rectangles, it's more complex.
     const minDistance = (Math.max(dimensions.width, dimensions.height) + Math.max(building.width, building.height)) / 2;
 
-    if (dist < minDistance * 0.9) {
-      // 0.9 factor to allow slight visual overlap but not logical overlap
+    if (distSq < minDistance * minDistance * 0.81) {
+      // 0.81 factor is 0.9 squared, to allow slight visual overlap but not logical overlap
       return false;
     }
   }
@@ -184,6 +176,8 @@ function precomputeTrigCache(numAngles: number): Array<{ cos: number; sin: numbe
  * @param gameState The current game state
  * @param searchRadius Maximum radius to search from each anchor point
  * @param minDistanceFromOtherTribes Minimum distance to keep from other tribe centers
+ * @param humanPosition Optional position of the human placing the building
+ * @param otherTribeCenters Optional pre-calculated centers of other tribes
  * @returns A valid position for building placement, or undefined if none found
  */
 export function findAdjacentBuildingPlacement(
@@ -193,6 +187,7 @@ export function findAdjacentBuildingPlacement(
   searchRadius: number,
   minDistanceFromOtherTribes: number,
   humanPosition?: Vector2D,
+  otherTribeCenters?: Vector2D[],
 ): Vector2D | undefined {
   const startTime = performance.now();
   const stats: PlacementSearchStats = {
@@ -224,9 +219,9 @@ export function findAdjacentBuildingPlacement(
     // Sort by distance from tribe center to prioritize central buildings
     const tribeCenter = getTribeCenter(ownerId, gameState);
     const sortedBuildings = [...tribeBuildings].sort((a, b) => {
-      const distA = calculateWrappedDistance(a.position, tribeCenter, worldWidth, worldHeight);
-      const distB = calculateWrappedDistance(b.position, tribeCenter, worldWidth, worldHeight);
-      return distA - distB;
+      const distSqA = calculateWrappedDistanceSq(a.position, tribeCenter, worldWidth, worldHeight);
+      const distSqB = calculateWrappedDistanceSq(b.position, tribeCenter, worldWidth, worldHeight);
+      return distSqA - distSqB;
     });
     anchorPoints.push(...sortedBuildings.map((b) => b.position));
   } else {
@@ -278,7 +273,15 @@ export function findAdjacentBuildingPlacement(
         // OPTIMIZATION: Swap check order - run cheap check first
         // Check tribe distance first (1 spatial query + distance checks)
         stats.tribeDistanceChecks++;
-        if (isLocationTooCloseToOtherTribes({ x: wx, y: wy }, ownerId, minDistanceFromOtherTribes, gameState)) {
+        if (
+          isLocationTooCloseToOtherTribes(
+            { x: wx, y: wy },
+            ownerId,
+            minDistanceFromOtherTribes,
+            gameState,
+            otherTribeCenters,
+          )
+        ) {
           continue; // Skip this candidate, too close to other tribes
         }
 

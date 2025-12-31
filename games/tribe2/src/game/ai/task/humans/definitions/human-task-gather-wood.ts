@@ -5,6 +5,7 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
+import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 import { getTribeLeaderForCoordination } from '../../../../entities/tribe/tribe-task-utils';
 import { getTribeWoodNeed } from '../../../../entities/tribe/tribe-food-utils';
 import { TREE_FALLEN } from '../../../../entities/plants/tree/states/tree-state-types';
@@ -25,6 +26,11 @@ export const humanGatherWoodDefinition = defineHumanTask<HumanEntity>({
 
     const [state] = tree.stateMachine ?? [];
     if (state !== TREE_FALLEN) {
+      return null;
+    }
+
+    // Check operating range
+    if (human.leaderId && !isWithinOperatingRange(tree.position, human.leaderId, context.gameState)) {
       return null;
     }
 

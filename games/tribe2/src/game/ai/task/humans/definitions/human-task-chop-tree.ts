@@ -5,6 +5,7 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
+import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 import { getTribeLeaderForCoordination } from '../../../../entities/tribe/tribe-task-utils';
 import { getTribeWoodNeed, getTribeAvailableWoodOnGround } from '../../../../entities/tribe/tribe-food-utils';
 import {
@@ -31,6 +32,11 @@ export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
     const [state] = tree.stateMachine ?? [];
     const isStanding = state === TREE_GROWING || state === TREE_FULL || state === TREE_SPREADING;
     if (!isStanding) {
+      return null;
+    }
+
+    // Check operating range
+    if (human.leaderId && !isWithinOperatingRange(tree.position, human.leaderId, context.gameState)) {
       return null;
     }
 

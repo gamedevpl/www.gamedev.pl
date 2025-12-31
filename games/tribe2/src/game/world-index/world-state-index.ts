@@ -7,9 +7,8 @@ import { GameWorldState } from '../world-types';
 import { indexItems } from './world-index-utils';
 import { IndexedWorldState } from './world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
-import { TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
-import { convertTerritoryIndexToPosition } from '../utils';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
+import { Task } from '../ai/task/task-types';
 
 /**
  * Creates an indexed version of the world state for efficient querying.
@@ -17,8 +16,7 @@ import { TreeEntity } from '../entities/plants/tree/tree-types';
  * @returns An IndexedWorldState object with searchable entity collections.
  */
 export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
-  // entities
-  const allEntities = Object.values(worldState.entities.entities);
+  const entities = worldState.entities.entities;
 
   const humans: HumanEntity[] = [];
   const berryBushes: BerryBushEntity[] = [];
@@ -28,7 +26,9 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
   const buildings: BuildingEntity[] = [];
   const trees: TreeEntity[] = [];
 
-  for (const entity of allEntities) {
+  // Use for...in to avoid Object.values() allocation
+  for (const id in entities) {
+    const entity = entities[id];
     switch (entity.type) {
       case 'human':
         humans.push(entity as HumanEntity);
@@ -66,29 +66,13 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
       predator: indexItems(predators, mapDimensions),
       building: indexItems(buildings, mapDimensions),
       tree: indexItems(trees, mapDimensions),
-      terrainOwnership: indexItems(
-        worldState.terrainOwnership
-          .map((ownerId, index) => {
-            if (ownerId === null) {
-              return null;
-            }
-            return {
-              position: convertTerritoryIndexToPosition(index, worldState.mapDimensions.width),
-              width: TERRITORY_OWNERSHIP_RESOLUTION,
-              height: TERRITORY_OWNERSHIP_RESOLUTION,
-              ownerId,
-            };
-          })
-          .filter((item) => item !== null),
-        mapDimensions,
-      ),
       tasks: (worldState as IndexedWorldState).search?.tasks ?? indexItems([], mapDimensions),
     },
     cache: {
       distances: {},
       tribeWoodNeeds: {},
       tribeAvailableWoodOnGround: {},
-      tribeCenters: {},
+      tribeCenters: (worldState as IndexedWorldState).cache?.tribeCenters ?? {},
     },
   };
 
@@ -96,5 +80,9 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
 }
 
 export function indexTasks(worldState: IndexedWorldState) {
-  worldState.search.tasks = indexItems(Object.values(worldState.tasks), worldState.mapDimensions);
+  const tasks: Task[] = [];
+  for (const id in worldState.tasks) {
+    tasks.push(worldState.tasks[id]);
+  }
+  worldState.search.tasks = indexItems(tasks, worldState.mapDimensions);
 }

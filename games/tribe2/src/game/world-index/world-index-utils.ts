@@ -1,6 +1,7 @@
 import Flatbush from 'flatbush';
 import { Vector2D } from '../utils/math-types';
 import { IndexType, Rect } from './world-index-types';
+import { calculateWrappedDistanceSq } from '../utils/math-utils';
 
 interface IndexItem {
   position: Vector2D;
@@ -48,8 +49,11 @@ export function indexItems<T extends IndexItem>(
   const index = new Flatbush(items.length);
   const propertyCache = new Map<keyof T, Map<unknown, T[]>>();
   const propertyByPathCache = new Map<string, Map<unknown, T[]>>();
+  let queryCounter = 0;
+  const visited = new Uint32Array(items.length);
 
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     if (item.width !== undefined && item.height !== undefined) {
       index.add(item.position.x, item.position.y, item.position.x + item.width, item.position.y + item.height);
     } else {
@@ -64,7 +68,8 @@ export function indexItems<T extends IndexItem>(
     },
     byRect(rect: Rect): T[] {
       const { width, height } = mapDimensions;
-      const results = new Set<number>();
+      const results: T[] = [];
+      queryCounter++;
 
       const xRanges: { left: number; right: number }[] = [];
       if (rect.left < 0) {
@@ -88,45 +93,93 @@ export function indexItems<T extends IndexItem>(
         yRanges.push({ top: rect.top, bottom: rect.bottom });
       }
 
-      for (const xRange of xRanges) {
-        for (const yRange of yRanges) {
-          const indices = index.search(xRange.left, yRange.top, xRange.right, yRange.bottom);
-          for (const i of indices) results.add(i);
-        }
-      }
-
-      return Array.from(results).map((i) => items[i]);
-    },
-
-    byRadius(position: Vector2D, distance: number): T[] {
-      const { width, height } = mapDimensions;
-      const results = new Set<number>();
-
-      // Search original and wrapped positions.
-      // We check if the search circle at (x + dx, y + dy) overlaps with the indexed bounds [0, width] x [0, height].
-      for (let dx = -width; dx <= width; dx += width) {
-        for (let dy = -height; dy <= height; dy += height) {
-          const searchX = position.x + dx;
-          const searchY = position.y + dy;
-
-          const closestX = Math.max(0, Math.min(searchX, width));
-          const closestY = Math.max(0, Math.min(searchY, height));
-          const distSq = (searchX - closestX) ** 2 + (searchY - closestY) ** 2;
-
-          if (distSq <= distance ** 2) {
-            const indices = index.neighbors(searchX, searchY, undefined, distance);
-            for (const i of indices) results.add(i);
+      for (let i = 0; i < xRanges.length; i++) {
+        const xr = xRanges[i];
+        for (let j = 0; j < yRanges.length; j++) {
+          const yr = yRanges[j];
+          const indices = index.search(xr.left, yr.top, xr.right, yr.bottom);
+          for (let k = 0; k < indices.length; k++) {
+            const idx = indices[k];
+            if (visited[idx] !== queryCounter) {
+              visited[idx] = queryCounter;
+              results.push(items[idx]);
+            }
           }
         }
       }
 
-      return Array.from(results).map((i) => items[i]);
+      return results;
+    },
+
+    byRadius(position: Vector2D, distance: number): T[] {
+      const { width: worldWidth, height: worldHeight } = mapDimensions;
+      const results: T[] = [];
+      queryCounter++;
+
+      const distSqThreshold = distance * distance;
+
+      const minX = position.x - distance;
+      const maxX = position.x + distance;
+      const minY = position.y - distance;
+      const maxY = position.y + distance;
+
+      const xRanges: { left: number; right: number }[] = [];
+      if (minX < 0) {
+        xRanges.push({ left: minX + worldWidth, right: worldWidth });
+        xRanges.push({ left: 0, right: maxX });
+      } else if (maxX > worldWidth) {
+        xRanges.push({ left: minX, right: worldWidth });
+        xRanges.push({ left: 0, right: maxX - worldWidth });
+      } else {
+        xRanges.push({ left: minX, right: maxX });
+      }
+
+      const yRanges: { top: number; bottom: number }[] = [];
+      if (minY < 0) {
+        yRanges.push({ top: minY + worldHeight, bottom: worldHeight });
+        yRanges.push({ top: 0, bottom: maxY });
+      } else if (maxY > worldHeight) {
+        yRanges.push({ top: minY, bottom: worldHeight });
+        yRanges.push({ top: 0, bottom: maxY - worldHeight });
+      } else {
+        yRanges.push({ top: minY, bottom: maxY });
+      }
+
+      for (let i = 0; i < xRanges.length; i++) {
+        const xr = xRanges[i];
+        for (let j = 0; j < yRanges.length; j++) {
+          const yr = yRanges[j];
+          const indices = index.search(xr.left, yr.top, xr.right, yr.bottom);
+
+          for (let k = 0; k < indices.length; k++) {
+            const idx = indices[k];
+            if (visited[idx] !== queryCounter) {
+              visited[idx] = queryCounter;
+              const item = items[idx];
+
+              const dSq = calculateWrappedDistanceSq(
+                position,
+                item.position,
+                worldWidth,
+                worldHeight
+              );
+
+              if (dSq <= distSqThreshold) {
+                results.push(item);
+              }
+            }
+          }
+        }
+      }
+
+      return results;
     },
 
     byProperty(propertyName: keyof T, propertyValue: unknown): T[] {
       if (!propertyCache.has(propertyName)) {
         const newCache = new Map<unknown, T[]>();
-        for (const item of items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
           const value = item[propertyName];
           if (!newCache.has(value)) {
             newCache.set(value, []);
@@ -141,7 +194,8 @@ export function indexItems<T extends IndexItem>(
     byPropertyPath(propertyPath: string, propertyValue: unknown): T[] {
       if (!propertyByPathCache.has(propertyPath)) {
         const newCache = new Map<unknown, T[]>();
-        for (const item of items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
           const value = getNestedProperty(item, propertyPath);
           if (!newCache.has(value)) {
             newCache.set(value, []);

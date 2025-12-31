@@ -1,3 +1,4 @@
+import { BlackboardData } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { StrictJson } from '../persistence/persistence-types';
 import { StateData, StateType } from '../state-machine/state-machine-types';
 import { Vector2D } from '../utils/math-types';
@@ -17,11 +18,12 @@ export interface Entity {
   acceleration: number;
   forces: Vector2D[];
   velocity: Vector2D;
-  stateMachine?: [StateType, StateData];
+  stateMachine: [StateType, StateData];
   debuffs: ActiveDebuff[];
   gatheringCooldownTime?: number;
   eatingCooldownTime?: number;
   isHighlighted?: boolean;
+  aiBlackboard: BlackboardData;
 }
 
 /**
