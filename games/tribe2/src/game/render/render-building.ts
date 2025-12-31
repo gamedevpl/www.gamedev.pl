@@ -12,7 +12,7 @@ import {
 import { Vector2D } from '../utils/math-types';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
-import { renderWithWrapping } from './render-utils';
+import { renderWithWrapping, getOffscreenCanvas, pseudoRandom } from './render-utils';
 import { Entity } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS, FoodType } from '../entities/food-types';
 import { ITEM_TYPE_EMOJIS, ItemType } from '../entities/item-types';
@@ -34,14 +34,100 @@ const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 // Storage rendering constants
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
+// Caching logic
+const buildingSpriteCache = new Map<string, HTMLCanvasElement>();
+const MAX_BUILDING_CACHE_SIZE = 200;
+const SPRITE_PADDING = 20;
+
 /**
- * A simple pseudo-random number generator based on an input seed.
- * Returns a number between -1 and 1.
- * This ensures stones look "random" but don't jitter every frame.
+ * Generates a unique cache key for a building sprite based on its visual state.
  */
-function pseudoRandom(seed: number): number {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x); // Returns 0 to 1
+function getBuildingSpriteKey(
+  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number },
+  isHostile: boolean,
+  isGhost: boolean = false,
+  isValid: boolean = true,
+): string {
+  if (isGhost) {
+    return `ghost_${building.buildingType}_${isValid}`;
+  }
+
+  const b = building as BuildingEntity;
+  const hasFuel = b.buildingType === BuildingType.Bonfire && (b.fuelLevel ?? 0) > 0;
+  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}`;
+}
+
+/**
+ * Retrieves a cached building sprite or creates a new one.
+ */
+function getBuildingSprite(
+  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number },
+  isHostile: boolean,
+  isGhost: boolean = false,
+  isValid: boolean = true,
+): HTMLCanvasElement {
+  const key = getBuildingSpriteKey(building, isHostile, isGhost, isValid);
+  const cached = buildingSpriteCache.get(key);
+  if (cached) {
+    // Move to end for LRU
+    buildingSpriteCache.delete(key);
+    buildingSpriteCache.set(key, cached);
+    return cached;
+  }
+
+  const { buildingType, width, height, id } = building;
+  const definition = BUILDING_DEFINITIONS[buildingType];
+  const isConstructed = 'isConstructed' in building ? building.isConstructed : true;
+
+  const canvasWidth = width + SPRITE_PADDING * 2;
+  const canvasHeight = height + SPRITE_PADDING * 2;
+  const { canvas, ctx } = getOffscreenCanvas(canvasWidth, canvasHeight);
+
+  ctx.translate(canvasWidth / 2, canvasHeight / 2);
+
+  if (isGhost) {
+    const ghostColor = isValid ? '#4CAF50' : '#F44336';
+    drawStoneRect(ctx, width, height, 9999, ghostColor);
+
+    ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ghostColor;
+    ctx.fillText(definition.icon, 0, 0);
+  } else {
+    const b = building as BuildingEntity;
+    let icon = definition.icon;
+    if (b.buildingType === BuildingType.Bonfire && isConstructed) {
+      icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+    }
+
+    // 1. Draw the Stone Border
+    if (isHostile) {
+      drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+    } else {
+      drawStoneRect(ctx, width, height, id);
+    }
+
+    // 2. Draw Icon
+    ctx.globalAlpha = 0.5;
+    ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(icon, 0, 0);
+  }
+
+  // Manage cache size (LRU)
+  if (buildingSpriteCache.size >= MAX_BUILDING_CACHE_SIZE) {
+    const firstKey = buildingSpriteCache.keys().next().value;
+    if (firstKey) buildingSpriteCache.delete(firstKey);
+  }
+  buildingSpriteCache.set(key, canvas);
+
+  return canvas;
 }
 
 /**
@@ -171,51 +257,24 @@ export function renderBuilding(
   building: BuildingEntity,
   indexedWorld: IndexedWorldState,
 ): void {
-  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed, id } =
+  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed } =
     building;
-  const definition = BUILDING_DEFINITIONS[building.buildingType];
-
-  // Determine icon based on state (e.g., Bonfire fuel)
-  let icon = definition.icon;
-  if (building.buildingType === BuildingType.Bonfire && isConstructed) {
-    icon = (building.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
-  }
 
   // Check hostility
   const player = findPlayerEntity(indexedWorld);
-  const isHostile = player && isEnemyBuilding(player, building, indexedWorld);
+  const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
+
+  // Get cached sprite
+  const sprite = getBuildingSprite(building, isHostile);
 
   ctx.save();
-  ctx.translate(position.x, position.y);
-
-  // 1. Draw the Stone Border
-  // If under construction, we make the stones semi-transparent
+  // If under construction, we make the sprite semi-transparent
   if (!isConstructed) {
     ctx.globalAlpha = 0.3 + constructionProgress * 0.7;
   }
 
-  if (isHostile) {
-    drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
-  } else {
-    drawStoneRect(ctx, width, height, id);
-  }
-
-  // 2. Draw Icon (Floating in the middle, no background box)
-  // We add a slight shadow/outline to the emoji so it pops against grass
-  ctx.globalAlpha = 0.5; // Ensure icon is fully visible
-  ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  // Icon Shadow/Outline
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 4;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(icon, 0, 0);
-
-  // Clean up shadow for other draws
-  ctx.shadowBlur = 0;
-
+  // Draw cached sprite centered at position
+  ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
   ctx.restore();
 
   // 3. Draw Progress Bars (unchanged)
@@ -248,7 +307,6 @@ export function renderBuilding(
   }
 
   // 4. Render storage contents as miniature items
-  // This is called after ctx.restore() to ensure clean transform state
   if (
     (building.buildingType === BuildingType.StorageSpot || building.buildingType === BuildingType.Bonfire) &&
     isConstructed
@@ -270,26 +328,13 @@ export function renderGhostBuilding(
   const definition = BUILDING_DEFINITIONS[buildingType];
   const { width, height } = definition.dimensions;
 
+  // Get cached ghost sprite
+  const sprite = getBuildingSprite({ buildingType, width, height, id: 9999 }, false, true, isValid);
+
   const drawGhost = (ctx: CanvasRenderingContext2D, pos: Vector2D) => {
     ctx.save();
-    ctx.translate(pos.x, pos.y);
-
     ctx.globalAlpha = BUILDING_GHOST_OPACITY;
-
-    // Choose color based on validity
-    // Greenish for valid, Reddish for invalid
-    const ghostColor = isValid ? '#4CAF50' : '#F44336';
-
-    // Draw the stone border using a temporary seed (e.g. 9999)
-    drawStoneRect(ctx, width, height, 9999, ghostColor);
-
-    // Draw Icon
-    ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ghostColor;
-    ctx.fillText(definition.icon, 0, 0);
-
+    ctx.drawImage(sprite, pos.x - sprite.width / 2, pos.y - sprite.height / 2);
     ctx.restore();
   };
 

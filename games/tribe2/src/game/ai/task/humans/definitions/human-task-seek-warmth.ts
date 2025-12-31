@@ -104,6 +104,7 @@ export const humanSeekWarmthDefinition = defineHumanTask<HumanEntity>({
     // Comfort zone: don't seek warmth if it's already warm enough (Comfort threshold = COLD_THRESHOLD + 5)
     const comfortThreshold = COLD_THRESHOLD + 5;
     if (temp >= comfortThreshold) {
+      human.activeAction = 'idle';
       return [TaskResult.Success, 'Comfortable temperature reached'];
     }
 

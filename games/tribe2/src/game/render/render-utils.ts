@@ -86,7 +86,6 @@ export function isEntityInView(
   );
 }
 
-
 /**
  * Renders an entity or visual effect with wrapping around the game world boundaries.
  * @param ctx The canvas rendering context.
@@ -116,4 +115,36 @@ export function renderWithWrapping<T extends Entity | VisualEffect>(
   }
 
   entity.position = originalPosition;
+}
+
+/**
+ * Creates a new offscreen canvas of the specified dimensions and returns it along with its 2D context.
+ * @param width The width of the canvas.
+ * @param height The height of the canvas.
+ * @returns An object containing the canvas and its context.
+ */
+export function getOffscreenCanvas(
+  width: number,
+  height: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get 2D context for offscreen canvas');
+  }
+  return { canvas, ctx };
+}
+
+/**
+ * A simple pseudo-random number generator based on an input seed.
+ * Returns a number between 0 and 1.
+ * This ensures visual elements look "random" but don't jitter every frame.
+ * @param seed The input seed.
+ * @returns A pseudo-random number between 0 and 1.
+ */
+export function pseudoRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
 }

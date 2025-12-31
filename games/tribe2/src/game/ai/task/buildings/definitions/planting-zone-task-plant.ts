@@ -6,6 +6,7 @@ import { isSoilDepleted } from '../../../../entities/plants/soil-depletion-updat
 import { isPositionOccupied } from '../../../../utils/spatial-utils';
 import { BERRY_BUSH_PLANTING_CLEARANCE_RADIUS } from '../../../../entities/plants/berry-bush/berry-bush-consts';
 import { TASK_PLANTING_VALIDITY_TICKS } from '../../task-consts';
+import { IndexedWorldState } from '../../../../world-index/world-index-types';
 
 export const plantingZoneTaskPlantProducer = (
   building: BuildingEntity,
@@ -24,9 +25,9 @@ export const plantingZoneTaskPlantProducer = (
   }
 
   // Find an existing task produced by this building
-  const existingTask = Object.values(gameState.tasks).find(
-    (t) => t.type === TaskType.HumanPlantBush && t.creatorEntityId === building.id,
-  );
+  const existingTask = (gameState as IndexedWorldState).search.tasks
+    .byProperty('creatorEntityId', building.id)
+    .find((t) => t.type === TaskType.HumanPlantBush);
 
   if (existingTask) {
     return { [existingTask.id]: existingTask };

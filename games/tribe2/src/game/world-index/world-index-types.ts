@@ -92,5 +92,6 @@ export interface IndexedWorldState extends GameWorldState {
     distances: Record<EntityId, Record<EntityId, number>>;
     tribeWoodNeeds: Record<EntityId, number>;
     tribeAvailableWoodOnGround: Record<EntityId, number>;
+    tribeCenters: Record<EntityId, Vector2D>;
   };
 }

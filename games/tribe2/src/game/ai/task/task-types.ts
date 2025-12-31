@@ -26,6 +26,8 @@ export enum TaskType {
   HumanAttackHuman,
   HumanSeekWarmth,
   HumanFlee,
+  HumanStayNearTribe,
+  HumanStayNearParent,
 }
 
 export enum TaskPriority {

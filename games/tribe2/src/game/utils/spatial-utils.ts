@@ -114,20 +114,25 @@ export function findValidPlantingSpot(
 }
 
 export function getTribeCenter(leaderId: EntityId, gameState: GameWorldState): Vector2D {
+  const indexedState = gameState as IndexedWorldState;
+  if (indexedState.cache?.tribeCenters?.[leaderId]) {
+    return indexedState.cache.tribeCenters[leaderId];
+  }
+
   const buildings = (gameState as IndexedWorldState).search.building.byProperty('ownerId', leaderId);
   if (buildings.length > 0) {
     // buildings define the tribe center if any exist
     const positions = buildings.map((building) => building.position);
-    return getAveragePosition(positions);
+    return (indexedState.cache.tribeCenters[leaderId] = getAveragePosition(positions));
   }
 
   const tribeMembers = findTribeMembers(leaderId, gameState);
   if (tribeMembers.length === 0) {
     const leader = gameState.entities.entities[leaderId];
-    return leader ? leader.position : { x: 0, y: 0 };
+    return (indexedState.cache.tribeCenters[leaderId] = leader ? leader.position : { x: 0, y: 0 });
   }
   const positions = tribeMembers.map((member) => member.position);
-  return getAveragePosition(positions);
+  return (indexedState.cache.tribeCenters[leaderId] = getAveragePosition(positions));
 }
 
 export function getFamilyCenter(human: HumanEntity, gameState: GameWorldState): Vector2D {

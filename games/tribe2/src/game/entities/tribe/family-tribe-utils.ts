@@ -176,10 +176,19 @@ function findMalePartner(human: HumanEntity, gameState: GameWorldState): HumanEn
 
 export function findFamilyPatriarch(human: HumanEntity, gameState: GameWorldState): HumanEntity | null {
   // Children follow their father
-  if (!human.isAdult && human.fatherId) {
-    const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
-    if (father && father.type === 'human') {
-      return father;
+  if (!human.isAdult) {
+    if (human.fatherId) {
+      const father = gameState.entities.entities[human.fatherId] as HumanEntity | undefined;
+      if (father && father.type === 'human') {
+        return father;
+      }
+    }
+    // Fallback to mother for children
+    if (human.motherId) {
+      const mother = gameState.entities.entities[human.motherId] as HumanEntity | undefined;
+      if (mother && mother.type === 'human') {
+        return mother;
+      }
     }
   }
 

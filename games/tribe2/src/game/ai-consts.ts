@@ -104,3 +104,11 @@ export const BORDER_POST_MIN_ISOLATION_DISTANCE = 100; // Minimum distance from 
 
 // Takeover Safety Constants
 export const TAKEOVER_SAFETY_RADIUS = 150; // Distance within which enemies block takeover/border pushing
+
+// Human Proximity Leash Constants
+export const HUMAN_MAX_DISTANCE_FROM_TRIBE_CENTER = 600;
+export const HUMAN_MAX_DISTANCE_FROM_PARENT = 250;
+export const HUMAN_STAY_NEAR_TRIBE_STRENGTH = 0.5;
+export const HUMAN_STAY_NEAR_PARENT_STRENGTH = 0.7;
+export const HUMAN_STAY_NEAR_TRIBE_STOP_DISTANCE = 300;
+export const HUMAN_STAY_NEAR_PARENT_STOP_DISTANCE = 150;

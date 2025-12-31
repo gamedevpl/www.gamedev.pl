@@ -13,7 +13,7 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import { Vector2D } from '../utils/math-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { isEntityInView } from './render-utils';
+import { isEntityInView, getOffscreenCanvas, pseudoRandom } from './render-utils';
 
 // Metaball rendering constants
 const METABALL_THRESHOLD = 1.0; // Field strength threshold for rendering
@@ -31,19 +31,22 @@ interface CachedFieldData {
   edgePoints: Vector2D[];
   regions: Vector2D[][];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  canvas?: HTMLCanvasElement;
 }
 
 const fieldDataCache = new Map<string, CachedFieldData>();
 const MAX_CACHE_SIZE = 50; // Prevent unbounded growth
 
 /**
- * Generates a cache key from a list of zone IDs.
+ * Generates a cache key from a list of zone IDs and hostility status.
  */
-function generateCacheKey(zones: BuildingEntity[]): string {
-  return zones
-    .map((z) => z.id)
-    .sort((a, b) => a - b)
-    .join(',');
+function generateCacheKey(zones: BuildingEntity[], isHostile: boolean): string {
+  return (
+    zones
+      .map((z) => z.id)
+      .sort((a, b) => a - b)
+      .join(',') + `_${isHostile}`
+  );
 }
 
 /**
@@ -142,8 +145,9 @@ function getOrComputeFieldData(
   zones: BuildingEntity[],
   dimensions: { width: number; height: number },
   bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  isHostile: boolean,
 ): CachedFieldData {
-  const cacheKey = generateCacheKey(zones);
+  const cacheKey = generateCacheKey(zones, isHostile);
 
   // Check cache
   if (fieldDataCache.has(cacheKey)) {
@@ -220,27 +224,38 @@ function renderMetaballGroup(
 ): void {
   if (zones.length === 0) return;
 
-  // Save context state at the start
-  ctx.save();
+  const { bounds } = fieldData;
+  const padding = 10;
 
-  // Ensure globalAlpha is 1 for consistent rendering
-  ctx.globalAlpha = 1;
+  if (!fieldData.canvas) {
+    const canvasWidth = bounds.maxX - bounds.minX + padding * 2;
+    const canvasHeight = bounds.maxY - bounds.minY + padding * 2;
 
-  const { fieldValues, regions, bounds } = fieldData;
+    const { canvas, ctx: offCtx } = getOffscreenCanvas(canvasWidth, canvasHeight);
 
-  // Render the subtle fill for the metaball area
-  renderMetaballFill(ctx, fieldValues, bounds, isHostile);
+    // Translate so (0,0) in offscreen canvas corresponds to (minX-padding, minY-padding) in world space
+    offCtx.translate(-bounds.minX + padding, -bounds.minY + padding);
 
-  // Use cached connected regions and render stones for each
+    const { fieldValues, regions } = fieldData;
 
-  let regionSeed = groupSeed;
-  for (const region of regions) {
-    const sortedPoints = sortEdgePointsInRegion(region);
-    renderStonesAlongPath(ctx, sortedPoints, isHostile, regionSeed);
-    regionSeed += 1000;
+    // Render the subtle fill for the metaball area
+    renderMetaballFill(offCtx, fieldValues, bounds, isHostile);
+
+    // Use cached connected regions and render stones for each
+    let regionSeed = groupSeed;
+    for (const region of regions) {
+      const sortedPoints = sortEdgePointsInRegion(region);
+      renderStonesAlongPath(offCtx, sortedPoints, isHostile, regionSeed);
+      regionSeed += 1000;
+    }
+
+    fieldData.canvas = canvas;
   }
 
-  // Restore context state
+  // Draw the cached canvas
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.drawImage(fieldData.canvas, bounds.minX - padding, bounds.minY - padding);
   ctx.restore();
 }
 
@@ -465,14 +480,6 @@ function renderStone(ctx: CanvasRenderingContext2D, x: number, y: number, isHost
 }
 
 /**
- * Simple pseudo-random number generator.
- */
-function pseudoRandom(seed: number): number {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-}
-
-/**
  * Renders all planting zones using the metaball approach.
  * Zones are grouped by owner and rendered together for smooth joining.
  * Stone borders are rendered around the continuous metaball boundary.
@@ -523,7 +530,7 @@ export function renderPlantingZonesMetaball(
     const bounds = getGroupBounds(zones, dimensions, METABALL_PADDING);
 
     // Get or compute field data (uses cache)
-    const fieldData = getOrComputeFieldData(zones, dimensions, bounds);
+    const fieldData = getOrComputeFieldData(zones, dimensions, bounds, isHostile);
 
     // Render metaball fill and continuous stone border for the group
     renderMetaballGroup(ctx, zones, dimensions, isHostile, groupSeed, fieldData);

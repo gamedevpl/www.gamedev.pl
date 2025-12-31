@@ -82,12 +82,13 @@ export function indexWorldState(worldState: GameWorldState): IndexedWorldState {
           .filter((item) => item !== null),
         mapDimensions,
       ),
-      tasks: indexItems([], mapDimensions),
+      tasks: (worldState as IndexedWorldState).search?.tasks ?? indexItems([], mapDimensions),
     },
     cache: {
       distances: {},
       tribeWoodNeeds: {},
       tribeAvailableWoodOnGround: {},
+      tribeCenters: {},
     },
   };
 
