@@ -20,11 +20,7 @@ import {
 import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 import { getDepletedSectorsInArea } from '../entities/plants/soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
-import {
-  BUILDING_PLACEMENT_MAX_ANCHORS,
-  BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS,
-  BUILDING_PLACEMENT_TRIG_CACHE_SIZE,
-} from '../ai-consts';
+import { BUILDING_PLACEMENT_MAX_ANCHORS, BUILDING_PLACEMENT_TRIG_CACHE_SIZE } from '../ai-consts';
 import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { addVisualEffect } from './visual-effects-utils';
 import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
@@ -290,15 +286,6 @@ export function findAdjacentBuildingPlacement(
         if (canPlaceBuilding({ x: wx, y: wy }, buildingType, ownerId, gameState)) {
           // Found valid position - log stats and return
           stats.totalTimeMs = performance.now() - startTime;
-          if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
-            console.log(
-              `[BuildingPlacement] Slow search for ${buildingType}: ${stats.totalTimeMs.toFixed(2)}ms | anchors=${
-                stats.anchorsSearched
-              }, candidates=${stats.candidatesTested}, canPlace=${stats.canPlaceChecks}, tribeDist=${
-                stats.tribeDistanceChecks
-              }`,
-            );
-          }
           // OPTIMIZATION: Only allocate Vector2D on return
           return { x: wx, y: wy };
         }
@@ -308,15 +295,6 @@ export function findAdjacentBuildingPlacement(
 
   // No valid location found - log stats
   stats.totalTimeMs = performance.now() - startTime;
-  if (stats.totalTimeMs > BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS) {
-    console.log(
-      `[BuildingPlacement] Slow search (no valid location) for ${buildingType}: ${stats.totalTimeMs.toFixed(
-        2,
-      )}ms | anchors=${stats.anchorsSearched}, candidates=${stats.candidatesTested}, canPlace=${
-        stats.canPlaceChecks
-      }, tribeDist=${stats.tribeDistanceChecks}`,
-    );
-  }
 
   return undefined;
 }

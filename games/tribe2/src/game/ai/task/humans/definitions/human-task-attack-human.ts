@@ -17,13 +17,14 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
 
     // 1. Trespassing check - only care if the owner is hostile
     const ownerId = getOwnerOfPoint(human.position.x, human.position.y, gameState);
-    const isTrespassing = ownerId !== null && ownerId !== human.leaderId && isTribeHostile(human.leaderId, ownerId, gameState);
+    const isTrespassing =
+      ownerId !== null && ownerId !== human.leaderId && isTribeHostile(human.leaderId, ownerId, gameState);
 
     // 2. Aggression check (attacking someone else)
     const isAggressive = human.activeAction === 'attacking' && human.attackTargetId !== undefined;
 
     if (isTrespassing || isAggressive) {
-      const taskId = `attack-human-${human.id}-${gameState.time.toFixed(2)}`;
+      const taskId = `attack-human-${human.id}`;
       tasks[taskId] = {
         id: taskId,
         type: TaskType.HumanAttackHuman,

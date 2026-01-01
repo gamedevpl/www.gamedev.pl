@@ -1,8 +1,6 @@
 import { UpdateContext, GameWorldState } from '../../../world-types';
 import { TaskType, Task } from '../task-types';
-import {
-  calculatePlantingZoneCapacity,
-} from '../../../entities/tribe/tribe-food-utils';
+import { calculatePlantingZoneCapacity, isPlantingZoneViable } from '../../../entities/tribe/tribe-food-utils';
 import { findAdjacentBuildingPlacement } from '../../../utils/building-placement-utils';
 import { BuildingType } from '../../../entities/buildings/building-consts';
 import {
@@ -21,14 +19,140 @@ import {
   COLD_THRESHOLD,
   BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
-import { calculateWrappedDistance } from '../../../utils/math-utils';
-import { findNearestTerritoryEdge } from '../../../entities/tribe/territory-utils';
+import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
+import {
+  convertTerritoryIndexToPosition,
+} from '../../../entities/tribe/territory-utils';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { EntityId } from '../../../entities/entities-types';
 import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { Vector2D } from '../../../utils/math-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
+import { isTribeHostile } from '../../../utils/human-utils';
+import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
+
+export type FrontierCandidate = {
+  score: number;
+  fromIdx: number;
+  lastSeenTime: number;
+};
+
+const BLACKBOARD_OWNED_INDICES = 'ownedIndices';
+const BLACKBOARD_FRONTIER_SCAN_INDEX = 'frontierScanIndex';
+const BLACKBOARD_FRONTIER_CANDIDATES = 'frontierCandidates';
+
+/**
+ * Incrementally scans the tribe's border to identify expansion candidates.
+ * Called every tick to spread the computation.
+ */
+export function updateTribeFrontier(context: UpdateContext): void {
+  const { gameState } = context;
+  const indexedState = gameState as IndexedWorldState;
+
+  // 1. Identify tribe leaders
+  const allHumans = indexedState.search.human.all();
+  const leaders = allHumans.filter((h) => h.leaderId === h.id);
+
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+
+  for (const leader of leaders) {
+    if (!leader.aiBlackboard) continue;
+
+    const ownedIndices = Blackboard.get<number[]>(leader.aiBlackboard, BLACKBOARD_OWNED_INDICES) || [];
+    if (ownedIndices.length === 0) continue;
+
+    let scanIndex = Blackboard.get<number>(leader.aiBlackboard, BLACKBOARD_FRONTIER_SCAN_INDEX) || 0;
+    const candidates = Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
+
+    const tribeCenter = getTribeCenter(leader.id, gameState);
+
+    // Process 20 cells per tick
+    const cellsToProcess = 20;
+    for (let i = 0; i < cellsToProcess; i++) {
+      // Ensure scanIndex is within bounds
+      if (scanIndex >= ownedIndices.length) {
+        scanIndex = 0;
+      }
+      
+      const idx = ownedIndices[scanIndex];
+      scanIndex = (scanIndex + 1) % ownedIndices.length;
+
+      const gx = idx % gridWidth;
+      const gy = Math.floor(idx / gridWidth);
+
+      // Check 4 cardinal neighbors
+      const neighbors = [
+        { dx: 0, dy: -1 }, // Top
+        { dx: 1, dy: 0 },  // Right
+        { dx: 0, dy: 1 },  // Bottom
+        { dx: -1, dy: 0 }, // Left
+      ];
+
+      for (const { dx, dy } of neighbors) {
+        const nx = (gx + dx + gridWidth) % gridWidth;
+        const ny = (gy + dy + gridHeight) % gridHeight;
+        const targetIdx = ny * gridWidth + nx;
+
+        const neighborOwner = gameState.terrainOwnership[targetIdx];
+        const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
+
+        // If neighbor is unowned or hostile, it's a frontier cell
+        if (neighborOwner === null || isHostile) {
+          // 1. Smoothing Score (Convexity)
+          // Count how many of targetIdx's neighbors are already owned by us
+          let ownedNeighborCount = 0;
+          for (const { dx: ddx, dy: ddy } of neighbors) {
+            const nnx = (nx + ddx + gridWidth) % gridWidth;
+            const nny = (ny + ddy + gridHeight) % gridHeight;
+            if (gameState.terrainOwnership[nny * gridWidth + nnx] === leader.id) {
+              ownedNeighborCount++;
+            }
+          }
+          const smoothingScore = ownedNeighborCount * 20;
+
+          // 2. Strategic Score (Resources)
+          const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
+          const bushes = indexedState.search.berryBush.byRadius(targetPos, 100);
+          const trees = indexedState.search.tree.byRadius(targetPos, 100);
+          const resourceScore = bushes.length * 10 + trees.length * 5;
+
+          const hostilityScore = isHostile ? 50 : 0;
+
+          // 3. Distance Penalty
+          const dist = calculateWrappedDistance(targetPos, tribeCenter, worldWidth, worldHeight);
+          const distPenalty = (dist / 100) * 5;
+
+          const totalScore = smoothingScore + resourceScore + hostilityScore - distPenalty;
+
+          candidates[targetIdx.toString()] = {
+            score: totalScore,
+            fromIdx: idx,
+            lastSeenTime: gameState.time,
+          };
+        }
+      }
+    }
+
+    // Keep top 50 candidates to prevent bloat
+    const sortedEntries = Object.entries(candidates).sort((a, b) => b[1].score - a[1].score);
+    if (sortedEntries.length > 50) {
+      const cappedCandidates: Record<string, FrontierCandidate> = {};
+      for (let j = 0; j < 50; j++) {
+        const [idxStr, cand] = sortedEntries[j];
+        cappedCandidates[idxStr] = cand;
+      }
+      Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, cappedCandidates);
+    } else {
+      Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
+    }
+
+    Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_SCAN_INDEX, scanIndex);
+  }
+}
 
 /**
  * Produces building placement tasks at the tribe level.
@@ -99,6 +223,15 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     const leader = gameState.entities.entities[leaderId] as HumanEntity;
     if (!leader) continue;
 
+    // Snapshotting (Hourly): Refresh the list of owned grid indices
+    const ownedIndices: number[] = [];
+    for (let i = 0; i < gameState.terrainOwnership.length; i++) {
+      if (gameState.terrainOwnership[i] === leaderId) {
+        ownedIndices.push(i);
+      }
+    }
+    Blackboard.set(leader.aiBlackboard, BLACKBOARD_OWNED_INDICES, ownedIndices);
+
     const tribeMembers = tribeMembersMap.get(leaderId) || [];
     if (tribeMembers.length < TRIBE_BUILDINGS_MIN_HEADCOUNT) continue;
 
@@ -118,10 +251,10 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
       }
     }
 
-    // --- STORAGE ---
+    // --- STORAGE -----
     if (!hasActiveTask(TaskType.HumanPlaceStorage)) {
-      const storageSpots = tribeBuildings.filter(b => b.buildingType === BuildingType.StorageSpot);
-      
+      const storageSpots = tribeBuildings.filter((b) => b.buildingType === BuildingType.StorageSpot);
+
       // Calculate utilization
       let totalItems = 0;
       let totalCapacity = 0;
@@ -131,7 +264,7 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
         totalCapacity += s.storageCapacity || 0;
       }
       const utilization = totalCapacity > 0 ? totalItems / totalCapacity : 0;
-      
+
       const needsStorage = storageSpots.length === 0 || utilization > LEADER_BUILDING_STORAGE_UTILIZATION_THRESHOLD;
 
       if (needsStorage) {
@@ -156,9 +289,9 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
       }
     }
 
-    // --- BONFIRE ---
+    // --- BONFIRE -----
     if (!hasActiveTask(TaskType.HumanPlaceBonfire)) {
-      const bonfires = tribeBuildings.filter(b => b.buildingType === BuildingType.Bonfire);
+      const bonfires = tribeBuildings.filter((b) => b.buildingType === BuildingType.Bonfire);
       const tribeCenter = tribeCenters.get(leaderId)!;
       const currentTemp = getTemperatureAt(
         gameState.temperature,
@@ -219,9 +352,11 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
       }
     }
 
-    // --- PLANTING ZONE ---
+    // --- PLANTING ZONE -----
     if (!hasActiveTask(TaskType.HumanPlacePlantingZone)) {
-      const plantingZones = tribeBuildings.filter(b => b.buildingType === BuildingType.PlantingZone);
+      const plantingZones = tribeBuildings.filter(
+        (b) => b.buildingType === BuildingType.PlantingZone && isPlantingZoneViable(b, gameState),
+      );
       const currentCapacity = plantingZones.reduce((sum, zone) => sum + calculatePlantingZoneCapacity(zone), 0);
       const targetBushes = Math.max(
         LEADER_BUILDING_MIN_BUSHES,
@@ -244,13 +379,87 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
       }
     }
 
-    // --- BORDER POST ---
-    if (!hasActiveTask(TaskType.HumanPlaceBorderPost)) {
-      const expandBordersWeight = leader.tribeControl?.armyControl?.expandBorders ?? 0;
-      if (expandBordersWeight >= 2) {
-        const edge = findNearestTerritoryEdge(leader.position, leaderId, gameState);
-        if (edge) {
-          createPlacementTask(leaderId, TaskType.HumanPlaceBorderPost, edge, gameState);
+    // --- BORDER POST -----
+    const expandBordersWeight = leader.tribeControl?.armyControl?.expandBorders ?? 0;
+    if (expandBordersWeight >= 2) {
+      const candidates = Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
+      const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+      
+      const borderPosts = tribeBuildings.filter(b => b.buildingType === BuildingType.BorderPost);
+      const activeBorderTasks = existingTasks.filter(t => t.type === TaskType.HumanPlaceBorderPost);
+
+      // Pruning Candidates (Hourly)
+      for (const targetIdxStr in candidates) {
+        const targetIdx = parseInt(targetIdxStr, 10);
+        const neighborOwner = gameState.terrainOwnership[targetIdx];
+        const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
+
+        // 1. Remove if no longer unowned/hostile or captured by us
+        if (neighborOwner === leaderId || (neighborOwner !== null && !isHostile)) {
+          delete candidates[targetIdxStr];
+          continue;
+        }
+
+        // 2. Remove if too close to existing border posts or tasks
+        const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
+        const isTooClose = 
+          borderPosts.some(p => calculateWrappedDistanceSq(targetPos, p.position, worldWidth, worldHeight) < 100 * 100) ||
+          activeBorderTasks.some(t => calculateWrappedDistanceSq(targetPos, t.position, worldWidth, worldHeight) < 100 * 100);
+
+        if (isTooClose) {
+          delete candidates[targetIdxStr];
+        }
+      }
+      Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
+
+      const maxConcurrentTasks = 3;
+      if (activeBorderTasks.length < maxConcurrentTasks) {
+        // Sort and select top candidates
+        const sortedCandidates = Object.entries(candidates)
+          .map(([idx, cand]) => ({ idx: parseInt(idx, 10), ...cand }))
+          .sort((a, b) => b.score - a.score);
+
+        const selectedPositions: Vector2D[] = [];
+        for (const candidate of sortedCandidates) {
+          if (selectedPositions.length >= maxConcurrentTasks - activeBorderTasks.length) break;
+
+          const targetPos = convertTerritoryIndexToPosition(candidate.idx, worldWidth);
+          
+          const isFarEnough = selectedPositions.every(pos => 
+            calculateWrappedDistanceSq(targetPos, pos, worldWidth, worldHeight) > 100 * 100
+          );
+
+          if (isFarEnough) {
+            selectedPositions.push(targetPos);
+          }
+        }
+
+        // Identify available indices for stable task IDs
+        const usedIndices = new Set(
+          activeBorderTasks
+            .map((t) => {
+              const parts = t.id.split('-');
+              return parseInt(parts[parts.length - 1], 10);
+            })
+            .filter((idx) => !isNaN(idx))
+        );
+
+        const availableIndices: number[] = [];
+        for (let i = 0; i < maxConcurrentTasks; i++) {
+          if (!usedIndices.has(i)) {
+            availableIndices.push(i);
+          }
+        }
+
+        // Create tasks for selected candidates
+        for (let i = 0; i < selectedPositions.length; i++) {
+          createPlacementTask(
+            leaderId,
+            TaskType.HumanPlaceBorderPost,
+            selectedPositions[i],
+            gameState,
+            availableIndices[i],
+          );
         }
       }
     }
@@ -260,8 +469,14 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
 /**
  * Helper to create and add a placement task to the game state.
  */
-function createPlacementTask(leaderId: EntityId, type: TaskType, target: Vector2D, gameState: GameWorldState): void {
-  const taskId = `${TaskType[type]}-${leaderId}-${gameState.time.toFixed(2)}`;
+function createPlacementTask(
+  leaderId: EntityId,
+  type: TaskType,
+  target: Vector2D,
+  gameState: GameWorldState,
+  index: number = 0,
+) {
+  const taskId = `${TaskType[type]}-${leaderId}-${index}`;
   gameState.tasks[taskId] = {
     id: taskId,
     position: target,

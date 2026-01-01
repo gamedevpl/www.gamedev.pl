@@ -53,7 +53,7 @@ export const plantingZoneTaskPlantProducer = (
     }
 
     if (!isPositionOccupied(position, gameState, BERRY_BUSH_PLANTING_CLEARANCE_RADIUS)) {
-      const taskId = `plant-bush-${building.id}-${gameState.time}`;
+      const taskId = `plant-bush-${building.id}`;
       const task: Task = {
         id: taskId,
         type: TaskType.HumanPlantBush,

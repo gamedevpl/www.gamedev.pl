@@ -15,7 +15,7 @@ import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
 import { updateTemperature } from './temperature/temperature-update';
-import { produceTribeBuildingTasks } from './ai/task/tribes/tribe-building-task-producer';
+import { produceTribeBuildingTasks, updateTribeFrontier } from './ai/task/tribes/tribe-building-task-producer';
 import { cleanupExpiredTasks } from './ai/task/task-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
@@ -81,6 +81,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Process entity interactions
     interactionsUpdate({ gameState: indexedState, deltaTime: deltaTime });
+
+    // Incremental frontier analysis for tribe expansion
+    updateTribeFrontier({ gameState: indexedState, deltaTime });
 
     // Global tribe management: check for orphaned tribes and execute merges/dissolutions
     // We run this once per game hour to maintain performance and avoid UI churn

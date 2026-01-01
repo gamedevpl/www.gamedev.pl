@@ -83,7 +83,6 @@ export const LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER 
 
 // Building Placement Optimization Constants
 export const BUILDING_PLACEMENT_MAX_ANCHORS = 8; // Maximum number of anchor points (buildings) to search from
-export const BUILDING_PLACEMENT_SLOW_LOG_THRESHOLD_MS = 5; // Log searches that take longer than this (in milliseconds)
 export const BUILDING_PLACEMENT_TRIG_CACHE_SIZE = 16; // Maximum number of angles to pre-compute for trig cache
 
 // Leader Building Interaction Constants (Enemy Buildings)

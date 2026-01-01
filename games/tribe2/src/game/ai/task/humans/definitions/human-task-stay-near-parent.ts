@@ -32,14 +32,6 @@ export const humanStayNearParentDefinition = defineHumanTask<HumanEntity>({
       return tasks;
     }
 
-    // Children should not follow parent who is outside of tribe territory
-    if (child.leaderId && tribeHasTerritory(child.leaderId, gameState)) {
-      const parentOwner = getOwnerOfPoint(parent.position.x, parent.position.y, gameState);
-      if (parentOwner !== child.leaderId) {
-        return tasks;
-      }
-    }
-
     const taskId = `stay-near-parent-${child.id}`;
     tasks[taskId] = {
       id: taskId,
@@ -85,11 +77,15 @@ export const humanStayNearParentDefinition = defineHumanTask<HumanEntity>({
     return score;
   },
   executor: (task, child, context) => {
-    if (typeof task.target !== 'number') return TaskResult.Failure;
+    if (typeof task.target !== 'number') {
+      child.activeAction = 'idle';
+      return TaskResult.Failure;
+    }
 
     const parent = context.gameState.entities.entities[task.target] as HumanEntity | undefined;
     if (!parent || parent.type !== 'human') {
       child.activeAction = 'idle';
+      child.target = undefined;
       return TaskResult.Failure;
     }
 
@@ -104,7 +100,6 @@ export const humanStayNearParentDefinition = defineHumanTask<HumanEntity>({
     if (distance <= HUMAN_STAY_NEAR_PARENT_STOP_DISTANCE) {
       child.activeAction = 'idle';
       child.target = undefined;
-      child.direction = { x: 0, y: 0 };
       return TaskResult.Success;
     }
 

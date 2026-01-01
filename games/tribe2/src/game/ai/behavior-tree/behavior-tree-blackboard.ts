@@ -12,7 +12,7 @@ type NodeExecutionEntry = {
   executionHistory: { time: number; status: NodeStatus }[];
 };
 
-type BlackboardValueType =
+export type BlackboardValueType =
   | Vector2D
   | number
   | string
