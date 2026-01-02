@@ -95,7 +95,7 @@ export function tribeHasTerritory(ownerId: EntityId, gameState: GameWorldState):
     }
     cachedTerrainOwnershipRef = gameState.terrainOwnership;
   }
-  return cachedTerritoryOwnerSet!.has(ownerId);
+  return cachedTerritoryOwnerSet?.has(ownerId) ?? false;
 }
 
 /**

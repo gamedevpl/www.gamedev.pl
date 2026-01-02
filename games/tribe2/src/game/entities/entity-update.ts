@@ -85,12 +85,18 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
     }
   }
 
-  // Clean up expired debuffs
+  // Clean up expired debuffs - only allocate new array if there are expired debuffs
   if (debuffs.length > 0) {
-    entity.debuffs = debuffs.filter((debuff) => {
-      const debuffElapsed = currentTime - debuff.startTime;
-      return debuffElapsed < debuff.duration;
-    });
+    let hasExpired = false;
+    for (let i = 0; i < debuffs.length; i++) {
+      if (currentTime - debuffs[i].startTime >= debuffs[i].duration) {
+        hasExpired = true;
+        break;
+      }
+    }
+    if (hasExpired) {
+      entity.debuffs = debuffs.filter((debuff) => currentTime - debuff.startTime < debuff.duration);
+    }
   }
 
   // Apply accumulated forces to velocity
@@ -124,7 +130,7 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces.length = 0;
 
   // Apply soil depletion when humans are walking (moving with significant velocity)
-  // Inline vectorLength check to avoid function call overhead
+  // Original: vectorLength(velocity) > 0.1, which equals sqrt(x²+y²) > 0.1, equivalent to x²+y² > 0.01
   if (entity.type === 'human' && (entity.velocity.x * entity.velocity.x + entity.velocity.y * entity.velocity.y) > 0.01) {
     applySoilWalkDepletion(
       updateContext.gameState.soilDepletion,
