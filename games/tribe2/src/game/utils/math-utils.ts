@@ -87,13 +87,30 @@ export function dirToTarget(
 }
 
 export function calculateWrappedDistance(v1: Vector2D, v2: Vector2D, worldWidth: number, worldHeight: number): number {
-  const difference = getDirectionVectorOnTorus(v1, v2, worldWidth, worldHeight);
-  return vectorLength(difference);
+  // Inline the math to avoid object allocation
+  return Math.sqrt(calculateWrappedDistanceSq(v1, v2, worldWidth, worldHeight));
 }
 
 export function calculateWrappedDistanceSq(v1: Vector2D, v2: Vector2D, worldWidth: number, worldHeight: number): number {
-  const difference = getDirectionVectorOnTorus(v1, v2, worldWidth, worldHeight);
-  return difference.x * difference.x + difference.y * difference.y;
+  // Inline getDirectionVectorOnTorus to avoid object allocation
+  let dx = v2.x - v1.x;
+  let dy = v2.y - v1.y;
+
+  // Wrap around horizontally if shorter
+  if (dx > worldWidth / 2) {
+    dx -= worldWidth;
+  } else if (dx < -worldWidth / 2) {
+    dx += worldWidth;
+  }
+
+  // Wrap around vertically if shorter
+  if (dy > worldHeight / 2) {
+    dy -= worldHeight;
+  } else if (dy < -worldHeight / 2) {
+    dy += worldHeight;
+  }
+
+  return dx * dx + dy * dy;
 }
 
 export function vectorDot(v1: Vector2D, v2: Vector2D): number {

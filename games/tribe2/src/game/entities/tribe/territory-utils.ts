@@ -72,14 +72,39 @@ export function checkPositionInTerritory(
   };
 }
 
+// Cache for tribeHasTerritory to avoid O(n) includes() calls
+let cachedTerritoryOwnerSet: Set<EntityId> | null = null;
+let cachedTerrainOwnershipRef: Array<EntityId | null> | null = null;
+
 /**
  * Checks if a tribe has any territory at all.
+ * Uses a cached Set for O(1) lookups, invalidated when terrainOwnership changes.
  * @param ownerId The tribe leader ID
  * @param gameState The current game state
  */
 export function tribeHasTerritory(ownerId: EntityId, gameState: GameWorldState): boolean {
-  // Fast native check
-  return gameState.terrainOwnership.includes(ownerId);
+  // Rebuild cache if terrainOwnership array reference changed
+  if (cachedTerrainOwnershipRef !== gameState.terrainOwnership) {
+    cachedTerritoryOwnerSet = new Set<EntityId>();
+    const ownership = gameState.terrainOwnership;
+    for (let i = 0; i < ownership.length; i++) {
+      const owner = ownership[i];
+      if (owner !== null) {
+        cachedTerritoryOwnerSet.add(owner);
+      }
+    }
+    cachedTerrainOwnershipRef = gameState.terrainOwnership;
+  }
+  return cachedTerritoryOwnerSet!.has(ownerId);
+}
+
+/**
+ * Invalidates the tribeHasTerritory cache.
+ * Must be called when terrain ownership is modified.
+ */
+export function invalidateTerritoryOwnerCache(): void {
+  cachedTerrainOwnershipRef = null;
+  cachedTerritoryOwnerSet = null;
 }
 
 /**
@@ -629,6 +654,7 @@ export function paintTerrainOwnership(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): void {
+  invalidateTerritoryOwnerCache();
   applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: false });
 }
 
@@ -641,6 +667,7 @@ export function takeOverTerrainOwnership(
   ownerId: EntityId,
   gameState: GameWorldState,
 ): void {
+  invalidateTerritoryOwnerCache();
   applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: true });
 }
 
@@ -783,6 +810,7 @@ export function replaceOwnerInTerrainOwnership(
   oldOwnerId: EntityId,
   newOwnerId: EntityId | null,
 ): void {
+  invalidateTerritoryOwnerCache();
   const ownershipGrid = gameState.terrainOwnership;
   for (let i = 0; i < ownershipGrid.length; i++) {
     if (ownershipGrid[i] === oldOwnerId) {

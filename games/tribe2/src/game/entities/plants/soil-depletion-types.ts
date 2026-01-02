@@ -28,25 +28,33 @@ export interface SoilDepletionState {
   lastUpdateTime: number;
 
   /**
-   * Sparse map of soil sectors, keyed by "x,y" grid coordinates.
+   * Sparse map of soil sectors, keyed by packed numeric grid coordinates.
    * Only sectors with non-default values are stored.
    */
-  sectors: Record<string, SoilSector>;
+  sectors: Record<number, SoilSector>;
+}
+
+// Use a large enough multiplier to pack coordinates into a single number
+// This avoids string operations entirely. Max grid size is 2^16 = 65536
+const SECTOR_KEY_MULTIPLIER = 65536;
+
+/**
+ * Creates a numeric key for the sector map from grid coordinates.
+ * Uses bit packing for O(1) key generation.
+ */
+export function getSectorKey(gridX: number, gridY: number): number {
+  return gridY * SECTOR_KEY_MULTIPLIER + gridX;
 }
 
 /**
- * Creates a key for the sector map from grid coordinates.
+ * Parses a numeric sector key back into grid coordinates.
+ * Uses bit unpacking for O(1) parsing.
  */
-export function getSectorKey(gridX: number, gridY: number): string {
-  return `${gridX},${gridY}`;
-}
-
-/**
- * Parses a sector key back into grid coordinates.
- */
-export function parseSectorKey(key: string): { gridX: number; gridY: number } {
-  const [x, y] = key.split(',').map(Number);
-  return { gridX: x, gridY: y };
+export function parseSectorKey(key: number): { gridX: number; gridY: number } {
+  return {
+    gridX: key % SECTOR_KEY_MULTIPLIER,
+    gridY: Math.floor(key / SECTOR_KEY_MULTIPLIER),
+  };
 }
 
 /**
