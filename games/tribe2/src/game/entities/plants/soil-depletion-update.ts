@@ -191,9 +191,10 @@ export function updateSoilRecovery({
   const maxGridY = Math.ceil(worldHeight / SOIL_SECTOR_SIZE);
 
   // Process all stored sectors
-  const keysToRemove: string[] = [];
+  const keysToRemove: number[] = [];
 
-  for (const key of Object.keys(state.sectors)) {
+  for (const keyString of Object.keys(state.sectors)) {
+    const key = Number(keyString);
     const sector = state.sectors[key];
 
     // Check if sector has been inactive long enough for recovery
@@ -218,9 +219,10 @@ export function updateSoilRecovery({
 
     // Clean up old entity cooldown entries
     const cooldownThreshold = currentTime - SOIL_WALK_DEPLETION_COOLDOWN_HOURS * 10;
-    for (const entityId of Object.keys(sector.lastAffectedBy)) {
-      if (sector.lastAffectedBy[Number(entityId)] < cooldownThreshold) {
-        delete sector.lastAffectedBy[Number(entityId)];
+    for (const entityIdString of Object.keys(sector.lastAffectedBy)) {
+      const entityId = Number(entityIdString);
+      if (sector.lastAffectedBy[entityId] < cooldownThreshold) {
+        delete sector.lastAffectedBy[entityId];
       }
     }
   }
@@ -241,7 +243,8 @@ export function getDepletedSectorsForRendering(
 ): Array<{ gridX: number; gridY: number; health: number }> {
   const result: Array<{ gridX: number; gridY: number; health: number }> = [];
 
-  for (const key of Object.keys(state.sectors)) {
+  for (const keyString of Object.keys(state.sectors)) {
+    const key = Number(keyString);
     const sector = state.sectors[key];
     if (sector.health < renderThreshold) {
       const { gridX, gridY } = parseSectorKey(key);

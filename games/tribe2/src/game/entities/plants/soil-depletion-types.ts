@@ -28,25 +28,27 @@ export interface SoilDepletionState {
   lastUpdateTime: number;
 
   /**
-   * Sparse map of soil sectors, keyed by "x,y" grid coordinates.
+   * Sparse map of soil sectors, keyed by numeric coordinates (gridX + gridY * 65536).
    * Only sectors with non-default values are stored.
    */
-  sectors: Record<string, SoilSector>;
+  sectors: Record<number, SoilSector>;
 }
 
 /**
  * Creates a key for the sector map from grid coordinates.
  */
-export function getSectorKey(gridX: number, gridY: number): string {
-  return `${gridX},${gridY}`;
+export function getSectorKey(gridX: number, gridY: number): number {
+  return gridX + gridY * 65536;
 }
 
 /**
  * Parses a sector key back into grid coordinates.
  */
-export function parseSectorKey(key: string): { gridX: number; gridY: number } {
-  const [x, y] = key.split(',').map(Number);
-  return { gridX: x, gridY: y };
+export function parseSectorKey(key: number): { gridX: number; gridY: number } {
+  return {
+    gridX: key % 65536,
+    gridY: Math.floor(key / 65536),
+  };
 }
 
 /**
