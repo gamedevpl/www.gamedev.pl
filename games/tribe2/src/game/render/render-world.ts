@@ -1,5 +1,6 @@
 import { Entity } from '../entities/entities-types';
 import { GameWorldState } from '../world-types';
+import { IndexedWorldState, Rect } from '../world-index/world-index-types';
 import { renderBerryBush } from './render-bush';
 import { BerryBushEntity } from '../entities/plants/berry-bush/berry-bush-types';
 import { renderCorpse } from './render-corpse';
@@ -32,6 +33,8 @@ import { renderPlantingZonesMetaball } from './render-planting-zones.ts';
 import { BuildingType } from '../entities/buildings/building-consts.ts';
 import { renderTree } from './render-tree';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
+
+const VIEWPORT_QUERY_MARGIN = 200;
 
 interface LightSource {
   position: Vector2D;
@@ -150,16 +153,32 @@ export function renderWorld(
   // This creates smooth, organic joining of adjacent zones belonging to the same tribe
   renderPlantingZonesMetaball(ctx, gameState, viewportCenter, player?.leaderId);
 
-  const sortedEntities = Object.values(gameState.entities.entities).sort((a, b) =>
+  const indexedWorld = gameState as IndexedWorldState;
+  const viewportRect: Rect = {
+    left: viewportCenter.x - canvasDimensions.width / 2 - VIEWPORT_QUERY_MARGIN,
+    top: viewportCenter.y - canvasDimensions.height / 2 - VIEWPORT_QUERY_MARGIN,
+    right: viewportCenter.x + canvasDimensions.width / 2 + VIEWPORT_QUERY_MARGIN,
+    bottom: viewportCenter.y + canvasDimensions.height / 2 + VIEWPORT_QUERY_MARGIN,
+  };
+
+  const visibleEntities = [
+    ...indexedWorld.search.human.byRect(viewportRect),
+    ...indexedWorld.search.building.byRect(viewportRect),
+    ...indexedWorld.search.berryBush.byRect(viewportRect),
+    ...indexedWorld.search.tree.byRect(viewportRect),
+    ...indexedWorld.search.corpse.byRect(viewportRect),
+    ...indexedWorld.search.prey.byRect(viewportRect),
+    ...indexedWorld.search.predator.byRect(viewportRect),
+  ].sort((a, b) =>
     isDebugOn && a.id === gameState.debugCharacterId && a.id !== b.id
       ? -1
       : a.type === 'building' && b.type !== 'building'
       ? -1
-      : a.position.y - b.position.y || a.id - b.id,
-  );
-
-  const visibleEntities = sortedEntities.filter((entity) =>
-    isEntityInView(entity, viewportCenter, canvasDimensions, gameState.mapDimensions),
+      : a.position.y < b.position.y
+      ? -1
+      : a.position.y > b.position.y
+      ? 1
+      : a.id - b.id,
   );
 
   visibleEntities.forEach((entity: Entity) => {
