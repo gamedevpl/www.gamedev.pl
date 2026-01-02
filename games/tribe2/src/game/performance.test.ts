@@ -415,8 +415,9 @@ describe('Performance Test Suite - updateWorld with 1k+ humans', () => {
     const deltaTime = 1 / 60;
 
     // Run garbage collection if available (Node.js --expose-gc flag)
-    if (global.gc) {
-      global.gc();
+    const gc = (globalThis as unknown as { gc?: () => void }).gc;
+    if (gc) {
+      gc();
     }
 
     const beforeHeap = process.memoryUsage().heapUsed;

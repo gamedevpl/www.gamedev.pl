@@ -7,7 +7,15 @@ import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { TREE_RADIUS } from '../entities/plants/tree/tree-consts';
 
-// Reusable object to avoid allocations in hot paths
+// Minimum distance squared for collision handling (avoids division by zero)
+const MIN_DISTANCE_SQ_THRESHOLD = 0.0001;
+
+/**
+ * Reusable object to avoid allocations in hot paths.
+ * IMPORTANT: This is only safe because interactions are processed synchronously
+ * in a single-threaded context. The value is consumed immediately after
+ * getDirectionFast is called before any other call can overwrite it.
+ */
 const _tempVector = { x: 0, y: 0 };
 
 /**
@@ -113,7 +121,7 @@ export const humanCollisionInteraction: InteractionDefinition<HumanEntity, Human
     );
 
     // Avoid division by zero or extreme forces if entities are exactly on top of each other
-    if (distanceSq < 0.0001) {
+    if (distanceSq < MIN_DISTANCE_SQ_THRESHOLD) {
       source.forces.push({ x: 0.1, y: 0 });
       target.forces.push({ x: -0.1, y: 0 });
       return;
@@ -179,7 +187,7 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
       worldHeight,
     );
 
-    if (distanceSq < 0.0001) {
+    if (distanceSq < MIN_DISTANCE_SQ_THRESHOLD) {
       source.forces.push({ x: 1.0, y: 0 });
       return;
     }
@@ -241,7 +249,7 @@ export const preyTreeCollisionInteraction: InteractionDefinition<PreyEntity, Tre
       worldHeight,
     );
 
-    if (distanceSq < 0.0001) {
+    if (distanceSq < MIN_DISTANCE_SQ_THRESHOLD) {
       source.forces.push({ x: 1.0, y: 0 });
       return;
     }
@@ -302,7 +310,7 @@ export const predatorTreeCollisionInteraction: InteractionDefinition<PredatorEnt
       worldHeight,
     );
 
-    if (distanceSq < 0.0001) {
+    if (distanceSq < MIN_DISTANCE_SQ_THRESHOLD) {
       source.forces.push({ x: 1.0, y: 0 });
       return;
     }
