@@ -161,6 +161,15 @@ export const handleUIButtonClick = (
         }
       }
       break;
+    case UIButtonActionType.OpenTribeModal:
+      gameState.tribeModalOpen = true;
+      break;
+    case UIButtonActionType.RecenterCamera:
+      gameState.cameraFollowingPlayer = true;
+      break;
+    case UIButtonActionType.CloseTribeModal:
+      gameState.tribeModalOpen = false;
+      break;
     case UIButtonActionType.OpenRoleManager:
       if (shift) {
         // Toggle roleManagement autopilot behavior

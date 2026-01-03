@@ -21,6 +21,11 @@ import { cleanupExpiredTasks } from './ai/task/task-utils';
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
 function updateViewport(state: GameWorldState, deltaTime: number): void {
+  // Only follow player if the flag is set
+  if (!state.cameraFollowingPlayer) {
+    return;
+  }
+
   const player = findPlayerEntity(state);
   if (player) {
     state.viewportCenter = vectorLerp(state.viewportCenter, player.position, VIEWPORT_FOLLOW_SPEED * deltaTime);

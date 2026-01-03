@@ -67,7 +67,17 @@ export const GameWorldController: React.FC<GameWorldControllerProps> = ({
     }
 
     // Update viewport center by calling the new utility function
+    // Detect external snaps (e.g., via centerViewportOn) and sync the ref
+    if (
+      gameStateRef.current.viewportCenter.x !== viewportCenterRef.current.x ||
+      gameStateRef.current.viewportCenter.y !== viewportCenterRef.current.y
+    ) {
+      viewportCenterRef.current = gameStateRef.current.viewportCenter;
+    }
+
     viewportCenterRef.current = updateViewportCenter(gameStateRef.current, viewportCenterRef.current, deltaTime);
+    // Sync the game state with the animated viewport position for minimap and logic
+    gameStateRef.current.viewportCenter = viewportCenterRef.current;
 
     const renderGameStart = performance.now();
     renderGame(

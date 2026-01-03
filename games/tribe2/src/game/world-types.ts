@@ -142,6 +142,14 @@ export interface GameWorldState {
   buildMenuOpen: boolean;
   roleManagerOpen: boolean;
   armyControlOpen: boolean;
+  tribeModalOpen: boolean;
+  cameraFollowingPlayer: boolean;
+  cameraZoom: number;
+  cameraTargetPosition?: Vector2D;
+  hoveredMinimapTribeId?: EntityId | null;
+  minimapRect?: Rect;
+  isDraggingMinimap: boolean;
+  minimapDragDistance: number;
   selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;

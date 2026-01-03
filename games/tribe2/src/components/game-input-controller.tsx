@@ -15,6 +15,10 @@ import {
   handleDebugPanelMouseDown,
   handleDebugPanelMouseUp,
   handleDebugPanelMouseMove,
+  handleMinimapMove,
+  handleMinimapMouseDown,
+  handleMinimapWheel,
+  handleMinimapMouseUp,
 } from '../game/input';
 import { screenToWorldCoords } from '../game/render/render-utils';
 
@@ -43,6 +47,15 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
     const handleWheel = (event: WheelEvent) => {
       if (!isActive() || gameStateRef.current.gameOver || !canvasRef.current) return;
 
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      if (handleMinimapWheel(event, mouseX, mouseY, gameStateRef.current, viewportCenterRef)) {
+        event.preventDefault();
+        return;
+      }
+
       const debugResult = handleDebugPanelMouseWheel(event, gameStateRef.current);
       gameStateRef.current = debugResult.newState;
       if (debugResult.handled) {
@@ -54,7 +67,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
     return () => {
       window.removeEventListener('wheel', handleWheel);
     };
-  }, [isActive, canvasRef, gameStateRef]);
+  }, [isActive, canvasRef, gameStateRef, viewportCenterRef]);
 
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -85,6 +98,19 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         return;
       }
 
+      // Check for minimap interaction
+      const minimapRect = gameStateRef.current.minimapRect;
+      if (
+        minimapRect &&
+        mouseX >= minimapRect.x &&
+        mouseX <= minimapRect.x + minimapRect.width &&
+        mouseY >= minimapRect.y &&
+        mouseY <= minimapRect.y + minimapRect.height
+      ) {
+        handleMinimapMouseDown(mouseX, mouseY, gameStateRef.current);
+        return;
+      }
+
       // Check for debug panel interaction
       const debugResult = handleDebugPanelMouseDown(event, gameStateRef.current);
       gameStateRef.current = debugResult.newState;
@@ -104,6 +130,12 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
 
     const handleMouseUp = (event: MouseEvent) => {
       if (!isActive() || !canvasRef.current) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      handleMinimapMouseUp(mouseX, mouseY, gameStateRef.current, viewportCenterRef);
 
       const debugResult = handleDebugPanelMouseUp(event, gameStateRef.current);
       gameStateRef.current = debugResult.newState;
@@ -192,7 +224,32 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       // If hovering over any button, don't determine world actions
       if (hoveredButtonId) {
         gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
+        gameStateRef.current.hoveredMinimapTribeId = null;
         return;
+      }
+
+      // Check for minimap interaction
+      const minimapRect = gameStateRef.current.minimapRect;
+      const isDraggingMinimap = gameStateRef.current.isDraggingMinimap;
+      if (
+        (minimapRect &&
+          mouseX >= minimapRect.x &&
+          mouseX <= minimapRect.x + minimapRect.width &&
+          mouseY >= minimapRect.y &&
+          mouseY <= minimapRect.y + minimapRect.height) ||
+        isDraggingMinimap
+      ) {
+        handleMinimapMove(
+          mouseX,
+          mouseY,
+          gameStateRef.current,
+          { x: event.movementX, y: event.movementY },
+          viewportCenterRef,
+        );
+        gameStateRef.current.autopilotControls.hoveredAutopilotAction = undefined;
+        return;
+      } else {
+        gameStateRef.current.hoveredMinimapTribeId = null;
       }
 
       // Determine hovered autopilot action in the world

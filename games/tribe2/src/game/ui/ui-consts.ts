@@ -153,3 +153,9 @@ export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_RADIUS: number = 45;
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_COLOR: string = '#FFD700'; // Gold
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_PULSE_SPEED: number = 3;
 export const UI_NOTIFICATION_ENTITY_HIGHLIGHT_LINE_WIDTH: number = 4;
+
+// UI Minimap Constants
+export const UI_MINIMAP_SIZE = 225;
+export const UI_MINIMAP_MARGIN = 20;
+export const UI_MINIMAP_BORDER_COLOR = '#666';
+export const UI_MINIMAP_BACKGROUND_COLOR = '#1a2a3a';

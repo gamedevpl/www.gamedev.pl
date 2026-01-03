@@ -1,7 +1,7 @@
 import { GameWorldState } from '../world-types';
 import { Vector2D } from './math-types';
 import { findPlayerEntity } from './world-utils';
-import { vectorLerp } from './math-utils';
+import { vectorLerp, getDirectionVectorOnTorus, vectorLength, vectorAdd } from './math-utils';
 import { VIEWPORT_FOLLOW_SPEED } from '../game-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 
@@ -10,6 +10,39 @@ export const updateViewportCenter = (
   currentViewportCenter: Vector2D,
   deltaTime: number,
 ): Vector2D => {
+  const { mapDimensions } = gameState;
+  const { width, height } = mapDimensions;
+
+  if (!gameState.cameraFollowingPlayer) {
+    if (gameState.cameraTargetPosition) {
+      // Smooth scroll to target
+      const diff = getDirectionVectorOnTorus(
+        currentViewportCenter,
+        gameState.cameraTargetPosition,
+        width,
+        height
+      );
+      
+      const distance = vectorLength(diff);
+      if (distance < 1) {
+        const finalPos = gameState.cameraTargetPosition;
+        gameState.cameraTargetPosition = undefined;
+        return finalPos;
+      }
+
+      const targetPosition = vectorAdd(currentViewportCenter, diff);
+      let newViewportCenter = vectorLerp(currentViewportCenter, targetPosition, VIEWPORT_FOLLOW_SPEED * deltaTime);
+
+      newViewportCenter = {
+        x: ((newViewportCenter.x % width) + width) % width,
+        y: ((newViewportCenter.y % height) + height) % height,
+      };
+
+      return newViewportCenter;
+    }
+    return currentViewportCenter;
+  }
+
   const player = findPlayerEntity(gameState);
   let targetEntity: HumanEntity | undefined = player;
 
@@ -21,9 +54,6 @@ export const updateViewportCenter = (
   }
 
   if (targetEntity) {
-    const { mapDimensions } = gameState;
-    const { width, height } = mapDimensions;
-
     // Create a target position for the lerp that may be outside the world bounds
     // to ensure the lerp takes the shortest path.
     let targetPosition = { ...targetEntity.position };
@@ -70,6 +100,7 @@ export const updateViewportCenter = (
 export function centerViewportOn(gameState: GameWorldState, position: Vector2D): void {
   const { width, height } = gameState.mapDimensions;
   // Ensure the position is wrapped within the world bounds
+  gameState.cameraTargetPosition = undefined;
   gameState.viewportCenter = {
     x: ((position.x % width) + width) % width,
     y: ((position.y % height) + height) % height,

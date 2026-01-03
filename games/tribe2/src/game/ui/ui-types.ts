@@ -172,6 +172,9 @@ export enum UIButtonActionType {
 
   // --- Diplomacy ---
   ToggleDiplomacy = 'ToggleDiplomacy',
+  OpenTribeModal = 'OpenTribeModal',
+  RecenterCamera = 'RecenterCamera',
+  CloseTribeModal = 'CloseTribeModal',
 
   // --- Tribe Role Manager ---
   OpenRoleManager = 'OpenRoleManager',

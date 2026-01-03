@@ -5,7 +5,7 @@ export const GAME_DAY_IN_REAL_SECONDS: number = 10; // World and Movement Consta
 // Time Constants
 export const MAP_WIDTH: number = 4000; // pixels
 export const MAP_HEIGHT: number = 4000; // pixels
-export const VIEWPORT_FOLLOW_SPEED = 2.0;
+export const VIEWPORT_FOLLOW_SPEED = 5.0;
 
 // Intro Screen Constants
 export const INTRO_SCREEN_INITIAL_HUMANS: number = 15;

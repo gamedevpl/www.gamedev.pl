@@ -15,7 +15,8 @@ import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
 import { renderUIButtons } from './render/ui/render-buttons';
 import { renderPauseOverlay } from './render/ui/render-pause-overlay';
 import { renderPlayerActionHints } from './render/ui/render-player-hints';
-import { renderTribeList } from './render/ui/render-tribe-list';
+import { renderMinimap } from './render/ui/render-minimap';
+import { renderTribeModal } from './render/ui/render-tribe-modal';
 import { renderTutorialPanel, renderUIElementHighlight } from './render/ui/render-tutorial';
 import { renderGameOverScreen } from './render/render-game-over';
 import { renderWorld } from './render/render-world';
@@ -153,9 +154,9 @@ export function renderGame(
       foodBarRect = panelRects.foodBarRect;
     }
 
-    // --- Bottom-Left UI (Tribe List) ---
+    // --- Bottom-Left UI (Minimap) ---
     const tribesInfo = getTribesInfo(gameState, player?.leaderId);
-    renderTribeList(ctx, gameState, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+    renderMinimap(ctx, gameState, viewportCenter, tribesInfo, ctx.canvas.width, ctx.canvas.height, gameState.cameraZoom);
 
     // --- Buttons & Tooltips ---
     const { commandButtonsRect } = renderUIButtons(ctx, gameState, ctx.canvas.width);
@@ -244,6 +245,11 @@ export function renderGame(
     if (gameState.armyControlOpen && player && player.leaderId === player.id) {
       const armyControlButtons = renderArmyControl(ctx, gameState, player);
       gameState.uiButtons.push(...armyControlButtons);
+    }
+
+    // --- Tribe Modal ---
+    if (gameState.tribeModalOpen) {
+      renderTribeModal(ctx, gameState, tribesInfo, ctx.canvas.width, ctx.canvas.height);
     }
 
     if (gameState.isPaused && gameState.exitConfirmation !== 'pending') {
