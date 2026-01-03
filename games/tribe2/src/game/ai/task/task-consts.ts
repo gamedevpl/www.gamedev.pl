@@ -1,4 +1,4 @@
-export const TASK_DEFAULT_VALIDITY_DURATION = 2; // in game hours
+export const TASK_DEFAULT_VALIDITY_DURATION = 3; // in game hours
 
 // Task scoring and parameter constants
 export const TASK_DISTANCE_SCORE_BASE = 250;
