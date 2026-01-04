@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { useGameContext } from '../context/game-context';
 import { BuildingEntity } from '../game/entities/buildings/building-types';
@@ -6,6 +6,7 @@ import {
   BuildingType,
   BUILDING_DEFINITIONS,
   getBuildingHitpoints,
+  PALISADE_GATE_GRID_SIZE,
 } from '../game/entities/buildings/building-consts';
 import { renderBuilding, renderGhostBuilding } from '../game/render/render-building';
 import { IndexedWorldState } from '../game/world-index/world-index-types';
@@ -199,6 +200,86 @@ export const BuildingsScreen: React.FC = () => {
   const [showGhost, setShowGhost] = useState(false);
   const [isHostile, setIsHostile] = useState(false);
   const [showAllTypes, setShowAllTypes] = useState(false);
+  const [interactiveMode, setInteractiveMode] = useState(false);
+  const [placedBuildings, setPlacedBuildings] = useState<BuildingEntity[]>([]);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [nextBuildingId, setNextBuildingId] = useState(1);
+
+  // Snap position to grid for palisades and gates
+  const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
+    const gridSize = PALISADE_GATE_GRID_SIZE;
+    return {
+      x: Math.round(x / gridSize) * gridSize,
+      y: Math.round(y / gridSize) * gridSize,
+    };
+  }, []);
+
+  // Check if a position already has a building
+  const isPositionOccupied = useCallback(
+    (pos: { x: number; y: number }): boolean => {
+      return placedBuildings.some(
+        (b) => Math.abs(b.position.x - pos.x) < 10 && Math.abs(b.position.y - pos.y) < 10,
+      );
+    },
+    [placedBuildings],
+  );
+
+  // Handle canvas click to place building
+  const handleCanvasClick = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!interactiveMode) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      const snappedPos = snapToGrid(x, y);
+
+      if (!isPositionOccupied(snappedPos)) {
+        const newBuilding = createBuildingEntity(
+          nextBuildingId,
+          selectedType,
+          snappedPos,
+          isHostile ? 999 : 1,
+          damagePercent,
+        );
+        setPlacedBuildings((prev) => [...prev, newBuilding]);
+        setNextBuildingId((prev) => prev + 1);
+      }
+    },
+    [interactiveMode, selectedType, isHostile, damagePercent, nextBuildingId, snapToGrid, isPositionOccupied],
+  );
+
+  // Handle mouse move for ghost preview
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!interactiveMode) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      setMousePos(snapToGrid(x, y));
+    },
+    [interactiveMode, snapToGrid],
+  );
+
+  // Handle mouse leave
+  const handleMouseLeave = useCallback(() => {
+    setMousePos(null);
+  }, []);
+
+  // Clear all placed buildings
+  const clearBuildings = useCallback(() => {
+    setPlacedBuildings([]);
+    setNextBuildingId(1);
+  }, []);
 
   useEffect(() => {
     const render = () => {
@@ -213,7 +294,42 @@ export const BuildingsScreen: React.FC = () => {
 
       const mapDimensions = { width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
 
-      if (showAllTypes) {
+      if (interactiveMode) {
+        // Draw grid lines for guidance
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= CANVAS_WIDTH; x += PALISADE_GATE_GRID_SIZE) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, CANVAS_HEIGHT);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= CANVAS_HEIGHT; y += PALISADE_GATE_GRID_SIZE) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(CANVAS_WIDTH, y);
+          ctx.stroke();
+        }
+
+        // Render all placed buildings
+        const mockState = createMockIndexedState(placedBuildings);
+        for (const building of placedBuildings) {
+          renderBuilding(ctx, building, mockState);
+        }
+
+        // Render ghost at mouse position
+        if (mousePos) {
+          const isValid = !isPositionOccupied(mousePos);
+          renderGhostBuilding(ctx, mousePos, selectedType, isValid, mapDimensions);
+        }
+
+        // Draw instruction
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Click to place buildings. Use the sidebar to select building type.', CANVAS_WIDTH / 2, 30);
+        ctx.fillText(`Placed: ${placedBuildings.length} buildings`, CANVAS_WIDTH / 2, CANVAS_HEIGHT - 20);
+      } else if (showAllTypes) {
         // Show all building types in a grid
         const buildingTypes = Object.values(BuildingType);
         const cols = 4;
@@ -313,7 +429,7 @@ export const BuildingsScreen: React.FC = () => {
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [selectedType, damagePercent, showGhost, isHostile, showAllTypes]);
+  }, [selectedType, damagePercent, showGhost, isHostile, showAllTypes, interactiveMode, placedBuildings, mousePos, isPositionOccupied]);
 
   const buildingTypes = Object.entries(BuildingType).map(([key, value]) => ({
     name: key,
@@ -328,7 +444,26 @@ export const BuildingsScreen: React.FC = () => {
 
         <SectionTitle>Display Mode</SectionTitle>
         <CheckboxLabel>
-          <input type="checkbox" checked={showAllTypes} onChange={(e) => setShowAllTypes(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={interactiveMode}
+            onChange={(e) => {
+              setInteractiveMode(e.target.checked);
+              if (e.target.checked) {
+                setShowAllTypes(false);
+                setShowGhost(false);
+              }
+            }}
+          />
+          Interactive Placement Mode
+        </CheckboxLabel>
+        <CheckboxLabel>
+          <input
+            type="checkbox"
+            checked={showAllTypes}
+            onChange={(e) => setShowAllTypes(e.target.checked)}
+            disabled={interactiveMode}
+          />
           Show All Building Types
         </CheckboxLabel>
         <CheckboxLabel>
@@ -336,7 +471,7 @@ export const BuildingsScreen: React.FC = () => {
             type="checkbox"
             checked={showGhost}
             onChange={(e) => setShowGhost(e.target.checked)}
-            disabled={showAllTypes}
+            disabled={showAllTypes || interactiveMode}
           />
           Show Ghost Preview
         </CheckboxLabel>
@@ -371,12 +506,31 @@ export const BuildingsScreen: React.FC = () => {
           />
         </SliderContainer>
 
+        {interactiveMode && (
+          <Button
+            onClick={clearBuildings}
+            style={{ backgroundColor: '#a33', marginTop: '10px' }}
+          >
+            🗑️ Clear All Buildings
+          </Button>
+        )}
+
         <BackButton onClick={returnToIntro}>Back to Intro</BackButton>
       </Sidebar>
       <CanvasContainer>
-        <Canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} />
+        <Canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          onClick={handleCanvasClick}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{ cursor: interactiveMode ? 'crosshair' : 'default' }}
+        />
         <p style={{ marginTop: '20px', color: '#888' }}>
-          Use the controls on the left to preview different building types and states.
+          {interactiveMode
+            ? 'Click on the canvas to place buildings. Select building type from sidebar.'
+            : 'Use the controls on the left to preview different building types and states.'}
         </p>
       </CanvasContainer>
     </ScreenContainer>
