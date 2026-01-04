@@ -1,6 +1,5 @@
 import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
-import { TribeRole } from '../entities/tribe/tribe-types';
 import { DiplomacyStatus } from '../world-types';
 import { Vector2D } from '../utils/math-types';
 
@@ -177,18 +176,6 @@ export enum UIButtonActionType {
   OpenTribeModal = 'OpenTribeModal',
   RecenterCamera = 'RecenterCamera',
   CloseTribeModal = 'CloseTribeModal',
-
-  // --- Tribe Role Manager ---
-  OpenRoleManager = 'OpenRoleManager',
-  CloseRoleManager = 'CloseRoleManager',
-  IncreaseRoleWeight = 'IncreaseRoleWeight',
-  DecreaseRoleWeight = 'DecreaseRoleWeight',
-
-  // --- Army Control ---
-  OpenArmyControl = 'OpenArmyControl',
-  CloseArmyControl = 'CloseArmyControl',
-  IncreaseArmyObjective = 'IncreaseArmyObjective',
-  DecreaseArmyObjective = 'DecreaseArmyObjective',
 }
 
 export interface ClickableUIButton {
@@ -205,6 +192,4 @@ export interface ClickableUIButton {
   lastActivated?: number;
   activated?: boolean;
   targetTribeId?: EntityId;
-  targetRole?: TribeRole;
-  targetArmyObjective?: ArmyControlObjective;
 }

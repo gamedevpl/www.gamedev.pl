@@ -14,10 +14,3 @@ export const FAST_FORWARD_AMOUNT_SECONDS = 10;
 
 // Tribe control constants
 export const TRIBE_BUILDINGS_MIN_HEADCOUNT = 2; // Minimum headcount to allow building placement
-export const TRIBE_ROLES_EFFECTIVE_MIN_HEADCOUNT = 10; // Minimum headcount for roles to be effective
-export const TRIBE_ARMY_CONTROL_MIN_HEADCOUNT = 15; // Minimum headcount to enable army control
-
-// Army Control constants - default priority weights for warrior objectives (0-10)
-export const DEFAULT_ARMY_CONTROL_PROTECT_HOMELAND = 5;
-export const DEFAULT_ARMY_CONTROL_EXPAND_BORDERS = 5;
-export const DEFAULT_ARMY_CONTROL_INVADE_ENEMIES = 5;

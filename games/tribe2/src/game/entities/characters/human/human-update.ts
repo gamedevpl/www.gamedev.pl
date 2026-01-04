@@ -28,7 +28,6 @@ import { addVisualEffect } from '../../../utils/visual-effects-utils';
 import { VisualEffectType } from '../../../visual-effects/visual-effect-types';
 import { addNotification } from '../../../notifications/notification-utils';
 import { NotificationType } from '../../../notifications/notification-types';
-import { TribeRole } from '../../tribe/tribe-types';
 import { findDescendants } from '../../tribe/family-tribe-utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
 import {
@@ -196,24 +195,10 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
         // Transfer leadership to the heir
         heir.leaderId = heir.id;
         heir.tribeInfo = entity.tribeInfo;
-        heir.tribeRole = TribeRole.Leader;
 
         // Initialize or transfer tribe control
         heir.tribeControl = entity.tribeControl ?? {
-          roleWeights: {
-            [TribeRole.Leader]: 0,
-            [TribeRole.Gatherer]: 2,
-            [TribeRole.Planter]: 2,
-            [TribeRole.Hunter]: 2,
-            [TribeRole.Mover]: 2,
-            [TribeRole.Warrior]: 2,
-          },
           diplomacy: {},
-          armyControl: {
-            protectHomeland: 5,
-            expandBorders: 5,
-            invadeEnemies: 5,
-          },
         };
 
         const indexedState = gameState as IndexedWorldState;

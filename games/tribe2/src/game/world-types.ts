@@ -36,7 +36,6 @@ export enum DebugPanelType {
   Performance,
   Ecosystem,
   Tribe,
-  SupplyChain,
 }
 
 export type PerformanceMetricsBucket = {
@@ -140,8 +139,6 @@ export interface GameWorldState {
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
-  roleManagerOpen: boolean;
-  armyControlOpen: boolean;
   tribeModalOpen: boolean;
   cameraFollowingPlayer: boolean;
   cameraZoom: number;
@@ -211,7 +208,6 @@ export type AutopilotControls = {
     attack: boolean;
     feedChildren: boolean;
     build: boolean;
-    roleManagement: boolean;
     chopping: boolean;
   };
   hoveredAutopilotAction?: HoveredAutopilotAction;

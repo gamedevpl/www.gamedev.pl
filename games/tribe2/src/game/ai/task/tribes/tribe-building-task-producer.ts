@@ -20,9 +20,7 @@ import {
   BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
 import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
-import {
-  convertTerritoryIndexToPosition,
-} from '../../../entities/tribe/territory-utils';
+import { convertTerritoryIndexToPosition } from '../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
@@ -66,7 +64,8 @@ export function updateTribeFrontier(context: UpdateContext): void {
     if (ownedIndices.length === 0) continue;
 
     let scanIndex = Blackboard.get<number>(leader.aiBlackboard, BLACKBOARD_FRONTIER_SCAN_INDEX) || 0;
-    const candidates = Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
+    const candidates =
+      Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
 
     const tribeCenter = getTribeCenter(leader.id, gameState);
 
@@ -77,7 +76,7 @@ export function updateTribeFrontier(context: UpdateContext): void {
       if (scanIndex >= ownedIndices.length) {
         scanIndex = 0;
       }
-      
+
       const idx = ownedIndices[scanIndex];
       scanIndex = (scanIndex + 1) % ownedIndices.length;
 
@@ -87,8 +86,8 @@ export function updateTribeFrontier(context: UpdateContext): void {
       // Check 4 cardinal neighbors
       const neighbors = [
         { dx: 0, dy: -1 }, // Top
-        { dx: 1, dy: 0 },  // Right
-        { dx: 0, dy: 1 },  // Bottom
+        { dx: 1, dy: 0 }, // Right
+        { dx: 0, dy: 1 }, // Bottom
         { dx: -1, dy: 0 }, // Left
       ];
 
@@ -380,87 +379,89 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     }
 
     // --- BORDER POST -----
-    const expandBordersWeight = leader.tribeControl?.armyControl?.expandBorders ?? 0;
-    if (expandBordersWeight >= 2) {
-      const candidates = Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
-      const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-      
-      const borderPosts = tribeBuildings.filter(b => b.buildingType === BuildingType.BorderPost);
-      const activeBorderTasks = existingTasks.filter(t => t.type === TaskType.HumanPlaceBorderPost);
+    const candidates =
+      Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
+    const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
-      // Pruning Candidates (Hourly)
-      for (const targetIdxStr in candidates) {
-        const targetIdx = parseInt(targetIdxStr, 10);
-        const neighborOwner = gameState.terrainOwnership[targetIdx];
-        const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
+    const borderPosts = tribeBuildings.filter((b) => b.buildingType === BuildingType.BorderPost);
+    const activeBorderTasks = existingTasks.filter((t) => t.type === TaskType.HumanPlaceBorderPost);
 
-        // 1. Remove if no longer unowned/hostile or captured by us
-        if (neighborOwner === leaderId || (neighborOwner !== null && !isHostile)) {
-          delete candidates[targetIdxStr];
-          continue;
-        }
+    // Pruning Candidates (Hourly)
+    for (const targetIdxStr in candidates) {
+      const targetIdx = parseInt(targetIdxStr, 10);
+      const neighborOwner = gameState.terrainOwnership[targetIdx];
+      const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
 
-        // 2. Remove if too close to existing border posts or tasks
-        const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
-        const isTooClose = 
-          borderPosts.some(p => calculateWrappedDistanceSq(targetPos, p.position, worldWidth, worldHeight) < 100 * 100) ||
-          activeBorderTasks.some(t => calculateWrappedDistanceSq(targetPos, t.position, worldWidth, worldHeight) < 100 * 100);
-
-        if (isTooClose) {
-          delete candidates[targetIdxStr];
-        }
+      // 1. Remove if no longer unowned/hostile or captured by us
+      if (neighborOwner === leaderId || (neighborOwner !== null && !isHostile)) {
+        delete candidates[targetIdxStr];
+        continue;
       }
-      Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
 
-      const maxConcurrentTasks = 3;
-      if (activeBorderTasks.length < maxConcurrentTasks) {
-        // Sort and select top candidates
-        const sortedCandidates = Object.entries(candidates)
-          .map(([idx, cand]) => ({ idx: parseInt(idx, 10), ...cand }))
-          .sort((a, b) => b.score - a.score);
-
-        const selectedPositions: Vector2D[] = [];
-        for (const candidate of sortedCandidates) {
-          if (selectedPositions.length >= maxConcurrentTasks - activeBorderTasks.length) break;
-
-          const targetPos = convertTerritoryIndexToPosition(candidate.idx, worldWidth);
-          
-          const isFarEnough = selectedPositions.every(pos => 
-            calculateWrappedDistanceSq(targetPos, pos, worldWidth, worldHeight) > 100 * 100
-          );
-
-          if (isFarEnough) {
-            selectedPositions.push(targetPos);
-          }
-        }
-
-        // Identify available indices for stable task IDs
-        const usedIndices = new Set(
-          activeBorderTasks
-            .map((t) => {
-              const parts = t.id.split('-');
-              return parseInt(parts[parts.length - 1], 10);
-            })
-            .filter((idx) => !isNaN(idx))
+      // 2. Remove if too close to existing border posts or tasks
+      const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
+      const isTooClose =
+        borderPosts.some(
+          (p) => calculateWrappedDistanceSq(targetPos, p.position, worldWidth, worldHeight) < 100 * 100,
+        ) ||
+        activeBorderTasks.some(
+          (t) => calculateWrappedDistanceSq(targetPos, t.position, worldWidth, worldHeight) < 100 * 100,
         );
 
-        const availableIndices: number[] = [];
-        for (let i = 0; i < maxConcurrentTasks; i++) {
-          if (!usedIndices.has(i)) {
-            availableIndices.push(i);
-          }
-        }
+      if (isTooClose) {
+        delete candidates[targetIdxStr];
+      }
+    }
+    Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
 
-        // Create tasks for selected candidates
-        for (let i = 0; i < selectedPositions.length; i++) {
-          createPlacementTask(
-            leaderId,
-            TaskType.HumanPlaceBorderPost,
-            selectedPositions[i],
-            gameState,
-            availableIndices[i],
-          );
+    const maxConcurrentTasks = 3;
+    if (activeBorderTasks.length < maxConcurrentTasks) {
+      // Sort and select top candidates
+      const sortedCandidates = Object.entries(candidates)
+        .map(([idx, cand]) => ({ idx: parseInt(idx, 10), ...cand }))
+        .sort((a, b) => b.score - a.score);
+
+      const selectedPositions: Vector2D[] = [];
+      for (const candidate of sortedCandidates) {
+        if (selectedPositions.length >= maxConcurrentTasks - activeBorderTasks.length) break;
+
+        const targetPos = convertTerritoryIndexToPosition(candidate.idx, worldWidth);
+
+        const isFarEnough = selectedPositions.every(
+          (pos) => calculateWrappedDistanceSq(targetPos, pos, worldWidth, worldHeight) > 100 * 100,
+        );
+
+        if (isFarEnough) {
+          selectedPositions.push(targetPos);
         }
+      }
+
+      // Identify available indices for stable task IDs
+      const usedIndices = new Set(
+        activeBorderTasks
+          .map((t) => {
+            const parts = t.id.split('-');
+            return parseInt(parts[parts.length - 1], 10);
+          })
+          .filter((idx) => !isNaN(idx)),
+      );
+
+      const availableIndices: number[] = [];
+      for (let i = 0; i < maxConcurrentTasks; i++) {
+        if (!usedIndices.has(i)) {
+          availableIndices.push(i);
+        }
+      }
+
+      // Create tasks for selected candidates
+      for (let i = 0; i < selectedPositions.length; i++) {
+        createPlacementTask(
+          leaderId,
+          TaskType.HumanPlaceBorderPost,
+          selectedPositions[i],
+          gameState,
+          availableIndices[i],
+        );
       }
     }
   }

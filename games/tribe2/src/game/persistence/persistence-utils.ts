@@ -26,8 +26,6 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       exitConfirmation: worldState.exitConfirmation,
       autopilotControls: worldState.autopilotControls,
       buildMenuOpen: worldState.buildMenuOpen,
-      roleManagerOpen: worldState.roleManagerOpen,
-      armyControlOpen: worldState.armyControlOpen,
       tribeModalOpen: worldState.tribeModalOpen,
       cameraFollowingPlayer: worldState.cameraFollowingPlayer,
       cameraZoom: worldState.cameraZoom,

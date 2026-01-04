@@ -25,7 +25,6 @@ import { storageRetrieveInteraction } from './storage-retrieve-interaction';
 import { storageStealInteraction } from './storage-steal-interaction';
 import { buildingTakeoverInteraction } from './building-takeover-interaction';
 import { buildingRemovalInteraction } from './building-removal-interaction';
-import { supplyTransferInteraction } from './supply-transfer-interaction';
 import { humanTreeChopInteraction } from './human-chop-tree-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
@@ -42,7 +41,6 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   storageStealInteraction,
   buildingTakeoverInteraction,
   buildingRemovalInteraction,
-  supplyTransferInteraction,
   humanTreeChopInteraction,
   // Animal interactions
   preyEatBerryBushInteraction,

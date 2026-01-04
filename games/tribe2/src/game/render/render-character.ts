@@ -24,8 +24,8 @@ import {
 import { HUMAN_ATTACK_MELEE_BUILDUP_HOURS, HUMAN_ATTACK_MELEE_COOLDOWN_HOURS } from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
-import { drawProgressBar, renderSupplyChainHighlights } from './render-ui';
-import { DebugPanelType, GameWorldState } from '../world-types.js';
+import { drawProgressBar } from './render-ui';
+import { GameWorldState } from '../world-types.js';
 import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
 import { SpriteCache } from './sprite-cache';
 import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
@@ -307,9 +307,5 @@ export function renderCharacter(
 
   if (showDebug) {
     renderDebugInfo(ctx, human);
-  }
-
-  if (gameState.debugPanel === DebugPanelType.SupplyChain) {
-    renderSupplyChainHighlights(ctx, human, gameState);
   }
 }

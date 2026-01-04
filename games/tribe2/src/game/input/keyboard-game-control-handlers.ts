@@ -65,26 +65,6 @@ export const handleGameControlKeyDown = (
         }
       }
       break;
-    case 'u':
-      const player = findPlayerEntity(gameState);
-      if (player && player.isAdult && player.leaderId === player.id) {
-        if (event.shiftKey) {
-          // Toggle roleManagement autopilot behavior
-          gameState.autopilotControls.behaviors.roleManagement = !gameState.autopilotControls.behaviors.roleManagement;
-        } else {
-          // Toggle role manager UI
-          gameState.roleManagerOpen = !gameState.roleManagerOpen;
-        }
-      }
-      break;
-    case 'v': {
-      const playerForArmy = findPlayerEntity(gameState);
-      if (playerForArmy && playerForArmy.isAdult && playerForArmy.leaderId === playerForArmy.id) {
-        // Toggle army control UI
-        gameState.armyControlOpen = !gameState.armyControlOpen;
-      }
-      break;
-    }
     case 'm':
       gameState.isMuted = !gameState.isMuted;
       setMasterVolume(gameState.masterVolume, gameState.isMuted);
@@ -159,23 +139,6 @@ export const handleGameControlKeyDown = (
         handled = false;
       }
       break;
-    case '$':
-      if (event.shiftKey) {
-        if (newState.debugPanel === DebugPanelType.SupplyChain) {
-          newState.debugPanel = DebugPanelType.None;
-          break;
-        }
-
-        newState.debugPanel = DebugPanelType.SupplyChain;
-        if (!newState.debugCharacterId || !newState.entities.entities[newState.debugCharacterId]) {
-          newState.debugCharacterId =
-            findPlayerEntity(newState)?.id ??
-            (newState as IndexedWorldState).search.human.all().find((h) => h.leaderId === h.id)?.id;
-        }
-      } else {
-        handled = false;
-      }
-      break;
     case '@':
       if (event.shiftKey) {
         if (newState.debugPanel === DebugPanelType.Performance) {
@@ -189,11 +152,7 @@ export const handleGameControlKeyDown = (
       }
       break;
     case 'tab':
-      if (
-        newState.debugPanel !== DebugPanelType.General &&
-        newState.debugPanel !== DebugPanelType.Tribe &&
-        newState.debugPanel !== DebugPanelType.SupplyChain
-      ) {
+      if (newState.debugPanel !== DebugPanelType.General && newState.debugPanel !== DebugPanelType.Tribe) {
         newState.debugPanel = DebugPanelType.General;
       }
 
@@ -223,7 +182,7 @@ export const handleGameControlKeyDown = (
         } else {
           newState.debugCharacterId = undefined;
         }
-      } else if (newState.debugPanel === DebugPanelType.Tribe || newState.debugPanel === DebugPanelType.SupplyChain) {
+      } else if (newState.debugPanel === DebugPanelType.Tribe) {
         const leaders = (newState as IndexedWorldState).search.human.all().filter((h) => h.leaderId === h.id);
         let currentLeaderIdx = leaders.findIndex((l) => l.id === newState.debugCharacterId) + 1;
         if (currentLeaderIdx === -1 || currentLeaderIdx > leaders.length - 1) {

@@ -8,8 +8,6 @@ import { SoundType } from '../sound/sound-types';
 import { HUMAN_DEPOSITING } from '../entities/characters/human/states/human-state-types';
 import { calculateStorageItemPosition } from '../utils/storage-utils';
 import { Item, ItemType } from '../entities/item-types';
-import { fulfillDemand } from '../ai/supply-chain/tribe-logistics-utils';
-import { getTribeLeaderForCoordination } from '../entities/tribe/tribe-task-utils';
 import { FoodItem } from '../entities/food-types';
 
 /**
@@ -96,13 +94,6 @@ export const storageDepositInteraction: InteractionDefinition<HumanEntity, Build
         item: itemToStore,
         positionOffset: calculateStorageItemPosition(target),
       });
-
-      if (target.buildingType === BuildingType.Bonfire) {
-        const leader = getTribeLeaderForCoordination(source, context.gameState);
-        if (leader && leader.aiBlackboard) {
-          fulfillDemand(leader.aiBlackboard, target.id, 'wood');
-        }
-      }
     }
 
     // Update cooldown timestamp

@@ -8,8 +8,7 @@ import { NotificationType } from '../../notifications/notification-types.ts';
 import { addNotification } from '../../notifications/notification-utils.ts';
 import { NOTIFICATION_DURATION_LONG_HOURS } from '../../notifications/notification-consts.ts';
 import { startBuildingDestruction } from '../../utils/building-placement-utils.ts';
-import { replaceOwnerInTerrainOwnership } from './territory-utils';
-import { TribeRole } from './tribe-types';
+import { replaceOwnerInTerrainOwnership } from './territory-utils.ts';
 import { generateTribeBadge } from '../../utils/general-utils';
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
 import { getDirectionVectorOnTorus } from '../../utils/math-utils';
@@ -340,25 +339,11 @@ export function getTopLivingAncestor(
  */
 export function promoteToLeader(human: HumanEntity, oldLeader?: HumanEntity): void {
   human.leaderId = human.id;
-  human.tribeRole = TribeRole.Leader;
 
   if (oldLeader) {
     human.tribeInfo = oldLeader.tribeInfo;
     human.tribeControl = oldLeader.tribeControl ?? {
-      roleWeights: {
-        [TribeRole.Leader]: 0,
-        [TribeRole.Gatherer]: 2,
-        [TribeRole.Planter]: 2,
-        [TribeRole.Hunter]: 2,
-        [TribeRole.Mover]: 2,
-        [TribeRole.Warrior]: 2,
-      },
       diplomacy: {},
-      armyControl: {
-        protectHomeland: 5,
-        expandBorders: 5,
-        invadeEnemies: 5,
-      },
     };
   }
 
@@ -371,20 +356,7 @@ export function promoteToLeader(human: HumanEntity, oldLeader?: HumanEntity): vo
 
   if (!human.tribeControl) {
     human.tribeControl = {
-      roleWeights: {
-        [TribeRole.Leader]: 0,
-        [TribeRole.Gatherer]: 2,
-        [TribeRole.Planter]: 2,
-        [TribeRole.Hunter]: 2,
-        [TribeRole.Mover]: 2,
-        [TribeRole.Warrior]: 2,
-      },
       diplomacy: {},
-      armyControl: {
-        protectHomeland: 5,
-        expandBorders: 5,
-        invadeEnemies: 5,
-      },
     };
   }
 }
@@ -493,8 +465,8 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       const avgDY = sumDY / ownedIndices.length;
 
       territoryCenter = {
-        x: ((reference.x + avgDX) % worldWidth + worldWidth) % worldWidth,
-        y: ((reference.y + avgDY) % worldHeight + worldHeight) % worldHeight,
+        x: (((reference.x + avgDX) % worldWidth) + worldWidth) % worldWidth,
+        y: (((reference.y + avgDY) % worldHeight) + worldHeight) % worldHeight,
       };
     }
 
@@ -687,8 +659,6 @@ function executeTribeMerge(fromTribeLeaderId: EntityId, toTribeLeaderId: EntityI
     if (member.id === toTribeLeaderId) continue;
     member.leaderId = toTribeLeaderId;
     member.tribeInfo = targetLeader.tribeInfo;
-    // Reset role, new leader will assign
-    member.tribeRole = undefined;
   }
 
   // Transfer buildings
@@ -760,7 +730,6 @@ export function checkAndExecuteTribeMerges(gameState: GameWorldState): void {
       for (const member of members) {
         member.leaderId = undefined;
         member.tribeInfo = undefined;
-        member.tribeRole = undefined;
       }
 
       // Buildings also become abandoned

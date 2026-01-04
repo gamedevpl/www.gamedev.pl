@@ -31,11 +31,8 @@ import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
 import { renderGhostBuilding } from './render/render-building';
 import { canPlaceBuilding } from './utils/building-placement-utils';
 import { screenToWorldCoords } from './render/render-utils';
-import { renderTribeRoleManager } from './render/ui/render-tribe-role-manager.ts';
-import { renderArmyControl } from './render/ui/render-army-control.ts';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
-import { renderSupplyChainDebugger } from './render/debug/render-supply-chain-debugger.ts';
 import { renderAiDebugger } from './render/debug/render-ai-debug.ts';
 
 export function renderGame(
@@ -156,7 +153,15 @@ export function renderGame(
 
     // --- Bottom-Left UI (Minimap) ---
     const tribesInfo = getTribesInfo(gameState, player?.leaderId);
-    renderMinimap(ctx, gameState, viewportCenter, tribesInfo, ctx.canvas.width, ctx.canvas.height, gameState.cameraZoom);
+    renderMinimap(
+      ctx,
+      gameState,
+      viewportCenter,
+      tribesInfo,
+      ctx.canvas.width,
+      ctx.canvas.height,
+      gameState.cameraZoom,
+    );
 
     // --- Buttons & Tooltips ---
     const { commandButtonsRect } = renderUIButtons(ctx, gameState, ctx.canvas.width);
@@ -224,27 +229,12 @@ export function renderGame(
       case DebugPanelType.Tribe:
         renderTribeDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
-      case DebugPanelType.SupplyChain:
-        renderSupplyChainDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
-        break;
       case DebugPanelType.Performance:
         renderPerformanceDebugger(ctx, gameState, canvasDimensions.width);
         break;
       case DebugPanelType.General:
         renderAiDebugger(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
         break;
-    }
-
-    // --- Tribe Role Manager ---
-    if (gameState.roleManagerOpen && player && player.leaderId === player.id) {
-      const roleManagerButtons = renderTribeRoleManager(ctx, gameState, player);
-      gameState.uiButtons.push(...roleManagerButtons);
-    }
-
-    // --- Army Control Dialog ---
-    if (gameState.armyControlOpen && player && player.leaderId === player.id) {
-      const armyControlButtons = renderArmyControl(ctx, gameState, player);
-      gameState.uiButtons.push(...armyControlButtons);
     }
 
     // --- Tribe Modal ---
