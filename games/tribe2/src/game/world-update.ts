@@ -16,6 +16,7 @@ import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
 import { updateTemperature } from './temperature/temperature-update';
 import { produceTribeBuildingTasks, updateTribeFrontier } from './ai/task/tribes/tribe-building-task-producer';
+import { produceTribeDiplomacyTasks } from './ai/task/tribes/tribe-diplomacy-task-producer';
 import { cleanupExpiredTasks } from './ai/task/task-utils';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
@@ -95,6 +96,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     if (Math.floor(indexedState.time) > Math.floor(indexedState.time - gameHoursDelta)) {
       checkAndExecuteTribeMerges(indexedState);
       produceTribeBuildingTasks({ gameState: indexedState, deltaTime });
+      produceTribeDiplomacyTasks({ gameState: indexedState, deltaTime });
     }
 
     // Process visual effects
