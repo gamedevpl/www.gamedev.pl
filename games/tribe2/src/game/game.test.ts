@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { initGame } from './index';
 import { updateWorld } from './world-update';
 import { GameWorldState } from './world-types';
@@ -11,7 +11,6 @@ import { generateTribeBadge, isLineage } from './utils/world-utils';
 import { createHuman, giveBirth } from './entities/entities-update';
 import { humanProcreationInteraction } from './interactions/human-procreation-interaction';
 import { FoodType } from './entities/food-types.ts';
-import { btProfiler } from './ai/behavior-tree/bt-profiler';
 import { TERRITORY_COLORS } from './entities/tribe/territory-consts.ts';
 
 // Helper to find a human by ID, with proper type assertion
@@ -84,11 +83,6 @@ describe('Game Mechanics', () => {
             2,
           )}, Food (Berries:Meat): ${foodBerries}:${foodMeat}, Max Ancestors: ${maxAncestors}`,
         );
-
-        if (yearsSimulated % 50 === 0) {
-          btProfiler.report();
-          btProfiler.reset();
-        }
 
         if (humanCount <= 0) {
           console.log(`Game ended prematurely at time ${time} due to extinction of humans.`);
@@ -231,51 +225,5 @@ describe('Planting bushes', () => {
 
     expect(finalBushCount).toBeGreaterThan(initialBushCount);
     expect(updatedHuman?.food.length).toBeLessThan(10);
-  });
-});
-
-describe('BT Profiler', () => {
-  it('should show problem report by default', () => {
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    let gameState: GameWorldState = initGame();
-    // Run for a short time to gather some data
-    const simulationSeconds = 1;
-    const timeStepSeconds = 1 / 60;
-
-    for (let time = 0; time < simulationSeconds; time += timeStepSeconds) {
-      gameState = updateWorld(gameState, timeStepSeconds);
-      if (gameState.gameOver) break;
-    }
-
-    btProfiler.report();
-
-    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Full Report (Root Not Found) ---');
-
-    // Reset for other tests
-    btProfiler.reset();
-    consoleSpy.mockRestore();
-  });
-
-  it('should show full report when requested', () => {
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    let gameState: GameWorldState = initGame();
-    // Run for a short time to gather some data
-    const simulationSeconds = 1;
-    const timeStepSeconds = 1 / 60;
-
-    for (let time = 0; time < simulationSeconds; time += timeStepSeconds) {
-      gameState = updateWorld(gameState, timeStepSeconds);
-      if (gameState.gameOver) break;
-    }
-
-    btProfiler.report({ showAll: true });
-
-    expect(consoleSpy).toHaveBeenCalledWith('--- Behavior Tree Full Report ---');
-
-    // Reset for other tests
-    btProfiler.reset();
-    consoleSpy.mockRestore();
   });
 });

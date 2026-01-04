@@ -1,10 +1,7 @@
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { UpdateContext } from '../world-types';
 import { AIType } from './ai-types';
-import { buildHumanBehaviorTree } from './behavior-tree/human-behavior-tree';
 import { updateHumanTaskAI } from './task/humans/human-task-update';
-
-export const humanBehaviorTree = buildHumanBehaviorTree();
 
 /**
  * Updates the AI decision-making for a human entity.

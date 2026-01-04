@@ -87,22 +87,6 @@ export const UI_TOOLTIP_OFFSET_Y: number = -15;
 export const UI_BUTTON_ACTIVATED_BORDER_COLOR: string = '#FFD700'; // Gold
 export const UI_BUTTON_ACTIVATED_PULSE_SPEED: number = 5;
 
-// Behavior Tree Debug UI Constants
-export const UI_BT_DEBUG_FONT_SIZE = 10;
-export const UI_BT_DEBUG_LINE_HEIGHT = 12;
-export const UI_BT_DEBUG_INDENT_SIZE = 10;
-export const UI_BT_DEBUG_STATUS_SUCCESS_COLOR = '#4CAF50';
-export const UI_BT_DEBUG_STATUS_FAILURE_COLOR = '#F44336';
-export const UI_BT_DEBUG_STATUS_RUNNING_COLOR = '#FFC107';
-export const UI_BT_DEBUG_STATUS_NOT_EVALUATED_COLOR = 'rgba(255, 255, 255, 0.2)';
-export const UI_BT_DEBUG_HEATMAP_COLD_COLOR = '#FFFFFF';
-export const UI_BT_DEBUG_HEATMAP_HOT_COLOR = '#FF6B6B';
-export const UI_BT_DEBUG_HEATMAP_DECAY_TIME_SECONDS = 5;
-export const UI_BT_DEBUG_HISTOGRAM_WINDOW_SECONDS = 30;
-export const UI_BT_DEBUG_HISTOGRAM_MAX_WIDTH = 50;
-export const UI_BT_DEBUG_HISTOGRAM_BAR_HEIGHT = 8;
-export const UI_BT_DEBUG_HISTOGRAM_X_OFFSET = 10;
-
 // Pause UI Constants
 export const UI_PAUSE_OVERLAY_COLOR: string = 'rgba(0, 0, 0, 0.5)';
 export const UI_PAUSE_TEXT_COLOR: string = '#FFFFFF';

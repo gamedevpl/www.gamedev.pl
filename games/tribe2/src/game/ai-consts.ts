@@ -20,18 +20,6 @@ export const MAX_TRIBE_ATTACKERS_PER_TARGET = 3; // Maximum number of tribe memb
 export const BLACKBOARD_ENTRY_MAX_AGE_HOURS = 24; // Time in game hours to keep BT node history
 export const ATTACK_CHASE_MAX_DISTANCE_FROM_CENTER = 600; // Max distance a human will chase an enemy from their home center
 
-// Behavior Tree Cooldowns
-export const BT_PROCREATION_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a procreation partner
-export const BT_PLANTING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a planting spot
-export const BT_GATHERING_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for a food source
-export const BT_CHOPPING_SEARCH_COOLDOWN_HOURS = 1; // Cooldown for searching for a tree
-export const BT_CLEANUP_TREES_SEARCH_COOLDOWN_HOURS = 0.5; // Cooldown for searching for trees in planting zones
-
-export const BT_HUNTING_PREY_SEARCH_COOLDOWN_HOURS = 2; // Cooldown for searching for prey
-// Behavior Tree Decorator Node Constants
-export const BT_ACTION_TIMEOUT_HOURS = 24; // Timeout for actions to prevent getting stuck
-export const BT_EXPENSIVE_OPERATION_CACHE_HOURS = 12; // Cache duration for expensive checks
-
 // Leader Meta AI Strategy Constants
 export const AI_DIPLOMACY_CHECK_INTERVAL_HOURS = 24; // How often the AI leader re-evaluates diplomacy
 export const LEADER_AGGRESSION_TRIBE_STRENGTH_ADVANTAGE_THRESHOLD = 1.5; // How much stronger our tribe must be to consider attacking another for their habitat

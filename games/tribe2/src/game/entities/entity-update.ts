@@ -160,8 +160,6 @@ function executeEntityAIUpdate(entity: Entity, updateContext: UpdateContext) {
     return;
   }
 
-  Blackboard.cleanupOldEntries(entity.aiBlackboard, updateContext.gameState.time);
-
   if (entity.type === 'human') {
     humanAIUpdate(entity as HumanEntity, updateContext);
   } else if (entity.type === 'corpse') {
