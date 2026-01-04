@@ -7,11 +7,17 @@ import { Vector2D } from './math-types';
 import { GameWorldState } from '../world-types';
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { BuildingEntity } from '../entities/buildings/building-types';
+import { TreeEntity } from '../entities/plants/tree/tree-types';
 import {
   PALISADE_GATE_GRID_SIZE,
   doesBuildingBlockMovement,
   canTribeMembersPass,
 } from '../entities/buildings/building-consts';
+import {
+  TREE_GROWING,
+  TREE_FULL,
+  TREE_SPREADING,
+} from '../entities/plants/tree/states/tree-state-types';
 import { EntityId } from '../entities/entities-types';
 
 // Navigation grid resolution (matches territory grid and palisade/gate size)
@@ -20,11 +26,18 @@ export const NAVIGATION_GRID_RESOLUTION = PALISADE_GATE_GRID_SIZE;
 // Maximum pathfinding iterations to prevent infinite loops
 const MAX_PATHFIND_ITERATIONS = 1000;
 
-// Path cache time-to-live in game hours
+/**
+ * Path cache time-to-live in game hours.
+ * Game time runs at approximately 60x real time (1 game hour = ~1 real minute).
+ * 0.1 game hours = ~6 real seconds.
+ */
 const PATH_CACHE_TTL = 0.1;
 
 // Maximum pathfinding requests per frame
 export const MAX_PATHFIND_REQUESTS_PER_FRAME = 10;
+
+// Diagonal movement cost (sqrt(2))
+const DIAGONAL_MOVEMENT_COST = Math.SQRT2;
 
 /**
  * Represents a node in the navigation grid.
@@ -81,6 +94,10 @@ export function navGridToWorld(gx: number, gy: number): Vector2D {
 /**
  * Calculates the wrapped distance on a toroidal grid.
  */
+/**
+ * Calculates the wrapped distance on a toroidal grid.
+ * Uses Chebyshev distance for 8-directional movement (diagonal movement has same cost as cardinal).
+ */
 function toroidalGridDistance(
   x1: number,
   y1: number,
@@ -91,8 +108,7 @@ function toroidalGridDistance(
 ): number {
   const dx = Math.min(Math.abs(x2 - x1), gridWidth - Math.abs(x2 - x1));
   const dy = Math.min(Math.abs(y2 - y1), gridHeight - Math.abs(y2 - y1));
-  // Use Chebyshev distance for 8-directional movement (or Manhattan for 4-directional)
-  // Chebyshev allows diagonal movement at same cost as cardinal
+  // Use Chebyshev distance for 8-directional movement
   return Math.max(dx, dy);
 }
 
@@ -177,7 +193,11 @@ export function isCellBlocked(
   // Also check for trees (standing trees block movement)
   const nearbyTrees = indexedState.search.tree.byRadius(cellCenter, NAVIGATION_GRID_RESOLUTION);
   for (const tree of nearbyTrees) {
-    if ('isFelled' in tree && !(tree as { isFelled: boolean }).isFelled) {
+    const treeEntity = tree as TreeEntity;
+    const [state] = treeEntity.stateMachine ?? [];
+    // Standing trees (TREE_GROWING, TREE_FULL, TREE_SPREADING) block movement
+    const isStanding = state === TREE_GROWING || state === TREE_FULL || state === TREE_SPREADING;
+    if (isStanding) {
       // Standing tree blocks movement
       if (Math.abs(cellCenter.x - tree.position.x) < tree.radius + NAVIGATION_GRID_RESOLUTION / 2 &&
           Math.abs(cellCenter.y - tree.position.y) < tree.radius + NAVIGATION_GRID_RESOLUTION / 2) {
@@ -321,9 +341,9 @@ export function findPath(
         continue;
       }
 
-      // Calculate movement cost (1 for cardinal, ~1.41 for diagonal)
+      // Calculate movement cost (1 for cardinal, sqrt(2) for diagonal)
       const isDiagonal = neighbor.gx !== current.x && neighbor.gy !== current.y;
-      const moveCost = isDiagonal ? 1.414 : 1;
+      const moveCost = isDiagonal ? DIAGONAL_MOVEMENT_COST : 1;
       const tentativeG = current.g + moveCost;
 
       const existingNode = openSet.get(neighborKey);

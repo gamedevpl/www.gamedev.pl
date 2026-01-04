@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { GameWorldState } from '../game/world-types';
 import { loadGame, saveGame, clearSavedGame } from '../game/persistence/persistence-utils';
 
-export type AppState = 'intro' | 'game' | 'gameOver' | 'effects';
+export type AppState = 'intro' | 'game' | 'gameOver' | 'effects' | 'buildings';
 
 interface GameOverDetails {
   generations: number;

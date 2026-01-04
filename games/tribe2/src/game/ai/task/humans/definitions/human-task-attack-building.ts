@@ -10,11 +10,27 @@ import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { doesBuildingBlockMovement, getBuildingHitpoints } from '../../../../entities/buildings/building-consts';
 import { IndexedWorldState } from '../../../../world-index/world-index-types';
 import { isDirectPathBlocked } from '../../../../utils/navigation-utils';
+import { EntityId } from '../../../../entities/entities-types';
 
 // Damage dealt to buildings per attack
 const BUILDING_ATTACK_DAMAGE = 10;
-// Attack cooldown in game hours
-const BUILDING_ATTACK_COOLDOWN = 0.05; // About 3 minutes real time
+/**
+ * Attack cooldown in game hours.
+ * Game time runs at approximately 60x real time (1 game hour = ~1 real minute).
+ * 0.05 game hours = ~3 real seconds.
+ */
+const BUILDING_ATTACK_COOLDOWN = 0.05;
+
+/**
+ * Helper function to get the leader ID from an entity.
+ * Returns the entity's leaderId if it has one, otherwise returns the entity's own ID.
+ */
+function getEntityLeaderId(entity: unknown, fallbackId: EntityId): EntityId | undefined {
+  if (entity && typeof entity === 'object' && 'leaderId' in entity) {
+    return (entity as HumanEntity).leaderId;
+  }
+  return fallbackId;
+}
 
 export const humanAttackBuildingDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanAttackBuilding,
@@ -51,10 +67,7 @@ export const humanAttackBuildingDefinition = defineHumanTask<HumanEntity>({
       // Check if building belongs to hostile tribe
       if (b.ownerId !== undefined) {
         const ownerEntity = gameState.entities.entities[b.ownerId];
-        const ownerLeaderId =
-          ownerEntity && 'leaderId' in ownerEntity
-            ? (ownerEntity as { leaderId?: number }).leaderId
-            : b.ownerId;
+        const ownerLeaderId = getEntityLeaderId(ownerEntity, b.ownerId);
 
         // Skip own tribe buildings
         if (ownerLeaderId === human.leaderId) continue;
@@ -98,10 +111,7 @@ export const humanAttackBuildingDefinition = defineHumanTask<HumanEntity>({
     // Check if building belongs to hostile tribe
     if (target.ownerId !== undefined) {
       const ownerEntity = context.gameState.entities.entities[target.ownerId];
-      const ownerLeaderId =
-        ownerEntity && 'leaderId' in ownerEntity
-          ? (ownerEntity as { leaderId?: number }).leaderId
-          : target.ownerId;
+      const ownerLeaderId = getEntityLeaderId(ownerEntity, target.ownerId);
 
       // Don't attack own tribe buildings
       if (ownerLeaderId === attacker.leaderId) return null;

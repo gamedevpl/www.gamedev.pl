@@ -10,6 +10,8 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
         setAppState('game');
       } else if (hash === '#effects') {
         setAppState('effects');
+      } else if (hash === '#buildings') {
+        setAppState('buildings');
       } else {
         setAppState('intro');
       }
@@ -27,6 +29,8 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
       document.location.hash = '#game';
     } else if (appState === 'effects') {
       document.location.hash = '#effects';
+    } else if (appState === 'buildings') {
+      document.location.hash = '#buildings';
     } else if (appState === 'intro') {
       document.location.hash = '';
     }
