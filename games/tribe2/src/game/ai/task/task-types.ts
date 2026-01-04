@@ -28,6 +28,7 @@ export enum TaskType {
   HumanFlee,
   HumanStayNearTribe,
   HumanStayNearParent,
+  HumanDiplomacy,
 }
 
 export enum TaskPriority {

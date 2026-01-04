@@ -37,7 +37,7 @@ const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
 // Caching logic
-const spriteCache = new SpriteCache(200);
+const spriteCache = new SpriteCache(1000);
 const SPRITE_PADDING = 20;
 
 /**

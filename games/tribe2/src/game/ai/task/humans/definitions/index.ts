@@ -26,6 +26,7 @@ import { humanSeekWarmthDefinition } from './human-task-seek-warmth';
 import { humanFleeDefinition } from './human-task-flee';
 import { humanStayNearTribeDefinition } from './human-task-stay-near-tribe';
 import { humanStayNearParentDefinition } from './human-task-stay-near-parent';
+import { humanDiplomacyDefinition } from './human-task-diplomacy';
 
 export const humanTaskDefinitions = [
   humanEatDefinition,
@@ -52,6 +53,7 @@ export const humanTaskDefinitions = [
   humanFleeDefinition,
   humanStayNearTribeDefinition,
   humanStayNearParentDefinition,
+  humanDiplomacyDefinition,
 ].reduce<Record<TaskType, TaskDefinition<HumanEntity>>>((acc, def) => {
   acc[def.type] = def;
   return acc;
