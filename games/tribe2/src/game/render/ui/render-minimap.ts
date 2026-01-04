@@ -104,7 +104,40 @@ export function renderMinimap(
   }
   ctx.globalAlpha = 1.0;
 
-  // --- 3. Render Static Viewport Indicator ---
+  // --- 3. Render Tribe Icons and Diplomacy Buttons ---
+  ctx.save();
+  // Clip to minimap area
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.width, rect.height);
+  ctx.clip();
+
+  for (const tribe of tribes) {
+    if (!tribe.territoryCenter) continue;
+
+    // Calculate position on minimap
+    const offset = getDirectionVectorOnTorus(viewportCenter, tribe.territoryCenter, worldWidth, worldHeight);
+    const sx = centerX + (offset.x / worldWidth) * rect.width;
+    const sy = centerY + (offset.y / worldHeight) * rect.height;
+
+    // Draw Tribe Badge
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText(tribe.tribeBadge, sx, sy);
+
+    if (tribe.isPlayerTribe) {
+      // Highlight player tribe center with a small circle
+      ctx.strokeStyle = 'gold';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // --- 4. Render Static Viewport Indicator ---
   const viewportWidth = canvasWidth / cameraZoom;
   const viewportHeight = canvasHeight / cameraZoom;
 
@@ -126,7 +159,7 @@ export function renderMinimap(
 
   ctx.restore();
 
-  // --- 4. Navigation Buttons (Below the Minimap) ---
+  // --- 5. Navigation Buttons (Below the Minimap) ---
   const buttonsY = rect.y + rect.height + spacing;
 
   // --- Center Button (Left) ---

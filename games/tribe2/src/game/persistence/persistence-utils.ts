@@ -55,6 +55,9 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       terrainOwnership: worldState.terrainOwnership,
       temperature: worldState.temperature,
       tasks: worldState.tasks,
+      isDraggingViewport: worldState.isDraggingViewport,
+      viewportDragButton: worldState.viewportDragButton,
+      viewportDragDistance: worldState.viewportDragDistance,
     };
 
     await workerManager.saveGame(serialized);

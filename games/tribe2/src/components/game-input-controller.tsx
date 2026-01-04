@@ -19,6 +19,10 @@ import {
   handleMinimapMouseDown,
   handleMinimapWheel,
   handleMinimapMouseUp,
+  handleViewportWheel,
+  handleViewportMouseDown,
+  handleViewportMouseMove,
+  handleViewportMouseUp,
 } from '../game/input';
 import { screenToWorldCoords } from '../game/render/render-utils';
 
@@ -60,6 +64,11 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       gameStateRef.current = debugResult.newState;
       if (debugResult.handled) {
         return;
+      }
+
+      // Fallback: handle viewport wheel
+      if (handleViewportWheel(event, gameStateRef.current, viewportCenterRef)) {
+        event.preventDefault();
       }
     };
 
@@ -118,6 +127,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
         return;
       }
 
+      // Fallback: handle viewport drag start
+      handleViewportMouseDown(event, gameStateRef.current);
+
       // If not a UI element, handle as an autopilot/world click
       const worldPos = screenToWorldCoords(
         { x: mouseX, y: mouseY },
@@ -136,6 +148,7 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const mouseY = event.clientY - rect.top;
 
       handleMinimapMouseUp(mouseX, mouseY, gameStateRef.current, viewportCenterRef);
+      handleViewportMouseUp(event, gameStateRef.current);
 
       const debugResult = handleDebugPanelMouseUp(event, gameStateRef.current);
       gameStateRef.current = debugResult.newState;
@@ -169,6 +182,9 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       const rect = canvasRef.current.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
+
+      // Handle viewport dragging
+      handleViewportMouseMove(event, gameStateRef.current, viewportCenterRef);
 
       gameStateRef.current.mousePosition = { x: mouseX, y: mouseY };
 
@@ -327,6 +343,22 @@ export const GameInputController: React.FC<GameInputControllerProps> = ({
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [isActive, gameStateRef, playerActionHintsRef, keysPressed, returnToIntro]);
+
+  // Prevent context menu to allow right-click dragging
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleContextMenu = (event: MouseEvent) => {
+      if (!isActive()) return;
+      event.preventDefault();
+    };
+
+    canvas.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [canvasRef, isActive]);
 
   return null;
 };

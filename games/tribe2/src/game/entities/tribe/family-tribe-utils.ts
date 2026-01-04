@@ -11,7 +11,8 @@ import { startBuildingDestruction } from '../../utils/building-placement-utils.t
 import { replaceOwnerInTerrainOwnership } from './territory-utils';
 import { TribeRole } from './tribe-types';
 import { generateTribeBadge } from '../../utils/general-utils';
-import { TERRITORY_COLORS } from './territory-consts';
+import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './territory-consts';
+import { getDirectionVectorOnTorus } from '../../utils/math-utils';
 
 export function findPotentialNewPartners(
   sourceHuman: HumanEntity,
@@ -423,6 +424,21 @@ export function findInternalSuccessor(members: HumanEntity[], gameState: GameWor
 }
 
 export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: EntityId): TribeInfo[] {
+  // 1. Group owned indices by tribe
+  const ownershipByTribe = new Map<EntityId, number[]>();
+  for (let i = 0; i < gameState.terrainOwnership.length; i++) {
+    const ownerId = gameState.terrainOwnership[i];
+    if (ownerId !== null) {
+      if (!ownershipByTribe.has(ownerId)) {
+        ownershipByTribe.set(ownerId, []);
+      }
+      ownershipByTribe.get(ownerId)!.push(i);
+    }
+  }
+
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+
   const tribes: Map<
     EntityId,
     { leaderId: EntityId; tribeInfo?: { tribeBadge: string; tribeColor: string }; members: HumanEntity[] }
@@ -452,6 +468,36 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
     const adultCount = tribe.members.filter((m) => m.isAdult).length;
     const childCount = tribe.members.length - adultCount;
 
+    // Calculate centroid of territory
+    const ownedIndices = ownershipByTribe.get(tribe.leaderId) || [];
+    let territoryCenter = leader?.position; // Fallback to leader position
+
+    if (ownedIndices.length > 0) {
+      const firstIdx = ownedIndices[0];
+      const refX = (firstIdx % gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION;
+      const refY = Math.floor(firstIdx / gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION;
+      const reference = { x: refX, y: refY };
+
+      let sumDX = 0;
+      let sumDY = 0;
+
+      for (const idx of ownedIndices) {
+        const x = (idx % gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION;
+        const y = Math.floor(idx / gridWidth) * TERRITORY_OWNERSHIP_RESOLUTION;
+        const offset = getDirectionVectorOnTorus(reference, { x, y }, worldWidth, worldHeight);
+        sumDX += offset.x;
+        sumDY += offset.y;
+      }
+
+      const avgDX = sumDX / ownedIndices.length;
+      const avgDY = sumDY / ownedIndices.length;
+
+      territoryCenter = {
+        x: ((reference.x + avgDX) % worldWidth + worldWidth) % worldWidth,
+        y: ((reference.y + avgDY) % worldHeight + worldHeight) % worldHeight,
+      };
+    }
+
     return {
       leaderId: tribe.leaderId,
       tribeBadge: tribe?.tribeInfo?.tribeBadge || '',
@@ -462,6 +508,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       leaderAge: leader?.age ?? 0,
       leaderGender: leader?.gender ?? 'male',
       diplomacyStatus: playerDiplomacy?.[tribe.leaderId ?? -1] ?? DiplomacyStatus.Friendly,
+      territoryCenter,
     };
   });
 

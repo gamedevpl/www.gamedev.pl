@@ -50,7 +50,7 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
 };
 
 // Caching logic
-const characterCache = new SpriteCache(500);
+const characterCache = new SpriteCache(10000);
 
 /**
  * Renders debug information for a human character.

@@ -2,6 +2,7 @@ import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
 import { TribeRole } from '../entities/tribe/tribe-types';
 import { DiplomacyStatus } from '../world-types';
+import { Vector2D } from '../utils/math-types';
 
 /** Army control objective keys for use in UI buttons */
 export type ArmyControlObjective = 'protectHomeland' | 'expandBorders' | 'invadeEnemies';
@@ -114,6 +115,7 @@ export interface TribeInfo {
   leaderAge: number;
   leaderGender: 'male' | 'female';
   diplomacyStatus?: DiplomacyStatus;
+  territoryCenter?: Vector2D;
 }
 
 export enum UIStatusType {

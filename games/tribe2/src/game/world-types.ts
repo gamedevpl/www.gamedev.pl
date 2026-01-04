@@ -150,6 +150,9 @@ export interface GameWorldState {
   minimapRect?: Rect;
   isDraggingMinimap: boolean;
   minimapDragDistance: number;
+  isDraggingViewport: boolean;
+  viewportDragButton: number | null;
+  viewportDragDistance: number;
   selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
