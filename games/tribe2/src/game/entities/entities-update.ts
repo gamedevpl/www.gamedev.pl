@@ -415,7 +415,7 @@ export function createPrey(
   geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
-  aiType: AIType = AIType.BehaviorTreeBased,
+  aiType: AIType = AIType.TaskBased,
 ): PreyEntity {
   const isAdult = initialAge >= PREY_MIN_PROCREATION_AGE;
   const currentTime = Date.now(); // Use current timestamp for state machine
@@ -453,7 +453,7 @@ export function createPredator(
   geneCode: number,
   motherId?: EntityId,
   fatherId?: EntityId,
-  aiType: AIType = AIType.BehaviorTreeBased,
+  aiType: AIType = AIType.TaskBased,
 ): PredatorEntity {
   const isAdult = initialAge >= PREDATOR_MIN_PROCREATION_AGE;
   const currentTime = Date.now(); // Use current timestamp for state machine

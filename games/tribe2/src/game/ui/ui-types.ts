@@ -189,9 +189,6 @@ export enum UIButtonActionType {
   CloseArmyControl = 'CloseArmyControl',
   IncreaseArmyObjective = 'IncreaseArmyObjective',
   DecreaseArmyObjective = 'DecreaseArmyObjective',
-
-  // --- AI Debugger ---
-  SwitchAIType = 'SwitchAIType',
 }
 
 export interface ClickableUIButton {

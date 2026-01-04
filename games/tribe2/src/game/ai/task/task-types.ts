@@ -29,6 +29,17 @@ export enum TaskType {
   HumanStayNearTribe,
   HumanStayNearParent,
   HumanDiplomacy,
+  AnimalFlee,
+  AnimalGraze,
+  AnimalHunt,
+  AnimalAttack,
+  AnimalProcreate,
+  AnimalWander,
+  AnimalFeedChild,
+  AnimalSeekFoodFromParent,
+  AnimalHerd,
+  AnimalTerritorial,
+  AnimalPack,
 }
 
 export enum TaskPriority {

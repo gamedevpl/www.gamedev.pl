@@ -106,7 +106,7 @@ export const EffectsScreen: React.FC = () => {
     }
 
     addVisualEffect(
-      mockState.current as any,
+      mockState.current,
       type,
       center,
       1.0, // 1 hour duration
@@ -120,7 +120,7 @@ export const EffectsScreen: React.FC = () => {
       // Update
       const deltaTimeHours = 0.016; // Approx 60fps
       mockState.current.time += deltaTimeHours;
-      visualEffectsUpdate(mockState.current as any);
+      visualEffectsUpdate(mockState.current);
 
       // Render
       const canvas = canvasRef.current;

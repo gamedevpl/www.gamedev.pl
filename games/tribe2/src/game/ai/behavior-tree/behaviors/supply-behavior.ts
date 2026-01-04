@@ -13,6 +13,8 @@ import { Blackboard } from '../behavior-tree-blackboard';
 import { EntityId } from '../../../entities/entities-types';
 import { ItemType } from '../../../entities/item-types';
 import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
+import { SupplyChainResourceType } from '../../supply-chain/supply-chain-types';
+import { BerryBushEntity } from '../../../entities/plants/berry-bush/berry-bush-types';
 
 // Supply chain phase constants
 const PHASE_FINDING_DEMAND = 'FINDING_DEMAND';
@@ -166,7 +168,8 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
 
       // ===== PHASE 3: DELIVERING_TO_DEMANDER =====
       if (currentPhase === PHASE_DELIVERING_TO_DEMANDER) {
-        const resourceType = Blackboard.get<string>(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE) || 'food';
+        const resourceType =
+          Blackboard.get<SupplyChainResourceType>(human.aiBlackboard, BB_KEY_TARGET_RESOURCE_TYPE) || 'food';
 
         // Get demander ID from blackboard
         const demanderId = Blackboard.get<EntityId>(human.aiBlackboard, BB_KEY_TARGET_DEMANDER_ID);
@@ -175,7 +178,7 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
           return [NodeStatus.FAILURE, 'Demander ID not found in blackboard'];
         }
 
-        const demand = getDemandById(leader.aiBlackboard, demanderId, resourceType as any);
+        const demand = getDemandById(leader.aiBlackboard, demanderId, resourceType);
 
         if (!demand || demand.claimedBy !== human.id) {
           cleanupSupplyState(human);
@@ -215,7 +218,7 @@ export function createSupplyBehavior(depth: number): BehaviorNode<HumanEntity> {
           human.activeAction = 'depositing';
           if (resourceType === 'food') {
             human.activeActionPayload = {
-              amount: Math.min((demander as any).maxFood / 2 || 1, human.food.length || 1),
+              amount: Math.min((demander as BerryBushEntity).maxFood / 2 || 1, human.food.length || 1),
             };
           }
           human.target = demander.id;
