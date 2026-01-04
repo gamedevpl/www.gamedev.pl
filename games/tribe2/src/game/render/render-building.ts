@@ -8,6 +8,7 @@ import {
   BUILDING_DESTRUCTION_BAR_COLOR,
   BUILDING_PROGRESS_BAR_HEIGHT,
   BUILDING_PROGRESS_BAR_OFFSET,
+  getBuildingHitpoints,
 } from '../entities/buildings/building-consts';
 import { Vector2D } from '../utils/math-types';
 import { drawProgressBar } from './render-ui';
@@ -33,6 +34,18 @@ const STONE_COLOR_HIGHLIGHT = '#7e7e7e'; // Lighter grey
 const STONE_COLOR_HOSTILE_BASE = '#8B0000'; // Dark Red
 const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 
+// Palisade visual constants
+const PALISADE_LOG_COLOR_DARK = '#5C4033'; // Dark brown
+const PALISADE_LOG_COLOR_LIGHT = '#8B6914'; // Light brown
+const PALISADE_POINT_COLOR = '#2F1F0F'; // Dark point tip
+const PALISADE_LOG_WIDTH = 3; // Width of each log
+const PALISADE_LOG_SPACING = 4; // Space between logs
+
+// Gate visual constants
+const GATE_FRAME_COLOR = '#4A3728'; // Frame color
+const GATE_PLANK_COLOR = '#6B4423'; // Plank color
+const GATE_METAL_COLOR = '#4A4A4A'; // Metal bands color
+
 // Storage rendering constants
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
@@ -55,7 +68,16 @@ function getBuildingSpriteKey(
 
   const b = building as BuildingEntity;
   const hasFuel = b.buildingType === BuildingType.Bonfire && (b.fuelLevel ?? 0) > 0;
-  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}`;
+
+  // Include damage state for palisades and gates (buckets of 25% for caching efficiency)
+  let damageLevel = 0;
+  if (b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate) {
+    const maxHp = getBuildingHitpoints(b.buildingType);
+    const currentHp = b.hitpoints ?? maxHp;
+    damageLevel = Math.floor((1 - currentHp / maxHp) * 4); // 0-4 damage levels
+  }
+
+  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}_${damageLevel}`;
 }
 
 /**
@@ -80,18 +102,46 @@ function getBuildingSprite(
 
     if (isGhost) {
       const ghostColor = isValid ? '#4CAF50' : '#F44336';
-      drawStoneRect(ctx, width, height, 9999, ghostColor);
 
-      ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = ghostColor;
-      ctx.fillText(definition.icon, 0, 0);
+      // Special ghost rendering for palisades and gates
+      if (buildingType === BuildingType.Palisade) {
+        drawPalisade(ctx, width, height, id, ghostColor, 0);
+      } else if (buildingType === BuildingType.Gate) {
+        drawGate(ctx, width, height, id, ghostColor, 0);
+      } else {
+        drawStoneRect(ctx, width, height, 9999, ghostColor);
+
+        ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = ghostColor;
+        ctx.fillText(definition.icon, 0, 0);
+      }
     } else {
       const b = building as BuildingEntity;
       let icon = definition.icon;
       if (b.buildingType === BuildingType.Bonfire && isConstructed) {
         icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+      }
+
+      // Special rendering for Palisade
+      if (b.buildingType === BuildingType.Palisade) {
+        const maxHp = getBuildingHitpoints(b.buildingType);
+        const currentHp = b.hitpoints ?? maxHp;
+        const damageRatio = 1 - currentHp / maxHp;
+        const tintColor = isHostile ? STONE_COLOR_HOSTILE_BASE : undefined;
+        drawPalisade(ctx, width, height, id, tintColor, damageRatio);
+        return;
+      }
+
+      // Special rendering for Gate
+      if (b.buildingType === BuildingType.Gate) {
+        const maxHp = getBuildingHitpoints(b.buildingType);
+        const currentHp = b.hitpoints ?? maxHp;
+        const damageRatio = 1 - currentHp / maxHp;
+        const tintColor = isHostile ? STONE_COLOR_HOSTILE_BASE : undefined;
+        drawGate(ctx, width, height, id, tintColor, damageRatio);
+        return;
       }
 
       // 1. Draw the Stone Border
@@ -113,6 +163,172 @@ function getBuildingSprite(
       ctx.fillText(icon, 0, 0);
     }
   });
+}
+
+/**
+ * Draws a palisade (wooden wall) with sharpened log stakes.
+ */
+function drawPalisade(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  seed: number,
+  tintColor?: string,
+  damageRatio: number = 0,
+) {
+  const left = -width / 2;
+  const top = -height / 2;
+  const bottom = height / 2;
+
+  // Calculate number of logs that fit
+  const logCount = Math.floor(width / PALISADE_LOG_SPACING);
+
+  for (let i = 0; i < logCount; i++) {
+    const uniqueLogId = seed + i * 17;
+    const rand = pseudoRandom(uniqueLogId);
+
+    // Determine if this log is "damaged" (missing or broken)
+    const isDamaged = rand < damageRatio * 0.8;
+    if (isDamaged && damageRatio > 0.2) continue; // Skip some logs when damaged
+
+    const x = left + (i + 0.5) * PALISADE_LOG_SPACING;
+    const heightVariation = rand * 4 - 2;
+    const logHeight = (height - 2) + heightVariation;
+    const brokenHeight = isDamaged ? logHeight * (0.3 + rand * 0.4) : logHeight;
+
+    // Log body
+    ctx.beginPath();
+    ctx.fillStyle = tintColor || (rand > 0.5 ? PALISADE_LOG_COLOR_LIGHT : PALISADE_LOG_COLOR_DARK);
+    ctx.roundRect(x - PALISADE_LOG_WIDTH / 2, top + 1, PALISADE_LOG_WIDTH, brokenHeight, 1);
+    ctx.fill();
+
+    // Sharpened point at top (if not broken)
+    if (!isDamaged || damageRatio < 0.3) {
+      ctx.beginPath();
+      ctx.fillStyle = tintColor || PALISADE_POINT_COLOR;
+      ctx.moveTo(x - PALISADE_LOG_WIDTH / 2, top + 1);
+      ctx.lineTo(x, top - 3);
+      ctx.lineTo(x + PALISADE_LOG_WIDTH / 2, top + 1);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Add wood grain lines for detail
+    if (!isDamaged) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, top + 3);
+      ctx.lineTo(x, bottom - 3);
+      ctx.stroke();
+    }
+  }
+
+  // Draw horizontal support beams
+  ctx.fillStyle = tintColor || PALISADE_LOG_COLOR_DARK;
+  ctx.fillRect(left, top + height * 0.3, width, 2);
+  ctx.fillRect(left, bottom - height * 0.3, width, 2);
+
+  // Add damage cracks if damaged
+  if (damageRatio > 0.3) {
+    ctx.strokeStyle = 'rgba(50, 30, 20, 0.8)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < Math.floor(damageRatio * 3); i++) {
+      const crackX = left + pseudoRandom(seed + i * 31) * width;
+      const crackY = top + pseudoRandom(seed + i * 37) * height;
+      ctx.beginPath();
+      ctx.moveTo(crackX, crackY);
+      ctx.lineTo(crackX + (pseudoRandom(seed + i * 41) - 0.5) * 10, crackY + 8);
+      ctx.stroke();
+    }
+  }
+}
+
+/**
+ * Draws a gate with wooden planks and metal reinforcements.
+ */
+function drawGate(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  seed: number,
+  tintColor?: string,
+  damageRatio: number = 0,
+) {
+  const left = -width / 2;
+  const right = width / 2;
+  const top = -height / 2;
+  const bottom = height / 2;
+
+  // Draw frame
+  ctx.fillStyle = tintColor || GATE_FRAME_COLOR;
+  ctx.fillRect(left, top, width, 2); // Top
+  ctx.fillRect(left, bottom - 2, width, 2); // Bottom
+  ctx.fillRect(left, top, 2, height); // Left
+  ctx.fillRect(right - 2, top, 2, height); // Right
+
+  // Draw planks
+  const plankCount = Math.floor((width - 4) / 4);
+  for (let i = 0; i < plankCount; i++) {
+    const uniquePlankId = seed + i * 23;
+    const rand = pseudoRandom(uniquePlankId);
+
+    // Determine if this plank is "damaged"
+    const isDamaged = rand < damageRatio * 0.6;
+    if (isDamaged && damageRatio > 0.3) continue;
+
+    const x = left + 2 + i * 4;
+    ctx.fillStyle = tintColor || (rand > 0.5 ? GATE_PLANK_COLOR : GATE_FRAME_COLOR);
+    ctx.fillRect(x, top + 2, 3, height - 4);
+
+    // Add wood grain
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, top + 3);
+    ctx.lineTo(x + 1.5, bottom - 3);
+    ctx.stroke();
+  }
+
+  // Draw metal bands (horizontal reinforcement)
+  ctx.fillStyle = tintColor || GATE_METAL_COLOR;
+  ctx.fillRect(left + 1, top + height * 0.25, width - 2, 2);
+  ctx.fillRect(left + 1, bottom - height * 0.25 - 2, width - 2, 2);
+
+  // Draw metal studs
+  const studPositions = [
+    { x: left + 4, y: top + height * 0.25 + 1 },
+    { x: right - 4, y: top + height * 0.25 + 1 },
+    { x: left + 4, y: bottom - height * 0.25 - 1 },
+    { x: right - 4, y: bottom - height * 0.25 - 1 },
+  ];
+
+  for (const pos of studPositions) {
+    ctx.beginPath();
+    ctx.fillStyle = tintColor || '#666666';
+    ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Add gate icon (door handle area)
+  ctx.fillStyle = tintColor || GATE_METAL_COLOR;
+  ctx.beginPath();
+  ctx.arc(right - 5, 0, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Add damage effects
+  if (damageRatio > 0.2) {
+    ctx.strokeStyle = 'rgba(40, 30, 20, 0.7)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < Math.floor(damageRatio * 4); i++) {
+      const crackX = left + pseudoRandom(seed + i * 29) * width;
+      const crackY = top + pseudoRandom(seed + i * 33) * height;
+      ctx.beginPath();
+      ctx.moveTo(crackX, crackY);
+      ctx.lineTo(crackX + (pseudoRandom(seed + i * 39) - 0.5) * 8, crackY + 6);
+      ctx.stroke();
+    }
+  }
 }
 
 /**
@@ -289,6 +505,25 @@ export function renderBuilding(
       UI_BAR_BACKGROUND_COLOR,
       BUILDING_DESTRUCTION_BAR_COLOR,
     );
+  } else if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
+    // Draw hitpoints bar for destructible buildings
+    const maxHp = getBuildingHitpoints(building.buildingType);
+    const currentHp = building.hitpoints ?? maxHp;
+    if (currentHp < maxHp) {
+      const hpRatio = currentHp / maxHp;
+      // Color based on health: green -> yellow -> red
+      const hpColor = hpRatio > 0.5 ? '#4CAF50' : hpRatio > 0.25 ? '#FFC107' : '#F44336';
+      drawProgressBar(
+        ctx,
+        barX,
+        barY,
+        barWidth,
+        BUILDING_PROGRESS_BAR_HEIGHT,
+        hpRatio,
+        UI_BAR_BACKGROUND_COLOR,
+        hpColor,
+      );
+    }
   }
 
   // 4. Render storage contents as miniature items

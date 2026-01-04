@@ -10,6 +10,8 @@ export const BuildingType = {
   PlantingZone: 'plantingZone',
   BorderPost: 'borderPost',
   Bonfire: 'bonfire',
+  Palisade: 'palisade',
+  Gate: 'gate',
 } as const;
 
 export type BuildingType = (typeof BuildingType)[keyof typeof BuildingType];
@@ -24,6 +26,14 @@ interface BuildingCost {
   wood?: number;
 }
 
+// Default hitpoints for buildings (0 means indestructible via combat)
+export const DEFAULT_BUILDING_HITPOINTS = 0;
+
+// Palisade and Gate specific constants
+export const PALISADE_HITPOINTS = 100;
+export const GATE_HITPOINTS = 150;
+export const PALISADE_GATE_GRID_SIZE = 20; // Matches territory grid resolution
+
 // Building Definitions
 export const BUILDING_DEFINITIONS: Record<
   BuildingType,
@@ -35,6 +45,9 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: number;
     destructionTimeHours: number;
     cost: BuildingCost;
+    hitpoints?: number; // Optional hitpoints for destructible buildings
+    blocksMovement?: boolean; // Whether this building blocks movement for all entities
+    tribeMembersCanPass?: boolean; // Whether tribe members can pass through (for gates)
   }
 > = {
   [BuildingType.StorageSpot]: {
@@ -73,6 +86,30 @@ export const BUILDING_DEFINITIONS: Record<
     destructionTimeHours: 0.2,
     cost: { wood: 5 },
   },
+  [BuildingType.Palisade]: {
+    name: 'Palisade',
+    description: 'A defensive wall that blocks all movement.',
+    icon: '🪵',
+    dimensions: { width: PALISADE_GATE_GRID_SIZE, height: PALISADE_GATE_GRID_SIZE },
+    constructionTimeHours: 0.3,
+    destructionTimeHours: 0.2,
+    cost: { wood: 1 },
+    hitpoints: PALISADE_HITPOINTS,
+    blocksMovement: true,
+    tribeMembersCanPass: false,
+  },
+  [BuildingType.Gate]: {
+    name: 'Gate',
+    description: 'A gate that allows passage only for tribe members.',
+    icon: '🚪',
+    dimensions: { width: PALISADE_GATE_GRID_SIZE, height: PALISADE_GATE_GRID_SIZE },
+    constructionTimeHours: 0.4,
+    destructionTimeHours: 0.2,
+    cost: { wood: 3 },
+    hitpoints: GATE_HITPOINTS,
+    blocksMovement: true,
+    tribeMembersCanPass: true,
+  },
 };
 
 // Visual Constants
@@ -96,4 +133,19 @@ export function getBuildingConstructionTime(type: BuildingType): number {
 // Helper to get destruction time
 export function getBuildingDestructionTime(type: BuildingType): number {
   return BUILDING_DEFINITIONS[type].destructionTimeHours;
+}
+
+// Helper to get building hitpoints
+export function getBuildingHitpoints(type: BuildingType): number {
+  return BUILDING_DEFINITIONS[type].hitpoints ?? DEFAULT_BUILDING_HITPOINTS;
+}
+
+// Helper to check if building blocks movement
+export function doesBuildingBlockMovement(type: BuildingType): boolean {
+  return BUILDING_DEFINITIONS[type].blocksMovement ?? false;
+}
+
+// Helper to check if tribe members can pass through
+export function canTribeMembersPass(type: BuildingType): boolean {
+  return BUILDING_DEFINITIONS[type].tribeMembersCanPass ?? false;
 }

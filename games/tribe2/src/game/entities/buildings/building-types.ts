@@ -39,6 +39,12 @@ export interface BuildingEntity extends Entity {
   /** Height of the building in pixels. */
   height: number;
 
+  /** Current hitpoints (for destructible buildings like Palisade and Gate). */
+  hitpoints?: number;
+
+  /** Maximum hitpoints (for destructible buildings). */
+  maxHitpoints?: number;
+
   // Storage-related properties (for StorageSpot buildings)
   /** Array of items (food, wood, etc.) stored in the building. */
   storedItems: StoredItem[];

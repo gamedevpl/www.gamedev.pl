@@ -148,3 +148,21 @@ export const humanPlaceBorderPostDefinition = defineHumanTask<HumanEntity>({
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.BorderPost, BORDER_POST_PLACEMENT_PROXIMITY),
 });
+
+export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
+  type: TaskType.HumanPlacePalisade,
+  requireAdult: true,
+  autopilotBehavior: 'build',
+  scorer: createPlacementScorer,
+  executor: (task, human, context) =>
+    createPlacementExecutor(task, human, context, BuildingType.Palisade, LEADER_BUILDING_PLACEMENT_PROXIMITY),
+});
+
+export const humanPlaceGateDefinition = defineHumanTask<HumanEntity>({
+  type: TaskType.HumanPlaceGate,
+  requireAdult: true,
+  autopilotBehavior: 'build',
+  scorer: createPlacementScorer,
+  executor: (task, human, context) =>
+    createPlacementExecutor(task, human, context, BuildingType.Gate, LEADER_BUILDING_PLACEMENT_PROXIMITY),
+});

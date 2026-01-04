@@ -97,7 +97,7 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotBuildingPlacement;
       position: Vector2D;
-      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire';
+      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'palisade' | 'gate';
     }
   | {
       action: PlayerActionType.AutopilotChop;
@@ -150,7 +150,7 @@ export interface GameWorldState {
   isDraggingViewport: boolean;
   viewportDragButton: number | null;
   viewportDragDistance: number;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'palisade' | 'gate' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;

@@ -23,8 +23,10 @@ import {
   HUMAN_ATTACKING,
   HumanAttackingStateData,
 } from './human-state-types';
+import { isDirectPathBlocked, findPath } from '../../../../utils/navigation-utils';
 
 const MOVEMENT_THRESHOLD = 7.5; // Distance to consider "close enough" to target
+const PATH_RECOMPUTE_INTERVAL = 0.5; // Recompute path every 0.5 game hours if needed
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;
@@ -95,15 +97,96 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
           ...movingData,
           enteredAt: updateContext.gameState.time,
           previousState: HUMAN_MOVING,
+          path: undefined,
+          pathIndex: undefined,
         },
       };
     }
 
+    // --- Pathfinding Logic ---
+    // Check if direct path is blocked by obstacles (palisades, gates, trees)
+    let immediateTarget = targetPosition;
+    let updatedMovingData = movingData;
+
+    const isBlocked = isDirectPathBlocked(entity.position, targetPosition, updateContext.gameState, entity.leaderId);
+
+    if (isBlocked) {
+      // Need to use pathfinding
+      const needsNewPath =
+        !movingData.path ||
+        movingData.path.length === 0 ||
+        (movingData.pathComputedAt !== undefined &&
+          updateContext.gameState.time - movingData.pathComputedAt > PATH_RECOMPUTE_INTERVAL);
+
+      if (needsNewPath) {
+        // Compute new path
+        const path = findPath(entity.position, targetPosition, updateContext.gameState, entity.leaderId);
+
+        if (path && path.length > 0) {
+          updatedMovingData = {
+            ...movingData,
+            path,
+            pathIndex: 0,
+            pathComputedAt: updateContext.gameState.time,
+          };
+        } else {
+          // No path found - clear path and try direct movement (may get stuck)
+          updatedMovingData = {
+            ...movingData,
+            path: undefined,
+            pathIndex: undefined,
+            pathComputedAt: undefined,
+          };
+        }
+      }
+
+      // Follow the computed path
+      if (updatedMovingData.path && updatedMovingData.path.length > 0) {
+        const pathIndex = updatedMovingData.pathIndex ?? 0;
+        const currentPath = updatedMovingData.path;
+
+        if (pathIndex < currentPath.length) {
+          const waypoint = currentPath[pathIndex];
+          const waypointDistance = calculateWrappedDistance(entity.position, waypoint, width, height);
+
+          if (waypointDistance < MOVEMENT_THRESHOLD * 2) {
+            // Reached waypoint, move to next
+            updatedMovingData = {
+              ...updatedMovingData,
+              pathIndex: pathIndex + 1,
+            };
+
+            // Get next waypoint or final target
+            if (pathIndex + 1 < currentPath.length) {
+              immediateTarget = currentPath[pathIndex + 1];
+            } else {
+              immediateTarget = targetPosition;
+            }
+          } else {
+            immediateTarget = waypoint;
+          }
+        }
+      }
+    } else {
+      // Direct path is clear, reset path data
+      if (movingData.path) {
+        updatedMovingData = {
+          ...movingData,
+          path: undefined,
+          pathIndex: undefined,
+          pathComputedAt: undefined,
+        };
+      }
+    }
+    // --- End Pathfinding Logic ---
+
     // --- Steering Logic ---
-    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, width, height);
+    const dirToTarget = getDirectionVectorOnTorus(entity.position, immediateTarget, width, height);
     const straightDir = vectorNormalize(dirToTarget);
 
-    if (distance > SOIL_STEERING_SAMPLE_DISTANCE) {
+    const immediateDistance = calculateWrappedDistance(entity.position, immediateTarget, width, height);
+
+    if (immediateDistance > SOIL_STEERING_SAMPLE_DISTANCE) {
       // Greedy Steering: Sample soil in 3 directions to find the fastest path
       const leftDir = vectorRotate(straightDir, -SOIL_STEERING_SAMPLE_ANGLE);
       const rightDir = vectorRotate(straightDir, SOIL_STEERING_SAMPLE_ANGLE);
@@ -158,7 +241,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     // Set acceleration based on effective speed
     entity.acceleration = getEffectiveSpeed(entity, terrainSpeedModifier);
 
-    return { nextState: HUMAN_MOVING, data: movingData };
+    return { nextState: HUMAN_MOVING, data: updatedMovingData };
   }
 
   onExit(context: StateContext<HumanEntity>) {

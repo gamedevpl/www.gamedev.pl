@@ -11,6 +11,8 @@ import {
   humanPlaceBonfireDefinition,
   humanPlacePlantingZoneDefinition,
   humanPlaceBorderPostDefinition,
+  humanPlacePalisadeDefinition,
+  humanPlaceGateDefinition,
 } from './human-task-place-building';
 import { humanPlantBushDefinition } from './human-task-plant-bush';
 import { humanStockpileDefinition } from './human-task-stockpile';
@@ -22,6 +24,7 @@ import { humanHuntPreyDefinition } from './human-task-hunt-prey';
 import { humanHuntPredatorDefinition } from './human-task-hunt-predator';
 import { humanPlayerCommandDefinition } from './human-task-player-command';
 import { humanAttackHumanDefinition } from './human-task-attack-human';
+import { humanAttackBuildingDefinition } from './human-task-attack-building';
 import { humanSeekWarmthDefinition } from './human-task-seek-warmth';
 import { humanFleeDefinition } from './human-task-flee';
 import { humanStayNearTribeDefinition } from './human-task-stay-near-tribe';
@@ -39,6 +42,8 @@ export const humanTaskDefinitions = [
   humanPlaceBonfireDefinition,
   humanPlacePlantingZoneDefinition,
   humanPlaceBorderPostDefinition,
+  humanPlacePalisadeDefinition,
+  humanPlaceGateDefinition,
   humanPlantBushDefinition,
   humanStockpileDefinition,
   humanFuelBonfireDefinition,
@@ -49,6 +54,7 @@ export const humanTaskDefinitions = [
   humanHuntPredatorDefinition,
   humanPlayerCommandDefinition,
   humanAttackHumanDefinition,
+  humanAttackBuildingDefinition,
   humanSeekWarmthDefinition,
   humanFleeDefinition,
   humanStayNearTribeDefinition,

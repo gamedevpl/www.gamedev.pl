@@ -19,6 +19,9 @@ interface HumanIdleStateData extends StateData {
 
 export interface HumanMovingStateData extends StateData {
   target?: Vector2D | EntityId; // Where the human is moving to
+  path?: Vector2D[]; // Computed path for navigation around obstacles
+  pathIndex?: number; // Current index in the path
+  pathComputedAt?: number; // When the path was computed (for cache invalidation)
 }
 
 interface HumanEatingStateData extends StateData {
