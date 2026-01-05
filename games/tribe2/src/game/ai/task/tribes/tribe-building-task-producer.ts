@@ -226,7 +226,9 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
       maxRelGY = Math.max(maxRelGY, relGY);
     }
 
-    const margin = 12;
+    // Margin in grid cells - larger value creates more spacious gords
+    // NAV_GRID_RESOLUTION = 10px, so margin of 20 gives 200px buffer
+    const margin = 20;
     const startRelGX = minRelGX - margin;
     const endRelGX = maxRelGX + margin;
     const startRelGY = minRelGY - margin;
@@ -414,7 +416,10 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     const tribeBuildings = buildingsByTribe.get(leaderId) || [];
 
     // --- GORDS (Palisades & Gates) -----
-    planGords(leaderId, tribeBuildings, context);
+    // Only AI leaders should auto-plan gords, not player-controlled leaders
+    if (!leader.isPlayer) {
+      planGords(leaderId, tribeBuildings, context);
+    }
 
     // Prepare other tribe centers for placement optimization
     const otherTribeCenters: Vector2D[] = [];

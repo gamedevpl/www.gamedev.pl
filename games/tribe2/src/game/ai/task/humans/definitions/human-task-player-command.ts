@@ -580,6 +580,15 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
           return [TaskResult.Failure, 'No building type specified'];
         }
 
+        // Check if palisade/gate requires wood
+        const requiresWood = buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate;
+        if (requiresWood) {
+          if (!human.heldItem || human.heldItem.type !== ItemType.Wood) {
+            gameState.autopilotControls.activeAutopilotAction = undefined;
+            return [TaskResult.Failure, 'Requires wood to place palisade/gate'];
+          }
+        }
+
         const distance = calculateWrappedDistance(
           human.position,
           targetPosition,
@@ -601,6 +610,10 @@ export const humanPlayerCommandDefinition = defineHumanTask<HumanEntity>({
               placementProximity,
             )
           ) {
+            // Consume wood if required
+            if (requiresWood) {
+              human.heldItem = undefined;
+            }
             createBuilding(targetPosition, buildingType, human.leaderId!, gameState);
             gameState.autopilotControls.activeAutopilotAction = undefined;
             human.activeAction = 'idle';

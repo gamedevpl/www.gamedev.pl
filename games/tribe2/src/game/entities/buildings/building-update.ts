@@ -72,7 +72,10 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       }
 
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
-        updateNavigationGridSector(gameState, building.position, building.radius, true, building.ownerId);
+        // Only gates should store ownerId in the navigation grid for passage checking
+        // Palisades should always block movement
+        const gateOwnerId = building.buildingType === BuildingType.Gate ? building.ownerId : null;
+        updateNavigationGridSector(gameState, building.position, building.radius, true, gateOwnerId);
       }
 
       // Update planting zone connections when a planting zone completes construction

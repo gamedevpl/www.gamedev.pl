@@ -11,6 +11,7 @@ import { defineHumanTask } from '../human-task-utils';
 import { getTribeCenter } from '../../../../utils/spatial-utils';
 import { convertPositionToTerritoryGrid } from '../../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../../entities/tribe/territory-consts';
+import { ItemType } from '../../../../entities/item-types';
 
 /**
  * Common scorer for building placement tasks.
@@ -113,6 +114,71 @@ function createPlacementExecutor(
   return TaskResult.Success;
 }
 
+/**
+ * Scorer for palisade/gate placement that requires wood.
+ * Only scores if human has wood in their held item.
+ */
+function createWoodRequiringPlacementScorer(human: HumanEntity, task: Task, context: UpdateContext): number | null {
+  // Must have wood to place palisade/gate
+  if (!human.heldItem || human.heldItem.type !== ItemType.Wood) {
+    return null;
+  }
+
+  if (human.leaderId !== task.creatorEntityId) {
+    return null;
+  }
+
+  if (!task.target || typeof task.target !== 'object' || !('x' in task.target)) {
+    return null;
+  }
+
+  const distance = calculateWrappedDistance(
+    human.position,
+    task.target as Vector2D,
+    context.gameState.mapDimensions.width,
+    context.gameState.mapDimensions.height,
+  );
+
+  // Score increases as distance decreases (0 to 1 range)
+  return getDistanceScore(distance);
+}
+
+/**
+ * Executor for palisade/gate placement that consumes wood.
+ */
+function createWoodRequiringPlacementExecutor(
+  task: Task,
+  human: HumanEntity,
+  context: UpdateContext,
+  buildingType: BuildingType,
+  proximity: number,
+): TaskResult {
+  // Check if human still has wood
+  if (!human.heldItem || human.heldItem.type !== ItemType.Wood) {
+    return TaskResult.Failure;
+  }
+
+  const target = task.target as Vector2D;
+
+  const distance = calculateWrappedDistance(
+    human.position,
+    target,
+    context.gameState.mapDimensions.width,
+    context.gameState.mapDimensions.height,
+  );
+
+  if (distance > proximity) {
+    human.target = target;
+    human.activeAction = 'moving';
+    return TaskResult.Running;
+  }
+
+  // At the target, consume wood and place building
+  human.heldItem = undefined;
+  createBuilding(target, buildingType, human.leaderId!, context.gameState);
+  return TaskResult.Success;
+}
+
 export const humanPlaceStorageDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceStorage,
   requireAdult: true,
@@ -153,16 +219,16 @@ export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlacePalisade,
   requireAdult: true,
   autopilotBehavior: 'build',
-  scorer: createPlacementScorer,
+  scorer: createWoodRequiringPlacementScorer,
   executor: (task, human, context) =>
-    createPlacementExecutor(task, human, context, BuildingType.Palisade, LEADER_BUILDING_PLACEMENT_PROXIMITY),
+    createWoodRequiringPlacementExecutor(task, human, context, BuildingType.Palisade, LEADER_BUILDING_PLACEMENT_PROXIMITY),
 });
 
 export const humanPlaceGateDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceGate,
   requireAdult: true,
   autopilotBehavior: 'build',
-  scorer: createPlacementScorer,
+  scorer: createWoodRequiringPlacementScorer,
   executor: (task, human, context) =>
-    createPlacementExecutor(task, human, context, BuildingType.Gate, LEADER_BUILDING_PLACEMENT_PROXIMITY),
+    createWoodRequiringPlacementExecutor(task, human, context, BuildingType.Gate, LEADER_BUILDING_PLACEMENT_PROXIMITY),
 });

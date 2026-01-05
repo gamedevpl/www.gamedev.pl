@@ -231,6 +231,15 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
   if (gameState.selectedBuildingType && gameState.selectedBuildingType !== 'removal') {
     const buildingType = gameState.selectedBuildingType as BuildingType;
 
+    // Check if palisade/gate requires wood
+    const requiresWood = buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate;
+    if (requiresWood) {
+      if (!player.heldItem || player.heldItem.type !== ItemType.Wood) {
+        // Player doesn't have wood, can't place palisade/gate
+        return;
+      }
+    }
+
     // Check if player is within proximity to place building
     const distance = calculateWrappedDistance(
       player.position,
@@ -245,6 +254,10 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
     if (distance <= placementProximity) {
       // Player is close enough, place immediately
       if (canPlaceBuilding(worldPos, buildingType, player.leaderId, gameState, player.position, placementProximity)) {
+        // Consume wood if required
+        if (requiresWood) {
+          player.heldItem = undefined;
+        }
         createBuilding(worldPos, buildingType, player.leaderId!, gameState);
         gameState.selectedBuildingType = null;
       }
