@@ -112,10 +112,10 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
 const createMockWorldState = (buildings: BuildingEntity[], terrainOwnership: (number | null)[]): GameWorldState => {
-  const entitiesMap: Record<number, any> = buildings.reduce((acc, b) => {
+  const entitiesMap: Record<number, unknown> = buildings.reduce((acc, b) => {
     acc[b.id] = b;
     return acc;
-  }, {} as Record<number, any>);
+  }, {} as Record<number, unknown>);
 
   // Mock player leader
   entitiesMap[1] = {
@@ -160,27 +160,34 @@ const createMockWorldState = (buildings: BuildingEntity[], terrainOwnership: (nu
   } as unknown as GameWorldState;
 
   // Add search functionality (mocking IndexedWorldState)
-  (state as any).search = {
+  (state as unknown as IndexedWorldState).search = {
     building: {
       all: () => buildings,
       byRadius: (pos: Vector2D, radius: number) =>
         buildings.filter((b) => calculateWrappedDistance(pos, b.position, CANVAS_WIDTH, CANVAS_HEIGHT) <= radius),
       byRect: () => buildings,
-      byProperty: (prop: string, value: unknown) => buildings.filter((b) => (b as any)[prop] === value),
-    },
+      byProperty: (prop: string, value: unknown) =>
+        buildings.filter((b) => (b as unknown as Record<string, unknown>)[prop] === value),
+    } as unknown as IndexedWorldState['search']['building'],
     human: {
       all: () => [entitiesMap[1], entitiesMap[2]],
       byProperty: (prop: string, value: unknown) => {
-        return Object.values(entitiesMap).filter((e) => e.type === 'human' && e[prop] === value);
+        return Object.values(entitiesMap).filter(
+          (e) =>
+            (e as unknown as Record<string, unknown>).type === 'human' &&
+            (e as unknown as Record<string, unknown>)[prop] === value,
+        );
       },
       byRadius: () => [],
-      byRect: () => Object.values(entitiesMap).filter((e) => e.type === 'human'),
-    },
-    berryBush: { byRect: () => [], all: () => [] },
-    tree: { byRect: () => [], all: () => [] },
-    corpse: { byRect: () => [], all: () => [] },
-    prey: { byRect: () => [], all: () => [] },
-    predator: { byRect: () => [], all: () => [] },
+      byRect: () =>
+        Object.values(entitiesMap).filter((e) => (e as unknown as Record<string, unknown>).type === 'human'),
+    } as unknown as IndexedWorldState['search']['human'],
+    berryBush: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['berryBush'],
+    tree: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['tree'],
+    corpse: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['corpse'],
+    prey: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['prey'],
+    predator: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['predator'],
+    tasks: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['tasks'],
   };
 
   return state;
