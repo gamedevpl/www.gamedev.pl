@@ -18,6 +18,7 @@ import { updateTemperature } from './temperature/temperature-update';
 import { produceTribeBuildingTasks, updateTribeFrontier } from './ai/task/tribes/tribe-building-task-producer';
 import { produceTribeDiplomacyTasks } from './ai/task/tribes/tribe-diplomacy-task-producer';
 import { cleanupExpiredTasks } from './ai/task/task-utils';
+import { updateNavigationAI } from './ai/navigation-ai-update';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -90,6 +91,9 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Incremental frontier analysis for tribe expansion
     updateTribeFrontier({ gameState: indexedState, deltaTime });
+
+    // Navigation AI: Process pathfinding queue and breach detection
+    updateNavigationAI(indexedState, deltaTime);
 
     // Global tribe management: check for orphaned tribes and execute merges/dissolutions
     // We run this once per game hour to maintain performance and avoid UI churn

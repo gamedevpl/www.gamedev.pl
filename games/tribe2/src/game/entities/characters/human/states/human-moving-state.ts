@@ -23,8 +23,9 @@ import {
   HUMAN_ATTACKING,
   HumanAttackingStateData,
 } from './human-state-types';
+import { isPathBlocked } from '../../../../utils/navigation-utils';
 
-const MOVEMENT_THRESHOLD = 7.5; // Distance to consider "close enough" to target
+const MOVEMENT_THRESHOLD = 10.0; // Distance to consider "close enough" to target
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;
@@ -84,10 +85,10 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
 
     const { width, height } = updateContext.gameState.mapDimensions;
 
-    // Check if we've reached the target
-    const distance = calculateWrappedDistance(entity.position, targetPosition, width, height);
+    // Check if we've reached the final target
+    const distanceToFinalTarget = calculateWrappedDistance(entity.position, targetPosition, width, height);
 
-    if (distance < MOVEMENT_THRESHOLD) {
+    if (distanceToFinalTarget < MOVEMENT_THRESHOLD) {
       // Close enough to target
       return {
         nextState: HUMAN_IDLE,
@@ -99,11 +100,65 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       };
     }
 
-    // --- Steering Logic ---
-    const dirToTarget = getDirectionVectorOnTorus(entity.position, targetPosition, width, height);
-    const straightDir = vectorNormalize(dirToTarget);
+    // --- Pathfinding Logic ---
+    const isDirectPathBlocked = isPathBlocked(updateContext.gameState, entity.position, targetPosition, entity);
 
-    if (distance > SOIL_STEERING_SAMPLE_DISTANCE) {
+    // 1. Path Invalidation / Recalculation
+    if (entity.path && entity.pathTarget) {
+      const targetMovedDistance = calculateWrappedDistance(entity.pathTarget, targetPosition, width, height);
+      
+      // If target moved significantly or direct path is no longer blocked (and close enough), clear the path
+      if (targetMovedDistance > 40 || (!isDirectPathBlocked && distanceToFinalTarget < 150)) {
+        entity.path = undefined;
+        entity.pathTarget = undefined;
+      }
+    }
+
+    // 2. Request Path if Blocked
+    if (isDirectPathBlocked && !entity.path) {
+      if (!updateContext.gameState.pathfindingQueue.includes(entity.id)) {
+        updateContext.gameState.pathfindingQueue.push(entity.id);
+      }
+      entity.acceleration = 0;
+      return { nextState: HUMAN_MOVING, data: movingData };
+    }
+
+    // 3. Determine Navigation Target (Waypoint or Final Target)
+    let navTarget = targetPosition;
+    if (entity.path && entity.path.length > 0) {
+      navTarget = entity.path[0];
+
+      // Check if path to current waypoint is blocked
+      if (isPathBlocked(updateContext.gameState, entity.position, navTarget, entity)) {
+        entity.path = undefined;
+        entity.pathTarget = undefined;
+        if (!updateContext.gameState.pathfindingQueue.includes(entity.id)) {
+          updateContext.gameState.pathfindingQueue.push(entity.id);
+        }
+        entity.acceleration = 0;
+        return { nextState: HUMAN_MOVING, data: movingData };
+      } else {
+        const distToWaypoint = calculateWrappedDistance(entity.position, navTarget, width, height);
+
+        // If reached waypoint, move to next
+        if (distToWaypoint < MOVEMENT_THRESHOLD) {
+          entity.path.shift();
+          if (entity.path.length > 0) {
+            navTarget = entity.path[0];
+          } else {
+            navTarget = targetPosition;
+          }
+        }
+      }
+    }
+    // --- End Pathfinding Logic ---
+
+    // --- Steering Logic ---
+    const dirToNavTarget = getDirectionVectorOnTorus(entity.position, navTarget, width, height);
+    const distanceToNavTarget = calculateWrappedDistance(entity.position, navTarget, width, height);
+    const straightDir = vectorNormalize(dirToNavTarget);
+
+    if (distanceToNavTarget > SOIL_STEERING_SAMPLE_DISTANCE) {
       // Greedy Steering: Sample soil in 3 directions to find the fastest path
       const leftDir = vectorRotate(straightDir, -SOIL_STEERING_SAMPLE_ANGLE);
       const rightDir = vectorRotate(straightDir, SOIL_STEERING_SAMPLE_ANGLE);

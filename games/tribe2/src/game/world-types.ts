@@ -97,7 +97,7 @@ export type HoveredAutopilotAction =
   | {
       action: PlayerActionType.AutopilotBuildingPlacement;
       position: Vector2D;
-      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire';
+      buildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'palisade' | 'gate';
     }
   | {
       action: PlayerActionType.AutopilotChop;
@@ -117,6 +117,11 @@ export interface ScheduledEvent {
     pushbackForce: number;
     attackerPosition: Vector2D;
   };
+}
+
+export interface NavigationGrid {
+  staticObstacles: Uint8Array;
+  gateOwners: (EntityId | null)[];
 }
 
 // Game State Interface
@@ -150,7 +155,7 @@ export interface GameWorldState {
   isDraggingViewport: boolean;
   viewportDragButton: number | null;
   viewportDragDistance: number;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'removal' | null;
+  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'palisade' | 'gate' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;
@@ -185,6 +190,8 @@ export interface GameWorldState {
   // This is recalculated whenever planting zones change.
   plantingZoneConnections: Record<EntityId, PlantingZoneConnections>;
   terrainOwnership: Array<EntityId | null>; // 1D array representing ownership of each terrain tile
+  navigationGrid: NavigationGrid;
+  pathfindingQueue: EntityId[];
   tasks: Record<string, Task>;
 }
 

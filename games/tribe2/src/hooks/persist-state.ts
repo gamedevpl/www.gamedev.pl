@@ -10,6 +10,8 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
         setAppState('game');
       } else if (hash === '#effects') {
         setAppState('effects');
+      } else if (hash === '#buildings') {
+        setAppState('buildings');
       } else {
         setAppState('intro');
       }

@@ -10,6 +10,7 @@ import {
   BUILDING_PROGRESS_BAR_OFFSET,
 } from '../entities/buildings/building-consts';
 import { Vector2D } from '../utils/math-types';
+import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping, pseudoRandom } from './render-utils';
@@ -20,6 +21,8 @@ import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
 import { SpriteCache } from './sprite-cache';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
+import { NAV_GRID_RESOLUTION } from '../utils/navigation-utils';
+import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -36,18 +39,49 @@ const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 // Storage rendering constants
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
+// Palisade/Gate Visual Constants
+const WOOD_COLOR_BASE = '#8B4513'; // SaddleBrown
+const WOOD_COLOR_HIGHLIGHT = '#A0522D'; // Sienna
+const CRACK_COLOR = 'rgba(40, 40, 40, 0.7)';
+
 // Caching logic
 const spriteCache = new SpriteCache(1000);
 const SPRITE_PADDING = 20;
 
 /**
+ * Interface for palisade connectivity flags.
+ */
+interface PalisadeConnections {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+  topRight: boolean;
+  bottomRight: boolean;
+  bottomLeft: boolean;
+  topLeft: boolean;
+}
+
+const DEFAULT_CONNECTIONS: PalisadeConnections = {
+  top: false,
+  right: false,
+  bottom: false,
+  left: false,
+  topRight: false,
+  bottomRight: false,
+  bottomLeft: false,
+  topLeft: false,
+};
+
+/**
  * Generates a unique cache key for a building sprite based on its visual state.
  */
 function getBuildingSpriteKey(
-  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number },
+  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
   isHostile: boolean,
   isGhost: boolean = false,
   isValid: boolean = true,
+  connections: PalisadeConnections = DEFAULT_CONNECTIONS,
 ): string {
   if (isGhost) {
     return `ghost_${building.buildingType}_${isValid}`;
@@ -55,19 +89,22 @@ function getBuildingSpriteKey(
 
   const b = building as BuildingEntity;
   const hasFuel = b.buildingType === BuildingType.Bonfire && (b.fuelLevel ?? 0) > 0;
-  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}`;
+  const c = connections;
+  const connKey = `${c.top}${c.right}${c.bottom}${c.left}${c.topRight}${c.bottomRight}${c.bottomLeft}${c.topLeft}`;
+  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}_${connKey}`;
 }
 
 /**
  * Retrieves a cached building sprite or creates a new one.
  */
 function getBuildingSprite(
-  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number },
+  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
   isHostile: boolean,
   isGhost: boolean = false,
   isValid: boolean = true,
+  connections: PalisadeConnections = DEFAULT_CONNECTIONS,
 ): HTMLCanvasElement {
-  const key = getBuildingSpriteKey(building, isHostile, isGhost, isValid);
+  const key = getBuildingSpriteKey(building, isHostile, isGhost, isValid, connections);
   const { width, height, id, buildingType } = building;
   const canvasWidth = width + SPRITE_PADDING * 2;
   const canvasHeight = height + SPRITE_PADDING * 2;
@@ -80,7 +117,11 @@ function getBuildingSprite(
 
     if (isGhost) {
       const ghostColor = isValid ? '#4CAF50' : '#F44336';
-      drawStoneRect(ctx, width, height, 9999, ghostColor);
+      if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
+        drawWoodPost(ctx, width, height, ghostColor);
+      } else {
+        drawStoneRect(ctx, width, height, 9999, ghostColor);
+      }
 
       ctx.font = `${Math.min(width, height) * 0.5}px Arial`;
       ctx.textAlign = 'center';
@@ -90,29 +131,217 @@ function getBuildingSprite(
     } else {
       const b = building as BuildingEntity;
       let icon = definition.icon;
-      if (b.buildingType === BuildingType.Bonfire && isConstructed) {
-        icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+      
+      // Determine tribe color
+      let tribeColor = '#FFFFFF';
+      if (b.ownerId !== undefined && b.ownerId !== null) {
+        tribeColor = TERRITORY_COLORS[b.ownerId % TERRITORY_COLORS.length];
       }
 
-      // 1. Draw the Stone Border
-      if (isHostile) {
-        drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+      if (buildingType === BuildingType.Palisade) {
+        drawPalisade(ctx, width, height, id, tribeColor, connections);
+      } else if (buildingType === BuildingType.Gate) {
+        drawGate(ctx, width, height, tribeColor, connections);
       } else {
-        drawStoneRect(ctx, width, height, id);
+        if (b.buildingType === BuildingType.Bonfire && isConstructed) {
+          icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+        }
+
+        // 1. Draw the Stone Border
+        if (isHostile) {
+          drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
+        } else {
+          drawStoneRect(ctx, width, height, id);
+        }
+
+        // 2. Draw Icon
+        ctx.globalAlpha = 0.5;
+        ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(icon, 0, 0);
       }
-
-      // 2. Draw Icon
-      ctx.globalAlpha = 0.5;
-      ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 4;
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(icon, 0, 0);
     }
   });
+}
+
+/**
+ * Draws a wooden post (used for ghosts and as base for palisades).
+ */
+function drawWoodPost(ctx: CanvasRenderingContext2D, width: number, height: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.fillRect(-width / 2, -height / 2, width, height);
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.strokeRect(-width / 2, -height / 2, width, height);
+}
+
+/**
+ * Draws a palisade segment with connections.
+ */
+function drawPalisade(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  seed: number,
+  tribeColor: string,
+  connections: PalisadeConnections,
+) {
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const beamThickness = height / 4;
+
+  // 1. Draw Beams (Behind Post)
+  ctx.fillStyle = WOOD_COLOR_BASE;
+  
+  // Orthogonal beams
+  if (connections.right) ctx.fillRect(0, -beamThickness / 2, halfW, beamThickness);
+  if (connections.left) ctx.fillRect(-halfW, -beamThickness / 2, halfW, beamThickness);
+  if (connections.bottom) ctx.fillRect(-beamThickness / 2, 0, beamThickness, halfH);
+  if (connections.top) ctx.fillRect(-beamThickness / 2, -halfH, beamThickness, halfH);
+
+  // Diagonal beams
+  ctx.lineWidth = beamThickness;
+  ctx.strokeStyle = WOOD_COLOR_BASE;
+  ctx.lineCap = 'round';
+  
+  const drawDiagonalBeam = (targetX: number, targetY: number) => {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(targetX, targetY);
+    ctx.stroke();
+  };
+
+  if (connections.topRight) drawDiagonalBeam(halfW, -halfH);
+  if (connections.bottomRight) drawDiagonalBeam(halfW, halfH);
+  if (connections.bottomLeft) drawDiagonalBeam(-halfW, halfH);
+  if (connections.topLeft) drawDiagonalBeam(-halfW, -halfH);
+
+  // 2. Main Post
+  const postWidth = width / 2;
+  ctx.fillStyle = WOOD_COLOR_BASE;
+  ctx.fillRect(-postWidth / 2, -halfH, postWidth, height);
+  
+  // Highlight
+  ctx.fillStyle = WOOD_COLOR_HIGHLIGHT;
+  ctx.fillRect(-postWidth / 4, -halfH, postWidth / 2, height);
+
+  // Smart Sharpening: Only draw pointed top if no palisade above
+  if (!connections.top) {
+    ctx.fillStyle = WOOD_COLOR_BASE;
+    ctx.beginPath();
+    ctx.moveTo(-postWidth / 2, -halfH);
+    ctx.lineTo(0, -halfH - 5);
+    ctx.lineTo(postWidth / 2, -halfH);
+    ctx.fill();
+  }
+
+  // Tribe accent band
+  ctx.fillStyle = tribeColor;
+  ctx.fillRect(-postWidth / 2, -height / 8, postWidth, height / 4);
+  
+  // Wood grain lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const x = (pseudoRandom(seed + i) - 0.5) * postWidth;
+    ctx.beginPath();
+    ctx.moveTo(x, -halfH);
+    ctx.lineTo(x, halfH);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draws a gate segment.
+ */
+function drawGate(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  tribeColor: string,
+  connections: PalisadeConnections,
+) {
+  // Rotate gate if connected vertically
+  if (connections.top || connections.bottom) {
+    ctx.rotate(Math.PI / 2);
+  }
+
+  const postWidth = width / 4;
+  const halfW = width / 2;
+  const halfH = height / 2;
+
+  // Side Posts
+  ctx.fillStyle = WOOD_COLOR_BASE;
+  ctx.fillRect(-halfW, -halfH, postWidth, height);
+  ctx.fillRect(halfW - postWidth, -halfH, postWidth, height);
+
+  // Top Crossbeam
+  ctx.fillStyle = '#5D2906'; // Darker wood
+  ctx.fillRect(-halfW, -halfH, width, postWidth);
+
+  // Door panels
+  ctx.fillStyle = WOOD_COLOR_BASE;
+  const doorWidth = (width - postWidth * 2) / 2;
+  ctx.fillRect(-halfW + postWidth + 1, -halfH + postWidth + 1, doorWidth - 2, height - postWidth - 2);
+  ctx.fillRect(1, -halfH + postWidth + 1, doorWidth - 2, height - postWidth - 2);
+
+  // Wood grain on doors
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 1;
+  for (let i = -1; i <= 1; i += 2) {
+    const x = i * (doorWidth / 2);
+    ctx.beginPath();
+    ctx.moveTo(x, -halfH + postWidth);
+    ctx.lineTo(x, halfH);
+    ctx.stroke();
+  }
+
+  // Tribe emblem/color
+  ctx.fillStyle = tribeColor;
+  ctx.beginPath();
+  ctx.arc(0, postWidth / 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Handles
+  ctx.fillStyle = '#C0C0C0';
+  ctx.fillRect(-2, postWidth / 2 - 1, 1, 2);
+  ctx.fillRect(1, postWidth / 2 - 1, 1, 2);
+}
+
+/**
+ * Draws cracks on a building based on destruction progress.
+ */
+function drawCracks(ctx: CanvasRenderingContext2D, width: number, height: number, progress: number, seed: number) {
+  if (progress <= 0) return;
+
+  ctx.save();
+  ctx.strokeStyle = CRACK_COLOR;
+  ctx.lineWidth = 1;
+  ctx.lineCap = 'round';
+
+  const numCracks = Math.floor(progress * 10) + 1;
+  for (let i = 0; i < numCracks; i++) {
+    const s = seed + i * 17;
+    let x = (pseudoRandom(s) - 0.5) * width;
+    let y = (pseudoRandom(s + 1) - 0.5) * height;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const length = 5 + pseudoRandom(s + 2) * 10;
+    const angle = pseudoRandom(s + 3) * Math.PI * 2;
+    
+    for (let j = 0; j < 3; j++) {
+      x += Math.cos(angle) * (length / 3);
+      y += Math.sin(angle) * (length / 3);
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /**
@@ -242,15 +471,58 @@ export function renderBuilding(
   building: BuildingEntity,
   indexedWorld: IndexedWorldState,
 ): void {
-  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed } =
+  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed, buildingType, ownerId, id } =
     building;
 
   // Check hostility
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
 
+  // Connectivity check for Palisades
+  let connections: PalisadeConnections = { ...DEFAULT_CONNECTIONS };
+  if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
+    const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
+    const nearbyBuildings = indexedWorld.search.building.byRadius(position, NAV_GRID_RESOLUTION * 1.5);
+
+    for (const neighbor of nearbyBuildings) {
+      if (neighbor.id === id) continue; // Skip self
+
+      if (
+        (neighbor.buildingType === BuildingType.Palisade || neighbor.buildingType === BuildingType.Gate) &&
+        neighbor.ownerId === ownerId
+      ) {
+        const dir = getDirectionVectorOnTorus(position, neighbor.position, worldWidth, worldHeight);
+        const threshold = NAV_GRID_RESOLUTION * 0.5;
+
+        const isRight = dir.x > threshold;
+        const isLeft = dir.x < -threshold;
+        const isBottom = dir.y > threshold;
+        const isTop = dir.y < -threshold;
+
+        const absX = Math.abs(dir.x);
+        const absY = Math.abs(dir.y);
+
+        // Orthogonal
+        if (absX > threshold && absY < threshold) {
+          if (isRight) connections.right = true;
+          if (isLeft) connections.left = true;
+        } else if (absY > threshold && absX < threshold) {
+          if (isBottom) connections.bottom = true;
+          if (isTop) connections.top = true;
+        } 
+        // Diagonal
+        else if (absX > threshold && absY > threshold) {
+          if (isRight && isTop) connections.topRight = true;
+          if (isRight && isBottom) connections.bottomRight = true;
+          if (isLeft && isBottom) connections.bottomLeft = true;
+          if (isLeft && isTop) connections.topLeft = true;
+        }
+      }
+    }
+  }
+
   // Get cached sprite
-  const sprite = getBuildingSprite(building, isHostile);
+  const sprite = getBuildingSprite(building, isHostile, false, true, connections);
 
   ctx.save();
   // If under construction, we make the sprite semi-transparent
@@ -260,9 +532,16 @@ export function renderBuilding(
 
   // Draw cached sprite centered at position
   ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
+  
+  // Damage feedback (cracks)
+  if (isBeingDestroyed && isConstructed) {
+    ctx.translate(position.x, position.y);
+    drawCracks(ctx, width, height, destructionProgress, id);
+  }
+  
   ctx.restore();
 
-  // 3. Draw Progress Bars (unchanged)
+  // 3. Draw Progress Bars
   const barWidth = width;
   const barX = position.x - barWidth / 2;
   const barY = position.y + height / 2 + BUILDING_PROGRESS_BAR_OFFSET;
@@ -314,7 +593,7 @@ export function renderGhostBuilding(
   const { width, height } = definition.dimensions;
 
   // Get cached ghost sprite
-  const sprite = getBuildingSprite({ buildingType, width, height, id: 9999 }, false, true, isValid);
+  const sprite = getBuildingSprite({ buildingType, width, height, id: 9999 }, false, true, isValid, DEFAULT_CONNECTIONS);
 
   const drawGhost = (ctx: CanvasRenderingContext2D, pos: Vector2D) => {
     ctx.save();

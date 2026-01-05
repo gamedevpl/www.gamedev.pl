@@ -336,6 +336,13 @@ export function renderUIButtons(
           name: 'Planting Zone',
         },
         {
+          id: 'buildMenu_palisade',
+          action: UIButtonActionType.SelectPalisade,
+          icon: '🧱',
+          shortcut: '3',
+          name: 'Palisade',
+        },
+        {
           id: 'buildMenu_bonfire',
           action: UIButtonActionType.SelectBonfire,
           icon: '🔥',
@@ -356,6 +363,13 @@ export function renderUIButtons(
           shortcut: '6',
           name: 'Remove Building',
         },
+        {
+          id: 'buildMenu_gate',
+          action: UIButtonActionType.SelectGate,
+          icon: '🚪',
+          shortcut: '7',
+          name: 'Gate',
+        },
       ];
 
       const buildMenuCols = buildMenuButtons.length;
@@ -373,10 +387,14 @@ export function renderUIButtons(
             gameState.selectedBuildingType === 'storageSpot') ||
           (buildButton.action === UIButtonActionType.SelectPlantingZone &&
             gameState.selectedBuildingType === 'plantingZone') ||
+          (buildButton.action === UIButtonActionType.SelectPalisade &&
+            gameState.selectedBuildingType === 'palisade') ||
           (buildButton.action === UIButtonActionType.SelectBorderPost &&
             gameState.selectedBuildingType === 'borderPost') ||
           (buildButton.action === UIButtonActionType.SelectBonfire && gameState.selectedBuildingType === 'bonfire') ||
-          (buildButton.action === UIButtonActionType.SelectRemovalTool && gameState.selectedBuildingType === 'removal');
+          (buildButton.action === UIButtonActionType.SelectRemovalTool && gameState.selectedBuildingType === 'removal') ||
+          (buildButton.action === UIButtonActionType.SelectGate &&
+            gameState.selectedBuildingType === 'gate');
 
         const button: ClickableUIButton = {
           id: buildButton.id,

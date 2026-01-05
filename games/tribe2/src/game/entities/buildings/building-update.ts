@@ -13,6 +13,7 @@ import {
 } from '../../temperature/temperature-consts';
 import { ItemType } from '../item-types';
 import { prepareBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
+import { updateNavigationGridSector } from '../../utils/navigation-utils';
 
 /**
  * Updates the state of a building entity.
@@ -38,6 +39,10 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     }
 
     if (building.destructionProgress >= 1) {
+      if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
+        updateNavigationGridSector(gameState, building.position, building.radius, false);
+      }
+
       const isPlantingZone = building.buildingType === BuildingType.PlantingZone;
       removeEntity(gameState.entities, building.id);
       // Update planting zone connections after a planting zone is removed
@@ -64,6 +69,10 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       // Paint terrain ownership when construction completes
       if (building.ownerId) {
         paintTerrainOwnership(building.position, TERRITORY_BUILDING_RADIUS, building.ownerId, gameState);
+      }
+
+      if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
+        updateNavigationGridSector(gameState, building.position, building.radius, true, building.ownerId);
       }
 
       // Update planting zone connections when a planting zone completes construction

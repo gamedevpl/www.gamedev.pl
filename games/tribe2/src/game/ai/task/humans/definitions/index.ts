@@ -11,6 +11,8 @@ import {
   humanPlaceBonfireDefinition,
   humanPlacePlantingZoneDefinition,
   humanPlaceBorderPostDefinition,
+  humanPlacePalisadeDefinition,
+  humanPlaceGateDefinition,
 } from './human-task-place-building';
 import { humanPlantBushDefinition } from './human-task-plant-bush';
 import { humanStockpileDefinition } from './human-task-stockpile';
@@ -27,6 +29,7 @@ import { humanFleeDefinition } from './human-task-flee';
 import { humanStayNearTribeDefinition } from './human-task-stay-near-tribe';
 import { humanStayNearParentDefinition } from './human-task-stay-near-parent';
 import { humanDiplomacyDefinition } from './human-task-diplomacy';
+import { humanAttackBuildingDefinition } from './human-task-attack-building';
 
 export const humanTaskDefinitions = [
   humanEatDefinition,
@@ -39,6 +42,8 @@ export const humanTaskDefinitions = [
   humanPlaceBonfireDefinition,
   humanPlacePlantingZoneDefinition,
   humanPlaceBorderPostDefinition,
+  humanPlacePalisadeDefinition,
+  humanPlaceGateDefinition,
   humanPlantBushDefinition,
   humanStockpileDefinition,
   humanFuelBonfireDefinition,
@@ -54,6 +59,7 @@ export const humanTaskDefinitions = [
   humanStayNearTribeDefinition,
   humanStayNearParentDefinition,
   humanDiplomacyDefinition,
+  humanAttackBuildingDefinition,
 ].reduce<Record<TaskType, TaskDefinition<HumanEntity>>>((acc, def) => {
   acc[def.type] = def;
   return acc;

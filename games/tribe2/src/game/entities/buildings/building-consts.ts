@@ -10,6 +10,8 @@ export const BuildingType = {
   PlantingZone: 'plantingZone',
   BorderPost: 'borderPost',
   Bonfire: 'bonfire',
+  Palisade: 'palisade',
+  Gate: 'gate',
 } as const;
 
 export type BuildingType = (typeof BuildingType)[keyof typeof BuildingType];
@@ -72,6 +74,24 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.5,
     destructionTimeHours: 0.2,
     cost: { wood: 5 },
+  },
+  [BuildingType.Palisade]: {
+    name: 'Palisade',
+    description: 'A defensive wall segment that blocks movement.',
+    icon: '🧱',
+    dimensions: { width: 20, height: 20 },
+    constructionTimeHours: 0.2,
+    destructionTimeHours: 0.1,
+    cost: { wood: 1 },
+  },
+  [BuildingType.Gate]: {
+    name: 'Gate',
+    description: 'A gate that allows passage for tribe members.',
+    icon: '🚪',
+    dimensions: { width: 20, height: 20 },
+    constructionTimeHours: 0.4,
+    destructionTimeHours: 0.2,
+    cost: { wood: 3 },
   },
 };
 

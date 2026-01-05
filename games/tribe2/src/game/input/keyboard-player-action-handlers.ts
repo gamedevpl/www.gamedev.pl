@@ -46,6 +46,10 @@ export const handlePlayerActionKeyDown = (
       gameState.selectedBuildingType = 'plantingZone';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
+    } else if (key === '3') {
+      gameState.selectedBuildingType = 'palisade';
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
     } else if (key === '4') {
       gameState.selectedBuildingType = 'bonfire';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
@@ -56,6 +60,10 @@ export const handlePlayerActionKeyDown = (
       return;
     } else if (key === '6') {
       gameState.selectedBuildingType = 'removal';
+      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
+      return;
+    } else if (key === '7') {
+      gameState.selectedBuildingType = 'gate';
       playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
       return;
     }

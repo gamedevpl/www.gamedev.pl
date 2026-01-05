@@ -160,6 +160,8 @@ export enum UIButtonActionType {
   SelectPlantingZone = 'SelectPlantingZone',
   SelectBorderPost = 'SelectBorderPost',
   SelectBonfire = 'SelectBonfire',
+  SelectPalisade = 'SelectPalisade',
+  SelectGate = 'SelectGate',
   SelectRemovalTool = 'SelectRemovalTool',
 
   // --- Autopilot Behavior Toggles ---

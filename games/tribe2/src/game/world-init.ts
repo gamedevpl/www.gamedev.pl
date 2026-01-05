@@ -34,6 +34,7 @@ import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tri
 import { TREE_GROWTH_TIME_GAME_HOURS } from './entities/plants/tree/tree-consts';
 import { initTemperatureState } from './temperature/temperature-update';
 import { AIType } from './ai/ai-types.ts';
+import { initNavigationGrid, updateNavigationGridSector } from './utils/navigation-utils';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -284,8 +285,17 @@ export function initWorld(): GameWorldState {
     terrainOwnership: new Array(
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
+    navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
+    pathfindingQueue: [],
     tasks: {},
   };
+
+  // Populate navigation grid with initial obstacles (trees)
+  Object.values(initialWorldState.entities.entities).forEach((entity) => {
+    if (entity.type === 'tree') {
+      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true);
+    }
+  });
 
   const indexedWorldState = indexWorldState(initialWorldState);
 
@@ -455,8 +465,17 @@ export function initIntroWorld(): GameWorldState {
     terrainOwnership: new Array(
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
+    navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
+    pathfindingQueue: [],
     tasks: {},
   };
+
+  // Populate navigation grid with initial obstacles (trees)
+  Object.values(initialWorldState.entities.entities).forEach((entity) => {
+    if (entity.type === 'tree') {
+      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true);
+    }
+  });
 
   return indexWorldState(initialWorldState);
 }

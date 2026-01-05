@@ -11,7 +11,7 @@ import { SerializedWorldState } from './persistence-types';
  */
 export async function saveGame(worldState: GameWorldState): Promise<void> {
   try {
-    const serialized: SerializedWorldState = {
+    const serialized = {
       time: worldState.time,
       entities: worldState.entities,
       visualEffects: worldState.visualEffects,
@@ -53,10 +53,12 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       terrainOwnership: worldState.terrainOwnership,
       temperature: worldState.temperature,
       tasks: worldState.tasks,
+      navigationGrid: worldState.navigationGrid,
+      pathfindingQueue: worldState.pathfindingQueue,
       isDraggingViewport: worldState.isDraggingViewport,
       viewportDragButton: worldState.viewportDragButton,
       viewportDragDistance: worldState.viewportDragDistance,
-    };
+    } as unknown as SerializedWorldState;
 
     await workerManager.saveGame(serialized);
   } catch (error) {

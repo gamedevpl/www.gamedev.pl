@@ -87,6 +87,12 @@ export interface HumanEntity extends CharacterEntity {
   /** Target for 'moving' action, either a position or entity. */
   target?: { x: number; y: number } | EntityId; // Target for 'moving' action. Set by player input or AI decision.
 
+  /** Current calculated path as a sequence of waypoints. */
+  path?: { x: number; y: number }[];
+
+  /** The target position for which the current path was calculated. Used for cache invalidation. */
+  pathTarget?: { x: number; y: number };
+
   /** The current progress of the entity's animation (0-1). */
   animationProgress?: number;
 

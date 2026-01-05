@@ -12,6 +12,8 @@ import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
 import { TREE_RADIUS } from '../entities/plants/tree/tree-consts';
+import { BuildingEntity } from '../entities/buildings/building-types';
+import { BuildingType as BuildingTypeEnum } from '../entities/buildings/building-consts';
 
 export const humanCollisionInteraction: InteractionDefinition<HumanEntity, HumanEntity> = {
   id: 'human-collision',
@@ -194,6 +196,185 @@ export const predatorTreeCollisionInteraction: InteractionDefinition<PredatorEnt
     }
 
     const overlap = effectiveSourceRadius + trunkRadius - distance;
+    if (overlap <= 0) return;
+
+    const forceMagnitude = overlap * 2.5;
+
+    const direction = vectorNormalize(
+      getDirectionVectorOnTorus(
+        target.position,
+        source.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      ),
+    );
+    const pushVector = vectorScale(direction, forceMagnitude);
+
+    source.forces.push(pushVector);
+  },
+};
+
+export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntity, BuildingEntity> = {
+  id: 'human-building-collision',
+  sourceType: 'human',
+  targetType: 'building',
+  maxDistance: 50,
+  checker: (source, target, { gameState }) => {
+    if (target.buildingType !== BuildingTypeEnum.Palisade && target.buildingType !== BuildingTypeEnum.Gate) {
+      return false;
+    }
+
+    if (!target.isConstructed) {
+      return false;
+    }
+
+    // Allow passage through own gates
+    if (target.buildingType === BuildingTypeEnum.Gate && source.leaderId === target.ownerId) {
+      return false;
+    }
+
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    return distance < effectiveSourceRadius + effectiveTargetRadius;
+  },
+  perform: (source, target, { gameState }) => {
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance === 0) {
+      source.forces.push({ x: 1.0, y: 0 });
+      return;
+    }
+
+    const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
+    if (overlap <= 0) return;
+
+    const forceMagnitude = overlap * 2.5;
+
+    const direction = vectorNormalize(
+      getDirectionVectorOnTorus(
+        target.position,
+        source.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      ),
+    );
+    const pushVector = vectorScale(direction, forceMagnitude);
+
+    source.forces.push(pushVector);
+  },
+};
+
+export const preyBuildingCollisionInteraction: InteractionDefinition<PreyEntity, BuildingEntity> = {
+  id: 'prey-building-collision',
+  sourceType: 'prey',
+  targetType: 'building',
+  maxDistance: 50,
+  checker: (source, target, { gameState }) => {
+    if (target.buildingType !== BuildingTypeEnum.Palisade && target.buildingType !== BuildingTypeEnum.Gate) {
+      return false;
+    }
+
+    if (!target.isConstructed) {
+      return false;
+    }
+
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    return distance < effectiveSourceRadius + effectiveTargetRadius;
+  },
+  perform: (source, target, { gameState }) => {
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance === 0) {
+      source.forces.push({ x: 1.0, y: 0 });
+      return;
+    }
+
+    const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
+    if (overlap <= 0) return;
+
+    const forceMagnitude = overlap * 2.5;
+
+    const direction = vectorNormalize(
+      getDirectionVectorOnTorus(
+        target.position,
+        source.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      ),
+    );
+    const pushVector = vectorScale(direction, forceMagnitude);
+
+    source.forces.push(pushVector);
+  },
+};
+
+export const predatorBuildingCollisionInteraction: InteractionDefinition<PredatorEntity, BuildingEntity> = {
+  id: 'predator-building-collision',
+  sourceType: 'predator',
+  targetType: 'building',
+  maxDistance: 50,
+  checker: (source, target, { gameState }) => {
+    if (target.buildingType !== BuildingTypeEnum.Palisade && target.buildingType !== BuildingTypeEnum.Gate) {
+      return false;
+    }
+
+    if (!target.isConstructed) {
+      return false;
+    }
+
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    return distance < effectiveSourceRadius + effectiveTargetRadius;
+  },
+  perform: (source, target, { gameState }) => {
+    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveTargetRadius = target.radius;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance === 0) {
+      source.forces.push({ x: 1.0, y: 0 });
+      return;
+    }
+
+    const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
     if (overlap <= 0) return;
 
     const forceMagnitude = overlap * 2.5;

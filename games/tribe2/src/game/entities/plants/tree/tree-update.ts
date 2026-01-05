@@ -4,6 +4,7 @@ import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../../game-cons
 import { TREE_RADIUS, TREE_GROWTH_TIME_GAME_HOURS, TREE_MAX_WOOD } from './tree-consts';
 import { ItemType } from '../../item-types';
 import { TREE_FALLEN, TREE_STUMP, TREE_DYING } from './states/tree-state-types';
+import { updateNavigationGridSector } from '../../../utils/navigation-utils';
 
 export function treeUpdate(entity: TreeEntity, updateContext: UpdateContext): void {
   const hoursPassed = (updateContext.deltaTime * HOURS_PER_GAME_DAY) / GAME_DAY_IN_REAL_SECONDS;
@@ -14,6 +15,13 @@ export function treeUpdate(entity: TreeEntity, updateContext: UpdateContext): vo
   }
 
   const [state] = entity.stateMachine;
+
+  // Clear navigation grid obstacle when tree falls or becomes a stump
+  // We trigger this when the state has just changed (enteredAt matches current time or is very recent)
+  const stateData = entity.stateMachine[1];
+  if ((state === TREE_FALLEN || state === TREE_STUMP) && stateData.enteredAt >= updateContext.gameState.time - hoursPassed) {
+    updateNavigationGridSector(updateContext.gameState, entity.position, entity.radius, false);
+  }
 
   // Wood generation and growth only happen for standing trees
   const isStanding = state !== TREE_FALLEN && state !== TREE_STUMP && state !== TREE_DYING;

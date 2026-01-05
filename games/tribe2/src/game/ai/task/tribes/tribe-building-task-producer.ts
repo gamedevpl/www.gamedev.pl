@@ -19,7 +19,11 @@ import {
   COLD_THRESHOLD,
   BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
-import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
+import {
+  calculateWrappedDistance,
+  calculateWrappedDistanceSq,
+  getDirectionVectorOnTorus,
+} from '../../../utils/math-utils';
 import { convertTerritoryIndexToPosition } from '../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
@@ -30,6 +34,7 @@ import { Vector2D } from '../../../utils/math-types';
 import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { isTribeHostile } from '../../../utils/human-utils';
 import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
+import { NAV_GRID_RESOLUTION, getNavigationGridCoords } from '../../../utils/navigation-utils';
 
 export type FrontierCandidate = {
   score: number;
@@ -154,6 +159,172 @@ export function updateTribeFrontier(context: UpdateContext): void {
 }
 
 /**
+ * Groups buildings that are close to each other into clusters.
+ */
+function clusterHubs(hubs: BuildingEntity[], worldWidth: number, worldHeight: number): BuildingEntity[][] {
+  const clusters: BuildingEntity[][] = [];
+  const visited = new Set<number>();
+  const CLUSTER_DISTANCE_SQ = 150 * 150;
+
+  for (let i = 0; i < hubs.length; i++) {
+    if (visited.has(i)) continue;
+    const cluster: BuildingEntity[] = [hubs[i]];
+    visited.add(i);
+
+    const queue = [hubs[i]];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (let j = 0; j < hubs.length; j++) {
+        if (visited.has(j)) continue;
+        const distSq = calculateWrappedDistanceSq(current.position, hubs[j].position, worldWidth, worldHeight);
+        if (distSq < CLUSTER_DISTANCE_SQ) {
+          visited.add(j);
+          cluster.push(hubs[j]);
+          queue.push(hubs[j]);
+        }
+      }
+    }
+    clusters.push(cluster);
+  }
+  return clusters;
+}
+
+/**
+ * Plans defensive enclosures (Gords) around critical infrastructure.
+ */
+function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context: UpdateContext): void {
+  const { gameState } = context;
+  const indexedState = gameState as IndexedWorldState;
+  const { width, height } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(width / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(height / NAV_GRID_RESOLUTION);
+
+  const hubs = tribeBuildings.filter(
+    (b) => b.buildingType === BuildingType.Bonfire || b.buildingType === BuildingType.StorageSpot,
+  );
+
+  const clusters = clusterHubs(hubs, width, height);
+
+  for (const cluster of clusters) {
+    if (cluster.length === 0) continue;
+
+    // Find bounding box in grid space relative to the first hub
+    const ref = cluster[0].position;
+    const refCoords = getNavigationGridCoords(ref, width, height);
+
+    let minRelGX = 0,
+      maxRelGX = 0,
+      minRelGY = 0,
+      maxRelGY = 0;
+    for (const hub of cluster) {
+      const dir = getDirectionVectorOnTorus(ref, hub.position, width, height);
+      const relGX = Math.round(dir.x / NAV_GRID_RESOLUTION);
+      const relGY = Math.round(dir.y / NAV_GRID_RESOLUTION);
+      minRelGX = Math.min(minRelGX, relGX);
+      maxRelGX = Math.max(maxRelGX, relGX);
+      minRelGY = Math.min(minRelGY, relGY);
+      maxRelGY = Math.max(maxRelGY, relGY);
+    }
+
+    const margin = 12;
+    const startRelGX = minRelGX - margin;
+    const endRelGX = maxRelGX + margin;
+    const startRelGY = minRelGY - margin;
+    const endRelGY = maxRelGY + margin;
+
+    const perimeterPositions: Vector2D[] = [];
+    const addPos = (rgx: number, rgy: number) => {
+      const gx = (refCoords.x + rgx + gridWidth) % gridWidth;
+      const gy = (refCoords.y + rgy + gridHeight) % gridHeight;
+      perimeterPositions.push({
+        x: gx * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+        y: gy * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+      });
+    };
+
+    for (let rgx = startRelGX; rgx <= endRelGX; rgx++) {
+      addPos(rgx, startRelGY);
+      addPos(rgx, endRelGY);
+    }
+    for (let rgy = startRelGY + 1; rgy < endRelGY; rgy++) {
+      addPos(startRelGX, rgy);
+      addPos(endRelGX, rgy);
+    }
+
+    // Sort to pick gate location (closest to tribe center)
+    const tribeCenter = getTribeCenter(leaderId, gameState);
+    perimeterPositions.sort((a, b) => {
+      const distA = calculateWrappedDistanceSq(a, tribeCenter, width, height);
+      const distB = calculateWrappedDistanceSq(b, tribeCenter, width, height);
+      return distA - distB;
+    });
+
+    let segmentsSinceGate = 0;
+    for (const pos of perimeterPositions) {
+      const coordKey = `${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
+
+      const existing = indexedState.search.building.at(pos, NAV_GRID_RESOLUTION / 2);
+      if (existing) {
+        if (existing.buildingType === BuildingType.Gate && existing.ownerId === leaderId) {
+          segmentsSinceGate = 1;
+        } else {
+          segmentsSinceGate++;
+        }
+        continue;
+      }
+
+      const existingTask = Object.values(gameState.tasks).find(
+        (t) =>
+          (t.type === TaskType.HumanPlacePalisade || t.type === TaskType.HumanPlaceGate) &&
+          calculateWrappedDistanceSq(t.position, pos, width, height) < 5 * 5,
+      );
+      if (existingTask) {
+        if (existingTask.type === TaskType.HumanPlaceGate) {
+          segmentsSinceGate = 1;
+        } else {
+          segmentsSinceGate++;
+        }
+        continue;
+      }
+      const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
+      if (trees.length > 0) {
+        const tree = trees[0];
+        const chopTaskId = `Chop-Gord-${tree.id}`;
+        if (!gameState.tasks[chopTaskId]) {
+          gameState.tasks[chopTaskId] = {
+            id: chopTaskId,
+            type: TaskType.HumanChopTree,
+            position: tree.position,
+            creatorEntityId: leaderId,
+            target: tree.id,
+            validUntilTime: gameState.time + 12,
+          };
+        }
+        continue;
+      }
+      const type =
+        segmentsSinceGate === 0 || segmentsSinceGate >= 15 ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
+      const taskId = `${TaskType[type]}-${leaderId}-${coordKey}`;
+
+      gameState.tasks[taskId] = {
+        id: taskId,
+        type,
+        position: pos,
+        creatorEntityId: leaderId,
+        target: pos,
+        validUntilTime: gameState.time + 24,
+      };
+
+      if (type === TaskType.HumanPlaceGate) {
+        segmentsSinceGate = 1;
+      } else {
+        segmentsSinceGate++;
+      }
+    }
+  }
+}
+
+/**
  * Produces building placement tasks at the tribe level.
  * This function is called periodically (e.g., hourly) to evaluate tribe needs
  * and create tasks that any available tribe member can execute.
@@ -241,6 +412,9 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     const hasActiveTask = (type: TaskType) => existingTasks.some((t) => t.type === type);
 
     const tribeBuildings = buildingsByTribe.get(leaderId) || [];
+
+    // --- GORDS (Palisades & Gates) -----
+    planGords(leaderId, tribeBuildings, context);
 
     // Prepare other tribe centers for placement optimization
     const otherTribeCenters: Vector2D[] = [];

@@ -45,6 +45,14 @@ export interface IndexType<T> {
   byRadius(position: Vector2D, distance: number): T[];
 
   /**
+   * Returns a single entity of type T found at the given position within the search distance.
+   * @param position The position to search at.
+   * @param distance The search radius.
+   * @returns An entity of type T, or undefined if none are found.
+   */
+  at(position: Vector2D, distance: number): T | undefined;
+
+  /**
    * Non-spatial query for entities matching a specific property value.
    * @param propertyName The name of the property to query.
    * @param propertyValue The value of the property to match.

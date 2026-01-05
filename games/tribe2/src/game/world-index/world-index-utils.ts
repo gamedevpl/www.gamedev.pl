@@ -39,6 +39,7 @@ export function indexItems<T extends IndexItem>(
       all: () => [],
       byRect: () => [],
       byRadius: () => [],
+      at: () => undefined,
       byProperty: () => [],
       byPropertyPath: () => [],
       resetPropertyCache: () => {},
@@ -173,6 +174,10 @@ export function indexItems<T extends IndexItem>(
       }
 
       return results;
+    },
+
+    at(position: Vector2D, distance: number): T | undefined {
+      return this.byRadius(position, distance)[0];
     },
 
     byProperty(propertyName: keyof T, propertyValue: unknown): T[] {

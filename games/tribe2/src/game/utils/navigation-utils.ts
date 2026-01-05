@@ -1,0 +1,285 @@
+import { Vector2D } from './math-types';
+import { GameWorldState, NavigationGrid } from '../world-types';
+import { EntityId } from '../entities/entities-types';
+import { HumanEntity } from '../entities/characters/human/human-types';
+import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
+
+/**
+ * Resolution of the navigation grid in pixels.
+ * Set to 10px (finer than territory grid) for better small obstacle detection.
+ */
+export const NAV_GRID_RESOLUTION = 10;
+
+/**
+ * Calculates the grid index for a given world position.
+ */
+export function getNavigationGridIndex(position: Vector2D, worldWidth: number, worldHeight: number): number {
+  const wrappedX = ((position.x % worldWidth) + worldWidth) % worldWidth;
+  const wrappedY = ((position.y % worldHeight) + worldHeight) % worldHeight;
+  const gridX = Math.floor(wrappedX / NAV_GRID_RESOLUTION);
+  const gridY = Math.floor(wrappedY / NAV_GRID_RESOLUTION);
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  return gridY * gridWidth + gridX;
+}
+
+/**
+ * Calculates grid coordinates from a world position.
+ */
+export function getNavigationGridCoords(
+  position: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+): { x: number; y: number } {
+  const wrappedX = ((position.x % worldWidth) + worldWidth) % worldWidth;
+  const wrappedY = ((position.y % worldHeight) + worldHeight) % worldHeight;
+  return {
+    x: Math.floor(wrappedX / NAV_GRID_RESOLUTION),
+    y: Math.floor(wrappedY / NAV_GRID_RESOLUTION),
+  };
+}
+
+/**
+ * Initializes an empty navigation grid.
+ */
+export function initNavigationGrid(worldWidth: number, worldHeight: number): NavigationGrid {
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+  const size = gridWidth * gridHeight;
+
+  return {
+    staticObstacles: new Uint8Array(size),
+    gateOwners: new Array(size).fill(null),
+  };
+}
+
+/**
+ * Updates a sector of the navigation grid (e.g., when a building is constructed or a tree falls).
+ */
+export function updateNavigationGridSector(
+  gameState: GameWorldState,
+  position: Vector2D,
+  radius: number,
+  isBlocked: boolean,
+  ownerId: EntityId | null = null,
+): void {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+
+  const radiusInCells = Math.ceil(radius / NAV_GRID_RESOLUTION);
+  const centerCoords = getNavigationGridCoords(position, worldWidth, worldHeight);
+
+  // Explicitly mark the center cell to ensure small obstacles are never missed
+  const centerIndex = centerCoords.y * gridWidth + centerCoords.x;
+  gameState.navigationGrid.staticObstacles[centerIndex] = isBlocked ? 1 : 0;
+  gameState.navigationGrid.gateOwners[centerIndex] = isBlocked ? ownerId : null;
+
+  for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
+    for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
+      const gx = (centerCoords.x + dx + gridWidth) % gridWidth;
+      const gy = (centerCoords.y + dy + gridHeight) % gridHeight;
+
+      const cellCenterX = gx * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2;
+      const cellCenterY = gy * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2;
+
+      const dist = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
+
+      if (dist <= radius) {
+        const index = gy * gridWidth + gx;
+        gameState.navigationGrid.staticObstacles[index] = isBlocked ? 1 : 0;
+        gameState.navigationGrid.gateOwners[index] = isBlocked ? ownerId : null;
+      }
+    }
+  }
+}
+
+/**
+ * Fast check to see if a direct line between two points is blocked.
+ */
+export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: Vector2D, entity: HumanEntity): boolean {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const dir = getDirectionVectorOnTorus(start, end, worldWidth, worldHeight);
+  const distance = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+
+  const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
+  const stepX = dir.x / steps;
+  const stepY = dir.y / steps;
+
+  const grid = gameState.navigationGrid;
+
+  for (let i = 1; i < steps; i++) {
+    const testPos = {
+      x: start.x + stepX * i,
+      y: start.y + stepY * i,
+    };
+
+    const offsets = [
+      { dx: 0, dy: 0 },
+      { dx: 4, dy: 0 },
+      { dx: -4, dy: 0 },
+      { dx: 0, dy: 4 },
+      { dx: 0, dy: -4 },
+    ];
+
+    for (const offset of offsets) {
+      const p = { x: testPos.x + offset.dx, y: testPos.y + offset.dy };
+      const index = getNavigationGridIndex(p, worldWidth, worldHeight);
+      if (grid.staticObstacles[index]) {
+        // It's blocked, but check if it's a gate owned by our tribe
+        const gateOwner = grid.gateOwners[index];
+        if (gateOwner !== null && gateOwner === entity.leaderId) {
+          continue; // Passable gate
+        }
+        return true; // Blocked
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Toroidal A* pathfinding.
+ */
+export function findPath(
+  gameState: GameWorldState,
+  start: Vector2D,
+  end: Vector2D,
+  entity: HumanEntity,
+): Vector2D[] | null {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+
+  const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
+  const endCoords = getNavigationGridCoords(end, worldWidth, worldHeight);
+
+  if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
+    return [end];
+  }
+
+  const grid = gameState.navigationGrid;
+
+  // Simple Priority Queue implementation
+  const openSet: number[] = [startCoords.y * gridWidth + startCoords.x];
+  const cameFrom = new Map<number, number>();
+  const gScore = new Map<number, number>();
+  const fScore = new Map<number, number>();
+
+  const startIdx = startCoords.y * gridWidth + startCoords.x;
+  gScore.set(startIdx, 0);
+  fScore.set(startIdx, toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight));
+
+  const maxIterations = 2000; // Safety cap
+  let iterations = 0;
+
+  while (openSet.length > 0 && iterations < maxIterations) {
+    iterations++;
+
+    // Get node with lowest fScore
+    let currentIdx = openSet[0];
+    let lowestF = fScore.get(currentIdx) ?? Infinity;
+    let openSetIdx = 0;
+
+    for (let i = 1; i < openSet.length; i++) {
+      const score = fScore.get(openSet[i]) ?? Infinity;
+      if (score < lowestF) {
+        lowestF = score;
+        currentIdx = openSet[i];
+        openSetIdx = i;
+      }
+    }
+
+    const curX = currentIdx % gridWidth;
+    const curY = Math.floor(currentIdx / gridWidth);
+
+    if (curX === endCoords.x && curY === endCoords.y) {
+      return reconstructPath(cameFrom, currentIdx, gridWidth, end);
+    }
+
+    openSet.splice(openSetIdx, 1);
+
+    // Neighbors (8 directions)
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+
+        const nx = (curX + dx + gridWidth) % gridWidth;
+        const ny = (curY + dy + gridHeight) % gridHeight;
+        const neighborIdx = ny * gridWidth + nx;
+
+        // Check obstacles
+        if (grid.staticObstacles[neighborIdx]) {
+          const gateOwner = grid.gateOwners[neighborIdx];
+          if (gateOwner === null || gateOwner !== entity.leaderId) {
+            continue; // Blocked
+          }
+        }
+
+        const moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
+        const tentativeGScore = (gScore.get(currentIdx) ?? 0) + moveCost;
+
+        if (tentativeGScore < (gScore.get(neighborIdx) ?? Infinity)) {
+          cameFrom.set(neighborIdx, currentIdx);
+          gScore.set(neighborIdx, tentativeGScore);
+          fScore.set(
+            neighborIdx,
+            tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight),
+          );
+
+          if (!openSet.includes(neighborIdx)) {
+            openSet.push(neighborIdx);
+          }
+        }
+      }
+    }
+  }
+
+  return null; // No path found
+}
+
+function toroidalHeuristic(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  width: number,
+  height: number,
+): number {
+  let dx = Math.abs(a.x - b.x);
+  let dy = Math.abs(a.y - b.y);
+
+  if (dx > width / 2) dx = width - dx;
+  if (dy > height / 2) dy = height - dy;
+
+  // Octile distance for 8-way movement
+  const D = 1;
+  const D2 = 1.414;
+  return D * (dx + dy) + (D2 - 2 * D) * Math.min(dx, dy);
+}
+
+function reconstructPath(
+  cameFrom: Map<number, number>,
+  currentIdx: number,
+  gridWidth: number,
+  finalPos: Vector2D,
+): Vector2D[] {
+  const path: Vector2D[] = [finalPos];
+  let curr = currentIdx;
+  const visited = new Set<number>();
+
+  while (cameFrom.has(curr)) {
+    if (visited.has(curr)) {
+      break;
+    }
+    visited.add(curr);
+    curr = cameFrom.get(curr)!;
+    path.unshift({
+      x: (curr % gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+      y: Math.floor(curr / gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+    });
+  }
+
+  // Remove the starting point (current position of entity)
+  path.shift();
+
+  return path;
+}

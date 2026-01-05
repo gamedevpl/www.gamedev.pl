@@ -4,6 +4,7 @@ import { IntroScreen } from './intro-screen';
 import { GameScreen } from './game-screen';
 import { GameOverScreen } from './game-over-screen';
 import { EffectsScreen } from './effects-screen';
+import { BuildingsScreen } from './buildings-screen';
 import { GlobalStyle } from '../styles/global';
 import { usePersistState } from '../hooks/persist-state';
 
@@ -20,6 +21,8 @@ export const App: React.FC = () => {
         return <GameScreen />;
       case 'effects':
         return <EffectsScreen />;
+      case 'buildings':
+        return <BuildingsScreen />;
       case 'gameOver':
         return (
           <>

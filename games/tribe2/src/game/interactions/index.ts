@@ -7,6 +7,9 @@ import {
   humanTreeCollisionInteraction,
   preyTreeCollisionInteraction,
   predatorTreeCollisionInteraction,
+  humanBuildingCollisionInteraction,
+  preyBuildingCollisionInteraction,
+  predatorBuildingCollisionInteraction,
 } from './collision-interaction';
 import { humanGatherFoodInteractions } from './human-gather-food-interaction';
 import { preyEatBerryBushInteraction } from './prey-eat-berry-bush-interaction';
@@ -26,12 +29,16 @@ import { storageStealInteraction } from './storage-steal-interaction';
 import { buildingTakeoverInteraction } from './building-takeover-interaction';
 import { buildingRemovalInteraction } from './building-removal-interaction';
 import { humanTreeChopInteraction } from './human-chop-tree-interaction';
+import { humanAttackBuildingInteraction } from './human-attack-building-interaction';
 
 export const interactionsDefinitions: InteractionDefinition[] = [
   humanCollisionInteraction,
   humanTreeCollisionInteraction,
   preyTreeCollisionInteraction,
   predatorTreeCollisionInteraction,
+  humanBuildingCollisionInteraction,
+  preyBuildingCollisionInteraction,
+  predatorBuildingCollisionInteraction,
   ...humanGatherFoodInteractions,
   humanProcreationInteraction, // Added procreation interaction
   humanChildFeedingInteraction, // Added child feeding interaction
@@ -42,6 +49,7 @@ export const interactionsDefinitions: InteractionDefinition[] = [
   buildingTakeoverInteraction,
   buildingRemovalInteraction,
   humanTreeChopInteraction,
+  humanAttackBuildingInteraction,
   // Animal interactions
   preyEatBerryBushInteraction,
   preyChildFeedingInteraction, // Prey parent-child feeding
