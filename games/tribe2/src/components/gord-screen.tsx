@@ -4,6 +4,10 @@ import { useGameContext } from '../context/game-context';
 import { BuildingEntity } from '../game/entities/buildings/building-types';
 import { BuildingType, BUILDING_DEFINITIONS } from '../game/entities/buildings/building-consts';
 import { renderBuilding } from '../game/render/render-building';
+import { renderTree } from '../game/render/render-tree';
+import { TreeEntity } from '../game/entities/plants/tree/tree-types';
+import { TREE_RADIUS } from '../game/entities/plants/tree/tree-consts';
+import { TREE_FULL } from '../game/entities/plants/tree/states/tree-state-types';
 import { IndexedWorldState } from '../game/world-index/world-index-types';
 import { Blackboard } from '../game/ai/behavior-tree/behavior-tree-blackboard';
 import {
@@ -124,18 +128,53 @@ const InfoText = styled.p`
   margin: 5px 0;
 `;
 
+const TribeSelector = styled.div`
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+`;
+
+const TribeButton = styled.button<{ $color: string; $selected: boolean }>`
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid ${(props) => (props.$selected ? '#fff' : 'transparent')};
+  background-color: ${(props) => props.$color};
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+`;
+
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
+// Tribe colors for multi-tribe support
+const TRIBE_COLORS = [
+  { id: 1, color: '#4CAF50', name: 'Green Tribe' },
+  { id: 2, color: '#F44336', name: 'Red Tribe' },
+  { id: 3, color: '#2196F3', name: 'Blue Tribe' },
+  { id: 4, color: '#FF9800', name: 'Orange Tribe' },
+];
+
 type HubType = 'bonfire' | 'storage';
+type PlacementMode = 'bonfire' | 'storage' | 'tree';
 
 interface Hub {
   id: number;
   type: HubType;
   position: Vector2D;
+  tribeId: number;
 }
 
-const createMockWorldState = (buildings: BuildingEntity[]): GameWorldState => {
+interface PlacedTree {
+  id: number;
+  entity: TreeEntity;
+}
+
+const createMockWorldState = (buildings: BuildingEntity[], trees: TreeEntity[]): GameWorldState => {
   const entitiesMap: Record<number, unknown> = buildings.reduce(
     (acc, b) => {
       acc[b.id] = b;
@@ -144,19 +183,26 @@ const createMockWorldState = (buildings: BuildingEntity[]): GameWorldState => {
     {} as Record<number, unknown>,
   );
 
-  // Mock player leader
-  entitiesMap[1] = {
-    id: 1,
-    type: 'human',
-    leaderId: 1,
-    isPlayer: true,
-    tribeInfo: { tribeBadge: '👑', tribeColor: '#4CAF50' },
-    position: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
-    radius: 10,
-    isAdult: true,
-    gender: 'male',
-    age: 25,
-  };
+  // Add trees to entities
+  for (const tree of trees) {
+    entitiesMap[tree.id] = tree;
+  }
+
+  // Mock tribe leaders
+  for (const tribe of TRIBE_COLORS) {
+    entitiesMap[tribe.id] = {
+      id: tribe.id,
+      type: 'human',
+      leaderId: tribe.id,
+      isPlayer: tribe.id === 1,
+      tribeInfo: { tribeBadge: tribe.id === 1 ? '👑' : '⚔️', tribeColor: tribe.color },
+      position: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+      radius: 10,
+      isAdult: true,
+      gender: 'male',
+      age: 25,
+    };
+  }
 
   const state = {
     time: 0,
@@ -182,13 +228,18 @@ const createMockWorldState = (buildings: BuildingEntity[]): GameWorldState => {
         buildings.find((b) => calculateWrappedDistance(pos, b.position, CANVAS_WIDTH, CANVAS_HEIGHT) <= radius),
     } as unknown as IndexedWorldState['search']['building'],
     human: {
-      all: () => [entitiesMap[1]],
+      all: () => TRIBE_COLORS.map((t) => entitiesMap[t.id]),
       byProperty: () => [],
       byRadius: () => [],
       byRect: () => [],
     } as unknown as IndexedWorldState['search']['human'],
     berryBush: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['berryBush'],
-    tree: { byRect: () => [], all: () => [], byRadius: () => [] } as unknown as IndexedWorldState['search']['tree'],
+    tree: {
+      byRect: () => trees,
+      all: () => trees,
+      byRadius: (pos: Vector2D, radius: number) =>
+        trees.filter((t) => calculateWrappedDistance(pos, t.position, CANVAS_WIDTH, CANVAS_HEIGHT) <= radius),
+    } as unknown as IndexedWorldState['search']['tree'],
     corpse: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['corpse'],
     prey: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['prey'],
     predator: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['predator'],
@@ -196,6 +247,30 @@ const createMockWorldState = (buildings: BuildingEntity[]): GameWorldState => {
   };
 
   return state;
+};
+
+const createTreeEntity = (id: number, position: Vector2D): TreeEntity => {
+  return {
+    id,
+    type: 'tree',
+    position,
+    radius: TREE_RADIUS,
+    age: 120, // Mature tree
+    lifespan: 24 * 30 * 10, // 300 days
+    swayOffset: Math.random() * Math.PI * 2,
+    variant: Math.floor(Math.random() * 4),
+    timeSinceLastSpreadAttempt: 0,
+    spreadRadius: 60,
+    wood: [],
+    woodGenerated: false,
+    direction: { x: 0, y: 0 },
+    acceleration: 0,
+    forces: [],
+    velocity: { x: 0, y: 0 },
+    debuffs: [],
+    stateMachine: [TREE_FULL, { enteredAt: 0 }],
+    aiBlackboard: Blackboard.create(),
+  } as TreeEntity;
 };
 
 const createBuildingEntity = (
@@ -305,15 +380,19 @@ export const GordScreen: React.FC = () => {
   const requestRef = useRef<number>();
 
   const [hubs, setHubs] = useState<Hub[]>([
-    { id: 1, type: 'bonfire', position: { x: 400, y: 300 } },
+    { id: 1, type: 'bonfire', position: { x: 400, y: 300 }, tribeId: 1 },
   ]);
+  const [placedTrees, setPlacedTrees] = useState<PlacedTree[]>([]);
   const [margin, setMargin] = useState(20);
   const [showGrid, setShowGrid] = useState(true);
   const [showPerimeter, setShowPerimeter] = useState(true);
   const [showGatePositions, setShowGatePositions] = useState(true);
-  const [placementMode, setPlacementMode] = useState<'bonfire' | 'storage'>('bonfire');
+  const [placementMode, setPlacementMode] = useState<PlacementMode>('bonfire');
+  const [selectedTribeId, setSelectedTribeId] = useState(1);
   const [nextHubId, setNextHubId] = useState(2);
+  const [nextTreeId, setNextTreeId] = useState(1000);
   const [mousePos, setMousePos] = useState<Vector2D | null>(null);
+  const [time, setTime] = useState(0);
 
   const snapToGrid = useCallback((x: number, y: number): Vector2D => {
     const gridSize = NAV_GRID_RESOLUTION;
@@ -333,16 +412,25 @@ export const GordScreen: React.FC = () => {
       const y = event.clientY - rect.top;
       const snappedPos = snapToGrid(x, y);
 
-      const isOccupied = hubs.some(
+      const isOccupiedByHub = hubs.some(
         (h) => Math.abs(h.position.x - snappedPos.x) < 30 && Math.abs(h.position.y - snappedPos.y) < 30,
       );
+      const isOccupiedByTree = placedTrees.some(
+        (t) => Math.abs(t.entity.position.x - snappedPos.x) < 25 && Math.abs(t.entity.position.y - snappedPos.y) < 25,
+      );
 
-      if (!isOccupied) {
-        setHubs((prev) => [...prev, { id: nextHubId, type: placementMode, position: snappedPos }]);
+      if (placementMode === 'tree') {
+        if (!isOccupiedByHub && !isOccupiedByTree) {
+          const newTree = createTreeEntity(nextTreeId, snappedPos);
+          setPlacedTrees((prev) => [...prev, { id: nextTreeId, entity: newTree }]);
+          setNextTreeId((prev) => prev + 1);
+        }
+      } else if (!isOccupiedByHub && !isOccupiedByTree) {
+        setHubs((prev) => [...prev, { id: nextHubId, type: placementMode, position: snappedPos, tribeId: selectedTribeId }]);
         setNextHubId((prev) => prev + 1);
       }
     },
-    [placementMode, snapToGrid, hubs, nextHubId],
+    [placementMode, snapToGrid, hubs, placedTrees, nextHubId, nextTreeId, selectedTribeId],
   );
 
   const handleMouseMove = useCallback(
@@ -361,7 +449,17 @@ export const GordScreen: React.FC = () => {
 
   const clearAll = useCallback(() => {
     setHubs([]);
+    setPlacedTrees([]);
     setNextHubId(1);
+    setNextTreeId(1000);
+  }, []);
+
+  // Update time for tree sway animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTime((t) => t + 16);
+    }, 16);
+    return () => clearInterval(interval);
   }, []);
 
   // Convert hubs to building entities for rendering
@@ -370,39 +468,63 @@ export const GordScreen: React.FC = () => {
       hub.id,
       hub.type === 'bonfire' ? BuildingType.Bonfire : BuildingType.StorageSpot,
       hub.position,
-      1,
+      hub.tribeId,
     ),
   );
 
-  const { perimeterPositions, boundingBox } = calculateGordPerimeter(hubs, margin, CANVAS_WIDTH, CANVAS_HEIGHT);
+  // Get tree entities
+  const treeEntities = placedTrees.map((t) => t.entity);
 
-  // Sort perimeter by distance to center for gate placement visualization
-  const tribeCenter =
-    hubs.length > 0
-      ? {
-          x: hubs.reduce((sum, h) => sum + h.position.x, 0) / hubs.length,
-          y: hubs.reduce((sum, h) => sum + h.position.y, 0) / hubs.length,
-        }
-      : { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+  // Group hubs by tribe for perimeter calculation
+  const hubsByTribe = TRIBE_COLORS.reduce(
+    (acc, tribe) => {
+      acc[tribe.id] = hubs.filter((h) => h.tribeId === tribe.id);
+      return acc;
+    },
+    {} as Record<number, Hub[]>,
+  );
 
-  const sortedPerimeter = [...perimeterPositions].sort((a, b) => {
-    const distA = calculateWrappedDistanceSq(a, tribeCenter, CANVAS_WIDTH, CANVAS_HEIGHT);
-    const distB = calculateWrappedDistanceSq(b, tribeCenter, CANVAS_WIDTH, CANVAS_HEIGHT);
-    return distA - distB;
+  // Calculate perimeters for each tribe
+  const tribePerimeters = TRIBE_COLORS.map((tribe) => {
+    const tribeHubs = hubsByTribe[tribe.id] || [];
+    if (tribeHubs.length === 0) {
+      return { tribeId: tribe.id, color: tribe.color, perimeterPositions: [], gateIndices: new Set<number>(), center: null };
+    }
+
+    const { perimeterPositions } = calculateGordPerimeter(tribeHubs, margin, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Calculate tribe center
+    const center = {
+      x: tribeHubs.reduce((sum, h) => sum + h.position.x, 0) / tribeHubs.length,
+      y: tribeHubs.reduce((sum, h) => sum + h.position.y, 0) / tribeHubs.length,
+    };
+
+    // Sort perimeter by distance to center for gate placement
+    const sortedPerimeter = [...perimeterPositions].sort((a, b) => {
+      const distA = calculateWrappedDistanceSq(a, center, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const distB = calculateWrappedDistanceSq(b, center, CANVAS_WIDTH, CANVAS_HEIGHT);
+      return distA - distB;
+    });
+
+    // Determine gate positions
+    const GATE_SPACING_SEGMENTS = 15;
+    const gateIndices = new Set<number>();
+    let segmentsSinceGate = 0;
+    for (let i = 0; i < sortedPerimeter.length; i++) {
+      if (segmentsSinceGate === 0 || segmentsSinceGate >= GATE_SPACING_SEGMENTS) {
+        gateIndices.add(i);
+        segmentsSinceGate = 1;
+      } else {
+        segmentsSinceGate++;
+      }
+    }
+
+    return { tribeId: tribe.id, color: tribe.color, perimeterPositions: sortedPerimeter, gateIndices, center };
   });
 
-  // Determine gate positions - gates are placed at regular intervals along the perimeter
-  const GATE_SPACING_SEGMENTS = 15; // Number of palisade segments between gates
-  const gateIndices = new Set<number>();
-  let segmentsSinceGate = 0;
-  for (let i = 0; i < sortedPerimeter.length; i++) {
-    if (segmentsSinceGate === 0 || segmentsSinceGate >= GATE_SPACING_SEGMENTS) {
-      gateIndices.add(i);
-      segmentsSinceGate = 1;
-    } else {
-      segmentsSinceGate++;
-    }
-  }
+  // Count stats
+  const totalPerimeterCells = tribePerimeters.reduce((sum, t) => sum + t.perimeterPositions.length, 0);
+  const totalGates = tribePerimeters.reduce((sum, t) => sum + t.gateIndices.size, 0);
 
   useEffect(() => {
     const render = () => {
@@ -410,7 +532,7 @@ export const GordScreen: React.FC = () => {
       const ctx = canvas?.getContext('2d');
       if (!ctx) return;
 
-      const mockState = createMockWorldState(buildings);
+      const mockState = createMockWorldState(buildings, treeEntities);
 
       // 1. Background
       ctx.fillStyle = '#2c5234';
@@ -434,55 +556,63 @@ export const GordScreen: React.FC = () => {
         }
       }
 
-      // 3. Draw bounding box
-      if (hubs.length > 0 && showPerimeter) {
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([10, 5]);
-
-        // Draw simple rectangle representation (may not be accurate for wrapped coords)
-        const boxWidth = Math.abs(boundingBox.maxX - boundingBox.minX);
-        const boxHeight = Math.abs(boundingBox.maxY - boundingBox.minY);
-        ctx.strokeRect(boundingBox.minX, boundingBox.minY, boxWidth, boxHeight);
-        ctx.setLineDash([]);
-      }
-
-      // 4. Draw perimeter positions
+      // 3. Draw perimeter positions for each tribe
       if (showPerimeter) {
-        for (let i = 0; i < sortedPerimeter.length; i++) {
-          const pos = sortedPerimeter[i];
-          const isGate = gateIndices.has(i) && showGatePositions;
+        for (const tribePerimeter of tribePerimeters) {
+          const { perimeterPositions, gateIndices, color } = tribePerimeter;
 
-          if (isGate) {
-            // Gate position (green)
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-            ctx.fillRect(
-              pos.x - NAV_GRID_RESOLUTION / 2,
-              pos.y - NAV_GRID_RESOLUTION / 2,
-              NAV_GRID_RESOLUTION,
-              NAV_GRID_RESOLUTION,
-            );
-          } else {
-            // Palisade position (orange)
-            ctx.fillStyle = 'rgba(255, 165, 0, 0.6)';
-            ctx.fillRect(
-              pos.x - NAV_GRID_RESOLUTION / 2,
-              pos.y - NAV_GRID_RESOLUTION / 2,
-              NAV_GRID_RESOLUTION,
-              NAV_GRID_RESOLUTION,
-            );
+          for (let i = 0; i < perimeterPositions.length; i++) {
+            const pos = perimeterPositions[i];
+            const isGate = gateIndices.has(i) && showGatePositions;
+
+            if (isGate) {
+              // Gate position (lighter version of tribe color)
+              ctx.fillStyle = color + '80'; // 50% opacity
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.fillRect(
+                pos.x - NAV_GRID_RESOLUTION / 2,
+                pos.y - NAV_GRID_RESOLUTION / 2,
+                NAV_GRID_RESOLUTION,
+                NAV_GRID_RESOLUTION,
+              );
+              ctx.strokeRect(
+                pos.x - NAV_GRID_RESOLUTION / 2,
+                pos.y - NAV_GRID_RESOLUTION / 2,
+                NAV_GRID_RESOLUTION,
+                NAV_GRID_RESOLUTION,
+              );
+            } else {
+              // Palisade position (tribe color with opacity)
+              ctx.fillStyle = color + '99'; // 60% opacity
+              ctx.fillRect(
+                pos.x - NAV_GRID_RESOLUTION / 2,
+                pos.y - NAV_GRID_RESOLUTION / 2,
+                NAV_GRID_RESOLUTION,
+                NAV_GRID_RESOLUTION,
+              );
+            }
           }
         }
       }
 
-      // 5. Draw tribe center
-      ctx.fillStyle = '#ffff00';
-      ctx.beginPath();
-      ctx.arc(tribeCenter.x, tribeCenter.y, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      // 4. Draw tribe centers
+      for (const tribePerimeter of tribePerimeters) {
+        if (tribePerimeter.center) {
+          ctx.fillStyle = tribePerimeter.color;
+          ctx.beginPath();
+          ctx.arc(tribePerimeter.center.x, tribePerimeter.center.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      // 5. Trees
+      for (const tree of treeEntities) {
+        renderTree(ctx, tree, time);
+      }
 
       // 6. Buildings (hubs)
       for (const building of buildings) {
@@ -491,7 +621,8 @@ export const GordScreen: React.FC = () => {
 
       // 7. Mouse cursor preview
       if (mousePos) {
-        ctx.strokeStyle = '#fff';
+        const selectedTribe = TRIBE_COLORS.find((t) => t.id === selectedTribeId);
+        ctx.strokeStyle = placementMode === 'tree' ? '#76a331' : (selectedTribe?.color || '#fff');
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(mousePos.x, mousePos.y, 15, 0, Math.PI * 2);
@@ -508,14 +639,27 @@ export const GordScreen: React.FC = () => {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [buildings, hubs, margin, showGrid, showPerimeter, showGatePositions, sortedPerimeter, gateIndices, mousePos, tribeCenter, boundingBox]);
+  }, [buildings, treeEntities, hubs, margin, showGrid, showPerimeter, showGatePositions, tribePerimeters, mousePos, selectedTribeId, placementMode, time]);
 
   return (
     <ScreenContainer>
       <Sidebar>
         <Title>Gord Placement Debug</Title>
 
-        <SectionTitle>Place Hubs</SectionTitle>
+        <SectionTitle>Select Tribe</SectionTitle>
+        <TribeSelector>
+          {TRIBE_COLORS.map((tribe) => (
+            <TribeButton
+              key={tribe.id}
+              $color={tribe.color}
+              $selected={selectedTribeId === tribe.id}
+              onClick={() => setSelectedTribeId(tribe.id)}
+              title={tribe.name}
+            />
+          ))}
+        </TribeSelector>
+
+        <SectionTitle>Placement Mode</SectionTitle>
         <Button
           onClick={() => setPlacementMode('bonfire')}
           style={{
@@ -533,6 +677,15 @@ export const GordScreen: React.FC = () => {
           }}
         >
           📦 Place Storage
+        </Button>
+        <Button
+          onClick={() => setPlacementMode('tree')}
+          style={{
+            backgroundColor: placementMode === 'tree' ? '#666' : '#444',
+            borderLeft: placementMode === 'tree' ? '3px solid #76a331' : 'none',
+          }}
+        >
+          🌲 Place Tree
         </Button>
 
         <SectionTitle>Gord Settings</SectionTitle>
@@ -563,9 +716,10 @@ export const GordScreen: React.FC = () => {
 
         <SectionTitle>Info</SectionTitle>
         <InfoText>Hubs placed: {hubs.length}</InfoText>
-        <InfoText>Perimeter cells: {perimeterPositions.length}</InfoText>
-        <InfoText>Gates: {gateIndices.size}</InfoText>
-        <InfoText>Palisades: {perimeterPositions.length - gateIndices.size}</InfoText>
+        <InfoText>Trees placed: {placedTrees.length}</InfoText>
+        <InfoText>Total perimeter cells: {totalPerimeterCells}</InfoText>
+        <InfoText>Total gates: {totalGates}</InfoText>
+        <InfoText>Total palisades: {totalPerimeterCells - totalGates}</InfoText>
 
         <Button onClick={clearAll} style={{ backgroundColor: '#a33', marginTop: '20px', textAlign: 'center' }}>
           🗑️ Clear All
@@ -583,10 +737,10 @@ export const GordScreen: React.FC = () => {
           style={{ cursor: 'crosshair' }}
         />
         <p style={{ marginTop: '20px', color: '#888' }}>
-          Click to place bonfires/storage spots. The gord perimeter is calculated automatically.
+          Click to place bonfires/storage/trees. Select a tribe to place hubs for that tribe.
         </p>
         <p style={{ color: '#666', fontSize: '0.8rem' }}>
-          Orange = Palisade positions | Green = Gate positions | Yellow dot = Tribe center
+          Perimeter colors match tribe colors | Lighter cells = Gate positions | Colored dots = Tribe centers
         </p>
       </CanvasContainer>
     </ScreenContainer>

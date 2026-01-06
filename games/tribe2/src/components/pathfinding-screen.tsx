@@ -5,6 +5,10 @@ import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { BuildingEntity } from '../game/entities/buildings/building-types';
 import { BuildingType, BUILDING_DEFINITIONS } from '../game/entities/buildings/building-consts';
 import { renderBuilding } from '../game/render/render-building';
+import { renderTree } from '../game/render/render-tree';
+import { TreeEntity } from '../game/entities/plants/tree/tree-types';
+import { TREE_RADIUS } from '../game/entities/plants/tree/tree-consts';
+import { TREE_FULL } from '../game/entities/plants/tree/states/tree-state-types';
 import { IndexedWorldState } from '../game/world-index/world-index-types';
 import { Blackboard } from '../game/ai/behavior-tree/behavior-tree-blackboard';
 import { calculateWrappedDistance } from '../game/utils/math-utils';
@@ -116,10 +120,11 @@ const InfoText = styled.p`
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
-type PlacementMode = 'obstacle' | 'gate' | 'start' | 'end';
+type PlacementMode = 'obstacle' | 'gate' | 'tree' | 'start' | 'end';
 
 const createMockWorldState = (
   buildings: BuildingEntity[],
+  trees: TreeEntity[],
   navigationGrid: ReturnType<typeof initNavigationGrid>,
 ): GameWorldState => {
   const entitiesMap: Record<number, unknown> = buildings.reduce(
@@ -129,6 +134,11 @@ const createMockWorldState = (
     },
     {} as Record<number, unknown>,
   );
+
+  // Add trees to entities
+  for (const tree of trees) {
+    entitiesMap[tree.id] = tree;
+  }
 
   // Mock player leader
   entitiesMap[1] = {
@@ -173,7 +183,12 @@ const createMockWorldState = (
       byRect: () => [],
     } as unknown as IndexedWorldState['search']['human'],
     berryBush: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['berryBush'],
-    tree: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['tree'],
+    tree: {
+      byRect: () => trees,
+      all: () => trees,
+      byRadius: (pos: Vector2D, radius: number) =>
+        trees.filter((t) => calculateWrappedDistance(pos, t.position, CANVAS_WIDTH, CANVAS_HEIGHT) <= radius),
+    } as unknown as IndexedWorldState['search']['tree'],
     corpse: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['corpse'],
     prey: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['prey'],
     predator: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['predator'],
@@ -181,6 +196,30 @@ const createMockWorldState = (
   };
 
   return state;
+};
+
+const createTreeEntity = (id: number, position: Vector2D): TreeEntity => {
+  return {
+    id,
+    type: 'tree',
+    position,
+    radius: TREE_RADIUS,
+    age: 120, // Mature tree
+    lifespan: 24 * 30 * 10, // 300 days
+    swayOffset: Math.random() * Math.PI * 2,
+    variant: Math.floor(Math.random() * 4),
+    timeSinceLastSpreadAttempt: 0,
+    spreadRadius: 60,
+    wood: [],
+    woodGenerated: false,
+    direction: { x: 0, y: 0 },
+    acceleration: 0,
+    forces: [],
+    velocity: { x: 0, y: 0 },
+    debuffs: [],
+    stateMachine: [TREE_FULL, { enteredAt: 0 }],
+    aiBlackboard: Blackboard.create(),
+  } as TreeEntity;
 };
 
 const createBuildingEntity = (
@@ -222,13 +261,16 @@ export const PathfindingScreen: React.FC = () => {
 
   const [placementMode, setPlacementMode] = useState<PlacementMode>('obstacle');
   const [placedBuildings, setPlacedBuildings] = useState<BuildingEntity[]>([]);
+  const [placedTrees, setPlacedTrees] = useState<TreeEntity[]>([]);
   const [startPos, setStartPos] = useState<Vector2D>({ x: 100, y: 300 });
   const [endPos, setEndPos] = useState<Vector2D>({ x: 700, y: 300 });
   const [path, setPath] = useState<Vector2D[] | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [showObstacles, setShowObstacles] = useState(true);
   const [nextBuildingId, setNextBuildingId] = useState(10);
+  const [nextTreeId, setNextTreeId] = useState(1000);
   const [mousePos, setMousePos] = useState<Vector2D | null>(null);
+  const [time, setTime] = useState(0);
 
   const [navigationGrid, setNavigationGrid] = useState(() => initNavigationGrid(CANVAS_WIDTH, CANVAS_HEIGHT));
 
@@ -241,12 +283,12 @@ export const PathfindingScreen: React.FC = () => {
   }, []);
 
   const recalculatePath = useCallback(() => {
-    const mockState = createMockWorldState(placedBuildings, navigationGrid);
+    const mockState = createMockWorldState(placedBuildings, placedTrees, navigationGrid);
     const mockHuman = mockState.entities.entities[1] as HumanEntity;
 
     const newPath = findPath(mockState, startPos, endPos, mockHuman);
     setPath(newPath);
-  }, [placedBuildings, navigationGrid, startPos, endPos]);
+  }, [placedBuildings, placedTrees, navigationGrid, startPos, endPos]);
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -262,6 +304,34 @@ export const PathfindingScreen: React.FC = () => {
         setStartPos(snappedPos);
       } else if (placementMode === 'end') {
         setEndPos(snappedPos);
+      } else if (placementMode === 'tree') {
+        // Check if position is occupied by building or tree
+        const isOccupiedByBuilding = placedBuildings.some(
+          (b) => Math.abs(b.position.x - snappedPos.x) < 25 && Math.abs(b.position.y - snappedPos.y) < 25,
+        );
+        const isOccupiedByTree = placedTrees.some(
+          (t) => Math.abs(t.position.x - snappedPos.x) < 25 && Math.abs(t.position.y - snappedPos.y) < 25,
+        );
+
+        if (!isOccupiedByBuilding && !isOccupiedByTree) {
+          const newTree = createTreeEntity(nextTreeId, snappedPos);
+
+          // Update navigation grid - trees block movement
+          const tempGrid = {
+            staticObstacles: new Uint8Array(navigationGrid.staticObstacles),
+            gateOwners: [...navigationGrid.gateOwners],
+          };
+          const tempState = {
+            mapDimensions: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+            navigationGrid: tempGrid,
+          } as GameWorldState;
+
+          updateNavigationGridSector(tempState, snappedPos, newTree.radius, true, null);
+
+          setNavigationGrid(tempGrid);
+          setPlacedTrees((prev) => [...prev, newTree]);
+          setNextTreeId((prev) => prev + 1);
+        }
       } else if (placementMode === 'obstacle' || placementMode === 'gate') {
         const isOccupied = placedBuildings.some(
           (b) => Math.abs(b.position.x - snappedPos.x) < 15 && Math.abs(b.position.y - snappedPos.y) < 15,
@@ -292,7 +362,7 @@ export const PathfindingScreen: React.FC = () => {
         }
       }
     },
-    [placementMode, snapToGrid, placedBuildings, nextBuildingId, navigationGrid],
+    [placementMode, snapToGrid, placedBuildings, placedTrees, nextBuildingId, nextTreeId, navigationGrid],
   );
 
   const handleMouseMove = useCallback(
@@ -311,7 +381,9 @@ export const PathfindingScreen: React.FC = () => {
 
   const clearAll = useCallback(() => {
     setPlacedBuildings([]);
+    setPlacedTrees([]);
     setNextBuildingId(10);
+    setNextTreeId(1000);
     setNavigationGrid(initNavigationGrid(CANVAS_WIDTH, CANVAS_HEIGHT));
     setPath(null);
     setStartPos({ x: 100, y: 300 });
@@ -323,13 +395,21 @@ export const PathfindingScreen: React.FC = () => {
     recalculatePath();
   }, [recalculatePath]);
 
+  // Update time for tree sway animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTime((t) => t + 16);
+    }, 16);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const render = () => {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!ctx) return;
 
-      const mockState = createMockWorldState(placedBuildings, navigationGrid);
+      const mockState = createMockWorldState(placedBuildings, placedTrees, navigationGrid);
 
       // 1. Background
       ctx.fillStyle = '#2c5234';
@@ -374,12 +454,17 @@ export const PathfindingScreen: React.FC = () => {
         }
       }
 
-      // 4. Buildings
+      // 4. Trees
+      for (const tree of placedTrees) {
+        renderTree(ctx, tree, time);
+      }
+
+      // 5. Buildings
       for (const building of placedBuildings) {
         renderBuilding(ctx, building, mockState as unknown as IndexedWorldState);
       }
 
-      // 5. Draw path
+      // 6. Draw path
       if (path && path.length > 0) {
         ctx.strokeStyle = '#00ffff';
         ctx.lineWidth = 3;
@@ -401,7 +486,7 @@ export const PathfindingScreen: React.FC = () => {
         }
       }
 
-      // 6. Start position
+      // 7. Start position
       ctx.fillStyle = '#00ff00';
       ctx.beginPath();
       ctx.arc(startPos.x, startPos.y, 12, 0, Math.PI * 2);
@@ -412,7 +497,7 @@ export const PathfindingScreen: React.FC = () => {
       ctx.textBaseline = 'middle';
       ctx.fillText('S', startPos.x, startPos.y);
 
-      // 7. End position
+      // 8. End position
       ctx.fillStyle = '#ff0000';
       ctx.beginPath();
       ctx.arc(endPos.x, endPos.y, 12, 0, Math.PI * 2);
@@ -420,7 +505,7 @@ export const PathfindingScreen: React.FC = () => {
       ctx.fillStyle = '#fff';
       ctx.fillText('E', endPos.x, endPos.y);
 
-      // 8. Mouse cursor preview
+      // 9. Mouse cursor preview
       if (mousePos) {
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
@@ -436,9 +521,9 @@ export const PathfindingScreen: React.FC = () => {
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [placedBuildings, navigationGrid, path, startPos, endPos, showGrid, showObstacles, mousePos]);
+  }, [placedBuildings, placedTrees, navigationGrid, path, startPos, endPos, showGrid, showObstacles, mousePos, time]);
 
-  const mockState = createMockWorldState(placedBuildings, navigationGrid);
+  const mockState = createMockWorldState(placedBuildings, placedTrees, navigationGrid);
   const mockHuman = mockState.entities.entities[1] as HumanEntity;
   const directPathBlocked = isPathBlocked(mockState, startPos, endPos, mockHuman);
 
@@ -465,6 +550,15 @@ export const PathfindingScreen: React.FC = () => {
           }}
         >
           🚪 Place Gate (Passable)
+        </Button>
+        <Button
+          onClick={() => setPlacementMode('tree')}
+          style={{
+            backgroundColor: placementMode === 'tree' ? '#666' : '#444',
+            borderLeft: placementMode === 'tree' ? '3px solid #76a331' : 'none',
+          }}
+        >
+          🌲 Place Tree (Blocks)
         </Button>
         <Button
           onClick={() => setPlacementMode('start')}
@@ -499,6 +593,7 @@ export const PathfindingScreen: React.FC = () => {
         <InfoText>Direct path blocked: {directPathBlocked ? '❌ Yes' : '✅ No'}</InfoText>
         <InfoText>Path found: {path ? `✅ ${path.length} waypoints` : '❌ No path'}</InfoText>
         <InfoText>Buildings: {placedBuildings.length}</InfoText>
+        <InfoText>Trees: {placedTrees.length}</InfoText>
 
         <Button onClick={clearAll} style={{ backgroundColor: '#a33', marginTop: '20px', textAlign: 'center' }}>
           🗑️ Clear All
@@ -516,7 +611,7 @@ export const PathfindingScreen: React.FC = () => {
           style={{ cursor: 'crosshair' }}
         />
         <p style={{ marginTop: '20px', color: '#888' }}>
-          Click to place obstacles/gates or set start/end positions. Path is calculated automatically using A*.
+          Click to place obstacles/gates/trees or set start/end positions. Path is calculated automatically using A*.
         </p>
         <p style={{ color: '#666', fontSize: '0.8rem' }}>
           Red overlay = blocked cells | Green overlay = gate cells (passable for owner)
