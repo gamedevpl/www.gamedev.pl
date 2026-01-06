@@ -24,6 +24,8 @@ export const TREE_SHADOW_COLOR = 'rgba(0, 0, 0, 0.25)';
 export const TREE_SPREAD_RADIUS = 60;
 export const TREE_SPREAD_COOLDOWN_HOURS = 24 * 7; // 1 week
 export const TREE_SPREAD_CHANCE = 0.1; // 10% chance to spread when cooldown is up
+export const MIN_TREE_SPREAD_CHANCE = 0.01;
+export const MAX_TREE_SPREAD_CHANCE = 0.50;
 
 // Resources
 export const TREE_MIN_WOOD = 1;

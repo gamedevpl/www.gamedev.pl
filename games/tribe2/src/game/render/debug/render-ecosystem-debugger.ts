@@ -4,6 +4,7 @@ import {
   ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
+  ECOSYSTEM_BALANCER_TARGET_TREE_COUNT,
   MAP_WIDTH,
   MAP_HEIGHT,
 } from '../../game-consts.ts';
@@ -15,6 +16,7 @@ interface PopulationHistory {
   prey: number;
   predators: number;
   bushes: number;
+  trees: number;
 }
 
 // Global history storage (persists across renders)
@@ -36,6 +38,7 @@ export function renderEcosystemDebugger(
   const preyCount = (gameState as IndexedWorldState).search.prey.count();
   const predatorCount = (gameState as IndexedWorldState).search.predator.count();
   const bushCount = (gameState as IndexedWorldState).search.berryBush.count();
+  const treeCount = (gameState as IndexedWorldState).search.tree.count();
 
   // Record population data
   if (gameState.time - lastRecordTime >= HISTORY_INTERVAL) {
@@ -44,6 +47,7 @@ export function renderEcosystemDebugger(
       prey: preyCount,
       predators: predatorCount,
       bushes: bushCount,
+      trees: treeCount,
     });
 
     // Keep history at reasonable size
@@ -58,6 +62,7 @@ export function renderEcosystemDebugger(
   const preyDensityPer1000 = (preyCount / mapArea) * 1000000; // per 1000 pixels²
   const predatorDensityPer1000 = (predatorCount / mapArea) * 1000000;
   const bushDensityPer1000 = (bushCount / mapArea) * 1000000;
+  const treeDensityPer1000 = (treeCount / mapArea) * 1000000;
 
   const qlStats = getEcosystemBalancerStats();
 
@@ -143,6 +148,7 @@ export function renderEcosystemDebugger(
   const preyTargetDensity = ((ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION / mapArea) * 1000000).toFixed(2);
   const predatorTargetDensity = ((ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION / mapArea) * 1000000).toFixed(2);
   const bushTargetDensity = ((ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT / mapArea) * 1000000).toFixed(2);
+  const treeTargetDensity = ((ECOSYSTEM_BALANCER_TARGET_TREE_COUNT / mapArea) * 1000000).toFixed(2);
 
   ctx.fillText(`Prey: ${preyDensityPer1000.toFixed(2)} (target: ${preyTargetDensity})`, leftMargin, currentY);
   currentY += lineHeight;
@@ -153,6 +159,8 @@ export function renderEcosystemDebugger(
   );
   currentY += lineHeight;
   ctx.fillText(`Bushes: ${bushDensityPer1000.toFixed(2)} (target: ${bushTargetDensity})`, leftMargin, currentY);
+  currentY += lineHeight;
+  ctx.fillText(`Trees: ${treeDensityPer1000.toFixed(2)} (target: ${treeTargetDensity})`, leftMargin, currentY);
   currentY += 20;
 
   // Current Population Summary
@@ -167,6 +175,7 @@ export function renderEcosystemDebugger(
   const preyPercentage = Math.round((preyCount / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION) * 100);
   const predatorPercentage = Math.round((predatorCount / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION) * 100);
   const bushPercentage = Math.round((bushCount / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT) * 100);
+  const treePercentage = Math.round((treeCount / ECOSYSTEM_BALANCER_TARGET_TREE_COUNT) * 100);
 
   const getStatusColor = (percentage: number) => {
     if (percentage < 50) return '#ff4444';
@@ -186,6 +195,14 @@ export function renderEcosystemDebugger(
   ctx.fillStyle = getStatusColor(predatorPercentage);
   ctx.fillText(
     `Predators: ${predatorCount}/${ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION} (${predatorPercentage}%)`,
+    leftMargin,
+    currentY,
+  );
+  currentY += lineHeight;
+
+  ctx.fillStyle = getStatusColor(treePercentage);
+  ctx.fillText(
+    `Trees: ${treeCount}/${ECOSYSTEM_BALANCER_TARGET_TREE_COUNT} (${treePercentage}%)`,
     leftMargin,
     currentY,
   );
@@ -235,6 +252,11 @@ export function renderEcosystemDebugger(
   );
   currentY += 15;
 
+  ctx.fillText('Trees:', leftMargin, currentY);
+  currentY += 13;
+  ctx.fillText(`• Spread Chance: ${(gameState.ecosystem.treeSpreadChance * 100).toFixed(1)}%`, leftMargin, currentY);
+  currentY += 15;
+
   // Footer
   ctx.fillStyle = '#888';
   ctx.font = '10px monospace';
@@ -264,6 +286,7 @@ function renderPopulationTrends(
     prey: Math.max(...recentHistory.map((h) => h.prey), ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION),
     predators: Math.max(...recentHistory.map((h) => h.predators), ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION),
     bushes: Math.max(...recentHistory.map((h) => h.bushes), ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT),
+    trees: Math.max(...recentHistory.map((h) => h.trees), ECOSYSTEM_BALANCER_TARGET_TREE_COUNT),
   };
 
   const charts = [
@@ -282,6 +305,13 @@ function renderPopulationTrends(
       max: maxValues.predators,
     },
     {
+      data: recentHistory.map((h) => h.trees),
+      color: '#76a331',
+      label: 'Trees',
+      target: ECOSYSTEM_BALANCER_TARGET_TREE_COUNT,
+      max: maxValues.trees,
+    },
+    {
       data: recentHistory.map((h) => h.bushes),
       color: '#ffaa44',
       label: 'Bushes',
@@ -291,12 +321,13 @@ function renderPopulationTrends(
   ];
 
   charts.forEach((chart, i) => {
-    const chartX = x + i * (chartWidth + chartSpacing);
-    const chartY = y;
+    const chartX = x + (i % 2) * (chartWidth + chartSpacing);
+    const chartY = y + Math.floor(i / 2) * (chartHeight + 25);
 
     // Chart label
     ctx.fillStyle = chart.color;
     ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
     ctx.fillText(chart.label, chartX, chartY - 5);
 
     // Chart border

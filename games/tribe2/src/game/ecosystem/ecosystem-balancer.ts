@@ -9,6 +9,7 @@ import {
   ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION,
   ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT,
+  ECOSYSTEM_BALANCER_TARGET_TREE_COUNT,
 } from '../game-consts.ts';
 import {
   MIN_PREY_GESTATION_PERIOD,
@@ -28,6 +29,7 @@ import {
   MIN_BERRY_BUSH_SPREAD_CHANCE,
   MAX_BERRY_BUSH_SPREAD_CHANCE,
 } from '../entities/plants/berry-bush/berry-bush-consts.ts';
+import { MIN_TREE_SPREAD_CHANCE, MAX_TREE_SPREAD_CHANCE } from '../entities/plants/tree/tree-consts.ts';
 
 const ECOSYSTEM_BALANCER_INTERVAL = 1; // More frequent updates for better control
 
@@ -60,8 +62,12 @@ enum QLearningAction {
   INCREASE_BUSH_SPREAD = 12,
   DECREASE_BUSH_SPREAD = 13,
 
+  // Tree actions
+  INCREASE_TREE_SPREAD = 14,
+  DECREASE_TREE_SPREAD = 15,
+
   // No action
-  NO_ACTION = 14,
+  NO_ACTION = 16,
 }
 
 const TOTAL_ACTIONS = Object.keys(QLearningAction).length / 2; // Enum has both number and string keys
@@ -76,7 +82,7 @@ class QLearningAgent {
   /**
    * Discretize ecosystem state into bins
    */
-  private discretizeState(preyCount: number, predatorCount: number, bushCount: number): string {
+  private discretizeState(preyCount: number, predatorCount: number, bushCount: number, treeCount: number): string {
     // Discretize prey count into 5 bins
     const preyBin = Math.min(4, Math.floor(preyCount / 25));
 
@@ -86,7 +92,10 @@ class QLearningAgent {
     // Discretize bush count into 5 bins
     const bushBin = Math.min(4, Math.floor(bushCount / 15));
 
-    return `${preyBin}-${predatorBin}-${bushBin}`;
+    // Discretize tree count into 5 bins
+    const treeBin = Math.min(4, Math.floor(treeCount / 50));
+
+    return `${preyBin}-${predatorBin}-${bushBin}-${treeBin}`;
   }
 
   /**
@@ -148,6 +157,7 @@ class QLearningAgent {
     preyCount: number,
     predatorCount: number,
     bushCount: number,
+    treeCount: number,
     gameState: GameWorldState,
   ): void {
     // More aggressive emergency corrections when populations are critically low
@@ -191,6 +201,14 @@ class QLearningAgent {
       );
     }
 
+    if (treeCount < ECOSYSTEM_BALANCER_TARGET_TREE_COUNT * 0.5) {
+      // Aggressively boost tree spread
+      gameState.ecosystem.treeSpreadChance = Math.min(
+        MAX_TREE_SPREAD_CHANCE,
+        gameState.ecosystem.treeSpreadChance * 1.2,
+      );
+    }
+
     // Control overpopulation - be more aggressive to stay within bounds
     if (preyCount > ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION * 1.4) {
       gameState.ecosystem.preyHungerIncreasePerHour = Math.min(
@@ -212,19 +230,30 @@ class QLearningAgent {
         gameState.ecosystem.berryBushSpreadChance * 0.95,
       );
     }
+
+    if (treeCount > ECOSYSTEM_BALANCER_TARGET_TREE_COUNT * 1.4) {
+      gameState.ecosystem.treeSpreadChance = Math.max(
+        MIN_TREE_SPREAD_CHANCE,
+        gameState.ecosystem.treeSpreadChance * 0.95,
+      );
+    }
   }
-  private calculateReward(preyCount: number, predatorCount: number, bushCount: number): number {
+
+  private calculateReward(preyCount: number, predatorCount: number, bushCount: number, treeCount: number): number {
     const preyError = Math.abs(preyCount - ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION);
     const predatorError = Math.abs(predatorCount - ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION);
     const bushError = Math.abs(bushCount - ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT);
+    const treeError = Math.abs(treeCount - ECOSYSTEM_BALANCER_TARGET_TREE_COUNT);
 
     // Scale errors relative to targets for balanced importance
     const normalizedPreyError = preyError / ECOSYSTEM_BALANCER_TARGET_PREY_POPULATION;
     const normalizedPredatorError = predatorError / ECOSYSTEM_BALANCER_TARGET_PREDATOR_POPULATION;
     const normalizedBushError = bushError / ECOSYSTEM_BALANCER_TARGET_BUSH_COUNT;
+    const normalizedTreeError = treeError / ECOSYSTEM_BALANCER_TARGET_TREE_COUNT;
 
     // Total normalized error
-    const totalNormalizedError = normalizedPreyError + normalizedPredatorError + normalizedBushError;
+    const totalNormalizedError =
+      normalizedPreyError + normalizedPredatorError + normalizedBushError + normalizedTreeError;
 
     // Reward is inversely related to error - higher reward for being closer to targets
     // Use exponential to give much higher reward for being very close
@@ -336,6 +365,18 @@ class QLearningAgent {
             stepSize * (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE),
         );
         break;
+      case QLearningAction.INCREASE_TREE_SPREAD:
+        gameState.ecosystem.treeSpreadChance = Math.min(
+          MAX_TREE_SPREAD_CHANCE,
+          gameState.ecosystem.treeSpreadChance + stepSize * (MAX_TREE_SPREAD_CHANCE - MIN_TREE_SPREAD_CHANCE),
+        );
+        break;
+      case QLearningAction.DECREASE_TREE_SPREAD:
+        gameState.ecosystem.treeSpreadChance = Math.max(
+          MIN_TREE_SPREAD_CHANCE,
+          gameState.ecosystem.treeSpreadChance - stepSize * (MAX_TREE_SPREAD_CHANCE - MIN_TREE_SPREAD_CHANCE),
+        );
+        break;
       case QLearningAction.NO_ACTION:
       default:
         // No action taken
@@ -362,15 +403,16 @@ class QLearningAgent {
     const preyCount = indexedState.search.prey.count();
     const predatorCount = indexedState.search.predator.count();
     const bushCount = indexedState.search.berryBush.count();
+    const treeCount = indexedState.search.tree.count();
 
     // Apply emergency corrections first to prevent ecosystem collapse
-    this.applyEmergencyCorrections(preyCount, predatorCount, bushCount, gameState);
+    this.applyEmergencyCorrections(preyCount, predatorCount, bushCount, treeCount, gameState);
 
-    const currentState = this.discretizeState(preyCount, predatorCount, bushCount);
+    const currentState = this.discretizeState(preyCount, predatorCount, bushCount, treeCount);
 
     // If we have a previous state and action, update Q-table
     if (this.lastState !== null && this.lastAction !== null) {
-      const reward = this.calculateReward(preyCount, predatorCount, bushCount);
+      const reward = this.calculateReward(preyCount, predatorCount, bushCount, treeCount);
       this.updateQTable(this.lastState, this.lastAction, reward, currentState);
     }
 
@@ -435,6 +477,8 @@ function updateEcosystemBalancerQLearning(gameState: GameWorldState): void {
       (MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR - MIN_PREDATOR_HUNGER_INCREASE_PER_HOUR) * 0.3;
     gameState.ecosystem.berryBushSpreadChance =
       MIN_BERRY_BUSH_SPREAD_CHANCE + (MAX_BERRY_BUSH_SPREAD_CHANCE - MIN_BERRY_BUSH_SPREAD_CHANCE) * 0.7; // Higher spread chance = more food
+    gameState.ecosystem.treeSpreadChance =
+      MIN_TREE_SPREAD_CHANCE + (MAX_TREE_SPREAD_CHANCE - MIN_TREE_SPREAD_CHANCE) * 0.2; // Moderate initial tree spread
   }
 
   // Apply Q-learning step
