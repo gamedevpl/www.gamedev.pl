@@ -391,11 +391,12 @@ export const GordScreen: React.FC = () => {
     return distA - distB;
   });
 
-  // Determine gate positions (every 15 segments)
+  // Determine gate positions - gates are placed at regular intervals along the perimeter
+  const GATE_SPACING_SEGMENTS = 15; // Number of palisade segments between gates
   const gateIndices = new Set<number>();
   let segmentsSinceGate = 0;
   for (let i = 0; i < sortedPerimeter.length; i++) {
-    if (segmentsSinceGate === 0 || segmentsSinceGate >= 15) {
+    if (segmentsSinceGate === 0 || segmentsSinceGate >= GATE_SPACING_SEGMENTS) {
       gateIndices.add(i);
       segmentsSinceGate = 1;
     } else {

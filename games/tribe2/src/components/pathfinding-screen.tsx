@@ -282,7 +282,7 @@ export const PathfindingScreen: React.FC = () => {
             navigationGrid: tempGrid,
           } as GameWorldState;
 
-          // Only store ownerId for gates, not palisades
+          // Store ownerId only for gates to enable owner-specific pathfinding; palisades block all entities
           const gateOwnerId = buildingType === BuildingType.Gate ? ownerId : null;
           updateNavigationGridSector(tempState, snappedPos, newBuilding.radius, true, gateOwnerId);
 
