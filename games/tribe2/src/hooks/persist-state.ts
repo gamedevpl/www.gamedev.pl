@@ -12,6 +12,10 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
         setAppState('effects');
       } else if (hash === '#buildings') {
         setAppState('buildings');
+      } else if (hash === '#pathfinding') {
+        setAppState('pathfinding');
+      } else if (hash === '#gord') {
+        setAppState('gord');
       } else {
         setAppState('intro');
       }
@@ -29,6 +33,10 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
       document.location.hash = '#game';
     } else if (appState === 'effects') {
       document.location.hash = '#effects';
+    } else if (appState === 'pathfinding') {
+      document.location.hash = '#pathfinding';
+    } else if (appState === 'gord') {
+      document.location.hash = '#gord';
     } else if (appState === 'intro') {
       document.location.hash = '';
     }
