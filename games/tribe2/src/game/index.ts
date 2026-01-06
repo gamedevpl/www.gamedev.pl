@@ -5,6 +5,7 @@
  * It will contain functions to initialize and manage the game state.
  */
 import { MIN_BERRY_BUSH_SPREAD_CHANCE } from './entities/plants/berry-bush/berry-bush-consts.ts';
+import { MIN_TREE_SPREAD_CHANCE } from './entities/plants/tree/tree-consts.ts';
 import {
   MAX_PREDATOR_GESTATION_PERIOD,
   MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
@@ -38,6 +39,7 @@ export function initGame(): GameWorldState {
     preyHungerIncreasePerHour: MAX_PREY_HUNGER_INCREASE_PER_HOUR,
     predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
     berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
+    treeSpreadChance: MIN_TREE_SPREAD_CHANCE,
   };
 
   initialWorldState.debugPanel = DebugPanelType.None;

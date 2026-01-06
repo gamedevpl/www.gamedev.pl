@@ -21,4 +21,7 @@ export interface EcosystemState {
 
   // Bush spread parameters
   berryBushSpreadChance: number;
+
+  // Tree spread parameters
+  treeSpreadChance: number;
 }

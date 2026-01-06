@@ -31,7 +31,7 @@ import { generateRandomPreyGeneCode } from './entities/characters/prey/prey-util
 import { generateRandomPredatorGeneCode } from './entities/characters/predator/predator-utils';
 import { createSoilDepletionState } from './entities/plants/soil-depletion-types.ts';
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tribe/territory-consts.ts';
-import { TREE_GROWTH_TIME_GAME_HOURS } from './entities/plants/tree/tree-consts';
+import { TREE_GROWTH_TIME_GAME_HOURS, MIN_TREE_SPREAD_CHANCE } from './entities/plants/tree/tree-consts';
 import { initTemperatureState } from './temperature/temperature-update';
 import { AIType } from './ai/ai-types.ts';
 import { initNavigationGrid, updateNavigationGridSector } from './utils/navigation-utils';
@@ -276,6 +276,7 @@ export function initWorld(): GameWorldState {
       preyHungerIncreasePerHour: MAX_PREY_HUNGER_INCREASE_PER_HOUR,
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
+      treeSpreadChance: MIN_TREE_SPREAD_CHANCE,
     },
     soilDepletion: createSoilDepletionState(),
     temperature: initTemperatureState(MAP_WIDTH, MAP_HEIGHT),
@@ -457,6 +458,7 @@ export function initIntroWorld(): GameWorldState {
       preyHungerIncreasePerHour: MAX_PREY_HUNGER_INCREASE_PER_HOUR,
       predatorHungerIncreasePerHour: MAX_PREDATOR_HUNGER_INCREASE_PER_HOUR,
       berryBushSpreadChance: MIN_BERRY_BUSH_SPREAD_CHANCE,
+      treeSpreadChance: MIN_TREE_SPREAD_CHANCE,
     },
     soilDepletion: createSoilDepletionState(),
     temperature: initTemperatureState(MAP_WIDTH, MAP_HEIGHT),
