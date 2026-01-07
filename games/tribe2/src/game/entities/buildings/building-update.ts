@@ -72,7 +72,8 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       }
 
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
-        updateNavigationGridSector(gameState, building.position, building.radius, true, building.ownerId);
+        const navOwnerId = building.buildingType === BuildingType.Gate ? (building.ownerId ?? null) : null;
+        updateNavigationGridSector(gameState, building.position, building.radius, true, navOwnerId);
       }
 
       // Update planting zone connections when a planting zone completes construction

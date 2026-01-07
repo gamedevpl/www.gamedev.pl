@@ -242,50 +242,45 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
       });
     };
 
-    for (let rgx = startRelGX; rgx <= endRelGX; rgx++) {
-      addPos(rgx, startRelGY);
-      addPos(rgx, endRelGY);
-    }
-    for (let rgy = startRelGY + 1; rgy < endRelGY; rgy++) {
-      addPos(startRelGX, rgy);
-      addPos(endRelGX, rgy);
-    }
+    // Generate perimeter in a continuous clockwise sequence
+    // 1. Top edge: Left to Right
+    for (let rgx = startRelGX; rgx <= endRelGX; rgx++) addPos(rgx, startRelGY);
+    // 2. Right edge: Top+1 to Bottom
+    for (let rgy = startRelGY + 1; rgy <= endRelGY; rgy++) addPos(endRelGX, rgy);
+    // 3. Bottom edge: Right-1 to Left
+    for (let rgx = endRelGX - 1; rgx >= startRelGX; rgx--) addPos(rgx, endRelGY);
+    // 4. Left edge: Bottom-1 to Top+1
+    for (let rgy = endRelGY - 1; rgy > startRelGY; rgy--) addPos(startRelGX, rgy);
 
-    // Sort to pick gate location (closest to tribe center)
+    // Find the point closest to the tribe center to start the sequence (ideal gate location)
     const tribeCenter = getTribeCenter(leaderId, gameState);
-    perimeterPositions.sort((a, b) => {
-      const distA = calculateWrappedDistanceSq(a, tribeCenter, width, height);
-      const distB = calculateWrappedDistanceSq(b, tribeCenter, width, height);
-      return distA - distB;
-    });
+    let bestIdx = 0;
+    let minDistSq = Infinity;
+    for (let i = 0; i < perimeterPositions.length; i++) {
+      const dSq = calculateWrappedDistanceSq(perimeterPositions[i], tribeCenter, width, height);
+      if (dSq < minDistSq) {
+        minDistSq = dSq;
+        bestIdx = i;
+      }
+    }
 
-    let segmentsSinceGate = 0;
-    for (const pos of perimeterPositions) {
+    // Rotate the sequence so it starts at the best point
+    const rotatedPerimeter = [...perimeterPositions.slice(bestIdx), ...perimeterPositions.slice(0, bestIdx)];
+
+    for (let i = 0; i < rotatedPerimeter.length; i++) {
+      const pos = rotatedPerimeter[i];
       const coordKey = `${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
 
       const existing = indexedState.search.building.at(pos, NAV_GRID_RESOLUTION / 2);
-      if (existing) {
-        if (existing.buildingType === BuildingType.Gate && existing.ownerId === leaderId) {
-          segmentsSinceGate = 1;
-        } else {
-          segmentsSinceGate++;
-        }
-        continue;
-      }
+      if (existing) continue;
 
       const existingTask = Object.values(gameState.tasks).find(
         (t) =>
           (t.type === TaskType.HumanPlacePalisade || t.type === TaskType.HumanPlaceGate) &&
           calculateWrappedDistanceSq(t.position, pos, width, height) < 5 * 5,
       );
-      if (existingTask) {
-        if (existingTask.type === TaskType.HumanPlaceGate) {
-          segmentsSinceGate = 1;
-        } else {
-          segmentsSinceGate++;
-        }
-        continue;
-      }
+      if (existingTask) continue;
+
       const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
       if (trees.length > 0) {
         const tree = trees[0];
@@ -302,8 +297,10 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
         }
         continue;
       }
-      const type =
-        segmentsSinceGate === 0 || segmentsSinceGate >= 15 ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
+
+      // Place a 2-segment wide gate (40px) every 20 segments (200px)
+      const isGate = i % 20 === 0 || i % 20 === 1;
+      const type = isGate ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
       const taskId = `${TaskType[type]}-${leaderId}-${coordKey}`;
 
       gameState.tasks[taskId] = {
@@ -314,12 +311,6 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
         target: pos,
         validUntilTime: gameState.time + 24,
       };
-
-      if (type === TaskType.HumanPlaceGate) {
-        segmentsSinceGate = 1;
-      } else {
-        segmentsSinceGate++;
-      }
     }
   }
 }

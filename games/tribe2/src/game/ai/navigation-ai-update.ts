@@ -10,11 +10,11 @@ import { TaskType } from './task/task-types';
  * Processes a batch of pathfinding requests and handles breach detection
  * for humans blocked by enemy palisades or gates.
  */
-export function updateNavigationAI(indexedState: IndexedWorldState, _deltaTime: number): void {
+export function updateNavigationAI(indexedState: IndexedWorldState): void {
   // Process pathfinding queue
   const pathfindingBatchSize = 10;
   const processedEntityIds = indexedState.pathfindingQueue.splice(0, pathfindingBatchSize);
-  
+
   for (const entityId of processedEntityIds) {
     const entity = indexedState.entities.entities[entityId] as HumanEntity | undefined;
     if (entity && entity.type === 'human' && entity.target) {
@@ -38,8 +38,9 @@ export function updateNavigationAI(indexedState: IndexedWorldState, _deltaTime: 
           const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
           const stepX = dir.x / steps;
           const stepY = dir.y / steps;
-          
-          for (let i = 1; i < Math.min(steps, 40); i++) { // Only check nearby
+
+          for (let i = 1; i < Math.min(steps, 40); i++) {
+            // Only check nearby
             const testPos = {
               x: entity.position.x + stepX * i,
               y: entity.position.y + stepY * i,
@@ -48,7 +49,7 @@ export function updateNavigationAI(indexedState: IndexedWorldState, _deltaTime: 
             if (indexedState.navigationGrid.staticObstacles[idx]) {
               const gateOwner = indexedState.navigationGrid.gateOwners[idx];
               if (gateOwner !== null && gateOwner === entity.leaderId) continue;
-              
+
               // Blocked by something that isn't our gate. Find the building.
               const obstacle = indexedState.search.building.at(testPos, NAV_GRID_RESOLUTION * 1.5);
               if (

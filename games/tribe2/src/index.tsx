@@ -15,6 +15,12 @@ if (rootElement) {
               ? 'game'
               : document.location.hash === '#effects'
               ? 'effects'
+              : document.location.hash === '#navigation'
+              ? 'navigation'
+              : document.location.hash === '#palisadePlacement'
+              ? 'palisadePlacement'
+              : document.location.hash === '#buildings'
+              ? 'buildings'
               : 'intro'
           }
         >

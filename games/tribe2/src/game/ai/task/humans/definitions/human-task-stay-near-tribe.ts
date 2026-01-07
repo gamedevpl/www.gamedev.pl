@@ -4,7 +4,7 @@ import {
   HUMAN_STAY_NEAR_TRIBE_STOP_DISTANCE,
 } from '../../../../ai-consts';
 import { HumanEntity } from '../../../../entities/characters/human/human-types';
-import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-utils';
+import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { getTribeCenter } from '../../../../utils/spatial-utils';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
@@ -81,7 +81,6 @@ export const humanStayNearTribeDefinition = defineHumanTask<HumanEntity>({
 
     human.activeAction = 'moving';
     human.target = tribeCenter;
-    human.direction = dirToTarget(human.position, tribeCenter, context.gameState.mapDimensions);
 
     return [TaskResult.Running, `Returning to tribe center (${Math.round(distance)}px away)`];
   },

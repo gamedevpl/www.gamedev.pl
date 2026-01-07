@@ -233,7 +233,7 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
       return false;
     }
 
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.25;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -244,7 +244,7 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
     return distance < effectiveSourceRadius + effectiveTargetRadius;
   },
   perform: (source, target, { gameState }) => {
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.25;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,

@@ -12,6 +12,10 @@ export function usePersistState(appState: AppState, setAppState: (state: AppStat
         setAppState('effects');
       } else if (hash === '#buildings') {
         setAppState('buildings');
+      } else if (hash === '#navigation') {
+        setAppState('navigation');
+      } else if (hash === '#palisadePlacement') {
+        setAppState('palisadePlacement');
       } else {
         setAppState('intro');
       }
