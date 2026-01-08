@@ -262,10 +262,9 @@ export function buildHPAGraph(
     }
   }
 
-  // Step 4: Add inter-cluster edges (direct connections between adjacent entrance pairs)
-  for (const entrance of entrances) {
-    addInterClusterEdge(graph, entrance);
-  }
+  // Note: Inter-cluster edges are implicitly handled by adding each entrance to both
+  // adjacent clusters' entrance lists. When the pathfinder visits an entrance node,
+  // it can access all entrances in both clusters it belongs to.
 
   return graph;
 }
@@ -594,18 +593,6 @@ function computeIntraClusterDistance(
   return null; // No path found
 }
 
-/**
- * Adds direct edge between entrance pairs (the actual transition between clusters).
- * Note: This function is a placeholder for future enhancement where we might add
- * explicit inter-cluster edges with transition costs.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function addInterClusterEdge(_graph: HPAGraph, _entrance: ClusterEntrance): void {
-  // The entrance itself represents a connection - add a small traversal cost (1 cell)
-  // Inter-cluster edges are already handled by the entrance being in both cluster lists
-  // The edge cost for crossing is minimal (essentially 0 since it's the same point)
-}
-
 // ============================================================================
 // Pathfinding
 // ============================================================================
@@ -678,22 +665,22 @@ export function findPathHPA(
   }
 
   // Step 2: Find abstract path through clusters
-  const abstractPath = findAbstractPath(hpaGraph, tempStartNode, tempGoalNode);
+  const abstractResult = findAbstractPath(hpaGraph, tempStartNode, tempGoalNode);
 
   // Clean up temporary nodes
   cleanupTemporaryNodes(hpaGraph, tempStartNode, tempGoalNode);
 
-  if (!abstractPath) {
-    return { path: null, iterations: 0, usedHPA: true };
+  if (!abstractResult.path) {
+    return { path: null, iterations: abstractResult.iterations, usedHPA: true };
   }
 
   // Step 3: Refine abstract path with low-level pathfinding
   const refinedPath = refineAbstractPath(
-    abstractPath,
+    abstractResult.path,
     finalTarget,
   );
 
-  return { path: refinedPath.path, iterations: refinedPath.iterations, usedHPA: true };
+  return { path: refinedPath, iterations: abstractResult.iterations, usedHPA: true };
 }
 
 /**
@@ -774,12 +761,13 @@ function cleanupTemporaryNodes(
 
 /**
  * Finds path through the abstract graph using A*.
+ * Returns the path and the number of iterations used.
  */
 function findAbstractPath(
   graph: HPAGraph,
   start: AbstractNode,
   goal: AbstractNode,
-): AbstractNode[] | null {
+): { path: AbstractNode[] | null; iterations: number } {
   const openSet = new Set<string>([start.id]);
   const cameFrom = new Map<string, string>();
   const gScore = new Map<string, number>();
@@ -812,7 +800,7 @@ function findAbstractPath(
         path.unshift(graph.nodes.get(curr)!);
         curr = cameFrom.get(curr) || '';
       }
-      return path;
+      return { path, iterations };
     }
 
     openSet.delete(currentId);
@@ -831,7 +819,7 @@ function findAbstractPath(
     }
   }
 
-  return null;
+  return { path: null, iterations };
 }
 
 /**
@@ -841,9 +829,8 @@ function findAbstractPath(
 function refineAbstractPath(
   abstractPath: AbstractNode[],
   end: Vector2D,
-): { path: Vector2D[]; iterations: number } {
+): Vector2D[] {
   const path: Vector2D[] = [];
-  const totalIterations = 0;
 
   // The abstract path already includes start and end as temporary nodes
   // We just need to convert positions, low-level refinement is optional
@@ -861,7 +848,7 @@ function refineAbstractPath(
     path.shift();
   }
 
-  return { path, iterations: totalIterations };
+  return path;
 }
 
 // ============================================================================
