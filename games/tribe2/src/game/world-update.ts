@@ -93,7 +93,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     updateTribeFrontier({ gameState: indexedState, deltaTime });
 
     // Navigation AI: Process pathfinding queue and breach detection
-    updateNavigationAI(indexedState, deltaTime);
+    updateNavigationAI(indexedState);
 
     // Global tribe management: check for orphaned tribes and execute merges/dissolutions
     // We run this once per game hour to maintain performance and avoid UI churn

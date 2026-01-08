@@ -3,17 +3,16 @@ import styled from 'styled-components';
 import { useGameContext } from '../context/game-context';
 import { useRafLoop } from 'react-use';
 import { Vector2D } from '../game/utils/math-types';
-import { GameWorldState, UpdateContext } from '../game/world-types';
+import { GameWorldState, DebugPanelType } from '../game/world-types';
 import {
   findPath,
   NAV_GRID_RESOLUTION,
   initNavigationGrid,
   updateNavigationGridSector,
+  NAVIGATION_AGENT_RADIUS,
+  isCellPassable,
 } from '../game/utils/navigation-utils';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
-import { Blackboard } from '../game/ai/behavior-tree/behavior-tree-blackboard';
-import { AIType } from '../game/ai/ai-types';
-import { humanMovingState } from '../game/entities/characters/human/states/human-moving-state';
 import { HUMAN_MOVING, HUMAN_IDLE } from '../game/entities/characters/human/states/human-state-types';
 import {
   vectorAdd,
@@ -23,13 +22,22 @@ import {
   calculateWrappedDistance,
   getDirectionVectorOnTorus,
 } from '../game/utils/math-utils';
-import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../game/game-consts';
 import {
   SOIL_STEERING_SAMPLE_DISTANCE,
   SOIL_STEERING_SAMPLE_ANGLE,
 } from '../game/entities/plants/soil-depletion-consts';
 import { createSoilDepletionState } from '../game/entities/plants/soil-depletion-types';
 import { TREE_RADIUS } from '../game/entities/plants/tree/tree-consts';
+import { CHARACTER_RADIUS } from '../game/ui/ui-consts';
+import { createTree, createBuilding, createHuman, removeEntity, entitiesUpdate } from '../game/entities/entities-update';
+import { BuildingType } from '../game/entities/buildings/building-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../game/entities/tribe/territory-consts';
+import { TransitionState } from '../game/tutorial/tutorial-types';
+import { indexWorldState } from '../game/world-index/world-state-index';
+import { interactionsUpdate } from '../game/interactions/interactions-update';
+import { updateNavigationAI } from '../game/ai/navigation-ai-update';
+import { visualEffectsUpdate } from '../game/visual-effects/visual-effects-update';
+import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../game/game-consts';
 
 const ScreenContainer = styled.div`
   display: flex;
@@ -79,8 +87,7 @@ const SectionTitle = styled.h2`
 `;
 
 const Button = styled.button<{ active?: boolean }>`
-  background-color: ${(props) => (props.active ? '#666' : '#444')};
-  color: white;
+  background-color: ${(props) => (props.active ? '#666' : '#444')};\n  color: white;
   border: ${(props) => (props.active ? '2px solid #4CAF50' : 'none')};
   padding: 10px;
   margin-bottom: 10px;
@@ -137,48 +144,94 @@ const CANVAS_HEIGHT = 600;
 type ObjectType = 'tree' | 'palisade' | 'gate' | 'start' | 'end' | 'palisadeLine';
 
 const createMockGameState = (): GameWorldState => {
-  return {
+  const terrainOwnershipSize =
+    Math.ceil(CANVAS_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) *
+    Math.ceil(CANVAS_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gameState: GameWorldState = {
     time: 0,
     mapDimensions: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
     entities: { entities: {}, nextEntityId: 2 },
     navigationGrid: initNavigationGrid(CANVAS_WIDTH, CANVAS_HEIGHT),
     soilDepletion: createSoilDepletionState(),
+    temperature: {
+      sectors: {},
+    },
     pathfindingQueue: [],
     notifications: [],
     visualEffects: [],
     nextVisualEffectId: 1,
-    tutorialState: { isActive: false, highlightedEntityIds: [], activeUIHighlights: [] },
+    tutorialState: {
+      isActive: false,
+      highlightedEntityIds: [],
+      activeUIHighlights: [],
+      currentStepIndex: 0,
+      completedSteps: [],
+      transitionAlpha: 0,
+      transitionState: TransitionState.INACTIVE,
+      stepStartTime: null,
+    },
     plantingZoneConnections: {},
-  } as unknown as GameWorldState;
-};
-
-const createMockHuman = (pos: Vector2D, leaderId: number): HumanEntity => {
-  return {
-    id: 1,
-    type: 'human',
-    position: { ...pos },
-    radius: 10,
-    leaderId: leaderId,
-    isAdult: true,
-    gender: 'male',
-    age: 25,
-    maxAge: 80,
-    hunger: 0,
-    hitpoints: 100,
-    maxHitpoints: 100,
-    food: [],
-    maxFood: 10,
-    ancestorIds: [],
-    aiType: AIType.TaskBased,
-    direction: { x: 0, y: 0 },
-    acceleration: 0,
-    forces: [],
-    velocity: { x: 0, y: 0 },
-    debuffs: [],
-    stateMachine: [HUMAN_MOVING, { enteredAt: 0 }],
-    aiBlackboard: Blackboard.create(),
-    activeAction: 'moving',
-  } as HumanEntity;
+    terrainOwnership: new Array(terrainOwnershipSize).fill(null),
+    performanceMetrics: {
+      currentBucket: { renderTime: 0, worldUpdateTime: 0, aiUpdateTime: 0 },
+      history: [],
+    },
+    autopilotControls: {
+      behaviors: {
+        procreation: false,
+        planting: false,
+        gathering: false,
+        attack: false,
+        feedChildren: false,
+        build: false,
+        chopping: false,
+      },
+      isManuallyMoving: false,
+    },
+    ecosystem: {
+      lastUpdateTime: 0,
+      preyGestationPeriod: 24,
+      preyProcreationCooldown: 48,
+      predatorGestationPeriod: 36,
+      predatorProcreationCooldown: 72,
+      preyHungerIncreasePerHour: 0.1,
+      predatorHungerIncreasePerHour: 0.1,
+      berryBushSpreadChance: 0.01,
+      treeSpreadChance: 0.005,
+    },
+    tasks: {},
+    scheduledEvents: [],
+    nextScheduledEventId: 1,
+    generationCount: 1,
+    gameOver: false,
+    viewportCenter: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+    isPaused: false,
+    exitConfirmation: 'inactive',
+    buildMenuOpen: false,
+    tribeModalOpen: false,
+    cameraFollowingPlayer: false,
+    cameraZoom: 1,
+    masterVolume: 1,
+    isMuted: false,
+    uiButtons: [],
+    tutorial: { steps: [] },
+    lastAutosaveTime: Date.now(),
+    autosaveIntervalSeconds: 0,
+    debugPanel: DebugPanelType.None,
+    debugPanelScroll: { x: 0, y: 0 },
+    isDraggingDebugPanel: false,
+    hasPlayerMovedEver: false,
+    hasPlayerPlantedBush: false,
+    hasPlayerEnabledAutopilot: 0,
+    isDraggingMinimap: false,
+    minimapDragDistance: 0,
+    isDraggingViewport: false,
+    viewportDragButton: null,
+    viewportDragDistance: 0,
+    selectedBuildingType: null,
+    selectedBuildingForRemoval: null,
+  };
+  return gameState;
 };
 
 export const NavigationScreen: React.FC = () => {
@@ -202,7 +255,7 @@ export const NavigationScreen: React.FC = () => {
   const [simulatedHuman, setSimulatedHuman] = useState<HumanEntity | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1.0);
-  const [obstaclePadding, setObstaclePadding] = useState(0);
+  const [obstaclePadding, setObstaclePadding] = useState(NAVIGATION_AGENT_RADIUS);
   const lastUpdateTimeRef = useRef<number>(0);
 
   const snapToGrid = useCallback((x: number, y: number): Vector2D => {
@@ -215,19 +268,21 @@ export const NavigationScreen: React.FC = () => {
   // Rebuild navigation grid whenever obstacles or padding change
   useEffect(() => {
     gameState.navigationGrid = initNavigationGrid(CANVAS_WIDTH, CANVAS_HEIGHT);
+    gameState.entities.entities = {};
+    gameState.entities.nextEntityId = 100;
 
     // Pass 1: Solid Padding (Trees, Palisades)
     for (const obj of placedObjects) {
       if (obj.type === 'tree' || obj.type === 'palisade') {
         const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
-        updateNavigationGridSector(gameState, obj.pos, radius + obstaclePadding, true, null);
+        updateNavigationGridSector(gameState, obj.pos, radius, true, null, obstaclePadding);
       }
     }
 
     // Pass 2: Gate Padding
     for (const obj of placedObjects) {
       if (obj.type === 'gate') {
-        updateNavigationGridSector(gameState, obj.pos, 10 + obstaclePadding, true, obj.ownerId);
+        updateNavigationGridSector(gameState, obj.pos, 10, true, obj.ownerId, obstaclePadding);
       }
     }
 
@@ -236,6 +291,14 @@ export const NavigationScreen: React.FC = () => {
       if (obj.type === 'tree' || obj.type === 'palisade') {
         const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
         updateNavigationGridSector(gameState, obj.pos, radius, true, null);
+
+        // Create actual entities for interactions
+        if (obj.type === 'tree') {
+          createTree(gameState.entities, obj.pos, gameState.time, 100);
+        } else {
+          const b = createBuilding(gameState.entities, obj.pos, BuildingType.Palisade, obj.ownerId || 0);
+          b.isConstructed = true;
+        }
       }
     }
 
@@ -243,12 +306,17 @@ export const NavigationScreen: React.FC = () => {
     for (const obj of placedObjects) {
       if (obj.type === 'gate') {
         updateNavigationGridSector(gameState, obj.pos, 10, true, obj.ownerId);
+        const b = createBuilding(gameState.entities, obj.pos, BuildingType.Gate, obj.ownerId || 0);
+        b.isConstructed = true;
       }
     }
 
     // Recalculate static path for visualization
     if (startPos && endPos) {
-      const mockHuman = createMockHuman(startPos, humanTribeId);
+      const mockHuman = {
+        leaderId: humanTribeId,
+        position: startPos,
+      } as unknown as HumanEntity;
       const newPath = findPath(gameState, startPos, endPos, mockHuman);
       setPath(newPath);
     }
@@ -329,15 +397,32 @@ export const NavigationScreen: React.FC = () => {
 
   const spawnHuman = () => {
     if (startPos && endPos) {
-      const human = createMockHuman(startPos, humanTribeId);
-      const initialPath = findPath(gameState, startPos, endPos, human);
+      if (simulatedHuman) {
+        removeEntity(gameState.entities, simulatedHuman.id);
+      }
+
+      const human = createHuman(
+        gameState.entities,
+        startPos,
+        gameState.time,
+        'male',
+        false,
+        25,
+        0,
+        undefined,
+        undefined,
+        [],
+        humanTribeId,
+        { tribeBadge: '👤', tribeColor: '#4A90E2' },
+      );
 
       human.target = endPos;
-      human.path = initialPath || undefined;
-      human.pathTarget = endPos;
       human.activeAction = 'moving';
-      human.velocity = { x: 0, y: 0 };
-      human.acceleration = 0;
+      human.stateMachine = [HUMAN_MOVING, { enteredAt: gameState.time }];
+
+      if (!gameState.pathfindingQueue.includes(human.id)) {
+        gameState.pathfindingQueue.push(human.id);
+      }
 
       setSimulatedHuman(human);
       setIsSimulating(true);
@@ -345,6 +430,9 @@ export const NavigationScreen: React.FC = () => {
   };
 
   const resetHuman = () => {
+    if (simulatedHuman) {
+      removeEntity(gameState.entities, simulatedHuman.id);
+    }
     setSimulatedHuman(null);
     setIsSimulating(false);
   };
@@ -360,86 +448,40 @@ export const NavigationScreen: React.FC = () => {
 
     if (!isSimulating || !simulatedHuman) return;
 
-    const deltaTime = realDeltaTime * simSpeed;
-    const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
-
-    gameState.time += gameHoursDelta;
-
-    // Process pathfinding queue if needed
-    if (gameState.pathfindingQueue.includes(simulatedHuman.id) && endPos) {
-      const newPath = findPath(gameState, simulatedHuman.position, endPos, simulatedHuman);
-      simulatedHuman.path = newPath || undefined;
-      simulatedHuman.pathTarget = endPos;
-      gameState.pathfindingQueue = gameState.pathfindingQueue.filter((id) => id !== simulatedHuman.id);
+    // Ensure human is in the entities map (it might have been cleared by grid rebuild)
+    if (!gameState.entities.entities[simulatedHuman.id]) {
+      gameState.entities.entities[simulatedHuman.id] = simulatedHuman;
     }
 
-    // Update state machine
-    const context: UpdateContext = {
-      gameState,
-      deltaTime,
-    };
+    let realDeltaTimeSeconds = realDeltaTime * simSpeed;
+    const MAX_REAL_TIME_DELTA = 1 / 60;
+    let currentState: GameWorldState = gameState;
 
-    // Ensure human follows the path or target
-    if (simulatedHuman.activeAction !== 'idle' && endPos) {
-      simulatedHuman.target = endPos;
+    while (realDeltaTimeSeconds > 0) {
+      const indexedState = indexWorldState(currentState);
+      const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
 
-      const result = humanMovingState.update(simulatedHuman.stateMachine[1], {
-        entity: simulatedHuman,
-        updateContext: context,
-      });
+      const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
+      indexedState.time += gameHoursDelta;
 
-      if (result) {
-        if (result.nextState === HUMAN_IDLE) {
-          // ARRIVAL
-          if (humanMovingState.onExit) {
-            humanMovingState.onExit({ entity: simulatedHuman, updateContext: context }, HUMAN_IDLE);
-          }
-          simulatedHuman.stateMachine[0] = HUMAN_IDLE;
-          simulatedHuman.stateMachine[1] = result.data;
-          simulatedHuman.activeAction = 'idle';
-          simulatedHuman.velocity = { x: 0, y: 0 };
-          simulatedHuman.acceleration = 0;
-          simulatedHuman.position = { ...endPos };
-        } else {
-          simulatedHuman.stateMachine[0] = result.nextState;
-          simulatedHuman.stateMachine[1] = result.data;
-          simulatedHuman.activeAction = 'moving';
-        }
-      }
+      entitiesUpdate({ gameState: indexedState, deltaTime });
+      interactionsUpdate({ gameState: indexedState, deltaTime });
+      updateNavigationAI(indexedState);
+      visualEffectsUpdate(indexedState);
 
-      // Strict arrival detection
-      const distToTarget = calculateWrappedDistance(simulatedHuman.position, endPos, CANVAS_WIDTH, CANVAS_HEIGHT);
-      if (distToTarget < 5) {
-        if (humanMovingState.onExit) {
-          humanMovingState.onExit({ entity: simulatedHuman, updateContext: context }, HUMAN_IDLE);
-        }
-        simulatedHuman.activeAction = 'idle';
-        simulatedHuman.velocity = { x: 0, y: 0 };
-        simulatedHuman.acceleration = 0;
-        simulatedHuman.position = { ...endPos };
-      }
+      currentState = indexedState;
+      realDeltaTimeSeconds -= deltaTime;
     }
 
-    // Apply Physics
-    if (simulatedHuman.activeAction === 'moving') {
-      const accelForce = vectorScale(vectorNormalize(simulatedHuman.direction), simulatedHuman.acceleration);
-      simulatedHuman.forces.push(accelForce);
-      simulatedHuman.forces.push(vectorScale(simulatedHuman.velocity, -0.1)); // Damping
-
-      const totalForce = simulatedHuman.forces.reduce(vectorAdd, { x: 0, y: 0 });
-      simulatedHuman.velocity = vectorAdd(simulatedHuman.velocity, vectorScale(totalForce, deltaTime));
-      simulatedHuman.position = vectorAdd(simulatedHuman.position, vectorScale(simulatedHuman.velocity, deltaTime));
-      simulatedHuman.forces = [];
-
-      // Toroidal Wrapping
-      simulatedHuman.position.x = ((simulatedHuman.position.x % CANVAS_WIDTH) + CANVAS_WIDTH) % CANVAS_WIDTH;
-      simulatedHuman.position.y = ((simulatedHuman.position.y % CANVAS_HEIGHT) + CANVAS_HEIGHT) % CANVAS_HEIGHT;
-    } else {
-      simulatedHuman.velocity = { x: 0, y: 0 };
-      simulatedHuman.acceleration = 0;
+    // Sync back to stable reference if the loop returned a new object (via indexWorldState)
+    if (currentState !== gameState) {
+      Object.assign(gameState, currentState);
     }
 
-    setSimulatedHuman({ ...simulatedHuman });
+    const updatedHuman = gameState.entities.entities[simulatedHuman.id] as HumanEntity;
+    if (updatedHuman) {
+      setSimulatedHuman({ ...updatedHuman });
+    }
   });
 
   useEffect(() => {
@@ -464,12 +506,15 @@ export const NavigationScreen: React.FC = () => {
     setStartPos(null);
     setEndPos(null);
     setPath(null);
+    if (simulatedHuman) {
+      removeEntity(gameState.entities, simulatedHuman.id);
+    }
     setSimulatedHuman(null);
     setIsSimulating(false);
     setPlacedObjects([]);
     setLineStartPos(null);
     gameState.pathfindingQueue = [];
-  }, [gameState]);
+  }, [gameState, simulatedHuman]);
 
   useEffect(() => {
     const render = () => {
@@ -504,13 +549,19 @@ export const NavigationScreen: React.FC = () => {
       for (let gy = 0; gy < gridHeight; gy++) {
         for (let gx = 0; gx < gridWidth; gx++) {
           const index = gy * gridWidth + gx;
-          if (gameState.navigationGrid.staticObstacles[index]) {
-            const ownerId = gameState.navigationGrid.gateOwners[index];
-            if (ownerId === null) {
-              ctx.fillStyle = 'rgba(244, 67, 54, 0.4)'; // Red for always blocked
+          if (!isCellPassable(gameState.navigationGrid, index, humanTribeId)) {
+            const gateCount = gameState.navigationGrid.gateRefCount[humanTribeId]?.[index] || 0;
+
+            // If it's blocked but has some friendly gates, show it differently
+            if (gateCount > 0) {
+              ctx.fillStyle = 'rgba(255, 152, 0, 0.4)'; // Orange for partially passable (mixed)
             } else {
-              ctx.fillStyle = ownerId === humanTribeId ? 'rgba(76, 175, 80, 0.4)' : 'rgba(244, 67, 54, 0.4)';
+              ctx.fillStyle = 'rgba(244, 67, 54, 0.4)'; // Red for always blocked
             }
+            ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
+          } else if (gameState.navigationGrid.obstacleCount[index] > 0) {
+            // It's passable but has obstacles (must be friendly gates)
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)'; // Green for passable
             ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
           }
         }
@@ -583,7 +634,7 @@ export const NavigationScreen: React.FC = () => {
         // Human body
         ctx.fillStyle = '#4A90E2';
         ctx.beginPath();
-        ctx.arc(position.x, position.y, 10, 0, Math.PI * 2);
+        ctx.arc(position.x, position.y, CHARACTER_RADIUS / 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.stroke();
@@ -702,7 +753,7 @@ export const NavigationScreen: React.FC = () => {
             setLineStartPos(null);
           }}
         >
-          🌳 Tree (Radius 20)
+          🌳 Tree (Radius {TREE_RADIUS})
         </Button>
         <Button
           active={placementMode === 'palisade'}
@@ -792,7 +843,7 @@ export const NavigationScreen: React.FC = () => {
           Status:{' '}
           {simulatedHuman?.activeAction === 'moving' && simulatedHuman.acceleration === 0
             ? '⚠️ STUCK'
-            : simulatedHuman?.activeAction === 'idle'
+            : simulatedHuman?.activeAction === 'idle' || simulatedHuman?.stateMachine[0] === HUMAN_IDLE
             ? '🏁 REACHED'
             : simulatedHuman
             ? '🏃 Moving'

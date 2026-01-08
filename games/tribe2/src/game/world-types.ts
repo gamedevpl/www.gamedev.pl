@@ -120,8 +120,8 @@ export interface ScheduledEvent {
 }
 
 export interface NavigationGrid {
-  staticObstacles: Uint8Array;
-  gateOwners: (EntityId | null)[];
+  obstacleCount: Uint16Array;
+  gateRefCount: Record<number, Uint16Array>;
 }
 
 // Game State Interface

@@ -1,7 +1,7 @@
 import { IndexedWorldState } from '../world-index/world-index-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { Vector2D } from '../utils/math-types';
-import { findPath, NAV_GRID_RESOLUTION, getNavigationGridIndex } from '../utils/navigation-utils';
+import { findPath, NAV_GRID_RESOLUTION, getNavigationGridIndex, isCellPassable } from '../utils/navigation-utils';
 import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { BuildingType } from '../entities/buildings/building-consts';
 import { TaskType } from './task/task-types';
@@ -35,43 +35,61 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
           const { width, height } = indexedState.mapDimensions;
           const dir = getDirectionVectorOnTorus(entity.position, targetPos, width, height);
           const distance = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+
+          if (distance < 0.001) continue;
+
           const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
           const stepX = dir.x / steps;
           const stepY = dir.y / steps;
 
-          for (let i = 1; i < Math.min(steps, 40); i++) {
+          const normX = dir.x / distance;
+          const normY = dir.y / distance;
+          const perpX = -normY;
+          const perpY = normX;
+          const lateralOffset = entity.radius * 0.5;
+
+          let foundObstacle = false;
+          for (let i = 0; i <= Math.min(steps, 40); i++) {
             // Only check nearby
             const testPos = {
               x: entity.position.x + stepX * i,
               y: entity.position.y + stepY * i,
             };
-            const idx = getNavigationGridIndex(testPos, width, height);
-            if (indexedState.navigationGrid.staticObstacles[idx]) {
-              const gateOwner = indexedState.navigationGrid.gateOwners[idx];
-              if (gateOwner !== null && gateOwner === entity.leaderId) continue;
 
-              // Blocked by something that isn't our gate. Find the building.
-              const obstacle = indexedState.search.building.at(testPos, NAV_GRID_RESOLUTION * 1.5);
-              if (
-                obstacle &&
-                (obstacle.buildingType === BuildingType.Palisade || obstacle.buildingType === BuildingType.Gate) &&
-                obstacle.ownerId !== entity.leaderId
-              ) {
-                const taskId = `Breach-${entity.id}`;
-                if (!indexedState.tasks[taskId]) {
-                  indexedState.tasks[taskId] = {
-                    id: taskId,
-                    type: TaskType.HumanAttackBuilding,
-                    position: obstacle.position,
-                    creatorEntityId: entity.id,
-                    target: obstacle.id,
-                    validUntilTime: indexedState.time + 0.5,
-                    claimedByEntityId: entity.id,
-                  };
+            const testPoints = [
+              testPos,
+              { x: testPos.x + perpX * lateralOffset, y: testPos.y + perpY * lateralOffset },
+              { x: testPos.x - perpX * lateralOffset, y: testPos.y - perpY * lateralOffset },
+            ];
+
+            for (const p of testPoints) {
+              const idx = getNavigationGridIndex(p, width, height);
+              if (!isCellPassable(indexedState.navigationGrid, idx, entity.leaderId)) {
+                // Blocked by something that isn't our gate. Find the building.
+                const obstacle = indexedState.search.building.at(p, NAV_GRID_RESOLUTION * 1.5);
+                if (
+                  obstacle &&
+                  (obstacle.buildingType === BuildingType.Palisade || obstacle.buildingType === BuildingType.Gate) &&
+                  obstacle.ownerId !== entity.leaderId
+                ) {
+                  const taskId = `Breach-${entity.id}`;
+                  if (!indexedState.tasks[taskId]) {
+                    indexedState.tasks[taskId] = {
+                      id: taskId,
+                      type: TaskType.HumanAttackBuilding,
+                      position: obstacle.position,
+                      creatorEntityId: entity.id,
+                      target: obstacle.id,
+                      validUntilTime: indexedState.time + 0.5,
+                      claimedByEntityId: entity.id,
+                    };
+                  }
+                  foundObstacle = true;
+                  break;
                 }
-                break;
               }
             }
+            if (foundObstacle) break;
           }
         }
       }

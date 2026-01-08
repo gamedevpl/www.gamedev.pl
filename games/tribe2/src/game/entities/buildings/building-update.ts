@@ -13,7 +13,7 @@ import {
 } from '../../temperature/temperature-consts';
 import { ItemType } from '../item-types';
 import { prepareBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
-import { updateNavigationGridSector } from '../../utils/navigation-utils';
+import { updateNavigationGridSector, NAVIGATION_AGENT_RADIUS } from '../../utils/navigation-utils';
 
 /**
  * Updates the state of a building entity.
@@ -40,7 +40,8 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
 
     if (building.destructionProgress >= 1) {
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
-        updateNavigationGridSector(gameState, building.position, building.radius, false);
+        const navOwnerId = building.buildingType === BuildingType.Gate ? building.ownerId ?? null : null;
+        updateNavigationGridSector(gameState, building.position, building.radius, false, navOwnerId, NAVIGATION_AGENT_RADIUS);
       }
 
       const isPlantingZone = building.buildingType === BuildingType.PlantingZone;
@@ -72,8 +73,15 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       }
 
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
-        const navOwnerId = building.buildingType === BuildingType.Gate ? (building.ownerId ?? null) : null;
-        updateNavigationGridSector(gameState, building.position, building.radius, true, navOwnerId);
+        const navOwnerId = building.buildingType === BuildingType.Gate ? building.ownerId ?? null : null;
+        updateNavigationGridSector(
+          gameState,
+          building.position,
+          building.radius,
+          true,
+          navOwnerId,
+          NAVIGATION_AGENT_RADIUS,
+        );
       }
 
       // Update planting zone connections when a planting zone completes construction

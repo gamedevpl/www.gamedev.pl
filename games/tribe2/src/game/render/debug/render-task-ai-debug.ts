@@ -154,6 +154,31 @@ export function renderTaskAiDebugger(
   }
   currentY += UI_TASK_DEBUG_LINE_HEIGHT;
 
+  // --- Pathfinding Section ---
+  if (debuggedEntity.type === 'human') {
+    const human = debuggedEntity as HumanEntity;
+    ctx.fillStyle = '#66ccff';
+    ctx.font = `bold ${UI_TASK_DEBUG_FONT_SIZE}px monospace`;
+    ctx.fillText('📍 Pathfinding', leftMargin, currentY);
+    currentY += UI_TASK_DEBUG_LINE_HEIGHT * 1.5;
+
+    ctx.font = `${UI_TASK_DEBUG_FONT_SIZE}px monospace`;
+    ctx.fillStyle = 'white';
+    ctx.fillText(`Waypoints: ${human.path?.length || 0}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
+    currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+
+    if (human.pathTarget) {
+      ctx.fillText(`Target: ${formatTarget(human.pathTarget)}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
+      currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+    }
+
+    if (human.path && human.path.length > 0) {
+      ctx.fillText(`Next: ${formatTarget(human.path[0])}`, leftMargin + UI_TASK_DEBUG_INDENT_SIZE, currentY);
+      currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+    }
+    currentY += UI_TASK_DEBUG_LINE_HEIGHT;
+  }
+
   // --- Recent Task History Section ---
   ctx.fillStyle = '#66ccff';
   ctx.font = `bold ${UI_TASK_DEBUG_FONT_SIZE}px monospace`;

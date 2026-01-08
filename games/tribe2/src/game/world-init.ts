@@ -34,7 +34,7 @@ import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tri
 import { TREE_GROWTH_TIME_GAME_HOURS, MIN_TREE_SPREAD_CHANCE } from './entities/plants/tree/tree-consts';
 import { initTemperatureState } from './temperature/temperature-update';
 import { AIType } from './ai/ai-types.ts';
-import { initNavigationGrid, updateNavigationGridSector } from './utils/navigation-utils';
+import { initNavigationGrid, updateNavigationGridSector, NAVIGATION_AGENT_RADIUS } from './utils/navigation-utils';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -294,7 +294,7 @@ export function initWorld(): GameWorldState {
   // Populate navigation grid with initial obstacles (trees)
   Object.values(initialWorldState.entities.entities).forEach((entity) => {
     if (entity.type === 'tree') {
-      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true);
+      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
     }
   });
 
@@ -475,7 +475,7 @@ export function initIntroWorld(): GameWorldState {
   // Populate navigation grid with initial obstacles (trees)
   Object.values(initialWorldState.entities.entities).forEach((entity) => {
     if (entity.type === 'tree') {
-      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true);
+      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
     }
   });
 

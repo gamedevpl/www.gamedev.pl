@@ -3,12 +3,19 @@ import { GameWorldState, NavigationGrid } from '../world-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
+import { CHARACTER_RADIUS } from '../ui/ui-consts';
 
 /**
  * Resolution of the navigation grid in pixels.
  * Set to 10px (finer than territory grid) for better small obstacle detection.
  */
 export const NAV_GRID_RESOLUTION = 10;
+
+/**
+ * The standard radius used to inflate obstacles on the navigation grid.
+ * Matches the HumanEntity radius to ensure they can navigate gaps.
+ */
+export const NAVIGATION_AGENT_RADIUS = CHARACTER_RADIUS;
 
 /**
  * Calculates the grid index for a given world position.
@@ -47,32 +54,53 @@ export function initNavigationGrid(worldWidth: number, worldHeight: number): Nav
   const size = gridWidth * gridHeight;
 
   return {
-    staticObstacles: new Uint8Array(size),
-    gateOwners: new Array(size).fill(null),
+    obstacleCount: new Uint16Array(size),
+    gateRefCount: {},
   };
 }
 
 /**
+ * Helper to check if a grid cell is passable for a specific tribe.
+ */
+export function isCellPassable(grid: NavigationGrid, index: number, leaderId?: number): boolean {
+  const count = grid.obstacleCount[index];
+  if (count === 0) return true;
+
+  // If we have a leaderId, check if all obstacles at this cell are gates belonging to our tribe
+  if (leaderId !== undefined) {
+    const gateCount = grid.gateRefCount[leaderId]?.[index] || 0;
+    return count === gateCount;
+  }
+
+  return false;
+}
+
+/**
  * Updates a sector of the navigation grid (e.g., when a building is constructed or a tree falls).
+ * Uses reference counting to handle overlapping obstacles correctly.
  */
 export function updateNavigationGridSector(
   gameState: GameWorldState,
   position: Vector2D,
   radius: number,
-  isBlocked: boolean,
+  isAdding: boolean,
   ownerId: EntityId | null = null,
+  inflationRadius: number = 0,
 ): void {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
 
-  const radiusInCells = Math.ceil(radius / NAV_GRID_RESOLUTION);
+  const effectiveRadius = radius + inflationRadius;
+  const radiusInCells = Math.ceil(effectiveRadius / NAV_GRID_RESOLUTION);
   const centerCoords = getNavigationGridCoords(position, worldWidth, worldHeight);
 
-  // Explicitly mark the center cell to ensure small obstacles are never missed
-  const centerIndex = centerCoords.y * gridWidth + centerCoords.x;
-  gameState.navigationGrid.staticObstacles[centerIndex] = isBlocked ? 1 : 0;
-  gameState.navigationGrid.gateOwners[centerIndex] = isBlocked ? ownerId : null;
+  const grid = gameState.navigationGrid;
+  const size = grid.obstacleCount.length;
+
+  if (ownerId !== null && !grid.gateRefCount[ownerId]) {
+    grid.gateRefCount[ownerId] = new Uint16Array(size);
+  }
 
   for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
     for (let dx = -radiusInCells; dx <= radiusInCells; dx++) {
@@ -84,10 +112,22 @@ export function updateNavigationGridSector(
 
       const dist = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
 
-      if (dist <= radius) {
+      if (dist <= effectiveRadius) {
         const index = gy * gridWidth + gx;
-        gameState.navigationGrid.staticObstacles[index] = isBlocked ? 1 : 0;
-        gameState.navigationGrid.gateOwners[index] = isBlocked ? ownerId : null;
+        if (isAdding) {
+          grid.obstacleCount[index]++;
+          if (ownerId !== null) {
+            grid.gateRefCount[ownerId][index]++;
+          }
+        } else {
+          // Safety check to avoid underflow
+          if (grid.obstacleCount[index] > 0) {
+            grid.obstacleCount[index]--;
+          }
+          if (ownerId !== null && grid.gateRefCount[ownerId] && grid.gateRefCount[ownerId][index] > 0) {
+            grid.gateRefCount[ownerId][index]--;
+          }
+        }
       }
     }
   }
@@ -101,35 +141,35 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   const dir = getDirectionVectorOnTorus(start, end, worldWidth, worldHeight);
   const distance = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
 
+  if (distance < 0.001) return false;
+
   const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
   const stepX = dir.x / steps;
   const stepY = dir.y / steps;
 
+  const normX = dir.x / distance;
+  const normY = dir.y / distance;
+  const perpX = -normY;
+  const perpY = normX;
+  const lateralOffset = entity.radius * 0.5;
+
   const grid = gameState.navigationGrid;
 
-  for (let i = 1; i < steps; i++) {
+  for (let i = 0; i <= steps; i++) {
     const testPos = {
       x: start.x + stepX * i,
       y: start.y + stepY * i,
     };
 
-    const offsets = [
-      { dx: 0, dy: 0 },
-      { dx: 4, dy: 0 },
-      { dx: -4, dy: 0 },
-      { dx: 0, dy: 4 },
-      { dx: 0, dy: -4 },
+    const testPoints = [
+      testPos,
+      { x: testPos.x + perpX * lateralOffset, y: testPos.y + perpY * lateralOffset },
+      { x: testPos.x - perpX * lateralOffset, y: testPos.y - perpY * lateralOffset },
     ];
 
-    for (const offset of offsets) {
-      const p = { x: testPos.x + offset.dx, y: testPos.y + offset.dy };
+    for (const p of testPoints) {
       const index = getNavigationGridIndex(p, worldWidth, worldHeight);
-      if (grid.staticObstacles[index]) {
-        // It's blocked, but check if it's a gate owned by our tribe
-        const gateOwner = grid.gateOwners[index];
-        if (gateOwner !== null && gateOwner === entity.leaderId) {
-          continue; // Passable gate
-        }
+      if (!isCellPassable(grid, index, entity.leaderId)) {
         return true; // Blocked
       }
     }
@@ -208,12 +248,9 @@ export function findPath(
         const ny = (curY + dy + gridHeight) % gridHeight;
         const neighborIdx = ny * gridWidth + nx;
 
-        // Check obstacles
-        if (grid.staticObstacles[neighborIdx]) {
-          const gateOwner = grid.gateOwners[neighborIdx];
-          if (gateOwner === null || gateOwner !== entity.leaderId) {
-            continue; // Blocked
-          }
+        // Check passability
+        if (!isCellPassable(grid, neighborIdx, entity.leaderId)) {
+          continue; // Blocked
         }
 
         const moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;

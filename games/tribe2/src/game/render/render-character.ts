@@ -26,6 +26,7 @@ import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-ass
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 import { GameWorldState } from '../world-types.js';
+import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
 import { SpriteCache } from './sprite-cache';
 import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
@@ -53,11 +54,73 @@ const actionToStanceMap: Record<NonNullable<HumanEntity['activeAction']>, Stance
 const characterCache = new SpriteCache(10000);
 
 /**
+ * Draws the character's path waypoints and target.
+ */
+function drawPath(ctx: CanvasRenderingContext2D, human: HumanEntity, gameState: GameWorldState): void {
+  if (!human.path || human.path.length === 0) return;
+
+  const { width, height } = gameState.mapDimensions;
+  ctx.save();
+
+  // Draw path waypoints
+  ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+
+  let currentPos = { ...human.position };
+
+  ctx.beginPath();
+  ctx.moveTo(currentPos.x, currentPos.y);
+
+  for (const waypoint of human.path) {
+    const dir = getDirectionVectorOnTorus(currentPos, waypoint, width, height);
+    const nextPos = { x: currentPos.x + dir.x, y: currentPos.y + dir.y };
+    ctx.lineTo(nextPos.x, nextPos.y);
+    currentPos = nextPos;
+  }
+
+  // Draw to final target if it exists
+  if (human.pathTarget) {
+    const dir = getDirectionVectorOnTorus(currentPos, human.pathTarget, width, height);
+    const nextPos = { x: currentPos.x + dir.x, y: currentPos.y + dir.y };
+    ctx.lineTo(nextPos.x, nextPos.y);
+    currentPos = nextPos;
+  }
+
+  ctx.stroke();
+
+  // Draw waypoints markers
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  let p = { ...human.position };
+  for (const waypoint of human.path) {
+    const dir = getDirectionVectorOnTorus(p, waypoint, width, height);
+    const nextP = { x: p.x + dir.x, y: p.y + dir.y };
+    ctx.beginPath();
+    ctx.arc(nextP.x, nextP.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+    p = nextP;
+  }
+
+  // Draw final target marker
+  if (human.pathTarget) {
+    const dir = getDirectionVectorOnTorus(p, human.pathTarget, width, height);
+    const finalP = { x: p.x + dir.x, y: p.y + dir.y };
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+    ctx.beginPath();
+    ctx.arc(finalP.x, finalP.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+/**
  * Renders debug information for a human character.
  * @param ctx Canvas rendering context
  * @param human The human entity to render debug info for
  */
-function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): void {
+function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity, gameState: GameWorldState): void {
   const { radius, position, activeAction = 'idle' } = human;
   const stateName = human.stateMachine[0] || 'N/A';
   const yOffset = human.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
@@ -68,6 +131,7 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.textAlign = 'center';
   ctx.fillText(`Action: ${activeAction}`, position.x, position.y - yOffset);
   ctx.fillText(`State: ${stateName}`, position.x, position.y - yOffset + 10);
+  ctx.fillText(`Path: ${human.path?.length || 0} waypoints`, position.x, position.y - yOffset + 50);
   ctx.fillText(`HP: ${human.hitpoints}`, position.x, position.y - yOffset + 20);
   ctx.fillText(`Cooldown: ${human.attackCooldown || 'N/A'}`, position.x, position.y - yOffset + 30);
   ctx.fillText(`Tribe: ${human.leaderId || 'N/A'}`, position.x, position.y - yOffset + 40);
@@ -77,6 +141,10 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity): voi
   ctx.beginPath();
   ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+
+  if (gameState.debugCharacterId === human.id) {
+    drawPath(ctx, human, gameState);
+  }
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
@@ -306,6 +374,6 @@ export function renderCharacter(
   renderAttackProgress(ctx, human, gameState.time);
 
   if (showDebug) {
-    renderDebugInfo(ctx, human);
+    renderDebugInfo(ctx, human, gameState);
   }
 }
