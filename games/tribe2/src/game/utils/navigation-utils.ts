@@ -47,6 +47,9 @@ export function getNavigationGridCoords(
 
 /**
  * Initializes an empty navigation grid.
+ * The grid uses a dual-layer system:
+ * 1. Physical Layer (obstacleCount): Represents the actual footprint of objects.
+ * 2. Padding Layer (paddingCount): Represents the safety margin/inflation for pathfinding.
  */
 export function initNavigationGrid(worldWidth: number, worldHeight: number): NavigationGrid {
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
@@ -56,28 +59,57 @@ export function initNavigationGrid(worldWidth: number, worldHeight: number): Nav
   return {
     obstacleCount: new Uint16Array(size),
     gateRefCount: {},
+    paddingCount: new Uint16Array(size),
+    gatePaddingRefCount: {},
   };
 }
 
 /**
  * Helper to check if a grid cell is passable for a specific tribe.
+ * @param grid The navigation grid
+ * @param index The grid index to check
+ * @param leaderId Optional leader ID to check for friendly gate passage
+ * @param usePadding If true, checks both physical obstacles and safety padding. If false, only checks physical obstacles.
  */
-export function isCellPassable(grid: NavigationGrid, index: number, leaderId?: number): boolean {
-  const count = grid.obstacleCount[index];
-  if (count === 0) return true;
+export function isCellPassable(
+  grid: NavigationGrid,
+  index: number,
+  leaderId?: number,
+  usePadding: boolean = true,
+): boolean {
+  if (usePadding) {
+    // Check combined physical obstacles and padding
+    const totalCount = grid.obstacleCount[index] + grid.paddingCount[index];
+    if (totalCount === 0) return true;
 
-  // If we have a leaderId, check if all obstacles at this cell are gates belonging to our tribe
-  if (leaderId !== undefined) {
-    const gateCount = grid.gateRefCount[leaderId]?.[index] || 0;
-    return count === gateCount;
+    if (leaderId !== undefined) {
+      // Safe Passage Corridor Logic:
+      // If a cell contains a friendly gate (physical or padding), it neutralizes
+      // any other padding penalties. This creates a zero-cost corridor through
+      // wall safety margins, making gates the preferred path through fortifications.
+      const totalGateCount =
+        (grid.gateRefCount[leaderId]?.[index] || 0) + (grid.gatePaddingRefCount[leaderId]?.[index] || 0);
+      
+      return totalGateCount > 0;
+    }
+    return false;
+  } else {
+    // Check only physical obstacles
+    const count = grid.obstacleCount[index];
+    if (count === 0) return true;
+
+    if (leaderId !== undefined) {
+      const gateCount = grid.gateRefCount[leaderId]?.[index] || 0;
+      return count === gateCount;
+    }
+    return false;
   }
-
-  return false;
 }
 
 /**
  * Updates a sector of the navigation grid (e.g., when a building is constructed or a tree falls).
  * Uses reference counting to handle overlapping obstacles correctly.
+ * Separates updates into physical core and padding halo.
  */
 export function updateNavigationGridSector(
   gameState: GameWorldState,
@@ -98,8 +130,14 @@ export function updateNavigationGridSector(
   const grid = gameState.navigationGrid;
   const size = grid.obstacleCount.length;
 
-  if (ownerId !== null && !grid.gateRefCount[ownerId]) {
-    grid.gateRefCount[ownerId] = new Uint16Array(size);
+  // Ensure tribe ref count arrays exist if ownerId is provided
+  if (ownerId !== null) {
+    if (!grid.gateRefCount[ownerId]) {
+      grid.gateRefCount[ownerId] = new Uint16Array(size);
+    }
+    if (!grid.gatePaddingRefCount[ownerId]) {
+      grid.gatePaddingRefCount[ownerId] = new Uint16Array(size);
+    }
   }
 
   for (let dy = -radiusInCells; dy <= radiusInCells; dy++) {
@@ -114,18 +152,28 @@ export function updateNavigationGridSector(
 
       if (dist <= effectiveRadius) {
         const index = gy * gridWidth + gx;
+        const isPhysical = dist <= radius;
+
         if (isAdding) {
-          grid.obstacleCount[index]++;
-          if (ownerId !== null) {
-            grid.gateRefCount[ownerId][index]++;
+          if (isPhysical) {
+            grid.obstacleCount[index]++;
+            if (ownerId !== null) grid.gateRefCount[ownerId][index]++;
+          } else {
+            grid.paddingCount[index]++;
+            if (ownerId !== null) grid.gatePaddingRefCount[ownerId][index]++;
           }
         } else {
-          // Safety check to avoid underflow
-          if (grid.obstacleCount[index] > 0) {
-            grid.obstacleCount[index]--;
-          }
-          if (ownerId !== null && grid.gateRefCount[ownerId] && grid.gateRefCount[ownerId][index] > 0) {
-            grid.gateRefCount[ownerId][index]--;
+          // Removal with safety checks to avoid underflow
+          if (isPhysical) {
+            if (grid.obstacleCount[index] > 0) grid.obstacleCount[index]--;
+            if (ownerId !== null && grid.gateRefCount[ownerId] && grid.gateRefCount[ownerId][index] > 0) {
+              grid.gateRefCount[ownerId][index]--;
+            }
+          } else {
+            if (grid.paddingCount[index] > 0) grid.paddingCount[index]--;
+            if (ownerId !== null && grid.gatePaddingRefCount[ownerId] && grid.gatePaddingRefCount[ownerId][index] > 0) {
+              grid.gatePaddingRefCount[ownerId][index]--;
+            }
           }
         }
       }
@@ -135,6 +183,7 @@ export function updateNavigationGridSector(
 
 /**
  * Fast check to see if a direct line between two points is blocked.
+ * Uses physical-only passability check to allow tight movement.
  */
 export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: Vector2D, entity: HumanEntity): boolean {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
@@ -151,7 +200,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   const normY = dir.y / distance;
   const perpX = -normY;
   const perpY = normX;
-  const lateralOffset = entity.radius * 0.5;
+  const lateralOffset = entity.radius;
 
   const grid = gameState.navigationGrid;
 
@@ -165,12 +214,15 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
       testPos,
       { x: testPos.x + perpX * lateralOffset, y: testPos.y + perpY * lateralOffset },
       { x: testPos.x - perpX * lateralOffset, y: testPos.y - perpY * lateralOffset },
+      { x: testPos.x + perpX * lateralOffset * 0.5, y: testPos.y + perpY * lateralOffset * 0.5 },
+      { x: testPos.x - perpX * lateralOffset * 0.5, y: testPos.y - perpY * lateralOffset * 0.5 },
     ];
 
     for (const p of testPoints) {
       const index = getNavigationGridIndex(p, worldWidth, worldHeight);
-      if (!isCellPassable(grid, index, entity.leaderId)) {
-        return true; // Blocked
+      // Use usePadding: false for real-time movement check
+      if (!isCellPassable(grid, index, entity.leaderId, false)) {
+        return true; // Physically Blocked
       }
     }
   }
@@ -180,6 +232,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
 
 /**
  * Toroidal A* pathfinding.
+ * Uses a cost-based penalty model for padding to ensure humans can always escape tight spots.
  */
 export function findPath(
   gameState: GameWorldState,
@@ -248,12 +301,19 @@ export function findPath(
         const ny = (curY + dy + gridHeight) % gridHeight;
         const neighborIdx = ny * gridWidth + nx;
 
-        // Check passability
-        if (!isCellPassable(grid, neighborIdx, entity.leaderId)) {
-          continue; // Blocked
+        // Hard check: Physical obstacles are strictly impassable
+        if (!isCellPassable(grid, neighborIdx, entity.leaderId, false)) {
+          continue;
         }
 
-        const moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
+        // Base cost for movement (cardinal vs diagonal)
+        let moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
+
+        // Penalty check: Padding (blue area) adds a high cost penalty instead of being a hard wall
+        if (!isCellPassable(grid, neighborIdx, entity.leaderId, true)) {
+          moveCost += 50.0;
+        }
+
         const tentativeGScore = (gScore.get(currentIdx) ?? 0) + moveCost;
 
         if (tentativeGScore < (gScore.get(neighborIdx) ?? Infinity)) {

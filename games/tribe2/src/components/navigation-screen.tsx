@@ -271,42 +271,23 @@ export const NavigationScreen: React.FC = () => {
     gameState.entities.entities = {};
     gameState.entities.nextEntityId = 100;
 
-    // Pass 1: Solid Padding (Trees, Palisades)
     for (const obj of placedObjects) {
-      if (obj.type === 'tree' || obj.type === 'palisade') {
-        const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
-        updateNavigationGridSector(gameState, obj.pos, radius, true, null, obstaclePadding);
-      }
-    }
+      const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
+      const navOwnerId = obj.type === 'gate' ? obj.ownerId ?? null : null;
 
-    // Pass 2: Gate Padding
-    for (const obj of placedObjects) {
-      if (obj.type === 'gate') {
-        updateNavigationGridSector(gameState, obj.pos, 10, true, obj.ownerId, obstaclePadding);
-      }
-    }
+      // Update Navigation Grid (Handles both physical core and padding halo)
+      updateNavigationGridSector(gameState, obj.pos, radius, true, navOwnerId, obstaclePadding);
 
-    // Pass 3: Solid Cores (Ensures center of palisade is always blocked even if overlapping a gate)
-    for (const obj of placedObjects) {
-      if (obj.type === 'tree' || obj.type === 'palisade') {
-        const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
-        updateNavigationGridSector(gameState, obj.pos, radius, true, null);
-
-        // Create actual entities for interactions
-        if (obj.type === 'tree') {
-          createTree(gameState.entities, obj.pos, gameState.time, 100);
-        } else {
-          const b = createBuilding(gameState.entities, obj.pos, BuildingType.Palisade, obj.ownerId || 0);
-          b.isConstructed = true;
-        }
-      }
-    }
-
-    // Pass 4: Gate Cores
-    for (const obj of placedObjects) {
-      if (obj.type === 'gate') {
-        updateNavigationGridSector(gameState, obj.pos, 10, true, obj.ownerId);
-        const b = createBuilding(gameState.entities, obj.pos, BuildingType.Gate, obj.ownerId || 0);
+      // Create actual entities for interactions
+      if (obj.type === 'tree') {
+        createTree(gameState.entities, obj.pos, gameState.time, 100);
+      } else {
+        const b = createBuilding(
+          gameState.entities,
+          obj.pos,
+          obj.type === 'gate' ? BuildingType.Gate : BuildingType.Palisade,
+          obj.ownerId || 0,
+        );
         b.isConstructed = true;
       }
     }
@@ -549,19 +530,20 @@ export const NavigationScreen: React.FC = () => {
       for (let gy = 0; gy < gridHeight; gy++) {
         for (let gx = 0; gx < gridWidth; gx++) {
           const index = gy * gridWidth + gx;
-          if (!isCellPassable(gameState.navigationGrid, index, humanTribeId)) {
-            const gateCount = gameState.navigationGrid.gateRefCount[humanTribeId]?.[index] || 0;
+          const isPhysicallyBlocked = !isCellPassable(gameState.navigationGrid, index, humanTribeId, false);
+          const isPaddingBlocked = !isCellPassable(gameState.navigationGrid, index, humanTribeId, true);
 
-            // If it's blocked but has some friendly gates, show it differently
-            if (gateCount > 0) {
-              ctx.fillStyle = 'rgba(255, 152, 0, 0.4)'; // Orange for partially passable (mixed)
-            } else {
-              ctx.fillStyle = 'rgba(244, 67, 54, 0.4)'; // Red for always blocked
-            }
+          if (isPhysicallyBlocked) {
+            // Red: Physically blocked (Solid wall or enemy gate)
+            ctx.fillStyle = 'rgba(244, 67, 54, 0.5)';
+            ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
+          } else if (isPaddingBlocked) {
+            // Blue: Pathfinding Padding (Safe to walk, but A* will avoid it)
+            ctx.fillStyle = 'rgba(33, 150, 243, 0.3)';
             ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
           } else if (gameState.navigationGrid.obstacleCount[index] > 0) {
-            // It's passable but has obstacles (must be friendly gates)
-            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)'; // Green for passable
+            // Green: Physically passable obstacle (Friendly Gate core)
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
             ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
           }
         }

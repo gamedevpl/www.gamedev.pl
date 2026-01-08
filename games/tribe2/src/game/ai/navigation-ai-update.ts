@@ -46,7 +46,7 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
           const normY = dir.y / distance;
           const perpX = -normY;
           const perpY = normX;
-          const lateralOffset = entity.radius * 0.5;
+          const lateralOffset = entity.radius;
 
           let foundObstacle = false;
           for (let i = 0; i <= Math.min(steps, 40); i++) {
@@ -60,11 +60,13 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
               testPos,
               { x: testPos.x + perpX * lateralOffset, y: testPos.y + perpY * lateralOffset },
               { x: testPos.x - perpX * lateralOffset, y: testPos.y - perpY * lateralOffset },
+              { x: testPos.x + perpX * lateralOffset * 0.5, y: testPos.y + perpY * lateralOffset * 0.5 },
+              { x: testPos.x - perpX * lateralOffset * 0.5, y: testPos.y - perpY * lateralOffset * 0.5 },
             ];
 
             for (const p of testPoints) {
               const idx = getNavigationGridIndex(p, width, height);
-              if (!isCellPassable(indexedState.navigationGrid, idx, entity.leaderId)) {
+              if (!isCellPassable(indexedState.navigationGrid, idx, entity.leaderId, false)) {
                 // Blocked by something that isn't our gate. Find the building.
                 const obstacle = indexedState.search.building.at(p, NAV_GRID_RESOLUTION * 1.5);
                 if (

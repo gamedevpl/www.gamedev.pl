@@ -107,8 +107,8 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
     if (entity.path && entity.pathTarget) {
       const targetMovedDistance = calculateWrappedDistance(entity.pathTarget, targetPosition, width, height);
 
-      // If target moved significantly or direct path is no longer blocked (and close enough), clear the path
-      if (targetMovedDistance > 40 || (!isDirectPathBlocked && distanceToFinalTarget < 150)) {
+      // If target moved significantly, clear the path
+      if (targetMovedDistance > 40) {
         entity.path = undefined;
         entity.pathTarget = undefined;
       }

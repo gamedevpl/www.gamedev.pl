@@ -122,6 +122,8 @@ export interface ScheduledEvent {
 export interface NavigationGrid {
   obstacleCount: Uint16Array;
   gateRefCount: Record<number, Uint16Array>;
+  paddingCount: Uint16Array;
+  gatePaddingRefCount: Record<number, Uint16Array>;
 }
 
 // Game State Interface
