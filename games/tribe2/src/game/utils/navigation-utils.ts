@@ -4,6 +4,12 @@ import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
 import { CHARACTER_RADIUS } from '../ui/ui-consts';
+import {
+  findPathHPA,
+  getOrBuildHPAGraph,
+  invalidateHPACache,
+  CLUSTER_SIZE_CELLS,
+} from './hpa-pathfinding';
 
 /**
  * Resolution of the navigation grid in pixels.
@@ -200,6 +206,9 @@ export function updateNavigationGridSector(
       }
     }
   }
+
+  // Invalidate HPA cache when obstacles change
+  invalidateHPACache();
 }
 
 /**
@@ -290,8 +299,15 @@ export function findNearestPassableCell(
 }
 
 /**
- * Toroidal A* pathfinding.
- * Uses a dynamic penalty field model for padding.
+ * Threshold distance (in grid cells) for using HPA* vs standard A*.
+ * If the Manhattan distance is greater than this, HPA* is used.
+ */
+const HPA_DISTANCE_THRESHOLD = CLUSTER_SIZE_CELLS * 2;
+
+/**
+ * Toroidal A* pathfinding with HPA* optimization for long distances.
+ * Uses hierarchical pathfinding for paths that span multiple clusters,
+ * and falls back to standard A* for short distances or within clusters.
  */
 export function findPath(
   gameState: GameWorldState,
@@ -319,6 +335,43 @@ export function findPath(
   if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
     return { path: [finalTarget], iterations: 0 };
   }
+
+  // Calculate grid distance to determine if HPA* should be used
+  let dx = Math.abs(startCoords.x - endCoords.x);
+  let dy = Math.abs(startCoords.y - endCoords.y);
+  // Handle toroidal wrapping
+  if (dx > gridWidth / 2) dx = gridWidth - dx;
+  if (dy > gridHeight / 2) dy = gridHeight - dy;
+  const gridDistance = dx + dy;
+
+  // Use HPA* for long-distance paths
+  if (gridDistance > HPA_DISTANCE_THRESHOLD) {
+    const hpaGraph = getOrBuildHPAGraph(grid, worldWidth, worldHeight);
+    const hpaResult = findPathHPA(gameState, start, finalTarget, entity, hpaGraph);
+    
+    if (hpaResult.usedHPA && hpaResult.path && hpaResult.path.length > 0) {
+      return { path: hpaResult.path, iterations: hpaResult.iterations };
+    }
+    // Fall through to standard A* if HPA* failed or wasn't used
+  }
+
+  // Standard A* for short distances or as fallback
+  return findPathAStar(grid, gridWidth, gridHeight, startCoords, endCoords, finalTarget, entity);
+}
+
+/**
+ * Standard A* pathfinding implementation.
+ * Uses a dynamic penalty field model for padding.
+ */
+function findPathAStar(
+  grid: NavigationGrid,
+  gridWidth: number,
+  gridHeight: number,
+  startCoords: { x: number; y: number },
+  endCoords: { x: number; y: number },
+  finalTarget: Vector2D,
+  entity: HumanEntity,
+): { path: Vector2D[] | null; iterations: number } {
 
   // Simple Priority Queue implementation
   const openSet: number[] = [startCoords.y * gridWidth + startCoords.x];
