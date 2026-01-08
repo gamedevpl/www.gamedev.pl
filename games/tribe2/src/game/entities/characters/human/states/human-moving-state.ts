@@ -163,7 +163,7 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       if (isPathBlocked(updateContext.gameState, entity.position, navTarget, entity)) {
         let foundShortcut = false;
         const skipLimit = Math.min(entity.path.length - 1, MAX_SKIP_LOOKAHEAD);
-        
+
         for (let i = 1; i <= skipLimit; i++) {
           if (!isPathBlocked(updateContext.gameState, entity.position, entity.path[i], entity)) {
             entity.path.splice(0, i);

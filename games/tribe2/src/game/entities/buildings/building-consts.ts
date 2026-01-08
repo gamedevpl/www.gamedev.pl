@@ -88,7 +88,7 @@ export const BUILDING_DEFINITIONS: Record<
     name: 'Gate',
     description: 'A gate that allows passage for tribe members.',
     icon: '🚪',
-    dimensions: { width: 20, height: 20 },
+    dimensions: { width: 60, height: 60 },
     constructionTimeHours: 0.4,
     destructionTimeHours: 0.2,
     cost: { wood: 3 },

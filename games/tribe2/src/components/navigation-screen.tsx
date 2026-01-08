@@ -11,6 +11,7 @@ import {
   updateNavigationGridSector,
   NAVIGATION_AGENT_RADIUS,
   isCellPassable,
+  PADDING_MAX_WEIGHT,
 } from '../game/utils/navigation-utils';
 import { HumanEntity } from '../game/entities/characters/human/human-types';
 import { HUMAN_MOVING, HUMAN_IDLE } from '../game/entities/characters/human/states/human-state-types';
@@ -558,15 +559,17 @@ export const NavigationScreen: React.FC = () => {
         for (let gx = 0; gx < gridWidth; gx++) {
           const index = gy * gridWidth + gx;
           const isPhysicallyBlocked = !isCellPassable(gameState.navigationGrid, index, humanTribeId, false);
-          const isPaddingBlocked = !isCellPassable(gameState.navigationGrid, index, humanTribeId, true);
+          const paddingWeight = gameState.navigationGrid.paddingCount[index];
 
           if (isPhysicallyBlocked) {
             // Red: Physically blocked (Solid wall or enemy gate)
             ctx.fillStyle = 'rgba(244, 67, 54, 0.5)';
             ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
-          } else if (isPaddingBlocked) {
-            // Blue: Pathfinding Padding (Safe to walk, but A* will avoid it)
-            ctx.fillStyle = 'rgba(33, 150, 243, 0.3)';
+          } else if (paddingWeight > 0) {
+            // Gradual Yellow/Orange: Pathfinding Padding (Penalty field)
+            // Weight is 1-100 (approximately, can be higher if overlapping)
+            const alpha = Math.min(0.6, 0.15 + (paddingWeight / PADDING_MAX_WEIGHT) * 0.45);
+            ctx.fillStyle = `rgba(255, 235, 59, ${alpha})`;
             ctx.fillRect(gx * NAV_GRID_RESOLUTION, gy * NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION, NAV_GRID_RESOLUTION);
           } else if (gameState.navigationGrid.obstacleCount[index] > 0) {
             // Green: Physically passable obstacle (Friendly Gate core)
@@ -642,6 +645,13 @@ export const NavigationScreen: React.FC = () => {
       if (simulatedHuman) {
         const { position, direction, path: hPath } = simulatedHuman;
 
+        // Human collision radius
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(position.x, position.y, CHARACTER_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+
         // Human body
         ctx.fillStyle = '#4A90E2';
         ctx.beginPath();
@@ -683,7 +693,7 @@ export const NavigationScreen: React.FC = () => {
             const normY = dir.y / dist;
             const perpX = -normY;
             const perpY = normX;
-            const lateralOffset = CHARACTER_RADIUS;
+            const lateralOffset = CHARACTER_RADIUS * 0.5;
 
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.lineWidth = 1;

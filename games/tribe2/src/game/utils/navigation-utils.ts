@@ -23,6 +23,106 @@ export const NAVIGATION_AGENT_RADIUS = CHARACTER_RADIUS;
  */
 export const PADDING_MAX_WEIGHT = 100;
 
+// Node status constants for pathfinding
+const UNVISITED = 0;
+const OPEN = 1;
+const CLOSED = 2;
+
+/**
+ * Buffer cache for pathfinding to avoid repeated allocations.
+ * Keyed by grid size (gridWidth * gridHeight).
+ */
+interface PathfindingBuffers {
+  gScore: Float32Array;
+  fScore: Float32Array;
+  cameFrom: Int32Array;
+  heap: Int32Array;
+  nodeStatus: Uint8Array;
+}
+
+const bufferCache = new Map<number, PathfindingBuffers>();
+
+/**
+ * Gets or creates reusable buffers for pathfinding.
+ */
+function getPathfindingBuffers(gridSize: number): PathfindingBuffers {
+  let buffers = bufferCache.get(gridSize);
+  if (!buffers) {
+    buffers = {
+      gScore: new Float32Array(gridSize),
+      fScore: new Float32Array(gridSize),
+      cameFrom: new Int32Array(gridSize),
+      heap: new Int32Array(gridSize),
+      nodeStatus: new Uint8Array(gridSize),
+    };
+    bufferCache.set(gridSize, buffers);
+  }
+  return buffers;
+}
+
+/**
+ * Binary Min-Heap helper: Bubble up a node to maintain heap property.
+ */
+function heapBubbleUp(heap: Int32Array, fScore: Float32Array, index: number): void {
+  while (index > 0) {
+    const parentIndex = (index - 1) >> 1; // Bitwise shift for performance
+    if (fScore[heap[index]] >= fScore[heap[parentIndex]]) break;
+
+    // Swap
+    const temp = heap[index];
+    heap[index] = heap[parentIndex];
+    heap[parentIndex] = temp;
+
+    index = parentIndex;
+  }
+}
+
+/**
+ * Binary Min-Heap helper: Bubble down a node to maintain heap property.
+ */
+function heapBubbleDown(heap: Int32Array, heapSize: number, fScore: Float32Array, index: number): void {
+  while (index < heapSize) {
+    const leftChild = (index << 1) + 1; // Bitwise shift for performance
+    const rightChild = (index << 1) + 2;
+    let smallest = index;
+
+    if (leftChild < heapSize && fScore[heap[leftChild]] < fScore[heap[smallest]]) {
+      smallest = leftChild;
+    }
+    if (rightChild < heapSize && fScore[heap[rightChild]] < fScore[heap[smallest]]) {
+      smallest = rightChild;
+    }
+
+    if (smallest === index) break;
+
+    // Swap
+    const temp = heap[index];
+    heap[index] = heap[smallest];
+    heap[smallest] = temp;
+
+    index = smallest;
+  }
+}
+
+/**
+ * Binary Min-Heap: Push a node onto the heap.
+ */
+function heapPush(heap: Int32Array, heapSize: number, fScore: Float32Array, nodeIdx: number): number {
+  heap[heapSize] = nodeIdx;
+  heapBubbleUp(heap, fScore, heapSize);
+  return heapSize + 1;
+}
+
+/**
+ * Binary Min-Heap: Pop the minimum node from the heap.
+ */
+function heapPop(heap: Int32Array, heapSize: number, fScore: Float32Array): { nodeIdx: number; newSize: number } {
+  const nodeIdx = heap[0];
+  heap[0] = heap[heapSize - 1];
+  heapBubbleDown(heap, heapSize - 1, fScore, 0);
+  return { nodeIdx, newSize: heapSize - 1 };
+}
+
 /**
  * Calculates the grid index for a given world position.
  */
@@ -221,7 +321,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   const normY = dir.y / distance;
   const perpX = -normY;
   const perpY = normX;
-  const lateralOffset = entity.radius * 0.85; // Allow slight squeezing to prevent stuck loops
+  const lateralOffset = entity.radius * 0.5; // Allow slight squeezing to prevent stuck loops
 
   const grid = gameState.navigationGrid;
 
@@ -290,8 +390,8 @@ export function findNearestPassableCell(
 }
 
 /**
- * Toroidal A* pathfinding.
- * Uses a dynamic penalty field model for padding.
+ * Toroidal A* pathfinding with optimized data structures.
+ * Uses a Binary Min-Heap for the open set and typed arrays for all data.
  */
 export function findPath(
   gameState: GameWorldState,
@@ -302,11 +402,11 @@ export function findPath(
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+  const gridSize = gridWidth * gridHeight;
 
   const grid = gameState.navigationGrid;
 
   // Ensure target is actually reachable (not inside a solid object)
-  // We now allow targets to be inside padding zones, as long as they aren't physically blocked.
   const endIdx = getNavigationGridIndex(end, worldWidth, worldHeight);
   let finalTarget = end;
   if (!isCellPassable(grid, endIdx, entity.leaderId, false)) {
@@ -320,44 +420,45 @@ export function findPath(
     return { path: [finalTarget], iterations: 0 };
   }
 
-  // Simple Priority Queue implementation
-  const openSet: number[] = [startCoords.y * gridWidth + startCoords.x];
-  const cameFrom = new Map<number, number>();
-  const gScore = new Map<number, number>();
-  const fScore = new Map<number, number>();
+  // Get reusable buffers
+  const buffers = getPathfindingBuffers(gridSize);
+  const { gScore, fScore, cameFrom, heap, nodeStatus } = buffers;
+
+  // Initialize buffers
+  gScore.fill(Infinity);
+  fScore.fill(Infinity);
+  cameFrom.fill(-1);
+  nodeStatus.fill(UNVISITED);
 
   const startIdx = startCoords.y * gridWidth + startCoords.x;
-  gScore.set(startIdx, 0);
-  fScore.set(startIdx, toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight));
+  gScore[startIdx] = 0;
+  fScore[startIdx] = toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight);
 
-  const maxIterations = 5000; // Safety cap
+  // Initialize heap
+  let heapSize = 0;
+  heapSize = heapPush(heap, heapSize, fScore, startIdx);
+  nodeStatus[startIdx] = OPEN;
+
+  const maxIterations = 5000;
   let iterations = 0;
 
-  while (openSet.length > 0 && iterations < maxIterations) {
+  while (heapSize > 0 && iterations < maxIterations) {
     iterations++;
 
     // Get node with lowest fScore
-    let currentIdx = openSet[0];
-    let lowestF = fScore.get(currentIdx) ?? Infinity;
-    let openSetIdx = 0;
-
-    for (let i = 1; i < openSet.length; i++) {
-      const score = fScore.get(openSet[i]) ?? Infinity;
-      if (score < lowestF) {
-        lowestF = score;
-        currentIdx = openSet[i];
-        openSetIdx = i;
-      }
-    }
+    const popResult = heapPop(heap, heapSize, fScore);
+    const currentIdx = popResult.nodeIdx;
+    heapSize = popResult.newSize;
 
     const curX = currentIdx % gridWidth;
     const curY = Math.floor(currentIdx / gridWidth);
 
+    // Mark as closed
+    nodeStatus[currentIdx] = CLOSED;
+
     if (curX === endCoords.x && curY === endCoords.y) {
       return { path: reconstructPath(cameFrom, currentIdx, gridWidth, finalTarget), iterations };
     }
-
-    openSet.splice(openSetIdx, 1);
 
     // Neighbors (8 directions)
     for (let dy = -1; dy <= 1; dy++) {
@@ -368,6 +469,9 @@ export function findPath(
         const ny = (curY + dy + gridHeight) % gridHeight;
         const neighborIdx = ny * gridWidth + nx;
 
+        // Skip if already closed
+        if (nodeStatus[neighborIdx] === CLOSED) continue;
+
         // Hard check: Physical obstacles are strictly impassable
         if (!isCellPassable(grid, neighborIdx, entity.leaderId, false)) {
           continue;
@@ -376,31 +480,26 @@ export function findPath(
         // Base cost for movement (cardinal vs diagonal)
         let moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
 
-        // Navigation Field Penalty Model:
-        // Calculate effective padding (total padding minus friendly gate padding)
+        // Navigation Field Penalty Model
         const totalPadding = grid.paddingCount[neighborIdx];
         const friendlyGatePadding =
           entity.leaderId !== undefined ? grid.gatePaddingRefCount[entity.leaderId]?.[neighborIdx] || 0 : 0;
         const effectivePadding = Math.max(0, totalPadding - friendlyGatePadding);
 
         if (effectivePadding > 0) {
-          // Soft penalty field model:
-          // Use the stored weights to create a potential field that naturally guides
-          // agents toward the center of narrow gaps without blocking them entirely.
-          moveCost += 5.0 + effectivePadding * 0.5;
+          moveCost += 10.0 + effectivePadding * 1.5;
         }
 
-        const tentativeGScore = (gScore.get(currentIdx) ?? 0) + moveCost;
+        const tentativeGScore = gScore[currentIdx] + moveCost;
 
-        if (tentativeGScore < (gScore.get(neighborIdx) ?? Infinity)) {
-          cameFrom.set(neighborIdx, currentIdx);
-          gScore.set(neighborIdx, tentativeGScore);
-          fScore.set(
-            neighborIdx,
-            tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight),
-          );
-          if (!openSet.includes(neighborIdx)) {
-            openSet.push(neighborIdx);
+        if (tentativeGScore < gScore[neighborIdx]) {
+          cameFrom[neighborIdx] = currentIdx;
+          gScore[neighborIdx] = tentativeGScore;
+          fScore[neighborIdx] = tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight);
+
+          if (nodeStatus[neighborIdx] !== OPEN) {
+            heapSize = heapPush(heap, heapSize, fScore, neighborIdx);
+            nodeStatus[neighborIdx] = OPEN;
           }
         }
       }
@@ -428,22 +527,17 @@ function toroidalHeuristic(
   return D * (dx + dy) + (D2 - 2 * D) * Math.min(dx, dy);
 }
 
-function reconstructPath(
-  cameFrom: Map<number, number>,
-  currentIdx: number,
-  gridWidth: number,
-  finalPos: Vector2D,
-): Vector2D[] {
+function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: number, finalPos: Vector2D): Vector2D[] {
   const path: Vector2D[] = [finalPos];
   let curr = currentIdx;
   const visited = new Set<number>();
 
-  while (cameFrom.has(curr)) {
+  while (cameFrom[curr] !== -1) {
     if (visited.has(curr)) {
       break;
     }
     visited.add(curr);
-    curr = cameFrom.get(curr)!;
+    curr = cameFrom[curr];
     path.unshift({
       x: (curr % gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
       y: Math.floor(curr / gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,

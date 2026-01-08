@@ -46,7 +46,7 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
           const normY = dir.y / distance;
           const perpX = -normY;
           const perpY = normX;
-          const lateralOffset = entity.radius;
+          const lateralOffset = entity.radius * 0.5;
 
           let foundObstacle = false;
           for (let i = 0; i <= Math.min(steps, 40); i++) {
