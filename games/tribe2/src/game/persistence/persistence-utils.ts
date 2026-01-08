@@ -4,7 +4,6 @@ import { updatePlantingZoneConnections } from '../utils/planting-zone-connection
 import { workerManager } from './persistence-worker-manager';
 import { SerializedWorldState } from './persistence-types';
 import { initHPAGraph, rebuildHPAGraph } from '../utils/navigation-utils';
-import { NAV_GRID_RESOLUTION } from '../utils/navigation-utils';
 
 /**
  * Saves the current game state to IndexedDB with GZIP compression.
@@ -96,9 +95,7 @@ export async function loadGame(): Promise<GameWorldState | null> {
 
     // Initialize and rebuild HPA* graph (not persisted, needs to be rebuilt)
     const { width, height } = gameState.mapDimensions;
-    const gridWidth = Math.ceil(width / NAV_GRID_RESOLUTION);
-    const gridHeight = Math.ceil(height / NAV_GRID_RESOLUTION);
-    gameState.hpaGraph = initHPAGraph(gridWidth, gridHeight);
+    gameState.hpaGraph = initHPAGraph(width, height);
 
     // Re-index the world state (must be done on main thread)
     const indexedGameState = indexWorldState(gameState);

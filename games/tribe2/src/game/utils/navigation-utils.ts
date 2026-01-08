@@ -351,13 +351,14 @@ function findPathSimpleAStar(
 
   const grid = gameState.navigationGrid;
 
-  // Simple Priority Queue implementation
-  const openSet: number[] = [startCoords.y * gridWidth + startCoords.x];
+  // Simple Priority Queue implementation (with Set for O(1) lookup)
+  const startIdx = startCoords.y * gridWidth + startCoords.x;
+  const openSet: number[] = [startIdx];
+  const openSetLookup = new Set<number>([startIdx]);
   const cameFrom = new Map<number, number>();
   const gScore = new Map<number, number>();
   const fScore = new Map<number, number>();
 
-  const startIdx = startCoords.y * gridWidth + startCoords.x;
   gScore.set(startIdx, 0);
   fScore.set(startIdx, toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight));
 
@@ -389,6 +390,7 @@ function findPathSimpleAStar(
     }
 
     openSet.splice(openSetIdx, 1);
+    openSetLookup.delete(currentIdx);
 
     // Neighbors (8 directions)
     for (let dy = -1; dy <= 1; dy++) {
@@ -415,8 +417,9 @@ function findPathSimpleAStar(
             tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight),
           );
 
-          if (!openSet.includes(neighborIdx)) {
+          if (!openSetLookup.has(neighborIdx)) {
             openSet.push(neighborIdx);
+            openSetLookup.add(neighborIdx);
           }
         }
       }

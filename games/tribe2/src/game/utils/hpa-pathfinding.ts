@@ -388,13 +388,14 @@ function computeIntraClusterPath(
 ): number | null {
   const { gridWidth, gridHeight } = hpaGraph;
 
-  // Use bounded A* within cluster
-  const openSet: number[] = [node1.gridY * gridWidth + node1.gridX];
-  const cameFrom = new Map<number, number>();
-  const gScore = new Map<number, number>();
-
+  // Use bounded A* within cluster (with Set for O(1) lookup)
   const startIdx = node1.gridY * gridWidth + node1.gridX;
   const endIdx = node2.gridY * gridWidth + node2.gridX;
+
+  const openSet: number[] = [startIdx];
+  const openSetLookup = new Set<number>([startIdx]);
+  const cameFrom = new Map<number, number>();
+  const gScore = new Map<number, number>();
 
   gScore.set(startIdx, 0);
 
@@ -429,6 +430,7 @@ function computeIntraClusterPath(
     }
 
     openSet.splice(openSetIdx, 1);
+    openSetLookup.delete(currentIdx);
 
     const curX = currentIdx % gridWidth;
     const curY = Math.floor(currentIdx / gridWidth);
@@ -460,8 +462,9 @@ function computeIntraClusterPath(
           cameFrom.set(neighborIdx, currentIdx);
           gScore.set(neighborIdx, tentativeGScore);
 
-          if (!openSet.includes(neighborIdx)) {
+          if (!openSetLookup.has(neighborIdx)) {
             openSet.push(neighborIdx);
+            openSetLookup.add(neighborIdx);
           }
         }
       }
@@ -480,6 +483,7 @@ export function hpaHighLevelSearch(
   endNodeId: number,
 ): number[] | null {
   const openSet: number[] = [startNodeId];
+  const openSetLookup = new Set<number>([startNodeId]);
   const cameFrom = new Map<number, number>();
   const gScore = new Map<number, number>();
   const fScore = new Map<number, number>();
@@ -523,6 +527,7 @@ export function hpaHighLevelSearch(
     }
 
     openSet.splice(openSetIdx, 1);
+    openSetLookup.delete(currentId);
 
     const edges = hpaGraph.edges.get(currentId) || [];
     for (const edge of edges) {
@@ -535,8 +540,9 @@ export function hpaHighLevelSearch(
         const neighborNode = hpaGraph.nodes.get(edge.toNodeId)!;
         fScore.set(edge.toNodeId, tentativeGScore + hpaHeuristic(neighborNode, endNode, hpaGraph));
 
-        if (!openSet.includes(edge.toNodeId)) {
+        if (!openSetLookup.has(edge.toNodeId)) {
           openSet.push(edge.toNodeId);
+          openSetLookup.add(edge.toNodeId);
         }
       }
     }
