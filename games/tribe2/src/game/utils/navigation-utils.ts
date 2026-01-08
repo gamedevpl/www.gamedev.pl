@@ -4,6 +4,16 @@ import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
 import { CHARACTER_RADIUS } from '../ui/ui-consts';
+import { HPAGraph } from './hpa-types';
+import {
+  createHPAGraph,
+  buildHPAGraph,
+  insertTemporaryNode,
+  removeTemporaryNode,
+  hpaHighLevelSearch,
+  hpaPathToWorldCoords,
+  markClustersDirty,
+} from './hpa-pathfinding';
 
 /**
  * Resolution of the navigation grid in pixels.
@@ -57,6 +67,23 @@ export function initNavigationGrid(worldWidth: number, worldHeight: number): Nav
     obstacleCount: new Uint16Array(size),
     gateRefCount: {},
   };
+}
+
+/**
+ * Initializes the HPA* graph for hierarchical pathfinding.
+ */
+export function initHPAGraph(worldWidth: number, worldHeight: number): HPAGraph {
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+  return createHPAGraph(gridWidth, gridHeight);
+}
+
+/**
+ * Builds or rebuilds the HPA* graph from the current navigation grid.
+ * Call this after initial obstacle setup or when a full rebuild is needed.
+ */
+export function rebuildHPAGraph(gameState: GameWorldState): void {
+  buildHPAGraph(gameState.hpaGraph, gameState.navigationGrid);
 }
 
 /**
@@ -131,6 +158,11 @@ export function updateNavigationGridSector(
       }
     }
   }
+
+  // Mark affected HPA* clusters as dirty for lazy rebuild
+  if (gameState.hpaGraph) {
+    markClustersDirty(gameState.hpaGraph, position, effectiveRadius, worldWidth, worldHeight);
+  }
 }
 
 /**
@@ -179,9 +211,128 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
 }
 
 /**
- * Toroidal A* pathfinding.
+ * Threshold distance (in grid cells) below which we use simple A* instead of HPA*.
+ * For short paths, regular A* is faster due to lower overhead.
+ */
+const HPA_DISTANCE_THRESHOLD = 50;
+
+/**
+ * HPA* (Hierarchical Pathfinding A*) based pathfinding.
+ * Uses hierarchical approach for long distances, falls back to simple A* for short paths.
  */
 export function findPath(
+  gameState: GameWorldState,
+  start: Vector2D,
+  end: Vector2D,
+  entity: HumanEntity,
+): Vector2D[] | null {
+  const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+
+  const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
+  const endCoords = getNavigationGridCoords(end, worldWidth, worldHeight);
+
+  if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
+    return [end];
+  }
+
+  // Calculate toroidal distance to decide which algorithm to use
+  let dx = Math.abs(startCoords.x - endCoords.x);
+  let dy = Math.abs(startCoords.y - endCoords.y);
+  if (dx > gridWidth / 2) dx = gridWidth - dx;
+  if (dy > gridHeight / 2) dy = gridHeight - dy;
+  const gridDistance = Math.sqrt(dx * dx + dy * dy);
+
+  // Use simple A* for short distances or if HPA* graph isn't ready
+  if (gridDistance < HPA_DISTANCE_THRESHOLD || !gameState.hpaGraph || gameState.hpaGraph.nodes.size === 0) {
+    return findPathSimpleAStar(gameState, start, end, entity);
+  }
+
+  // Rebuild HPA* graph if needed
+  if (gameState.hpaGraph.needsRebuild) {
+    buildHPAGraph(gameState.hpaGraph, gameState.navigationGrid, entity.leaderId);
+  }
+
+  // Use HPA* for longer distances
+  return findPathHPA(gameState, start, end, entity, startCoords, endCoords);
+}
+
+/**
+ * HPA* based pathfinding for longer distances.
+ */
+function findPathHPA(
+  gameState: GameWorldState,
+  start: Vector2D,
+  end: Vector2D,
+  entity: HumanEntity,
+  startCoords: { x: number; y: number },
+  endCoords: { x: number; y: number },
+): Vector2D[] | null {
+  const hpaGraph = gameState.hpaGraph;
+
+  // Insert temporary start and end nodes
+  const startNode = insertTemporaryNode(
+    hpaGraph,
+    gameState.navigationGrid,
+    startCoords.x,
+    startCoords.y,
+    entity.leaderId,
+  );
+
+  const endNode = insertTemporaryNode(
+    hpaGraph,
+    gameState.navigationGrid,
+    endCoords.x,
+    endCoords.y,
+    entity.leaderId,
+  );
+
+  if (!startNode || !endNode) {
+    // Clean up and fall back to simple A*
+    if (startNode) removeTemporaryNode(hpaGraph, startNode.id);
+    if (endNode) removeTemporaryNode(hpaGraph, endNode.id);
+    return findPathSimpleAStar(gameState, start, end, entity);
+  }
+
+  // Perform high-level search on abstract graph
+  const abstractPath = hpaHighLevelSearch(hpaGraph, startNode.id, endNode.id);
+
+  // Clean up temporary nodes
+  removeTemporaryNode(hpaGraph, startNode.id);
+  removeTemporaryNode(hpaGraph, endNode.id);
+
+  if (!abstractPath || abstractPath.length === 0) {
+    return null;
+  }
+
+  // Convert abstract path to world coordinates
+  const worldPath = hpaPathToWorldCoords(hpaGraph, abstractPath);
+
+  // Replace the last waypoint with the actual destination
+  if (worldPath.length > 0) {
+    worldPath[worldPath.length - 1] = end;
+  } else {
+    worldPath.push(end);
+  }
+
+  // Remove starting point if it's too close to current position
+  if (worldPath.length > 1) {
+    const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+    const firstDist = calculateWrappedDistance(start, worldPath[0], worldWidth, worldHeight);
+    if (firstDist < NAV_GRID_RESOLUTION) {
+      worldPath.shift();
+    }
+  }
+
+  return worldPath.length > 0 ? worldPath : null;
+}
+
+/**
+ * Simple A* pathfinding (original implementation).
+ * Used for short distances where HPA* overhead isn't justified.
+ */
+function findPathSimpleAStar(
   gameState: GameWorldState,
   start: Vector2D,
   end: Vector2D,

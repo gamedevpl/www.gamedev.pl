@@ -8,6 +8,7 @@ import {
   findPath,
   NAV_GRID_RESOLUTION,
   initNavigationGrid,
+  initHPAGraph,
   updateNavigationGridSector,
   NAVIGATION_AGENT_RADIUS,
   isCellPassable,
@@ -152,6 +153,7 @@ const createMockGameState = (): GameWorldState => {
     mapDimensions: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
     entities: { entities: {}, nextEntityId: 2 },
     navigationGrid: initNavigationGrid(CANVAS_WIDTH, CANVAS_HEIGHT),
+    hpaGraph: initHPAGraph(CANVAS_WIDTH, CANVAS_HEIGHT),
     soilDepletion: createSoilDepletionState(),
     temperature: {
       sectors: {},

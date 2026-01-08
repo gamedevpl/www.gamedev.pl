@@ -34,7 +34,7 @@ import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from './entities/tri
 import { TREE_GROWTH_TIME_GAME_HOURS, MIN_TREE_SPREAD_CHANCE } from './entities/plants/tree/tree-consts';
 import { initTemperatureState } from './temperature/temperature-update';
 import { AIType } from './ai/ai-types.ts';
-import { initNavigationGrid, updateNavigationGridSector, NAVIGATION_AGENT_RADIUS } from './utils/navigation-utils';
+import { initNavigationGrid, updateNavigationGridSector, NAVIGATION_AGENT_RADIUS, initHPAGraph, rebuildHPAGraph } from './utils/navigation-utils';
 
 export function initWorld(): GameWorldState {
   const entities = createEntities();
@@ -287,6 +287,7 @@ export function initWorld(): GameWorldState {
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
     navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
+    hpaGraph: initHPAGraph(MAP_WIDTH, MAP_HEIGHT),
     pathfindingQueue: [],
     tasks: {},
   };
@@ -297,6 +298,9 @@ export function initWorld(): GameWorldState {
       updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
     }
   });
+
+  // Build the HPA* graph after all initial obstacles are placed
+  rebuildHPAGraph(initialWorldState);
 
   const indexedWorldState = indexWorldState(initialWorldState);
 
@@ -468,6 +472,7 @@ export function initIntroWorld(): GameWorldState {
       Math.ceil(MAP_WIDTH / TERRITORY_OWNERSHIP_RESOLUTION) * Math.ceil(MAP_HEIGHT / TERRITORY_OWNERSHIP_RESOLUTION),
     ).fill(null),
     navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
+    hpaGraph: initHPAGraph(MAP_WIDTH, MAP_HEIGHT),
     pathfindingQueue: [],
     tasks: {},
   };
@@ -478,6 +483,9 @@ export function initIntroWorld(): GameWorldState {
       updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
     }
   });
+
+  // Build the HPA* graph after all initial obstacles are placed
+  rebuildHPAGraph(initialWorldState);
 
   return indexWorldState(initialWorldState);
 }

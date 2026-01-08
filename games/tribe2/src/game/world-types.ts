@@ -13,6 +13,7 @@ import { EcosystemState } from './ecosystem';
 import { SoilDepletionState } from './entities/plants/soil-depletion-types';
 import { TemperatureState } from './temperature/temperature-types';
 import { Task } from './ai/task/task-types';
+import { HPAGraph } from './utils/hpa-types';
 
 /**
  * Describes which edges of a planting zone are connected to adjacent zones of the same tribe.
@@ -191,6 +192,7 @@ export interface GameWorldState {
   plantingZoneConnections: Record<EntityId, PlantingZoneConnections>;
   terrainOwnership: Array<EntityId | null>; // 1D array representing ownership of each terrain tile
   navigationGrid: NavigationGrid;
+  hpaGraph: HPAGraph; // Hierarchical pathfinding graph for improved performance
   pathfindingQueue: EntityId[];
   tasks: Record<string, Task>;
 }
