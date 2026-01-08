@@ -129,17 +129,22 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       navTarget = entity.path[0];
 
       // Check if path to current waypoint is blocked
-      if (isPathBlocked(updateContext.gameState, entity.position, navTarget, entity)) {
-        entity.path = undefined;
-        entity.pathTarget = undefined;
-        if (!updateContext.gameState.pathfindingQueue.includes(entity.id)) {
-          updateContext.gameState.pathfindingQueue.push(entity.id);
-        }
-        entity.acceleration = 0;
-        return { nextState: HUMAN_MOVING, data: movingData };
-      } else {
-        const distToWaypoint = calculateWrappedDistance(entity.position, navTarget, width, height);
+      const isDirectlyBlocked = isPathBlocked(updateContext.gameState, entity.position, navTarget, entity);
+      const distToWaypoint = calculateWrappedDistance(entity.position, navTarget, width, height);
 
+      if (isDirectlyBlocked) {
+        // Cornering logic: If we're very close to the waypoint, don't stop. 
+        // This allows clearing the 'shoulder' of an obstacle.
+        if (distToWaypoint > entity.radius * 1.2) {
+          entity.path = undefined;
+          entity.pathTarget = undefined;
+          if (!updateContext.gameState.pathfindingQueue.includes(entity.id)) {
+            updateContext.gameState.pathfindingQueue.push(entity.id);
+          }
+          entity.acceleration = 0;
+          return { nextState: HUMAN_MOVING, data: movingData };
+        }
+      } else {
         // If reached waypoint, move to next
         if (distToWaypoint < MOVEMENT_THRESHOLD) {
           entity.path.shift();

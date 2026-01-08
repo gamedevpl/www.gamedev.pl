@@ -29,8 +29,14 @@ import {
 import { createSoilDepletionState } from '../game/entities/plants/soil-depletion-types';
 import { TREE_RADIUS } from '../game/entities/plants/tree/tree-consts';
 import { CHARACTER_RADIUS } from '../game/ui/ui-consts';
-import { createTree, createBuilding, createHuman, removeEntity, entitiesUpdate } from '../game/entities/entities-update';
-import { BuildingType } from '../game/entities/buildings/building-consts';
+import {
+  createTree,
+  createBuilding,
+  createHuman,
+  removeEntity,
+  entitiesUpdate,
+} from '../game/entities/entities-update';
+import { BuildingType, BUILDING_DEFINITIONS } from '../game/entities/buildings/building-consts';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../game/entities/tribe/territory-consts';
 import { TransitionState } from '../game/tutorial/tutorial-types';
 import { indexWorldState } from '../game/world-index/world-state-index';
@@ -87,7 +93,8 @@ const SectionTitle = styled.h2`
 `;
 
 const Button = styled.button<{ active?: boolean }>`
-  background-color: ${(props) => (props.active ? '#666' : '#444')};\n  color: white;
+  background-color: ${(props) => (props.active ? '#666' : '#444')};
+  color: white;
   border: ${(props) => (props.active ? '2px solid #4CAF50' : 'none')};
   padding: 10px;
   margin-bottom: 10px;
@@ -141,7 +148,7 @@ const InfoText = styled.p`
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
-type ObjectType = 'tree' | 'palisade' | 'gate' | 'start' | 'end' | 'palisadeLine';
+type ObjectType = 'tree' | BuildingType | 'start' | 'end' | 'palisadeLine';
 
 const createMockGameState = (): GameWorldState => {
   const terrainOwnershipSize =
@@ -242,12 +249,13 @@ export const NavigationScreen: React.FC = () => {
   const [startPos, setStartPos] = useState<Vector2D | null>(null);
   const [endPos, setEndPos] = useState<Vector2D | null>(null);
   const [path, setPath] = useState<Vector2D[] | null>(null);
+  const [pathIterations, setPathIterations] = useState<number>(0);
   const [placementMode, setPlacementMode] = useState<ObjectType>('tree');
   const [mousePos, setMousePos] = useState<Vector2D | null>(null);
   const [obstacleOwnerId, setObstacleOwnerId] = useState<number>(1);
   const [humanTribeId, setHumanTribeId] = useState<number>(1);
   const [placedObjects, setPlacedObjects] = useState<
-    { pos: Vector2D; type: 'tree' | 'palisade' | 'gate'; ownerId: number | null }[]
+    { pos: Vector2D; type: 'tree' | BuildingType; ownerId: number | null }[]
   >([]);
   const [lineStartPos, setLineStartPos] = useState<Vector2D | null>(null);
 
@@ -272,22 +280,29 @@ export const NavigationScreen: React.FC = () => {
     gameState.entities.nextEntityId = 100;
 
     for (const obj of placedObjects) {
-      const radius = obj.type === 'tree' ? TREE_RADIUS : 10;
-      const navOwnerId = obj.type === 'gate' ? obj.ownerId ?? null : null;
+      let radius: number;
+      if (obj.type === 'tree') {
+        radius = TREE_RADIUS;
+      } else {
+        const dims = BUILDING_DEFINITIONS[obj.type].dimensions;
+        radius = Math.max(dims.width, dims.height) / 2;
+      }
 
-      // Update Navigation Grid (Handles both physical core and padding halo)
-      updateNavigationGridSector(gameState, obj.pos, radius, true, navOwnerId, obstaclePadding);
+      const navOwnerId = obj.type === BuildingType.Gate ? obj.ownerId ?? null : null;
+
+      // Update Navigation Grid
+      // Palisades, Gates, AND Trees block navigation in production
+      const isBlocking = obj.type === BuildingType.Palisade || obj.type === BuildingType.Gate || obj.type === 'tree';
+
+      if (isBlocking) {
+        updateNavigationGridSector(gameState, obj.pos, radius, true, navOwnerId, obstaclePadding);
+      }
 
       // Create actual entities for interactions
       if (obj.type === 'tree') {
         createTree(gameState.entities, obj.pos, gameState.time, 100);
       } else {
-        const b = createBuilding(
-          gameState.entities,
-          obj.pos,
-          obj.type === 'gate' ? BuildingType.Gate : BuildingType.Palisade,
-          obj.ownerId || 0,
-        );
+        const b = createBuilding(gameState.entities, obj.pos, obj.type as BuildingType, obj.ownerId || 0);
         b.isConstructed = true;
       }
     }
@@ -297,9 +312,11 @@ export const NavigationScreen: React.FC = () => {
       const mockHuman = {
         leaderId: humanTribeId,
         position: startPos,
+        radius: CHARACTER_RADIUS,
       } as unknown as HumanEntity;
-      const newPath = findPath(gameState, startPos, endPos, mockHuman);
+      const { path: newPath, iterations } = findPath(gameState, startPos, endPos, mockHuman);
       setPath(newPath);
+      setPathIterations(iterations);
     }
   }, [placedObjects, obstaclePadding, startPos, endPos, humanTribeId, gameState]);
 
@@ -327,7 +344,7 @@ export const NavigationScreen: React.FC = () => {
           const normalizedDir = vectorNormalize(dir);
 
           const segments = Math.ceil(dist / 20);
-          const newPalisades: { pos: Vector2D; type: 'palisade'; ownerId: null }[] = [];
+          const newPalisades: { pos: Vector2D; type: BuildingType; ownerId: null }[] = [];
 
           for (let i = 0; i <= segments; i++) {
             const pos = vectorAdd(lineStartPos, vectorScale(normalizedDir, i * 20));
@@ -338,7 +355,7 @@ export const NavigationScreen: React.FC = () => {
               !placedObjects.some((o) => o.pos.x === snappedSegmentPos.x && o.pos.y === snappedSegmentPos.y) &&
               !newPalisades.some((o) => o.pos.x === snappedSegmentPos.x && o.pos.y === snappedSegmentPos.y)
             ) {
-              newPalisades.push({ pos: snappedSegmentPos, type: 'palisade', ownerId: null });
+              newPalisades.push({ pos: snappedSegmentPos, type: BuildingType.Palisade, ownerId: null });
             }
           }
 
@@ -350,24 +367,33 @@ export const NavigationScreen: React.FC = () => {
 
         if (existingIndex !== -1) {
           const existing = placedObjects[existingIndex];
-          // Replace palisade with gate
-          if (placementMode === 'gate' && existing.type === 'palisade') {
+
+          // Replace if different type
+          if (
+            placementMode !== existing.type &&
+            (placementMode === 'tree' || Object.values(BuildingType).includes(placementMode as BuildingType))
+          ) {
             setPlacedObjects((prev) => {
               const next = [...prev];
-              next[existingIndex] = { pos: snappedPos, type: 'gate', ownerId: obstacleOwnerId };
+              next[existingIndex] = {
+                pos: snappedPos,
+                type: placementMode as 'tree' | BuildingType,
+                ownerId: placementMode === BuildingType.Gate ? obstacleOwnerId : null,
+              };
               return next;
             });
           } else {
+            // Remove if same type
             setPlacedObjects((prev) => prev.filter((_, i) => i !== existingIndex));
           }
         } else {
-          // Normal placement with overlap validation
+          // Normal placement
           setPlacedObjects((prev) => [
             ...prev,
             {
               pos: snappedPos,
-              type: placementMode as 'tree' | 'palisade' | 'gate',
-              ownerId: placementMode === 'gate' ? obstacleOwnerId : null,
+              type: placementMode as 'tree' | BuildingType,
+              ownerId: placementMode === BuildingType.Gate ? obstacleOwnerId : null,
             },
           ]);
         }
@@ -487,6 +513,7 @@ export const NavigationScreen: React.FC = () => {
     setStartPos(null);
     setEndPos(null);
     setPath(null);
+    setPathIterations(0);
     if (simulatedHuman) {
       removeEntity(gameState.entities, simulatedHuman.id);
     }
@@ -555,9 +582,11 @@ export const NavigationScreen: React.FC = () => {
       ctx.textBaseline = 'middle';
       for (const obj of placedObjects) {
         let icon = '';
-        if (obj.type === 'tree') icon = '🌳';
-        else if (obj.type === 'palisade') icon = '🧱';
-        else if (obj.type === 'gate') icon = '🚪';
+        if (obj.type === 'tree') {
+          icon = '🌳';
+        } else {
+          icon = BUILDING_DEFINITIONS[obj.type].icon;
+        }
 
         if (icon) {
           ctx.fillText(icon, obj.pos.x, obj.pos.y);
@@ -630,20 +659,41 @@ export const NavigationScreen: React.FC = () => {
         ctx.stroke();
 
         // Target waypoint indicator
-        if (hPath && hPath.length > 0) {
+        const navTarget = hPath && hPath.length > 0 ? hPath[0] : null;
+        if (navTarget) {
           ctx.strokeStyle = '#FFEB3B';
           ctx.setLineDash([2, 2]);
           ctx.beginPath();
           ctx.moveTo(position.x, position.y);
-          ctx.lineTo(hPath[0].x, hPath[0].y);
+          ctx.lineTo(navTarget.x, navTarget.y);
           ctx.stroke();
           ctx.setLineDash([]);
 
           // Draw waypoint circle
           ctx.fillStyle = '#FFEB3B';
           ctx.beginPath();
-          ctx.arc(hPath[0].x, hPath[0].y, 4, 0, Math.PI * 2);
+          ctx.arc(navTarget.x, navTarget.y, 4, 0, Math.PI * 2);
           ctx.fill();
+
+          // Visualize Collision Rails (isPathBlocked sampling)
+          const dir = getDirectionVectorOnTorus(position, navTarget, CANVAS_WIDTH, CANVAS_HEIGHT);
+          const dist = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+          if (dist > 0.001) {
+            const normX = dir.x / dist;
+            const normY = dir.y / dist;
+            const perpX = -normY;
+            const perpY = normX;
+            const lateralOffset = CHARACTER_RADIUS;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            [lateralOffset, -lateralOffset, lateralOffset * 0.5, -lateralOffset * 0.5].forEach((offset) => {
+              ctx.beginPath();
+              ctx.moveTo(position.x + perpX * offset, position.y + perpY * offset);
+              ctx.lineTo(navTarget.x + perpX * offset, navTarget.y + perpY * offset);
+              ctx.stroke();
+            });
+          }
         }
 
         // Visualize Steering Samples
@@ -675,11 +725,17 @@ export const NavigationScreen: React.FC = () => {
       // Draw mouse cursor preview
       if (mousePos) {
         let icon = '';
-        if (placementMode === 'tree') icon = '🌳';
-        else if (placementMode === 'palisade' || placementMode === 'palisadeLine') icon = '🧱';
-        else if (placementMode === 'gate') icon = '🚪';
-        else if (placementMode === 'start') icon = '🟢';
-        else if (placementMode === 'end') icon = '🔴';
+        if (placementMode === 'tree') {
+          icon = '🌳';
+        } else if (placementMode === 'start') {
+          icon = '🟢';
+        } else if (placementMode === 'end') {
+          icon = '🔴';
+        } else if (placementMode === 'palisadeLine') {
+          icon = BUILDING_DEFINITIONS[BuildingType.Palisade].icon;
+        } else if (Object.values(BuildingType).includes(placementMode as BuildingType)) {
+          icon = BUILDING_DEFINITIONS[placementMode as BuildingType].icon;
+        }
 
         if (icon) {
           ctx.globalAlpha = 0.5;
@@ -737,15 +793,20 @@ export const NavigationScreen: React.FC = () => {
         >
           🌳 Tree (Radius {TREE_RADIUS})
         </Button>
-        <Button
-          active={placementMode === 'palisade'}
-          onClick={() => {
-            setPlacementMode('palisade');
-            setLineStartPos(null);
-          }}
-        >
-          🧱 Palisade (20x20)
-        </Button>
+
+        {Object.entries(BUILDING_DEFINITIONS).map(([type, def]) => (
+          <Button
+            key={type}
+            active={placementMode === type}
+            onClick={() => {
+              setPlacementMode(type as BuildingType);
+              setLineStartPos(null);
+            }}
+          >
+            {def.icon} {def.name} ({def.dimensions.width}x{def.dimensions.height})
+          </Button>
+        ))}
+
         <Button
           active={placementMode === 'palisadeLine'}
           onClick={() => {
@@ -754,15 +815,6 @@ export const NavigationScreen: React.FC = () => {
           }}
         >
           🧱 Palisade Line
-        </Button>
-        <Button
-          active={placementMode === 'gate'}
-          onClick={() => {
-            setPlacementMode('gate');
-            setLineStartPos(null);
-          }}
-        >
-          🚪 Gate (20x20)
         </Button>
 
         <SectionTitle>Gate Ownership</SectionTitle>
@@ -819,6 +871,7 @@ export const NavigationScreen: React.FC = () => {
         <SectionTitle>Info</SectionTitle>
         <InfoText>Grid: {NAV_GRID_RESOLUTION}px</InfoText>
         <InfoText>Path Nodes: {simulatedHuman?.path?.length || path?.length || 0}</InfoText>
+        <InfoText>A* Iterations: {pathIterations}</InfoText>
         <InfoText>Action: {simulatedHuman?.activeAction || 'idle'}</InfoText>
         <InfoText>Accel: {simulatedHuman?.acceleration.toFixed(2) || '0.00'}</InfoText>
         <InfoText>
@@ -832,7 +885,7 @@ export const NavigationScreen: React.FC = () => {
             : '⏳ Idle'}
         </InfoText>
         <InfoText style={{ fontSize: '0.75rem', color: '#666', marginTop: '10px' }}>
-          Note: Click Gate tool on an existing Palisade to replace it. Use Palisade Line for multi-segment walls.
+          Note: Click any tool on an existing object to replace or remove it. Use Palisade Line for multi-segment walls.
         </InfoText>
 
         <Button onClick={clearAll} style={{ backgroundColor: '#a33', marginTop: '20px' }}>
@@ -852,8 +905,8 @@ export const NavigationScreen: React.FC = () => {
           style={{ cursor: 'crosshair' }}
         />
         <InfoText style={{ marginTop: '10px', textAlign: 'center' }}>
-          Place Trees, Palisades, and Gates to test pathfinding. Adjust padding to see how it affects real game
-          navigation logic. Multi-pass grid rebuild ensures gates remain passable even with padding.
+          Place Trees and Buildings to test pathfinding. Only Palisades and Gates physically block movement. Adjust
+          padding to see how it affects real game navigation logic.
         </InfoText>
       </CanvasContainer>
     </ScreenContainer>

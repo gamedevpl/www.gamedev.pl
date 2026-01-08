@@ -83,14 +83,11 @@ export function isCellPassable(
     if (totalCount === 0) return true;
 
     if (leaderId !== undefined) {
-      // Safe Passage Corridor Logic:
-      // If a cell contains a friendly gate (physical or padding), it neutralizes
-      // any other padding penalties. This creates a zero-cost corridor through
-      // wall safety margins, making gates the preferred path through fortifications.
+      // Strict Passability: A cell is only 'perfectly passable' if ALL obstacles/padding
+      // in it belong to the leader's gates.
       const totalGateCount =
         (grid.gateRefCount[leaderId]?.[index] || 0) + (grid.gatePaddingRefCount[leaderId]?.[index] || 0);
-      
-      return totalGateCount > 0;
+      return totalCount === totalGateCount;
     }
     return false;
   } else {
@@ -231,27 +228,72 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
 }
 
 /**
+ * Finds the nearest cell that is fully passable (no physical obstacles AND no padding penalty).
+ * Spirals out from the given position.
+ */
+export function findNearestPassableCell(
+  grid: NavigationGrid,
+  pos: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+  leaderId?: number,
+): Vector2D {
+  const startCoords = getNavigationGridCoords(pos, worldWidth, worldHeight);
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+
+  // Spiral search
+  for (let r = 0; r < 20; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+
+        const nx = (startCoords.x + dx + gridWidth) % gridWidth;
+        const ny = (startCoords.y + dy + gridHeight) % gridHeight;
+        const index = ny * gridWidth + nx;
+
+        if (isCellPassable(grid, index, leaderId, true)) {
+          return {
+            x: nx * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+            y: ny * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+          };
+        }
+      }
+    }
+  }
+
+  return pos; // Fallback
+}
+
+/**
  * Toroidal A* pathfinding.
- * Uses a cost-based penalty model for padding to ensure humans can always escape tight spots.
+ * Uses a dynamic penalty field model for padding.
  */
 export function findPath(
   gameState: GameWorldState,
   start: Vector2D,
   end: Vector2D,
   entity: HumanEntity,
-): Vector2D[] | null {
+): { path: Vector2D[] | null; iterations: number } {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
 
-  const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
-  const endCoords = getNavigationGridCoords(end, worldWidth, worldHeight);
+  const grid = gameState.navigationGrid;
 
-  if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
-    return [end];
+  // Ensure target is actually reachable (not inside a solid object or padding)
+  const endIdx = getNavigationGridIndex(end, worldWidth, worldHeight);
+  let finalTarget = end;
+  if (!isCellPassable(grid, endIdx, entity.leaderId, true)) {
+    finalTarget = findNearestPassableCell(grid, end, worldWidth, worldHeight, entity.leaderId);
   }
 
-  const grid = gameState.navigationGrid;
+  const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
+  const endCoords = getNavigationGridCoords(finalTarget, worldWidth, worldHeight);
+
+  if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
+    return { path: [finalTarget], iterations: 0 };
+  }
 
   // Simple Priority Queue implementation
   const openSet: number[] = [startCoords.y * gridWidth + startCoords.x];
@@ -263,7 +305,7 @@ export function findPath(
   gScore.set(startIdx, 0);
   fScore.set(startIdx, toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight));
 
-  const maxIterations = 2000; // Safety cap
+  const maxIterations = 5000; // Safety cap
   let iterations = 0;
 
   while (openSet.length > 0 && iterations < maxIterations) {
@@ -287,7 +329,7 @@ export function findPath(
     const curY = Math.floor(currentIdx / gridWidth);
 
     if (curX === endCoords.x && curY === endCoords.y) {
-      return reconstructPath(cameFrom, currentIdx, gridWidth, end);
+      return { path: reconstructPath(cameFrom, currentIdx, gridWidth, finalTarget), iterations };
     }
 
     openSet.splice(openSetIdx, 1);
@@ -309,9 +351,17 @@ export function findPath(
         // Base cost for movement (cardinal vs diagonal)
         let moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
 
-        // Penalty check: Padding (blue area) adds a high cost penalty instead of being a hard wall
-        if (!isCellPassable(grid, neighborIdx, entity.leaderId, true)) {
-          moveCost += 50.0;
+        // Navigation Field Penalty Model:
+        // Calculate effective padding (total padding minus friendly gate padding)
+        const totalPadding = grid.paddingCount[neighborIdx];
+        const friendlyGatePadding =
+          entity.leaderId !== undefined ? grid.gatePaddingRefCount[entity.leaderId]?.[neighborIdx] || 0 : 0;
+        const effectivePadding = Math.max(0, totalPadding - friendlyGatePadding);
+
+        if (effectivePadding > 0) {
+          // Add penalty per source of padding. 25.0 is a strong deterrent but allows
+          // squeezing through holes if the detour is long.
+          moveCost += 25.0 * effectivePadding;
         }
 
         const tentativeGScore = (gScore.get(currentIdx) ?? 0) + moveCost;
@@ -323,7 +373,6 @@ export function findPath(
             neighborIdx,
             tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight),
           );
-
           if (!openSet.includes(neighborIdx)) {
             openSet.push(neighborIdx);
           }
@@ -332,7 +381,7 @@ export function findPath(
     }
   }
 
-  return null; // No path found
+  return { path: null, iterations }; // No path found
 }
 
 function toroidalHeuristic(

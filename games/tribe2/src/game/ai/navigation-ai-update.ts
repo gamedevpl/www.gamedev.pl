@@ -26,7 +26,7 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
       }
 
       if (targetPos) {
-        const path = findPath(indexedState, entity.position, targetPos, entity);
+        const { path } = findPath(indexedState, entity.position, targetPos, entity);
         if (path) {
           entity.path = path;
           entity.pathTarget = { ...targetPos };
