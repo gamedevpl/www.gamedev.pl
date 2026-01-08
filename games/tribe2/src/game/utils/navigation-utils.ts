@@ -3,7 +3,10 @@ import { GameWorldState, NavigationGrid } from '../world-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
-import { CHARACTER_RADIUS } from '../ui/ui-consts';
+import {
+  NAV_GRID_RESOLUTION,
+  PADDING_MAX_WEIGHT,
+} from './navigation-consts';
 import {
   findPathHPA,
   getOrBuildHPAGraph,
@@ -11,23 +14,8 @@ import {
   CLUSTER_SIZE_CELLS,
 } from './hpa-pathfinding';
 
-/**
- * Resolution of the navigation grid in pixels.
- * Set to 10px (finer than territory grid) for better small obstacle detection.
- */
-export const NAV_GRID_RESOLUTION = 10;
-
-/**
- * The standard radius used to inflate obstacles on the navigation grid.
- * Matches the HumanEntity radius to ensure they can navigate gaps.
- */
-export const NAVIGATION_AGENT_RADIUS = CHARACTER_RADIUS;
-
-/**
- * Maximum weight assigned to a padding cell.
- * Used to create a gradual penalty field around obstacles.
- */
-export const PADDING_MAX_WEIGHT = 100;
+// Re-export constants for backward compatibility
+export { NAV_GRID_RESOLUTION, NAVIGATION_AGENT_RADIUS, PADDING_MAX_WEIGHT } from './navigation-consts';
 
 /**
  * Calculates the grid index for a given world position.

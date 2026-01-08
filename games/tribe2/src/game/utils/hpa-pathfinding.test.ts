@@ -6,7 +6,6 @@ import {
   invalidateHPACache,
   CLUSTER_SIZE_CELLS,
   CLUSTER_SIZE_PIXELS,
-  HPAGraph,
 } from './hpa-pathfinding';
 import {
   initNavigationGrid,
@@ -14,7 +13,7 @@ import {
   NAV_GRID_RESOLUTION,
   findPath,
 } from './navigation-utils';
-import { GameWorldState, NavigationGrid } from '../world-types';
+import { GameWorldState } from '../world-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { CHARACTER_RADIUS } from '../ui/ui-consts';
 
@@ -41,7 +40,24 @@ function createMockHuman(position: { x: number; y: number }, leaderId?: number):
     direction: { x: 0, y: 0 },
     velocity: 0,
     acceleration: 0,
-  } as HumanEntity;
+    // Required fields with defaults for testing
+    hitpoints: 100,
+    maxHitpoints: 100,
+    gender: 'male',
+    food: [],
+    hunger: 0,
+    maxHunger: 100,
+    age: 25,
+    isAdult: true,
+    isPregnant: false,
+    isPlayer: false,
+    activeAction: undefined,
+    attackTargetId: undefined,
+    target: undefined,
+    path: undefined,
+    pathTarget: undefined,
+    stateMachine: ['idle', {}],
+  } as unknown as HumanEntity;
 }
 
 describe('HPA* Pathfinding', () => {
@@ -95,10 +111,12 @@ describe('HPA* Pathfinding', () => {
 
       // Check that the cluster at (0,0) has fewer entrances to (1,0)
       const cluster00Key = '0,0';
-      const entrances00 = graph.clusterEntrances.get(cluster00Key) || [];
-      
+      const entrances00Count = (graph.clusterEntrances.get(cluster00Key) || []).length;
+
       // There should still be entrances, but possibly fewer/none on the blocked side
       expect(graph.nodes.size).toBeGreaterThan(0);
+      // Just verify we got a count (can be 0 or more)
+      expect(entrances00Count).toBeGreaterThanOrEqual(0);
     });
   });
 

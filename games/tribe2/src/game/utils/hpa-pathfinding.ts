@@ -13,12 +13,94 @@
 import { Vector2D } from './math-types';
 import { GameWorldState, NavigationGrid } from '../world-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import {
-  NAV_GRID_RESOLUTION,
-  getNavigationGridCoords,
-  isCellPassable,
-  findNearestPassableCell,
-} from './navigation-utils';
+import { NAV_GRID_RESOLUTION } from './navigation-consts';
+
+// ============================================================================
+// Local utility functions (to avoid circular dependency with navigation-utils)
+// ============================================================================
+
+/**
+ * Calculates grid coordinates from a world position.
+ */
+function getGridCoords(
+  position: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+): { x: number; y: number } {
+  const wrappedX = ((position.x % worldWidth) + worldWidth) % worldWidth;
+  const wrappedY = ((position.y % worldHeight) + worldHeight) % worldHeight;
+  return {
+    x: Math.floor(wrappedX / NAV_GRID_RESOLUTION),
+    y: Math.floor(wrappedY / NAV_GRID_RESOLUTION),
+  };
+}
+
+/**
+ * Helper to check if a grid cell is passable.
+ */
+function checkCellPassable(
+  grid: NavigationGrid,
+  index: number,
+  leaderId?: number,
+  usePadding: boolean = true,
+): boolean {
+  if (usePadding) {
+    const totalCount = grid.obstacleCount[index] + grid.paddingCount[index];
+    if (totalCount === 0) return true;
+
+    if (leaderId !== undefined) {
+      const totalGateCount =
+        (grid.gateRefCount[leaderId]?.[index] || 0) + (grid.gatePaddingRefCount[leaderId]?.[index] || 0);
+      return totalCount === totalGateCount;
+    }
+    return false;
+  } else {
+    const count = grid.obstacleCount[index];
+    if (count === 0) return true;
+
+    if (leaderId !== undefined) {
+      const gateCount = grid.gateRefCount[leaderId]?.[index] || 0;
+      return count === gateCount;
+    }
+    return false;
+  }
+}
+
+/**
+ * Finds the nearest cell that is fully passable.
+ */
+function findNearestPassable(
+  grid: NavigationGrid,
+  pos: Vector2D,
+  worldWidth: number,
+  worldHeight: number,
+  leaderId?: number,
+): Vector2D {
+  const startCoords = getGridCoords(pos, worldWidth, worldHeight);
+  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
+
+  for (let r = 0; r < 20; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+
+        const nx = (startCoords.x + dx + gridWidth) % gridWidth;
+        const ny = (startCoords.y + dy + gridHeight) % gridHeight;
+        const index = ny * gridWidth + nx;
+
+        if (checkCellPassable(grid, index, leaderId, true)) {
+          return {
+            x: nx * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+            y: ny * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+          };
+        }
+      }
+    }
+  }
+
+  return pos;
+}
 
 // ============================================================================
 // Constants
@@ -214,9 +296,9 @@ function findAllEntrances(
         const leftIdx = y * gridWidth + (borderX - 1);
         const rightIdx = y * gridWidth + borderX;
 
-        const leftPassable = isCellPassable(grid, leftIdx, undefined, false);
+        const leftPassable = checkCellPassable(grid, leftIdx, undefined, false);
         const rightPassable =
-          borderX < gridWidth ? isCellPassable(grid, rightIdx, undefined, false) : false;
+          borderX < gridWidth ? checkCellPassable(grid, rightIdx, undefined, false) : false;
 
         if (leftPassable && rightPassable) {
           if (segmentStart === -1) segmentStart = y;
@@ -267,9 +349,9 @@ function findAllEntrances(
         const topIdx = (borderY - 1) * gridWidth + x;
         const bottomIdx = borderY * gridWidth + x;
 
-        const topPassable = isCellPassable(grid, topIdx, undefined, false);
+        const topPassable = checkCellPassable(grid, topIdx, undefined, false);
         const bottomPassable =
-          borderY < gridHeight ? isCellPassable(grid, bottomIdx, undefined, false) : false;
+          borderY < gridHeight ? checkCellPassable(grid, bottomIdx, undefined, false) : false;
 
         if (topPassable && bottomPassable) {
           if (segmentStart === -1) segmentStart = x;
@@ -490,7 +572,7 @@ function computeIntraClusterDistance(
 
         const neighborIdx = ny * gridWidth + nx;
 
-        if (!isCellPassable(grid, neighborIdx, undefined, false)) {
+        if (!checkCellPassable(grid, neighborIdx, undefined, false)) {
           continue;
         }
 
@@ -547,8 +629,8 @@ export function findPathHPA(
     return { path: null, iterations: 0, usedHPA: false };
   }
 
-  const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
-  const endCoords = getNavigationGridCoords(end, worldWidth, worldHeight);
+  const startCoords = getGridCoords(start, worldWidth, worldHeight);
+  const endCoords = getGridCoords(end, worldWidth, worldHeight);
 
   // Check if start and end are in the same cluster - use low-level A* directly
   const startCluster = getClusterForGridPos(startCoords.x, startCoords.y);
@@ -563,8 +645,8 @@ export function findPathHPA(
   let finalTarget = end;
   const endIdx =
     endCoords.y * hpaGraph.gridWidth + endCoords.x;
-  if (!isCellPassable(grid, endIdx, entity.leaderId, false)) {
-    finalTarget = findNearestPassableCell(grid, end, worldWidth, worldHeight, entity.leaderId);
+  if (!checkCellPassable(grid, endIdx, entity.leaderId, false)) {
+    finalTarget = findNearestPassable(grid, end, worldWidth, worldHeight, entity.leaderId);
   }
 
   // Step 1: Insert temporary start and goal nodes into the abstract graph
@@ -582,7 +664,7 @@ export function findPathHPA(
   const tempGoalNode = createTemporaryNode(
     'temp_goal',
     finalTarget,
-    getNavigationGridCoords(finalTarget, worldWidth, worldHeight),
+    getGridCoords(finalTarget, worldWidth, worldHeight),
     endCluster,
     hpaGraph,
     grid,
