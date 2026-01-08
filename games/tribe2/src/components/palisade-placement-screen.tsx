@@ -114,6 +114,37 @@ const InfoText = styled.p`
   margin: 5px 0;
 `;
 
+const QualityBadge = styled.span<{ $rating: 'Excellent' | 'Good' | 'Fair' | 'Poor' }>`
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.75rem;
+  background-color: ${(props) => {
+    switch (props.$rating) {
+      case 'Excellent': return '#2a5';
+      case 'Good': return '#28a';
+      case 'Fair': return '#a82';
+      case 'Poor': return '#a33';
+    }
+  }};
+`;
+
+const ComparisonBox = styled.div`
+  background-color: #333;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  border-left: 3px solid #666;
+`;
+
+const ComparisonTitle = styled.div`
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 5px;
+  font-weight: bold;
+`;
+
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
 
@@ -129,10 +160,44 @@ interface GordPlanStats {
   gateCount: number;
   hubCount: number;
   enclosedArea: number;
+  // Quality metrics
+  defenseEfficiency: number; // Area per palisade (higher = more efficient)
+  compactness: number; // How close to a square (1.0 = perfect square)
+  accessibilityScore: number; // Gate ratio (gates / total perimeter pieces)
+  woodCost: number; // Estimated wood needed
+  qualityRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
 }
+
+// AI default values (from tribe-building-task-producer.ts)
+const AI_DEFAULT_MARGIN = 12;
+const AI_DEFAULT_GATE_SPACING = 20;
 
 // Default margin for gord perimeter (in grid cells)
 const DEFAULT_GORD_MARGIN = 6;
+
+// Quality scoring thresholds for gord evaluation
+// Defense efficiency: area protected per palisade (higher = more efficient)
+const DEFENSE_EFFICIENCY_EXCELLENT = 800; // Outstanding resource usage
+const DEFENSE_EFFICIENCY_GOOD = 500; // Good balance of protection and resources
+const DEFENSE_EFFICIENCY_FAIR = 300; // Acceptable but could be improved
+
+// Compactness: how square the enclosure is (1.0 = perfect square)
+// Square shapes are best for defense as they minimize perimeter for a given area
+const COMPACTNESS_EXCELLENT = 0.7; // Near-square
+const COMPACTNESS_GOOD = 0.5; // Reasonably compact
+const COMPACTNESS_FAIR = 0.3; // Elongated but acceptable
+
+// Accessibility: ratio of gates to total perimeter segments
+// Too few gates = hard to exit/enter, too many = weak defense
+const ACCESSIBILITY_MIN_OPTIMAL = 0.05; // At least 5% gates
+const ACCESSIBILITY_MAX_OPTIMAL = 0.15; // No more than 15% gates
+const ACCESSIBILITY_MIN_ACCEPTABLE = 0.02;
+const ACCESSIBILITY_MAX_ACCEPTABLE = 0.25;
+
+// Overall quality thresholds
+const QUALITY_EXCELLENT_THRESHOLD = 80;
+const QUALITY_GOOD_THRESHOLD = 60;
+const QUALITY_FAIR_THRESHOLD = 40;
 
 const createMockWorldState = (buildings: BuildingEntity[], terrainOwnership: (number | null)[]): GameWorldState => {
   const entitiesMap: Record<number, unknown> = buildings.reduce((acc, b) => {
@@ -190,6 +255,11 @@ const createMockWorldState = (buildings: BuildingEntity[], terrainOwnership: (nu
     predator: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['predator'],
     tasks: { byRect: () => [], all: () => [] } as unknown as IndexedWorldState['search']['tasks'],
   };
+
+  // Add cache for getTribeCenter to work
+  (state as unknown as IndexedWorldState).cache = {
+    tribeCenters: {},
+  } as unknown as IndexedWorldState['cache'];
 
   return state;
 };
@@ -336,20 +406,82 @@ function planGordPerimeter(
 }
 
 /**
- * Calculates statistics for a planned gord.
+ * Calculates statistics and quality metrics for a planned gord.
  */
 function calculateGordStats(
   plannedPositions: PlannedGordPosition[],
   hubs: BuildingEntity[],
+  margin: number,
 ): GordPlanStats {
   const palisadeCount = plannedPositions.filter((p) => !p.isGate).length;
   const gateCount = plannedPositions.filter((p) => p.isGate).length;
-  const perimeterLength = plannedPositions.length * NAV_GRID_RESOLUTION;
+  const totalSegments = plannedPositions.length;
+  const perimeterLength = totalSegments * NAV_GRID_RESOLUTION;
   
-  // Calculate enclosed area (rough approximation based on perimeter)
-  // Using the formula: Area ≈ (perimeter²) / (4π) for a circle
-  // This is a rough estimate; actual area depends on shape
-  const enclosedArea = Math.round((perimeterLength * perimeterLength) / (4 * Math.PI));
+  // Calculate actual enclosed area based on rectangular perimeter
+  // The gord is rectangular, so we calculate from hub bounding box plus margin
+  // Find the bounding box of all hubs
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const hub of hubs) {
+    minX = Math.min(minX, hub.position.x);
+    maxX = Math.max(maxX, hub.position.x);
+    minY = Math.min(minY, hub.position.y);
+    maxY = Math.max(maxY, hub.position.y);
+  }
+  const hubSpreadX = hubs.length > 0 ? maxX - minX : 0;
+  const hubSpreadY = hubs.length > 0 ? maxY - minY : 0;
+  const widthPx = hubSpreadX + (margin * 2 * NAV_GRID_RESOLUTION);
+  const heightPx = hubSpreadY + (margin * 2 * NAV_GRID_RESOLUTION);
+  const enclosedArea = widthPx * heightPx;
+
+  // Quality metrics
+  
+  // 1. Defense Efficiency: Area protected per palisade (higher = more efficient use of resources)
+  // Normalized to 0-100 scale where 100 is excellent
+  const defenseEfficiency = palisadeCount > 0 ? enclosedArea / palisadeCount : 0;
+  
+  // 2. Compactness: How close to a square shape (1.0 = perfect square, lower = elongated)
+  // For a rectangle, compactness = 4*area / perimeter² (maximum 1 for a square)
+  const compactness = perimeterLength > 0 
+    ? (4 * enclosedArea) / (perimeterLength * perimeterLength) 
+    : 0;
+  
+  // 3. Accessibility Score: Ratio of gates to total perimeter (0-1, reasonable is 0.05-0.15)
+  const accessibilityScore = totalSegments > 0 ? gateCount / totalSegments : 0;
+  
+  // 4. Wood Cost: Using actual building definitions
+  const palisadeWoodCost = BUILDING_DEFINITIONS[BuildingType.Palisade].cost?.wood ?? 1;
+  const gateWoodCost = BUILDING_DEFINITIONS[BuildingType.Gate].cost?.wood ?? 3;
+  const woodCost = (palisadeCount * palisadeWoodCost) + (gateCount * gateWoodCost);
+  
+  // 5. Overall Quality Rating based on multiple factors
+  // Score considers: defense efficiency, compactness, and reasonable gate ratio
+  let qualityScore = 0;
+  
+  // Defense efficiency contribution (higher is better, normalized)
+  if (defenseEfficiency > DEFENSE_EFFICIENCY_EXCELLENT) qualityScore += 30;
+  else if (defenseEfficiency > DEFENSE_EFFICIENCY_GOOD) qualityScore += 20;
+  else if (defenseEfficiency > DEFENSE_EFFICIENCY_FAIR) qualityScore += 10;
+  
+  // Compactness contribution (closer to square is better for defense)
+  if (compactness > COMPACTNESS_EXCELLENT) qualityScore += 30;
+  else if (compactness > COMPACTNESS_GOOD) qualityScore += 20;
+  else if (compactness > COMPACTNESS_FAIR) qualityScore += 10;
+  
+  // Accessibility contribution (need some gates, but not too many)
+  if (accessibilityScore >= ACCESSIBILITY_MIN_OPTIMAL && accessibilityScore <= ACCESSIBILITY_MAX_OPTIMAL) qualityScore += 25;
+  else if (accessibilityScore > ACCESSIBILITY_MIN_ACCEPTABLE && accessibilityScore < ACCESSIBILITY_MAX_ACCEPTABLE) qualityScore += 15;
+  else qualityScore += 5;
+  
+  // Hub protection bonus (more hubs enclosed = better)
+  if (hubs.length >= 2) qualityScore += 15;
+  else if (hubs.length === 1) qualityScore += 10;
+  
+  let qualityRating: GordPlanStats['qualityRating'];
+  if (qualityScore >= QUALITY_EXCELLENT_THRESHOLD) qualityRating = 'Excellent';
+  else if (qualityScore >= QUALITY_GOOD_THRESHOLD) qualityRating = 'Good';
+  else if (qualityScore >= QUALITY_FAIR_THRESHOLD) qualityRating = 'Fair';
+  else qualityRating = 'Poor';
 
   return {
     perimeterLength,
@@ -357,6 +489,11 @@ function calculateGordStats(
     gateCount,
     hubCount: hubs.length,
     enclosedArea,
+    defenseEfficiency: Math.round(defenseEfficiency),
+    compactness: Math.round(compactness * 100) / 100,
+    accessibilityScore: Math.round(accessibilityScore * 1000) / 1000,
+    woodCost,
+    qualityRating,
   };
 }
 
@@ -426,8 +563,24 @@ export const PalisadePlacementScreen: React.FC = () => {
   // Calculate gord statistics
   const gordStats = useMemo((): GordPlanStats | null => {
     if (plannedGordPositions.length === 0) return null;
-    return calculateGordStats(plannedGordPositions, hubBuildings);
-  }, [plannedGordPositions, hubBuildings]);
+    return calculateGordStats(plannedGordPositions, hubBuildings, gordMargin);
+  }, [plannedGordPositions, hubBuildings, gordMargin]);
+
+  // Calculate what the AI would build with its default settings
+  const aiDefaultStats = useMemo((): GordPlanStats | null => {
+    if (hubBuildings.length === 0) return null;
+    
+    // Plan gord with AI default settings
+    const clusters = clusterHubs(hubBuildings, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const allPositions: PlannedGordPosition[] = [];
+    for (const cluster of clusters) {
+      const positions = planGordPerimeter(cluster, placedBuildings, AI_DEFAULT_MARGIN, AI_DEFAULT_GATE_SPACING);
+      allPositions.push(...positions);
+    }
+    
+    if (allPositions.length === 0) return null;
+    return calculateGordStats(allPositions, hubBuildings, AI_DEFAULT_MARGIN);
+  }, [hubBuildings, placedBuildings]);
 
   const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
     const gridSize = NAV_GRID_RESOLUTION;
@@ -786,14 +939,33 @@ export const PalisadePlacementScreen: React.FC = () => {
         <SectionTitle>Gord Statistics</SectionTitle>
         {gordStats ? (
           <>
+            <InfoText>
+              🎯 Quality: <QualityBadge $rating={gordStats.qualityRating}>{gordStats.qualityRating}</QualityBadge>
+            </InfoText>
             <InfoText>🏠 Hubs enclosed: {gordStats.hubCount}</InfoText>
-            <InfoText>🧱 Palisades planned: {gordStats.palisadeCount}</InfoText>
-            <InfoText>🚪 Gates planned: {gordStats.gateCount}</InfoText>
+            <InfoText>🧱 Palisades: {gordStats.palisadeCount}</InfoText>
+            <InfoText>🚪 Gates: {gordStats.gateCount}</InfoText>
             <InfoText>📏 Perimeter: {gordStats.perimeterLength}px</InfoText>
-            <InfoText>📐 Est. area: ~{gordStats.enclosedArea}px²</InfoText>
+            <InfoText>📐 Area: ~{gordStats.enclosedArea}px²</InfoText>
+            <InfoText>⚔️ Defense efficiency: {gordStats.defenseEfficiency} area/palisade</InfoText>
+            <InfoText>📦 Compactness: {gordStats.compactness} (1.0 = perfect)</InfoText>
+            <InfoText>🚪 Accessibility: {(gordStats.accessibilityScore * 100).toFixed(1)}%</InfoText>
+            <InfoText>🪵 Wood cost: ~{gordStats.woodCost}</InfoText>
           </>
         ) : (
           <InfoText>No gord planned. Place hubs first.</InfoText>
+        )}
+
+        {aiDefaultStats && (
+          <ComparisonBox>
+            <ComparisonTitle>AI Default (margin={AI_DEFAULT_MARGIN})</ComparisonTitle>
+            <InfoText>
+              🎯 <QualityBadge $rating={aiDefaultStats.qualityRating}>{aiDefaultStats.qualityRating}</QualityBadge>
+            </InfoText>
+            <InfoText>🧱 {aiDefaultStats.palisadeCount} palisades, 🚪 {aiDefaultStats.gateCount} gates</InfoText>
+            <InfoText>⚔️ Efficiency: {aiDefaultStats.defenseEfficiency} | 📦 Compact: {aiDefaultStats.compactness}</InfoText>
+            <InfoText>🪵 Wood: ~{aiDefaultStats.woodCost}</InfoText>
+          </ComparisonBox>
         )}
 
         <SectionTitle>Visualization</SectionTitle>
