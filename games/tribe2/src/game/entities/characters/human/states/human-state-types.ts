@@ -19,6 +19,7 @@ interface HumanIdleStateData extends StateData {
 
 export interface HumanMovingStateData extends StateData {
   target?: Vector2D | EntityId; // Where the human is moving to
+  lastPruneTime?: number; // Timestamp for throttled path pruning
 }
 
 interface HumanEatingStateData extends StateData {

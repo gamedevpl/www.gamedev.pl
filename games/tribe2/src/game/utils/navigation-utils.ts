@@ -18,6 +18,12 @@ export const NAV_GRID_RESOLUTION = 10;
 export const NAVIGATION_AGENT_RADIUS = CHARACTER_RADIUS;
 
 /**
+ * Maximum weight assigned to a padding cell.
+ * Used to create a gradual penalty field around obstacles.
+ */
+export const PADDING_MAX_WEIGHT = 100;
+
+/**
  * Calculates the grid index for a given world position.
  */
 export function getNavigationGridIndex(position: Vector2D, worldWidth: number, worldHeight: number): number {
@@ -151,13 +157,21 @@ export function updateNavigationGridSector(
         const index = gy * gridWidth + gx;
         const isPhysical = dist <= radius;
 
+        // Calculate a distance-based weight for padding cells.
+        // If inflationRadius is 0, weight is always 1 (physical only).
+        // Otherwise, weight decreases as we move away from the physical radius.
+        const weight =
+          inflationRadius > 0 && !isPhysical
+            ? Math.max(1, Math.floor(PADDING_MAX_WEIGHT * (1 - (dist - radius) / inflationRadius)))
+            : 1;
+
         if (isAdding) {
           if (isPhysical) {
             grid.obstacleCount[index]++;
             if (ownerId !== null) grid.gateRefCount[ownerId][index]++;
           } else {
-            grid.paddingCount[index]++;
-            if (ownerId !== null) grid.gatePaddingRefCount[ownerId][index]++;
+            grid.paddingCount[index] += weight;
+            if (ownerId !== null) grid.gatePaddingRefCount[ownerId][index] += weight;
           }
         } else {
           // Removal with safety checks to avoid underflow
@@ -167,9 +181,19 @@ export function updateNavigationGridSector(
               grid.gateRefCount[ownerId][index]--;
             }
           } else {
-            if (grid.paddingCount[index] > 0) grid.paddingCount[index]--;
-            if (ownerId !== null && grid.gatePaddingRefCount[ownerId] && grid.gatePaddingRefCount[ownerId][index] > 0) {
-              grid.gatePaddingRefCount[ownerId][index]--;
+            if (grid.paddingCount[index] >= weight) {
+              grid.paddingCount[index] -= weight;
+            } else {
+              grid.paddingCount[index] = 0;
+            }
+            if (
+              ownerId !== null &&
+              grid.gatePaddingRefCount[ownerId] &&
+              grid.gatePaddingRefCount[ownerId][index] >= weight
+            ) {
+              grid.gatePaddingRefCount[ownerId][index] -= weight;
+            } else if (ownerId !== null && grid.gatePaddingRefCount[ownerId]) {
+              grid.gatePaddingRefCount[ownerId][index] = 0;
             }
           }
         }
@@ -197,7 +221,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   const normY = dir.y / distance;
   const perpX = -normY;
   const perpY = normX;
-  const lateralOffset = entity.radius;
+  const lateralOffset = entity.radius * 0.85; // Allow slight squeezing to prevent stuck loops
 
   const grid = gameState.navigationGrid;
 
@@ -281,10 +305,11 @@ export function findPath(
 
   const grid = gameState.navigationGrid;
 
-  // Ensure target is actually reachable (not inside a solid object or padding)
+  // Ensure target is actually reachable (not inside a solid object)
+  // We now allow targets to be inside padding zones, as long as they aren't physically blocked.
   const endIdx = getNavigationGridIndex(end, worldWidth, worldHeight);
   let finalTarget = end;
-  if (!isCellPassable(grid, endIdx, entity.leaderId, true)) {
+  if (!isCellPassable(grid, endIdx, entity.leaderId, false)) {
     finalTarget = findNearestPassableCell(grid, end, worldWidth, worldHeight, entity.leaderId);
   }
 
@@ -359,9 +384,10 @@ export function findPath(
         const effectivePadding = Math.max(0, totalPadding - friendlyGatePadding);
 
         if (effectivePadding > 0) {
-          // Add penalty per source of padding. 25.0 is a strong deterrent but allows
-          // squeezing through holes if the detour is long.
-          moveCost += 25.0 * effectivePadding;
+          // Soft penalty field model:
+          // Use the stored weights to create a potential field that naturally guides
+          // agents toward the center of narrow gaps without blocking them entirely.
+          moveCost += 5.0 + effectivePadding * 0.5;
         }
 
         const tentativeGScore = (gScore.get(currentIdx) ?? 0) + moveCost;

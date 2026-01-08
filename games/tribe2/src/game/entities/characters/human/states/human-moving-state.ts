@@ -26,6 +26,8 @@ import {
 import { isPathBlocked } from '../../../../utils/navigation-utils';
 
 const MOVEMENT_THRESHOLD = 10.0; // Distance to consider "close enough" to target
+const PATH_PRUNE_INTERVAL = 0.2; // Seconds between proactive smoothing checks
+const MAX_SKIP_LOOKAHEAD = 15; // Max waypoints to look ahead for shortcuts
 
 class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
   id = HUMAN_MOVING;
@@ -123,36 +125,74 @@ class HumanMovingState implements State<HumanEntity, HumanMovingStateData> {
       return { nextState: HUMAN_MOVING, data: movingData };
     }
 
-    // 3. Determine Navigation Target (Waypoint or Final Target)
+    // 3. Path Following, Pruning, and Skipping
     let navTarget = targetPosition;
     if (entity.path && entity.path.length > 0) {
-      navTarget = entity.path[0];
+      const now = updateContext.gameState.time;
 
-      // Check if path to current waypoint is blocked
-      const isDirectlyBlocked = isPathBlocked(updateContext.gameState, entity.position, navTarget, entity);
-      const distToWaypoint = calculateWrappedDistance(entity.position, navTarget, width, height);
+      // --- Throttled Proactive Smoothing ---
+      // Periodically check if we can skip ahead to the final target or a much later waypoint
+      if (now - (movingData.lastPruneTime ?? 0) > PATH_PRUNE_INTERVAL) {
+        movingData.lastPruneTime = now;
 
-      if (isDirectlyBlocked) {
-        // Cornering logic: If we're very close to the waypoint, don't stop. 
-        // This allows clearing the 'shoulder' of an obstacle.
-        if (distToWaypoint > entity.radius * 1.2) {
+        // Greedy Check: Can we see the final target directly?
+        if (!isPathBlocked(updateContext.gameState, entity.position, targetPosition, entity)) {
+          entity.path = [targetPosition];
+        } else {
+          // Lookahead: Check the next few waypoints from furthest to closest for a shortcut
+          const checkLimit = Math.min(entity.path.length - 1, MAX_SKIP_LOOKAHEAD);
+          for (let i = checkLimit; i > 0; i--) {
+            const waypoint = entity.path[i];
+            if (!isPathBlocked(updateContext.gameState, entity.position, waypoint, entity)) {
+              entity.path.splice(0, i);
+              break;
+            }
+          }
+        }
+      }
+
+      // Ensure path still has waypoints after pruning
+      if (entity.path.length === 0) {
+        navTarget = targetPosition;
+      } else {
+        navTarget = entity.path[0];
+      }
+
+      // --- Reactive Skip-on-Block ---
+      // If our immediate waypoint is blocked, search for a shortcut past the obstruction
+      if (isPathBlocked(updateContext.gameState, entity.position, navTarget, entity)) {
+        let foundShortcut = false;
+        const skipLimit = Math.min(entity.path.length - 1, MAX_SKIP_LOOKAHEAD);
+        
+        for (let i = 1; i <= skipLimit; i++) {
+          if (!isPathBlocked(updateContext.gameState, entity.position, entity.path[i], entity)) {
+            entity.path.splice(0, i);
+            navTarget = entity.path[0];
+            foundShortcut = true;
+            break;
+          }
+        }
+
+        if (!foundShortcut) {
+          // Truly stuck: No waypoints are reachable without physical collision.
+          // Invalidate path to trigger a fresh A* request.
+          // The new weighted padding field in navigation-utils will now allow
+          // the pathfinder to find tight routes through gaps that were previously blocked.
           entity.path = undefined;
           entity.pathTarget = undefined;
-          if (!updateContext.gameState.pathfindingQueue.includes(entity.id)) {
-            updateContext.gameState.pathfindingQueue.push(entity.id);
-          }
           entity.acceleration = 0;
           return { nextState: HUMAN_MOVING, data: movingData };
         }
-      } else {
-        // If reached waypoint, move to next
-        if (distToWaypoint < MOVEMENT_THRESHOLD) {
-          entity.path.shift();
-          if (entity.path.length > 0) {
-            navTarget = entity.path[0];
-          } else {
-            navTarget = targetPosition;
-          }
+      }
+
+      // --- Waypoint Advancing ---
+      const distToWaypoint = calculateWrappedDistance(entity.position, navTarget, width, height);
+      if (distToWaypoint < MOVEMENT_THRESHOLD) {
+        entity.path.shift();
+        if (entity.path.length > 0) {
+          navTarget = entity.path[0];
+        } else {
+          navTarget = targetPosition;
         }
       }
     }
