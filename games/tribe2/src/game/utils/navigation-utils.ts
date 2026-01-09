@@ -352,7 +352,8 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
 }
 
 /**
- * Finds the nearest cell that is fully passable (no physical obstacles AND no padding penalty).
+ * Finds the nearest cell that is passable.
+ * @param usePadding If true, looks for a cell with no padding penalty. If false, looks for any physically passable cell.
  * Spirals out from the given position.
  */
 export function findNearestPassableCell(
@@ -361,6 +362,7 @@ export function findNearestPassableCell(
   worldWidth: number,
   worldHeight: number,
   leaderId?: number,
+  usePadding: boolean = true,
 ): Vector2D {
   const startCoords = getNavigationGridCoords(pos, worldWidth, worldHeight);
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
@@ -376,7 +378,7 @@ export function findNearestPassableCell(
         const ny = (startCoords.y + dy + gridHeight) % gridHeight;
         const index = ny * gridWidth + nx;
 
-        if (isCellPassable(grid, index, leaderId, true)) {
+        if (isCellPassable(grid, index, leaderId, usePadding)) {
           return {
             x: nx * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
             y: ny * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
@@ -410,13 +412,18 @@ export function findPath(
   const endIdx = getNavigationGridIndex(end, worldWidth, worldHeight);
   let finalTarget = end;
   if (!isCellPassable(grid, endIdx, entity.leaderId, false)) {
-    finalTarget = findNearestPassableCell(grid, end, worldWidth, worldHeight, entity.leaderId);
+    // When the target is blocked (e.g. inside a tree), find the nearest PHYSICAL cell.
+    // We use usePadding: false because interaction ranges are usually tighter
+    // than the pathfinding safety padding.
+    finalTarget = findNearestPassableCell(grid, end, worldWidth, worldHeight, entity.leaderId, false);
   }
 
   const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
   const endCoords = getNavigationGridCoords(finalTarget, worldWidth, worldHeight);
 
   if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
+    // Already in the same grid cell as the target
+    // Return the target position so the entity can fine-tune its position
     return { path: [finalTarget], iterations: 0 };
   }
 
@@ -527,7 +534,12 @@ function toroidalHeuristic(
   return D * (dx + dy) + (D2 - 2 * D) * Math.min(dx, dy);
 }
 
-function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: number, finalPos: Vector2D): Vector2D[] {
+function reconstructPath(
+  cameFrom: Int32Array,
+  currentIdx: number,
+  gridWidth: number,
+  finalPos: Vector2D,
+): Vector2D[] {
   const path: Vector2D[] = [finalPos];
   let curr = currentIdx;
   const visited = new Set<number>();
@@ -545,7 +557,10 @@ function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: nu
   }
 
   // Remove the starting point (current position of entity)
-  path.shift();
+  // But only if there's more than one point in the path
+  if (path.length > 1) {
+    path.shift();
+  }
 
   return path;
 }

@@ -97,3 +97,6 @@ export const HUMAN_STAY_NEAR_TRIBE_STRENGTH = 0.5;
 export const HUMAN_STAY_NEAR_PARENT_STRENGTH = 0.7;
 export const HUMAN_STAY_NEAR_TRIBE_STOP_DISTANCE = 300;
 export const HUMAN_STAY_NEAR_PARENT_STOP_DISTANCE = 150;
+
+// Gord Planning Constants
+export const GORD_MIN_INTERIOR_SIZE = 10; // Minimum interior spread (in grid cells) for gord enclosures before margin is applied
