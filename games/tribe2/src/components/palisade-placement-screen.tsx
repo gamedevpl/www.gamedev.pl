@@ -23,7 +23,6 @@ import {
   traceAllPerimeters,
   assignGates,
   clusterHubs,
-  GORD_SAFE_RADIUS,
   GORD_HUB_CLUSTER_RADIUS,
   GORD_WALL_PROXIMITY_THRESHOLD,
   GORD_DEFAULT_GATE_SPACING,
@@ -170,7 +169,7 @@ interface GordPlanStats {
 }
 
 // Default safe radius for gord perimeter (in pixels)
-const DEFAULT_GORD_SAFE_RADIUS = GORD_SAFE_RADIUS;
+const DEFAULT_GORD_SAFE_RADIUS = 75;
 
 // Quality scoring thresholds for gord evaluation
 const DEFENSE_EFFICIENCY_EXCELLENT = 800;
@@ -571,11 +570,28 @@ export const PalisadePlacementScreen: React.FC = () => {
       terrainOwnership: tempOwnership,
     } as GameWorldState;
 
-    for (const planned of plannedGordPositions) {
+    let segmentsToSkip = 0;
+    for (let i = 0; i < plannedGordPositions.length; i++) {
+      const planned = plannedGordPositions[i];
+
+      // Update skip logic for gates
+      if (planned.isGate) {
+        segmentsToSkip = 0;
+      }
+
+      // Skip segments if we just placed a building
+      if (segmentsToSkip > 0) {
+        segmentsToSkip--;
+        continue;
+      }
+
       const buildingType = planned.isGate ? BuildingType.Gate : BuildingType.Palisade;
       const newBuilding = createBuildingEntity(currentId++, buildingType, planned.position, 1);
       newBuildings.push(newBuilding);
       paintTerrainOwnership(planned.position, TERRITORY_BUILDING_RADIUS, 1, tempState);
+
+      // Set skip count: palisade = 0 (every cell), gate = 2 (occupies 3 cells)
+      segmentsToSkip = planned.isGate ? 2 : 0;
     }
 
     setTerrainOwnership(tempOwnership);

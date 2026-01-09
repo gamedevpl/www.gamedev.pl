@@ -16,7 +16,7 @@ import { EntityId } from '../../../entities/entities-types';
 /**
  * Radius around hub buildings to mark as "safe zone" / interior of the gord.
  */
-export const GORD_SAFE_RADIUS = 80;
+export const GORD_SAFE_RADIUS = 75;
 
 /**
  * Radius within which hubs are grouped into a single cluster.
@@ -27,7 +27,7 @@ export const GORD_HUB_CLUSTER_RADIUS = 200;
 /**
  * Minimum distance from existing walls before placing a new wall segment.
  */
-export const GORD_WALL_PROXIMITY_THRESHOLD = 15;
+export const GORD_WALL_PROXIMITY_THRESHOLD = 18;
 
 /**
  * Default spacing between gate segments along the perimeter (in segments).
@@ -340,19 +340,22 @@ export function assignGates(
   // Determine optimal number of gates based on perimeter length
   const numGates = Math.max(1, Math.floor(perimeterLength / GORD_MIN_GATE_DISTANCE_PX));
 
-  // Find the position closest to tribe center (this will be the first gate)
-  let closestIndex = 0;
-  let minDistSq = Infinity;
+  // Find the top-leftmost position (smallest Y, then smallest X if tied)
+  // This provides a stable starting point that doesn't shift with tribe movement
+  let topLeftIndex = 0;
+  let minY = positions[0].y;
+  let minX = positions[0].x;
+  
   for (let i = 0; i < positions.length; i++) {
-    const distSq = calculateWrappedDistanceSq(positions[i], tribeCenter, worldWidth, worldHeight);
-    if (distSq < minDistSq) {
-      minDistSq = distSq;
-      closestIndex = i;
+    if (positions[i].y < minY || (positions[i].y === minY && positions[i].x < minX)) {
+      minY = positions[i].y;
+      minX = positions[i].x;
+      topLeftIndex = i;
     }
   }
 
-  // Rotate array so closest position is at index 0
-  const rotated = [...positions.slice(closestIndex), ...positions.slice(0, closestIndex)];
+  // Rotate array so top-left position is at index 0
+  const rotated = [...positions.slice(topLeftIndex), ...positions.slice(0, topLeftIndex)];
 
   // Calculate step size for even distribution
   const step = positions.length / numGates;

@@ -295,8 +295,9 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
         };
 
         // Skip next segments based on building size
-        // Gate is 60px = 1+4 segments, Palisade is 20px = 1+2 segments
-        segmentsToSkip = planned.isGate ? 4 : 2;
+        // Palisade is 20px = 1 cell, skip 0 additional (place in every cell)
+        // Gate is 60px = 3 cells, skip 2 additional (gate occupies 3 cells total)
+        segmentsToSkip = planned.isGate ? 2 : 0;
       }
     }
   }
