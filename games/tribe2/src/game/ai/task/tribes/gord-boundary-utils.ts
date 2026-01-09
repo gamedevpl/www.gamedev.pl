@@ -231,6 +231,18 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
   const worldWidth = gridWidth * NAV_GRID_RESOLUTION;
   const worldHeight = gridHeight * NAV_GRID_RESOLUTION;
 
+  // 8-directional neighbors for boundary tracing (includes diagonals)
+  const directions8 = [
+    { dx: 0, dy: -1 }, // N
+    { dx: 1, dy: -1 }, // NE
+    { dx: 1, dy: 0 }, // E
+    { dx: 1, dy: 1 }, // SE
+    { dx: 0, dy: 1 }, // S
+    { dx: -1, dy: 1 }, // SW
+    { dx: -1, dy: 0 }, // W
+    { dx: -1, dy: -1 }, // NW
+  ];
+
   // Process all boundary cells to find all disconnected loops
   for (const startCell of boundaryCells) {
     if (globalVisited.has(`${startCell.x},${startCell.y}`)) continue;
@@ -238,13 +250,7 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
     const perimeter: Vector2D[] = [];
     let currentX = startCell.x;
     let currentY = startCell.y;
-    let direction = 1; // East
-    const directions = [
-      { dx: 0, dy: -1 },
-      { dx: 1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-    ];
+    let direction = 2; // Start facing East
 
     let iterations = 0;
     const maxIterations = gridWidth * gridHeight;
@@ -257,11 +263,14 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
       globalVisited.add(`${currentX},${currentY}`);
 
       let moved = false;
-      for (let turn = -1; turn <= 2; turn++) {
-        const newDir = (direction + turn + 4) % 4;
-        const nextX = (currentX + directions[newDir].dx + gridWidth) % gridWidth;
-        const nextY = (currentY + directions[newDir].dy + gridHeight) % gridHeight;
-        if (influenceMap[nextY * gridWidth + nextX]) {
+      // Try directions starting from left of current direction, going clockwise
+      // This implements a "keep left wall" tracing algorithm
+      for (let turn = -2; turn <= 5; turn++) {
+        const newDir = (direction + turn + 8) % 8;
+        const nextX = (currentX + directions8[newDir].dx + gridWidth) % gridWidth;
+        const nextY = (currentY + directions8[newDir].dy + gridHeight) % gridHeight;
+        // Only move to cells that are on the boundary
+        if (boundarySet.has(`${nextX},${nextY}`) && !globalVisited.has(`${nextX},${nextY}`)) {
           currentX = nextX;
           currentY = nextY;
           direction = newDir;
@@ -269,7 +278,21 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
           break;
         }
       }
-      if (!moved) break;
+      
+      // If we couldn't move to an unvisited cell, check if we can return to start
+      if (!moved) {
+        for (let turn = -2; turn <= 5; turn++) {
+          const newDir = (direction + turn + 8) % 8;
+          const nextX = (currentX + directions8[newDir].dx + gridWidth) % gridWidth;
+          const nextY = (currentY + directions8[newDir].dy + gridHeight) % gridHeight;
+          if (nextX === startCell.x && nextY === startCell.y) {
+            moved = true; // We've completed the loop
+            break;
+          }
+        }
+        break; // Exit the main loop
+      }
+      
       iterations++;
     } while ((currentX !== startCell.x || currentY !== startCell.y) && iterations < maxIterations);
 
