@@ -255,6 +255,10 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
     let iterations = 0;
     const maxIterations = gridWidth * gridHeight;
 
+    // Turn range covers all 8 directions starting from left of current direction
+    const TURN_START = -2;
+    const TURN_END = 5;
+
     do {
       perimeter.push({
         x: currentX * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
@@ -265,7 +269,7 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
       let moved = false;
       // Try directions starting from left of current direction, going clockwise
       // This implements a "keep left wall" tracing algorithm
-      for (let turn = -2; turn <= 5; turn++) {
+      for (let turn = TURN_START; turn <= TURN_END; turn++) {
         const newDir = (direction + turn + 8) % 8;
         const nextX = (currentX + directions8[newDir].dx + gridWidth) % gridWidth;
         const nextY = (currentY + directions8[newDir].dy + gridHeight) % gridHeight;
@@ -278,21 +282,21 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
           break;
         }
       }
-      
-      // If we couldn't move to an unvisited cell, check if we can return to start
+
+      // If we couldn't move to an unvisited cell, check if we can return to start to complete the loop
       if (!moved) {
-        for (let turn = -2; turn <= 5; turn++) {
+        for (let turn = TURN_START; turn <= TURN_END; turn++) {
           const newDir = (direction + turn + 8) % 8;
           const nextX = (currentX + directions8[newDir].dx + gridWidth) % gridWidth;
           const nextY = (currentY + directions8[newDir].dy + gridHeight) % gridHeight;
           if (nextX === startCell.x && nextY === startCell.y) {
-            moved = true; // We've completed the loop
+            // Loop is complete - adjacent to start cell
             break;
           }
         }
         break; // Exit the main loop
       }
-      
+
       iterations++;
     } while ((currentX !== startCell.x || currentY !== startCell.y) && iterations < maxIterations);
 
