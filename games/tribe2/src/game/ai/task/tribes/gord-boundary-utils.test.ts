@@ -168,6 +168,31 @@ describe('Gord Boundary Utilities', () => {
       const edges = traceGordPerimeter(new Set(), 10, 10);
       expect(edges.length).toBe(0);
     });
+
+    it('should return edges sorted into a continuous chain', () => {
+      // Create a 2x2 cluster to form a simple square perimeter
+      const gridWidth = 8;
+      const gridHeight = 6;
+      const cluster = new Set([0, 1, gridWidth, gridWidth + 1]);
+
+      const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
+
+      // Verify edges form a continuous chain: each edge's 'to' should match next edge's 'from'
+      for (let i = 0; i < edges.length - 1; i++) {
+        const current = edges[i];
+        const next = edges[i + 1];
+        const currentTo = `${Math.round(current.to.x)},${Math.round(current.to.y)}`;
+        const nextFrom = `${Math.round(next.from.x)},${Math.round(next.from.y)}`;
+        expect(currentTo).toBe(nextFrom);
+      }
+
+      // Verify it forms a closed loop: last edge's 'to' should match first edge's 'from'
+      const first = edges[0];
+      const last = edges[edges.length - 1];
+      const lastTo = `${Math.round(last.to.x)},${Math.round(last.to.y)}`;
+      const firstFrom = `${Math.round(first.from.x)},${Math.round(first.from.y)}`;
+      expect(lastTo).toBe(firstFrom);
+    });
   });
 
   describe('assignGates', () => {

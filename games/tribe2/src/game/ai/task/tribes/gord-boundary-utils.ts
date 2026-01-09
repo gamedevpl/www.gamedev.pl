@@ -143,7 +143,72 @@ export interface GordEdge {
 }
 
 /**
+ * Creates a unique key for a point to use in edge chaining.
+ */
+function pointKey(p: Vector2D): string {
+  return `${Math.round(p.x)},${Math.round(p.y)}`;
+}
+
+/**
+ * Sorts edges into continuous chains to form proper perimeters.
+ * Edges are connected end-to-end where one edge's 'to' matches another edge's 'from'.
+ */
+function sortEdgesIntoContinuousChain(edges: GordEdge[]): GordEdge[] {
+  if (edges.length <= 1) return edges;
+
+  // Build adjacency map: for each point, which edges start from there?
+  const edgesByStart = new Map<string, GordEdge[]>();
+  for (const edge of edges) {
+    const key = pointKey(edge.from);
+    if (!edgesByStart.has(key)) {
+      edgesByStart.set(key, []);
+    }
+    edgesByStart.get(key)!.push(edge);
+  }
+
+  const result: GordEdge[] = [];
+  const used = new Set<GordEdge>();
+
+  // Process all edges, handling multiple disconnected loops
+  while (result.length < edges.length) {
+    // Find an unused edge to start a new chain
+    let startEdge: GordEdge | undefined;
+    for (const edge of edges) {
+      if (!used.has(edge)) {
+        startEdge = edge;
+        break;
+      }
+    }
+    if (!startEdge) break;
+
+    // Build a chain starting from this edge
+    let current = startEdge;
+    while (!used.has(current)) {
+      result.push(current);
+      used.add(current);
+
+      // Find the next edge that starts where this one ends
+      const nextKey = pointKey(current.to);
+      const candidates = edgesByStart.get(nextKey) || [];
+      let nextEdge: GordEdge | undefined;
+      for (const candidate of candidates) {
+        if (!used.has(candidate)) {
+          nextEdge = candidate;
+          break;
+        }
+      }
+
+      if (!nextEdge) break;
+      current = nextEdge;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Traces the perimeter edges of a cluster of gord cells.
+ * Returns edges sorted into a continuous chain for proper perimeter formation.
  */
 export function traceGordPerimeter(cluster: Set<number>, gridWidth: number, gridHeight: number): GordEdge[] {
   const edges: GordEdge[] = [];
@@ -197,7 +262,8 @@ export function traceGordPerimeter(cluster: Set<number>, gridWidth: number, grid
     }
   }
 
-  return edges;
+  // Sort edges into a continuous chain for proper perimeter formation
+  return sortEdgesIntoContinuousChain(edges);
 }
 
 /**
