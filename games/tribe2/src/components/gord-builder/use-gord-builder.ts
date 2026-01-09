@@ -18,7 +18,6 @@ import {
   GORD_UNSURROUNDED_THRESHOLD,
   GORD_MIN_CELLS_FOR_SURROUNDING,
 } from '../../game/ai/task/tribes/gord-boundary-utils';
-import { GORD_MIN_CELLS } from '../../game/ai-consts';
 import { PlannedGordEdge, GordPlanStats } from './types';
 import { createMockWorldState, createBuildingEntity } from './mock-state-utils';
 
@@ -52,8 +51,8 @@ function calculateGordStats(
   const coverageRatio = totalEdges > 0 ? coveredEdges / totalEdges : 0;
 
   let qualityRating: GordPlanStats['qualityRating'] = 'Fair';
-  if (totalCells >= GORD_MIN_CELLS * 2) qualityRating = 'Excellent';
-  else if (totalCells >= GORD_MIN_CELLS) qualityRating = 'Good';
+  if (totalCells >= GORD_MIN_CELLS_FOR_SURROUNDING * 2) qualityRating = 'Excellent';
+  else if (totalCells >= GORD_MIN_CELLS_FOR_SURROUNDING) qualityRating = 'Good';
 
   return {
     perimeterLength,

@@ -29,6 +29,23 @@ export const GORD_MIN_GATE_DISTANCE_PX = 300;
 export const GORD_WALL_PROXIMITY_THRESHOLD = 18;
 
 /**
+ * Calculates the wrapped (toroidal) distance squared between two points.
+ * Used for worlds that wrap around at the edges.
+ */
+function wrappedDistanceSq(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  worldWidth: number,
+  worldHeight: number,
+): number {
+  const dx = Math.min(Math.abs(x1 - x2), worldWidth - Math.abs(x1 - x2));
+  const dy = Math.min(Math.abs(y1 - y2), worldHeight - Math.abs(y1 - y2));
+  return dx * dx + dy * dy;
+}
+
+/**
  * Checks if a 100px gord grid cell is fully owned by the tribe.
  * A cell is considered owned if a majority of its constituent territory cells are owned.
  */
@@ -276,9 +293,14 @@ export function isEdgeCoveredByWalls(
   const thresholdSq = GORD_BORDER_COVERAGE_DISTANCE * GORD_BORDER_COVERAGE_DISTANCE;
 
   for (const wall of existingWalls) {
-    const dx = Math.min(Math.abs(midpoint.x - wall.position.x), worldWidth - Math.abs(midpoint.x - wall.position.x));
-    const dy = Math.min(Math.abs(midpoint.y - wall.position.y), worldHeight - Math.abs(midpoint.y - wall.position.y));
-    const distSq = dx * dx + dy * dy;
+    const distSq = wrappedDistanceSq(
+      midpoint.x,
+      midpoint.y,
+      wall.position.x,
+      wall.position.y,
+      worldWidth,
+      worldHeight,
+    );
 
     if (distSq < thresholdSq) {
       return true;
