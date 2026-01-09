@@ -10,6 +10,8 @@ import {
   LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_MIN_BUSHES,
+  GORD_GRID_RESOLUTION,
+  GORD_MIN_CELLS,
 } from '../../../ai-consts';
 import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
@@ -20,7 +22,7 @@ import {
   BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
 import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
-import { convertTerritoryIndexToPosition, getOwnerOfPoint } from '../../../entities/tribe/territory-utils';
+import { convertTerritoryIndexToPosition } from '../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
@@ -32,12 +34,9 @@ import { isTribeHostile } from '../../../utils/human-utils';
 import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
 import { NAV_GRID_RESOLUTION } from '../../../utils/navigation-utils';
 import {
-  createInfluenceMap,
-  traceAllPerimeters,
+  findGordClusters,
+  traceGordPerimeter,
   assignGates,
-  clusterHubs,
-  GORD_SAFE_RADIUS,
-  GORD_HUB_CLUSTER_RADIUS,
   GORD_WALL_PROXIMITY_THRESHOLD,
 } from './gord-boundary-utils';
 
@@ -171,7 +170,6 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
   const { width, height } = gameState.mapDimensions;
-  const gridWidth = Math.ceil(width / NAV_GRID_RESOLUTION);
 
   // 1. Clear existing palisade/gate tasks for the leader first to prevent ghost walls
   Object.keys(gameState.tasks).forEach((taskId) => {
@@ -196,74 +194,58 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
   );
 
-  // Cluster nearby hubs so they share a single gord
-  const hubClusters = clusterHubs(hubs, GORD_HUB_CLUSTER_RADIUS, width, height);
-
-  const tribeCenter = getTribeCenter(leaderId, gameState);
+  // 2. Identify 100px grid clusters based on territory ownership
+  const clusters = findGordClusters(hubs, leaderId, gameState);
+  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
 
   // Process each hub cluster independently
-  for (const hubCluster of hubClusters) {
-    if (hubCluster.length === 0) continue;
+  for (const cluster of clusters) {
+    // 3. Minimum size requirement (e.g., 4 cells = 200x200px area)
+    if (cluster.size < GORD_MIN_CELLS) continue;
 
-    // Create influence map for this cluster only
-    const influenceMap = createInfluenceMap(hubCluster, width, height, GORD_SAFE_RADIUS);
+    // 4. Trace perimeter edges of the cluster
+    const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
+    if (edges.length === 0) continue;
 
-    // Trace all boundary loops (supports multiple separate gord areas)
-    const allBoundaryPositions = traceAllPerimeters(influenceMap, gridWidth, Math.ceil(height / NAV_GRID_RESOLUTION));
+    // 5. Assign gates strategically along the edges
+    const edgesWithGates = assignGates(edges);
 
-    if (allBoundaryPositions.length === 0) continue;
+    // 6. Create tasks by interpolating along each 100px edge
+    for (const edge of edgesWithGates) {
+      const step = 20; // Palisade placement interval (matches territory resolution)
+      const numSteps = GORD_GRID_RESOLUTION / step;
 
-    // Process each perimeter loop independently
-    for (const boundaryPositions of allBoundaryPositions) {
-      if (boundaryPositions.length === 0) continue;
+      const dx = edge.to.x > edge.from.x ? step : edge.to.x < edge.from.x ? -step : 0;
+      const dy = edge.to.y > edge.from.y ? step : edge.to.y < edge.from.y ? -step : 0;
 
-      // 2. Assign gates to the FULL perimeter loop for stability
-      const loopWithGates = assignGates(boundaryPositions, tribeCenter, width, height);
-
-      // 3. Filter the results AFTER gate assignment
-      const filteredPositions = loopWithGates.filter((planned) => {
-        // Filter by territory ownership
-        const owner = getOwnerOfPoint(planned.position.x, planned.position.y, gameState);
-        if (owner !== leaderId) return false;
-
-        // Filter by existing walls
-        const tooCloseToWall = existingWalls.some(
-          (wall) =>
-            calculateWrappedDistanceSq(planned.position, wall.position, width, height) <
-            GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
-        );
-        if (tooCloseToWall) return false;
-
-        return true;
-      });
-
-      if (filteredPositions.length === 0) continue;
-
-      // Track segments to skip for proper spacing
       let segmentsToSkip = 0;
 
-      // Create tasks for each position with smart spacing
-      for (let i = 0; i < filteredPositions.length; i++) {
-        const planned = filteredPositions[i];
-
-        // 4. Update segmentsToSkip logic: Gates take priority
-        if (planned.isGate) {
-          segmentsToSkip = 0;
-        }
-
-        // Skip segments if we just placed a building
+      for (let i = 0; i < numSteps; i++) {
         if (segmentsToSkip > 0) {
           segmentsToSkip--;
           continue;
         }
 
-        const pos = planned.position;
+        // Calculate placement position (centered in the 20px segment)
+        const pos = {
+          x: (edge.from.x + dx * i + dx / 2 + width) % width,
+          y: (edge.from.y + dy * i + dy / 2 + height) % height,
+        };
 
-        // Check if building already exists
+        // Check if building already exists at this position
         const existing = indexedState.search.building.at(pos, NAV_GRID_RESOLUTION / 2);
         if (existing) continue;
 
-        // Check for trees blocking the position
+        // Check for existing walls too close
+        const tooCloseToWall = existingWalls.some(
+          (wall) =>
+            calculateWrappedDistanceSq(pos, wall.position, width, height) <
+            GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
+        );
+        if (tooCloseToWall) continue;
+
+        // Check for trees blocking placement
         const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
         if (trees.length > 0) {
           const tree = trees[0];
@@ -281,8 +263,8 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
           continue;
         }
 
-        // Create placement task
-        const type = planned.isGate ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
+        // Determine building type (Place one gate at the start of a gate edge)
+        const type = edge.isGate && i === 0 ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
         const taskId = `${TaskType[type]}-${leaderId}-${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
 
         gameState.tasks[taskId] = {
@@ -294,10 +276,8 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
           validUntilTime: gameState.time + 24,
         };
 
-        // Skip next segments based on building size
-        // Palisade is 20px = 1 cell, skip 0 additional (place in every cell)
-        // Gate is 60px = 3 cells, skip 2 additional (gate occupies 3 cells total)
-        segmentsToSkip = planned.isGate ? 2 : 0;
+        // Gate occupies 3 segments (60px), Palisade occupies 1 segment (20px)
+        segmentsToSkip = type === TaskType.HumanPlaceGate ? 2 : 0;
       }
     }
   }

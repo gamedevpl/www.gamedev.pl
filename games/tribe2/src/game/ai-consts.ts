@@ -99,4 +99,12 @@ export const HUMAN_STAY_NEAR_TRIBE_STOP_DISTANCE = 300;
 export const HUMAN_STAY_NEAR_PARENT_STOP_DISTANCE = 150;
 
 // Gord Planning Constants
-export const GORD_MIN_INTERIOR_SIZE = 10; // Minimum interior spread (in grid cells) for gord enclosures before margin is applied
+export const GORD_GRID_RESOLUTION = 100; // Simplified grid resolution for gord planning
+export const GORD_MIN_CELLS = 4; // Minimum number of 100px cells in a cluster before planning a gord
+/**
+ * Threshold for a 100px grid cell to be considered "owned" by a tribe.
+ * Set to 0.5 because circular territory (radius 80) in a square grid (100x100) 
+ * can result in ~68% coverage (17/25 points) when buildings are placed at cell corners.
+ * A 50% threshold ensures any building significantly "claims" its cell regardless of position.
+ */
+export const GORD_CELL_OWNERSHIP_THRESHOLD = 0.5;

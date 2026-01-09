@@ -1,38 +1,22 @@
 /**
- * Gord Boundary Tracing Utilities
+ * Gord Boundary Tracing Utilities (Simplified Grid-Based)
  *
- * This module provides algorithms for planning defensive enclosures (gords) around
- * hub buildings using grid-based influence maps and boundary tracing.
+ * This module provides algorithms for planning defensive enclosures (gords) using
+ * a simplified coarse grid based on territory ownership.
  */
 
 import { Vector2D } from '../../../utils/math-types';
-import { BuildingEntity, BuildingType } from '../../../entities/buildings/building-types';
-import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
-import { NAV_GRID_RESOLUTION } from '../../../utils/navigation-utils';
+import { BuildingEntity } from '../../../entities/buildings/building-types';
 import { getOwnerOfPoint } from '../../../entities/tribe/territory-utils';
 import { GameWorldState } from '../../../world-types';
 import { EntityId } from '../../../entities/entities-types';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
+import { GORD_CELL_OWNERSHIP_THRESHOLD } from '../../../ai-consts';
 
 /**
- * Radius around hub buildings to mark as "safe zone" / interior of the gord.
+ * Simplified grid resolution for gord planning in pixels.
  */
-export const GORD_SAFE_RADIUS = 75;
-
-/**
- * Radius within which hubs are grouped into a single cluster.
- * Hubs within this distance will share a single gord boundary.
- */
-export const GORD_HUB_CLUSTER_RADIUS = 200;
-
-/**
- * Minimum distance from existing walls before placing a new wall segment.
- */
-export const GORD_WALL_PROXIMITY_THRESHOLD = 18;
-
-/**
- * Default spacing between gate segments along the perimeter (in segments).
- */
-export const GORD_DEFAULT_GATE_SPACING = 100;
+export const GORD_GRID_RESOLUTION = 100;
 
 /**
  * Minimum geometric distance between gates in pixels.
@@ -40,167 +24,77 @@ export const GORD_DEFAULT_GATE_SPACING = 100;
 export const GORD_MIN_GATE_DISTANCE_PX = 300;
 
 /**
- * Groups hubs that are close together into clusters.
- * Hubs within clusterRadius of each other will share a single gord boundary.
- * Uses a union-find approach to efficiently group connected hubs.
+ * Minimum distance from existing walls before placing a new wall segment.
  */
-export function clusterHubs(
-  hubs: BuildingEntity[],
-  clusterRadius: number,
-  worldWidth: number,
-  worldHeight: number,
-): BuildingEntity[][] {
-  if (hubs.length === 0) return [];
-  if (hubs.length === 1) return [hubs];
+export const GORD_WALL_PROXIMITY_THRESHOLD = 18;
 
-  const clusterRadiusSq = clusterRadius * clusterRadius;
+/**
+ * Checks if a 100px gord grid cell is fully owned by the tribe.
+ * A cell is considered owned if a majority of its constituent territory cells are owned.
+ */
+export function isGordCellOwned(gx: number, gy: number, leaderId: EntityId, gameState: GameWorldState): boolean {
+  const { width, height } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
 
-  // Union-Find data structure
-  const parent: number[] = [];
-  for (let i = 0; i < hubs.length; i++) {
-    parent[i] = i;
-  }
+  // Wrap coordinates
+  const wrappedGX = (gx + gridWidth) % gridWidth;
+  const wrappedGY = (gy + gridHeight) % gridHeight;
 
-  const find = (i: number): number => {
-    if (parent[i] !== i) {
-      parent[i] = find(parent[i]); // Path compression
-    }
-    return parent[i];
-  };
+  const territoryPerGord = GORD_GRID_RESOLUTION / TERRITORY_OWNERSHIP_RESOLUTION;
+  const totalSubCells = territoryPerGord * territoryPerGord;
+  let ownedCells = 0;
 
-  const union = (i: number, j: number) => {
-    const rootI = find(i);
-    const rootJ = find(j);
-    if (rootI !== rootJ) {
-      parent[rootJ] = rootI;
-    }
-  };
+  for (let ty = 0; ty < territoryPerGord; ty++) {
+    for (let tx = 0; tx < territoryPerGord; tx++) {
+      const worldX =
+        wrappedGX * GORD_GRID_RESOLUTION + tx * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+      const worldY =
+        wrappedGY * GORD_GRID_RESOLUTION + ty * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
 
-  // Find all pairs of hubs within clusterRadius and union them
-  for (let i = 0; i < hubs.length; i++) {
-    for (let j = i + 1; j < hubs.length; j++) {
-      const distSq = calculateWrappedDistanceSq(hubs[i].position, hubs[j].position, worldWidth, worldHeight);
-      if (distSq <= clusterRadiusSq) {
-        union(i, j);
+      if (getOwnerOfPoint(worldX, worldY, gameState) === leaderId) {
+        ownedCells++;
       }
     }
   }
-
-  // Group hubs by their root parent
-  const clusterMap = new Map<number, BuildingEntity[]>();
-  for (let i = 0; i < hubs.length; i++) {
-    const root = find(i);
-    if (!clusterMap.has(root)) {
-      clusterMap.set(root, []);
-    }
-    clusterMap.get(root)!.push(hubs[i]);
-  }
-
-  return Array.from(clusterMap.values());
+  return ownedCells >= totalSubCells * GORD_CELL_OWNERSHIP_THRESHOLD;
 }
 
 /**
- * Creates a grid-based influence map marking cells within safe radius of any hub building.
- * Optimized using bounding boxes for hubs.
+ * Finds clusters of 100px gord cells that are owned by the tribe and connected to hub buildings.
  */
-export function createInfluenceMap(
-  hubs: BuildingEntity[],
-  worldWidth: number,
-  worldHeight: number,
-  safeRadius: number,
-): boolean[] {
-  const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
-  const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
-  const gridSize = gridWidth * gridHeight;
+export function findGordClusters(hubs: BuildingEntity[], leaderId: EntityId, gameState: GameWorldState): Set<number>[] {
+  const { width, height } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
 
-  const influenceMap = new Array(gridSize).fill(false);
-  const safeRadiusSq = safeRadius * safeRadius;
-
+  // Identify cells containing hubs that are also owned
+  const hubCells = new Set<number>();
   for (const hub of hubs) {
-    // Optimization: only check cells within bounding box of the hub influence
-    const minGX = Math.floor((hub.position.x - safeRadius) / NAV_GRID_RESOLUTION);
-    const maxGX = Math.ceil((hub.position.x + safeRadius) / NAV_GRID_RESOLUTION);
-    const minGY = Math.floor((hub.position.y - safeRadius) / NAV_GRID_RESOLUTION);
-    const maxGY = Math.ceil((hub.position.y + safeRadius) / NAV_GRID_RESOLUTION);
-
-    for (let gy = minGY; gy <= maxGY; gy++) {
-      for (let gx = minGX; gx <= maxGX; gx++) {
-        const wrappedGX = (gx + gridWidth) % gridWidth;
-        const wrappedGY = (gy + gridHeight) % gridHeight;
-        const index = wrappedGY * gridWidth + wrappedGX;
-
-        if (influenceMap[index]) continue;
-
-        const cellCenterX = wrappedGX * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2;
-        const cellCenterY = wrappedGY * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2;
-
-        const distSq = calculateWrappedDistanceSq(
-          { x: cellCenterX, y: cellCenterY },
-          hub.position,
-          worldWidth,
-          worldHeight,
-        );
-        if (distSq <= safeRadiusSq) {
-          influenceMap[index] = true;
-        }
-      }
+    const gx = Math.floor(hub.position.x / GORD_GRID_RESOLUTION);
+    const gy = Math.floor(hub.position.y / GORD_GRID_RESOLUTION);
+    const idx = gy * gridWidth + gx;
+    if (isGordCellOwned(gx, gy, leaderId, gameState)) {
+      hubCells.add(idx);
     }
   }
 
-  return influenceMap;
-}
+  const clusters: Set<number>[] = [];
+  const visited = new Set<number>();
 
-/**
- * Calculates the signed area of a perimeter loop using the Shoelace formula.
- * Handles toroidal world wrapping by unwrapping coordinates relative to the first point.
- * Positive = Clockwise (Outer boundary), Negative = Counter-clockwise (Hole).
- */
-export function calculateSignedArea(perimeter: Vector2D[], worldWidth: number, worldHeight: number): number {
-  if (perimeter.length < 3) return 0;
+  for (const startIdx of hubCells) {
+    if (visited.has(startIdx)) continue;
 
-  // Unwrap coordinates to a continuous space to handle world wrapping
-  const unwrapped: Vector2D[] = [perimeter[0]];
-  for (let i = 1; i < perimeter.length; i++) {
-    let dx = perimeter[i].x - perimeter[i - 1].x;
-    let dy = perimeter[i].y - perimeter[i - 1].y;
+    const cluster = new Set<number>();
+    const queue = [startIdx];
+    visited.add(startIdx);
+    cluster.add(startIdx);
 
-    // Detect and handle toroidal jumps
-    if (dx > worldWidth / 2) dx -= worldWidth;
-    else if (dx < -worldWidth / 2) dx += worldWidth;
-    if (dy > worldHeight / 2) dy -= worldHeight;
-    else if (dy < -worldHeight / 2) dy += worldHeight;
+    while (queue.length > 0) {
+      const currIdx = queue.shift()!;
+      const cx = currIdx % gridWidth;
+      const cy = Math.floor(currIdx / gridWidth);
 
-    unwrapped.push({
-      x: unwrapped[i - 1].x + dx,
-      y: unwrapped[i - 1].y + dy,
-    });
-  }
-
-  // Shoelace formula for signed area
-  let area = 0;
-  for (let i = 0; i < unwrapped.length; i++) {
-    const p1 = unwrapped[i];
-    const p2 = unwrapped[(i + 1) % unwrapped.length];
-    area += p1.x * p2.y - p2.x * p1.y;
-  }
-
-  return area / 2;
-}
-
-/**
- * Traces all perimeter loops in an influence map to find multiple boundary regions.
- * Filters out internal holes to ensure only outer boundaries are returned.
- */
-export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, gridHeight: number): Vector2D[][] {
-  const boundaryCells: Array<{ x: number; y: number }> = [];
-  const boundarySet = new Set<string>();
-
-  for (let gy = 0; gy < gridHeight; gy++) {
-    for (let gx = 0; gx < gridWidth; gx++) {
-      const index = gy * gridWidth + gx;
-      if (!influenceMap[index]) continue;
-
-      let isBoundary = false;
       const neighbors = [
         { dx: 0, dy: -1 },
         { dx: 1, dy: 0 },
@@ -209,172 +103,113 @@ export function traceAllPerimeters(influenceMap: boolean[], gridWidth: number, g
       ];
 
       for (const { dx, dy } of neighbors) {
-        const nx = (gx + dx + gridWidth) % gridWidth;
-        const ny = (gy + dy + gridHeight) % gridHeight;
-        if (!influenceMap[ny * gridWidth + nx]) {
-          isBoundary = true;
-          break;
+        const nx = (cx + dx + gridWidth) % gridWidth;
+        const ny = (cy + dy + gridHeight) % gridHeight;
+        const nIdx = ny * gridWidth + nx;
+
+        if (!visited.has(nIdx) && isGordCellOwned(nx, ny, leaderId, gameState)) {
+          visited.add(nIdx);
+          cluster.add(nIdx);
+          queue.push(nIdx);
         }
       }
-
-      if (isBoundary) {
-        boundaryCells.push({ x: gx, y: gy });
-        boundarySet.add(`${gx},${gy}`);
-      }
     }
+    clusters.push(cluster);
   }
 
-  if (boundaryCells.length === 0) return [];
-
-  const perimeters: Vector2D[][] = [];
-  const globalVisited = new Set<string>();
-  const worldWidth = gridWidth * NAV_GRID_RESOLUTION;
-  const worldHeight = gridHeight * NAV_GRID_RESOLUTION;
-
-  // Process all boundary cells to find all disconnected loops
-  for (const startCell of boundaryCells) {
-    if (globalVisited.has(`${startCell.x},${startCell.y}`)) continue;
-
-    const perimeter: Vector2D[] = [];
-    let currentX = startCell.x;
-    let currentY = startCell.y;
-    let direction = 1; // East
-    const directions = [
-      { dx: 0, dy: -1 },
-      { dx: 1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-    ];
-
-    let iterations = 0;
-    const maxIterations = gridWidth * gridHeight;
-
-    do {
-      perimeter.push({
-        x: currentX * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
-        y: currentY * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
-      });
-      globalVisited.add(`${currentX},${currentY}`);
-
-      let moved = false;
-      for (let turn = -1; turn <= 2; turn++) {
-        const newDir = (direction + turn + 4) % 4;
-        const nextX = (currentX + directions[newDir].dx + gridWidth) % gridWidth;
-        const nextY = (currentY + directions[newDir].dy + gridHeight) % gridHeight;
-        if (influenceMap[nextY * gridWidth + nextX]) {
-          currentX = nextX;
-          currentY = nextY;
-          direction = newDir;
-          moved = true;
-          break;
-        }
-      }
-      if (!moved) break;
-      iterations++;
-    } while ((currentX !== startCell.x || currentY !== startCell.y) && iterations < maxIterations);
-
-    if (perimeter.length > 2) {
-      // Filter out holes (negative area loops) to keep only outer boundaries
-      if (calculateSignedArea(perimeter, worldWidth, worldHeight) > 0) {
-        perimeters.push(perimeter);
-      }
-    }
-  }
-
-  return perimeters;
+  return clusters;
 }
 
-export function tracePerimeter(influenceMap: boolean[], gridWidth: number, gridHeight: number): Vector2D[] {
-  const all = traceAllPerimeters(influenceMap, gridWidth, gridHeight);
-  return all.length > 0 ? all[0] : [];
-}
-
-export function filterPerimeterByTerritory(
-  positions: Vector2D[],
-  leaderId: EntityId,
-  gameState: GameWorldState,
-): Vector2D[] {
-  return positions.filter((pos) => getOwnerOfPoint(pos.x, pos.y, gameState) === leaderId);
-}
-
-export function filterPerimeterByExistingWalls(
-  positions: Vector2D[],
-  existingBuildings: BuildingEntity[],
-  worldWidth: number,
-  worldHeight: number,
-  proximityThreshold: number,
-): Vector2D[] {
-  const walls = existingBuildings.filter(
-    (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
-  );
-  if (walls.length === 0) return positions;
-
-  return positions.filter((pos) => {
-    for (const wall of walls) {
-      if (calculateWrappedDistance(pos, wall.position, worldWidth, worldHeight) < proximityThreshold) return false;
-    }
-    return true;
-  });
+export interface GordEdge {
+  from: Vector2D;
+  to: Vector2D;
 }
 
 /**
- * Assigns gates strategically along the perimeter loop using even distribution.
- * Gates are placed at regular intervals to ensure they are far apart and evenly spaced.
+ * Traces the perimeter edges of a cluster of gord cells.
  */
-export function assignGates(
-  positions: Vector2D[],
-  tribeCenter: Vector2D,
-  worldWidth: number,
-  worldHeight: number,
-): Array<{ position: Vector2D; isGate: boolean }> {
-  if (positions.length === 0) return [];
+export function traceGordPerimeter(cluster: Set<number>, gridWidth: number, gridHeight: number): GordEdge[] {
+  const edges: GordEdge[] = [];
 
-  // Calculate total perimeter length
-  let perimeterLength = 0;
-  for (let i = 0; i < positions.length; i++) {
-    const p1 = positions[i];
-    const p2 = positions[(i + 1) % positions.length];
-    perimeterLength += calculateWrappedDistance(p1, p2, worldWidth, worldHeight);
-  }
+  for (const idx of cluster) {
+    const gx = idx % gridWidth;
+    const gy = Math.floor(idx / gridWidth);
 
-  // Determine optimal number of gates based on perimeter length
-  const numGates = Math.max(1, Math.floor(perimeterLength / GORD_MIN_GATE_DISTANCE_PX));
+    const neighbors = [
+      { dx: 0, dy: -1, name: 'north' },
+      { dx: 1, dy: 0, name: 'east' },
+      { dx: 0, dy: 1, name: 'south' },
+      { dx: -1, dy: 0, name: 'west' },
+    ];
 
-  // Find the top-leftmost position (smallest Y, then smallest X if tied)
-  // This provides a stable starting point that doesn't shift with tribe movement
-  let topLeftIndex = 0;
-  let minY = positions[0].y;
-  let minX = positions[0].x;
-  
-  for (let i = 0; i < positions.length; i++) {
-    if (positions[i].y < minY || (positions[i].y === minY && positions[i].x < minX)) {
-      minY = positions[i].y;
-      minX = positions[i].x;
-      topLeftIndex = i;
+    for (const { dx, dy, name } of neighbors) {
+      const nx = (gx + dx + gridWidth) % gridWidth;
+      const ny = (gy + dy + gridHeight) % gridHeight;
+      const nIdx = ny * gridWidth + nx;
+
+      if (!cluster.has(nIdx)) {
+        // This is a boundary edge
+        let from: Vector2D, to: Vector2D;
+        const x1 = gx * GORD_GRID_RESOLUTION;
+        const y1 = gy * GORD_GRID_RESOLUTION;
+        const x2 = (gx + 1) * GORD_GRID_RESOLUTION;
+        const y2 = (gy + 1) * GORD_GRID_RESOLUTION;
+
+        switch (name) {
+          case 'north':
+            from = { x: x1, y: y1 };
+            to = { x: x2, y: y1 };
+            break;
+          case 'east':
+            from = { x: x2, y: y1 };
+            to = { x: x2, y: y2 };
+            break;
+          case 'south':
+            from = { x: x2, y: y2 };
+            to = { x: x1, y: y2 };
+            break;
+          case 'west':
+            from = { x: x1, y: y2 };
+            to = { x: x1, y: y1 };
+            break;
+          default:
+            continue;
+        }
+        edges.push({ from, to });
+      }
     }
   }
 
-  // Rotate array so top-left position is at index 0
-  const rotated = [...positions.slice(topLeftIndex), ...positions.slice(0, topLeftIndex)];
+  return edges;
+}
+
+/**
+ * Assigns gates strategically along the perimeter edges.
+ */
+export function assignGates(edges: GordEdge[]): Array<{ from: Vector2D; to: Vector2D; isGate: boolean }> {
+  if (edges.length === 0) return [];
+
+  // Calculate total perimeter length
+  const totalLength = edges.length * GORD_GRID_RESOLUTION;
+
+  // Determine number of gates based on perimeter length
+  const numGates = Math.max(1, Math.floor(totalLength / GORD_MIN_GATE_DISTANCE_PX));
 
   // Calculate step size for even distribution
-  const step = positions.length / numGates;
+  const step = edges.length / numGates;
 
-  // Mark gate positions
-  const result: Array<{ position: Vector2D; isGate: boolean }> = [];
-  for (let i = 0; i < rotated.length; i++) {
-    // A position is a gate if it's close to any of the evenly distributed indices
+  const result: Array<{ from: Vector2D; to: Vector2D; isGate: boolean }> = [];
+  for (let i = 0; i < edges.length; i++) {
     let isGate = false;
     for (let g = 0; g < numGates; g++) {
-      const gateIndex = Math.round(g * step);
-      if (i === gateIndex) {
+      if (i === Math.round(g * step)) {
         isGate = true;
         break;
       }
     }
 
     result.push({
-      position: rotated[i],
+      ...edges[i],
       isGate,
     });
   }
