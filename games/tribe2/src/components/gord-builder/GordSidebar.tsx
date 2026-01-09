@@ -2,8 +2,12 @@ import React from 'react';
 import styled from 'styled-components';
 import { BuildingType, BUILDING_DEFINITIONS } from '../../game/entities/buildings/building-consts';
 import { BuildingEntity } from '../../game/entities/buildings/building-types';
-import { GORD_GRID_RESOLUTION, GORD_MIN_GATE_DISTANCE_PX } from '../../game/ai/task/tribes/gord-boundary-utils';
-import { GORD_MIN_CELLS } from '../../game/ai-consts';
+import {
+  GORD_GRID_RESOLUTION,
+  GORD_MIN_GATE_DISTANCE_PX,
+  GORD_MIN_CELLS_FOR_SURROUNDING,
+  GORD_UNSURROUNDED_THRESHOLD,
+} from '../../game/ai/task/tribes/gord-boundary-utils';
 import { GordPlanStats, PlannedGordEdge } from './types';
 
 const Sidebar = styled.div`
@@ -83,6 +87,34 @@ const InfoText = styled.p`
   font-size: 0.85rem;
   color: #888;
   margin: 5px 0;
+`;
+
+const CoverageBadge = styled.span<{ $status: 'covered' | 'partial' | 'open' }>`
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.75rem;
+  background-color: ${(props) => {
+    switch (props.$status) {
+      case 'covered':
+        return '#2a5';
+      case 'partial':
+        return '#a82';
+      case 'open':
+        return '#a33';
+    }
+  }};
+  color: white;
+`;
+
+const ExpansionStatus = styled.div<{ $shouldPause: boolean }>`
+  padding: 8px;
+  margin: 10px 0;
+  border-radius: 4px;
+  background-color: ${(props) => (props.$shouldPause ? '#633' : '#263')};
+  font-size: 0.85rem;
+  text-align: center;
 `;
 
 const QualityBadge = styled.span<{ $rating: 'Excellent' | 'Good' | 'Fair' | 'Poor' }>`
@@ -189,8 +221,9 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
 
       <SectionTitle>3. AI Gord Planning</SectionTitle>
       <InfoText>Grid Resolution: {GORD_GRID_RESOLUTION}px</InfoText>
-      <InfoText>Min Cluster Size: {GORD_MIN_CELLS} cells</InfoText>
+      <InfoText>Min Cluster Size: {GORD_MIN_CELLS_FOR_SURROUNDING} cells</InfoText>
       <InfoText>Min Gate Dist: {GORD_MIN_GATE_DISTANCE_PX}px</InfoText>
+      <InfoText>Unsurrounded Threshold: {Math.round(GORD_UNSURROUNDED_THRESHOLD * 100)}%</InfoText>
       <Button
         onClick={onPlanGord}
         style={{ backgroundColor: hubBuildings.length > 0 ? '#2a5' : '#555', textAlign: 'center' }}
@@ -219,6 +252,32 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
             📏 Perimeter: {gordStats.perimeterLength}px | 📐 Area: ~{gordStats.enclosedArea}px²
           </InfoText>
           <InfoText>🪵 Cost: {gordStats.woodCost}</InfoText>
+
+          {gordStats.totalEdges !== undefined && gordStats.totalEdges > 0 && (
+            <>
+              <SectionTitle>Border Coverage</SectionTitle>
+              <InfoText>
+                🛡️ Coverage:{' '}
+                <CoverageBadge
+                  $status={
+                    gordStats.coverageRatio && gordStats.coverageRatio >= 0.8
+                      ? 'covered'
+                      : gordStats.coverageRatio && gordStats.coverageRatio >= 0.5
+                        ? 'partial'
+                        : 'open'
+                  }
+                >
+                  {Math.round((gordStats.coverageRatio || 0) * 100)}%
+                </CoverageBadge>
+              </InfoText>
+              <InfoText>
+                📊 Covered: {gordStats.coveredEdges}/{gordStats.totalEdges} edges
+              </InfoText>
+              <ExpansionStatus $shouldPause={gordStats.shouldPauseExpansion || false}>
+                {gordStats.shouldPauseExpansion ? '⏸️ Pause expansion - Build palisades!' : '▶️ OK to expand territory'}
+              </ExpansionStatus>
+            </>
+          )}
         </>
       ) : (
         <InfoText>No gord planned. Place hubs first.</InfoText>

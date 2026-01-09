@@ -216,3 +216,153 @@ export function assignGates(edges: GordEdge[]): Array<{ from: Vector2D; to: Vect
 
   return result;
 }
+
+/**
+ * Result of territory border coverage analysis.
+ */
+export interface BorderCoverageResult {
+  /** Total number of border edge segments (100px each) */
+  totalBorderEdges: number;
+  /** Number of border edge segments that have palisades/gates nearby */
+  coveredBorderEdges: number;
+  /** Percentage of border that is covered (0-1) */
+  coverageRatio: number;
+  /** Percentage of border that is NOT covered (0-1) */
+  unsurroundedRatio: number;
+  /** Total number of cells in the territory */
+  totalCells: number;
+}
+
+/**
+ * Threshold for unsurrounded border percentage above which we should prioritize building palisades
+ * instead of expanding territory. If more than 50% of the border is unsurrounded, pause expansion.
+ */
+export const GORD_UNSURROUNDED_THRESHOLD = 0.5;
+
+/**
+ * Minimum number of cells in a territory cluster before we consider surrounding it with palisades.
+ * Prevents wasting resources on very small territories.
+ */
+export const GORD_MIN_CELLS_FOR_SURROUNDING = 6;
+
+/**
+ * Distance threshold (in pixels) to consider an existing palisade as covering a border segment.
+ * If a palisade is within this distance of a border edge midpoint, the edge is considered covered.
+ */
+export const GORD_BORDER_COVERAGE_DISTANCE = 40;
+
+/**
+ * Calculates the midpoint of a gord edge.
+ */
+export function getEdgeMidpoint(edge: GordEdge): Vector2D {
+  return {
+    x: (edge.from.x + edge.to.x) / 2,
+    y: (edge.from.y + edge.to.y) / 2,
+  };
+}
+
+/**
+ * Checks if an edge is covered by existing walls (palisades or gates).
+ * An edge is considered covered if there's a wall within GORD_BORDER_COVERAGE_DISTANCE
+ * of its midpoint.
+ */
+export function isEdgeCoveredByWalls(
+  edge: GordEdge,
+  existingWalls: BuildingEntity[],
+  worldWidth: number,
+  worldHeight: number,
+): boolean {
+  const midpoint = getEdgeMidpoint(edge);
+  const thresholdSq = GORD_BORDER_COVERAGE_DISTANCE * GORD_BORDER_COVERAGE_DISTANCE;
+
+  for (const wall of existingWalls) {
+    const dx = Math.min(Math.abs(midpoint.x - wall.position.x), worldWidth - Math.abs(midpoint.x - wall.position.x));
+    const dy = Math.min(Math.abs(midpoint.y - wall.position.y), worldHeight - Math.abs(midpoint.y - wall.position.y));
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq < thresholdSq) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Analyzes the border coverage of a territory cluster.
+ * Returns statistics about how much of the border is already surrounded by palisades/gates.
+ */
+export function analyzeBorderCoverage(
+  cluster: Set<number>,
+  existingWalls: BuildingEntity[],
+  gridWidth: number,
+  gridHeight: number,
+  worldWidth: number,
+  worldHeight: number,
+): BorderCoverageResult {
+  const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
+  const totalBorderEdges = edges.length;
+
+  if (totalBorderEdges === 0) {
+    return {
+      totalBorderEdges: 0,
+      coveredBorderEdges: 0,
+      coverageRatio: 1, // Fully covered (no border = no need to cover)
+      unsurroundedRatio: 0,
+      totalCells: cluster.size,
+    };
+  }
+
+  let coveredBorderEdges = 0;
+  for (const edge of edges) {
+    if (isEdgeCoveredByWalls(edge, existingWalls, worldWidth, worldHeight)) {
+      coveredBorderEdges++;
+    }
+  }
+
+  const coverageRatio = coveredBorderEdges / totalBorderEdges;
+
+  return {
+    totalBorderEdges,
+    coveredBorderEdges,
+    coverageRatio,
+    unsurroundedRatio: 1 - coverageRatio,
+    totalCells: cluster.size,
+  };
+}
+
+/**
+ * Filters out edges that are already covered by existing walls.
+ * This allows reuse of existing palisades when planning a gord.
+ */
+export function filterUncoveredEdges(
+  edges: GordEdge[],
+  existingWalls: BuildingEntity[],
+  worldWidth: number,
+  worldHeight: number,
+): GordEdge[] {
+  return edges.filter((edge) => !isEdgeCoveredByWalls(edge, existingWalls, worldWidth, worldHeight));
+}
+
+/**
+ * Checks if territory expansion should be paused in favor of building palisades.
+ * Returns true if the unsurrounded border percentage is above the threshold
+ * and the territory is large enough to warrant surrounding.
+ */
+export function shouldPauseExpansionForPalisades(
+  cluster: Set<number>,
+  existingWalls: BuildingEntity[],
+  gridWidth: number,
+  gridHeight: number,
+  worldWidth: number,
+  worldHeight: number,
+): boolean {
+  // Don't pause for very small territories
+  if (cluster.size < GORD_MIN_CELLS_FOR_SURROUNDING) {
+    return false;
+  }
+
+  const coverage = analyzeBorderCoverage(cluster, existingWalls, gridWidth, gridHeight, worldWidth, worldHeight);
+
+  // Pause expansion if more than threshold of the border is unsurrounded
+  return coverage.unsurroundedRatio > GORD_UNSURROUNDED_THRESHOLD;
+}

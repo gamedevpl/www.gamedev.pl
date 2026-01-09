@@ -13,6 +13,10 @@ import {
   traceGordPerimeter,
   assignGates,
   GORD_GRID_RESOLUTION,
+  filterUncoveredEdges,
+  analyzeBorderCoverage,
+  GORD_UNSURROUNDED_THRESHOLD,
+  GORD_MIN_CELLS_FOR_SURROUNDING,
 } from '../../game/ai/task/tribes/gord-boundary-utils';
 import { GORD_MIN_CELLS } from '../../game/ai-consts';
 import { PlannedGordEdge, GordPlanStats } from './types';
@@ -21,7 +25,14 @@ import { createMockWorldState, createBuildingEntity } from './mock-state-utils';
 /**
  * Calculates statistics and quality metrics for a planned gord.
  */
-function calculateGordStats(plannedEdges: PlannedGordEdge[], totalCells: number, hubCount: number): GordPlanStats {
+function calculateGordStats(
+  plannedEdges: PlannedGordEdge[],
+  totalCells: number,
+  hubCount: number,
+  coveredEdges: number,
+  totalEdges: number,
+  shouldPauseExpansion: boolean,
+): GordPlanStats {
   const gateCount = plannedEdges.filter((e) => e.isGate).length;
   const perimeterLength = plannedEdges.length * GORD_GRID_RESOLUTION;
 
@@ -38,6 +49,8 @@ function calculateGordStats(plannedEdges: PlannedGordEdge[], totalCells: number,
   const gateWoodCost = BUILDING_DEFINITIONS[BuildingType.Gate].cost?.wood ?? 3;
   const woodCost = palisadeCount * palisadeWoodCost + gateCount * gateWoodCost;
 
+  const coverageRatio = totalEdges > 0 ? coveredEdges / totalEdges : 0;
+
   let qualityRating: GordPlanStats['qualityRating'] = 'Fair';
   if (totalCells >= GORD_MIN_CELLS * 2) qualityRating = 'Excellent';
   else if (totalCells >= GORD_MIN_CELLS) qualityRating = 'Good';
@@ -50,6 +63,10 @@ function calculateGordStats(plannedEdges: PlannedGordEdge[], totalCells: number,
     enclosedArea,
     woodCost,
     qualityRating,
+    coveredEdges,
+    totalEdges,
+    coverageRatio,
+    shouldPauseExpansion,
   };
 }
 
@@ -63,6 +80,11 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   const [showPlannedGord, setShowPlannedGord] = useState(true);
   const [plannedGordEdges, setPlannedGordEdges] = useState<PlannedGordEdge[]>([]);
   const [totalGordCells, setTotalGordCells] = useState(0);
+  const [coverageStats, setCoverageStats] = useState<{ covered: number; total: number; shouldPause: boolean }>({
+    covered: 0,
+    total: 0,
+    shouldPause: false,
+  });
 
   const [terrainOwnership, setTerrainOwnership] = useState<(number | null)[]>(
     new Array(
@@ -78,9 +100,16 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   }, [placedBuildings]);
 
   const gordStats = useMemo((): GordPlanStats | null => {
-    if (plannedGordEdges.length === 0) return null;
-    return calculateGordStats(plannedGordEdges, totalGordCells, hubBuildings.length);
-  }, [plannedGordEdges, totalGordCells, hubBuildings.length]);
+    if (plannedGordEdges.length === 0 && coverageStats.total === 0) return null;
+    return calculateGordStats(
+      plannedGordEdges,
+      totalGordCells,
+      hubBuildings.length,
+      coverageStats.covered,
+      coverageStats.total,
+      coverageStats.shouldPause,
+    );
+  }, [plannedGordEdges, totalGordCells, hubBuildings.length, coverageStats]);
 
   const snapToGrid = useCallback((x: number, y: number): Vector2D => {
     const gridSize = NAV_GRID_RESOLUTION;
@@ -125,6 +154,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
     setPlacedBuildings([]);
     setPlannedGordEdges([]);
     setTotalGordCells(0);
+    setCoverageStats({ covered: 0, total: 0, shouldPause: false });
     setNextBuildingId(10);
     setTerrainOwnership(new Array(terrainOwnership.length).fill(null));
   }, [terrainOwnership.length]);
@@ -133,6 +163,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
     if (hubBuildings.length === 0) {
       setPlannedGordEdges([]);
       setTotalGordCells(0);
+      setCoverageStats({ covered: 0, total: 0, shouldPause: false });
       return;
     }
     const mockState = createMockWorldState(placedBuildings, terrainOwnership, canvasWidth, canvasHeight);
@@ -140,19 +171,57 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
     const gridWidth = Math.ceil(canvasWidth / GORD_GRID_RESOLUTION);
     const gridHeight = Math.ceil(canvasHeight / GORD_GRID_RESOLUTION);
 
+    // Get existing walls for coverage analysis
+    const existingWalls = placedBuildings.filter(
+      (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
+    );
+
     const allPlanned: PlannedGordEdge[] = [];
     let totalCells = 0;
+    let totalCoveredEdges = 0;
+    let totalEdges = 0;
+    let shouldPauseExpansion = false;
 
     for (const cluster of clusters) {
-      if (cluster.size < GORD_MIN_CELLS) continue;
+      // Use stricter minimum for actual palisade placement (avoid very small territories)
+      if (cluster.size < GORD_MIN_CELLS_FOR_SURROUNDING) continue;
+      
       totalCells += cluster.size;
-      const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
-      const edgesWithGates = assignGates(edges);
+
+      // Analyze border coverage
+      const coverage = analyzeBorderCoverage(
+        cluster,
+        existingWalls,
+        gridWidth,
+        gridHeight,
+        canvasWidth,
+        canvasHeight,
+      );
+
+      totalEdges += coverage.totalBorderEdges;
+      totalCoveredEdges += coverage.coveredBorderEdges;
+
+      // Check if expansion should be paused
+      if (coverage.unsurroundedRatio > GORD_UNSURROUNDED_THRESHOLD) {
+        shouldPauseExpansion = true;
+      }
+
+      // Get all edges and filter out covered ones
+      const allEdges = traceGordPerimeter(cluster, gridWidth, gridHeight);
+      const uncoveredEdges = filterUncoveredEdges(allEdges, existingWalls, canvasWidth, canvasHeight);
+
+      // Only assign gates to uncovered edges
+      const edgesWithGates = assignGates(uncoveredEdges);
       allPlanned.push(...edgesWithGates);
     }
 
     setPlannedGordEdges(allPlanned);
     setTotalGordCells(totalCells);
+    setCoverageStats({
+      covered: totalCoveredEdges,
+      total: totalEdges,
+      shouldPause: shouldPauseExpansion,
+    });
   }, [hubBuildings, placedBuildings, terrainOwnership, canvasWidth, canvasHeight]);
 
   const executeGordPlan = useCallback(() => {

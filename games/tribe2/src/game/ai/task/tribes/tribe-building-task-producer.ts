@@ -11,7 +11,6 @@ import {
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_MIN_BUSHES,
   GORD_GRID_RESOLUTION,
-  GORD_MIN_CELLS,
 } from '../../../ai-consts';
 import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
@@ -38,6 +37,10 @@ import {
   traceGordPerimeter,
   assignGates,
   GORD_WALL_PROXIMITY_THRESHOLD,
+  filterUncoveredEdges,
+  analyzeBorderCoverage,
+  GORD_MIN_CELLS_FOR_SURROUNDING,
+  GORD_UNSURROUNDED_THRESHOLD,
 } from './gord-boundary-utils';
 
 export type FrontierCandidate = {
@@ -165,8 +168,17 @@ export function updateTribeFrontier(context: UpdateContext): void {
 
 /**
  * Plans defensive enclosures (Gords) around critical infrastructure using influence map boundary tracing.
+ * 
+ * New algorithm:
+ * 1. Periodically check how much of the tribe territory border is NOT surrounded by gord
+ * 2. If the unsurrounded percentage is above threshold, prioritize placing palisades
+ * 3. Filter out edges that are already covered by existing palisades (reuse)
+ * 4. Avoid surrounding very small territories
+ * 5. Place gates strategically but not too many
+ * 
+ * @returns BorderCoverageResult for the leader to use in expansion decisions
  */
-function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context: UpdateContext): void {
+function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context: UpdateContext): { shouldPauseExpansion: boolean } {
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
   const { width, height } = gameState.mapDimensions;
@@ -187,9 +199,9 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     (b) => b.buildingType === BuildingType.Bonfire || b.buildingType === BuildingType.StorageSpot,
   );
 
-  if (hubs.length === 0) return;
+  if (hubs.length === 0) return { shouldPauseExpansion: false };
 
-  // Gather existing walls for gord expansion
+  // Gather existing walls for gord expansion and reuse
   const existingWalls = tribeBuildings.filter(
     (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
   );
@@ -199,19 +211,35 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
   const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
   const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
 
+  let shouldPauseExpansion = false;
+
   // Process each hub cluster independently
   for (const cluster of clusters) {
-    // 3. Minimum size requirement (e.g., 4 cells = 200x200px area)
-    if (cluster.size < GORD_MIN_CELLS) continue;
+    // 3. Minimum size requirement - avoid surrounding very small territories
+    // Use the stricter GORD_MIN_CELLS_FOR_SURROUNDING for actual palisade placement
+    if (cluster.size < GORD_MIN_CELLS_FOR_SURROUNDING) continue;
 
-    // 4. Trace perimeter edges of the cluster
-    const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
-    if (edges.length === 0) continue;
+    // 4. Analyze border coverage to determine if we need more palisades
+    const coverage = analyzeBorderCoverage(cluster, existingWalls, gridWidth, gridHeight, width, height);
+    
+    // If the unsurrounded ratio is above threshold, we should pause expansion
+    if (coverage.unsurroundedRatio > GORD_UNSURROUNDED_THRESHOLD) {
+      shouldPauseExpansion = true;
+    }
 
-    // 5. Assign gates strategically along the edges
-    const edgesWithGates = assignGates(edges);
+    // 5. Trace perimeter edges of the cluster
+    const allEdges = traceGordPerimeter(cluster, gridWidth, gridHeight);
+    if (allEdges.length === 0) continue;
 
-    // 6. Create tasks by interpolating along each 100px edge
+    // 6. Filter out edges that are already covered by existing palisades (reuse existing walls)
+    const uncoveredEdges = filterUncoveredEdges(allEdges, existingWalls, width, height);
+    if (uncoveredEdges.length === 0) continue; // All edges are already covered
+
+    // 7. Assign gates strategically along the uncovered edges
+    // Gate count is based on the uncovered edges, not total edges
+    const edgesWithGates = assignGates(uncoveredEdges);
+
+    // 8. Create tasks by interpolating along each 100px edge
     for (const edge of edgesWithGates) {
       const step = 20; // Palisade placement interval (matches territory resolution)
       const numSteps = GORD_GRID_RESOLUTION / step;
@@ -281,6 +309,8 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
       }
     }
   }
+
+  return { shouldPauseExpansion };
 }
 
 /**
@@ -373,7 +403,8 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     const tribeBuildings = buildingsByTribe.get(leaderId) || [];
 
     // --- GORDS (Palisades & Gates) -----
-    planGords(leaderId, tribeBuildings, context);
+    // planGords now returns whether expansion should be paused based on border coverage
+    const { shouldPauseExpansion } = planGords(leaderId, tribeBuildings, context);
 
     // Prepare other tribe centers for placement optimization
     const otherTribeCenters: Vector2D[] = [];
@@ -512,89 +543,93 @@ export function produceTribeBuildingTasks(context: UpdateContext): void {
     }
 
     // --- BORDER POST -----
-    const candidates =
-      Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
-    const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+    // Skip border post placement if the tribe needs to prioritize palisade placement
+    // This ensures the tribe secures its current territory before expanding further
+    if (!shouldPauseExpansion) {
+      const candidates =
+        Blackboard.get<Record<string, FrontierCandidate>>(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES) || {};
+      const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
 
-    const borderPosts = tribeBuildings.filter((b) => b.buildingType === BuildingType.BorderPost);
-    const activeBorderTasks = existingTasks.filter((t) => t.type === TaskType.HumanPlaceBorderPost);
+      const borderPosts = tribeBuildings.filter((b) => b.buildingType === BuildingType.BorderPost);
+      const activeBorderTasks = existingTasks.filter((t) => t.type === TaskType.HumanPlaceBorderPost);
 
-    // Pruning Candidates (Hourly)
-    for (const targetIdxStr in candidates) {
-      const targetIdx = parseInt(targetIdxStr, 10);
-      const neighborOwner = gameState.terrainOwnership[targetIdx];
-      const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
+      // Pruning Candidates (Hourly)
+      for (const targetIdxStr in candidates) {
+        const targetIdx = parseInt(targetIdxStr, 10);
+        const neighborOwner = gameState.terrainOwnership[targetIdx];
+        const isHostile = neighborOwner !== null && isTribeHostile(leader.id, neighborOwner, gameState);
 
-      // 1. Remove if no longer unowned/hostile or captured by us
-      if (neighborOwner === leaderId || (neighborOwner !== null && !isHostile)) {
-        delete candidates[targetIdxStr];
-        continue;
-      }
+        // 1. Remove if no longer unowned/hostile or captured by us
+        if (neighborOwner === leaderId || (neighborOwner !== null && !isHostile)) {
+          delete candidates[targetIdxStr];
+          continue;
+        }
 
-      // 2. Remove if too close to existing border posts or tasks
-      const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
-      const isTooClose =
-        borderPosts.some(
-          (p) => calculateWrappedDistanceSq(targetPos, p.position, worldWidth, worldHeight) < 100 * 100,
-        ) ||
-        activeBorderTasks.some(
-          (t) => calculateWrappedDistanceSq(targetPos, t.position, worldWidth, worldHeight) < 100 * 100,
-        );
+        // 2. Remove if too close to existing border posts or tasks
+        const targetPos = convertTerritoryIndexToPosition(targetIdx, worldWidth);
+        const isTooClose =
+          borderPosts.some(
+            (p) => calculateWrappedDistanceSq(targetPos, p.position, worldWidth, worldHeight) < 100 * 100,
+          ) ||
+          activeBorderTasks.some(
+            (t) => calculateWrappedDistanceSq(targetPos, t.position, worldWidth, worldHeight) < 100 * 100,
+          );
 
-      if (isTooClose) {
-        delete candidates[targetIdxStr];
-      }
-    }
-    Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
-
-    const maxConcurrentTasks = 3;
-    if (activeBorderTasks.length < maxConcurrentTasks) {
-      // Sort and select top candidates
-      const sortedCandidates = Object.entries(candidates)
-        .map(([idx, cand]) => ({ idx: parseInt(idx, 10), ...cand }))
-        .sort((a, b) => b.score - a.score);
-
-      const selectedPositions: Vector2D[] = [];
-      for (const candidate of sortedCandidates) {
-        if (selectedPositions.length >= maxConcurrentTasks - activeBorderTasks.length) break;
-
-        const targetPos = convertTerritoryIndexToPosition(candidate.idx, worldWidth);
-
-        const isFarEnough = selectedPositions.every(
-          (pos) => calculateWrappedDistanceSq(targetPos, pos, worldWidth, worldHeight) > 100 * 100,
-        );
-
-        if (isFarEnough) {
-          selectedPositions.push(targetPos);
+        if (isTooClose) {
+          delete candidates[targetIdxStr];
         }
       }
+      Blackboard.set(leader.aiBlackboard, BLACKBOARD_FRONTIER_CANDIDATES, candidates);
 
-      // Identify available indices for stable task IDs
-      const usedIndices = new Set(
-        activeBorderTasks
-          .map((t) => {
-            const parts = t.id.split('-');
-            return parseInt(parts[parts.length - 1], 10);
-          })
-          .filter((idx) => !isNaN(idx)),
-      );
+      const maxConcurrentTasks = 3;
+      if (activeBorderTasks.length < maxConcurrentTasks) {
+        // Sort and select top candidates
+        const sortedCandidates = Object.entries(candidates)
+          .map(([idx, cand]) => ({ idx: parseInt(idx, 10), ...cand }))
+          .sort((a, b) => b.score - a.score);
 
-      const availableIndices: number[] = [];
-      for (let i = 0; i < maxConcurrentTasks; i++) {
-        if (!usedIndices.has(i)) {
-          availableIndices.push(i);
+        const selectedPositions: Vector2D[] = [];
+        for (const candidate of sortedCandidates) {
+          if (selectedPositions.length >= maxConcurrentTasks - activeBorderTasks.length) break;
+
+          const targetPos = convertTerritoryIndexToPosition(candidate.idx, worldWidth);
+
+          const isFarEnough = selectedPositions.every(
+            (pos) => calculateWrappedDistanceSq(targetPos, pos, worldWidth, worldHeight) > 100 * 100,
+          );
+
+          if (isFarEnough) {
+            selectedPositions.push(targetPos);
+          }
         }
-      }
 
-      // Create tasks for selected candidates
-      for (let i = 0; i < selectedPositions.length; i++) {
-        createPlacementTask(
-          leaderId,
-          TaskType.HumanPlaceBorderPost,
-          selectedPositions[i],
-          gameState,
-          availableIndices[i],
+        // Identify available indices for stable task IDs
+        const usedIndices = new Set(
+          activeBorderTasks
+            .map((t) => {
+              const parts = t.id.split('-');
+              return parseInt(parts[parts.length - 1], 10);
+            })
+            .filter((idx) => !isNaN(idx)),
         );
+
+        const availableIndices: number[] = [];
+        for (let i = 0; i < maxConcurrentTasks; i++) {
+          if (!usedIndices.has(i)) {
+            availableIndices.push(i);
+          }
+        }
+
+        // Create tasks for selected candidates
+        for (let i = 0; i < selectedPositions.length; i++) {
+          createPlacementTask(
+            leaderId,
+            TaskType.HumanPlaceBorderPost,
+            selectedPositions[i],
+            gameState,
+            availableIndices[i],
+          );
+        }
       }
     }
   }

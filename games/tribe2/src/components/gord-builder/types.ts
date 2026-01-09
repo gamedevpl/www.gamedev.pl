@@ -20,4 +20,12 @@ export interface GordPlanStats {
   enclosedArea: number;
   woodCost: number;
   qualityRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  /** Number of border edges that are already covered by existing walls */
+  coveredEdges?: number;
+  /** Total number of border edges */
+  totalEdges?: number;
+  /** Percentage of border that is covered (0-1) */
+  coverageRatio?: number;
+  /** Whether expansion should be paused in favor of palisade placement */
+  shouldPauseExpansion?: boolean;
 }
