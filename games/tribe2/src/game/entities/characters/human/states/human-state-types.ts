@@ -12,6 +12,7 @@ export const HUMAN_PROCREATING = 'humanProcreating'; // When procreating with an
 export const HUMAN_ATTACKING = 'humanAttacking';
 export const HUMAN_PLANTING = 'humanPlanting';
 export const HUMAN_CHOPPING = 'humanChopping';
+export const HUMAN_DISMANTLING = 'humanDismantling';
 
 interface HumanIdleStateData extends StateData {
   state: 'idle'; // Explicitly define state for clarity
@@ -57,6 +58,10 @@ export interface HumanChoppingStateData extends StateData {
   state: 'chopping';
 }
 
+export interface HumanDismantlingStateData extends StateData {
+  state: 'dismantling';
+}
+
 export type HumanStateData =
   | HumanIdleStateData
   | HumanMovingStateData
@@ -67,4 +72,5 @@ export type HumanStateData =
   | HumanProcreatingStateData
   | HumanAttackingStateData
   | HumanPlantingStateData
-  | HumanChoppingStateData;
+  | HumanChoppingStateData
+  | HumanDismantlingStateData;

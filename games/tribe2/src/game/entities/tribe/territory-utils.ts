@@ -17,6 +17,7 @@ import { isTribeHostile } from '../../utils/human-utils';
 import { IndexedWorldState } from '../../world-index/world-index-types';
 import { HumanEntity } from '../characters/human/human-types';
 import { TAKEOVER_SAFETY_RADIUS } from '../../ai-consts';
+import { BuildingEntity } from '../buildings/building-types';
 
 /** Converts a world position to territory grid coordinates. */
 export function convertPositionToTerritoryGrid(position: Vector2D): Vector2D {
@@ -48,7 +49,11 @@ export function convertPositionToTerritoryIndex(position: Vector2D, worldWidth: 
  * Uses the terrainOwnership grid to determine ownership.
  */
 export function getOwnerOfPoint(x: number, y: number, gameState: GameWorldState): EntityId | null {
-  const territoryIndex = convertPositionToTerritoryIndex({ x, y }, gameState.mapDimensions.width, gameState.mapDimensions.height);
+  const territoryIndex = convertPositionToTerritoryIndex(
+    { x, y },
+    gameState.mapDimensions.width,
+    gameState.mapDimensions.height,
+  );
   return gameState.terrainOwnership[territoryIndex] || null;
 }
 
@@ -422,6 +427,7 @@ export function constrainWanderToTerritory(
 
 type TerrainPaintOptions = {
   allowOverwrite: boolean;
+  ignoreBuildingId?: EntityId;
 };
 
 function applyTerrainOwnershipPaint(
@@ -429,9 +435,26 @@ function applyTerrainOwnershipPaint(
   radius: number,
   ownerId: EntityId,
   gameState: GameWorldState,
-  { allowOverwrite }: TerrainPaintOptions,
+  { allowOverwrite, ignoreBuildingId }: TerrainPaintOptions,
 ): void {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+  const indexedState = gameState as IndexedWorldState;
+
+  // Find blocking buildings (hostile constructed buildings)
+  let blockingBuildings: BuildingEntity[] = [];
+  if (indexedState.search && indexedState.search.building) {
+    // Search slightly wider than radius to catch buildings whose edge overlaps our radius
+    const searchRadius = radius + 100; // Arbitrary safety margin, or max building radius
+    const nearbyBuildings = indexedState.search.building.byRadius(position, searchRadius);
+
+    blockingBuildings = nearbyBuildings.filter((b) => {
+      if (b.id === ignoreBuildingId) return false;
+      if (!b.isConstructed) return false;
+      if (!b.ownerId) return false;
+      // Check if hostile
+      return isTribeHostile(ownerId, b.ownerId, gameState);
+    });
+  }
 
   // Grid config
   const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
@@ -448,6 +471,23 @@ function applyTerrainOwnershipPaint(
       const gridY = (((centerGridY + dy) % gridHeight) + gridHeight) % gridHeight;
       const cellCenterX = gridX * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
       const cellCenterY = gridY * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+
+      // Check against blocking buildings
+      let isBlocked = false;
+      for (const building of blockingBuildings) {
+        const distSq = calculateWrappedDistanceSq(
+          { x: cellCenterX, y: cellCenterY },
+          building.position,
+          worldWidth,
+          worldHeight,
+        );
+        // If cell center is inside building radius, it's blocked.
+        if (distSq < building.radius * building.radius) {
+          isBlocked = true;
+          break;
+        }
+      }
+      if (isBlocked) continue;
 
       const distance = calculateWrappedDistance(position, { x: cellCenterX, y: cellCenterY }, worldWidth, worldHeight);
 
@@ -640,8 +680,9 @@ export function takeOverTerrainOwnership(
   radius: number,
   ownerId: EntityId,
   gameState: GameWorldState,
+  ignoreBuildingId?: EntityId,
 ): void {
-  applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: true });
+  applyTerrainOwnershipPaint(position, radius, ownerId, gameState, { allowOverwrite: true, ignoreBuildingId });
 }
 
 /**

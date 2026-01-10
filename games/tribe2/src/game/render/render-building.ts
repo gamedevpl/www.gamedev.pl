@@ -14,15 +14,16 @@ import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
 import { renderWithWrapping, pseudoRandom } from './render-utils';
-import { Entity } from '../entities/entities-types';
+import { Entity, EntityId } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS, FoodType } from '../entities/food-types';
 import { ITEM_TYPE_EMOJIS, ItemType } from '../entities/item-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
 import { SpriteCache } from './sprite-cache';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
-import { NAV_GRID_RESOLUTION } from '../utils/navigation-utils';
-import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
+import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
+import { drawPalisade, PalisadeConnections } from './render-palisade';
+import { drawGate } from './render-gate';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -39,45 +40,24 @@ const STONE_COLOR_HOSTILE_HIGHLIGHT = '#FF4444'; // Light Red
 // Storage rendering constants
 const STORAGE_ITEM_ICON_SIZE = 6; // Size of food item emojis
 
-// Palisade/Gate Visual Constants
-const WOOD_COLOR_BASE = '#8B4513'; // SaddleBrown
-const WOOD_COLOR_HIGHLIGHT = '#A0522D'; // Sienna
 const CRACK_COLOR = 'rgba(40, 40, 40, 0.7)';
 
 // Caching logic
 const spriteCache = new SpriteCache(1000);
-const SPRITE_PADDING = 20;
-
-/**
- * Interface for palisade connectivity flags.
- */
-interface PalisadeConnections {
-  top: boolean;
-  right: boolean;
-  bottom: boolean;
-  left: boolean;
-  topRight: boolean;
-  bottomRight: boolean;
-  bottomLeft: boolean;
-  topLeft: boolean;
-}
+const SPRITE_PADDING = 50;
 
 const DEFAULT_CONNECTIONS: PalisadeConnections = {
-  top: false,
-  right: false,
-  bottom: false,
-  left: false,
-  topRight: false,
-  bottomRight: false,
-  bottomLeft: false,
-  topLeft: false,
+  connections: [],
+  isInner: false,
 };
 
 /**
  * Generates a unique cache key for a building sprite based on its visual state.
  */
 function getBuildingSpriteKey(
-  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
+  building:
+    | BuildingEntity
+    | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
   isHostile: boolean,
   isGhost: boolean = false,
   isValid: boolean = true,
@@ -89,16 +69,34 @@ function getBuildingSpriteKey(
 
   const b = building as BuildingEntity;
   const hasFuel = b.buildingType === BuildingType.Bonfire && (b.fuelLevel ?? 0) > 0;
-  const c = connections;
-  const connKey = `${c.top}${c.right}${c.bottom}${c.left}${c.topRight}${c.bottomRight}${c.bottomLeft}${c.topLeft}`;
-  return `${b.id}_${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}_${connKey}`;
+
+  // Create a stable key by sorting connections and rounding angles/distances
+  // This ensures that slight variations in placement don't invalidate the cache
+  const connKey =
+    connections.connections
+      .slice()
+      .sort((a, b) => a.angle - b.angle)
+      .map((c) => {
+        const deg = Math.round((c.angle * 180) / Math.PI / 5) * 5; // Round to 5 deg
+        const dist = Math.round(c.distance / 2) * 2; // Round to 2px
+        return `${deg}:${dist}`;
+      })
+      .join(',') + `_inner:${connections.isInner}`;
+
+  // For caching efficiency, we use ownerId instead of unique building id
+  // so identical segments of the same tribe share the same sprite.
+  const tribeKey = b.ownerId ?? 'neutral';
+
+  return `${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}_${tribeKey}_${connKey}`;
 }
 
 /**
  * Retrieves a cached building sprite or creates a new one.
  */
 function getBuildingSprite(
-  building: BuildingEntity | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
+  building:
+    | BuildingEntity
+    | { buildingType: BuildingType; width: number; height: number; id: number; ownerId?: number | null },
   isHostile: boolean,
   isGhost: boolean = false,
   isValid: boolean = true,
@@ -118,7 +116,7 @@ function getBuildingSprite(
     if (isGhost) {
       const ghostColor = isValid ? '#4CAF50' : '#F44336';
       if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
-        drawWoodPost(ctx, width, height, ghostColor);
+        drawGhostBox(ctx, width, height, ghostColor);
       } else {
         drawStoneRect(ctx, width, height, 9999, ghostColor);
       }
@@ -131,7 +129,7 @@ function getBuildingSprite(
     } else {
       const b = building as BuildingEntity;
       let icon = definition.icon;
-      
+
       // Determine tribe color
       let tribeColor = '#FFFFFF';
       if (b.ownerId !== undefined && b.ownerId !== null) {
@@ -141,7 +139,7 @@ function getBuildingSprite(
       if (buildingType === BuildingType.Palisade) {
         drawPalisade(ctx, width, height, id, tribeColor, connections);
       } else if (buildingType === BuildingType.Gate) {
-        drawGate(ctx, width, height, tribeColor, connections);
+        drawGate(ctx, width, height, id, tribeColor, connections);
       } else {
         if (b.buildingType === BuildingType.Bonfire && isConstructed) {
           icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
@@ -170,146 +168,22 @@ function getBuildingSprite(
 }
 
 /**
- * Draws a wooden post (used for ghosts and as base for palisades).
+ * Draws a simple box for ghost previews, matching the chunky style.
  */
-function drawWoodPost(ctx: CanvasRenderingContext2D, width: number, height: number, color: string) {
+function drawGhostBox(ctx: CanvasRenderingContext2D, width: number, height: number, color: string) {
+  const halfW = width / 2;
+  const halfH = height / 2;
+
   ctx.fillStyle = color;
-  ctx.fillRect(-width / 2, -height / 2, width, height);
-  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-  ctx.strokeRect(-width / 2, -height / 2, width, height);
-}
+  ctx.globalAlpha = 0.3;
+  ctx.fillRect(-halfW, -halfH, width, height);
 
-/**
- * Draws a palisade segment with connections.
- */
-function drawPalisade(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  seed: number,
-  tribeColor: string,
-  connections: PalisadeConnections,
-) {
-  const halfW = width / 2;
-  const halfH = height / 2;
-  const beamThickness = height / 4;
+  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-halfW, -halfH, width, height);
 
-  // 1. Draw Beams (Behind Post)
-  ctx.fillStyle = WOOD_COLOR_BASE;
-  
-  // Orthogonal beams
-  if (connections.right) ctx.fillRect(0, -beamThickness / 2, halfW, beamThickness);
-  if (connections.left) ctx.fillRect(-halfW, -beamThickness / 2, halfW, beamThickness);
-  if (connections.bottom) ctx.fillRect(-beamThickness / 2, 0, beamThickness, halfH);
-  if (connections.top) ctx.fillRect(-beamThickness / 2, -halfH, beamThickness, halfH);
-
-  // Diagonal beams
-  ctx.lineWidth = beamThickness;
-  ctx.strokeStyle = WOOD_COLOR_BASE;
-  ctx.lineCap = 'round';
-  
-  const drawDiagonalBeam = (targetX: number, targetY: number) => {
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(targetX, targetY);
-    ctx.stroke();
-  };
-
-  if (connections.topRight) drawDiagonalBeam(halfW, -halfH);
-  if (connections.bottomRight) drawDiagonalBeam(halfW, halfH);
-  if (connections.bottomLeft) drawDiagonalBeam(-halfW, halfH);
-  if (connections.topLeft) drawDiagonalBeam(-halfW, -halfH);
-
-  // 2. Main Post
-  const postWidth = width / 2;
-  ctx.fillStyle = WOOD_COLOR_BASE;
-  ctx.fillRect(-postWidth / 2, -halfH, postWidth, height);
-  
-  // Highlight
-  ctx.fillStyle = WOOD_COLOR_HIGHLIGHT;
-  ctx.fillRect(-postWidth / 4, -halfH, postWidth / 2, height);
-
-  // Smart Sharpening: Only draw pointed top if no palisade above
-  if (!connections.top) {
-    ctx.fillStyle = WOOD_COLOR_BASE;
-    ctx.beginPath();
-    ctx.moveTo(-postWidth / 2, -halfH);
-    ctx.lineTo(0, -halfH - 5);
-    ctx.lineTo(postWidth / 2, -halfH);
-    ctx.fill();
-  }
-
-  // Tribe accent band
-  ctx.fillStyle = tribeColor;
-  ctx.fillRect(-postWidth / 2, -height / 8, postWidth, height / 4);
-  
-  // Wood grain lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 3; i++) {
-    const x = (pseudoRandom(seed + i) - 0.5) * postWidth;
-    ctx.beginPath();
-    ctx.moveTo(x, -halfH);
-    ctx.lineTo(x, halfH);
-    ctx.stroke();
-  }
-}
-
-/**
- * Draws a gate segment.
- */
-function drawGate(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  tribeColor: string,
-  connections: PalisadeConnections,
-) {
-  // Rotate gate if connected vertically
-  if (connections.top || connections.bottom) {
-    ctx.rotate(Math.PI / 2);
-  }
-
-  const postWidth = width / 4;
-  const halfW = width / 2;
-  const halfH = height / 2;
-
-  // Side Posts
-  ctx.fillStyle = WOOD_COLOR_BASE;
-  ctx.fillRect(-halfW, -halfH, postWidth, height);
-  ctx.fillRect(halfW - postWidth, -halfH, postWidth, height);
-
-  // Top Crossbeam
-  ctx.fillStyle = '#5D2906'; // Darker wood
-  ctx.fillRect(-halfW, -halfH, width, postWidth);
-
-  // Door panels
-  ctx.fillStyle = WOOD_COLOR_BASE;
-  const doorWidth = (width - postWidth * 2) / 2;
-  ctx.fillRect(-halfW + postWidth + 1, -halfH + postWidth + 1, doorWidth - 2, height - postWidth - 2);
-  ctx.fillRect(1, -halfH + postWidth + 1, doorWidth - 2, height - postWidth - 2);
-
-  // Wood grain on doors
-  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-  ctx.lineWidth = 1;
-  for (let i = -1; i <= 1; i += 2) {
-    const x = i * (doorWidth / 2);
-    ctx.beginPath();
-    ctx.moveTo(x, -halfH + postWidth);
-    ctx.lineTo(x, halfH);
-    ctx.stroke();
-  }
-
-  // Tribe emblem/color
-  ctx.fillStyle = tribeColor;
-  ctx.beginPath();
-  ctx.arc(0, postWidth / 2, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Handles
-  ctx.fillStyle = '#C0C0C0';
-  ctx.fillRect(-2, postWidth / 2 - 1, 1, 2);
-  ctx.fillRect(1, postWidth / 2 - 1, 1, 2);
+  ctx.globalAlpha = 1.0;
 }
 
 /**
@@ -328,12 +202,12 @@ function drawCracks(ctx: CanvasRenderingContext2D, width: number, height: number
     const s = seed + i * 17;
     let x = (pseudoRandom(s) - 0.5) * width;
     let y = (pseudoRandom(s + 1) - 0.5) * height;
-    
+
     ctx.beginPath();
     ctx.moveTo(x, y);
     const length = 5 + pseudoRandom(s + 2) * 10;
     const angle = pseudoRandom(s + 3) * Math.PI * 2;
-    
+
     for (let j = 0; j < 3; j++) {
       x += Math.cos(angle) * (length / 3);
       y += Math.sin(angle) * (length / 3);
@@ -471,18 +345,30 @@ export function renderBuilding(
   building: BuildingEntity,
   indexedWorld: IndexedWorldState,
 ): void {
-  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed, buildingType, ownerId, id } =
-    building;
+  const {
+    position,
+    width,
+    height,
+    constructionProgress,
+    destructionProgress,
+    isConstructed,
+    isBeingDestroyed,
+    buildingType,
+    ownerId,
+    id,
+  } = building;
 
   // Check hostility
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
 
-  // Connectivity check for Palisades
-  let connections: PalisadeConnections = { ...DEFAULT_CONNECTIONS };
+  // Connectivity and Inner/Outer check for Palisades
+  let connections: PalisadeConnections = { connections: [], isInner: false };
   if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
     const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
-    const nearbyBuildings = indexedWorld.search.building.byRadius(position, NAV_GRID_RESOLUTION * 1.5);
+    // Search radius increased to 100px to detect connections between small palisades (20px)
+    // and large gates (60px) or between gates (60px) which have larger center-to-center distances.
+    const nearbyBuildings = indexedWorld.search.building.byRadius(position, 100);
 
     for (const neighbor of nearbyBuildings) {
       if (neighbor.id === id) continue; // Skip self
@@ -492,31 +378,51 @@ export function renderBuilding(
         neighbor.ownerId === ownerId
       ) {
         const dir = getDirectionVectorOnTorus(position, neighbor.position, worldWidth, worldHeight);
-        const threshold = NAV_GRID_RESOLUTION * 0.5;
+        const dist = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
 
-        const isRight = dir.x > threshold;
-        const isLeft = dir.x < -threshold;
-        const isBottom = dir.y > threshold;
-        const isTop = dir.y < -threshold;
-
-        const absX = Math.abs(dir.x);
-        const absY = Math.abs(dir.y);
-
-        // Orthogonal
-        if (absX > threshold && absY < threshold) {
-          if (isRight) connections.right = true;
-          if (isLeft) connections.left = true;
-        } else if (absY > threshold && absX < threshold) {
-          if (isBottom) connections.bottom = true;
-          if (isTop) connections.top = true;
-        } 
-        // Diagonal
-        else if (absX > threshold && absY > threshold) {
-          if (isRight && isTop) connections.topRight = true;
-          if (isRight && isBottom) connections.bottomRight = true;
-          if (isLeft && isBottom) connections.bottomLeft = true;
-          if (isLeft && isTop) connections.topLeft = true;
+        // Capture precise angle and distance for all neighbors in range
+        if (dist >= 15 && dist <= 100) {
+          connections.connections.push({
+            angle: Math.atan2(dir.y, dir.x),
+            distance: dist,
+          });
         }
+      }
+    }
+
+    // Inner/Outer Detection using Perspective Sampling
+    if (ownerId !== null) {
+      const getOwnerOfPoint = (px: number, py: number): EntityId | null => {
+        const wrappedX = ((px % worldWidth) + worldWidth) % worldWidth;
+        const wrappedY = ((py % worldHeight) + worldHeight) % worldHeight;
+        const gx = Math.floor(wrappedX / TERRITORY_OWNERSHIP_RESOLUTION);
+        const gy = Math.floor(wrappedY / TERRITORY_OWNERSHIP_RESOLUTION);
+        const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+        return indexedWorld.terrainOwnership[gy * gridWidth + gx];
+      };
+
+      // Improved isVertical check for sampling: true if connections are primarily vertical
+      const isVertical =
+        connections.connections.length > 0 && connections.connections.every((c) => Math.abs(Math.sin(c.angle)) > 0.7);
+
+      // Sample point outside the building footprint
+      const sampleDist = Math.max(width, height) * 0.5 + 10;
+
+      let sampleX = position.x;
+      let sampleY = position.y;
+
+      if (isVertical) {
+        // For vertical walls, sample East to see if we are inside
+        sampleX += sampleDist;
+      } else {
+        // For horizontal walls and corners, sample South (the \"front\" relative to camera)
+        sampleY += sampleDist;
+      }
+
+      const frontOwner = getOwnerOfPoint(sampleX, sampleY);
+
+      if (frontOwner === ownerId) {
+        connections.isInner = true;
       }
     }
   }
@@ -532,13 +438,13 @@ export function renderBuilding(
 
   // Draw cached sprite centered at position
   ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
-  
+
   // Damage feedback (cracks)
   if (isBeingDestroyed && isConstructed) {
     ctx.translate(position.x, position.y);
     drawCracks(ctx, width, height, destructionProgress, id);
   }
-  
+
   ctx.restore();
 
   // 3. Draw Progress Bars
@@ -593,7 +499,13 @@ export function renderGhostBuilding(
   const { width, height } = definition.dimensions;
 
   // Get cached ghost sprite
-  const sprite = getBuildingSprite({ buildingType, width, height, id: 9999 }, false, true, isValid, DEFAULT_CONNECTIONS);
+  const sprite = getBuildingSprite(
+    { buildingType, width, height, id: 9999, ownerId: null },
+    false,
+    true,
+    isValid,
+    DEFAULT_CONNECTIONS,
+  );
 
   const drawGhost = (ctx: CanvasRenderingContext2D, pos: Vector2D) => {
     ctx.save();
@@ -612,12 +524,7 @@ export function renderGhostBuilding(
     forces: [],
     velocity: { x: 0, y: 0 },
     debuffs: [],
-    stateMachine: [
-      '',
-      {
-        enteredAt: 0,
-      },
-    ],
+    stateMachine: ['', { enteredAt: 0 }],
     aiBlackboard: Blackboard.create(),
   };
 

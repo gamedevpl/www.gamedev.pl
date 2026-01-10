@@ -114,6 +114,9 @@ export interface HumanEntity extends CharacterEntity {
 
   /** The non-food item currently held by the human. Only one item can be held at a time. */
   heldItem?: Item;
+
+  /** ID of the entity (building or tree) that is currently trapping the human. */
+  trappedByObstacleId?: EntityId;
 }
 
 export type HumanAction =

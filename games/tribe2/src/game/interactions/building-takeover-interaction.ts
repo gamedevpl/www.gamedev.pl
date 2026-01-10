@@ -49,7 +49,14 @@ export const buildingTakeoverInteraction: InteractionDefinition<HumanEntity, Bui
     target.ownerId = source.id;
 
     // Paint the territory to reflect new ownership (overwrite previous owner)
-    takeOverTerrainOwnership(target.position, TERRITORY_BUILDING_RADIUS, source.id, context.gameState);
+    // Pass target.id as ignoreBuildingId to allow painting under the captured building
+    takeOverTerrainOwnership(
+      target.position,
+      TERRITORY_BUILDING_RADIUS,
+      source.id,
+      context.gameState,
+      target.id,
+    );
 
     // Reset/Repair the building fully
     target.constructionProgress = 1;

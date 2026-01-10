@@ -24,6 +24,11 @@ export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
       return null;
     }
 
+    // Immediate priority if this tree is trapping the human
+    if (human.trappedByObstacleId === task.target) {
+      return 1000;
+    }
+
     const tree = context.gameState.entities.entities[task.target] as TreeEntity | undefined;
     if (!tree || tree.type !== 'tree') {
       return null;

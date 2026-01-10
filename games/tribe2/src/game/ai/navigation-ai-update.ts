@@ -3,8 +3,7 @@ import { HumanEntity } from '../entities/characters/human/human-types';
 import { Vector2D } from '../utils/math-types';
 import { findPath, NAV_GRID_RESOLUTION, getNavigationGridIndex, isCellPassable } from '../utils/navigation-utils';
 import { getDirectionVectorOnTorus } from '../utils/math-utils';
-import { BuildingType } from '../entities/buildings/building-consts';
-import { TaskType } from './task/task-types';
+import { TREE_GROWING, TREE_FULL, TREE_SPREADING } from '../entities/plants/tree/states/tree-state-types';
 
 /**
  * Processes a batch of pathfinding requests and handles breach detection
@@ -26,19 +25,29 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
       }
 
       if (targetPos) {
-        const { path } = findPath(indexedState, entity.position, targetPos, entity);
-        if (path) {
+        const { path, isBestEffort } = findPath(indexedState, entity.position, targetPos, entity);
+
+        if (path && !isBestEffort) {
+          // Valid, complete path found
           entity.path = path;
           entity.pathTarget = { ...targetPos };
+          entity.trappedByObstacleId = undefined; // Clear trapped state
         } else {
-          // Pathfinding failed - check for breaching
+          // Pathfinding failed or is best-effort (blocked) - check for obstacles
+          if (path) {
+            // Even if best effort, we might want to follow it until we hit the wall,
+            // but for stuck detection, we need to know WHAT is blocking us.
+            entity.path = path;
+            entity.pathTarget = { ...targetPos };
+          }
+
           const { width, height } = indexedState.mapDimensions;
           const dir = getDirectionVectorOnTorus(entity.position, targetPos, width, height);
           const distance = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
 
           if (distance < 0.001) continue;
 
-          const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
+          const steps = Math.ceil(Math.min(distance, 100) / (NAV_GRID_RESOLUTION / 2)); // Limit check distance
           const stepX = dir.x / steps;
           const stepY = dir.y / steps;
 
@@ -48,7 +57,8 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
           const perpY = normX;
           const lateralOffset = entity.radius * 0.5;
 
-          let foundObstacle = false;
+          let foundObstacleId: number | undefined = undefined;
+
           for (let i = 0; i <= Math.min(steps, 40); i++) {
             // Only check nearby
             const testPos = {
@@ -67,32 +77,30 @@ export function updateNavigationAI(indexedState: IndexedWorldState): void {
             for (const p of testPoints) {
               const idx = getNavigationGridIndex(p, width, height);
               if (!isCellPassable(indexedState.navigationGrid, idx, entity.leaderId, false)) {
-                // Blocked by something that isn't our gate. Find the building.
-                const obstacle = indexedState.search.building.at(p, NAV_GRID_RESOLUTION * 1.5);
-                if (
-                  obstacle &&
-                  (obstacle.buildingType === BuildingType.Palisade || obstacle.buildingType === BuildingType.Gate) &&
-                  obstacle.ownerId !== entity.leaderId
-                ) {
-                  const taskId = `Breach-${entity.id}`;
-                  if (!indexedState.tasks[taskId]) {
-                    indexedState.tasks[taskId] = {
-                      id: taskId,
-                      type: TaskType.HumanAttackBuilding,
-                      position: obstacle.position,
-                      creatorEntityId: entity.id,
-                      target: obstacle.id,
-                      validUntilTime: indexedState.time + 0.5,
-                      claimedByEntityId: entity.id,
-                    };
-                  }
-                  foundObstacle = true;
+                // Blocked. Find what is blocking us.
+
+                // Check for buildings
+                const building = indexedState.search.building.at(p, NAV_GRID_RESOLUTION * 1.5);
+                if (building) {
+                  foundObstacleId = building.id;
                   break;
+                }
+
+                // Check for trees
+                const tree = indexedState.search.tree.at(p, NAV_GRID_RESOLUTION * 1.5);
+                if (tree) {
+                  const [state] = tree.stateMachine ?? [];
+                  if (state === TREE_GROWING || state === TREE_FULL || state === TREE_SPREADING) {
+                    foundObstacleId = tree.id;
+                    break;
+                  }
                 }
               }
             }
-            if (foundObstacle) break;
+            if (foundObstacleId !== undefined) break;
           }
+
+          entity.trappedByObstacleId = foundObstacleId;
         }
       }
     }

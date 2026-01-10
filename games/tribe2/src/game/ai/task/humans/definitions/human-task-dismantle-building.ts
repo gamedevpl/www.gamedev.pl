@@ -4,12 +4,18 @@ import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { getDistanceScore } from '../../task-utils';
 import { defineHumanTask } from '../human-task-utils';
 import { EntityId } from '../../../../entities/entities-types';
+import { BuildingEntity } from '../../../../entities/buildings/building-types';
 
 export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanDismantleBuilding,
   requireAdult: true,
 
   scorer: (human, task, context) => {
+    // Immediate priority if this building is trapping the human
+    if (human.trappedByObstacleId === task.target) {
+      return 1000;
+    }
+
     // Only dismantle own tribe's buildings
     if (human.leaderId !== task.creatorEntityId) {
       return null;
@@ -31,10 +37,11 @@ export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
 
   executor: (task, human, context) => {
     const targetId = task.target as EntityId;
-    const targetBuilding = context.gameState.entities.entities[targetId];
+    const targetBuilding = context.gameState.entities.entities[targetId] as BuildingEntity | undefined;
 
     if (!targetBuilding) {
-      return TaskResult.Failure;
+      human.activeAction = 'idle';
+      return TaskResult.Success;
     }
 
     // Proximity check (20px range)
@@ -53,6 +60,12 @@ export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
 
     // At target, start dismantling
     human.activeAction = 'dismantling';
-    return TaskResult.Success;
+    human.target = targetBuilding.id;
+    
+    // Ensure the building knows it's being destroyed so buildingUpdate() processes it
+    targetBuilding.isBeingDestroyed = true;
+
+    // Return Running so the human stays dedicated to this building until it's gone
+    return TaskResult.Running;
   },
 });

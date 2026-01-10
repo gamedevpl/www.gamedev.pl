@@ -15,6 +15,8 @@ import {
   HUMAN_RETRIEVING,
   HUMAN_CHOPPING,
   HumanChoppingStateData,
+  HUMAN_DISMANTLING,
+  HumanDismantlingStateData,
 } from './human-state-types';
 
 // Define the human idle state
@@ -127,6 +129,18 @@ export const humanIdleState: State<HumanEntity, HumanStateData> = {
           previousState: HUMAN_IDLE,
           state: 'chopping',
         } as HumanChoppingStateData,
+      };
+    }
+
+    if (entity.activeAction === 'dismantling') {
+      return {
+        nextState: HUMAN_DISMANTLING,
+        data: {
+          ...data,
+          enteredAt: updateContext.gameState.time,
+          previousState: HUMAN_IDLE,
+          state: 'dismantling',
+        } as HumanDismantlingStateData,
       };
     }
 

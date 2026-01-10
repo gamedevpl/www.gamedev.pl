@@ -404,7 +404,7 @@ export function findPath(
   start: Vector2D,
   end: Vector2D,
   entity: HumanEntity,
-): { path: Vector2D[] | null; iterations: number } {
+): { path: Vector2D[] | null; iterations: number; isBestEffort: boolean } {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
   const gridWidth = Math.ceil(worldWidth / NAV_GRID_RESOLUTION);
   const gridHeight = Math.ceil(worldHeight / NAV_GRID_RESOLUTION);
@@ -428,7 +428,7 @@ export function findPath(
   if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
     // Already in the same grid cell as the target
     // Return the target position so the entity can fine-tune its position
-    return { path: [finalTarget], iterations: 0 };
+    return { path: [finalTarget], iterations: 0, isBestEffort: false };
   }
 
   // Get reusable buffers
@@ -480,7 +480,11 @@ export function findPath(
     nodeStatus[currentIdx] = CLOSED;
 
     if (curX === endCoords.x && curY === endCoords.y) {
-      return { path: reconstructPath(cameFrom, currentIdx, gridWidth, finalTarget), iterations };
+      return {
+        path: reconstructPath(cameFrom, currentIdx, gridWidth, finalTarget),
+        iterations,
+        isBestEffort: false,
+      };
     }
 
     // Neighbors (8 directions)
@@ -535,7 +539,11 @@ export function findPath(
     y: Math.floor(closestNodeIdx / gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
   };
 
-  return { path: reconstructPath(cameFrom, closestNodeIdx, gridWidth, closestNodePos), iterations };
+  return {
+    path: reconstructPath(cameFrom, closestNodeIdx, gridWidth, closestNodePos),
+    iterations,
+    isBestEffort: true,
+  };
 }
 
 function toroidalHeuristic(

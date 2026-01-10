@@ -25,6 +25,7 @@ import { VisualEffectType } from '../visual-effects/visual-effect-types';
 import { addVisualEffect } from './visual-effects-utils';
 import { EFFECT_DURATION_SHORT_HOURS } from '../effect-consts';
 import { BONFIRE_STORAGE_CAPACITY } from '../temperature/temperature-consts';
+import { isTribeHostile } from '../utils/human-utils';
 
 /**
  * Statistics for building placement search performance.
@@ -116,7 +117,27 @@ export function canPlaceBuilding(
     }
   }
 
-  // 3. Check territory constraints - buildings can only be placed within or near tribe territory
+  // 4. Special check for Border Posts: Prevent placement if it would overlap hostile buildings
+  // This prevents \"taking over\" buildings by just placing a border post near them.
+  if (buildingType === BuildingType.BorderPost) {
+    const paintRadius = BORDER_EXPANSION_PAINT_RADIUS;
+    // Search slightly wider to catch buildings whose edge overlaps our paint radius
+    const nearbyForBorder = indexedState.search.building.byRadius(position, paintRadius + 100);
+
+    for (const building of nearbyForBorder) {
+      if (building.isConstructed && building.ownerId && isTribeHostile(ownerId, building.ownerId, gameState)) {
+        const distSq = calculateWrappedDistanceSq(position, building.position, worldWidth, worldHeight);
+        const collisionDist = paintRadius + building.radius;
+
+        // If the paint circle overlaps with the building circle
+        if (distSq < collisionDist * collisionDist) {
+          return false;
+        }
+      }
+    }
+  }
+
+  // 5. Check territory constraints - buildings can only be placed within or near tribe territory
   // Use the appropriate territory claim radius for the contiguity check
   const territoryRadius = getBuildingTerritoryRadius(buildingType);
 
