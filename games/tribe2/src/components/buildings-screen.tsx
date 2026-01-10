@@ -5,7 +5,7 @@ import { BuildingEntity } from '../game/entities/buildings/building-types';
 import {
   BuildingType,
   BUILDING_DEFINITIONS,
-  BORDER_EXPANSION_PAINT_RADIUS,
+  getBuildingTerritoryRadius,
 } from '../game/entities/buildings/building-consts';
 import { renderBuilding, renderGhostBuilding } from '../game/render/render-building';
 import { IndexedWorldState } from '../game/world-index/world-index-types';
@@ -17,7 +17,7 @@ import { GameWorldState } from '../game/world-types';
 import { paintTerrainOwnership } from '../game/entities/tribe/territory-utils';
 import { renderAllTerritories } from '../game/render/render-territory';
 import { renderPlantingZonesMetaball } from '../game/render/render-planting-zones';
-import { TERRITORY_OWNERSHIP_RESOLUTION, TERRITORY_BUILDING_RADIUS } from '../game/entities/tribe/territory-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../game/entities/tribe/territory-consts';
 
 const ScreenContainer = styled.div`
   display: flex;
@@ -277,8 +277,7 @@ export const BuildingsScreen: React.FC = () => {
           terrainOwnership: tempOwnership,
         } as GameWorldState;
 
-        const radius =
-          selectedType === BuildingType.BorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
+        const radius = getBuildingTerritoryRadius(selectedType);
 
         paintTerrainOwnership(snappedPos, radius, ownerId, tempState);
         setTerrainOwnership(tempOwnership);

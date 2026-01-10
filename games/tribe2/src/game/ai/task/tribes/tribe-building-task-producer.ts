@@ -10,9 +10,9 @@ import {
   LEADER_BUILDING_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_MIN_BUSHES,
-  GORD_GRID_RESOLUTION,
   GORD_MIN_ENCLOSURE_CELLS,
   GORD_UNPROTECTED_THRESHOLD,
+  GORD_WALL_PROXIMITY_THRESHOLD,
 } from '../../../ai-consts';
 import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
@@ -35,11 +35,9 @@ import { isTribeHostile } from '../../../utils/human-utils';
 import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
 import { NAV_GRID_RESOLUTION } from '../../../utils/navigation-utils';
 import {
-  getAllOwnedGordCells,
-  getTribePerimeterEdges,
-  calculateProtectionStats,
-  assignGates,
-  GORD_WALL_PROXIMITY_THRESHOLD,
+  planGordPlacement,
+  calculateGordCoverage,
+  getInteriorEdgeIndices,
 } from './gord-boundary-utils';
 
 export type FrontierCandidate = {
@@ -180,8 +178,8 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
   const leader = gameState.entities.entities[leaderId] as HumanEntity;
   if (!leader) return;
 
-  // 1. Identify all owned 100px grid cells
-  const ownedCells = getAllOwnedGordCells(leaderId, gameState);
+  // 1. Identify all owned grid cells (using the new utility for consistency)
+  const ownedCells = getInteriorEdgeIndices(leaderId, gameState);
 
   // 2. Minimum size requirement (avoid surrounding tiny territories)
   if (ownedCells.size < GORD_MIN_ENCLOSURE_CELLS) {
@@ -191,22 +189,16 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     return;
   }
 
-  // 3. Trace perimeter edges of the entire territory
-  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
-  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
-  const edges = getTribePerimeterEdges(ownedCells, gridWidth, gridHeight);
-  if (edges.length === 0) return;
-
-  // 4. Gather existing walls for protection check
+  // 3. Gather existing walls for protection check
   const existingWalls = tribeBuildings.filter(
     (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
   );
 
-  // 5. Calculate protection statistics
-  const stats = calculateProtectionStats(edges, existingWalls, width, height);
+  // 4. Calculate protection statistics
+  const coverage = calculateGordCoverage(leaderId, gameState, existingWalls);
 
-  // 6. Evaluate if we need to build walls and stop expansion
-  const unprotectedPercentage = 1 - stats.protectedPercentage;
+  // 5. Evaluate if we need to build walls and stop expansion
+  const unprotectedPercentage = 1 - coverage;
 
   if (unprotectedPercentage > GORD_UNPROTECTED_THRESHOLD) {
     // Tribe decides to prioritize defense
@@ -214,14 +206,14 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
       leader.tribeControl = { diplomacy: {} };
     }
     leader.tribeControl.stopExpansion = true;
-  } else if (stats.protectedPercentage >= 0.9) {
+  } else if (coverage >= 0.9) {
     // Territory is sufficiently enclosed, can resume expansion
     if (leader.tribeControl) {
       leader.tribeControl.stopExpansion = false;
     }
   }
 
-  // 7. Clear existing palisade/gate tasks for the leader first to prevent ghost walls
+  // 6. Clear existing palisade/gate tasks for the leader first to prevent ghost walls
   Object.keys(gameState.tasks).forEach((taskId) => {
     const task = gameState.tasks[taskId];
     if (
@@ -232,82 +224,55 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     }
   });
 
-  // 8. If we are in "stop expansion" mode, ensure we have tasks for unprotected segments
+  // 7. If we are in "stop expansion" mode, ensure we have tasks for unprotected segments
   if (leader.tribeControl?.stopExpansion) {
-    // Assign gates strategically along the edges (considering existing walls)
-    const edgesWithGates = assignGates(edges);
+    const placements = planGordPlacement(leaderId, gameState);
 
-    // Create tasks by interpolating along each 100px unprotected edge
-    for (const edge of edgesWithGates) {
-      if (edge.isProtected) continue;
+    for (const placement of placements) {
+      const pos = placement.position;
 
-      const step = 20; // Palisade placement interval (matches territory resolution)
-      const numSteps = GORD_GRID_RESOLUTION / step;
+      // Check if building already exists at this position
+      const existing = indexedState.search.building.at(pos, 10);
+      if (existing) continue;
 
-      const dx = edge.to.x > edge.from.x ? step : edge.to.x < edge.from.x ? -step : 0;
-      const dy = edge.to.y > edge.from.y ? step : edge.to.y < edge.from.y ? -step : 0;
+      // Check for existing walls too close (redundant but safe)
+      const tooCloseToWall = existingWalls.some(
+        (wall) =>
+          calculateWrappedDistanceSq(pos, wall.position, width, height) <
+          GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
+      );
+      if (tooCloseToWall) continue;
 
-      let segmentsToSkip = 0;
-
-      for (let i = 0; i < numSteps; i++) {
-        if (segmentsToSkip > 0) {
-          segmentsToSkip--;
-          continue;
-        }
-
-        // Calculate placement position (centered in the 20px segment)
-        const pos = {
-          x: (edge.from.x + dx * i + dx / 2 + width) % width,
-          y: (edge.from.y + dy * i + dy / 2 + height) % height,
-        };
-
-        // Reuse logic: Check if building already exists at this position
-        const existing = indexedState.search.building.at(pos, NAV_GRID_RESOLUTION / 2);
-        if (existing) continue;
-
-        // Check for existing walls too close (redundant but safe)
-        const tooCloseToWall = existingWalls.some(
-          (wall) =>
-            calculateWrappedDistanceSq(pos, wall.position, width, height) <
-            GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
-        );
-        if (tooCloseToWall) continue;
-
-        // Check for trees blocking placement
-        const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
-        if (trees.length > 0) {
-          const tree = trees[0];
-          const chopTaskId = `Chop-Gord-${tree.id}`;
-          if (!gameState.tasks[chopTaskId]) {
-            gameState.tasks[chopTaskId] = {
-              id: chopTaskId,
-              type: TaskType.HumanChopTree,
-              position: tree.position,
-              creatorEntityId: leaderId,
-              target: tree.id,
-              validUntilTime: gameState.time + 12,
-            };
-          }
-          continue;
-        }
-
-        // Determine building type (Place one gate at the start of a gate edge)
-        const type = edge.isGate && i === 0 ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
-        const taskId = `${TaskType[type]}-${leaderId}-${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
-
-        if (!gameState.tasks[taskId]) {
-          gameState.tasks[taskId] = {
-            id: taskId,
-            type,
-            position: pos,
+      // Check for trees blocking placement
+      const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
+      if (trees.length > 0) {
+        const tree = trees[0];
+        const chopTaskId = `Chop-Gord-${tree.id}`;
+        if (!gameState.tasks[chopTaskId]) {
+          gameState.tasks[chopTaskId] = {
+            id: chopTaskId,
+            type: TaskType.HumanChopTree,
+            position: tree.position,
             creatorEntityId: leaderId,
-            target: pos,
-            validUntilTime: gameState.time + 24,
+            target: tree.id,
+            validUntilTime: gameState.time + 12,
           };
         }
+        continue;
+      }
 
-        // Gate occupies 3 segments (60px), Palisade occupies 1 segment (20px)
-        segmentsToSkip = type === TaskType.HumanPlaceGate ? 2 : 0;
+      const type = placement.type === BuildingType.Gate ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
+      const taskId = `${TaskType[type]}-${leaderId}-${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
+
+      if (!gameState.tasks[taskId]) {
+        gameState.tasks[taskId] = {
+          id: taskId,
+          type,
+          position: pos,
+          creatorEntityId: leaderId,
+          target: pos,
+          validUntilTime: gameState.time + 24,
+        };
       }
     }
   }

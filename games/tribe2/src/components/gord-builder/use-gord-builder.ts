@@ -1,23 +1,24 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { BuildingType, BUILDING_DEFINITIONS } from '../../game/entities/buildings/building-consts';
+import {
+  BuildingType,
+  BUILDING_DEFINITIONS,
+  getBuildingTerritoryRadius,
+} from '../../game/entities/buildings/building-consts';
 import { BuildingEntity } from '../../game/entities/buildings/building-types';
 import { Vector2D } from '../../game/utils/math-types';
 import { GameWorldState } from '../../game/world-types';
-import { TERRITORY_OWNERSHIP_RESOLUTION, TERRITORY_BUILDING_RADIUS } from '../../game/entities/tribe/territory-consts';
-import { BORDER_EXPANSION_PAINT_RADIUS } from '../../game/entities/buildings/building-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../game/entities/tribe/territory-consts';
 import { NAV_GRID_RESOLUTION } from '../../game/utils/navigation-utils';
-import { paintTerrainOwnership } from '../../game/entities/tribe/territory-utils';
+import { paintTerrainOwnership, convertTerritoryIndexToPosition } from '../../game/entities/tribe/territory-utils';
 import { canPlaceBuilding, findAdjacentBuildingPlacement } from '../../game/utils/building-placement-utils';
 import {
-  getAllOwnedGordCells,
-  getTribePerimeterEdges,
-  calculateProtectionStats,
-  assignGates,
-  GORD_GRID_RESOLUTION,
-  ProtectionStats,
-  GORD_WALL_PROXIMITY_THRESHOLD,
+  getInteriorEdgeIndices,
+  traceEdgeChains,
+  planGordPlacement,
+  calculateGordCoverage,
+  GordPlacement,
 } from '../../game/ai/task/tribes/gord-boundary-utils';
-import { GORD_MIN_ENCLOSURE_CELLS } from '../../game/ai-consts';
+import { GORD_MIN_ENCLOSURE_CELLS, GORD_WALL_PROXIMITY_THRESHOLD } from '../../game/ai-consts';
 import { PlannedGordEdge, GordPlanStats } from './types';
 import { createMockWorldState, createBuildingEntity } from './mock-state-utils';
 import { calculateWrappedDistanceSq } from '../../game/utils/math-utils';
@@ -25,21 +26,12 @@ import { calculateWrappedDistanceSq } from '../../game/utils/math-utils';
 /**
  * Calculates statistics and quality metrics for a planned gord.
  */
-function calculateGordStats(
-  plannedEdges: PlannedGordEdge[],
-  totalCells: number,
-  protectionStats: ProtectionStats,
-): GordPlanStats {
-  const gateCount = plannedEdges.filter((e) => e.isGate).length;
-  const perimeterLength = plannedEdges.length * GORD_GRID_RESOLUTION;
+function calculateGordStats(placements: GordPlacement[], totalCells: number, coverage: number): GordPlanStats {
+  const gateCount = placements.filter((p) => p.type === BuildingType.Gate).length;
+  const palisadeCount = placements.filter((p) => p.type === BuildingType.Palisade).length;
+  const perimeterLength = placements.length * TERRITORY_OWNERSHIP_RESOLUTION;
 
-  // Only count wood for unprotected segments that need building
-  const palisadeCount = plannedEdges.reduce((sum, edge) => {
-    if (edge.isProtected) return sum;
-    return sum + (edge.isGate ? 2 : 5);
-  }, 0);
-
-  const enclosedArea = totalCells * GORD_GRID_RESOLUTION * GORD_GRID_RESOLUTION;
+  const enclosedArea = totalCells * TERRITORY_OWNERSHIP_RESOLUTION * TERRITORY_OWNERSHIP_RESOLUTION;
 
   const palisadeWoodCost = BUILDING_DEFINITIONS[BuildingType.Palisade].cost?.wood ?? 1;
   const gateWoodCost = BUILDING_DEFINITIONS[BuildingType.Gate].cost?.wood ?? 3;
@@ -56,7 +48,7 @@ function calculateGordStats(
     totalCells,
     enclosedArea,
     woodCost,
-    protectedPercentage: protectionStats.protectedPercentage * 100,
+    protectedPercentage: coverage * 100,
     qualityRating,
   };
 }
@@ -70,8 +62,9 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   const [showGordGrid, setShowGordGrid] = useState(true);
   const [showPlannedGord, setShowPlannedGord] = useState(true);
   const [plannedGordEdges, setPlannedGordEdges] = useState<PlannedGordEdge[]>([]);
+  const [plannedPlacements, setPlannedPlacements] = useState<GordPlacement[]>([]);
   const [totalGordCells, setTotalGordCells] = useState(0);
-  const [protectionStats, setProtectionStats] = useState<ProtectionStats | null>(null);
+  const [coverage, setCoverage] = useState<number>(0);
 
   const [terrainOwnership, setTerrainOwnership] = useState<(number | null)[]>(
     new Array(
@@ -81,9 +74,9 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   );
 
   const gordStats = useMemo((): GordPlanStats | null => {
-    if (plannedGordEdges.length === 0 || !protectionStats) return null;
-    return calculateGordStats(plannedGordEdges, totalGordCells, protectionStats);
-  }, [plannedGordEdges, totalGordCells, protectionStats]);
+    if (plannedPlacements.length === 0) return null;
+    return calculateGordStats(plannedPlacements, totalGordCells, coverage);
+  }, [plannedPlacements, totalGordCells, coverage]);
 
   const snapToGrid = useCallback((x: number, y: number): Vector2D => {
     const gridSize = NAV_GRID_RESOLUTION;
@@ -103,8 +96,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
         mapDimensions: { width: canvasWidth, height: canvasHeight },
         terrainOwnership: tempOwnership,
       } as GameWorldState;
-      const radius =
-        selectedType === BuildingType.BorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
+      const radius = getBuildingTerritoryRadius(selectedType);
 
       paintTerrainOwnership(snappedPos, radius, 1, tempState);
       setTerrainOwnership(tempOwnership);
@@ -125,38 +117,69 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   const clearBuildings = useCallback(() => {
     setPlacedBuildings([]);
     setPlannedGordEdges([]);
+    setPlannedPlacements([]);
     setTotalGordCells(0);
-    setProtectionStats(null);
+    setCoverage(0);
     setNextBuildingId(10);
     setTerrainOwnership(new Array(terrainOwnership.length).fill(null));
   }, [terrainOwnership.length]);
 
   const planGord = useCallback(() => {
     const mockState = createMockWorldState(placedBuildings, terrainOwnership, canvasWidth, canvasHeight);
-    const ownedCells = getAllOwnedGordCells(1, mockState);
+    const ownedCells = getInteriorEdgeIndices(1, mockState);
 
     if (ownedCells.size < GORD_MIN_ENCLOSURE_CELLS) {
       setPlannedGordEdges([]);
+      setPlannedPlacements([]);
       setTotalGordCells(0);
-      setProtectionStats(null);
+      setCoverage(0);
       return;
     }
 
-    const gridWidth = Math.ceil(canvasWidth / GORD_GRID_RESOLUTION);
-    const gridHeight = Math.ceil(canvasHeight / GORD_GRID_RESOLUTION);
+    const gridWidth = Math.ceil(canvasWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+    const gridHeight = Math.ceil(canvasHeight / TERRITORY_OWNERSHIP_RESOLUTION);
 
-    const edges = getTribePerimeterEdges(ownedCells, gridWidth, gridHeight);
+    // 1. Generate placements (what the AI actually does)
+    const placements = planGordPlacement(1, mockState);
+    setPlannedPlacements(placements);
 
+    // 2. Generate visualization edges from chains
+    const chains = traceEdgeChains(ownedCells, gridWidth, gridHeight);
+    const edges: PlannedGordEdge[] = [];
+
+    for (const chain of chains) {
+      for (let i = 0; i < chain.length - 1; i++) {
+        const fromIdx = chain[i];
+        const toIdx = chain[i + 1];
+        const fromPos = convertTerritoryIndexToPosition(fromIdx, canvasWidth);
+        const toPos = convertTerritoryIndexToPosition(toIdx, canvasWidth);
+
+        // Check if this segment corresponds to a gate placement
+        // We approximate by checking if the 'from' position is near a planned gate
+        const isGate = placements.some(
+          (p) =>
+            p.type === BuildingType.Gate &&
+            calculateWrappedDistanceSq(p.position, fromPos, canvasWidth, canvasHeight) <
+              TERRITORY_OWNERSHIP_RESOLUTION * TERRITORY_OWNERSHIP_RESOLUTION,
+        );
+
+        edges.push({
+          from: fromPos,
+          to: toPos,
+          isGate,
+          isProtected: false, // Simplified for visualization
+        });
+      }
+    }
+    setPlannedGordEdges(edges);
+
+    // 3. Calculate coverage
     const existingWalls = placedBuildings.filter(
       (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
     );
-
-    const stats = calculateProtectionStats(edges, existingWalls, canvasWidth, canvasHeight);
-    const edgesWithGates = assignGates(edges);
-
-    setPlannedGordEdges(edgesWithGates);
+    const currentCoverage = calculateGordCoverage(1, mockState, existingWalls);
+    setCoverage(currentCoverage);
     setTotalGordCells(ownedCells.size);
-    setProtectionStats(stats);
   }, [placedBuildings, terrainOwnership, canvasWidth, canvasHeight]);
 
   // Automatically plan gord whenever buildings or territory changes
@@ -165,7 +188,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   }, [planGord]);
 
   const executeGordPlan = useCallback(() => {
-    if (plannedGordEdges.length === 0) return;
+    if (plannedPlacements.length === 0) return;
     const newBuildings: BuildingEntity[] = [];
     let currentId = nextBuildingId;
     const tempOwnership = [...terrainOwnership];
@@ -173,6 +196,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
       mapDimensions: { width: canvasWidth, height: canvasHeight },
       terrainOwnership: tempOwnership,
     } as GameWorldState;
+
     // Gather existing walls for proximity check (including newly placed ones in this batch)
     const allWalls = [
       ...placedBuildings.filter(
@@ -180,51 +204,29 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
       ),
     ];
 
-    for (const edge of plannedGordEdges) {
-      if (edge.isProtected) continue;
+    for (const placement of plannedPlacements) {
+      const pos = placement.position;
 
-      const step = 20;
-      const numSteps = GORD_GRID_RESOLUTION / step;
-      const dx = edge.to.x > edge.from.x ? step : edge.to.x < edge.from.x ? -step : 0;
-      const dy = edge.to.y > edge.from.y ? step : edge.to.y < edge.from.y ? -step : 0;
+      // Proximity check against existing walls
+      const tooClose = allWalls.some(
+        (wall) =>
+          calculateWrappedDistanceSq(pos, wall.position, canvasWidth, canvasHeight) <
+          GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
+      );
 
-      let segmentsToSkip = 0;
-      for (let i = 0; i < numSteps; i++) {
-        if (segmentsToSkip > 0) {
-          segmentsToSkip--;
-          continue;
-        }
+      if (tooClose) continue;
 
-        const pos = {
-          x: (edge.from.x + dx * i + dx / 2 + canvasWidth) % canvasWidth,
-          y: (edge.from.y + dy * i + dy / 2 + canvasHeight) % canvasHeight,
-        };
-        // Proximity check against existing walls (including those just added in this loop)
-        const tooClose = allWalls.some(
-          (wall) =>
-            calculateWrappedDistanceSq(pos, wall.position, canvasWidth, canvasHeight) <
-            GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
-        );
+      const newBuilding = createBuildingEntity(currentId++, placement.type, pos, 1);
+      newBuildings.push(newBuilding);
+      allWalls.push(newBuilding);
 
-        if (tooClose) continue;
-
-        const buildingType = edge.isGate && i === 2 ? BuildingType.Gate : BuildingType.Palisade;
-        const newBuilding = createBuildingEntity(currentId++, buildingType, pos, 1);
-        allWalls.push(newBuilding);
-
-        // paintTerrainOwnership(pos, TERRITORY_BUILDING_RADIUS, 1, tempState);
-        paintTerrainOwnership(pos, TERRITORY_BUILDING_RADIUS, 1, tempState);
-
-        segmentsToSkip = buildingType === BuildingType.Gate ? 2 : 0;
-      }
+      paintTerrainOwnership(pos, getBuildingTerritoryRadius(placement.type), 1, tempState);
     }
 
     setTerrainOwnership(tempOwnership);
     setPlacedBuildings((prev) => [...prev, ...newBuildings]);
     setNextBuildingId(currentId);
-    // Note: We no longer clear plannedGordEdges here.
-    // The useEffect will automatically re-plan and update stats after setPlacedBuildings/setTerrainOwnership triggers.
-  }, [plannedGordEdges, nextBuildingId, terrainOwnership, canvasWidth, canvasHeight]);
+  }, [plannedPlacements, nextBuildingId, terrainOwnership, canvasWidth, canvasHeight, placedBuildings]);
 
   const autoPlaceSingleBuilding = useCallback(() => {
     const mockState = createMockWorldState(placedBuildings, terrainOwnership, canvasWidth, canvasHeight);
@@ -238,7 +240,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
         mapDimensions: { width: canvasWidth, height: canvasHeight },
         terrainOwnership: tempOwnership,
       } as GameWorldState;
-      paintTerrainOwnership(position, TERRITORY_BUILDING_RADIUS, 1, tempState);
+      paintTerrainOwnership(position, getBuildingTerritoryRadius(selectedType), 1, tempState);
       setTerrainOwnership(tempOwnership);
       setPlacedBuildings((prev) => [...prev, newBuilding]);
       setNextBuildingId((prev) => prev + 1);

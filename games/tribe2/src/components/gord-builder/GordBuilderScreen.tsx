@@ -4,7 +4,7 @@ import { useGameContext } from '../../context/game-context';
 import { useGordBuilder } from './use-gord-builder';
 import { GordCanvas } from './GordCanvas';
 import { GordSidebar } from './GordSidebar';
-import { GORD_MIN_CELLS } from '../../game/ai-consts';
+import { GORD_MIN_ENCLOSURE_CELLS } from '../../game/ai-consts';
 
 const ScreenContainer = styled.div`
   display: flex;
@@ -80,7 +80,7 @@ export const GordBuilderScreen: React.FC = () => {
           using 100px grid cells.
           <br />
           Existing walls are reused to save resources. Enclosure triggers when unprotected border exceeds a threshold.
-          Minimum territory size: {GORD_MIN_CELLS} cells.
+          Minimum territory size: {GORD_MIN_ENCLOSURE_CELLS} cells.
         </Description>
       </CanvasContainer>
     </ScreenContainer>

@@ -7,9 +7,9 @@ import { renderBuilding, renderGhostBuilding } from '../../game/render/render-bu
 import { renderAllTerritories } from '../../game/render/render-territory';
 import { IndexedWorldState } from '../../game/world-index/world-index-types';
 import { canPlaceBuilding } from '../../game/utils/building-placement-utils';
-import { isGordCellOwned, GORD_GRID_RESOLUTION } from '../../game/ai/task/tribes/gord-boundary-utils';
 import { PlannedGordEdge } from './types';
 import { createMockWorldState } from './mock-state-utils';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../game/entities/tribe/territory-consts';
 
 const StyledCanvas = styled.canvas`
   background-color: #2c5234;
@@ -74,13 +74,13 @@ export const GordCanvas: React.FC<GordCanvasProps> = ({
       if (showGordGrid) {
         ctx.strokeStyle = 'rgba(255,255,255,0.08)';
         ctx.lineWidth = 1;
-        for (let x = 0; x <= canvasWidth; x += GORD_GRID_RESOLUTION) {
+        for (let x = 0; x <= canvasWidth; x += TERRITORY_OWNERSHIP_RESOLUTION) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, canvasHeight);
           ctx.stroke();
         }
-        for (let y = 0; y <= canvasHeight; y += GORD_GRID_RESOLUTION) {
+        for (let y = 0; y <= canvasHeight; y += TERRITORY_OWNERSHIP_RESOLUTION) {
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(canvasWidth, y);
@@ -88,17 +88,18 @@ export const GordCanvas: React.FC<GordCanvasProps> = ({
         }
 
         // Highlight eligible cells
-        const gridWidth = Math.ceil(canvasWidth / GORD_GRID_RESOLUTION);
-        const gridHeight = Math.ceil(canvasHeight / GORD_GRID_RESOLUTION);
+        const gridWidth = Math.ceil(canvasWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+        const gridHeight = Math.ceil(canvasHeight / TERRITORY_OWNERSHIP_RESOLUTION);
         for (let gy = 0; gy < gridHeight; gy++) {
           for (let gx = 0; gx < gridWidth; gx++) {
-            if (isGordCellOwned(gx, gy, 1, mockState)) {
+            const idx = gy * gridWidth + gx;
+            if (mockState.terrainOwnership[idx] === 1) {
               ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
               ctx.fillRect(
-                gx * GORD_GRID_RESOLUTION,
-                gy * GORD_GRID_RESOLUTION,
-                GORD_GRID_RESOLUTION,
-                GORD_GRID_RESOLUTION,
+                gx * TERRITORY_OWNERSHIP_RESOLUTION,
+                gy * TERRITORY_OWNERSHIP_RESOLUTION,
+                TERRITORY_OWNERSHIP_RESOLUTION,
+                TERRITORY_OWNERSHIP_RESOLUTION,
               );
             }
           }

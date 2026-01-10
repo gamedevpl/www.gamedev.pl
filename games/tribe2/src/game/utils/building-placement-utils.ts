@@ -4,6 +4,7 @@ import {
   BORDER_EXPANSION_PAINT_RADIUS,
   BuildingType,
   getBuildingDimensions,
+  getBuildingTerritoryRadius,
 } from '../entities/buildings/building-consts';
 import { BuildingEntity } from '../entities/buildings/building-types';
 import { EntityId } from '../entities/entities-types';
@@ -17,7 +18,6 @@ import {
   paintTerrainOwnership,
   takeOverTerrainOwnership,
 } from '../entities/tribe/territory-utils';
-import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 import { getDepletedSectorsInArea } from '../entities/plants/soil-depletion-update';
 import { isLocationTooCloseToOtherTribes } from './entity-finder-utils';
 import { BUILDING_PLACEMENT_MAX_ANCHORS, BUILDING_PLACEMENT_TRIG_CACHE_SIZE } from '../ai-consts';
@@ -118,15 +118,14 @@ export function canPlaceBuilding(
 
   // 3. Check territory constraints - buildings can only be placed within or near tribe territory
   // Use the appropriate territory claim radius for the contiguity check
-  const isBorderPost = buildingType === BuildingType.BorderPost;
-  const territoryRadius = isBorderPost ? BORDER_EXPANSION_PAINT_RADIUS : TERRITORY_BUILDING_RADIUS;
+  const territoryRadius = getBuildingTerritoryRadius(buildingType);
 
   const territoryCheck = canPlaceBuildingInTerritory(
     position,
     ownerId,
     gameState,
     territoryRadius,
-    isBorderPost, // allowHostileOverwrite
+    buildingType === BuildingType.BorderPost, // allowHostileOverwrite
     ownerId, // takingTribeId
   );
 
@@ -327,7 +326,7 @@ export function createBuilding(
   }
 
   // Paint terrain ownership for the new building
-  paintTerrainOwnership(position, TERRITORY_BUILDING_RADIUS, ownerId, gameState);
+  paintTerrainOwnership(position, getBuildingTerritoryRadius(buildingType), ownerId, gameState);
 
   // Update planting zone connections when a new planting zone is created
   if (buildingType === BuildingType.PlantingZone) {

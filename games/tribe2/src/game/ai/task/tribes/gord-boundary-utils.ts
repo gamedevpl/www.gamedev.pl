@@ -6,277 +6,186 @@
  */
 
 import { Vector2D } from '../../../utils/math-types';
-import { BuildingEntity } from '../../../entities/buildings/building-types';
-import { getOwnerOfPoint } from '../../../entities/tribe/territory-utils';
 import { GameWorldState } from '../../../world-types';
 import { EntityId } from '../../../entities/entities-types';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
-import {
-  GORD_CELL_OWNERSHIP_THRESHOLD,
-  GORD_MAX_GATES_COUNT,
-  GORD_GATE_SPACING_PX,
-} from '../../../ai-consts';
+import { BuildingType } from '../../../entities/buildings/building-consts';
+import { BuildingEntity } from '../../../entities/buildings/building-types';
+import { convertTerritoryIndexToPosition } from '../../../entities/tribe/territory-utils';
 import { calculateWrappedDistanceSq } from '../../../utils/math-utils';
+import { GORD_GATE_SPACING_PX, GORD_WALL_PROXIMITY_THRESHOLD } from '../../../ai-consts';
 
-/**
- * Simplified grid resolution for gord planning in pixels.
- */
-export const GORD_GRID_RESOLUTION = 100;
-
-/**
- * Minimum geometric distance between gates in pixels.
- */
-export const GORD_MIN_GATE_DISTANCE_PX = 300;
-
-/**
- * Minimum distance from existing walls before placing a new wall segment.
- */
-export const GORD_WALL_PROXIMITY_THRESHOLD = 40;
-
-export interface GordEdge {
-  from: Vector2D;
-  to: Vector2D;
-  isProtected?: boolean;
-}
-
-export interface ProtectionStats {
-  protectedCount: number;
-  totalCount: number;
-  protectedPercentage: number;
+export interface GordPlacement {
+  position: Vector2D;
+  type: BuildingType;
 }
 
 /**
- * Checks if a 100px gord grid cell is fully owned by the tribe.
- * A cell is considered owned if a majority of its constituent territory cells are owned.
+ * Identifies all grid cells that are on the interior edge of the tribe's territory.
+ * An interior edge cell is an owned cell that has at least one neighbor not owned by the tribe.
  */
-export function isGordCellOwned(gx: number, gy: number, leaderId: EntityId, gameState: GameWorldState): boolean {
+export function getInteriorEdgeIndices(leaderId: EntityId, gameState: GameWorldState): Set<number> {
   const { width, height } = gameState.mapDimensions;
-  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
-  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
+  const gridWidth = Math.ceil(width / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(height / TERRITORY_OWNERSHIP_RESOLUTION);
+  const edgeIndices = new Set<number>();
 
-  // Wrap coordinates
-  const wrappedGX = (gx + gridWidth) % gridWidth;
-  const wrappedGY = (gy + gridHeight) % gridHeight;
+  const ownership = gameState.terrainOwnership;
 
-  const territoryPerGord = GORD_GRID_RESOLUTION / TERRITORY_OWNERSHIP_RESOLUTION;
-  const totalSubCells = territoryPerGord * territoryPerGord;
-  let ownedCells = 0;
+  for (let i = 0; i < ownership.length; i++) {
+    if (ownership[i] !== leaderId) continue;
 
-  for (let ty = 0; ty < territoryPerGord; ty++) {
-    for (let tx = 0; tx < territoryPerGord; tx++) {
-      const worldX =
-        wrappedGX * GORD_GRID_RESOLUTION + tx * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
-      const worldY =
-        wrappedGY * GORD_GRID_RESOLUTION + ty * TERRITORY_OWNERSHIP_RESOLUTION + TERRITORY_OWNERSHIP_RESOLUTION / 2;
+    const gx = i % gridWidth;
+    const gy = Math.floor(i / gridWidth);
 
-      if (getOwnerOfPoint(worldX, worldY, gameState) === leaderId) {
-        ownedCells++;
-      }
-    }
-  }
-  return ownedCells >= totalSubCells * GORD_CELL_OWNERSHIP_THRESHOLD;
-}
-
-/**
- * Returns all 100px grid cell indices owned by the tribe.
- */
-export function getAllOwnedGordCells(leaderId: EntityId, gameState: GameWorldState): Set<number> {
-  const { width, height } = gameState.mapDimensions;
-  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
-  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
-  const ownedCells = new Set<number>();
-
-  for (let gy = 0; gy < gridHeight; gy++) {
-    for (let gx = 0; gx < gridWidth; gx++) {
-      if (isGordCellOwned(gx, gy, leaderId, gameState)) {
-        ownedCells.add(gy * gridWidth + gx);
-      }
-    }
-  }
-  return ownedCells;
-}
-
-/**
- * Traces the perimeter edges of all owned gord cells.
- */
-export function getTribePerimeterEdges(ownedCells: Set<number>, gridWidth: number, gridHeight: number): GordEdge[] {
-  const edges: GordEdge[] = [];
-
-  for (const idx of ownedCells) {
-    const gx = idx % gridWidth;
-    const gy = Math.floor(idx / gridWidth);
-
+    // Check 4 cardinal neighbors
     const neighbors = [
-      { dx: 0, dy: -1, name: 'north' },
-      { dx: 1, dy: 0, name: 'east' },
-      { dx: 0, dy: 1, name: 'south' },
-      { dx: -1, dy: 0, name: 'west' },
+      { dx: 0, dy: -1 }, // Top
+      { dx: 1, dy: 0 }, // Right
+      { dx: 0, dy: 1 }, // Bottom
+      { dx: -1, dy: 0 }, // Left
     ];
 
-    for (const { dx, dy, name } of neighbors) {
+    let isEdge = false;
+    for (const { dx, dy } of neighbors) {
       const nx = (gx + dx + gridWidth) % gridWidth;
       const ny = (gy + dy + gridHeight) % gridHeight;
       const nIdx = ny * gridWidth + nx;
 
-      if (!ownedCells.has(nIdx)) {
-        // This is a boundary edge
-        const x1 = gx * GORD_GRID_RESOLUTION;
-        const y1 = gy * GORD_GRID_RESOLUTION;
-        const x2 = (gx + 1) * GORD_GRID_RESOLUTION;
-        const y2 = (gy + 1) * GORD_GRID_RESOLUTION;
-
-        let from: Vector2D, to: Vector2D;
-        switch (name) {
-          case 'north':
-            from = { x: x1, y: y1 };
-            to = { x: x2, y: y1 };
-            break;
-          case 'east':
-            from = { x: x2, y: y1 };
-            to = { x: x2, y: y2 };
-            break;
-          case 'south':
-            from = { x: x2, y: y2 };
-            to = { x: x1, y: y2 };
-            break;
-          case 'west':
-            from = { x: x1, y: y2 };
-            to = { x: x1, y: y1 };
-            break;
-          default:
-            continue;
-        }
-        edges.push({ from, to });
+      if (ownership[nIdx] !== leaderId) {
+        isEdge = true;
+        break;
       }
     }
-  }
 
-  return edges;
-}
-
-/**
- * Checks if a perimeter segment already has a wall within GORD_WALL_PROXIMITY_THRESHOLD.
- */
-export function checkSegmentProtection(
-  edge: GordEdge,
-  existingWalls: BuildingEntity[],
-  worldWidth: number,
-  worldHeight: number,
-): boolean {
-  // Check the midpoint of the edge for existing walls
-  const midX = (edge.from.x + edge.to.x) / 2;
-  const midY = (edge.from.y + edge.to.y) / 2;
-  const midpoint = { x: midX, y: midY };
-
-  return existingWalls.some(
-    (wall) =>
-      calculateWrappedDistanceSq(midpoint, wall.position, worldWidth, worldHeight) <
-      GORD_WALL_PROXIMITY_THRESHOLD * GORD_WALL_PROXIMITY_THRESHOLD,
-  );
-}
-
-/**
- * Calculates protection statistics for the tribe perimeter.
- */
-export function calculateProtectionStats(
-  edges: GordEdge[],
-  existingWalls: BuildingEntity[],
-  worldWidth: number,
-  worldHeight: number,
-): ProtectionStats {
-  let protectedCount = 0;
-  for (const edge of edges) {
-    if (checkSegmentProtection(edge, existingWalls, worldWidth, worldHeight)) {
-      edge.isProtected = true;
-      protectedCount++;
-    } else {
-      edge.isProtected = false;
+    if (isEdge) {
+      edgeIndices.add(i);
     }
   }
 
-  return {
-    protectedCount,
-    totalCount: edges.length,
-    protectedPercentage: edges.length > 0 ? protectedCount / edges.length : 1,
+  return edgeIndices;
+}
+
+/**
+ * Organizes a set of edge indices into contiguous chains.
+ * This allows for sequential processing (e.g., placing gates at regular intervals).
+ */
+export function traceEdgeChains(edgeIndices: Set<number>, gridWidth: number, gridHeight: number): number[][] {
+  const chains: number[][] = [];
+  const visited = new Set<number>();
+
+  // Helper to find an unvisited neighbor in the set
+  const findNextNeighbor = (currentIdx: number): number | null => {
+    const gx = currentIdx % gridWidth;
+    const gy = Math.floor(currentIdx / gridWidth);
+
+    // Check 8 neighbors for continuity (diagonals allowed for smoother chains)
+    const neighbors = [
+      { dx: 1, dy: 0 },
+      { dx: 1, dy: 1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: -1, dy: -1 },
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: -1 },
+    ];
+
+    for (const { dx, dy } of neighbors) {
+      const nx = (gx + dx + gridWidth) % gridWidth;
+      const ny = (gy + dy + gridHeight) % gridHeight;
+      const nIdx = ny * gridWidth + nx;
+
+      if (edgeIndices.has(nIdx) && !visited.has(nIdx)) {
+        return nIdx;
+      }
+    }
+    return null;
   };
+
+  for (const startIdx of edgeIndices) {
+    if (visited.has(startIdx)) continue;
+
+    const chain: number[] = [startIdx];
+    visited.add(startIdx);
+
+    let current = startIdx;
+    let next: number | null;
+    while ((next = findNextNeighbor(current)) !== null) {
+      chain.push(next);
+      visited.add(next);
+      current = next;
+    }
+    chains.push(chain);
+  }
+
+  return chains;
 }
 
 /**
- * Assigns gates strategically along the unprotected perimeter edges.
- * Prefers straight segments and avoids corners.
+ * Plans the placement of palisades and gates along the tribe's territory border.
  */
-export function assignGates(
-  edges: GordEdge[],
-): Array<{ from: Vector2D; to: Vector2D; isGate: boolean; isProtected?: boolean }> {
-  if (edges.length === 0) return [];
+export function planGordPlacement(leaderId: EntityId, gameState: GameWorldState): GordPlacement[] {
+  const { width, height } = gameState.mapDimensions;
+  const gridWidth = Math.ceil(width / TERRITORY_OWNERSHIP_RESOLUTION);
+  const gridHeight = Math.ceil(height / TERRITORY_OWNERSHIP_RESOLUTION);
 
-  // Identify orientations and build vertex map to detect corners
-  const vertexMap = new Map<string, { isHorizontal: boolean }[]>();
-  const getVKey = (v: Vector2D) => `${Math.round(v.x)},${Math.round(v.y)}`;
+  const edgeIndices = getInteriorEdgeIndices(leaderId, gameState);
+  const chains = traceEdgeChains(edgeIndices, gridWidth, gridHeight);
+  const placements: GordPlacement[] = [];
 
-  edges.forEach((edge) => {
-    const isH = Math.abs(edge.from.y - edge.to.y) < 1;
-    const v1 = getVKey(edge.from);
-    const v2 = getVKey(edge.to);
+  const gateSpacingCells = Math.ceil(GORD_GATE_SPACING_PX / TERRITORY_OWNERSHIP_RESOLUTION);
+  // Gate is 60px wide, resolution is 20px -> 3 cells.
+  // We skip 2 extra cells after placing a gate to avoid overlap.
+  const gateSkipCells = 2;
 
-    if (!vertexMap.has(v1)) vertexMap.set(v1, []);
-    if (!vertexMap.has(v2)) vertexMap.set(v2, []);
+  for (const chain of chains) {
+    let cellsSinceLastGate = gateSpacingCells; // Start ready for a gate (or offset slightly)
 
-    vertexMap.get(v1)!.push({ isHorizontal: isH });
-    vertexMap.get(v2)!.push({ isHorizontal: isH });
-  });
+    for (let i = 0; i < chain.length; i++) {
+      const idx = chain[i];
+      const position = convertTerritoryIndexToPosition(idx, width);
 
-  // Identify straight edges (both vertices connect to collinear edges)
-  const straightEdges = edges.filter((edge) => {
-    const isH = Math.abs(edge.from.y - edge.to.y) < 1;
-    const v1 = getVKey(edge.from);
-    const v2 = getVKey(edge.to);
-
-    const isStraightVertex = (vKey: string) => {
-      const connections = vertexMap.get(vKey) || [];
-      // A vertex on a simple perimeter usually has 2 edges.
-      // It's "straight" if both edges have the same orientation.
-      return connections.length === 2 && connections.every((c) => c.isHorizontal === isH);
-    };
-
-    return isStraightVertex(v1) && isStraightVertex(v2);
-  });
-
-  // Identify unprotected edges
-  const unprotectedEdges = edges.filter((e) => !e.isProtected);
-  if (unprotectedEdges.length === 0) {
-    return edges.map((e) => ({ ...e, isGate: false }));
-  }
-
-  // Filter unprotected edges to only straight ones if possible (avoid corners)
-  const unprotectedStraightEdges = straightEdges.filter((e) => !e.isProtected);
-  const gateCandidates = unprotectedStraightEdges.length > 0 ? unprotectedStraightEdges : unprotectedEdges;
-
-  const totalUnprotectedLength = unprotectedEdges.length * GORD_GRID_RESOLUTION;
-
-  // Determine number of gates based on unprotected length and spacing
-  const desiredGates = Math.floor(totalUnprotectedLength / GORD_GATE_SPACING_PX);
-  const numGates = Math.min(GORD_MAX_GATES_COUNT, Math.max(1, desiredGates));
-
-  // Calculate step size for distribution among candidates
-  const step = gateCandidates.length / numGates;
-
-  return edges.map((edge) => {
-    let isGate = false;
-    if (!edge.isProtected) {
-      const candidateIdx = gateCandidates.indexOf(edge);
-      if (candidateIdx !== -1) {
-        for (let g = 0; g < numGates; g++) {
-          if (candidateIdx === Math.round(g * step)) {
-            isGate = true;
-            break;
-          }
-        }
+      // Determine if we should place a gate
+      if (cellsSinceLastGate >= gateSpacingCells) {
+        placements.push({ position, type: BuildingType.Gate });
+        cellsSinceLastGate = 0;
+        // Skip the next few cells in the chain to account for gate width
+        i += gateSkipCells;
+      } else {
+        placements.push({ position, type: BuildingType.Palisade });
+        cellsSinceLastGate++;
       }
     }
-    return {
-      ...edge,
-      isGate,
-    };
-  });
+  }
+
+  return placements;
+}
+
+/**
+ * Calculates the percentage of the tribe's perimeter that is currently protected by walls.
+ */
+export function calculateGordCoverage(
+  leaderId: EntityId,
+  gameState: GameWorldState,
+  existingWalls: BuildingEntity[],
+): number {
+  const edgeIndices = getInteriorEdgeIndices(leaderId, gameState);
+  if (edgeIndices.size === 0) return 1; // No border to protect
+
+  const { width, height } = gameState.mapDimensions;
+  let coveredCount = 0;
+  const checkDistSq = (GORD_WALL_PROXIMITY_THRESHOLD + 10) ** 2; // Slightly lenient check
+
+  for (const idx of edgeIndices) {
+    const pos = convertTerritoryIndexToPosition(idx, width);
+    const isCovered = existingWalls.some(
+      (wall) => calculateWrappedDistanceSq(pos, wall.position, width, height) < checkDistSq,
+    );
+    if (isCovered) {
+      coveredCount++;
+    }
+  }
+
+  return coveredCount / edgeIndices.size;
 }

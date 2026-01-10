@@ -4,6 +4,7 @@
  */
 
 import { FoodType } from '../food-types';
+import { TERRITORY_BUILDING_RADIUS } from '../tribe/territory-consts';
 
 export const BuildingType = {
   StorageSpot: 'storageSpot',
@@ -26,6 +27,14 @@ interface BuildingCost {
   wood?: number;
 }
 
+// Visual Constants
+export const BUILDING_GHOST_OPACITY = 0.5;
+export const BUILDING_CONSTRUCTION_BAR_COLOR = '#FFA500'; // Orange
+export const BUILDING_DESTRUCTION_BAR_COLOR = '#FF4500'; // Red-Orange
+export const BUILDING_PROGRESS_BAR_HEIGHT = 4;
+export const BUILDING_PROGRESS_BAR_OFFSET = 10;
+export const BORDER_EXPANSION_PAINT_RADIUS = 60; // Radius of territory claimed by pioneer
+
 // Building Definitions
 export const BUILDING_DEFINITIONS: Record<
   BuildingType,
@@ -37,6 +46,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: number;
     destructionTimeHours: number;
     cost: BuildingCost;
+    territoryRadius: number;
   }
 > = {
   [BuildingType.StorageSpot]: {
@@ -47,6 +57,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.1, // Near instant
     destructionTimeHours: 0.1,
     cost: {}, // Free for now
+    territoryRadius: TERRITORY_BUILDING_RADIUS,
   },
   [BuildingType.PlantingZone]: {
     name: 'Planting Zone',
@@ -56,6 +67,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.1, // Near instant
     destructionTimeHours: 0.1,
     cost: {}, // Free for now
+    territoryRadius: TERRITORY_BUILDING_RADIUS,
   },
   [BuildingType.BorderPost]: {
     name: 'Border Post',
@@ -65,6 +77,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.2,
     destructionTimeHours: 0.1,
     cost: { wood: 2 },
+    territoryRadius: BORDER_EXPANSION_PAINT_RADIUS,
   },
   [BuildingType.Bonfire]: {
     name: 'Bonfire',
@@ -74,6 +87,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.5,
     destructionTimeHours: 0.2,
     cost: { wood: 5 },
+    territoryRadius: TERRITORY_BUILDING_RADIUS,
   },
   [BuildingType.Palisade]: {
     name: 'Palisade',
@@ -83,6 +97,7 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.2,
     destructionTimeHours: 0.1,
     cost: { wood: 1 },
+    territoryRadius: 0,
   },
   [BuildingType.Gate]: {
     name: 'Gate',
@@ -92,16 +107,9 @@ export const BUILDING_DEFINITIONS: Record<
     constructionTimeHours: 0.4,
     destructionTimeHours: 0.2,
     cost: { wood: 3 },
+    territoryRadius: 0,
   },
 };
-
-// Visual Constants
-export const BUILDING_GHOST_OPACITY = 0.5;
-export const BUILDING_CONSTRUCTION_BAR_COLOR = '#FFA500'; // Orange
-export const BUILDING_DESTRUCTION_BAR_COLOR = '#FF4500'; // Red-Orange
-export const BUILDING_PROGRESS_BAR_HEIGHT = 4;
-export const BUILDING_PROGRESS_BAR_OFFSET = 10;
-export const BORDER_EXPANSION_PAINT_RADIUS = 60; // Radius of territory claimed by pioneer
 
 // Helper to get dimensions easily
 export function getBuildingDimensions(type: BuildingType): BuildingDimensions {
@@ -116,4 +124,9 @@ export function getBuildingConstructionTime(type: BuildingType): number {
 // Helper to get destruction time
 export function getBuildingDestructionTime(type: BuildingType): number {
   return BUILDING_DEFINITIONS[type].destructionTimeHours;
+}
+
+// Helper to get territory radius
+export function getBuildingTerritoryRadius(type: BuildingType): number {
+  return BUILDING_DEFINITIONS[type].territoryRadius;
 }

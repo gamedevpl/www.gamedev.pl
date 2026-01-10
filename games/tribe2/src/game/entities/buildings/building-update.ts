@@ -1,10 +1,9 @@
 import { UpdateContext } from '../../world-types';
 import { BuildingEntity } from './building-types';
-import { getBuildingConstructionTime, getBuildingDestructionTime, BuildingType } from './building-consts.ts';
+import { getBuildingConstructionTime, getBuildingDestructionTime, BuildingType, getBuildingTerritoryRadius } from './building-consts.ts';
 import { removeEntity } from '../entities-update';
 import { HOURS_PER_GAME_DAY, GAME_DAY_IN_REAL_SECONDS } from '../../game-consts.ts';
 import { paintTerrainOwnership } from '../tribe/territory-utils';
-import { TERRITORY_BUILDING_RADIUS } from '../tribe/territory-consts';
 import { updatePlantingZoneConnections } from '../../utils/planting-zone-connections-utils';
 import {
   BONFIRE_FUEL_CONSUMPTION_PER_HOUR,
@@ -69,7 +68,7 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
 
       // Paint terrain ownership when construction completes
       if (building.ownerId) {
-        paintTerrainOwnership(building.position, TERRITORY_BUILDING_RADIUS, building.ownerId, gameState);
+        paintTerrainOwnership(building.position, getBuildingTerritoryRadius(building.buildingType), building.ownerId, gameState);
       }
 
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {

@@ -1,8 +1,8 @@
 import React from 'react';
 import styled from 'styled-components';
 import { BuildingType, BUILDING_DEFINITIONS } from '../../game/entities/buildings/building-consts';
-import { GORD_GRID_RESOLUTION, GORD_MIN_GATE_DISTANCE_PX } from '../../game/ai/task/tribes/gord-boundary-utils';
-import { GORD_MIN_CELLS } from '../../game/ai-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../game/entities/tribe/territory-consts';
+import { GORD_MIN_ENCLOSURE_CELLS, GORD_GATE_SPACING_PX } from '../../game/ai-consts';
 import { GordPlanStats, PlannedGordEdge } from './types';
 
 const Sidebar = styled.div`
@@ -196,9 +196,9 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
       </Button>
 
       <SectionTitle>3. AI Gord Planning</SectionTitle>
-      <InfoText>Grid Resolution: {GORD_GRID_RESOLUTION}px</InfoText>
-      <InfoText>Min Cluster Size: {GORD_MIN_CELLS} cells</InfoText>
-      <InfoText>Min Gate Dist: {GORD_MIN_GATE_DISTANCE_PX}px</InfoText>
+      <InfoText>Grid Resolution: {TERRITORY_OWNERSHIP_RESOLUTION}px</InfoText>
+      <InfoText>Min Cluster Size: {GORD_MIN_ENCLOSURE_CELLS} cells</InfoText>
+      <InfoText>Min Gate Dist: {GORD_GATE_SPACING_PX}px</InfoText>
       <Button onClick={onPlanGord} style={{ backgroundColor: '#2a5', textAlign: 'center' }}>
         🏰 Plan Gord Walls
       </Button>
