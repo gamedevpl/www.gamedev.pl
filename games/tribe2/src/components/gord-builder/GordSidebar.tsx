@@ -1,7 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
 import { BuildingType, BUILDING_DEFINITIONS } from '../../game/entities/buildings/building-consts';
-import { BuildingEntity } from '../../game/entities/buildings/building-types';
 import { GORD_GRID_RESOLUTION, GORD_MIN_GATE_DISTANCE_PX } from '../../game/ai/task/tribes/gord-boundary-utils';
 import { GORD_MIN_CELLS } from '../../game/ai-consts';
 import { GordPlanStats, PlannedGordEdge } from './types';
@@ -108,7 +107,6 @@ const QualityBadge = styled.span<{ $rating: 'Excellent' | 'Good' | 'Fair' | 'Poo
 
 interface GordSidebarProps {
   selectedType: BuildingType;
-  hubBuildings: BuildingEntity[];
   plannedGordEdges: PlannedGordEdge[];
   gordStats: GordPlanStats | null;
   showPlannedGord: boolean;
@@ -127,7 +125,6 @@ interface GordSidebarProps {
 
 export const GordSidebar: React.FC<GordSidebarProps> = ({
   selectedType,
-  hubBuildings,
   plannedGordEdges,
   gordStats,
   showPlannedGord,
@@ -143,6 +140,8 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
   onToggleShowGordGrid,
   onBack,
 }) => {
+  const unprotectedEdgesCount = plannedGordEdges.filter((e) => !e.isProtected).length;
+
   return (
     <Sidebar>
       <Title>Gord Builder Test</Title>
@@ -165,6 +164,15 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
         }}
       >
         {BUILDING_DEFINITIONS[BuildingType.StorageSpot].icon} Storage (Hub)
+      </Button>
+      <Button
+        onClick={() => onSelectType(BuildingType.BorderPost)}
+        style={{
+          backgroundColor: selectedType === BuildingType.BorderPost ? '#666' : '#444',
+          borderLeft: selectedType === BuildingType.BorderPost ? '3px solid #FF6600' : 'none',
+        }}
+      >
+        {BUILDING_DEFINITIONS[BuildingType.BorderPost].icon} Border Post
       </Button>
 
       <SectionTitle>2. Manual Placement</SectionTitle>
@@ -191,37 +199,34 @@ export const GordSidebar: React.FC<GordSidebarProps> = ({
       <InfoText>Grid Resolution: {GORD_GRID_RESOLUTION}px</InfoText>
       <InfoText>Min Cluster Size: {GORD_MIN_CELLS} cells</InfoText>
       <InfoText>Min Gate Dist: {GORD_MIN_GATE_DISTANCE_PX}px</InfoText>
-      <Button
-        onClick={onPlanGord}
-        style={{ backgroundColor: hubBuildings.length > 0 ? '#2a5' : '#555', textAlign: 'center' }}
-        disabled={hubBuildings.length === 0}
-      >
-        🏰 Plan Gord ({hubBuildings.length} hubs)
+      <Button onClick={onPlanGord} style={{ backgroundColor: '#2a5', textAlign: 'center' }}>
+        🏰 Plan Gord Walls
       </Button>
       <Button
         onClick={onExecutePlan}
-        style={{ backgroundColor: plannedGordEdges.length > 0 ? '#25a' : '#555', textAlign: 'center' }}
-        disabled={plannedGordEdges.length === 0}
+        style={{ backgroundColor: unprotectedEdgesCount > 0 ? '#25a' : '#555', textAlign: 'center' }}
+        disabled={unprotectedEdgesCount === 0}
       >
-        ✅ Execute Plan ({plannedGordEdges.length} edges)
+        ✅ Execute Plan ({unprotectedEdgesCount} unprotected edges)
       </Button>
-
       <SectionTitle>Gord Statistics</SectionTitle>
       {gordStats ? (
         <>
           <InfoText>
             🎯 Quality: <QualityBadge $rating={gordStats.qualityRating}>{gordStats.qualityRating}</QualityBadge>
           </InfoText>
+          <InfoText>🛡️ Protection: {gordStats.protectedPercentage.toFixed(1)}%</InfoText>
           <InfoText>
-            🏠 Hubs: {gordStats.hubCount} | 🧱 Palis: {gordStats.palisadeCount} | 🚪 Gates: {gordStats.gateCount}
+            🧱 Palis: {gordStats.palisadeCount} | 🚪 Gates: {gordStats.gateCount}
           </InfoText>
+          <InfoText>🗺️ Territory: {gordStats.totalCells} cells</InfoText>
           <InfoText>
             📏 Perimeter: {gordStats.perimeterLength}px | 📐 Area: ~{gordStats.enclosedArea}px²
           </InfoText>
           <InfoText>🪵 Cost: {gordStats.woodCost}</InfoText>
         </>
       ) : (
-        <InfoText>No gord planned. Place hubs first.</InfoText>
+        <InfoText>No gord planned. Expand territory first.</InfoText>
       )}
 
       <SectionTitle>Visualization</SectionTitle>

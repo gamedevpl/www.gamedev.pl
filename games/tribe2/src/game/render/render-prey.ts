@@ -3,7 +3,9 @@ import { TribePrey2D } from '../../../../../tools/asset-generator/generator-asse
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { SpriteCache } from './sprite-cache';
-import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
+import { snapToStep, discretizeDirection, getDiscretizedDirectionVector, renderDebugTargetHighlight } from './render-utils';
+import { GameWorldState } from '../world-types';
+import { CharacterEntity } from '../entities/characters/character-types';
 
 // Map prey actions to sprite stances
 const preyStanceMap: Record<string, string> = {
@@ -22,7 +24,7 @@ const preyCache = new SpriteCache(200);
  * @param ctx Canvas rendering context
  * @param prey The prey entity to render debug info for
  */
-function renderPreyDebugInfo(ctx: CanvasRenderingContext2D, prey: PreyEntity): void {
+function renderPreyDebugInfo(ctx: CanvasRenderingContext2D, prey: PreyEntity, gameState: GameWorldState): void {
   const { radius, position, activeAction = 'idle' } = prey;
   const stateName = prey.stateMachine[0] || 'N/A';
   const yOffset = prey.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
@@ -45,6 +47,8 @@ function renderPreyDebugInfo(ctx: CanvasRenderingContext2D, prey: PreyEntity): v
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
+
+  renderDebugTargetHighlight(ctx, prey as CharacterEntity, gameState);
 }
 
 /**
@@ -54,6 +58,7 @@ export function renderPrey(
   ctx: CanvasRenderingContext2D,
   prey: PreyEntity,
   isDebugOn: boolean = false,
+  gameState: GameWorldState,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = prey;
@@ -110,6 +115,6 @@ export function renderPrey(
   const showDebug = isDebugOn && (debugEntityId === undefined || prey.id === debugEntityId);
 
   if (showDebug) {
-    renderPreyDebugInfo(ctx, prey);
+    renderPreyDebugInfo(ctx, prey, gameState);
   }
 }

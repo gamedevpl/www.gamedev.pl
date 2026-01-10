@@ -11,7 +11,8 @@ import {
   LEADER_BUILDING_FIRST_STORAGE_MIN_DISTANCE_FROM_OTHER_TRIBE_CENTER,
   LEADER_BUILDING_MIN_BUSHES,
   GORD_GRID_RESOLUTION,
-  GORD_MIN_CELLS,
+  GORD_MIN_ENCLOSURE_CELLS,
+  GORD_UNPROTECTED_THRESHOLD,
 } from '../../../ai-consts';
 import { getTribeCenter } from '../../../utils';
 import { getTemperatureAt } from '../../../temperature/temperature-update';
@@ -34,8 +35,9 @@ import { isTribeHostile } from '../../../utils/human-utils';
 import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
 import { NAV_GRID_RESOLUTION } from '../../../utils/navigation-utils';
 import {
-  findGordClusters,
-  traceGordPerimeter,
+  getAllOwnedGordCells,
+  getTribePerimeterEdges,
+  calculateProtectionStats,
   assignGates,
   GORD_WALL_PROXIMITY_THRESHOLD,
 } from './gord-boundary-utils';
@@ -68,6 +70,11 @@ export function updateTribeFrontier(context: UpdateContext): void {
 
   for (const leader of leaders) {
     if (!leader.aiBlackboard) continue;
+
+    // Expansion check: skip if the tribe has prioritized wall building
+    if (leader.tribeControl?.stopExpansion) {
+      continue;
+    }
 
     const ownedIndices = Blackboard.get<number[]>(leader.aiBlackboard, BLACKBOARD_OWNED_INDICES) || [];
     if (ownedIndices.length === 0) continue;
@@ -164,14 +171,57 @@ export function updateTribeFrontier(context: UpdateContext): void {
 }
 
 /**
- * Plans defensive enclosures (Gords) around critical infrastructure using influence map boundary tracing.
+ * Plans defensive enclosures (Gords) around the entire tribe territory border.
  */
 function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context: UpdateContext): void {
   const { gameState } = context;
   const indexedState = gameState as IndexedWorldState;
   const { width, height } = gameState.mapDimensions;
+  const leader = gameState.entities.entities[leaderId] as HumanEntity;
+  if (!leader) return;
 
-  // 1. Clear existing palisade/gate tasks for the leader first to prevent ghost walls
+  // 1. Identify all owned 100px grid cells
+  const ownedCells = getAllOwnedGordCells(leaderId, gameState);
+
+  // 2. Minimum size requirement (avoid surrounding tiny territories)
+  if (ownedCells.size < GORD_MIN_ENCLOSURE_CELLS) {
+    if (leader.tribeControl) {
+      leader.tribeControl.stopExpansion = false;
+    }
+    return;
+  }
+
+  // 3. Trace perimeter edges of the entire territory
+  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
+  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
+  const edges = getTribePerimeterEdges(ownedCells, gridWidth, gridHeight);
+  if (edges.length === 0) return;
+
+  // 4. Gather existing walls for protection check
+  const existingWalls = tribeBuildings.filter(
+    (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
+  );
+
+  // 5. Calculate protection statistics
+  const stats = calculateProtectionStats(edges, existingWalls, width, height);
+
+  // 6. Evaluate if we need to build walls and stop expansion
+  const unprotectedPercentage = 1 - stats.protectedPercentage;
+
+  if (unprotectedPercentage > GORD_UNPROTECTED_THRESHOLD) {
+    // Tribe decides to prioritize defense
+    if (!leader.tribeControl) {
+      leader.tribeControl = { diplomacy: {} };
+    }
+    leader.tribeControl.stopExpansion = true;
+  } else if (stats.protectedPercentage >= 0.9) {
+    // Territory is sufficiently enclosed, can resume expansion
+    if (leader.tribeControl) {
+      leader.tribeControl.stopExpansion = false;
+    }
+  }
+
+  // 7. Clear existing palisade/gate tasks for the leader first to prevent ghost walls
   Object.keys(gameState.tasks).forEach((taskId) => {
     const task = gameState.tasks[taskId];
     if (
@@ -182,37 +232,15 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     }
   });
 
-  // Gather all hub buildings
-  const hubs = tribeBuildings.filter(
-    (b) => b.buildingType === BuildingType.Bonfire || b.buildingType === BuildingType.StorageSpot,
-  );
-
-  if (hubs.length === 0) return;
-
-  // Gather existing walls for gord expansion
-  const existingWalls = tribeBuildings.filter(
-    (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
-  );
-
-  // 2. Identify 100px grid clusters based on territory ownership
-  const clusters = findGordClusters(hubs, leaderId, gameState);
-  const gridWidth = Math.ceil(width / GORD_GRID_RESOLUTION);
-  const gridHeight = Math.ceil(height / GORD_GRID_RESOLUTION);
-
-  // Process each hub cluster independently
-  for (const cluster of clusters) {
-    // 3. Minimum size requirement (e.g., 4 cells = 200x200px area)
-    if (cluster.size < GORD_MIN_CELLS) continue;
-
-    // 4. Trace perimeter edges of the cluster
-    const edges = traceGordPerimeter(cluster, gridWidth, gridHeight);
-    if (edges.length === 0) continue;
-
-    // 5. Assign gates strategically along the edges
+  // 8. If we are in "stop expansion" mode, ensure we have tasks for unprotected segments
+  if (leader.tribeControl?.stopExpansion) {
+    // Assign gates strategically along the edges (considering existing walls)
     const edgesWithGates = assignGates(edges);
 
-    // 6. Create tasks by interpolating along each 100px edge
+    // Create tasks by interpolating along each 100px unprotected edge
     for (const edge of edgesWithGates) {
+      if (edge.isProtected) continue;
+
       const step = 20; // Palisade placement interval (matches territory resolution)
       const numSteps = GORD_GRID_RESOLUTION / step;
 
@@ -233,11 +261,11 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
           y: (edge.from.y + dy * i + dy / 2 + height) % height,
         };
 
-        // Check if building already exists at this position
+        // Reuse logic: Check if building already exists at this position
         const existing = indexedState.search.building.at(pos, NAV_GRID_RESOLUTION / 2);
         if (existing) continue;
 
-        // Check for existing walls too close
+        // Check for existing walls too close (redundant but safe)
         const tooCloseToWall = existingWalls.some(
           (wall) =>
             calculateWrappedDistanceSq(pos, wall.position, width, height) <
@@ -267,14 +295,16 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
         const type = edge.isGate && i === 0 ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
         const taskId = `${TaskType[type]}-${leaderId}-${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
 
-        gameState.tasks[taskId] = {
-          id: taskId,
-          type,
-          position: pos,
-          creatorEntityId: leaderId,
-          target: pos,
-          validUntilTime: gameState.time + 24,
-        };
+        if (!gameState.tasks[taskId]) {
+          gameState.tasks[taskId] = {
+            id: taskId,
+            type,
+            position: pos,
+            creatorEntityId: leaderId,
+            target: pos,
+            validUntilTime: gameState.time + 24,
+          };
+        }
 
         // Gate occupies 3 segments (60px), Palisade occupies 1 segment (20px)
         segmentsToSkip = type === TaskType.HumanPlaceGate ? 2 : 0;

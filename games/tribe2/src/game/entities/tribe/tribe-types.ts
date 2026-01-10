@@ -6,4 +6,6 @@ import { EntityId } from '../entities-types';
  */
 export type TribeControl = {
   diplomacy: Record<EntityId, DiplomacyStatus>; // LeaderId -> Status
+  /** Flag to halt territory expansion when defensive walls are needed. */
+  stopExpansion?: boolean;
 };

@@ -7,6 +7,7 @@ export interface PlannedGordEdge {
   from: Vector2D;
   to: Vector2D;
   isGate: boolean;
+  isProtected?: boolean;
 }
 
 /**
@@ -16,8 +17,9 @@ export interface GordPlanStats {
   perimeterLength: number;
   palisadeCount: number;
   gateCount: number;
-  hubCount: number;
+  totalCells: number;
   enclosedArea: number;
   woodCost: number;
+  protectedPercentage: number;
   qualityRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
 }

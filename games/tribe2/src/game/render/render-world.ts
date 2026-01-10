@@ -265,7 +265,7 @@ export function renderWorld(
         renderPrey,
         entity as PreyEntity,
         isDebugOn,
-        gameState.time,
+        gameState,
         gameState.debugCharacterId,
       );
     } else if (entity.type === 'predator') {
@@ -276,7 +276,7 @@ export function renderWorld(
         renderPredator,
         entity as PredatorEntity,
         isDebugOn,
-        gameState.time,
+        gameState,
         gameState.debugCharacterId,
       );
     }

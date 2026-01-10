@@ -29,7 +29,7 @@ import { GameWorldState } from '../world-types.js';
 import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { ITEM_TYPE_EMOJIS } from '../entities/item-types';
 import { SpriteCache } from './sprite-cache';
-import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
+import { snapToStep, discretizeDirection, getDiscretizedDirectionVector, renderDebugTargetHighlight } from './render-utils';
 
 type Stance = 'idle' | 'walk' | 'eat' | 'gathering' | 'procreate' | 'dead' | 'attacking' | 'planting';
 
@@ -148,6 +148,8 @@ function renderDebugInfo(ctx: CanvasRenderingContext2D, human: HumanEntity, game
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
+
+  renderDebugTargetHighlight(ctx, human, gameState);
 }
 
 function drawTribeBadge(

@@ -1,6 +1,10 @@
 import { Entity } from '../entities/entities-types';
 import { Vector2D } from '../utils/math-types';
 import { VisualEffect } from '../visual-effects/visual-effect-types';
+import { GameWorldState } from '../world-types';
+import { CharacterEntity } from '../entities/characters/character-types';
+import { getCurrentTask } from '../ai/task/task-utils';
+import { getDirectionVectorOnTorus } from '../utils/math-utils';
 
 /**
  * Converts screen coordinates to world coordinates, taking into account viewport position and map wrapping.
@@ -180,4 +184,99 @@ export function discretizeDirection(direction: Vector2D, steps: number = 8): num
 export function getDiscretizedDirectionVector(step: number, steps: number = 8): [number, number] {
   const angle = (step / steps) * Math.PI * 2;
   return [Math.cos(angle), Math.sin(angle)];
+}
+
+/**
+ * Renders a debug highlight for the character's current target.
+ * Shows a dashed line to the target and a marker at the target position.
+ */
+export function renderDebugTargetHighlight(
+  ctx: CanvasRenderingContext2D,
+  character: CharacterEntity,
+  gameState: GameWorldState,
+): void {
+  const { width, height } = gameState.mapDimensions;
+  let targetPos: Vector2D | undefined;
+  let targetEntityId: number | undefined;
+
+  // 1. Try to get target from the entity's target property (movement target)
+  // We use 'any' cast here to safely access properties that might exist on specific subtypes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const char = character as any;
+  if (char.target) {
+    if (typeof char.target === 'object' && 'x' in char.target && 'y' in char.target) {
+      targetPos = char.target as Vector2D;
+    } else if (typeof char.target === 'number') {
+      targetEntityId = char.target;
+      targetPos = gameState.entities.entities[char.target]?.position;
+    }
+  }
+
+  // 2. If no target yet, try to get it from the current task (intended target)
+  if (!targetPos) {
+    const currentTaskId = getCurrentTask(character);
+    const currentTask = currentTaskId ? gameState.tasks[currentTaskId] : null;
+    if (currentTask && currentTask.target) {
+      if (typeof currentTask.target === 'object' && 'x' in currentTask.target && 'y' in currentTask.target) {
+        targetPos = currentTask.target as Vector2D;
+      } else if (typeof currentTask.target === 'number') {
+        targetEntityId = currentTask.target;
+        targetPos = gameState.entities.entities[currentTask.target]?.position;
+      }
+    }
+  }
+
+  if (!targetPos) return;
+
+  ctx.save();
+
+  // Draw dashed line from character to target (shortest path on torus)
+  const dir = getDirectionVectorOnTorus(character.position, targetPos, width, height);
+  const endPos = { x: character.position.x + dir.x, y: character.position.y + dir.y };
+
+  ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = 'rgba(255, 165, 0, 0.5)'; // Semi-transparent orange
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(character.position.x, character.position.y);
+  ctx.lineTo(endPos.x, endPos.y);
+  ctx.stroke();
+
+  // Draw target marker
+  if (targetEntityId) {
+    const targetEntity = gameState.entities.entities[targetEntityId];
+    if (targetEntity) {
+      // Highlight the target entity with a pulsing orange circle
+      // Logic inlined from renderEntityHighlight to avoid circular dependency
+      const pulseSpeed = 5;
+      const pulse = (Math.sin(gameState.time * pulseSpeed) + 1) / 2;
+      const currentLineWidth = 2 + pulse * 2;
+
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(endPos.x, endPos.y, targetEntity.radius + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';
+      ctx.lineWidth = currentLineWidth;
+      ctx.stroke();
+    }
+  } else {
+    // Draw crosshair at target position
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+    ctx.lineWidth = 2;
+    const size = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(endPos.x - size, endPos.y);
+    ctx.lineTo(endPos.x + size, endPos.y);
+    ctx.moveTo(endPos.x, endPos.y - size);
+    ctx.lineTo(endPos.x, endPos.y + size);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(endPos.x, endPos.y, size * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }

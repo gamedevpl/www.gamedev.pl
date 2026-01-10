@@ -25,10 +25,10 @@ const CanvasContainer = styled.div`
 `;
 
 const Description = styled.p`
-  margintop: 20px;
+  margin-top: 20px;
   color: #888;
-  maxwidth: 600px;
-  textalign: center;
+  max-width: 600px;
+  text-align: center;
   font-size: 0.9rem;
   line-height: 1.4;
 `;
@@ -44,7 +44,6 @@ export const GordBuilderScreen: React.FC = () => {
     <ScreenContainer>
       <GordSidebar
         selectedType={builder.selectedType}
-        hubBuildings={builder.hubBuildings}
         plannedGordEdges={builder.plannedGordEdges}
         gordStats={builder.gordStats}
         showPlannedGord={builder.showPlannedGord}
@@ -77,11 +76,11 @@ export const GordBuilderScreen: React.FC = () => {
           onMouseLeave={() => builder.setMousePos(null)}
         />
         <Description>
-          <strong>Simplified Gord Planning:</strong> Perimeters are now based on 100px grid cells.
-          <br />A cell is eligible if it meets the ownership threshold. Clusters must have at least {
-            GORD_MIN_CELLS
-          }{' '}
-          cells.
+          <strong>Territory Perimeter Planning:</strong> Walls are planned around the entire tribe territory border
+          using 100px grid cells.
+          <br />
+          Existing walls are reused to save resources. Enclosure triggers when unprotected border exceeds a threshold.
+          Minimum territory size: {GORD_MIN_CELLS} cells.
         </Description>
       </CanvasContainer>
     </ScreenContainer>

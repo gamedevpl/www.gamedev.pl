@@ -3,7 +3,9 @@ import { TribePredator2D } from '../../../../../tools/asset-generator/generator-
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { SpriteCache } from './sprite-cache';
-import { snapToStep, discretizeDirection, getDiscretizedDirectionVector } from './render-utils';
+import { snapToStep, discretizeDirection, getDiscretizedDirectionVector, renderDebugTargetHighlight } from './render-utils';
+import { GameWorldState } from '../world-types';
+import { CharacterEntity } from '../entities/characters/character-types';
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
@@ -23,7 +25,7 @@ const predatorCache = new SpriteCache(200);
  * @param ctx Canvas rendering context
  * @param predator The predator entity to render debug info for
  */
-function renderPredatorDebugInfo(ctx: CanvasRenderingContext2D, predator: PredatorEntity): void {
+function renderPredatorDebugInfo(ctx: CanvasRenderingContext2D, predator: PredatorEntity, gameState: GameWorldState): void {
   const { radius, position, activeAction = 'idle' } = predator;
   const stateName = predator.stateMachine[0] || 'N/A';
   const yOffset = predator.isAdult ? CHARACTER_RADIUS + 20 : CHARACTER_RADIUS * 0.6 + 20;
@@ -46,6 +48,8 @@ function renderPredatorDebugInfo(ctx: CanvasRenderingContext2D, predator: Predat
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.closePath();
+
+  renderDebugTargetHighlight(ctx, predator as CharacterEntity, gameState);
 }
 
 /**
@@ -55,6 +59,7 @@ export function renderPredator(
   ctx: CanvasRenderingContext2D,
   predator: PredatorEntity,
   isDebugOn: boolean = false,
+  gameState: GameWorldState,
   debugEntityId?: EntityId,
 ): void {
   const { position, activeAction = 'idle' } = predator;
@@ -122,6 +127,6 @@ export function renderPredator(
   // Debug rendering
   const showDebug = isDebugOn && (debugEntityId === undefined || predator.id === debugEntityId);
   if (showDebug) {
-    renderPredatorDebugInfo(ctx, predator);
+    renderPredatorDebugInfo(ctx, predator, gameState);
   }
 }

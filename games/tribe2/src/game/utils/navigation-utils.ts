@@ -394,6 +394,10 @@ export function findNearestPassableCell(
 /**
  * Toroidal A* pathfinding with optimized data structures.
  * Uses a Binary Min-Heap for the open set and typed arrays for all data.
+ *
+ * Implements "Best Effort" pathfinding:
+ * If the target is unreachable (blocked or too far), returns a path to the
+ * closest reachable node instead of null.
  */
 export function findPath(
   gameState: GameWorldState,
@@ -439,7 +443,8 @@ export function findPath(
 
   const startIdx = startCoords.y * gridWidth + startCoords.x;
   gScore[startIdx] = 0;
-  fScore[startIdx] = toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight);
+  const startH = toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight);
+  fScore[startIdx] = startH;
 
   // Initialize heap
   let heapSize = 0;
@@ -448,6 +453,10 @@ export function findPath(
 
   const maxIterations = 5000;
   let iterations = 0;
+
+  // Track closest node for best-effort path
+  let closestNodeIdx = startIdx;
+  let closestNodeHScore = startH;
 
   while (heapSize > 0 && iterations < maxIterations) {
     iterations++;
@@ -459,6 +468,13 @@ export function findPath(
 
     const curX = currentIdx % gridWidth;
     const curY = Math.floor(currentIdx / gridWidth);
+
+    // Update closest node tracking
+    const currentH = toroidalHeuristic({ x: curX, y: curY }, endCoords, gridWidth, gridHeight);
+    if (currentH < closestNodeHScore) {
+      closestNodeHScore = currentH;
+      closestNodeIdx = currentIdx;
+    }
 
     // Mark as closed
     nodeStatus[currentIdx] = CLOSED;
@@ -513,7 +529,13 @@ export function findPath(
     }
   }
 
-  return { path: null, iterations }; // No path found
+  // Target not reached: Return best effort path to the closest node found
+  const closestNodePos = {
+    x: (closestNodeIdx % gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+    y: Math.floor(closestNodeIdx / gridWidth) * NAV_GRID_RESOLUTION + NAV_GRID_RESOLUTION / 2,
+  };
+
+  return { path: reconstructPath(cameFrom, closestNodeIdx, gridWidth, closestNodePos), iterations };
 }
 
 function toroidalHeuristic(
@@ -534,12 +556,7 @@ function toroidalHeuristic(
   return D * (dx + dy) + (D2 - 2 * D) * Math.min(dx, dy);
 }
 
-function reconstructPath(
-  cameFrom: Int32Array,
-  currentIdx: number,
-  gridWidth: number,
-  finalPos: Vector2D,
-): Vector2D[] {
+function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: number, finalPos: Vector2D): Vector2D[] {
   const path: Vector2D[] = [finalPos];
   let curr = currentIdx;
   const visited = new Set<number>();
