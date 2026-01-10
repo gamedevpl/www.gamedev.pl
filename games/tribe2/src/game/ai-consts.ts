@@ -100,6 +100,6 @@ export const HUMAN_STAY_NEAR_PARENT_STOP_DISTANCE = 150;
 
 // Gord Planning Constants
 export const GORD_UNPROTECTED_THRESHOLD = 0.4; // 40% of border unprotected triggers gord building
-export const GORD_MIN_ENCLOSURE_CELLS = 4; // Avoid surrounding very small territory
+export const GORD_MIN_ENCLOSURE_CELLS = 100; // Avoid surrounding very small territory
 export const GORD_GATE_SPACING_PX = 500; // Preferred spacing between gates
 export const GORD_WALL_PROXIMITY_THRESHOLD = 10;

@@ -131,7 +131,11 @@ export function planGordPlacement(leaderId: EntityId, gameState: GameWorldState)
   const gridHeight = Math.ceil(height / TERRITORY_OWNERSHIP_RESOLUTION);
 
   const edgeIndices = getInteriorEdgeIndices(leaderId, gameState);
-  const chains = traceEdgeChains(edgeIndices, gridWidth, gridHeight);
+  const rawChains = traceEdgeChains(edgeIndices, gridWidth, gridHeight);
+  
+  // Filter out very short chains to avoid isolated wall segments
+  const chains = rawChains.filter(chain => chain.length >= 3);
+  
   const placements: GordPlacement[] = [];
 
   const gateSpacingCells = Math.ceil(GORD_GATE_SPACING_PX / TERRITORY_OWNERSHIP_RESOLUTION);

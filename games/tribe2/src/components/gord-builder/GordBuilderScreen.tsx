@@ -33,8 +33,8 @@ const Description = styled.p`
   line-height: 1.4;
 `;
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
+const CANVAS_WIDTH = 1000;
+const CANVAS_HEIGHT = 1000;
 
 export const GordBuilderScreen: React.FC = () => {
   const { returnToIntro } = useGameContext();

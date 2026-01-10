@@ -32,6 +32,7 @@ export enum TaskType {
   HumanPlacePalisade,
   HumanPlaceGate,
   HumanAttackBuilding,
+  HumanDismantleBuilding,
   AnimalFlee,
   AnimalGraze,
   AnimalHunt,

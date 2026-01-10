@@ -12,27 +12,37 @@ export const buildingRemovalInteraction: InteractionDefinition<HumanEntity, Buil
   maxDistance: 20,
 
   checker: (source, target, context) => {
-    // Only leaders can remove enemy buildings
-    if (source.leaderId !== source.id) {
-      return false;
+    // Case 1: Dismantling friendly building (Cleanup)
+    if (source.activeAction === 'dismantling') {
+      // Must be same tribe
+      if (source.leaderId !== target.ownerId) {
+        return false;
+      }
+      // Don't trigger if already being destroyed
+      if (target.isBeingDestroyed) {
+        return false;
+      }
+      return true;
     }
 
-    // Must be actively trying to destroy
-    if (source.activeAction !== 'destroyingBuilding') {
-      return false;
+    // Case 2: Destroying enemy building (Warfare)
+    if (source.activeAction === 'destroyingBuilding') {
+      // Only leaders can remove enemy buildings
+      if (source.leaderId !== source.id) {
+        return false;
+      }
+      // Must be an enemy building
+      if (!isEnemyBuilding(source, target, context.gameState)) {
+        return false;
+      }
+      // Don't trigger if already being destroyed
+      if (target.isBeingDestroyed) {
+        return false;
+      }
+      return true;
     }
 
-    // Must be an enemy building
-    if (!isEnemyBuilding(source, target, context.gameState)) {
-      return false;
-    }
-
-    // Don't trigger if already being destroyed
-    if (target.isBeingDestroyed) {
-      return false;
-    }
-
-    return true;
+    return false;
   },
 
   perform: (source, target, context) => {

@@ -23,7 +23,7 @@ import {
   BONFIRE_HEAT_RADIUS,
 } from '../../../temperature/temperature-consts';
 import { calculateWrappedDistance, calculateWrappedDistanceSq } from '../../../utils/math-utils';
-import { convertTerritoryIndexToPosition } from '../../../entities/tribe/territory-utils';
+import { convertTerritoryIndexToPosition, convertPositionToTerritoryIndex } from '../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 import { TRIBE_BUILDINGS_MIN_HEADCOUNT } from '../../../entities/tribe/tribe-consts';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
@@ -194,6 +194,32 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     (b) => b.buildingType === BuildingType.Palisade || b.buildingType === BuildingType.Gate,
   );
 
+  // --- CLEANUP OBSOLETE WALLS ---
+  // If a wall is inside the territory but NOT on the border (ownedCells), it's obsolete.
+  for (const wall of existingWalls) {
+    const wallIdx = convertPositionToTerritoryIndex(wall.position, width, height);
+
+    // If it's NOT a border cell...
+    if (!ownedCells.has(wallIdx)) {
+      // ...AND it is still owned by us (meaning territory expanded past it)
+      const currentOwner = gameState.terrainOwnership[wallIdx];
+      if (currentOwner === leaderId) {
+        // Schedule dismantling
+        const dismantleTaskId = `Dismantle-${wall.id}`;
+        if (!gameState.tasks[dismantleTaskId]) {
+          gameState.tasks[dismantleTaskId] = {
+            id: dismantleTaskId,
+            type: TaskType.HumanDismantleBuilding,
+            position: wall.position,
+            creatorEntityId: leaderId,
+            target: wall.id,
+            validUntilTime: gameState.time + 24,
+          };
+        }
+      }
+    }
+  }
+
   // 4. Calculate protection statistics
   const coverage = calculateGordCoverage(leaderId, gameState, existingWalls);
 
@@ -231,11 +257,12 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
     for (const placement of placements) {
       const pos = placement.position;
 
-      // Check if building already exists at this position
-      const existing = indexedState.search.building.at(pos, 10);
+      // a. Check if a building already exists at the position (e.g. storage, bonfire, or existing wall)
+      // Use a small radius to check for direct overlap (e.g. 20px)
+      const existing = indexedState.search.building.at(pos, 20);
       if (existing) continue;
 
-      // Check for existing walls too close (redundant but safe)
+      // b. Check if any existing wall (palisade/gate) is too close (using GORD_WALL_PROXIMITY_THRESHOLD)
       const tooCloseToWall = existingWalls.some(
         (wall) =>
           calculateWrappedDistanceSq(pos, wall.position, width, height) <
@@ -243,9 +270,11 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
       );
       if (tooCloseToWall) continue;
 
-      // Check for trees blocking placement
-      const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION / 2);
+      // c. Check for trees at the position
+      // Use a radius slightly larger than NAV_GRID_RESOLUTION to ensure clear placement
+      const trees = indexedState.search.tree.byRadius(pos, NAV_GRID_RESOLUTION * 1.5);
       if (trees.length > 0) {
+        // Tree is blocking the wall path - schedule a chop task
         const tree = trees[0];
         const chopTaskId = `Chop-Gord-${tree.id}`;
         if (!gameState.tasks[chopTaskId]) {
@@ -258,9 +287,19 @@ function planGords(leaderId: EntityId, tribeBuildings: BuildingEntity[], context
             validUntilTime: gameState.time + 12,
           };
         }
+        // Skip placing the wall task until the tree is removed
         continue;
       }
 
+      // d. Check for humans at the position (Safety Check)
+      // Use a small radius (e.g. 20px) to see if anyone is standing exactly where we want to build
+      const blockingHumans = indexedState.search.human.byRadius(pos, 20);
+      if (blockingHumans.length > 0) {
+        // Someone is in the way, skip this placement for now
+        continue;
+      }
+
+      // e. If clear, create the placement task
       const type = placement.type === BuildingType.Gate ? TaskType.HumanPlaceGate : TaskType.HumanPlacePalisade;
       const taskId = `${TaskType[type]}-${leaderId}-${Math.floor(pos.x)}-${Math.floor(pos.y)}`;
 

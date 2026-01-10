@@ -62,7 +62,8 @@ export function isPositionOccupied(
   return (
     check(indexedState.search.human.byRect(searchRect)) ||
     check(indexedState.search.berryBush.byRect(searchRect)) ||
-    check(indexedState.search.corpse.byRect(searchRect))
+    check(indexedState.search.corpse.byRect(searchRect)) ||
+    check(indexedState.search.tree.byRect(searchRect))
   );
 }
 

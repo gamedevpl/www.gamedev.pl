@@ -66,7 +66,7 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
   const [totalGordCells, setTotalGordCells] = useState(0);
   const [coverage, setCoverage] = useState<number>(0);
 
-  const [terrainOwnership, setTerrainOwnership] = useState<(number | null)[]>(
+  const [terrainOwnership, setTerrainOwnership] = useState<(number | null)[]> (
     new Array(
       Math.ceil(canvasWidth / TERRITORY_OWNERSHIP_RESOLUTION) *
         Math.ceil(canvasHeight / TERRITORY_OWNERSHIP_RESOLUTION),
@@ -144,7 +144,10 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
     setPlannedPlacements(placements);
 
     // 2. Generate visualization edges from chains
-    const chains = traceEdgeChains(ownedCells, gridWidth, gridHeight);
+    const rawChains = traceEdgeChains(ownedCells, gridWidth, gridHeight);
+    // Filter out short chains to match game logic
+    const chains = rawChains.filter(chain => chain.length >= 3);
+    
     const edges: PlannedGordEdge[] = [];
 
     for (const chain of chains) {
@@ -207,6 +210,14 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
     for (const placement of plannedPlacements) {
       const pos = placement.position;
 
+      // Check for direct overlap with any existing building (including non-walls)
+      // Note: mock state doesn't have spatial index 'at' method fully implemented for all types,
+      // but we can check placedBuildings directly.
+      const isOccupied = placedBuildings.some(
+        (b) => calculateWrappedDistanceSq(pos, b.position, canvasWidth, canvasHeight) < 20 * 20
+      );
+      if (isOccupied) continue;
+
       // Proximity check against existing walls
       const tooClose = allWalls.some(
         (wall) =>
@@ -215,6 +226,9 @@ export const useGordBuilder = (canvasWidth: number, canvasHeight: number) => {
       );
 
       if (tooClose) continue;
+      
+      // Note: Tree collision check is skipped in mock builder as mock state doesn't support tree queries yet.
+      // In the real game, trees would also block placement.
 
       const newBuilding = createBuildingEntity(currentId++, placement.type, pos, 1);
       newBuildings.push(newBuilding);
