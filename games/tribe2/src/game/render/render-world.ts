@@ -169,17 +169,30 @@ export function renderWorld(
     ...indexedWorld.search.corpse.byRect(viewportRect),
     ...indexedWorld.search.prey.byRect(viewportRect),
     ...indexedWorld.search.predator.byRect(viewportRect),
-  ].sort((a, b) =>
-    isDebugOn && a.id === gameState.debugCharacterId && a.id !== b.id
-      ? -1
-      : a.type === 'building' && b.type !== 'building'
-      ? -1
-      : a.position.y < b.position.y
-      ? -1
-      : a.position.y > b.position.y
-      ? 1
-      : a.id - b.id,
-  );
+  ].sort((a, b) => {
+    if (isDebugOn && a.id === gameState.debugCharacterId && a.id !== b.id) return -1;
+    if (isDebugOn && b.id === gameState.debugCharacterId && a.id !== b.id) return 1;
+
+    const getSortingY = (e: Entity): number => {
+      if (e.type === 'building') {
+        const b = e as BuildingEntity;
+        if (b.buildingType === BuildingType.StorageSpot || b.buildingType === BuildingType.PlantingZone) {
+          // Floor buildings should always be behind characters
+          return b.position.y - b.height / 2;
+        }
+        // Use logical footprint for all tall structures (Gate height 60 -> +30, Palisade height 20 -> +10)
+        return b.position.y + b.height / 2;
+      }
+      // Characters and nature are sorted by their "feet" or base
+      return e.position.y + e.radius;
+    };
+
+    const ay = getSortingY(a);
+    const by = getSortingY(b);
+
+    if (ay !== by) return ay - by;
+    return a.id - b.id;
+  });
 
   visibleEntities.forEach((entity: Entity) => {
     if (entity.type === 'building') {
