@@ -142,7 +142,8 @@ function getBuildingSprite(
         drawGate(ctx, width, height, id, tribeColor, connections);
       } else {
         if (b.buildingType === BuildingType.Bonfire && isConstructed) {
-          icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
+          // Don't show emoji when fire effect is active - the visual effect handles the fire rendering
+          icon = (b.fuelLevel ?? 0) > 0 ? '' : '🪵';
         }
 
         // 1. Draw the Stone Border

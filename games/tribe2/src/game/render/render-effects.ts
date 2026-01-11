@@ -4,15 +4,15 @@ import { pseudoRandom } from './render-utils';
 
 const EFFECT_BASE_RADIUS = 15;
 
-// Fire effect constants - optimized for performance
-const FIRE_PARTICLE_COUNT = 8;
-const FIRE_BASE_SIZE = 4;
-const FIRE_HEIGHT = 25;
+// Fire effect constants - cozy slow fire
+const FIRE_PARTICLE_COUNT = 10;
+const FIRE_BASE_SIZE = 5;
+const FIRE_HEIGHT = 30;
 
-// Smoke effect constants - optimized for performance
-const SMOKE_PARTICLE_COUNT = 4;
-const SMOKE_BASE_SIZE = 6;
-const SMOKE_HEIGHT = 40;
+// Smoke effect constants - tall column of smoke rising slowly
+const SMOKE_PARTICLE_COUNT = 12;
+const SMOKE_BASE_SIZE = 3;
+const SMOKE_HEIGHT = 120;
 
 function drawPulsatingCircle(
   ctx: CanvasRenderingContext2D,
@@ -153,50 +153,59 @@ function drawBonfireFire(ctx: CanvasRenderingContext2D, effect: VisualEffect, cu
   ctx.save();
   ctx.globalAlpha = opacity;
 
-  // Use effect ID as base seed for consistent particle positions
-  const baseSeed = effect.id * 1000;
-  // Convert game time to animation time (multiply by 60 for faster animation)
-  const animTime = elapsedTime * 60;
+  // Use entityId (bonfire ID) as base seed for unique but consistent appearance per bonfire
+  const baseSeed = (effect.entityId ?? effect.id) * 1000;
+  // Convert game time to animation time - slower for cozy fire (multiply by 20)
+  const animTime = elapsedTime * 20;
 
   for (let i = 0; i < FIRE_PARTICLE_COUNT; i++) {
     const particleSeed = baseSeed + i;
 
-    // Animate particle lifetime within the effect duration - faster cycle
-    const particlePhase = (animTime * 2 + pseudoRandom(particleSeed) * 2) % 1;
+    // Animate particle lifetime with varied speeds for more natural look - slower
+    const speedVariation = 0.6 + pseudoRandom(particleSeed) * 0.8;
+    const particlePhase = (animTime * speedVariation + pseudoRandom(particleSeed) * 2) % 1;
 
-    // Horizontal position: centered with some spread
-    const spreadX = (pseudoRandom(particleSeed + 1) - 0.5) * 15;
-    const flickerX = Math.sin(animTime * 8 + i * 0.7) * 3;
-    const x = effect.position.x + spreadX + flickerX;
+    // Horizontal position: centered with gentle spread and flicker
+    const baseSpreadX = (pseudoRandom(particleSeed + 1) - 0.5) * 18;
+    const flickerX = Math.sin(animTime * 3 + i * 0.9) * 3 * (1 - particlePhase * 0.5);
+    const x = effect.position.x + baseSpreadX * (1 - particlePhase * 0.3) + flickerX;
 
-    // Vertical position: rises up
-    const y = effect.position.y - particlePhase * FIRE_HEIGHT - 5;
+    // Vertical position: rises up gently
+    const curveOffset = Math.sin(particlePhase * Math.PI) * 2;
+    const y = effect.position.y - particlePhase * FIRE_HEIGHT - 8 + curveOffset;
 
-    // Size decreases as particle rises
-    const size = FIRE_BASE_SIZE * (1 - particlePhase * 0.7) * (0.8 + pseudoRandom(particleSeed + 2) * 0.4);
+    // Size decreases as particle rises, with more variation
+    const sizeVariation = 0.6 + pseudoRandom(particleSeed + 2) * 0.8;
+    const size = FIRE_BASE_SIZE * (1.2 - particlePhase * 0.9) * sizeVariation;
 
-    // Color gradient from yellow core to orange to red
-    const colorPhase = particlePhase + pseudoRandom(particleSeed + 3) * 0.3;
+    // Color gradient from bright yellow core to orange to red tips
+    const colorPhase = Math.min(1, particlePhase * 1.2 + pseudoRandom(particleSeed + 3) * 0.2);
     let r: number, g: number, b: number;
-    if (colorPhase < 0.3) {
-      // Yellow core
+    if (colorPhase < 0.25) {
+      // Bright yellow/white core
       r = 255;
-      g = 255 - colorPhase * 200;
-      b = 100 - colorPhase * 300;
-    } else if (colorPhase < 0.6) {
-      // Orange middle
+      g = 255 - colorPhase * 100;
+      b = 150 - colorPhase * 400;
+    } else if (colorPhase < 0.5) {
+      // Yellow to orange
       r = 255;
-      g = 180 - (colorPhase - 0.3) * 400;
+      g = 230 - (colorPhase - 0.25) * 400;
+      b = 50 - (colorPhase - 0.25) * 200;
+    } else if (colorPhase < 0.75) {
+      // Orange to red
+      r = 255;
+      g = 130 - (colorPhase - 0.5) * 400;
       b = 0;
     } else {
-      // Red tip
-      r = 255 - (colorPhase - 0.6) * 200;
-      g = 60 - (colorPhase - 0.6) * 100;
+      // Red to dark red
+      r = 255 - (colorPhase - 0.75) * 300;
+      g = 30 - (colorPhase - 0.75) * 100;
       b = 0;
     }
 
-    // Particle opacity fades as it rises
-    const particleOpacity = Math.max(0, 1 - particlePhase * 1.2);
+    // Particle opacity with gentle flicker effect
+    const flicker = 0.85 + Math.sin(animTime * 4 + i * 2) * 0.15;
+    const particleOpacity = Math.max(0, (1 - particlePhase * 1.1) * flicker);
 
     ctx.beginPath();
     ctx.fillStyle = `rgba(${Math.max(0, Math.round(r))}, ${Math.max(0, Math.round(g))}, ${Math.max(0, Math.round(b))}, ${particleOpacity})`;
@@ -204,23 +213,25 @@ function drawBonfireFire(ctx: CanvasRenderingContext2D, effect: VisualEffect, cu
     ctx.fill();
   }
 
-  // Draw core glow
-  const glowSize = FIRE_BASE_SIZE * 2 + Math.sin(animTime * 5) * 2;
+  // Draw gentle core glow
+  const glowPulse = Math.sin(animTime * 2) * 0.2 + Math.sin(animTime * 3) * 0.1;
+  const glowSize = FIRE_BASE_SIZE * 2.5 + glowPulse * 2;
   const gradient = ctx.createRadialGradient(
     effect.position.x,
-    effect.position.y - 5,
+    effect.position.y - 8,
     0,
     effect.position.x,
-    effect.position.y - 5,
-    glowSize * 2,
+    effect.position.y - 8,
+    glowSize * 2.5,
   );
-  gradient.addColorStop(0, 'rgba(255, 200, 50, 0.6)');
-  gradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.3)');
-  gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+  gradient.addColorStop(0, 'rgba(255, 220, 100, 0.7)');
+  gradient.addColorStop(0.3, 'rgba(255, 150, 30, 0.5)');
+  gradient.addColorStop(0.6, 'rgba(255, 80, 0, 0.2)');
+  gradient.addColorStop(1, 'rgba(200, 30, 0, 0)');
 
   ctx.beginPath();
   ctx.fillStyle = gradient;
-  ctx.arc(effect.position.x, effect.position.y - 5, glowSize * 2, 0, Math.PI * 2);
+  ctx.arc(effect.position.x, effect.position.y - 8, glowSize * 2.5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
@@ -236,36 +247,38 @@ function drawBonfireSmoke(ctx: CanvasRenderingContext2D, effect: VisualEffect, c
   const opacity = Math.max(0, 1 - progress * 0.5);
 
   ctx.save();
-  ctx.globalAlpha = opacity * 0.6; // Smoke is more transparent
+  ctx.globalAlpha = opacity * 0.7; // Smoke is semi-transparent
 
-  const baseSeed = effect.id * 2000;
-  // Convert game time to animation time (multiply by 60 for faster animation)
-  const animTime = elapsedTime * 60;
+  // Use entityId (bonfire ID) as base seed for unique but consistent appearance per bonfire
+  const baseSeed = (effect.entityId ?? effect.id) * 2000;
+  // Convert game time to animation time - very slow for cozy long smoke column (multiply by 10)
+  const animTime = elapsedTime * 10;
 
   for (let i = 0; i < SMOKE_PARTICLE_COUNT; i++) {
     const particleSeed = baseSeed + i;
 
-    // Animate particle lifetime - smoke rises slower than fire
-    const particlePhase = (animTime * 0.8 + pseudoRandom(particleSeed) * 3) % 1;
+    // Animate particle lifetime - smoke rises very slowly, long cycle
+    const speedVariation = 0.15 + pseudoRandom(particleSeed) * 0.15;
+    const particlePhase = (animTime * speedVariation + pseudoRandom(particleSeed) * 2) % 1;
 
-    // Horizontal drift: smoke drifts more than fire
-    const driftX = Math.sin(animTime * 1.5 + i) * 8 + (pseudoRandom(particleSeed + 1) - 0.5) * 10;
+    // Horizontal drift: smoke drifts gently and sways
+    const driftX = Math.sin(animTime * 0.3 + i * 0.4 + pseudoRandom(particleSeed + 4)) * 5 + (pseudoRandom(particleSeed + 1) - 0.5) * 6;
     const x = effect.position.x + driftX;
 
-    // Vertical position: starts above fire, rises up
-    const y = effect.position.y - FIRE_HEIGHT - particlePhase * SMOKE_HEIGHT;
+    // Vertical position: starts above fire, rises up high into a long column
+    const y = effect.position.y - FIRE_HEIGHT * 0.3 - particlePhase * SMOKE_HEIGHT;
 
-    // Size increases slightly as smoke expands
-    const size = SMOKE_BASE_SIZE * (1 + particlePhase * 0.5) * (0.6 + pseudoRandom(particleSeed + 2) * 0.8);
+    // Size increases as smoke expands while rising
+    const size = SMOKE_BASE_SIZE * (1 + particlePhase * 2) * (0.7 + pseudoRandom(particleSeed + 2) * 0.5);
 
-    // Smoke fades out as it rises
-    const particleOpacity = Math.max(0, 0.4 - particlePhase * 0.5);
+    // Smoke starts more opaque and gradually fades out over the long rise
+    const particleOpacity = Math.max(0, 0.45 - particlePhase * 0.5);
 
-    // Gray color with slight variation
-    const grayValue = 80 + pseudoRandom(particleSeed + 3) * 40;
+    // Gray color with slight variation - darker at base, lighter as it rises
+    const grayValue = 50 + particlePhase * 50 + pseudoRandom(particleSeed + 3) * 25;
 
     ctx.beginPath();
-    ctx.fillStyle = `rgba(${grayValue}, ${grayValue}, ${grayValue + 10}, ${particleOpacity})`;
+    ctx.fillStyle = `rgba(${grayValue}, ${grayValue}, ${grayValue + 5}, ${particleOpacity})`;
     ctx.arc(x, y, Math.max(1, size), 0, Math.PI * 2);
     ctx.fill();
   }

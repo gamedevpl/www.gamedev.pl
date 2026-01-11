@@ -189,11 +189,20 @@ export function renderWorld(
       if (building.isConstructed) {
         const isBonfire = building.buildingType === BuildingType.Bonfire && (building.fuelLevel ?? 0) > 0;
         if (isBonfire) {
+          // Add subtle flickering to bonfire light based on time and building ID
+          const flickerTime = gameState.time * 20; // Convert game time to animation time
+          const flickerSeed = building.id * 0.1;
+          const flicker =
+            Math.sin(flickerTime * 2 + flickerSeed) * 0.03 +
+            Math.sin(flickerTime * 3.7 + flickerSeed * 2) * 0.02 +
+            Math.sin(flickerTime * 5.3 + flickerSeed * 3) * 0.01;
+          const flickeringIntensity = 0.92 + flicker; // Base 0.92, varies ~0.86-0.98
+
           addWrappedLightSources(
             lightSources,
             building.position,
             180,
-            0.95,
+            flickeringIntensity,
             gameState.mapDimensions,
             viewportCenter,
             canvasDimensions,
