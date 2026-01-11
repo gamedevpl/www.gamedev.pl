@@ -23,7 +23,10 @@ export interface PalisadeConnections {
   isVertical: boolean;
   /** Overall orientation of the wall segment in radians. */
   wallAngle: number;
+  /** True if there's a gate neighbor in any direction (used for cache key differentiation) */
   hasGateNeighbor: boolean;
+  /** True if there's a gate neighbor specifically in the "top" direction (northern arc), used for spike suppression */
+  hasTopGateNeighbor: boolean;
 }
 
 /**
@@ -221,7 +224,8 @@ export function drawPalisade(
     return deg > -150 && deg < -30;
   });
 
-  if (!hasTopConnection && !connections.hasGateNeighbor) {
+  // Only suppress spike if there's a palisade/gate directly above, or a gate specifically in the top arc
+  if (!hasTopConnection && !connections.hasTopGateNeighbor) {
     const spikeHeight = 10;
     const spikeY = -postH / 2;
 

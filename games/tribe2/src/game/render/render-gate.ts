@@ -3,6 +3,7 @@ import {
   drawPixelBlock,
   PALISADE_DEFAULT_HEIGHT,
   PALISADE_INNER_SHADOW,
+  PALISADE_PALETTE,
   PalisadeConnections,
 } from './render-palisade';
 import { pseudoRandom } from './render-utils';
@@ -13,6 +14,29 @@ const METAL_PALETTE = {
   shadow: '#2A2A2A',
   outline: '#1A1A1A',
 };
+
+/**
+ * Draws a pointed spike on top of a tower or post.
+ */
+function drawSpike(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
+  // Spike outline
+  ctx.fillStyle = PALISADE_PALETTE.outline;
+  ctx.beginPath();
+  ctx.moveTo(x - width / 2, y);
+  ctx.lineTo(x, y - height);
+  ctx.lineTo(x + width / 2, y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Highlight on left face
+  ctx.fillStyle = PALISADE_PALETTE.highlight;
+  ctx.beginPath();
+  ctx.moveTo(x - width / 2 + 1, y);
+  ctx.lineTo(x, y - height + 1);
+  ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fill();
+}
 
 /**
  * Renders a gate segment in a "chunky 3D pixel art" style.
@@ -82,6 +106,13 @@ export function drawGate(
     // --- FRONT / DIAGONAL GATE ---
     // Use wallAngle to determine perspective skew
     const skew = Math.sin(connections.wallAngle) * 0.6;
+    
+    // Tower accent and spike dimensions (relative to tower size)
+    const accentInset = 2;
+    const accentYOffset = towerH / 3;
+    const accentHeight = towerH / 4;
+    const spikeWidth = towerW * 0.8;
+    const spikeHeight = 8;
 
     // Helper to draw a tower
     const drawTower = (x: number) => {
@@ -93,6 +124,15 @@ export function drawGate(
         drawPixelBlock(ctx, x + towerW / 2 - 4, ty, 4, towerH, true);
       } else {
         drawPixelBlock(ctx, x - towerW / 2, ty, towerW, towerH, true);
+        
+        // Add tribe accent stripe on tower
+        ctx.fillStyle = tribeColor;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x - towerW / 2 + accentInset, ty + accentYOffset, towerW - accentInset * 2, accentHeight);
+        ctx.globalAlpha = 1.0;
+        
+        // Add spike on top of outer tower
+        drawSpike(ctx, x, ty, spikeWidth, spikeHeight);
       }
     };
 

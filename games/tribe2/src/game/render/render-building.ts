@@ -52,6 +52,7 @@ const DEFAULT_CONNECTIONS: PalisadeConnections = {
   isVertical: false,
   wallAngle: 0,
   hasGateNeighbor: false,
+  hasTopGateNeighbor: false,
 };
 
 /**
@@ -341,7 +342,7 @@ export function renderBuilding(
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
 
-  let connections: PalisadeConnections = { connections: [], isInner: false, isVertical: false, wallAngle: 0, hasGateNeighbor: false };
+  let connections: PalisadeConnections = { connections: [], isInner: false, isVertical: false, wallAngle: 0, hasGateNeighbor: false, hasTopGateNeighbor: false };
   if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
     const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
     // Search radius 55 to ensure we catch neighbors at 50px grid spacing
@@ -359,13 +360,22 @@ export function renderBuilding(
 
         // Connection threshold: 15px to 55px
         if (dist >= 15 && dist <= 55) {
+          const angle = Math.atan2(dir.y, dir.x);
           connections.connections.push({
-            angle: Math.atan2(dir.y, dir.x),
+            angle,
             distance: dist,
           });
 
           if (neighbor.buildingType === BuildingType.Gate) {
             connections.hasGateNeighbor = true;
+            
+            // Check if the gate is in the "top" direction (northern arc: -150 to -30 degrees)
+            let deg = (angle * 180) / Math.PI;
+            while (deg <= -180) deg += 360;
+            while (deg > 180) deg -= 360;
+            if (deg > -150 && deg < -30) {
+              connections.hasTopGateNeighbor = true;
+            }
           }
         }
       }
