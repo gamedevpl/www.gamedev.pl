@@ -49,6 +49,9 @@ const SPRITE_PADDING = 50;
 const DEFAULT_CONNECTIONS: PalisadeConnections = {
   connections: [],
   isInner: false,
+  isVertical: false,
+  wallAngle: 0,
+  hasGateNeighbor: false,
 };
 
 /**
@@ -71,7 +74,6 @@ function getBuildingSpriteKey(
   const hasFuel = b.buildingType === BuildingType.Bonfire && (b.fuelLevel ?? 0) > 0;
 
   // Create a stable key by sorting connections and rounding angles/distances
-  // This ensures that slight variations in placement don't invalidate the cache
   const connKey =
     connections.connections
       .slice()
@@ -81,10 +83,8 @@ function getBuildingSpriteKey(
         const dist = Math.round(c.distance / 2) * 2; // Round to 2px
         return `${deg}:${dist}`;
       })
-      .join(',') + `_inner:${connections.isInner}`;
+      .join(',') + `_inner:${connections.isInner}_vert:${connections.isVertical}_ang:${Math.round(connections.wallAngle * 10)}`;
 
-  // For caching efficiency, we use ownerId instead of unique building id
-  // so identical segments of the same tribe share the same sprite.
   const tribeKey = b.ownerId ?? 'neutral';
 
   return `${b.buildingType}_${b.width}_${b.height}_${isHostile}_${b.isConstructed}_${hasFuel}_${tribeKey}_${connKey}`;
@@ -232,51 +232,40 @@ function drawStoneRect(
   const perimeter = (width + height) * 2;
   const stoneCount = Math.floor(perimeter / STONE_SPACING);
 
-  // Define the 4 corners relative to center
   const left = -width / 2;
   const right = width / 2;
   const top = -height / 2;
   const bottom = height / 2;
 
-  // We walk the perimeter: Top -> Right -> Bottom -> Left
   for (let i = 0; i < stoneCount; i++) {
-    // Generate deterministic variation based on building ID + stone index
     const uniqueStoneId = seed + i * 13;
     const randSize = pseudoRandom(uniqueStoneId);
     const randOffset = pseudoRandom(uniqueStoneId + 1);
 
-    // Determine position along perimeter
     let currentDist = i * STONE_SPACING;
     let x = 0;
     let y = 0;
 
     if (currentDist < width) {
-      // Top Edge
       x = left + currentDist;
       y = top;
     } else if (currentDist < width + height) {
-      // Right Edge
       x = right;
       y = top + (currentDist - width);
     } else if (currentDist < width * 2 + height) {
-      // Bottom Edge
       x = right - (currentDist - (width + height));
       y = bottom;
     } else {
-      // Left Edge
       x = left;
       y = bottom - (currentDist - (width * 2 + height));
     }
 
-    // Apply wiggle
     const wiggleX = (randOffset - 0.5) * STONE_VAR_OFFSET;
     const wiggleY = (pseudoRandom(uniqueStoneId + 2) - 0.5) * STONE_VAR_OFFSET;
 
-    // Draw the stone
     ctx.beginPath();
     const radius = STONE_BASE_RADIUS + randSize * STONE_VAR_RADIUS;
 
-    // Determine color
     if (overrideColor) {
       ctx.fillStyle = overrideColor;
     } else {
@@ -284,11 +273,9 @@ function drawStoneRect(
         randSize > 0.5 ? overrideHighlightColor || STONE_COLOR_HIGHLIGHT : overrideColor || STONE_COLOR_BASE;
     }
 
-    // Draw slightly irregular circle (ellipse)
     ctx.ellipse(x + wiggleX, y + wiggleY, radius, radius * 0.85, randOffset * Math.PI, 0, Math.PI * 2);
     ctx.fill();
 
-    // Optional: Add a small outline for definition if no override color is set
     if (!overrideColor) {
       ctx.strokeStyle = '#2b2b2b';
       ctx.lineWidth = 1;
@@ -299,7 +286,6 @@ function drawStoneRect(
 
 /**
  * Renders the contents of a storage spot as miniature item icons
- * scattered around the building.
  */
 function renderStorageContents(ctx: CanvasRenderingContext2D, building: BuildingEntity): void {
   if (!building.storedItems || building.storedItems.length === 0) {
@@ -313,7 +299,6 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Add a subtle shadow to make emojis stand out
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur = 2;
 
@@ -321,7 +306,6 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
     const type = storedItem.item.type;
     const emoji = (FOOD_TYPE_EMOJIS[type as FoodType] || ITEM_TYPE_EMOJIS[type as ItemType]) ?? '?';
 
-    // Use stored position if available, otherwise calculate fallback
     const renderPos: Vector2D = {
       x: position.x + storedItem.positionOffset.x,
       y: position.y + storedItem.positionOffset.y,
@@ -329,10 +313,6 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
 
     ctx.fillText(emoji, renderPos.x, renderPos.y);
   });
-
-  // Reset shadow
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
 
   ctx.restore();
 }
@@ -358,20 +338,17 @@ export function renderBuilding(
     id,
   } = building;
 
-  // Check hostility
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
 
-  // Connectivity and Inner/Outer check for Palisades
-  let connections: PalisadeConnections = { connections: [], isInner: false };
+  let connections: PalisadeConnections = { connections: [], isInner: false, isVertical: false, wallAngle: 0, hasGateNeighbor: false };
   if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
     const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
-    // Search radius increased to 100px to detect connections between small palisades (20px)
-    // and large gates (60px) or between gates (60px) which have larger center-to-center distances.
-    const nearbyBuildings = indexedWorld.search.building.byRadius(position, 100);
+    // Search radius 55 to ensure we catch neighbors at 50px grid spacing
+    const nearbyBuildings = indexedWorld.search.building.byRadius(position, 55);
 
     for (const neighbor of nearbyBuildings) {
-      if (neighbor.id === id) continue; // Skip self
+      if (neighbor.id === id) continue;
 
       if (
         (neighbor.buildingType === BuildingType.Palisade || neighbor.buildingType === BuildingType.Gate) &&
@@ -380,15 +357,36 @@ export function renderBuilding(
         const dir = getDirectionVectorOnTorus(position, neighbor.position, worldWidth, worldHeight);
         const dist = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
 
-        // Capture precise angle and distance for all neighbors in range
-        if (dist >= 15 && dist <= 100) {
+        // Connection threshold: 15px to 55px
+        if (dist >= 15 && dist <= 55) {
           connections.connections.push({
             angle: Math.atan2(dir.y, dir.x),
             distance: dist,
           });
+
+          if (neighbor.buildingType === BuildingType.Gate) {
+            connections.hasGateNeighbor = true;
+          }
         }
       }
     }
+
+    // Calculate wallAngle using axial averaging
+    if (connections.connections.length > 0) {
+      let sumX = 0;
+      let sumY = 0;
+      for (const conn of connections.connections) {
+        sumX += Math.cos(conn.angle * 2);
+        sumY += Math.sin(conn.angle * 2);
+      }
+      connections.wallAngle = Math.atan2(sumY, sumX) / 2;
+    } else {
+      connections.wallAngle = 0;
+    }
+
+    // Detect if the segment is vertical (Side Profile)
+    // A segment is vertical if its wall angle is strictly North-South.
+    connections.isVertical = connections.connections.length > 0 && Math.abs(Math.sin(connections.wallAngle)) > 0.9;
 
     // Inner/Outer Detection using Perspective Sampling
     if (ownerId !== null) {
@@ -401,45 +399,27 @@ export function renderBuilding(
         return indexedWorld.terrainOwnership[gy * gridWidth + gx];
       };
 
-      // Improved isVertical check for sampling: true if connections are primarily vertical
-      const isVertical =
-        connections.connections.length > 0 && connections.connections.every((c) => Math.abs(Math.sin(c.angle)) > 0.7);
-
-      // Sample point outside the building footprint
-      const sampleDist = Math.max(width, height) * 0.5 + 10;
-
-      let sampleX = position.x;
-      let sampleY = position.y;
-
-      if (isVertical) {
-        // For vertical walls, sample East to see if we are inside
-        sampleX += sampleDist;
-      } else {
-        // For horizontal walls and corners, sample South (the \"front\" relative to camera)
-        sampleY += sampleDist;
-      }
+      // Sample along the wall normal to detect which side is "inside"
+      const normalAngle = connections.wallAngle + Math.PI / 2;
+      const sampleX = position.x + Math.cos(normalAngle) * 20;
+      const sampleY = position.y + Math.sin(normalAngle) * 20;
 
       const frontOwner = getOwnerOfPoint(sampleX, sampleY);
-
       if (frontOwner === ownerId) {
         connections.isInner = true;
       }
     }
   }
 
-  // Get cached sprite
   const sprite = getBuildingSprite(building, isHostile, false, true, connections);
 
   ctx.save();
-  // If under construction, we make the sprite semi-transparent
   if (!isConstructed) {
     ctx.globalAlpha = 0.3 + constructionProgress * 0.7;
   }
 
-  // Draw cached sprite centered at position
   ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);
 
-  // Damage feedback (cracks)
   if (isBeingDestroyed && isConstructed) {
     ctx.translate(position.x, position.y);
     drawCracks(ctx, width, height, destructionProgress, id);
@@ -447,7 +427,6 @@ export function renderBuilding(
 
   ctx.restore();
 
-  // 3. Draw Progress Bars
   const barWidth = width;
   const barX = position.x - barWidth / 2;
   const barY = position.y + height / 2 + BUILDING_PROGRESS_BAR_OFFSET;
@@ -476,7 +455,6 @@ export function renderBuilding(
     );
   }
 
-  // 4. Render storage contents as miniature items
   if (
     (building.buildingType === BuildingType.StorageSpot || building.buildingType === BuildingType.Bonfire) &&
     isConstructed
@@ -498,7 +476,6 @@ export function renderGhostBuilding(
   const definition = BUILDING_DEFINITIONS[buildingType];
   const { width, height } = definition.dimensions;
 
-  // Get cached ghost sprite
   const sprite = getBuildingSprite(
     { buildingType, width, height, id: 9999, ownerId: null },
     false,
