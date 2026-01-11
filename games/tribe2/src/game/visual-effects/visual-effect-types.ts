@@ -21,6 +21,8 @@ export enum VisualEffectType {
   AutopilotMoveTarget,
   BorderClaim,
   StoneProjectile,
+  BonfireFire,
+  BonfireSmoke,
 }
 
 export interface VisualEffect {

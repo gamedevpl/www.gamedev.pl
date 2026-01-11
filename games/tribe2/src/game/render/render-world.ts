@@ -185,20 +185,20 @@ export function renderWorld(
     if (entity.type === 'building') {
       const building = entity as BuildingEntity;
 
-      // 2. Collect building lights
+      // 2. Collect bonfire lights - only bonfires with fuel emit light during night
       if (building.isConstructed) {
         const isBonfire = building.buildingType === BuildingType.Bonfire && (building.fuelLevel ?? 0) > 0;
-        const radius = isBonfire ? 180 : 60;
-        const intensity = isBonfire ? 0.9 : 0.4;
-        addWrappedLightSources(
-          lightSources,
-          building.position,
-          radius,
-          intensity,
-          gameState.mapDimensions,
-          viewportCenter,
-          canvasDimensions,
-        );
+        if (isBonfire) {
+          addWrappedLightSources(
+            lightSources,
+            building.position,
+            180,
+            0.95,
+            gameState.mapDimensions,
+            viewportCenter,
+            canvasDimensions,
+          );
+        }
       }
 
       // Skip planting zones as they are rendered by metaball approach
@@ -228,17 +228,6 @@ export function renderWorld(
       const isPlayerPartner =
         player && (human.partnerIds?.includes(player.id) || player.partnerIds?.includes(human.id));
       const isPlayerAttackTarget = player?.attackTargetId === human.id;
-
-      // 3. Collect human lights
-      addWrappedLightSources(
-        lightSources,
-        human.position,
-        40,
-        0.3,
-        gameState.mapDimensions,
-        viewportCenter,
-        canvasDimensions,
-      );
 
       renderWithWrapping(
         ctx,
