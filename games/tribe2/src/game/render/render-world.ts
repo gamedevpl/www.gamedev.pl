@@ -36,6 +36,10 @@ import { TreeEntity } from '../entities/plants/tree/tree-types';
 
 const VIEWPORT_QUERY_MARGIN = 200;
 
+// Bonfire light flickering constants
+const BONFIRE_LIGHT_BASE_INTENSITY = 0.92;
+const BONFIRE_LIGHT_FLICKER_AMPLITUDE = 0.06; // Results in range ~0.86-0.98
+
 interface LightSource {
   position: Vector2D;
   radius: number;
@@ -193,10 +197,10 @@ export function renderWorld(
           const flickerTime = gameState.time * 20; // Convert game time to animation time
           const flickerSeed = building.id * 0.1;
           const flicker =
-            Math.sin(flickerTime * 2 + flickerSeed) * 0.03 +
-            Math.sin(flickerTime * 3.7 + flickerSeed * 2) * 0.02 +
-            Math.sin(flickerTime * 5.3 + flickerSeed * 3) * 0.01;
-          const flickeringIntensity = 0.92 + flicker; // Base 0.92, varies ~0.86-0.98
+            Math.sin(flickerTime * 2 + flickerSeed) * (BONFIRE_LIGHT_FLICKER_AMPLITUDE * 0.5) +
+            Math.sin(flickerTime * 3.7 + flickerSeed * 2) * (BONFIRE_LIGHT_FLICKER_AMPLITUDE * 0.33) +
+            Math.sin(flickerTime * 5.3 + flickerSeed * 3) * (BONFIRE_LIGHT_FLICKER_AMPLITUDE * 0.17);
+          const flickeringIntensity = BONFIRE_LIGHT_BASE_INTENSITY + flicker;
 
           addWrappedLightSources(
             lightSources,
