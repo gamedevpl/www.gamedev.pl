@@ -68,6 +68,7 @@ export function drawPixelBlock(
 
 /**
  * Renders a solid filler segment between palisade units.
+ * Fixed to keep planks upright in 2.5D perspective.
  */
 export function drawPalisadeConnection(
   ctx: CanvasRenderingContext2D,
@@ -82,35 +83,64 @@ export function drawPalisadeConnection(
   const plankWidth = 5;
 
   ctx.save();
-  ctx.rotate(angle);
 
   if (isVertical) {
     // --- VERTICAL CONNECTION (Side Profile) ---
     const wallThickness = 8;
-    
+
     if (isInner) {
+      // Draw background shadow as a rotated rectangle
+      ctx.save();
+      ctx.rotate(angle);
       ctx.fillStyle = PALISADE_INNER_SHADOW;
       ctx.fillRect(0, -wallThickness / 2, connLength, wallThickness);
       // Structural rail
       drawPixelBlock(ctx, 0, -wallThickness / 2, connLength, 3, false);
+      ctx.restore();
     } else {
-      drawPixelBlock(ctx, 0, -wallThickness / 2, connLength, wallThickness, false);
+      // Draw as segments along the path
+      const numSegments = Math.ceil(connLength / 4);
+      for (let i = 0; i < numSegments; i++) {
+        const t = (i / numSegments) * connLength;
+        const x = Math.cos(angle) * t;
+        const y = Math.sin(angle) * t;
+        const segmentLength = Math.min(4, connLength - t);
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        drawPixelBlock(ctx, 0, -wallThickness / 2, segmentLength, wallThickness, false);
+        ctx.restore();
+      }
     }
   } else {
     // --- HORIZONTAL/DIAGONAL CONNECTION (Front Face) ---
+    const skew = Math.sin(angle) * 0.6;
+
     if (isInner) {
+      // Draw background shadow and rails as rotated rectangles
+      ctx.save();
+      ctx.rotate(angle);
       ctx.fillStyle = PALISADE_INNER_SHADOW;
       ctx.fillRect(0, -height / 2 + 2, connLength, height - 4);
-      
+
       // Two horizontal rails
       drawPixelBlock(ctx, 0, -height / 2 + 4, connLength, 5, false);
       drawPixelBlock(ctx, 0, height / 2 - 9, connLength, 5, false);
+      ctx.restore();
     } else {
-      for (let x = 0; x < connLength; x += plankWidth) {
-        const hVar = (pseudoRandom(seed + x + angle) - 0.5) * 4;
+      // Draw vertical planks along the diagonal path
+      for (let t = 0; t < connLength; t += plankWidth) {
+        const x = Math.cos(angle) * t;
+        const y = Math.sin(angle) * t;
+        const hVar = (pseudoRandom(seed + t + angle) - 0.5) * 4;
         const pHeight = height + hVar;
-        const w = Math.min(plankWidth, connLength - x);
-        drawPixelBlock(ctx, x, -pHeight / 2, w, pHeight, true);
+        const w = Math.min(plankWidth, connLength - t);
+
+        // Apply skew based on x position for 2.5D perspective
+        const pY = -pHeight / 2 + x * skew;
+
+        drawPixelBlock(ctx, x - w / 2, y + pY, w, pHeight, true);
       }
     }
   }
@@ -138,15 +168,7 @@ export function drawPalisade(
   // 1. Connections (Filler segments)
   // Draw these first so they appear behind the main post
   for (const conn of connections.connections) {
-    drawPalisadeConnection(
-      ctx,
-      conn.distance,
-      conn.angle,
-      height,
-      seed,
-      connections.isInner,
-      connections.isVertical
-    );
+    drawPalisadeConnection(ctx, conn.distance, conn.angle, height, seed, connections.isInner, connections.isVertical);
   }
 
   // 2. Main Wall Structure
@@ -155,7 +177,7 @@ export function drawPalisade(
     // In 2.5D, vertical walls are seen from the side, appearing as a thick block.
     const wallThickness = width * 0.4;
     const wallHeight = height + 4;
-    
+
     if (connections.isInner) {
       // Back side: Dark shadow with structural rails
       ctx.fillStyle = PALISADE_INNER_SHADOW;
@@ -168,7 +190,7 @@ export function drawPalisade(
     }
   } else {
     // --- HORIZONTAL OR DIAGONAL WALL ---
-    // Horizontal walls show the front face of planks. 
+    // Horizontal walls show the front face of planks.
     // Diagonals are foreshortened by skewing the plank positions.
     const skew = Math.sin(connections.wallAngle) * 0.6;
 
@@ -177,7 +199,7 @@ export function drawPalisade(
       // Background shade for the shadowed interior face
       ctx.fillStyle = PALISADE_INNER_SHADOW;
       ctx.fillRect(-halfW + 2, -halfH + 2, width - 4, height - 4);
-      
+
       // Horizontal Rails (top and bottom)
       drawPixelBlock(ctx, -halfW, -halfH + 4, width, 5, false);
       drawPixelBlock(ctx, -halfW, halfH - 5 - 4, width, 5, false);
@@ -187,11 +209,11 @@ export function drawPalisade(
       const endX = halfW;
 
       for (let x = startX; x < endX; x += plankWidth) {
-        // Add height variation for a \"rugged\" look
+        // Add height variation for a "rugged" look
         const hVar = (pseudoRandom(seed + x) - 0.5) * 4;
         const pHeight = height + hVar;
         // Skew the vertical position based on connection angle
-        const pY = -pHeight / 2 + (x * skew);
+        const pY = -pHeight / 2 + x * skew;
 
         drawPixelBlock(ctx, x, pY, Math.min(plankWidth, endX - x), pHeight, true);
       }
