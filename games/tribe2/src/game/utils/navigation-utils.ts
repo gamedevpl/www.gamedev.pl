@@ -321,7 +321,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   const normY = dir.y / distance;
   const perpX = -normY;
   const perpY = normX;
-  const lateralOffset = entity.radius * 0.5; // Allow slight squeezing to prevent stuck loops
+  const lateralOffset = entity.radius * 0.6; // Allow slight squeezing to prevent stuck loops
 
   const grid = gameState.navigationGrid;
 

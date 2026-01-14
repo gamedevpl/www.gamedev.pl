@@ -1,13 +1,7 @@
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { HumanEntity } from '../entities/characters/human/human-types';
 import { InteractionDefinition } from './interactions-types';
-import {
-  calculateWrappedDistance,
-  vectorNormalize,
-  vectorScale,
-  vectorSubtract,
-  getDirectionVectorOnTorus,
-} from '../utils/math-utils';
+import { calculateWrappedDistance, vectorNormalize, vectorScale, getDirectionVectorOnTorus } from '../utils/math-utils';
 import { TreeEntity } from '../entities/plants/tree/tree-types';
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { PredatorEntity } from '../entities/characters/predator/predator-types';
@@ -37,22 +31,26 @@ export const humanCollisionInteraction: InteractionDefinition<HumanEntity, Human
       gameState.mapDimensions.height,
     );
 
-    // Avoid division by zero or extreme forces if entities are exactly on top of each other
     if (distance === 0) {
-      source.forces.push({ x: 0.1, y: 0 }); // Apply a small default push
+      source.forces.push({ x: 0.1, y: 0 });
       target.forces.push({ x: -0.1, y: 0 });
       return;
     }
 
-    const overlap = source.radius + target.radius - distance;
+    const overlap = (source.radius + target.radius) / 3 - distance;
+    if (overlap <= 0) return;
 
-    // The force is proportional to the overlap
-    const forceMagnitude = overlap * 0.05; // Stiffness factor
-
-    const direction = vectorNormalize(vectorSubtract(source.position, target.position));
+    const forceMagnitude = overlap * 0.05;
+    const direction = vectorNormalize(
+      getDirectionVectorOnTorus(
+        target.position,
+        source.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      ),
+    );
     const pushVector = vectorScale(direction, forceMagnitude);
 
-    // Apply symmetrical forces
     source.forces.push(pushVector);
     target.forces.push(vectorScale(pushVector, -1));
   },
@@ -62,7 +60,67 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
   id: 'human-tree-collision',
   sourceType: 'human',
   targetType: 'tree',
-  maxDistance: CHARACTER_RADIUS * 0.6 + TREE_RADIUS * 0.4,
+  maxDistance: CHARACTER_RADIUS + TREE_RADIUS,
+  checker: (source, target, { gameState }) => {
+    const state = target.stateMachine[0];
+    if (state === 'fallen' || state === 'stump') {
+      return false;
+    }
+
+    const trunkRadius = target.radius * 0.25;
+    const effectiveSourceRadius = source.radius * 0.5;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+    return distance < effectiveSourceRadius + trunkRadius;
+  },
+  perform: (source, target, { gameState }) => {
+    const trunkRadius = target.radius * 0.25;
+    const effectiveSourceRadius = source.radius * 0.5;
+    const distance = calculateWrappedDistance(
+      source.position,
+      target.position,
+      gameState.mapDimensions.width,
+      gameState.mapDimensions.height,
+    );
+
+    if (distance === 0) {
+      source.forces.push({ x: 1.0, y: 0 });
+      return;
+    }
+
+    const overlap = effectiveSourceRadius + trunkRadius - distance;
+    if (overlap <= 0) return;
+
+    const direction = vectorNormalize(
+      getDirectionVectorOnTorus(
+        target.position,
+        source.position,
+        gameState.mapDimensions.width,
+        gameState.mapDimensions.height,
+      ),
+    );
+
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
+
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
+  },
+};
+
+export const preyTreeCollisionInteraction: InteractionDefinition<PreyEntity, TreeEntity> = {
+  id: 'prey-tree-collision',
+  sourceType: 'prey',
+  targetType: 'tree',
+  maxDistance: CHARACTER_RADIUS + TREE_RADIUS,
   checker: (source, target, { gameState }) => {
     const state = target.stateMachine[0];
     if (state === 'fallen' || state === 'stump') {
@@ -97,9 +155,6 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
     const overlap = effectiveSourceRadius + trunkRadius - distance;
     if (overlap <= 0) return;
 
-    const forceMagnitude = overlap * 2.5;
-
-    // Push away from tree center
     const direction = vectorNormalize(
       getDirectionVectorOnTorus(
         target.position,
@@ -108,59 +163,16 @@ export const humanTreeCollisionInteraction: InteractionDefinition<HumanEntity, T
         gameState.mapDimensions.height,
       ),
     );
-    const pushVector = vectorScale(direction, forceMagnitude);
 
-    source.forces.push(pushVector);
-  },
-};
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
 
-export const preyTreeCollisionInteraction: InteractionDefinition<PreyEntity, TreeEntity> = {
-  id: 'prey-tree-collision',
-  sourceType: 'prey',
-  targetType: 'tree',
-  maxDistance: CHARACTER_RADIUS * 0.6 + TREE_RADIUS * 0.4,
-  checker: (source, target, { gameState }) => {
-    const trunkRadius = target.radius * 0.25;
-    const effectiveSourceRadius = source.radius * 0.4;
-    const distance = calculateWrappedDistance(
-      source.position,
-      target.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-    return distance < effectiveSourceRadius + trunkRadius;
-  },
-  perform: (source, target, { gameState }) => {
-    const trunkRadius = target.radius * 0.25;
-    const effectiveSourceRadius = source.radius * 0.4;
-    const distance = calculateWrappedDistance(
-      source.position,
-      target.position,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-
-    if (distance === 0) {
-      source.forces.push({ x: 1.0, y: 0 });
-      return;
-    }
-
-    const overlap = effectiveSourceRadius + trunkRadius - distance;
-    if (overlap <= 0) return;
-
-    const forceMagnitude = overlap * 2.5;
-
-    const direction = vectorNormalize(
-      getDirectionVectorOnTorus(
-        target.position,
-        source.position,
-        gameState.mapDimensions.width,
-        gameState.mapDimensions.height,
-      ),
-    );
-    const pushVector = vectorScale(direction, forceMagnitude);
-
-    source.forces.push(pushVector);
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
   },
 };
 
@@ -168,8 +180,13 @@ export const predatorTreeCollisionInteraction: InteractionDefinition<PredatorEnt
   id: 'predator-tree-collision',
   sourceType: 'predator',
   targetType: 'tree',
-  maxDistance: CHARACTER_RADIUS * 0.6 + TREE_RADIUS * 0.4,
+  maxDistance: CHARACTER_RADIUS + TREE_RADIUS,
   checker: (source, target, { gameState }) => {
+    const state = target.stateMachine[0];
+    if (state === 'fallen' || state === 'stump') {
+      return false;
+    }
+
     const trunkRadius = target.radius * 0.25;
     const effectiveSourceRadius = source.radius * 0.4;
     const distance = calculateWrappedDistance(
@@ -198,8 +215,6 @@ export const predatorTreeCollisionInteraction: InteractionDefinition<PredatorEnt
     const overlap = effectiveSourceRadius + trunkRadius - distance;
     if (overlap <= 0) return;
 
-    const forceMagnitude = overlap * 2.5;
-
     const direction = vectorNormalize(
       getDirectionVectorOnTorus(
         target.position,
@@ -208,9 +223,16 @@ export const predatorTreeCollisionInteraction: InteractionDefinition<PredatorEnt
         gameState.mapDimensions.height,
       ),
     );
-    const pushVector = vectorScale(direction, forceMagnitude);
 
-    source.forces.push(pushVector);
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
+
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
   },
 };
 
@@ -233,7 +255,7 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
       return false;
     }
 
-    const effectiveSourceRadius = source.radius * 0.25;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -244,7 +266,7 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
     return distance < effectiveSourceRadius + effectiveTargetRadius;
   },
   perform: (source, target, { gameState }) => {
-    const effectiveSourceRadius = source.radius * 0.25;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -261,8 +283,6 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
     const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
     if (overlap <= 0) return;
 
-    const forceMagnitude = overlap * 2.5;
-
     const direction = vectorNormalize(
       getDirectionVectorOnTorus(
         target.position,
@@ -271,9 +291,16 @@ export const humanBuildingCollisionInteraction: InteractionDefinition<HumanEntit
         gameState.mapDimensions.height,
       ),
     );
-    const pushVector = vectorScale(direction, forceMagnitude);
 
-    source.forces.push(pushVector);
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
+
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
   },
 };
 
@@ -291,7 +318,7 @@ export const preyBuildingCollisionInteraction: InteractionDefinition<PreyEntity,
       return false;
     }
 
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -302,7 +329,7 @@ export const preyBuildingCollisionInteraction: InteractionDefinition<PreyEntity,
     return distance < effectiveSourceRadius + effectiveTargetRadius;
   },
   perform: (source, target, { gameState }) => {
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -319,8 +346,6 @@ export const preyBuildingCollisionInteraction: InteractionDefinition<PreyEntity,
     const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
     if (overlap <= 0) return;
 
-    const forceMagnitude = overlap * 2.5;
-
     const direction = vectorNormalize(
       getDirectionVectorOnTorus(
         target.position,
@@ -329,9 +354,16 @@ export const preyBuildingCollisionInteraction: InteractionDefinition<PreyEntity,
         gameState.mapDimensions.height,
       ),
     );
-    const pushVector = vectorScale(direction, forceMagnitude);
 
-    source.forces.push(pushVector);
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
+
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
   },
 };
 
@@ -349,7 +381,7 @@ export const predatorBuildingCollisionInteraction: InteractionDefinition<Predato
       return false;
     }
 
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -360,7 +392,7 @@ export const predatorBuildingCollisionInteraction: InteractionDefinition<Predato
     return distance < effectiveSourceRadius + effectiveTargetRadius;
   },
   perform: (source, target, { gameState }) => {
-    const effectiveSourceRadius = source.radius * 0.4;
+    const effectiveSourceRadius = source.radius * 0.5;
     const effectiveTargetRadius = target.radius;
     const distance = calculateWrappedDistance(
       source.position,
@@ -377,8 +409,6 @@ export const predatorBuildingCollisionInteraction: InteractionDefinition<Predato
     const overlap = effectiveSourceRadius + effectiveTargetRadius - distance;
     if (overlap <= 0) return;
 
-    const forceMagnitude = overlap * 2.5;
-
     const direction = vectorNormalize(
       getDirectionVectorOnTorus(
         target.position,
@@ -387,8 +417,15 @@ export const predatorBuildingCollisionInteraction: InteractionDefinition<Predato
         gameState.mapDimensions.height,
       ),
     );
-    const pushVector = vectorScale(direction, forceMagnitude);
 
-    source.forces.push(pushVector);
+    // Repulsion force
+    const forceMagnitude = overlap * 15.0;
+    source.forces.push(vectorScale(direction, forceMagnitude));
+
+    // Hard Position Projection
+    const { width, height } = gameState.mapDimensions;
+    const correction = vectorScale(direction, overlap);
+    source.position.x = (source.position.x + correction.x + width) % width;
+    source.position.y = (source.position.y + correction.y + height) % height;
   },
 };

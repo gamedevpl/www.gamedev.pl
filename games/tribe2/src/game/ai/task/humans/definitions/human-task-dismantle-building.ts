@@ -44,7 +44,7 @@ export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
       return TaskResult.Success;
     }
 
-    // Proximity check (20px range)
+    // Proximity check (35px range to accommodate increased collision radius)
     const distance = calculateWrappedDistance(
       human.position,
       targetBuilding.position,
@@ -52,7 +52,7 @@ export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
       context.gameState.mapDimensions.height,
     );
 
-    if (distance > 20) {
+    if (distance > 35) {
       human.target = targetBuilding.position;
       human.activeAction = 'moving';
       return TaskResult.Running;
@@ -61,7 +61,7 @@ export const humanDismantleBuildingDefinition = defineHumanTask<HumanEntity>({
     // At target, start dismantling
     human.activeAction = 'dismantling';
     human.target = targetBuilding.id;
-    
+
     // Ensure the building knows it's being destroyed so buildingUpdate() processes it
     targetBuilding.isBeingDestroyed = true;
 
