@@ -51,17 +51,17 @@ export default defineConfig({
       cheap: 'gemini-3-flash-preview',
     },
     openai: {
-      default: 'gpt-5.1-codex',
+      default: 'gpt-5.2-codex',
       lite: 'gpt-5.1-codex-mini',
-      cheap: 'gpt-5.1-chat-latest',
+      cheap: 'gpt-5.2-chat-latest',
       modelSpecificSettings: {
-        'gpt-5.1-codex': {
+        'gpt-5.2-codex': {
           temperatureUnsupported: true,
         },
         'gpt-5.1-codex-mini': {
           temperatureUnsupported: true,
         },
-        'gpt-5.1-chat-latest': {
+        'gpt-5.2-chat-latest': {
           temperatureUnsupported: true,
         },
       },
