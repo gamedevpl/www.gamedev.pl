@@ -60,4 +60,10 @@ export interface BuildingEntity extends Entity {
 
   /** Maximum fuel level (for buildings like Bonfire). */
   maxFuelLevel?: number;
+
+  /** Current fire phase for bonfires (lighting, burning, stopping, off). */
+  firePhase?: 'lighting' | 'burning' | 'stopping' | 'off';
+
+  /** Fire intensity for bonfires (0 to 1), used to scale visual effects. */
+  fireIntensity?: number;
 }

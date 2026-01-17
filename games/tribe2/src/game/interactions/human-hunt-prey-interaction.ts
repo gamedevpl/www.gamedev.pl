@@ -110,6 +110,7 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
         human.position,
         projectileDuration,
         undefined,
+        undefined,
         prey.position,
         prey.id,
       );
@@ -132,15 +133,15 @@ export const humanHuntPreyInteraction: InteractionDefinition<HumanEntity, PreyEn
 
       if (prey.hitpoints <= 0) {
         playSoundAt(context, SoundType.HumanDeath, prey.position);
-        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
+        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, undefined, prey.id);
       } else {
-        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, prey.id);
+        addVisualEffect(gameState, VisualEffectType.Hit, prey.position, EFFECT_DURATION_SHORT_HOURS, undefined, prey.id);
         prey.fleeCooldown = 8;
         playSoundAt(context, SoundType.Attack, human.position);
       }
 
       // Add melee attack effect on human
-      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
+      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, undefined, human.id);
     }
 
     // Set attack cooldown and reset attack start time

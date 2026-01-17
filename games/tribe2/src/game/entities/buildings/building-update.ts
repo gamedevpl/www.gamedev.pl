@@ -95,16 +95,53 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
   // Handle Bonfire Fuel Consumption and Visual Effects
   if (building.buildingType === BuildingType.Bonfire && building.isConstructed && !building.isBeingDestroyed) {
     if (building.fuelLevel !== undefined) {
+      // Initialize fire state if undefined
+      if (building.firePhase === undefined) {
+        building.firePhase = 'off';
+      }
+      if (building.fireIntensity === undefined) {
+        building.fireIntensity = 0;
+      }
+
+      // Fire phase state machine
+      const LIGHTING_RATE = 2.0; // Intensity increase per game hour
+      const STOPPING_RATE = 1.0; // Intensity decrease per game hour
+
+      // Transition logic
+      if (building.fuelLevel > 0 && (building.firePhase === 'off' || building.firePhase === 'stopping')) {
+        building.firePhase = 'lighting';
+      }
+
+      if (building.firePhase === 'lighting') {
+        building.fireIntensity += gameHoursDelta * LIGHTING_RATE;
+        if (building.fireIntensity >= 1) {
+          building.fireIntensity = 1;
+          building.firePhase = 'burning';
+        }
+      } else if (building.firePhase === 'burning') {
+        building.fireIntensity = 1;
+        if (building.fuelLevel <= 0) {
+          building.firePhase = 'stopping';
+        }
+      } else if (building.firePhase === 'stopping') {
+        building.fireIntensity -= gameHoursDelta * STOPPING_RATE;
+        if (building.fireIntensity <= 0) {
+          building.fireIntensity = 0;
+          building.firePhase = 'off';
+        }
+      }
+
       building.fuelLevel -= gameHoursDelta * BONFIRE_FUEL_CONSUMPTION_PER_HOUR;
       if (building.fuelLevel < 0) building.fuelLevel = 0;
 
       // Trigger Fire/Smoke visual effects
-      if (building.fuelLevel > 0) {
-        if (Math.random() < gameHoursDelta * 15) {
-          addVisualEffect(gameState, VisualEffectType.Fire, building.position, 0.1);
+      if (building.fireIntensity > 0) {
+        // Reduced spawn rates and increased durations for calmer effects
+        if (Math.random() < gameHoursDelta * 4) {
+          addVisualEffect(gameState, VisualEffectType.Fire, building.position, 0.5, building.fireIntensity);
         }
-        if (Math.random() < gameHoursDelta * 5) {
-          addVisualEffect(gameState, VisualEffectType.Smoke, building.position, 0.3);
+        if (Math.random() < gameHoursDelta * 2) {
+          addVisualEffect(gameState, VisualEffectType.Smoke, building.position, 1.2, building.fireIntensity);
         }
       }
 

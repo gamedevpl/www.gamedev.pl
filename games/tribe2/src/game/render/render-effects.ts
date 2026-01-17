@@ -13,7 +13,7 @@ const effectSpriteCache = new SpriteCache(50);
  */
 function getCachedCircleSprite(color: string, size: number): HTMLCanvasElement {
   const key = `circle_${color}_${size}`;
-  
+
   return effectSpriteCache.getOrRender(key, size, size, (ctx) => {
     const radius = size / 2;
     ctx.clearRect(0, 0, size, size);
@@ -180,15 +180,26 @@ function drawStoneProjectile(
 function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number) {
   const elapsedTime = currentTime - effect.startTime;
   const progress = Math.min(elapsedTime / effect.duration, 1);
-  const fade = 1 - progress * 0.6;
 
-  // Fast erratic flicker for flame height
-  const flicker1 = 0.8 + 0.4 * Math.sin(currentTime * 15 + effect.id * 2.3);
-  const flicker2 = 0.8 + 0.4 * Math.sin(currentTime * 18 + effect.id * 1.7);
-  const flicker3 = 0.8 + 0.4 * Math.sin(currentTime * 12 + effect.id * 3.1);
-  
-  // Gentle horizontal sway for the entire bonfire
-  const swayX = Math.sin(currentTime * 3 + effect.id) * 2;
+  // Use intensity to scale the effect (default to 1 if not provided)
+  const intensity = effect.intensity ?? 1;
+
+  // Smooth fade-in/out curve: ramp up in first 20%, ramp down in last 30%
+  let fadeCurve = 1;
+  if (progress < 0.2) {
+    fadeCurve = progress / 0.2; // Fade in
+  } else if (progress > 0.7) {
+    fadeCurve = (1 - progress) / 0.3; // Fade out
+  }
+  const fade = fadeCurve * intensity;
+
+  // Slower, calmer flicker for flame height
+  const flicker1 = 0.8 + 0.4 * Math.sin(currentTime * 4 + effect.id * 2.3);
+  const flicker2 = 0.8 + 0.4 * Math.sin(currentTime * 5 + effect.id * 1.7);
+  const flicker3 = 0.8 + 0.4 * Math.sin(currentTime * 3 + effect.id * 3.1);
+
+  // Slower, gentler horizontal sway for the entire bonfire
+  const swayX = Math.sin(currentTime * 1 + effect.id) * 2;
 
   // Pre-rendered sprites for each layer (64x64 base size for quality)
   const spriteSize = 64;
@@ -203,6 +214,9 @@ function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, cur
   // Draw three layers of vertically stretched flames
   const layers = [
     { width: 16, height: 28 * flicker1, sprite: outerSprite, offsetX: -2 },
+    { width: 16 * intensity, height: 28 * flicker1 * intensity, sprite: outerSprite, offsetX: -2 },
+    { width: 14 * intensity, height: 24 * flicker2 * intensity, sprite: middleSprite, offsetX: 0 },
+    { width: 10 * intensity, height: 18 * flicker3 * intensity, sprite: innerSprite, offsetX: 1 },
     { width: 14, height: 24 * flicker2, sprite: middleSprite, offsetX: 0 },
     { width: 10, height: 18 * flicker3, sprite: innerSprite, offsetX: 1 },
   ];
@@ -210,16 +224,7 @@ function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, cur
   for (const layer of layers) {
     const scaleX = layer.width / spriteSize;
     const scaleY = layer.height / spriteSize;
-    drawCachedSprite(
-      ctx,
-      baseX + layer.offsetX,
-      baseY,
-      layer.sprite,
-      scaleX,
-      scaleY,
-      fade,
-      'bottom',
-    );
+    drawCachedSprite(ctx, baseX + layer.offsetX, baseY, layer.sprite, scaleX, scaleY, fade, 'bottom');
   }
 
   // Draw rising sparks
@@ -227,7 +232,7 @@ function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, cur
   const sparkCount = 3;
   for (let i = 0; i < sparkCount; i++) {
     const sparkProgress = (currentTime * 2 + i * 0.5 + effect.id) % 1;
-    const sparkX = baseX + (Math.sin(currentTime * 4 + i * 2) * 4);
+    const sparkX = baseX + Math.sin(currentTime * 4 + i * 2) * 4;
     const sparkY = baseY - 20 - sparkProgress * 15;
     const sparkOpacity = (1 - sparkProgress) * fade * 0.8;
     drawCachedSprite(ctx, sparkX, sparkY, sparkSprite, 0.08, 0.08, sparkOpacity, 'center');
@@ -236,7 +241,17 @@ function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, cur
 
 function drawSmokeEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number) {
   const elapsedTime = currentTime - effect.startTime;
+  // Use intensity to scale the effect (default to 1 if not provided)
+  const intensity = effect.intensity ?? 1;
   const progress = Math.min(elapsedTime / effect.duration, 1);
+
+  // Smoother fade curve: ease in/out
+  let fadeCurve = 1;
+  if (progress < 0.15) {
+    fadeCurve = progress / 0.15; // Fade in
+  } else if (progress > 0.8) {
+    fadeCurve = (1 - progress) / 0.2; // Fade out
+  }
 
   // Pre-rendered smoke puff sprite (64x64 base size)
   const spriteSize = 64;
@@ -245,13 +260,13 @@ function drawSmokeEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, cu
   const puffCount = 3;
   for (let i = 0; i < puffCount; i++) {
     const offsetProgress = Math.min(progress + i * 0.2, 1);
-    
-    // Calculate movement and appearance
-    const driftX = Math.sin(currentTime * 1.5 + i * 2 + effect.id) * 6;
-    const rise = offsetProgress * 30 + i * 6;
-    const radius = 6 + offsetProgress * 10 + i * 2;
+
+    // Slower drift and rise for calmer smoke
+    const driftX = Math.sin(currentTime * 0.8 + i * 2 + effect.id) * 6;
+    const rise = offsetProgress * 25 + i * 5;
+    const radius = (6 + offsetProgress * 10 + i * 2) * intensity;
+    const opacity = fadeCurve * intensity * 0.7;
     const scale = (radius * 2) / spriteSize;
-    const opacity = (1 - offsetProgress) * 0.7;
 
     // Draw using the correct cached sprite function
     drawCachedSprite(

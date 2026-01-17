@@ -125,6 +125,7 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
         human.position,
         projectileDuration,
         undefined,
+        undefined,
         predator.position,
         predator.id,
       );
@@ -147,9 +148,9 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
 
       if (predator.hitpoints <= 0) {
         playSoundAt(context, SoundType.HumanDeath, predator.position);
-        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, predator.id);
+        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, undefined, predator.id);
       } else {
-        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, predator.id);
+        addVisualEffect(gameState, VisualEffectType.Hit, predator.position, EFFECT_DURATION_SHORT_HOURS, undefined, predator.id);
 
         // Wounded predators might become more desperate and aggressive
         if (predator.hitpoints < predator.maxHitpoints * 0.3) {
@@ -160,7 +161,7 @@ export const humanAttackPredatorInteraction: InteractionDefinition<HumanEntity, 
       }
 
       // Add melee attack effect on human
-      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, human.id);
+      addVisualEffect(gameState, VisualEffectType.Attack, human.position, EFFECT_DURATION_SHORT_HOURS, undefined, human.id);
     }
 
     // Set attack cooldown

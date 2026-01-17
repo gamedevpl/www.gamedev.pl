@@ -55,7 +55,7 @@ export const humanAttackBuildingInteraction: InteractionDefinition<HumanEntity, 
     source.attackCooldown.melee = gameState.time + HUMAN_ATTACK_MELEE_COOLDOWN_HOURS;
 
     // Visual effect: Hit spark or dust
-    addVisualEffect(gameState, VisualEffectType.Hit, target.position, 0.5, source.id, undefined, target.id);
+    addVisualEffect(gameState, VisualEffectType.Hit, target.position, 0.5, undefined, source.id, undefined, target.id);
 
     // If destructionProgress >= 1, the buildingUpdate logic in building-update.ts 
     // will handle the actual removal of the entity.

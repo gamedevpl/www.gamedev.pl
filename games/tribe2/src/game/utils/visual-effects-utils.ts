@@ -8,6 +8,7 @@ export function addVisualEffect(
   type: VisualEffectType,
   position: Vector2D,
   duration: number,
+  intensity?: number,
   entityId?: EntityId,
   targetPosition?: Vector2D,
   targetEntityId?: EntityId,
@@ -19,6 +20,7 @@ export function addVisualEffect(
     startTime: gameState.time,
     duration,
     entityId,
+    intensity,
     targetPosition,
     targetEntityId,
   };

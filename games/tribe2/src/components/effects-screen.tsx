@@ -111,6 +111,7 @@ export const EffectsScreen: React.FC = () => {
       center,
       1.0, // 1 hour duration
       undefined,
+      undefined,
       targetPosition,
     );
   };

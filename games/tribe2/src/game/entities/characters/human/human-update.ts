@@ -94,7 +94,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
       !entity.lastPregnantEffectTime ||
       gameState.time - entity.lastPregnantEffectTime > EFFECT_DURATION_MEDIUM_HOURS * 3
     ) {
-      addVisualEffect(gameState, VisualEffectType.Pregnant, entity.position, EFFECT_DURATION_MEDIUM_HOURS, entity.id);
+      addVisualEffect(gameState, VisualEffectType.Pregnant, entity.position, EFFECT_DURATION_MEDIUM_HOURS, undefined, entity.id);
       entity.lastPregnantEffectTime = gameState.time;
     }
 

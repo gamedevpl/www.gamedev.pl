@@ -45,6 +45,7 @@ export const predatorChildFeedingInteraction: InteractionDefinition<PredatorEnti
         VisualEffectType.ChildFed,
         child.position,
         EFFECT_DURATION_SHORT_HOURS,
+        undefined,
         child.id,
       );
       child.lastChildFedEffectTime = context.gameState.time;

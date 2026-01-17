@@ -101,6 +101,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
         VisualEffectType.AttackDeflected,
         target.position,
         EFFECT_DURATION_SHORT_HOURS,
+        undefined,
         target.id,
       );
     } else {
@@ -147,6 +148,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
           source.position,
           projectileDuration,
           undefined,
+          undefined,
           target.position,
           target.id,
         );
@@ -163,7 +165,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
           endTime: gameState.time + HUMAN_ATTACK_MOVEMENT_SLOWDOWN_DURATION_HOURS,
         };
 
-        addVisualEffect(gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, target.id);
+        addVisualEffect(gameState, VisualEffectType.Hit, target.position, EFFECT_DURATION_SHORT_HOURS, undefined, target.id);
 
         // Apply push-back force
         const pushDirection = getDirectionVectorOnTorus(
@@ -182,7 +184,7 @@ export const humanAttackInteraction: InteractionDefinition<HumanEntity, HumanEnt
         }
 
         // Add melee attack effect on source
-        addVisualEffect(gameState, VisualEffectType.Attack, source.position, EFFECT_DURATION_SHORT_HOURS, source.id);
+        addVisualEffect(gameState, VisualEffectType.Attack, source.position, EFFECT_DURATION_SHORT_HOURS, undefined, source.id);
       }
     }
 
