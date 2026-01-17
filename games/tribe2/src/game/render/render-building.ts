@@ -109,7 +109,6 @@ function getBuildingSprite(
 
   return spriteCache.getOrRender(key, canvasWidth, canvasHeight, (ctx) => {
     const definition = BUILDING_DEFINITIONS[buildingType];
-    const isConstructed = 'isConstructed' in building ? building.isConstructed : true;
 
     ctx.translate(canvasWidth / 2, canvasHeight / 2);
 
@@ -141,10 +140,6 @@ function getBuildingSprite(
       } else if (buildingType === BuildingType.Gate) {
         drawGate(ctx, width, height, id, tribeColor, connections);
       } else {
-        if (b.buildingType === BuildingType.Bonfire && isConstructed) {
-          icon = (b.fuelLevel ?? 0) > 0 ? '🔥' : '🪵';
-        }
-
         // 1. Draw the Stone Border
         if (isHostile) {
           drawStoneRect(ctx, width, height, id, STONE_COLOR_HOSTILE_BASE, STONE_COLOR_HOSTILE_HIGHLIGHT);
@@ -152,16 +147,18 @@ function getBuildingSprite(
           drawStoneRect(ctx, width, height, id);
         }
 
-        // 2. Draw Icon
-        ctx.globalAlpha = 0.5;
-        ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // 2. Draw Icon (if not a bonfire - we use visual effects for bonfires)
+        if (buildingType !== BuildingType.Bonfire) {
+          ctx.globalAlpha = 0.5;
+          ctx.font = `${Math.min(width, height, 30) * 0.5}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
 
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(icon, 0, 0);
+          ctx.shadowColor = 'rgba(0,0,0,0.5)';
+          ctx.shadowBlur = 4;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(icon, 0, 0);
+        }
       }
     }
   });

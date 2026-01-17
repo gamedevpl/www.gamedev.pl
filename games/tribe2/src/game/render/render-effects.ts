@@ -1,5 +1,53 @@
 import { VisualEffect, VisualEffectType } from '../visual-effects/visual-effect-types';
 import { GameWorldState } from '../world-types';
+import { SpriteCache } from './sprite-cache';
+
+// Sprite cache for pre-rendered effect shapes
+const effectSpriteCache = new SpriteCache(50);
+
+/**
+ * Gets or creates a cached circle sprite of the specified color and size.
+ * @param color The fill color for the circle
+ * @param size The diameter of the circle (sprite canvas will be size x size)
+ * @returns A cached HTMLCanvasElement containing the rendered circle
+ */
+function getCachedCircleSprite(color: string, size: number): HTMLCanvasElement {
+  const key = `circle_${color}_${size}`;
+  
+  return effectSpriteCache.getOrRender(key, size, size, (ctx) => {
+    const radius = size / 2;
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath();
+    ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  });
+}
+
+/**
+ * Draws a cached circle sprite at the specified position with scale and alpha.
+ * @param anchor 'center' (default) or 'bottom' for positioning the sprite
+ */
+function drawCachedSprite(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  sprite: HTMLCanvasElement,
+  scaleX: number,
+  scaleY: number,
+  alpha: number,
+  anchor: 'center' | 'bottom' = 'center',
+) {
+  const width = sprite.width * scaleX;
+  const height = sprite.height * scaleY;
+  const offsetX = x - width / 2;
+  const offsetY = anchor === 'bottom' ? y - height : y - height / 2;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(sprite, offsetX, offsetY, width, height);
+  ctx.restore();
+}
 
 const EFFECT_BASE_RADIUS = 15;
 
@@ -129,6 +177,96 @@ function drawStoneProjectile(
   ctx.restore();
 }
 
+function drawFireEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number) {
+  const elapsedTime = currentTime - effect.startTime;
+  const progress = Math.min(elapsedTime / effect.duration, 1);
+  const fade = 1 - progress * 0.6;
+
+  // Fast erratic flicker for flame height
+  const flicker1 = 0.8 + 0.4 * Math.sin(currentTime * 15 + effect.id * 2.3);
+  const flicker2 = 0.8 + 0.4 * Math.sin(currentTime * 18 + effect.id * 1.7);
+  const flicker3 = 0.8 + 0.4 * Math.sin(currentTime * 12 + effect.id * 3.1);
+  
+  // Gentle horizontal sway for the entire bonfire
+  const swayX = Math.sin(currentTime * 3 + effect.id) * 2;
+
+  // Pre-rendered sprites for each layer (64x64 base size for quality)
+  const spriteSize = 64;
+  const outerSprite = getCachedCircleSprite('rgba(255, 80, 0, 0.6)', spriteSize);
+  const middleSprite = getCachedCircleSprite('rgba(255, 140, 0, 0.7)', spriteSize);
+  const innerSprite = getCachedCircleSprite('rgba(255, 220, 120, 0.8)', spriteSize);
+
+  // Base position (bottom-center of the flame)
+  const baseX = effect.position.x + swayX;
+  const baseY = effect.position.y;
+
+  // Draw three layers of vertically stretched flames
+  const layers = [
+    { width: 16, height: 28 * flicker1, sprite: outerSprite, offsetX: -2 },
+    { width: 14, height: 24 * flicker2, sprite: middleSprite, offsetX: 0 },
+    { width: 10, height: 18 * flicker3, sprite: innerSprite, offsetX: 1 },
+  ];
+
+  for (const layer of layers) {
+    const scaleX = layer.width / spriteSize;
+    const scaleY = layer.height / spriteSize;
+    drawCachedSprite(
+      ctx,
+      baseX + layer.offsetX,
+      baseY,
+      layer.sprite,
+      scaleX,
+      scaleY,
+      fade,
+      'bottom',
+    );
+  }
+
+  // Draw rising sparks
+  const sparkSprite = getCachedCircleSprite('rgba(255, 220, 100, 0.9)', spriteSize);
+  const sparkCount = 3;
+  for (let i = 0; i < sparkCount; i++) {
+    const sparkProgress = (currentTime * 2 + i * 0.5 + effect.id) % 1;
+    const sparkX = baseX + (Math.sin(currentTime * 4 + i * 2) * 4);
+    const sparkY = baseY - 20 - sparkProgress * 15;
+    const sparkOpacity = (1 - sparkProgress) * fade * 0.8;
+    drawCachedSprite(ctx, sparkX, sparkY, sparkSprite, 0.08, 0.08, sparkOpacity, 'center');
+  }
+}
+
+function drawSmokeEffect(ctx: CanvasRenderingContext2D, effect: VisualEffect, currentTime: number) {
+  const elapsedTime = currentTime - effect.startTime;
+  const progress = Math.min(elapsedTime / effect.duration, 1);
+
+  // Pre-rendered smoke puff sprite (64x64 base size)
+  const spriteSize = 64;
+  const smokeSprite = getCachedCircleSprite('rgba(180, 180, 180, 0.7)', spriteSize);
+
+  const puffCount = 3;
+  for (let i = 0; i < puffCount; i++) {
+    const offsetProgress = Math.min(progress + i * 0.2, 1);
+    
+    // Calculate movement and appearance
+    const driftX = Math.sin(currentTime * 1.5 + i * 2 + effect.id) * 6;
+    const rise = offsetProgress * 30 + i * 6;
+    const radius = 6 + offsetProgress * 10 + i * 2;
+    const scale = (radius * 2) / spriteSize;
+    const opacity = (1 - offsetProgress) * 0.7;
+
+    // Draw using the correct cached sprite function
+    drawCachedSprite(
+      ctx,
+      effect.position.x + driftX,
+      effect.position.y - rise,
+      smokeSprite,
+      scale,
+      scale,
+      opacity,
+      'center',
+    );
+  }
+}
+
 export function renderVisualEffect(
   ctx: CanvasRenderingContext2D,
   effect: VisualEffect,
@@ -183,6 +321,12 @@ export function renderVisualEffect(
       break;
     case VisualEffectType.StoneProjectile:
       drawStoneProjectile(ctx, effect, currentTime, gameState);
+      break;
+    case VisualEffectType.Fire:
+      drawFireEffect(ctx, effect, currentTime);
+      break;
+    case VisualEffectType.Smoke:
+      drawSmokeEffect(ctx, effect, currentTime);
       break;
   }
 }

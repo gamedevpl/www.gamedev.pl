@@ -13,6 +13,8 @@ import {
 import { ItemType } from '../item-types';
 import { prepareBuildingTaskAI } from '../../ai/task/buildings/building-task-update';
 import { updateNavigationGridSector, NAVIGATION_AGENT_RADIUS } from '../../utils/navigation-utils';
+import { addVisualEffect } from '../../utils/visual-effects-utils';
+import { VisualEffectType } from '../../visual-effects/visual-effect-types';
 
 /**
  * Updates the state of a building entity.
@@ -90,11 +92,21 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
     }
   }
 
-  // Handle Bonfire Fuel Consumption
+  // Handle Bonfire Fuel Consumption and Visual Effects
   if (building.buildingType === BuildingType.Bonfire && building.isConstructed && !building.isBeingDestroyed) {
     if (building.fuelLevel !== undefined) {
       building.fuelLevel -= gameHoursDelta * BONFIRE_FUEL_CONSUMPTION_PER_HOUR;
       if (building.fuelLevel < 0) building.fuelLevel = 0;
+
+      // Trigger Fire/Smoke visual effects
+      if (building.fuelLevel > 0) {
+        if (Math.random() < gameHoursDelta * 15) {
+          addVisualEffect(gameState, VisualEffectType.Fire, building.position, 0.1);
+        }
+        if (Math.random() < gameHoursDelta * 5) {
+          addVisualEffect(gameState, VisualEffectType.Smoke, building.position, 0.3);
+        }
+      }
 
       // Internal Refueling: Consume wood from storage if fuel is low
       if (building.fuelLevel < (building.maxFuelLevel || 0) * BONFIRE_REFUEL_THRESHOLD) {
