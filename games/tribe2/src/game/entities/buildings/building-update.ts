@@ -141,7 +141,7 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
           addVisualEffect(gameState, VisualEffectType.Fire, building.position, 0.5, building.fireIntensity);
         }
         if (Math.random() < gameHoursDelta * 2) {
-          addVisualEffect(gameState, VisualEffectType.Smoke, building.position, 1.2, building.fireIntensity);
+          addVisualEffect(gameState, VisualEffectType.Smoke, building.position, 2.5, building.fireIntensity);
         }
       }
 
