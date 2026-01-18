@@ -28,6 +28,12 @@ const UNVISITED = 0;
 const OPEN = 1;
 const CLOSED = 2;
 
+// Octile distance constants for 8-way movement heuristic
+// DIAGONAL_COST = sqrt(2) ≈ 1.414
+const DIAGONAL_COST = 1.414;
+// OCTILE_FACTOR = sqrt(2) - 2 ≈ -0.586 (used in octile distance formula)
+const OCTILE_FACTOR = DIAGONAL_COST - 2;
+
 /**
  * Buffer cache for pathfinding to avoid repeated allocations.
  * Keyed by grid size (gridWidth * gridHeight).
@@ -577,7 +583,7 @@ export function findPath(
   let dy = Math.abs(startCoords.y - endY);
   if (dx > halfGridWidth) dx = gridWidth - dx;
   if (dy > halfGridHeight) dy = gridHeight - dy;
-  const startH = dx + dy + (1.414 - 2) * Math.min(dx, dy);
+  const startH = dx + dy + OCTILE_FACTOR * Math.min(dx, dy);
   
   fScore[startIdx] = startH;
   markNodeTouched(buffers, startIdx);
@@ -610,7 +616,7 @@ export function findPath(
     let hDy = Math.abs(curY - endY);
     if (hDx > halfGridWidth) hDx = gridWidth - hDx;
     if (hDy > halfGridHeight) hDy = gridHeight - hDy;
-    const currentH = hDx + hDy + (1.414 - 2) * Math.min(hDx, hDy);
+    const currentH = hDx + hDy + OCTILE_FACTOR * Math.min(hDx, hDy);
     
     if (currentH < closestNodeHScore) {
       closestNodeHScore = currentH;
@@ -646,7 +652,7 @@ export function findPath(
         }
 
         // Base cost for movement (cardinal vs diagonal)
-        let moveCost = ddx !== 0 && ddy !== 0 ? 1.414 : 1.0;
+        let moveCost = ddx !== 0 && ddy !== 0 ? DIAGONAL_COST : 1.0;
 
         // Navigation Field Penalty Model
         const totalPadding = grid.paddingCount[neighborIdx];
@@ -673,7 +679,7 @@ export function findPath(
           let nDy = Math.abs(ny - endY);
           if (nDx > halfGridWidth) nDx = gridWidth - nDx;
           if (nDy > halfGridHeight) nDy = gridHeight - nDy;
-          fScore[neighborIdx] = tentativeGScore + nDx + nDy + (1.414 - 2) * Math.min(nDx, nDy);
+          fScore[neighborIdx] = tentativeGScore + nDx + nDy + OCTILE_FACTOR * Math.min(nDx, nDy);
 
           if (nodeStatus[neighborIdx] !== OPEN) {
             heapSize = heapPush(heap, heapSize, fScore, neighborIdx);
@@ -698,7 +704,7 @@ export function findPath(
 }
 
 // Note: toroidalHeuristic was inlined in findPath for performance.
-// The formula: dx + dy + (1.414 - 2) * Math.min(dx, dy) is used directly.
+// The formula: dx + dy + OCTILE_FACTOR * Math.min(dx, dy) is used directly.
 
 function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: number, finalPos: Vector2D): Vector2D[] {
   const path: Vector2D[] = [finalPos];

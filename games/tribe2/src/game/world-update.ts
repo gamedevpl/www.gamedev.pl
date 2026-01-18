@@ -50,7 +50,10 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
   }
 
   // Index world state ONCE per frame (major optimization)
-  // Re-indexing every sub-step was extremely expensive
+  // The index is built once and all updates work on the same indexed state.
+  // Note: If entities are added/removed during updates, search indexes may be stale,
+  // but this is acceptable for performance since spatial queries are approximate.
+  // Critical operations like collision detection use the navigation grid which is always up-to-date.
   let indexedState = indexWorldState(currentState);
 
   while (realDeltaTimeSeconds > 0) {
