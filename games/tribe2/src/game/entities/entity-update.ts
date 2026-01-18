@@ -1,6 +1,6 @@
 import { UpdateContext } from '../world-types';
 import { stateUpdate } from '../state-machine/state-machine-update';
-import { vectorScale, vectorLength, vectorNormalize, vectorAddMut, vectorScaleMut, vectorAddScaledMut, vectorZeroMut } from '../utils/math-utils';
+import { vectorLength, vectorAddMut, vectorScaleMut, vectorAddScaledMut, vectorZeroMut } from '../utils/math-utils';
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
 import { corpseUpdate } from './characters/corpse-update';
@@ -47,12 +47,23 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext, phase
 }
 
 function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
-  // Apply friction/damping - adds scaled velocity to forces
-  entity.forces.push(vectorScale(entity.velocity, -0.1));
+  // Apply friction/damping directly to velocity (mutable)
+  // friction = velocity * -0.1, then add to velocity
+  vectorAddScaledMut(entity.velocity, entity.velocity, -0.1);
 
   // Apply acceleration force based on direction
-  const accelerationForce = vectorScale(vectorNormalize(entity.direction), entity.acceleration);
-  entity.forces.push(accelerationForce);
+  // accelerationForce = normalize(direction) * acceleration
+  const dirLen = Math.sqrt(entity.direction.x * entity.direction.x + entity.direction.y * entity.direction.y);
+  if (dirLen > 0 && entity.acceleration > 0) {
+    const scale = entity.acceleration / dirLen;
+    entity.velocity.x += entity.direction.x * scale;
+    entity.velocity.y += entity.direction.y * scale;
+  }
+
+  // Apply any additional forces that were pushed externally
+  for (let i = 0; i < entity.forces.length; i++) {
+    vectorAddMut(entity.velocity, entity.forces[i]);
+  }
 
   // Process each active debuff
   for (let i = 0; i < entity.debuffs.length; i++) {
@@ -71,11 +82,6 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
     const debuffElapsed = updateContext.gameState.time - debuff.startTime;
     return debuffElapsed < debuff.duration;
   });
-
-  // Apply accumulated forces to velocity (mutable accumulation)
-  for (let i = 0; i < entity.forces.length; i++) {
-    vectorAddMut(entity.velocity, entity.forces[i]);
-  }
 
   // Zero velocity if it's too small to prevent drifting
   if (vectorLength(entity.velocity) < 0.001) {

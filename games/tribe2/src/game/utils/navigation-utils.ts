@@ -72,8 +72,20 @@ function getPathfindingBuffers(gridSize: number): PathfindingBuffers {
 
 /**
  * Resets only the touched nodes in the buffers for efficient cleanup.
+ * Falls back to full reset if buffer overflow occurred.
  */
 function resetTouchedNodes(buffers: PathfindingBuffers): void {
+  // If buffer overflowed, do a full reset
+  if (buffers.touchedCount >= buffers.touchedNodes.length) {
+    buffers.gScore.fill(Infinity);
+    buffers.fScore.fill(Infinity);
+    buffers.cameFrom.fill(-1);
+    buffers.nodeStatus.fill(UNVISITED);
+    buffers.touchedCount = 0;
+    return;
+  }
+
+  // Otherwise, reset only touched nodes (fast path)
   for (let i = 0; i < buffers.touchedCount; i++) {
     const idx = buffers.touchedNodes[i];
     buffers.gScore[idx] = Infinity;
@@ -86,11 +98,14 @@ function resetTouchedNodes(buffers: PathfindingBuffers): void {
 
 /**
  * Marks a node as touched for later cleanup.
+ * If buffer is full, falls back to full reset on next pathfinding call.
  */
 function markNodeTouched(buffers: PathfindingBuffers, idx: number): void {
   if (buffers.touchedCount < buffers.touchedNodes.length) {
     buffers.touchedNodes[buffers.touchedCount++] = idx;
   }
+  // If buffer is full, touchedCount will equal length, triggering full reset
+  // in resetTouchedNodes on the next call
 }
 
 /**

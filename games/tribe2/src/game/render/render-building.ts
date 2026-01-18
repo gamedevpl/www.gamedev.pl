@@ -331,7 +331,7 @@ function getOrComputePalisadeConnections(
 
   // Check if we have valid cached connections
   // Connections are invalidated when buildings change (handled by buildingVersion in world state)
-  const cachedVersion = (indexedWorld as { buildingVersion?: number }).buildingVersion ?? 0;
+  const cachedVersion = indexedWorld.buildingVersion ?? 0;
   if (building.cachedConnections && building.cachedConnections.computedAt === cachedVersion) {
     return building.cachedConnections;
   }
