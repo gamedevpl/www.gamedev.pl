@@ -5,11 +5,13 @@
  * 1. Pathfinding (findPath) - 28.5% of frame time
  * 2. Rendering queries (byRadius for palisades) - called every frame
  * 3. Physics/Math operations (vectorAdd) - high call frequency
+ * 4. isPathBlocked - called multiple times per human per frame
+ * 5. interactionsUpdate - O(n^2) entity checks
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initGame } from './index';
 import { GameWorldState } from './world-types';
-import { findPath, NAV_GRID_RESOLUTION } from './utils/navigation-utils';
+import { findPath, NAV_GRID_RESOLUTION, isPathBlocked } from './utils/navigation-utils';
 import { vectorAdd, vectorScale, vectorNormalize } from './utils/math-utils';
 import { Vector2D } from './utils/math-types';
 import { HumanEntity } from './entities/characters/human/human-types';
@@ -17,6 +19,7 @@ import { createHuman, createBuilding } from './entities/entities-update';
 import { indexWorldState } from './world-index/world-state-index';
 import { IndexedWorldState } from './world-index/world-index-types';
 import { BuildingType } from './entities/buildings/building-consts';
+import { interactionsUpdate } from './interactions/interactions-update';
 
 describe('Performance Benchmarks', () => {
   let gameState: GameWorldState;
@@ -259,6 +262,82 @@ describe('Performance Benchmarks', () => {
       console.log(`[indexWorldState] ${iterations} calls: ${elapsed.toFixed(2)}ms total, ${avgTime.toFixed(3)}ms avg`);
 
       // Should be reasonably fast
+      expect(avgTime).toBeLessThan(50);
+    });
+  });
+
+  describe('isPathBlocked Performance', () => {
+    it('should measure isPathBlocked for short distances', () => {
+      const iterations = 10000;
+      const startPos = { x: 100, y: 100 };
+      const endPos = { x: 150, y: 150 };
+
+      const start = performance.now();
+      for (let i = 0; i < iterations; i++) {
+        isPathBlocked(gameState, startPos, endPos, testHuman);
+      }
+      const elapsed = performance.now() - start;
+      const avgTime = elapsed / iterations;
+
+      console.log(`[isPathBlocked Short] ${iterations} calls: ${elapsed.toFixed(2)}ms total, ${avgTime.toFixed(4)}ms avg`);
+
+      // Target: < 0.01ms per call (10 microseconds)
+      expect(avgTime).toBeLessThan(0.1);
+    });
+
+    it('should measure isPathBlocked for medium distances', () => {
+      const iterations = 1000;
+      const startPos = { x: 100, y: 100 };
+      const endPos = { x: 300, y: 300 };
+
+      const start = performance.now();
+      for (let i = 0; i < iterations; i++) {
+        isPathBlocked(gameState, startPos, endPos, testHuman);
+      }
+      const elapsed = performance.now() - start;
+      const avgTime = elapsed / iterations;
+
+      console.log(`[isPathBlocked Medium] ${iterations} calls: ${elapsed.toFixed(2)}ms total, ${avgTime.toFixed(4)}ms avg`);
+
+      // Target: < 0.05ms per call
+      expect(avgTime).toBeLessThan(0.5);
+    });
+
+    it('should simulate multiple isPathBlocked calls per human per frame', () => {
+      // Simulate 50 humans each calling isPathBlocked up to 7 times per frame
+      const humans = 50;
+      const callsPerHuman = 7;
+      const iterations = humans * callsPerHuman;
+
+      const start = performance.now();
+      for (let i = 0; i < iterations; i++) {
+        const startPos = { x: 100 + (i % 10) * 50, y: 100 + Math.floor(i / 10) * 50 };
+        const endPos = { x: startPos.x + 100, y: startPos.y + 100 };
+        isPathBlocked(gameState, startPos, endPos, testHuman);
+      }
+      const elapsed = performance.now() - start;
+
+      console.log(`[isPathBlocked Frame Sim] ${iterations} calls (${humans} humans x ${callsPerHuman}): ${elapsed.toFixed(2)}ms`);
+
+      // Target: entire frame's isPathBlocked calls < 5ms
+      expect(elapsed).toBeLessThan(50);
+    });
+  });
+
+  describe('interactionsUpdate Performance', () => {
+    it('should measure interactionsUpdate performance', () => {
+      const iterations = 100;
+
+      const start = performance.now();
+      for (let i = 0; i < iterations; i++) {
+        interactionsUpdate({ gameState: indexedState, deltaTime: 0.016 });
+      }
+      const elapsed = performance.now() - start;
+      const avgTime = elapsed / iterations;
+
+      console.log(`[interactionsUpdate] ${iterations} calls: ${elapsed.toFixed(2)}ms total, ${avgTime.toFixed(3)}ms avg`);
+
+      // Target: < 5ms per frame
       expect(avgTime).toBeLessThan(50);
     });
   });

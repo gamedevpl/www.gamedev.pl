@@ -2,7 +2,7 @@ import { Vector2D } from './math-types';
 import { GameWorldState, NavigationGrid } from '../world-types';
 import { EntityId } from '../entities/entities-types';
 import { HumanEntity } from '../entities/characters/human/human-types';
-import { calculateWrappedDistance, getDirectionVectorOnTorus } from './math-utils';
+import { calculateWrappedDistance } from './math-utils';
 import { CHARACTER_RADIUS } from '../ui/ui-consts';
 
 /**
@@ -350,52 +350,120 @@ export function updateNavigationGridSector(
   }
 }
 
+// Pre-computed inverse resolution for fast division
+const INV_NAV_GRID_RESOLUTION = 1 / NAV_GRID_RESOLUTION;
+// Pre-allocated grid dimensions cache
+let cachedGridWidth = 0;
+let cachedWorldWidth = 0;
+let cachedWorldHeight = 0;
+
+/**
+ * Fast inline grid index calculation without object creation.
+ * Avoids the overhead of function call and object destructuring.
+ */
+function getGridIndexFast(x: number, y: number, worldWidth: number, worldHeight: number, gridWidth: number): number {
+  // Fast modulo for positive numbers that might be slightly negative
+  let wrappedX = x % worldWidth;
+  let wrappedY = y % worldHeight;
+  if (wrappedX < 0) wrappedX += worldWidth;
+  if (wrappedY < 0) wrappedY += worldHeight;
+  
+  const gridX = (wrappedX * INV_NAV_GRID_RESOLUTION) | 0; // Fast floor using bitwise OR
+  const gridY = (wrappedY * INV_NAV_GRID_RESOLUTION) | 0;
+  return gridY * gridWidth + gridX;
+}
+
+/**
+ * Fast inline passability check without function call overhead.
+ */
+function isCellPassableFast(grid: NavigationGrid, index: number, leaderId: number | undefined): boolean {
+  const count = grid.obstacleCount[index];
+  if (count === 0) return true;
+  if (leaderId !== undefined) {
+    const gateCount = grid.gateRefCount[leaderId]?.[index] || 0;
+    return count === gateCount;
+  }
+  return false;
+}
+
 /**
  * Fast check to see if a direct line between two points is blocked.
  * Uses physical-only passability check to allow tight movement.
+ * Optimized to avoid object allocations in the hot path.
  */
 export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: Vector2D, entity: HumanEntity): boolean {
   const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
-  const dir = getDirectionVectorOnTorus(start, end, worldWidth, worldHeight);
-  const distance = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
-
-  if (distance < 0.001) return false;
-
-  const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION / 2));
-  const stepX = dir.x / steps;
-  const stepY = dir.y / steps;
-
-  const normX = dir.x / distance;
-  const normY = dir.y / distance;
+  
+  // Cache grid width calculation
+  if (worldWidth !== cachedWorldWidth || worldHeight !== cachedWorldHeight) {
+    cachedWorldWidth = worldWidth;
+    cachedWorldHeight = worldHeight;
+    cachedGridWidth = Math.ceil(worldWidth * INV_NAV_GRID_RESOLUTION);
+  }
+  const gridWidth = cachedGridWidth;
+  
+  // Inline direction calculation to avoid function call and object allocation
+  let dx = end.x - start.x;
+  let dy = end.y - start.y;
+  
+  // Wrap around horizontally if shorter
+  if (dx > worldWidth * 0.5) dx -= worldWidth;
+  else if (dx < -worldWidth * 0.5) dx += worldWidth;
+  
+  // Wrap around vertically if shorter
+  if (dy > worldHeight * 0.5) dy -= worldHeight;
+  else if (dy < -worldHeight * 0.5) dy += worldHeight;
+  
+  const distSq = dx * dx + dy * dy;
+  if (distSq < 0.000001) return false;
+  
+  const distance = Math.sqrt(distSq);
+  const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION * 0.5));
+  const stepX = dx / steps;
+  const stepY = dy / steps;
+  
+  const invDistance = 1 / distance;
+  const normX = dx * invDistance;
+  const normY = dy * invDistance;
   const perpX = -normY;
   const perpY = normX;
-  const lateralOffset = entity.radius * 0.6; // Allow slight squeezing to prevent stuck loops
-
+  const lateralOffset = entity.radius * 0.6;
+  const halfLateralOffset = lateralOffset * 0.5;
+  
   const grid = gameState.navigationGrid;
-
+  const leaderId = entity.leaderId;
+  
+  // Check points along the path without creating temporary objects
   for (let i = 0; i <= steps; i++) {
-    const testPos = {
-      x: start.x + stepX * i,
-      y: start.y + stepY * i,
-    };
-
-    const testPoints = [
-      testPos,
-      { x: testPos.x + perpX * lateralOffset, y: testPos.y + perpY * lateralOffset },
-      { x: testPos.x - perpX * lateralOffset, y: testPos.y - perpY * lateralOffset },
-      { x: testPos.x + perpX * lateralOffset * 0.5, y: testPos.y + perpY * lateralOffset * 0.5 },
-      { x: testPos.x - perpX * lateralOffset * 0.5, y: testPos.y - perpY * lateralOffset * 0.5 },
-    ];
-
-    for (const p of testPoints) {
-      const index = getNavigationGridIndex(p, worldWidth, worldHeight);
-      // Use usePadding: false for real-time movement check
-      if (!isCellPassable(grid, index, entity.leaderId, false)) {
-        return true; // Physically Blocked
-      }
+    const testX = start.x + stepX * i;
+    const testY = start.y + stepY * i;
+    
+    // Check center point
+    if (!isCellPassableFast(grid, getGridIndexFast(testX, testY, worldWidth, worldHeight, gridWidth), leaderId)) {
+      return true;
+    }
+    
+    // Check lateral offset points (full offset)
+    const offsetX = perpX * lateralOffset;
+    const offsetY = perpY * lateralOffset;
+    if (!isCellPassableFast(grid, getGridIndexFast(testX + offsetX, testY + offsetY, worldWidth, worldHeight, gridWidth), leaderId)) {
+      return true;
+    }
+    if (!isCellPassableFast(grid, getGridIndexFast(testX - offsetX, testY - offsetY, worldWidth, worldHeight, gridWidth), leaderId)) {
+      return true;
+    }
+    
+    // Check lateral offset points (half offset)
+    const halfOffsetX = perpX * halfLateralOffset;
+    const halfOffsetY = perpY * halfLateralOffset;
+    if (!isCellPassableFast(grid, getGridIndexFast(testX + halfOffsetX, testY + halfOffsetY, worldWidth, worldHeight, gridWidth), leaderId)) {
+      return true;
+    }
+    if (!isCellPassableFast(grid, getGridIndexFast(testX - halfOffsetX, testY - halfOffsetY, worldWidth, worldHeight, gridWidth), leaderId)) {
+      return true;
     }
   }
-
+  
   return false;
 }
 
