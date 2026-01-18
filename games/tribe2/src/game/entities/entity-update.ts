@@ -26,6 +26,10 @@ import { prepareHumanTaskAI } from '../ai/task/humans/human-task-update';
 import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { AI_UPDATE_INTERVAL } from '../ai-consts';
 
+// Threshold constants for performance-optimized checks
+const MIN_VELOCITY_SQUARED = 0.000001; // 0.001^2 - minimum velocity to prevent drifting
+const MIN_WALK_VELOCITY_SQUARED = 0.01; // 0.1^2 - minimum velocity to trigger soil depletion
+
 export enum EntityUpdatePhase {
   Physics,
   PrepareAI,
@@ -90,7 +94,7 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
 
   // Zero velocity if it's too small to prevent drifting (inline length check)
   const velLenSq = entity.velocity.x * entity.velocity.x + entity.velocity.y * entity.velocity.y;
-  if (velLenSq < 0.000001) { // 0.001^2
+  if (velLenSq < MIN_VELOCITY_SQUARED) {
     entity.velocity.x = 0;
     entity.velocity.y = 0;
   }
@@ -109,8 +113,7 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces.length = 0;
 
   // Apply soil depletion when humans are walking (moving with significant velocity)
-  // Use velLenSq from earlier check (0.1^2 = 0.01)
-  if (entity.type === 'human' && velLenSq > 0.01) {
+  if (entity.type === 'human' && velLenSq > MIN_WALK_VELOCITY_SQUARED) {
     applySoilWalkDepletion(
       updateContext.gameState.soilDepletion,
       entity.position,

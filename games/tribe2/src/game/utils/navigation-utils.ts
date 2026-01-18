@@ -352,7 +352,11 @@ export function updateNavigationGridSector(
 
 // Pre-computed inverse resolution for fast division
 const INV_NAV_GRID_RESOLUTION = 1 / NAV_GRID_RESOLUTION;
-// Pre-allocated grid dimensions cache
+
+// Threshold constants for performance-optimized checks
+const MIN_DISTANCE_SQUARED = 0.000001; // 0.001^2 - minimum distance to consider non-zero
+
+// Grid dimensions cache - safe since game dimensions don't change during gameplay
 let cachedGridWidth = 0;
 let cachedWorldWidth = 0;
 let cachedWorldHeight = 0;
@@ -415,7 +419,7 @@ export function isPathBlocked(gameState: GameWorldState, start: Vector2D, end: V
   else if (dy < -worldHeight * 0.5) dy += worldHeight;
   
   const distSq = dx * dx + dy * dy;
-  if (distSq < 0.000001) return false;
+  if (distSq < MIN_DISTANCE_SQUARED) return false;
   
   const distance = Math.sqrt(distSq);
   const steps = Math.ceil(distance / (NAV_GRID_RESOLUTION * 0.5));
