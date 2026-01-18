@@ -161,14 +161,19 @@ function heapPush(heap: Int32Array, heapSize: number, fScore: Float32Array, node
   return heapSize + 1;
 }
 
+// Reusable result object for heapPop to avoid allocation per call
+const heapPopResult = { nodeIdx: 0, newSize: 0 };
+
 /**
  * Binary Min-Heap: Pop the minimum node from the heap.
+ * Uses a cached result object to avoid allocation.
  */
 function heapPop(heap: Int32Array, heapSize: number, fScore: Float32Array): { nodeIdx: number; newSize: number } {
-  const nodeIdx = heap[0];
+  heapPopResult.nodeIdx = heap[0];
+  heapPopResult.newSize = heapSize - 1;
   heap[0] = heap[heapSize - 1];
   heapBubbleDown(heap, heapSize - 1, fScore, 0);
-  return { nodeIdx, newSize: heapSize - 1 };
+  return heapPopResult;
 }
 
 /**
@@ -544,8 +549,14 @@ export function findPath(
 
   const startCoords = getNavigationGridCoords(start, worldWidth, worldHeight);
   const endCoords = getNavigationGridCoords(finalTarget, worldWidth, worldHeight);
+  
+  // Cache end coordinates for inlined heuristic calculations
+  const endX = endCoords.x;
+  const endY = endCoords.y;
+  const halfGridWidth = gridWidth >> 1; // Bitwise division by 2
+  const halfGridHeight = gridHeight >> 1;
 
-  if (startCoords.x === endCoords.x && startCoords.y === endCoords.y) {
+  if (startCoords.x === endX && startCoords.y === endY) {
     // Already in the same grid cell as the target
     // Return the target position so the entity can fine-tune its position
     return { path: [finalTarget], iterations: 0, isBestEffort: false };
@@ -560,7 +571,14 @@ export function findPath(
 
   const startIdx = startCoords.y * gridWidth + startCoords.x;
   gScore[startIdx] = 0;
-  const startH = toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight);
+  
+  // Inline toroidalHeuristic for startH
+  let dx = Math.abs(startCoords.x - endX);
+  let dy = Math.abs(startCoords.y - endY);
+  if (dx > halfGridWidth) dx = gridWidth - dx;
+  if (dy > halfGridHeight) dy = gridHeight - dy;
+  const startH = dx + dy + (1.414 - 2) * Math.min(dx, dy);
+  
   fScore[startIdx] = startH;
   markNodeTouched(buffers, startIdx);
 
@@ -585,10 +603,15 @@ export function findPath(
     heapSize = popResult.newSize;
 
     const curX = currentIdx % gridWidth;
-    const curY = Math.floor(currentIdx / gridWidth);
+    const curY = (currentIdx / gridWidth) | 0; // Bitwise floor
 
-    // Update closest node tracking
-    const currentH = toroidalHeuristic({ x: curX, y: curY }, endCoords, gridWidth, gridHeight);
+    // Update closest node tracking (inline toroidalHeuristic)
+    let hDx = Math.abs(curX - endX);
+    let hDy = Math.abs(curY - endY);
+    if (hDx > halfGridWidth) hDx = gridWidth - hDx;
+    if (hDy > halfGridHeight) hDy = gridHeight - hDy;
+    const currentH = hDx + hDy + (1.414 - 2) * Math.min(hDx, hDy);
+    
     if (currentH < closestNodeHScore) {
       closestNodeHScore = currentH;
       closestNodeIdx = currentIdx;
@@ -597,7 +620,7 @@ export function findPath(
     // Mark as closed
     nodeStatus[currentIdx] = CLOSED;
 
-    if (curX === endCoords.x && curY === endCoords.y) {
+    if (curX === endX && curY === endY) {
       return {
         path: reconstructPath(cameFrom, currentIdx, gridWidth, finalTarget),
         iterations,
@@ -606,12 +629,12 @@ export function findPath(
     }
 
     // Neighbors (8 directions)
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
+    for (let ddy = -1; ddy <= 1; ddy++) {
+      for (let ddx = -1; ddx <= 1; ddx++) {
+        if (ddx === 0 && ddy === 0) continue;
 
-        const nx = (curX + dx + gridWidth) % gridWidth;
-        const ny = (curY + dy + gridHeight) % gridHeight;
+        const nx = (curX + ddx + gridWidth) % gridWidth;
+        const ny = (curY + ddy + gridHeight) % gridHeight;
         const neighborIdx = ny * gridWidth + nx;
 
         // Skip if already closed
@@ -623,7 +646,7 @@ export function findPath(
         }
 
         // Base cost for movement (cardinal vs diagonal)
-        let moveCost = dx !== 0 && dy !== 0 ? 1.414 : 1.0;
+        let moveCost = ddx !== 0 && ddy !== 0 ? 1.414 : 1.0;
 
         // Navigation Field Penalty Model
         const totalPadding = grid.paddingCount[neighborIdx];
@@ -644,7 +667,13 @@ export function findPath(
           }
           cameFrom[neighborIdx] = currentIdx;
           gScore[neighborIdx] = tentativeGScore;
-          fScore[neighborIdx] = tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight);
+          
+          // Inline toroidalHeuristic for neighbor
+          let nDx = Math.abs(nx - endX);
+          let nDy = Math.abs(ny - endY);
+          if (nDx > halfGridWidth) nDx = gridWidth - nDx;
+          if (nDy > halfGridHeight) nDy = gridHeight - nDy;
+          fScore[neighborIdx] = tentativeGScore + nDx + nDy + (1.414 - 2) * Math.min(nDx, nDy);
 
           if (nodeStatus[neighborIdx] !== OPEN) {
             heapSize = heapPush(heap, heapSize, fScore, neighborIdx);
@@ -668,23 +697,8 @@ export function findPath(
   };
 }
 
-function toroidalHeuristic(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-  width: number,
-  height: number,
-): number {
-  let dx = Math.abs(a.x - b.x);
-  let dy = Math.abs(a.y - b.y);
-
-  if (dx > width / 2) dx = width - dx;
-  if (dy > height / 2) dy = height - dy;
-
-  // Octile distance for 8-way movement
-  const D = 1;
-  const D2 = 1.414;
-  return D * (dx + dy) + (D2 - 2 * D) * Math.min(dx, dy);
-}
+// Note: toroidalHeuristic was inlined in findPath for performance.
+// The formula: dx + dy + (1.414 - 2) * Math.min(dx, dy) is used directly.
 
 function reconstructPath(cameFrom: Int32Array, currentIdx: number, gridWidth: number, finalPos: Vector2D): Vector2D[] {
   const path: Vector2D[] = [finalPos];

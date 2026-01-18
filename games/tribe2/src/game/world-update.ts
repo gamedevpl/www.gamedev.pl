@@ -49,8 +49,11 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     }
   }
 
+  // Index world state ONCE per frame (major optimization)
+  // Re-indexing every sub-step was extremely expensive
+  let indexedState = indexWorldState(currentState);
+
   while (realDeltaTimeSeconds > 0) {
-    const indexedState = indexWorldState(currentState);
     const deltaTime = Math.min(realDeltaTimeSeconds, MAX_REAL_TIME_DELTA);
 
     const gameHoursDelta = deltaTime * (HOURS_PER_GAME_DAY / GAME_DAY_IN_REAL_SECONDS);
@@ -112,9 +115,8 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     // Update UI state
     updateUI(indexedState);
 
-    currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;
   }
 
-  return currentState;
+  return indexedState;
 }
