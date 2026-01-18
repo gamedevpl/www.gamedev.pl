@@ -43,6 +43,8 @@ export function buildingUpdate(building: BuildingEntity, updateContext: UpdateCo
       if (building.buildingType === BuildingType.Palisade || building.buildingType === BuildingType.Gate) {
         const navOwnerId = building.buildingType === BuildingType.Gate ? building.ownerId ?? null : null;
         updateNavigationGridSector(gameState, building.position, building.radius, false, navOwnerId, NAVIGATION_AGENT_RADIUS);
+        // Increment building version for cache invalidation (palisade connections)
+        gameState.buildingVersion = (gameState.buildingVersion ?? 0) + 1;
       }
 
       const isPlantingZone = building.buildingType === BuildingType.PlantingZone;

@@ -315,6 +315,112 @@ function renderStorageContents(ctx: CanvasRenderingContext2D, building: Building
 }
 
 /**
+ * Computes and caches palisade/gate connections for a building.
+ * Connections are cached on the building entity to avoid expensive spatial queries every frame.
+ */
+function getOrComputePalisadeConnections(
+  building: BuildingEntity,
+  indexedWorld: IndexedWorldState,
+): PalisadeConnections {
+  const { buildingType, ownerId, position, id } = building;
+
+  // If not a palisade or gate, return empty connections
+  if (buildingType !== BuildingType.Palisade && buildingType !== BuildingType.Gate) {
+    return DEFAULT_CONNECTIONS;
+  }
+
+  // Check if we have valid cached connections
+  // Connections are invalidated when buildings change (handled by buildingVersion in world state)
+  const cachedVersion = (indexedWorld as { buildingVersion?: number }).buildingVersion ?? 0;
+  if (building.cachedConnections && building.cachedConnections.computedAt === cachedVersion) {
+    return building.cachedConnections;
+  }
+
+  // Compute new connections
+  const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
+  const connections: PalisadeConnections = {
+    connections: [],
+    isInner: false,
+    isVertical: false,
+    wallAngle: 0,
+    hasGateNeighbor: false,
+  };
+
+  // Search radius 55 to ensure we catch neighbors at 50px grid spacing
+  const nearbyBuildings = indexedWorld.search.building.byRadius(position, 55);
+
+  for (const neighbor of nearbyBuildings) {
+    if (neighbor.id === id) continue;
+
+    if (
+      (neighbor.buildingType === BuildingType.Palisade || neighbor.buildingType === BuildingType.Gate) &&
+      neighbor.ownerId === ownerId
+    ) {
+      const dir = getDirectionVectorOnTorus(position, neighbor.position, worldWidth, worldHeight);
+      const dist = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+
+      // Connection threshold: 15px to 55px
+      if (dist >= 15 && dist <= 55) {
+        connections.connections.push({
+          angle: Math.atan2(dir.y, dir.x),
+          distance: dist,
+        });
+
+        if (neighbor.buildingType === BuildingType.Gate) {
+          connections.hasGateNeighbor = true;
+        }
+      }
+    }
+  }
+
+  // Calculate wallAngle using axial averaging
+  if (connections.connections.length > 0) {
+    let sumX = 0;
+    let sumY = 0;
+    for (const conn of connections.connections) {
+      sumX += Math.cos(conn.angle * 2);
+      sumY += Math.sin(conn.angle * 2);
+    }
+    connections.wallAngle = Math.atan2(sumY, sumX) / 2;
+  } else {
+    connections.wallAngle = 0;
+  }
+
+  // Detect if the segment is vertical (Side Profile)
+  connections.isVertical = connections.connections.length > 0 && Math.abs(Math.sin(connections.wallAngle)) > 0.9;
+
+  // Inner/Outer Detection using Perspective Sampling
+  if (ownerId !== null && ownerId !== undefined) {
+    const getOwnerOfPoint = (px: number, py: number): EntityId | null => {
+      const wrappedX = ((px % worldWidth) + worldWidth) % worldWidth;
+      const wrappedY = ((py % worldHeight) + worldHeight) % worldHeight;
+      const gx = Math.floor(wrappedX / TERRITORY_OWNERSHIP_RESOLUTION);
+      const gy = Math.floor(wrappedY / TERRITORY_OWNERSHIP_RESOLUTION);
+      const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+      return indexedWorld.terrainOwnership[gy * gridWidth + gx];
+    };
+
+    // Sample along the wall normal to detect which side is "inside"
+    const normalAngle = connections.wallAngle + Math.PI / 2;
+    const sampleX = position.x + Math.cos(normalAngle) * 20;
+    const sampleY = position.y + Math.sin(normalAngle) * 20;
+
+    const frontOwner = getOwnerOfPoint(sampleX, sampleY);
+    if (frontOwner === ownerId) {
+      connections.isInner = true;
+    }
+  }
+
+  // Cache the connections on the building entity
+  building.cachedConnections = {
+    ...connections,
+    computedAt: cachedVersion,
+  };
+
+  return connections;
+}
+
+/**
  * Renders a building entity.
  */
 export function renderBuilding(
@@ -330,83 +436,13 @@ export function renderBuilding(
     destructionProgress,
     isConstructed,
     isBeingDestroyed,
-    buildingType,
-    ownerId,
-    id,
   } = building;
 
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));
 
-  let connections: PalisadeConnections = { connections: [], isInner: false, isVertical: false, wallAngle: 0, hasGateNeighbor: false };
-  if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
-    const { width: worldWidth, height: worldHeight } = indexedWorld.mapDimensions;
-    // Search radius 55 to ensure we catch neighbors at 50px grid spacing
-    const nearbyBuildings = indexedWorld.search.building.byRadius(position, 55);
-
-    for (const neighbor of nearbyBuildings) {
-      if (neighbor.id === id) continue;
-
-      if (
-        (neighbor.buildingType === BuildingType.Palisade || neighbor.buildingType === BuildingType.Gate) &&
-        neighbor.ownerId === ownerId
-      ) {
-        const dir = getDirectionVectorOnTorus(position, neighbor.position, worldWidth, worldHeight);
-        const dist = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
-
-        // Connection threshold: 15px to 55px
-        if (dist >= 15 && dist <= 55) {
-          connections.connections.push({
-            angle: Math.atan2(dir.y, dir.x),
-            distance: dist,
-          });
-
-          if (neighbor.buildingType === BuildingType.Gate) {
-            connections.hasGateNeighbor = true;
-          }
-        }
-      }
-    }
-
-    // Calculate wallAngle using axial averaging
-    if (connections.connections.length > 0) {
-      let sumX = 0;
-      let sumY = 0;
-      for (const conn of connections.connections) {
-        sumX += Math.cos(conn.angle * 2);
-        sumY += Math.sin(conn.angle * 2);
-      }
-      connections.wallAngle = Math.atan2(sumY, sumX) / 2;
-    } else {
-      connections.wallAngle = 0;
-    }
-
-    // Detect if the segment is vertical (Side Profile)
-    // A segment is vertical if its wall angle is strictly North-South.
-    connections.isVertical = connections.connections.length > 0 && Math.abs(Math.sin(connections.wallAngle)) > 0.9;
-
-    // Inner/Outer Detection using Perspective Sampling
-    if (ownerId !== null) {
-      const getOwnerOfPoint = (px: number, py: number): EntityId | null => {
-        const wrappedX = ((px % worldWidth) + worldWidth) % worldWidth;
-        const wrappedY = ((py % worldHeight) + worldHeight) % worldHeight;
-        const gx = Math.floor(wrappedX / TERRITORY_OWNERSHIP_RESOLUTION);
-        const gy = Math.floor(wrappedY / TERRITORY_OWNERSHIP_RESOLUTION);
-        const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
-        return indexedWorld.terrainOwnership[gy * gridWidth + gx];
-      };
-
-      // Sample along the wall normal to detect which side is "inside"
-      const normalAngle = connections.wallAngle + Math.PI / 2;
-      const sampleX = position.x + Math.cos(normalAngle) * 20;
-      const sampleY = position.y + Math.sin(normalAngle) * 20;
-
-      const frontOwner = getOwnerOfPoint(sampleX, sampleY);
-      if (frontOwner === ownerId) {
-        connections.isInner = true;
-      }
-    }
-  }
+  // Use cached connections for palisades/gates to avoid expensive spatial queries every frame
+  const connections = getOrComputePalisadeConnections(building, indexedWorld);
 
   const sprite = getBuildingSprite(building, isHostile, false, true, connections);
 
@@ -419,7 +455,7 @@ export function renderBuilding(
 
   if (isBeingDestroyed && isConstructed) {
     ctx.translate(position.x, position.y);
-    drawCracks(ctx, width, height, destructionProgress, id);
+    drawCracks(ctx, width, height, destructionProgress, building.id);
   }
 
   ctx.restore();

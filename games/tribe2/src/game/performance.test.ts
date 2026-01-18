@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initGame } from './index';
 import { GameWorldState } from './world-types';
-import { findPath, initNavigationGrid, NAV_GRID_RESOLUTION } from './utils/navigation-utils';
+import { findPath, NAV_GRID_RESOLUTION } from './utils/navigation-utils';
 import { vectorAdd, vectorScale, vectorNormalize } from './utils/math-utils';
 import { Vector2D } from './utils/math-types';
 import { HumanEntity } from './entities/characters/human/human-types';
@@ -205,7 +205,7 @@ describe('Performance Benchmarks', () => {
         // Update position
         const position: Vector2D = { x: 100, y: 100 };
         const deltaTime = 0.016;
-        const _newPosition = vectorAdd(position, vectorScale(newVelocity, deltaTime));
+        vectorAdd(position, vectorScale(newVelocity, deltaTime));
       }
       const elapsed = performance.now() - start;
 
@@ -223,7 +223,7 @@ describe('Performance Benchmarks', () => {
       for (let i = 0; i < iterations; i++) {
         const v1: Vector2D = { x: 1, y: 2 };
         const v2: Vector2D = { x: 3, y: 4 };
-        const _result = vectorAdd(v1, v2);
+        vectorAdd(v1, v2);
       }
       const elapsedImmutable = performance.now() - startImmutable;
 

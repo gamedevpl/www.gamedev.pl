@@ -7,6 +7,55 @@ export function vectorAdd(v1: Vector2D, v2: Vector2D): Vector2D {
   };
 }
 
+/**
+ * Mutable vector addition - modifies target in place for performance.
+ * Use in hot paths like physics updates to avoid object allocation.
+ */
+export function vectorAddMut(target: Vector2D, source: Vector2D): void {
+  target.x += source.x;
+  target.y += source.y;
+}
+
+/**
+ * Mutable vector subtraction - modifies target in place for performance.
+ */
+export function vectorSubtractMut(target: Vector2D, source: Vector2D): void {
+  target.x -= source.x;
+  target.y -= source.y;
+}
+
+/**
+ * Mutable vector scaling - modifies target in place for performance.
+ */
+export function vectorScaleMut(target: Vector2D, scalar: number): void {
+  target.x *= scalar;
+  target.y *= scalar;
+}
+
+/**
+ * Mutable vector set - sets target to source values for performance.
+ */
+export function vectorSetMut(target: Vector2D, source: Vector2D): void {
+  target.x = source.x;
+  target.y = source.y;
+}
+
+/**
+ * Mutable vector zero - sets target to zero for performance.
+ */
+export function vectorZeroMut(target: Vector2D): void {
+  target.x = 0;
+  target.y = 0;
+}
+
+/**
+ * Mutable add scaled vector - target += source * scalar, for performance.
+ */
+export function vectorAddScaledMut(target: Vector2D, source: Vector2D, scalar: number): void {
+  target.x += source.x * scalar;
+  target.y += source.y * scalar;
+}
+
 export function vectorSubtract(v1: Vector2D, v2: Vector2D): Vector2D {
   return {
     x: v1.x - v2.x,

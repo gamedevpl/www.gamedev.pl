@@ -11,6 +11,20 @@ export type StoredItem = {
 };
 
 /**
+ * Cached connection data for palisade/gate rendering.
+ * Stored to avoid expensive byRadius queries every frame.
+ */
+export interface CachedPalisadeConnections {
+  connections: { angle: number; distance: number }[];
+  isInner: boolean;
+  isVertical: boolean;
+  wallAngle: number;
+  hasGateNeighbor: boolean;
+  /** Version/timestamp when connections were last computed */
+  computedAt: number;
+}
+
+/**
  * Represents a building entity in the game world.
  * Buildings are stationary structures that can be constructed and destroyed.
  */
@@ -66,4 +80,7 @@ export interface BuildingEntity extends Entity {
 
   /** Fire intensity for bonfires (0 to 1), used to scale visual effects. */
   fireIntensity?: number;
+
+  /** Cached palisade/gate connections for rendering optimization. */
+  cachedConnections?: CachedPalisadeConnections;
 }

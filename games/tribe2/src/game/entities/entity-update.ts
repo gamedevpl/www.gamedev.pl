@@ -1,6 +1,6 @@
 import { UpdateContext } from '../world-types';
 import { stateUpdate } from '../state-machine/state-machine-update';
-import { vectorScale, vectorAdd, vectorLength, vectorNormalize } from '../utils/math-utils';
+import { vectorScale, vectorLength, vectorNormalize, vectorAddMut, vectorScaleMut, vectorAddScaledMut, vectorZeroMut } from '../utils/math-utils';
 import { Entity } from './entities-types';
 import { humanUpdate } from './characters/human/human-update';
 import { corpseUpdate } from './characters/corpse-update';
@@ -47,7 +47,7 @@ export function entityUpdate(entity: Entity, updateContext: UpdateContext, phase
 }
 
 function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
-  // Apply friction/damping
+  // Apply friction/damping - adds scaled velocity to forces
   entity.forces.push(vectorScale(entity.velocity, -0.1));
 
   // Apply acceleration force based on direction
@@ -55,15 +55,16 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
   entity.forces.push(accelerationForce);
 
   // Process each active debuff
-  entity.debuffs.forEach((debuff) => {
+  for (let i = 0; i < entity.debuffs.length; i++) {
+    const debuff = entity.debuffs[i];
     const debuffElapsed = updateContext.gameState.time - debuff.startTime;
 
     if (debuffElapsed < debuff.duration && debuff.type === 'slow') {
       // Apply debuff effect - currently all debuffs reduce velocity by 50%
-      // Multiple debuffs stack multiplicatively
-      entity.velocity = vectorScale(entity.velocity, 0.5);
+      // Multiple debuffs stack multiplicatively (mutable scale)
+      vectorScaleMut(entity.velocity, 0.5);
     }
-  });
+  }
 
   // Clean up expired debuffs
   entity.debuffs = entity.debuffs.filter((debuff) => {
@@ -71,16 +72,18 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
     return debuffElapsed < debuff.duration;
   });
 
-  // Apply accumulated forces to velocity
-  entity.velocity = vectorAdd(entity.velocity, entity.forces.reduce(vectorAdd, { x: 0, y: 0 }));
+  // Apply accumulated forces to velocity (mutable accumulation)
+  for (let i = 0; i < entity.forces.length; i++) {
+    vectorAddMut(entity.velocity, entity.forces[i]);
+  }
 
   // Zero velocity if it's too small to prevent drifting
   if (vectorLength(entity.velocity) < 0.001) {
-    entity.velocity = { x: 0, y: 0 };
+    vectorZeroMut(entity.velocity);
   }
 
-  // Update position based on velocity
-  entity.position = vectorAdd(entity.position, vectorScale(entity.velocity, updateContext.deltaTime));
+  // Update position based on velocity (mutable add scaled)
+  vectorAddScaledMut(entity.position, entity.velocity, updateContext.deltaTime);
 
   // --- World Wrapping ---
   // Ensure the entity position wraps around the world boundaries
@@ -93,8 +96,8 @@ function entityPhysicsUpdate(entity: Entity, updateContext: UpdateContext) {
     updateContext.gameState.mapDimensions.height;
   // --- End World Wrapping ---
 
-  // Reset forces for the next frame
-  entity.forces = [];
+  // Reset forces for the next frame (clear array without allocation)
+  entity.forces.length = 0;
 
   // Apply soil depletion when humans are walking (moving with significant velocity)
   if (entity.type === 'human' && vectorLength(entity.velocity) > 0.1) {

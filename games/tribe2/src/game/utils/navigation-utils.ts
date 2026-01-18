@@ -38,6 +38,10 @@ interface PathfindingBuffers {
   cameFrom: Int32Array;
   heap: Int32Array;
   nodeStatus: Uint8Array;
+  /** List of node indices that were touched and need cleanup */
+  touchedNodes: Int32Array;
+  /** Number of touched nodes */
+  touchedCount: number;
 }
 
 const bufferCache = new Map<number, PathfindingBuffers>();
@@ -54,10 +58,39 @@ function getPathfindingBuffers(gridSize: number): PathfindingBuffers {
       cameFrom: new Int32Array(gridSize),
       heap: new Int32Array(gridSize),
       nodeStatus: new Uint8Array(gridSize),
+      touchedNodes: new Int32Array(Math.min(gridSize, 10000)), // Max expected touched nodes
+      touchedCount: 0,
     };
+    // Initialize arrays with default values (only once at creation)
+    buffers.gScore.fill(Infinity);
+    buffers.fScore.fill(Infinity);
+    buffers.cameFrom.fill(-1);
     bufferCache.set(gridSize, buffers);
   }
   return buffers;
+}
+
+/**
+ * Resets only the touched nodes in the buffers for efficient cleanup.
+ */
+function resetTouchedNodes(buffers: PathfindingBuffers): void {
+  for (let i = 0; i < buffers.touchedCount; i++) {
+    const idx = buffers.touchedNodes[i];
+    buffers.gScore[idx] = Infinity;
+    buffers.fScore[idx] = Infinity;
+    buffers.cameFrom[idx] = -1;
+    buffers.nodeStatus[idx] = UNVISITED;
+  }
+  buffers.touchedCount = 0;
+}
+
+/**
+ * Marks a node as touched for later cleanup.
+ */
+function markNodeTouched(buffers: PathfindingBuffers, idx: number): void {
+  if (buffers.touchedCount < buffers.touchedNodes.length) {
+    buffers.touchedNodes[buffers.touchedCount++] = idx;
+  }
 }
 
 /**
@@ -435,16 +468,14 @@ export function findPath(
   const buffers = getPathfindingBuffers(gridSize);
   const { gScore, fScore, cameFrom, heap, nodeStatus } = buffers;
 
-  // Initialize buffers
-  gScore.fill(Infinity);
-  fScore.fill(Infinity);
-  cameFrom.fill(-1);
-  nodeStatus.fill(UNVISITED);
+  // Reset only previously touched nodes (much faster than fill for large grids)
+  resetTouchedNodes(buffers);
 
   const startIdx = startCoords.y * gridWidth + startCoords.x;
   gScore[startIdx] = 0;
   const startH = toroidalHeuristic(startCoords, endCoords, gridWidth, gridHeight);
   fScore[startIdx] = startH;
+  markNodeTouched(buffers, startIdx);
 
   // Initialize heap
   let heapSize = 0;
@@ -520,6 +551,10 @@ export function findPath(
         const tentativeGScore = gScore[currentIdx] + moveCost;
 
         if (tentativeGScore < gScore[neighborIdx]) {
+          // Mark as touched before modifying
+          if (nodeStatus[neighborIdx] === UNVISITED) {
+            markNodeTouched(buffers, neighborIdx);
+          }
           cameFrom[neighborIdx] = currentIdx;
           gScore[neighborIdx] = tentativeGScore;
           fScore[neighborIdx] = tentativeGScore + toroidalHeuristic({ x: nx, y: ny }, endCoords, gridWidth, gridHeight);
