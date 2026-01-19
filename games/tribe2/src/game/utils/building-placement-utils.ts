@@ -353,6 +353,12 @@ export function createBuilding(
   if (buildingType === BuildingType.PlantingZone) {
     updatePlantingZoneConnections(gameState);
   }
+
+  // Increment building version for cache invalidation (palisade connections)
+  if (buildingType === BuildingType.Palisade || buildingType === BuildingType.Gate) {
+    gameState.buildingVersion = (gameState.buildingVersion ?? 0) + 1;
+  }
+
   return building;
 }
 

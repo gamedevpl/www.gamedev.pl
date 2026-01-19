@@ -195,6 +195,8 @@ export interface GameWorldState {
   navigationGrid: NavigationGrid;
   pathfindingQueue: EntityId[];
   tasks: Record<string, Task>;
+  /** Version counter incremented when buildings are added/removed, used for cache invalidation */
+  buildingVersion: number;
 }
 
 export type UpdateContext = {

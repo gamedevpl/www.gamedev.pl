@@ -238,6 +238,7 @@ const createMockGameState = (): GameWorldState => {
     viewportDragDistance: 0,
     selectedBuildingType: null,
     selectedBuildingForRemoval: null,
+    buildingVersion: 0,
   };
   return gameState;
 };

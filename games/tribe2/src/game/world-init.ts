@@ -289,6 +289,7 @@ export function initWorld(): GameWorldState {
     navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
     pathfindingQueue: [],
     tasks: {},
+    buildingVersion: 0,
   };
 
   // Populate navigation grid with initial obstacles (trees)
@@ -470,6 +471,7 @@ export function initIntroWorld(): GameWorldState {
     navigationGrid: initNavigationGrid(MAP_WIDTH, MAP_HEIGHT),
     pathfindingQueue: [],
     tasks: {},
+    buildingVersion: 0,
   };
 
   // Populate navigation grid with initial obstacles (trees)
