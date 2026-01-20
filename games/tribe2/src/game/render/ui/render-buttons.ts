@@ -268,6 +268,13 @@ export function renderUIButtons(
           player.leaderId === player.id &&
           findTribeMembers(player.id, gameState).length > TRIBE_BUILDINGS_MIN_HEADCOUNT,
       },
+      {
+        playerAction: PlayerActionType.StrategicCommand,
+        buttonAction: UIButtonActionType.ToggleStrategicMenu,
+        shortcut: 'Y',
+        name: 'Strategy',
+        condition: () => player.isAdult === true && player.leaderId === player.id,
+      },
     ];
 
     playerCommandButtons = playerCommandButtons.filter((b) => (b.condition ? b.condition() : true));
@@ -293,6 +300,10 @@ export function renderUIButtons(
       const isBuildButton = behavior.playerAction === PlayerActionType.Build;
       const isBuildMenuOpen = isBuildButton && gameState.buildMenuOpen;
 
+      // Special handling for Strategy button
+      const isStrategyButton = behavior.playerAction === PlayerActionType.StrategicCommand;
+      const isStrategicMenuOpen = isStrategyButton && gameState.strategicMenuOpen;
+
       const shiftTooltip =
         !gameState.hasPlayerEnabledAutopilot || gameState.hasPlayerEnabledAutopilot < 4
           ? ' (Press Shift to toggle Auto)'
@@ -300,7 +311,9 @@ export function renderUIButtons(
       const tooltipText = isToggleButton ? `${behavior.name}${shiftTooltip}` : behavior.name;
 
       const backgroundColor =
-        isBehaviorActive || isBuildMenuOpen ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
+        isBehaviorActive || isBuildMenuOpen || isStrategicMenuOpen
+          ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR
+          : UI_BUTTON_BACKGROUND_COLOR;
 
       const button: ClickableUIButton = {
         id: `commandButton_${behavior.name}`,
@@ -313,7 +326,10 @@ export function renderUIButtons(
         currentWidth: UI_AUTOPILOT_BUTTON_SIZE,
         tooltip: tooltipText,
         isDisabled,
-        activated: isBehaviorActive || (behavior.buttonAction === UIButtonActionType.CommandBuild && isBuildMenuOpen),
+        activated:
+          isBehaviorActive ||
+          (behavior.buttonAction === UIButtonActionType.CommandBuild && isBuildMenuOpen) ||
+          (behavior.buttonAction === UIButtonActionType.ToggleStrategicMenu && isStrategicMenuOpen),
       };
       gameState.uiButtons.push(button);
     });
