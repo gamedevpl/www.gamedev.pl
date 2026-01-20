@@ -168,24 +168,6 @@ export const handleUIButtonClick = (
     case UIButtonActionType.CloseTribeModal:
       gameState.tribeModalOpen = false;
       break;
-    case UIButtonActionType.ToggleStrategicMenu:
-      gameState.strategicMenuOpen = !gameState.strategicMenuOpen;
-      break;
-    case UIButtonActionType.SelectStrategicObjective:
-      if (player && player.leaderId && button.objective !== undefined) {
-        const leader = gameState.entities.entities[player.leaderId] as HumanEntity | undefined;
-        if (leader) {
-          // Initialize tribeControl if it doesn't exist
-          if (!leader.tribeControl) {
-            leader.tribeControl = {
-              diplomacy: {},
-            };
-          }
-          // Update the strategic objective
-          leader.tribeControl.strategicObjective = button.objective;
-        }
-      }
-      break;
   }
 
   // For most cases, the original gameState object is mutated, so we return it.
