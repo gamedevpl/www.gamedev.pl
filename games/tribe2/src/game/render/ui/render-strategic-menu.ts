@@ -1,15 +1,14 @@
 import { GameWorldState } from '../../world-types';
 import { StrategicObjective } from '../../entities/tribe/tribe-types';
 import { UIButtonActionType } from '../../ui/ui-types';
-import { findPlayerEntity, findTribeMembers } from '../../utils/world-utils';
+import { findPlayerEntity } from '../../utils/world-utils';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import {
   UI_AUTOPILOT_BUTTON_SIZE,
-  UI_AUTOPILOT_BUTTON_SPACING,
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_BUTTON_ACTIVATED_BORDER_COLOR,
   UI_BUTTON_BACKGROUND_COLOR,
-  UI_BUTTON_DISABLED_TEXT_COLOR,
+  UI_BUTTON_HOVER_BACKGROUND_COLOR,
   UI_BUTTON_TEXT_COLOR,
   UI_BUTTON_HEIGHT,
   UI_FONT_SIZE,
@@ -20,65 +19,86 @@ export interface ObjectiveDefinition {
   objective: StrategicObjective;
   icon: string;
   name: string;
+  tooltip: string;
 }
 
-export interface CategoryDefinition {
-  name: string;
-  icon: string;
-  objectives: ObjectiveDefinition[];
-}
-
-export const OBJECTIVE_CATEGORIES: CategoryDefinition[] = [
+export const STRATEGIC_OBJECTIVE_DEFINITIONS: ObjectiveDefinition[] = [
   {
-    name: 'ECONOMIC',
+    objective: StrategicObjective.None,
+    icon: '⭕',
+    name: 'None',
+    tooltip: 'No specific objective. Tribe will act autonomously.',
+  },
+  {
+    objective: StrategicObjective.GreatHarvest,
     icon: '🌾',
-    objectives: [
-      { objective: StrategicObjective.GreatHarvest, icon: '🌾', name: 'GREAT HARVEST' },
-      { objective: StrategicObjective.GreenThumb, icon: '🌱', name: 'GREEN THUMB' },
-      { objective: StrategicObjective.LumberjackFever, icon: '🪓', name: 'LUMBERJACK' },
-      { objective: StrategicObjective.WinterPrep, icon: '🔥', name: 'WINTER PREP' },
-    ],
+    name: 'Great Harvest',
+    tooltip: 'Focus on gathering berries and surplus food.',
   },
   {
-    name: 'GROWTH',
-    icon: '🏗️',
-    objectives: [
-      { objective: StrategicObjective.BabyBoom, icon: '👶', name: 'BABY BOOM' },
-      { objective: StrategicObjective.ManifestDestiny, icon: '🗺️', name: 'MANIFEST' },
-      { objective: StrategicObjective.IronCurtain, icon: '🧱', name: 'IRON CURTAIN' },
-    ],
+    objective: StrategicObjective.GreenThumb,
+    icon: '🌱',
+    name: 'Green Thumb',
+    tooltip: 'Prioritize planting and expanding berry bushes.',
   },
   {
-    name: 'MILITARY',
+    objective: StrategicObjective.LumberjackFever,
+    icon: '🌲',
+    name: 'Lumberjack',
+    tooltip: 'Focus on chopping trees and gathering wood.',
+  },
+  {
+    objective: StrategicObjective.WinterPrep,
+    icon: '🔥',
+    name: 'Winter Prep',
+    tooltip: 'Stockpile wood and maintain bonfires for warmth.',
+  },
+  {
+    objective: StrategicObjective.BabyBoom,
+    icon: '👶',
+    name: 'Baby Boom',
+    tooltip: 'Encourage procreation to grow the tribe population.',
+  },
+  {
+    objective: StrategicObjective.ManifestDestiny,
+    icon: '🎭',
+    name: 'Manifest Iron',
+    tooltip: 'Expand territory and seek out iron deposits.',
+  },
+  {
+    objective: StrategicObjective.IronCurtain,
+    icon: '🧱',
+    name: 'Iron Curtain',
+    tooltip: 'Focus on building and maintaining defensive walls.',
+  },
+  {
+    objective: StrategicObjective.Warpath,
     icon: '⚔️',
-    objectives: [
-      { objective: StrategicObjective.Warpath, icon: '⚔️', name: 'WARPATH' },
-      { objective: StrategicObjective.ActiveDefense, icon: '🛡️', name: 'DEFENSE' },
-      { objective: StrategicObjective.RaidingParty, icon: '🗡️', name: 'RAIDING' },
-    ],
+    name: 'Warpath',
+    tooltip: 'Aggressively seek out and attack rival tribes.',
+  },
+  {
+    objective: StrategicObjective.ActiveDefense,
+    icon: '🛡️',
+    name: 'Defense',
+    tooltip: 'Prioritize defending territory and responding to threats.',
+  },
+  {
+    objective: StrategicObjective.RaidingParty,
+    icon: '🗡️',
+    name: 'Raiding',
+    tooltip: 'Launch small-scale raids to steal resources from others.',
   },
 ];
 
 export function getObjectiveName(objective: StrategicObjective): string {
-  if (objective === StrategicObjective.None) {
-    return 'NONE';
-  }
-  for (const category of OBJECTIVE_CATEGORIES) {
-    const found = category.objectives.find((o) => o.objective === objective);
-    if (found) return found.name;
-  }
-  return 'STRATEGY';
+  const found = STRATEGIC_OBJECTIVE_DEFINITIONS.find((o) => o.objective === objective);
+  return found ? found.name : 'STRATEGY';
 }
 
 export function getObjectiveIcon(objective: StrategicObjective): string {
-  if (objective === StrategicObjective.None) {
-    return '⭕';
-  }
-  for (const category of OBJECTIVE_CATEGORIES) {
-    const found = category.objectives.find((o) => o.objective === objective);
-    if (found) return found.icon;
-  }
-  return '🎖️';
+  const found = STRATEGIC_OBJECTIVE_DEFINITIONS.find((o) => o.objective === objective);
+  return found ? found.icon : '🎖️';
 }
 
 export function renderStrategicMenu(
@@ -96,40 +116,26 @@ export function renderStrategicMenu(
   if (!leader) return;
 
   const currentObjective = leader.tribeControl?.strategicObjective || StrategicObjective.None;
-  const tribeMembers = findTribeMembers(player.leaderId, gameState);
-  const population = tribeMembers.length;
 
-  const gridCols = 3;
-  const gridCellSize = Math.round(UI_AUTOPILOT_BUTTON_SIZE * 0.85);
-  const gridSpacing = UI_AUTOPILOT_BUTTON_SPACING;
-  const headerHeight = Math.round(UI_FONT_SIZE * 1.2);
-  const currentRowHeight = UI_BUTTON_HEIGHT;
-  const categoryHeaderHeight = Math.round(UI_FONT_SIZE * 0.7);
-  const footerHeight = UI_BUTTON_HEIGHT + UI_PADDING;
-  const sectionSpacing = UI_PADDING * 0.6;
+  const rowHeight = UI_BUTTON_HEIGHT + 4;
+  const rowSpacing = 2;
+  const headerHeight = Math.round(UI_FONT_SIZE * 1.5);
+  const panelPadding = UI_PADDING;
 
-  let contentHeight = headerHeight + currentRowHeight + gridSpacing;
-  contentHeight += currentRowHeight + sectionSpacing;
-
-  for (const category of OBJECTIVE_CATEGORIES) {
-    const rows = Math.ceil(category.objectives.length / gridCols);
-    const gridHeight = rows * gridCellSize + (rows - 1) * gridSpacing;
-    contentHeight += categoryHeaderHeight + gridHeight + sectionSpacing;
-  }
-
-  const panelWidth =
-    gridCols * gridCellSize + (gridCols - 1) * gridSpacing + UI_PADDING * 2;
-  const panelHeight = contentHeight + footerHeight + UI_PADDING * 2;
+  const contentHeight =
+    headerHeight + STRATEGIC_OBJECTIVE_DEFINITIONS.length * (rowHeight + rowSpacing) + panelPadding;
+  const panelWidth = 280;
+  const panelHeight = contentHeight + panelPadding;
 
   const buttonBarY = canvasHeight - UI_AUTOPILOT_BUTTON_SIZE - 20;
-  const panelBottom = buttonBarY - gridSpacing;
+  const panelBottom = buttonBarY - 10;
   const panelX = Math.max(UI_PADDING, Math.floor((canvasWidth - panelWidth) / 2));
   const panelY = Math.max(UI_PADDING, Math.floor(panelBottom - panelHeight));
 
   ctx.save();
 
   // Panel background
-  ctx.fillStyle = UI_BUTTON_BACKGROUND_COLOR;
+  ctx.fillStyle = '#2d3748'; // UI_BUTTON_BACKGROUND_COLOR equivalent with higher opacity
   ctx.globalAlpha = 0.95;
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
   ctx.globalAlpha = 1;
@@ -139,116 +145,71 @@ export function renderStrategicMenu(
   ctx.lineWidth = 2;
   ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
-  let cursorY = panelY + UI_PADDING;
+  let cursorY = panelY + panelPadding;
 
   // Header
   ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-  ctx.font = `${Math.round(UI_FONT_SIZE * 0.7)}px "Press Start 2P", Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('STRATEGIC COMMAND', panelX + panelWidth / 2, cursorY + headerHeight / 2);
+  ctx.font = `${Math.round(UI_FONT_SIZE * 0.7)}px \"Press Start 2P\", Arial`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('STRATEGIC COMMAND', panelX + panelPadding, cursorY);
   cursorY += headerHeight;
 
-  // Current strategy row
-  const currentLabel = `${getObjectiveIcon(currentObjective)} ${getObjectiveName(currentObjective)}`;
-  ctx.fillStyle = UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
-  ctx.fillRect(panelX + UI_PADDING, cursorY, panelWidth - UI_PADDING * 2, currentRowHeight);
-  ctx.strokeStyle = UI_BUTTON_ACTIVATED_BORDER_COLOR;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(panelX + UI_PADDING, cursorY, panelWidth - UI_PADDING * 2, currentRowHeight);
-  ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-  ctx.font = `${Math.round(UI_FONT_SIZE * 0.6)}px "Press Start 2P", Arial`;
-  ctx.textAlign = 'center';
-  ctx.fillText(currentLabel, panelX + panelWidth / 2, cursorY + currentRowHeight / 2);
-  cursorY += currentRowHeight + gridSpacing;
+  // Render objectives list
+  STRATEGIC_OBJECTIVE_DEFINITIONS.forEach((objDef) => {
+    const isSelected = currentObjective === objDef.objective;
+    const rowX = panelX + panelPadding;
+    const rowY = cursorY;
+    const rowWidth = panelWidth - panelPadding * 2;
 
-  // None option row
-  const noneSelected = currentObjective === StrategicObjective.None;
-  ctx.fillStyle = noneSelected ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-  ctx.fillRect(panelX + UI_PADDING, cursorY, panelWidth - UI_PADDING * 2, currentRowHeight);
-  ctx.strokeStyle = UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(panelX + UI_PADDING, cursorY, panelWidth - UI_PADDING * 2, currentRowHeight);
-  ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-  ctx.font = `${Math.round(UI_FONT_SIZE * 0.6)}px "Press Start 2P", Arial`;
-  ctx.textAlign = 'center';
-  ctx.fillText('⭕ NONE', panelX + panelWidth / 2, cursorY + currentRowHeight / 2);
+    const buttonId = `strategic_objective_${objDef.objective}`;
+    const isHovered = gameState.hoveredButtonId === buttonId;
 
-  gameState.uiButtons.push({
-    id: 'strategic_objective_none',
-    action: UIButtonActionType.SelectStrategicObjective,
-    rect: {
-      x: panelX + UI_PADDING,
-      y: cursorY,
-      width: panelWidth - UI_PADDING * 2,
-      height: currentRowHeight,
-    },
-    text: '',
-    backgroundColor: 'transparent',
-    textColor: UI_BUTTON_TEXT_COLOR,
-    currentWidth: panelWidth - UI_PADDING * 2,
-    objective: StrategicObjective.None,
-  });
+    // Row background if hovered (subtle)
+    if (isHovered && !isSelected) {
+      ctx.fillStyle = UI_BUTTON_HOVER_BACKGROUND_COLOR;
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(rowX, rowY, rowWidth, rowHeight);
+      ctx.globalAlpha = 1.0;
+    }
 
-  cursorY += currentRowHeight + sectionSpacing;
-
-  // Categories and objectives grid
-  for (const category of OBJECTIVE_CATEGORIES) {
-    ctx.fillStyle = UI_BUTTON_DISABLED_TEXT_COLOR;
-    ctx.font = `${Math.round(UI_FONT_SIZE * 0.55)}px "Press Start 2P", Arial`;
-    ctx.textAlign = 'left';
-    ctx.fillText(`${category.icon} ${category.name}`, panelX + UI_PADDING, cursorY + categoryHeaderHeight / 2);
-    cursorY += categoryHeaderHeight;
-
-    category.objectives.forEach((objDef, index) => {
-      const row = Math.floor(index / gridCols);
-      const col = index % gridCols;
-      const cellX = panelX + UI_PADDING + col * (gridCellSize + gridSpacing);
-      const cellY = cursorY + row * (gridCellSize + gridSpacing);
-      const isSelected = currentObjective === objDef.objective;
-
-      ctx.fillStyle = isSelected ? UI_BUTTON_ACTIVE_BACKGROUND_COLOR : UI_BUTTON_BACKGROUND_COLOR;
-      ctx.fillRect(cellX, cellY, gridCellSize, gridCellSize);
-      ctx.strokeStyle = isSelected ? UI_BUTTON_ACTIVATED_BORDER_COLOR : UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
+    // Row background if selected
+    if (isSelected) {
+      ctx.fillStyle = UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
+      ctx.fillRect(rowX, rowY, rowWidth, rowHeight);
+      ctx.strokeStyle = UI_BUTTON_ACTIVATED_BORDER_COLOR;
       ctx.lineWidth = 1;
-      ctx.strokeRect(cellX, cellY, gridCellSize, gridCellSize);
+      ctx.strokeRect(rowX, rowY, rowWidth, rowHeight);
+    }
 
-      ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `${Math.round(gridCellSize * 0.35)}px "Press Start 2P", Arial`;
-      ctx.fillText(objDef.icon, cellX + gridCellSize / 2, cellY + gridCellSize * 0.35);
-      ctx.font = `${Math.round(UI_FONT_SIZE * 0.45)}px "Press Start 2P", Arial`;
-      ctx.fillText(objDef.name, cellX + gridCellSize / 2, cellY + gridCellSize * 0.72);
+    // Icon and Name
+    ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
+    ctx.font = `${Math.round(UI_FONT_SIZE * 0.6)}px \"Press Start 2P\", Arial`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${objDef.icon} ${objDef.name}`, rowX + 10, rowY + rowHeight / 2);
 
-      gameState.uiButtons.push({
-        id: `strategic_objective_${objDef.objective}`,
-        action: UIButtonActionType.SelectStrategicObjective,
-        rect: { x: cellX, y: cellY, width: gridCellSize, height: gridCellSize },
-        text: '',
-        backgroundColor: 'transparent',
-        textColor: UI_BUTTON_TEXT_COLOR,
-        currentWidth: gridCellSize,
-        objective: objDef.objective,
-      });
+    // Checkmark if selected
+    if (isSelected) {
+      ctx.textAlign = 'right';
+      ctx.fillText('✓', rowX + rowWidth - 10, rowY + rowHeight / 2);
+    }
+
+    // Register UI button for interaction
+    gameState.uiButtons.push({
+      id: buttonId,
+      action: UIButtonActionType.SelectStrategicObjective,
+      rect: { x: rowX, y: rowY, width: rowWidth, height: rowHeight },
+      text: '',
+      backgroundColor: 'transparent',
+      textColor: UI_BUTTON_TEXT_COLOR,
+      currentWidth: rowWidth,
+      objective: objDef.objective,
+      tooltip: objDef.tooltip,
     });
 
-    const rows = Math.ceil(category.objectives.length / gridCols);
-    cursorY += rows * gridCellSize + (rows - 1) * gridSpacing + sectionSpacing;
-  }
-
-  // Footer
-  const footerY = panelY + panelHeight - footerHeight;
-  ctx.fillStyle = UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
-  ctx.fillRect(panelX + UI_PADDING, footerY, panelWidth - UI_PADDING * 2, footerHeight - UI_PADDING / 2);
-  ctx.strokeStyle = UI_BUTTON_ACTIVE_BACKGROUND_COLOR;
-  ctx.strokeRect(panelX + UI_PADDING, footerY, panelWidth - UI_PADDING * 2, footerHeight - UI_PADDING / 2);
-
-  ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-  ctx.font = `${Math.round(UI_FONT_SIZE * 0.5)}px "Press Start 2P", Arial`;
-  ctx.textAlign = 'left';
-  ctx.fillText(`POP: ${population}`, panelX + UI_PADDING + 8, footerY + footerHeight / 2 - 6);
-  ctx.fillText('MORALE: 80%', panelX + UI_PADDING + 8, footerY + footerHeight / 2 + 8);
+    cursorY += rowHeight + rowSpacing;
+  });
 
   ctx.restore();
 }

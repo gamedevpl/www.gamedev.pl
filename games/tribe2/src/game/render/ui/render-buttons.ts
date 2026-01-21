@@ -26,8 +26,8 @@ import { ClickableUIButton, UIButtonActionType } from '../../ui/ui-types';
 import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity } from '../../utils/world-utils';
 import { HumanEntity } from '../../entities/characters/human/human-types';
+import { StrategicObjective } from '../../entities/tribe/tribe-types';
 import {
-  OBJECTIVE_CATEGORIES,
   getObjectiveIcon,
   getObjectiveName,
 } from './render-strategic-menu';
@@ -203,13 +203,19 @@ export function renderUIButtons(
   let commandButtonsRect: Rect2D | null = null;
   if (player) {
     const leader = player.leaderId ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined) : undefined;
-    const currentObjective = leader?.tribeControl?.strategicObjective;
-    const hasObjectives = OBJECTIVE_CATEGORIES.some((category) => category.objectives.length > 0);
-    const objectiveIcon = currentObjective ? getObjectiveIcon(currentObjective) : hasObjectives ? '🎖️' : '⭕';
-    const objectiveName = currentObjective ? getObjectiveName(currentObjective) : 'STRATEGY';
-    const buttonText = `${objectiveIcon} ${objectiveName}`;
+    const currentObjective = leader?.tribeControl?.strategicObjective || StrategicObjective.None;
+    const toggleIcon = gameState.strategicMenuOpen ? '🔼' : '🔽';
 
-    const strategyButtonWidth = 220;
+    let buttonText = '';
+    if (currentObjective !== StrategicObjective.None) {
+      const icon = getObjectiveIcon(currentObjective);
+      const name = getObjectiveName(currentObjective).toUpperCase();
+      buttonText = `${icon} ${name} (ACTIVE) ${toggleIcon}`;
+    } else {
+      buttonText = `🎖️ STRATEGY ${toggleIcon}`;
+    }
+
+    const strategyButtonWidth = 300;
     const strategyButtonHeight = UI_AUTOPILOT_BUTTON_SIZE;
     const buttonX = Math.floor((canvasWidth - strategyButtonWidth) / 2);
     const buttonY = ctx.canvas.height - strategyButtonHeight - 20;
