@@ -2,6 +2,7 @@ import { HumanAction } from '../entities/characters/human/human-types';
 import { Entity, EntityId } from '../entities/entities-types';
 import { DiplomacyStatus } from '../world-types';
 import { Vector2D } from '../utils/math-types';
+import { StrategicObjective } from '../entities/tribe/tribe-types';
 
 /** Army control objective keys for use in UI buttons */
 export type ArmyControlObjective = 'protectHomeland' | 'expandBorders' | 'invadeEnemies';
@@ -24,6 +25,7 @@ export enum PlayerActionType {
   RemoveEnemyBuilding = 'RemoveEnemyBuilding',
   ArmyControl = 'ArmyControl',
   Chop = 'Chop',
+  StrategicCommand = 'StrategicCommand',
   // Autopilot specific
   AutopilotMove = 'AutopilotMove',
   AutopilotGather = 'AutopilotGather',
@@ -55,6 +57,7 @@ export const PLAYER_ACTION_EMOJIS: Record<PlayerActionType, string> = {
   [PlayerActionType.RemoveEnemyBuilding]: '🧨',
   [PlayerActionType.ArmyControl]: '🎖️',
   [PlayerActionType.Chop]: '🪓',
+  [PlayerActionType.StrategicCommand]: '🎖️',
   [PlayerActionType.AutopilotMove]: '🎯',
   [PlayerActionType.AutopilotGather]: '✋',
   [PlayerActionType.AutopilotAttack]: '⚔️',
@@ -85,6 +88,7 @@ export const PLAYER_ACTION_NAMES: Record<PlayerActionType, string> = {
   [PlayerActionType.RemoveEnemyBuilding]: 'Destroy Enemy Building',
   [PlayerActionType.ArmyControl]: 'Army Control',
   [PlayerActionType.Chop]: 'Chop Tree',
+  [PlayerActionType.StrategicCommand]: 'Strategic Command',
   [PlayerActionType.AutopilotMove]: 'Walk',
   [PlayerActionType.AutopilotGather]: 'Gather',
   [PlayerActionType.AutopilotAttack]: 'Attack',
@@ -178,6 +182,10 @@ export enum UIButtonActionType {
   OpenTribeModal = 'OpenTribeModal',
   RecenterCamera = 'RecenterCamera',
   CloseTribeModal = 'CloseTribeModal',
+
+  // --- Strategic Commands ---
+  ToggleStrategicMenu = 'ToggleStrategicMenu',
+  SelectStrategicObjective = 'SelectStrategicObjective',
 }
 
 export interface ClickableUIButton {
@@ -194,4 +202,5 @@ export interface ClickableUIButton {
   lastActivated?: number;
   activated?: boolean;
   targetTribeId?: EntityId;
+  objective?: StrategicObjective;
 }

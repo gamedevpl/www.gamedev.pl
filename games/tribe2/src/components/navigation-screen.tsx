@@ -217,6 +217,7 @@ const createMockGameState = (): GameWorldState => {
     exitConfirmation: 'inactive',
     buildMenuOpen: false,
     tribeModalOpen: false,
+    strategicMenuOpen: false,
     cameraFollowingPlayer: false,
     cameraZoom: 1,
     masterVolume: 1,

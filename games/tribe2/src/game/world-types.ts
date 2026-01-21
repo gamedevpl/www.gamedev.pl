@@ -147,6 +147,7 @@ export interface GameWorldState {
   autopilotControls: AutopilotControls;
   buildMenuOpen: boolean;
   tribeModalOpen: boolean;
+  strategicMenuOpen: boolean;
   cameraFollowingPlayer: boolean;
   cameraZoom: number;
   cameraTargetPosition?: Vector2D;

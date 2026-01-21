@@ -33,6 +33,7 @@ export async function saveGame(worldState: GameWorldState): Promise<void> {
       minimapDragDistance: worldState.minimapDragDistance,
       selectedBuildingType: worldState.selectedBuildingType,
       selectedBuildingForRemoval: worldState.selectedBuildingForRemoval,
+      strategicMenuOpen: worldState.strategicMenuOpen,
       hasPlayerMovedEver: worldState.hasPlayerMovedEver,
       hasPlayerPlantedBush: worldState.hasPlayerPlantedBush,
       hasPlayerEnabledAutopilot: worldState.hasPlayerEnabledAutopilot,

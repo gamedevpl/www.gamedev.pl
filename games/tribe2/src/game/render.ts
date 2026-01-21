@@ -34,6 +34,7 @@ import { screenToWorldCoords } from './render/render-utils';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
 import { renderAiDebugger } from './render/debug/render-ai-debug.ts';
+import { renderStrategicMenu } from './render/ui/render-strategic-menu';
 
 export function renderGame(
   ctx: CanvasRenderingContext2D,
@@ -240,6 +241,11 @@ export function renderGame(
     // --- Tribe Modal ---
     if (gameState.tribeModalOpen) {
       renderTribeModal(ctx, gameState, tribesInfo, ctx.canvas.width, ctx.canvas.height);
+    }
+
+    // --- Strategic Command Menu ---
+    if (gameState.strategicMenuOpen) {
+      renderStrategicMenu(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
     }
 
     if (gameState.isPaused && gameState.exitConfirmation !== 'pending') {
