@@ -9,6 +9,8 @@ import { getTribeCenter, isTribeHostile } from '../../../utils';
 import { EntityId } from '../../../entities/entities-types';
 import { BuildingType } from '../../../entities/buildings/building-consts';
 import { ItemType } from '../../../entities/item-types';
+import { HUMAN_HUNGER_DEATH } from '../../../human-consts';
+import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../entities/tribe/territory-consts';
 
 /**
  * Interval in game hours between strategic objective evaluations.
@@ -19,6 +21,13 @@ const STRATEGY_EVALUATION_INTERVAL_HOURS = 4;
  * Blackboard key for last strategy evaluation time.
  */
 const BLACKBOARD_LAST_STRATEGY_EVAL = 'lastStrategyEvalTime';
+
+/**
+ * Strategy AI thresholds for decision making.
+ */
+const STRATEGY_MIN_WOOD_THRESHOLD = 3;
+const STRATEGY_SMALL_TERRITORY_THRESHOLD = 50;
+const STRATEGY_LARGE_TERRITORY_THRESHOLD = 200;
 
 /**
  * Evaluates the current situation and selects the most appropriate strategic objective
@@ -125,8 +134,7 @@ function evaluateBestStrategy(
 
   // --- Food Levels (Great Harvest / Green Thumb) ---
   const avgHunger = tribeMembers.reduce((sum, m) => sum + m.hunger, 0) / Math.max(1, tribeMemberCount);
-  const maxHunger = 100; // Approximation - actual death threshold
-  const hungerRatio = avgHunger / maxHunger;
+  const hungerRatio = avgHunger / HUMAN_HUNGER_DEATH;
 
   if (hungerRatio > 0.6) {
     scores[StrategicObjective.GreatHarvest] += 35;
@@ -146,18 +154,20 @@ function evaluateBestStrategy(
   const hasStorage = tribeBuildings.some((b) => b.buildingType === BuildingType.StorageSpot);
   const totalWood = tribeBuildings.reduce((sum, b) => {
     const woodItems =
-      b.storedItems?.filter((storedItem) => 'type' in storedItem.item && storedItem.item.type === ItemType.Wood) || [];
+      b.storedItems?.filter(
+        (storedItem) => storedItem.item.itemType === 'item' && storedItem.item.type === ItemType.Wood,
+      ) || [];
     return sum + woodItems.length;
   }, 0);
 
-  if (hasStorage && totalWood < 3) {
+  if (hasStorage && totalWood < STRATEGY_MIN_WOOD_THRESHOLD) {
     scores[StrategicObjective.LumberjackFever] += 20;
   }
 
   // --- Territory Analysis (Manifest Destiny / Iron Curtain) ---
   const ownedCells = gameState.terrainOwnership.filter((owner) => owner === leader.id).length;
-  const smallTerritory = ownedCells < 50;
-  const largeTerritory = ownedCells > 200;
+  const smallTerritory = ownedCells < STRATEGY_SMALL_TERRITORY_THRESHOLD;
+  const largeTerritory = ownedCells > STRATEGY_LARGE_TERRITORY_THRESHOLD;
 
   if (smallTerritory && tribeMemberCount >= 3) {
     scores[StrategicObjective.ManifestDestiny] += 25;
@@ -179,12 +189,17 @@ function evaluateBestStrategy(
       return hostileTribeIds.includes(h.leaderId);
     });
 
+    const { width: worldWidth, height: worldHeight } = gameState.mapDimensions;
+    const gridWidth = Math.ceil(worldWidth / TERRITORY_OWNERSHIP_RESOLUTION);
+    const gridHeight = Math.ceil(worldHeight / TERRITORY_OWNERSHIP_RESOLUTION);
+
     const enemiesNearTerritory = nearbyEnemies.some((enemy) => {
-      const ownerAtEnemyPos =
-        gameState.terrainOwnership[
-          Math.floor(enemy.position.y / 32) * Math.ceil(gameState.mapDimensions.width / 32) +
-            Math.floor(enemy.position.x / 32)
-        ];
+      const gridX = Math.floor(enemy.position.x / TERRITORY_OWNERSHIP_RESOLUTION);
+      const gridY = Math.floor(enemy.position.y / TERRITORY_OWNERSHIP_RESOLUTION);
+      // Clamp to valid bounds
+      const clampedX = Math.max(0, Math.min(gridWidth - 1, gridX));
+      const clampedY = Math.max(0, Math.min(gridHeight - 1, gridY));
+      const ownerAtEnemyPos = gameState.terrainOwnership[clampedY * gridWidth + clampedX];
       return ownerAtEnemyPos === leader.id;
     });
 
