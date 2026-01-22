@@ -2,10 +2,12 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { UpdateContext } from '../../../world-types';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../task-consts';
 import { TaskType, Task, TaskResult, TaskDefinition } from '../task-types';
+import { getStrategicModifier } from '../strategic-objective-modifiers';
 
 /**
  * A wrapper for defining human tasks that standardizes common checks.
  * Handles isAdult and autopilot behavior checks automatically.
+ * Also applies strategic objective modifiers to task scores.
  */
 
 export function defineHumanTask<T extends HumanEntity>(options: {
@@ -23,7 +25,19 @@ export function defineHumanTask<T extends HumanEntity>(options: {
           return null;
         }
 
-        return scorer(entity, task, context);
+        const baseScore = scorer(entity, task, context);
+        if (baseScore === null) {
+          return null;
+        }
+
+        // Apply strategic objective modifier from the tribe leader
+        const leader = entity.leaderId
+          ? (context.gameState.entities.entities[entity.leaderId] as HumanEntity | undefined)
+          : undefined;
+        const strategicObjective = leader?.tribeControl?.strategicObjective;
+        const modifier = getStrategicModifier(strategicObjective, task.type);
+
+        return baseScore * modifier;
       }
     : undefined;
 

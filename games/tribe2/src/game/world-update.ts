@@ -16,6 +16,7 @@ import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils'
 import { updateTemperature } from './temperature/temperature-update';
 import { produceTribeBuildingTasks, updateTribeFrontier } from './ai/task/tribes/tribe-building-task-producer';
 import { produceTribeDiplomacyTasks } from './ai/task/tribes/tribe-diplomacy-task-producer';
+import { produceTribeStrategyTasks } from './ai/task/tribes/tribe-strategy-ai';
 import { cleanupExpiredTasks } from './ai/task/task-utils';
 import { updateNavigationAI } from './ai/navigation-ai-update';
 
@@ -100,6 +101,7 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
       checkAndExecuteTribeMerges(indexedState);
       produceTribeBuildingTasks({ gameState: indexedState, deltaTime });
       produceTribeDiplomacyTasks({ gameState: indexedState, deltaTime });
+      produceTribeStrategyTasks({ gameState: indexedState, deltaTime });
     }
 
     // Process visual effects
