@@ -38,7 +38,7 @@ function createPlacementScorer(human: HumanEntity, task: Task, context: UpdateCo
 
 /**
  * Specialized scorer for border post placement.
- * Producer handles "architectural" quality (roundness/convexity), 
+ * Producer handles "architectural" quality (roundness/convexity),
  * so worker focuses more on efficiency (proximity).
  */
 function borderPostScorer(human: HumanEntity, task: Task, context: UpdateContext): number | null {
@@ -116,7 +116,6 @@ function createPlacementExecutor(
 export const humanPlaceStorageDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceStorage,
   requireAdult: true,
-  autopilotBehavior: 'build',
   scorer: createPlacementScorer,
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.StorageSpot, LEADER_BUILDING_PLACEMENT_PROXIMITY),
@@ -125,7 +124,6 @@ export const humanPlaceStorageDefinition = defineHumanTask<HumanEntity>({
 export const humanPlaceBonfireDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceBonfire,
   requireAdult: true,
-  autopilotBehavior: 'build',
   scorer: createPlacementScorer,
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.Bonfire, LEADER_BUILDING_PLACEMENT_PROXIMITY),
@@ -134,7 +132,6 @@ export const humanPlaceBonfireDefinition = defineHumanTask<HumanEntity>({
 export const humanPlacePlantingZoneDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlacePlantingZone,
   requireAdult: true,
-  autopilotBehavior: 'build',
   scorer: createPlacementScorer,
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.PlantingZone, LEADER_BUILDING_PLACEMENT_PROXIMITY),
@@ -144,7 +141,6 @@ export const humanPlaceBorderPostDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceBorderPost,
   scorer: borderPostScorer,
   requireAdult: true,
-  autopilotBehavior: 'build',
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.BorderPost, BORDER_POST_PLACEMENT_PROXIMITY),
 });
@@ -152,7 +148,6 @@ export const humanPlaceBorderPostDefinition = defineHumanTask<HumanEntity>({
 export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlacePalisade,
   requireAdult: true,
-  autopilotBehavior: 'build',
   scorer: createPlacementScorer,
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.Palisade, LEADER_BUILDING_PLACEMENT_PROXIMITY),
@@ -161,7 +156,6 @@ export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
 export const humanPlaceGateDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceGate,
   requireAdult: true,
-  autopilotBehavior: 'build',
   scorer: createPlacementScorer,
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.Gate, LEADER_BUILDING_PLACEMENT_PROXIMITY),

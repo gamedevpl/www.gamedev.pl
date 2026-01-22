@@ -83,6 +83,7 @@ export const UI_TOOLTIP_BACKGROUND_COLOR: string = 'rgba(0, 0, 0, 0.8)';
 export const UI_TOOLTIP_TEXT_COLOR: string = '#FFFFFF';
 export const UI_TOOLTIP_FONT_SIZE: number = 14;
 export const UI_TOOLTIP_PADDING: number = 8;
+export const UI_TOOLTIP_MAX_WIDTH: number = 350;
 export const UI_TOOLTIP_OFFSET_Y: number = -15;
 export const UI_BUTTON_ACTIVATED_BORDER_COLOR: string = '#FFD700'; // Gold
 export const UI_BUTTON_ACTIVATED_PULSE_SPEED: number = 5;

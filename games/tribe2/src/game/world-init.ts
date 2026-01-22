@@ -208,20 +208,10 @@ export function initWorld(): GameWorldState {
     isPaused: false,
     exitConfirmation: 'inactive',
     autopilotControls: {
-      behaviors: {
-        procreation: false,
-        planting: false,
-        gathering: false,
-        attack: false,
-        feedChildren: true,
-        build: false,
-        chopping: false,
-      },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,
       isManuallyMoving: false,
     },
-    buildMenuOpen: false,
     tribeModalOpen: false,
     strategicMenuOpen: false,
     cameraFollowingPlayer: true,
@@ -233,7 +223,6 @@ export function initWorld(): GameWorldState {
     isDraggingViewport: false,
     viewportDragButton: null,
     viewportDragDistance: 0,
-    selectedBuildingType: null,
     selectedBuildingForRemoval: null,
     hasPlayerMovedEver: false,
     hasPlayerPlantedBush: false,
@@ -296,7 +285,14 @@ export function initWorld(): GameWorldState {
   // Populate navigation grid with initial obstacles (trees)
   Object.values(initialWorldState.entities.entities).forEach((entity) => {
     if (entity.type === 'tree') {
-      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
+      updateNavigationGridSector(
+        initialWorldState,
+        entity.position,
+        entity.radius,
+        true,
+        null,
+        NAVIGATION_AGENT_RADIUS,
+      );
     }
   });
 
@@ -404,20 +400,10 @@ export function initIntroWorld(): GameWorldState {
     isPaused: false,
     exitConfirmation: 'inactive',
     autopilotControls: {
-      behaviors: {
-        procreation: false,
-        planting: false,
-        gathering: false,
-        attack: false,
-        feedChildren: true,
-        build: false,
-        chopping: false,
-      },
       hoveredAutopilotAction: undefined,
       activeAutopilotAction: undefined,
       isManuallyMoving: false,
     },
-    buildMenuOpen: false,
     tribeModalOpen: false,
     strategicMenuOpen: false,
     cameraFollowingPlayer: true,
@@ -429,7 +415,6 @@ export function initIntroWorld(): GameWorldState {
     isDraggingViewport: false,
     viewportDragButton: null,
     viewportDragDistance: 0,
-    selectedBuildingType: null,
     selectedBuildingForRemoval: null,
     hasPlayerMovedEver: false,
     hasPlayerPlantedBush: false,
@@ -479,7 +464,14 @@ export function initIntroWorld(): GameWorldState {
   // Populate navigation grid with initial obstacles (trees)
   Object.values(initialWorldState.entities.entities).forEach((entity) => {
     if (entity.type === 'tree') {
-      updateNavigationGridSector(initialWorldState, entity.position, entity.radius, true, null, NAVIGATION_AGENT_RADIUS);
+      updateNavigationGridSector(
+        initialWorldState,
+        entity.position,
+        entity.radius,
+        true,
+        null,
+        NAVIGATION_AGENT_RADIUS,
+      );
     }
   });
 

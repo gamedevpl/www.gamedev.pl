@@ -14,7 +14,6 @@ import { BONFIRE_STORAGE_CAPACITY } from '../../../../temperature/temperature-co
 export const humanFuelBonfireDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanFuelBonfire,
   requireAdult: true,
-  autopilotBehavior: 'gathering',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;

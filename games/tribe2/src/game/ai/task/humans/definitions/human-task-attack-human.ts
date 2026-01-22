@@ -10,7 +10,6 @@ import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanAttackHuman,
   requireAdult: true,
-  autopilotBehavior: 'attack',
   producer: (human, context) => {
     const { gameState } = context;
     const tasks: Record<string, Task> = {};

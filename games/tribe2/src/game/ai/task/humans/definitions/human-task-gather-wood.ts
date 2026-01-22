@@ -13,7 +13,6 @@ import { TREE_FALLEN } from '../../../../entities/plants/tree/states/tree-state-
 export const humanGatherWoodDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherWood,
   requireAdult: true,
-  autopilotBehavior: 'gathering',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;

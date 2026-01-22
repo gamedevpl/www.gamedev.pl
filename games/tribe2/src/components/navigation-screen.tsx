@@ -185,15 +185,6 @@ const createMockGameState = (): GameWorldState => {
       history: [],
     },
     autopilotControls: {
-      behaviors: {
-        procreation: false,
-        planting: false,
-        gathering: false,
-        attack: false,
-        feedChildren: false,
-        build: false,
-        chopping: false,
-      },
       isManuallyMoving: false,
     },
     ecosystem: {
@@ -215,7 +206,6 @@ const createMockGameState = (): GameWorldState => {
     viewportCenter: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
     isPaused: false,
     exitConfirmation: 'inactive',
-    buildMenuOpen: false,
     tribeModalOpen: false,
     strategicMenuOpen: false,
     cameraFollowingPlayer: false,
@@ -237,7 +227,6 @@ const createMockGameState = (): GameWorldState => {
     isDraggingViewport: false,
     viewportDragButton: null,
     viewportDragDistance: 0,
-    selectedBuildingType: null,
     selectedBuildingForRemoval: null,
     buildingVersion: 0,
   };

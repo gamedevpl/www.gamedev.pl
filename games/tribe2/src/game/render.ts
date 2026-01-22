@@ -12,7 +12,7 @@ import { findChildren, findHeir, findPlayerEntity, getTribesInfo } from './utils
 import { Vector2D } from './utils/math-types';
 import { PlayerActionHint, UIButtonActionType } from './ui/ui-types';
 import { TutorialUIHighlightKey } from './tutorial/tutorial-types';
-import { renderUIButtons } from './render/ui/render-buttons';
+import { renderUIButtons, renderGlobalTooltips } from './render/ui/render-buttons';
 import { renderPauseOverlay } from './render/ui/render-pause-overlay';
 import { renderPlayerActionHints } from './render/ui/render-player-hints';
 import { renderMinimap } from './render/ui/render-minimap';
@@ -28,9 +28,6 @@ import { renderTribeDebugger } from './render/debug/render-tribe-debugger';
 import { renderNotifications } from './render/ui/render-notifications';
 import { renderPerformanceDebugger } from './render/ui/render-performance-debugger';
 import { renderExitConfirmation } from './render/ui/render-exit-confirmation';
-import { renderGhostBuilding } from './render/render-building';
-import { canPlaceBuilding } from './utils/building-placement-utils';
-import { screenToWorldCoords } from './render/render-utils';
 import { renderDepletedSoil } from './render/render-soil';
 import { renderAllTerritories } from './render/render-territory';
 import { renderAiDebugger } from './render/debug/render-ai-debug.ts';
@@ -74,23 +71,6 @@ export function renderGame(
     canvasDimensions,
     borderLights,
   );
-
-  // Render ghost building preview
-  if (
-    player &&
-    gameState.selectedBuildingType &&
-    gameState.selectedBuildingType !== 'removal' &&
-    gameState.mousePosition
-  ) {
-    const worldPos = screenToWorldCoords(
-      gameState.mousePosition,
-      viewportCenter,
-      canvasDimensions,
-      gameState.mapDimensions,
-    );
-    const isValid = canPlaceBuilding(worldPos, gameState.selectedBuildingType, player.leaderId, gameState);
-    renderGhostBuilding(ctx, worldPos, gameState.selectedBuildingType, isValid, gameState.mapDimensions);
-  }
 
   // --- Notification Area Highlights ---
   const activeNotifications = gameState.notifications.filter((n) => !n.isDismissed);
@@ -255,5 +235,8 @@ export function renderGame(
     if (gameState.exitConfirmation === 'pending') {
       renderExitConfirmation(ctx, gameState, ctx.canvas.width, ctx.canvas.height);
     }
+
+    // --- Global Tooltips (Always on top) ---
+    renderGlobalTooltips(ctx, gameState);
   }
 }

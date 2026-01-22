@@ -198,6 +198,7 @@ export interface ClickableUIButton {
   backgroundColor: string;
   textColor: string;
   tooltip?: string;
+  fixedTooltipY?: number;
   isDisabled?: boolean;
   lastActivated?: number;
   activated?: boolean;

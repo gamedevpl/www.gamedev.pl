@@ -13,7 +13,6 @@ import { defineHumanTask } from '../human-task-utils';
 export const humanStockpileDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanStockpile,
   requireAdult: true,
-  autopilotBehavior: 'gathering',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;

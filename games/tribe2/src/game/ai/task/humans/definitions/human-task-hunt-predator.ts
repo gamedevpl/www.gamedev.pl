@@ -10,7 +10,6 @@ import { isWithinOperatingRange } from '../../../../entities/tribe/territory-uti
 export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanHuntPredator,
   requireAdult: true,
-  autopilotBehavior: 'attack',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') return null;
 

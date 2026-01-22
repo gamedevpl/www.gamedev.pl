@@ -7,7 +7,6 @@ import {
   UI_AUTOPILOT_BUTTON_SIZE,
   UI_BUTTON_ACTIVE_BACKGROUND_COLOR,
   UI_BUTTON_ACTIVATED_BORDER_COLOR,
-  UI_BUTTON_BACKGROUND_COLOR,
   UI_BUTTON_HOVER_BACKGROUND_COLOR,
   UI_BUTTON_TEXT_COLOR,
   UI_BUTTON_HEIGHT,
@@ -122,8 +121,7 @@ export function renderStrategicMenu(
   const headerHeight = Math.round(UI_FONT_SIZE * 1.5);
   const panelPadding = UI_PADDING;
 
-  const contentHeight =
-    headerHeight + STRATEGIC_OBJECTIVE_DEFINITIONS.length * (rowHeight + rowSpacing) + panelPadding;
+  const contentHeight = headerHeight + STRATEGIC_OBJECTIVE_DEFINITIONS.length * (rowHeight + rowSpacing) + panelPadding;
   const panelWidth = 280;
   const panelHeight = contentHeight + panelPadding;
 
@@ -149,7 +147,7 @@ export function renderStrategicMenu(
 
   // Header
   ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-  ctx.font = `${Math.round(UI_FONT_SIZE * 0.7)}px \"Press Start 2P\", Arial`;
+  ctx.font = `${Math.round(UI_FONT_SIZE * 0.7)}px "Press Start 2P", Arial`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText('STRATEGIC COMMAND', panelX + panelPadding, cursorY);
@@ -184,7 +182,7 @@ export function renderStrategicMenu(
 
     // Icon and Name
     ctx.fillStyle = UI_BUTTON_TEXT_COLOR;
-    ctx.font = `${Math.round(UI_FONT_SIZE * 0.6)}px \"Press Start 2P\", Arial`;
+    ctx.font = `${Math.round(UI_FONT_SIZE * 0.6)}px "Press Start 2P", Arial`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${objDef.icon} ${objDef.name}`, rowX + 10, rowY + rowHeight / 2);
@@ -206,6 +204,7 @@ export function renderStrategicMenu(
       currentWidth: rowWidth,
       objective: objDef.objective,
       tooltip: objDef.tooltip,
+      fixedTooltipY: panelY - 10,
     });
 
     cursorY += rowHeight + rowSpacing;

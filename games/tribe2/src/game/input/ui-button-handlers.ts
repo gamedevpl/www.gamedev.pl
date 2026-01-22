@@ -5,7 +5,7 @@ import { updateWorld } from '../world-update';
 import { FAST_FORWARD_AMOUNT_SECONDS } from '../entities/tribe/tribe-consts.ts';
 import { playSoundAt } from '../sound/sound-manager';
 import { SoundType } from '../sound/sound-types';
-import { findPlayerEntity, performTribeSplit } from '../utils/world-utils';
+import { findPlayerEntity } from '../utils/world-utils';
 import { dismissNotification } from '../notifications/notification-utils';
 import { centerViewportOn } from '../utils/camera-utils';
 import { HumanEntity } from '../entities/characters/human/human-types';
@@ -49,8 +49,6 @@ export const handleUIButtonClick = (
     gameState.hasPlayerEnabledAutopilot++;
   }
 
-  const { behaviors } = gameState.autopilotControls;
-
   switch (button.action) {
     // --- System Controls ---
     case UIButtonActionType.ReturnToIntro:
@@ -83,62 +81,6 @@ export const handleUIButtonClick = (
       if (player && player.food.length > 0) {
         player.activeAction = 'eating';
       }
-      break;
-    case UIButtonActionType.CommandGather:
-      if (shift) {
-        behaviors.gathering = !behaviors.gathering;
-      } else if (player) {
-        player.activeAction = 'gathering';
-      }
-      break;
-    case UIButtonActionType.CommandPlant:
-      if (shift) {
-        behaviors.planting = !behaviors.planting;
-      } else if (player) {
-        gameState.autopilotControls.isManuallyPlanting = true;
-      }
-      break;
-    case UIButtonActionType.ToggleProcreationBehavior:
-      behaviors.procreation = !behaviors.procreation;
-      break;
-    case UIButtonActionType.ToggleAttackBehavior:
-      behaviors.attack = !behaviors.attack;
-      break;
-    case UIButtonActionType.ToggleFeedChildBehavior:
-      behaviors.feedChildren = !behaviors.feedChildren;
-      break;
-    case UIButtonActionType.CommandTribeSplit:
-      if (player) {
-        performTribeSplit(player, gameState);
-      }
-      break;
-    case UIButtonActionType.CommandBuild:
-      if (shift) {
-        behaviors.build = !behaviors.build;
-      } else {
-        gameState.buildMenuOpen = !gameState.buildMenuOpen;
-      }
-      break;
-    case UIButtonActionType.SelectStorageSpot:
-      gameState.selectedBuildingType = 'storageSpot';
-      break;
-    case UIButtonActionType.SelectPlantingZone:
-      gameState.selectedBuildingType = 'plantingZone';
-      break;
-    case UIButtonActionType.SelectRemovalTool:
-      gameState.selectedBuildingType = 'removal';
-      break;
-    case UIButtonActionType.SelectBorderPost:
-      gameState.selectedBuildingType = 'borderPost';
-      break;
-    case UIButtonActionType.SelectBonfire:
-      gameState.selectedBuildingType = 'bonfire';
-      break;
-    case UIButtonActionType.SelectPalisade:
-      gameState.selectedBuildingType = 'palisade';
-      break;
-    case UIButtonActionType.SelectGate:
-      gameState.selectedBuildingType = 'gate';
       break;
     case UIButtonActionType.ToggleDiplomacy:
       if (player && player.leaderId && button.targetTribeId) {

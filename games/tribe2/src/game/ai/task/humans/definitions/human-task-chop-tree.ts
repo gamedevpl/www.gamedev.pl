@@ -18,7 +18,6 @@ import {
 export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanChopTree,
   requireAdult: true,
-  autopilotBehavior: 'chopping',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;

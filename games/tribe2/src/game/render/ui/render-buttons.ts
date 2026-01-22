@@ -17,6 +17,7 @@ import {
   UI_PADDING,
   UI_TOOLTIP_BACKGROUND_COLOR,
   UI_TOOLTIP_FONT_SIZE,
+  UI_TOOLTIP_MAX_WIDTH,
   UI_TOOLTIP_OFFSET_Y,
   UI_TOOLTIP_PADDING,
   UI_TOOLTIP_TEXT_COLOR,
@@ -27,10 +28,7 @@ import { Rect2D, Vector2D } from '../../utils/math-types';
 import { findPlayerEntity } from '../../utils/world-utils';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 import { StrategicObjective } from '../../entities/tribe/tribe-types';
-import {
-  getObjectiveIcon,
-  getObjectiveName,
-} from './render-strategic-menu';
+import { getObjectiveIcon, getObjectiveName } from './render-strategic-menu';
 
 function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, isHovered: boolean): void {
   ctx.save();
@@ -112,29 +110,80 @@ function drawButton(ctx: CanvasRenderingContext2D, button: ClickableUIButton, is
   ctx.restore();
 }
 
-function renderTooltip(ctx: CanvasRenderingContext2D, rect: Rect2D, text: string, mousePosition: Vector2D): void {
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const width = ctx.measureText(currentLine + ' ' + word).width;
+    if (width < maxWidth) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
+}
+
+export function renderUITooltip(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect2D,
+  text: string,
+  mousePosition: Vector2D,
+  fixedTooltipY?: number,
+): void {
   ctx.save();
 
   ctx.font = `${UI_TOOLTIP_FONT_SIZE}px "Press Start 2P", Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
 
-  const textMetrics = ctx.measureText(text);
-  const textWidth = textMetrics.width;
-  const textHeight = UI_TOOLTIP_FONT_SIZE;
+  const lines = wrapText(ctx, text, UI_TOOLTIP_MAX_WIDTH);
+  const lineHeight = UI_TOOLTIP_FONT_SIZE * 1.5;
 
-  const boxWidth = textWidth + UI_TOOLTIP_PADDING * 2;
-  const boxHeight = textHeight + UI_TOOLTIP_PADDING * 2;
-  const boxX = mousePosition.x - boxWidth / 2;
+  const textWidths = lines.map((line) => ctx.measureText(line).width);
+  const maxTextWidth = Math.max(...textWidths);
+
+  const boxWidth = maxTextWidth + UI_TOOLTIP_PADDING * 2;
+  const boxHeight = lines.length * lineHeight + UI_TOOLTIP_PADDING * 2;
+
+  const canvasWidth = ctx.canvas.width;
   const canvasHeight = ctx.canvas.height;
-  const boxY =
-    rect.y < canvasHeight / 2 ? rect.y + rect.height - UI_TOOLTIP_OFFSET_Y : rect.y - boxHeight + UI_TOOLTIP_OFFSET_Y;
 
+  // Horizontal positioning: center on mouse position, but clamp within screen
+  let boxX = mousePosition.x - boxWidth / 2;
+  boxX = Math.max(UI_PADDING, Math.min(canvasWidth - boxWidth - UI_PADDING, boxX));
+
+  // Vertical positioning: decide whether to show above or below the button
+  let boxY: number;
+  if (fixedTooltipY !== undefined) {
+    // Use fixed vertical position if provided
+    boxY = fixedTooltipY - boxHeight;
+  } else if (rect.y < canvasHeight / 2) {
+    // Button is in the top half of the screen, show tooltip below it
+    boxY = rect.y + rect.height - UI_TOOLTIP_OFFSET_Y;
+  } else {
+    // Button is in the bottom half of the screen, show tooltip above it
+    boxY = rect.y - boxHeight + UI_TOOLTIP_OFFSET_Y;
+  }
+
+  // Clamp vertical position to stay within screen boundaries
+  boxY = Math.max(UI_PADDING, Math.min(canvasHeight - boxHeight - UI_PADDING, boxY));
+
+  // Draw background box
   ctx.fillStyle = UI_TOOLTIP_BACKGROUND_COLOR;
   ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
+  // Draw text lines
   ctx.fillStyle = UI_TOOLTIP_TEXT_COLOR;
-  ctx.fillText(text, mousePosition.x, boxY + boxHeight / 2 + textHeight / 2);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, boxX + UI_TOOLTIP_PADDING, boxY + UI_TOOLTIP_PADDING + index * lineHeight);
+  });
 
   ctx.restore();
 }
@@ -202,7 +251,9 @@ export function renderUIButtons(
   // 2. Strategy Button
   let commandButtonsRect: Rect2D | null = null;
   if (player) {
-    const leader = player.leaderId ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined) : undefined;
+    const leader = player.leaderId
+      ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined)
+      : undefined;
     const currentObjective = leader?.tribeControl?.strategicObjective || StrategicObjective.None;
     const toggleIcon = gameState.strategicMenuOpen ? '🔼' : '🔽';
 
@@ -253,18 +304,25 @@ export function renderUIButtons(
     currentButtonX -= button.currentWidth + UI_BUTTON_SPACING;
   });
 
-  // --- Render Tooltip ---
-  const hoveredButton = gameState.hoveredButtonId
-    ? gameState.uiButtons.find((b) => b.id === gameState.hoveredButtonId)
-    : undefined;
-
-  if (hoveredButton && hoveredButton.tooltip && gameState.mousePosition) {
-    renderTooltip(ctx, hoveredButton.rect, hoveredButton.tooltip, gameState.mousePosition);
-  }
-
   ctx.restore();
 
   return {
     commandButtonsRect,
   };
+}
+
+export function renderGlobalTooltips(ctx: CanvasRenderingContext2D, gameState: GameWorldState): void {
+  const hoveredButton = gameState.hoveredButtonId
+    ? gameState.uiButtons.find((b) => b.id === gameState.hoveredButtonId)
+    : undefined;
+
+  if (hoveredButton && hoveredButton.tooltip && gameState.mousePosition) {
+    renderUITooltip(
+      ctx,
+      hoveredButton.rect,
+      hoveredButton.tooltip,
+      gameState.mousePosition,
+      hoveredButton.fixedTooltipY,
+    );
+  }
 }

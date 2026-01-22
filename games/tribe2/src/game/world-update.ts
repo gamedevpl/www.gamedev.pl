@@ -10,7 +10,6 @@ import { updateNotificationEffects, updateNotifications } from './notifications/
 import { indexWorldState } from './world-index/world-state-index';
 import { updateEcosystemBalancer } from './ecosystem';
 import { saveGame } from './persistence/persistence-utils';
-import { updateUI } from './ui/ui-utils.ts';
 import { updateSoilRecovery } from './entities/plants/soil-depletion-update.ts';
 import { scheduledEventsUpdate } from './scheduled-events-update';
 import { checkAndExecuteTribeMerges } from './entities/tribe/family-tribe-utils';
@@ -108,9 +107,6 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
 
     // Update tutorial state
     updateTutorial(indexedState, deltaTime);
-
-    // Update UI state
-    updateUI(indexedState);
 
     currentState = indexedState;
     realDeltaTimeSeconds -= deltaTime;

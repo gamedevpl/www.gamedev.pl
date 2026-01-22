@@ -13,7 +13,6 @@ import { TASK_PLANTING_COMPLETION_RADIUS } from '../../task-consts';
 export const humanPlantBushDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlantBush,
   requireAdult: true,
-  autopilotBehavior: 'planting',
   scorer: (human, task, context) => {
     const berries = human.food.filter((f) => f.type === FoodType.Berry).length;
     if (berries < BERRY_COST_FOR_PLANTING) return null;

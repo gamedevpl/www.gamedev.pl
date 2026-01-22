@@ -1,5 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
-import { AutopilotControls, UpdateContext } from '../../../world-types';
+import { UpdateContext } from '../../../world-types';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../task-consts';
 import { TaskType, Task, TaskResult, TaskDefinition } from '../task-types';
 
@@ -11,20 +11,15 @@ import { TaskType, Task, TaskResult, TaskDefinition } from '../task-types';
 export function defineHumanTask<T extends HumanEntity>(options: {
   type: TaskType;
   requireAdult?: boolean;
-  autopilotBehavior?: keyof AutopilotControls['behaviors'];
   producer?: (entity: T, context: UpdateContext) => Record<string, Task>;
   scorer?: (entity: T, task: Task, context: UpdateContext) => number | null;
   executor?: (task: Task, entity: T, context: UpdateContext) => [TaskResult, string?, Task?] | TaskResult;
 }): TaskDefinition<T> {
-  const { type, requireAdult, autopilotBehavior, producer, scorer, executor } = options;
+  const { type, requireAdult, producer, scorer, executor } = options;
 
   const wrappedScorer = scorer
     ? (entity: T, task: Task, context: UpdateContext): number | null => {
         if (requireAdult && !entity.isAdult) {
-          return null;
-        }
-
-        if (autopilotBehavior && entity.isPlayer && !context.gameState.autopilotControls.behaviors[autopilotBehavior]) {
           return null;
         }
 
@@ -35,10 +30,6 @@ export function defineHumanTask<T extends HumanEntity>(options: {
   const wrappedExecutor = executor
     ? (task: Task, entity: T, context: UpdateContext): [TaskResult, string?, Task?] | TaskResult => {
         if (requireAdult && !entity.isAdult) {
-          return TaskResult.Failure;
-        }
-
-        if (autopilotBehavior && entity.isPlayer && !context.gameState.autopilotControls.behaviors[autopilotBehavior]) {
           return TaskResult.Failure;
         }
 

@@ -14,7 +14,6 @@ import { defineHumanTask } from '../human-task-utils';
 export const humanProcreateFemaleDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanProcreateFemale,
   requireAdult: true,
-  autopilotBehavior: 'procreation',
   producer: (human, context) => {
     const tasks: Record<string, Task> = {};
 

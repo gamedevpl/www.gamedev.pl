@@ -36,51 +36,7 @@ export const handlePlayerActionKeyDown = (
     gameState.hasPlayerEnabledAutopilot++;
   }
 
-  // Handle build menu shortcuts when menu is open
-  if (gameState.buildMenuOpen) {
-    if (key === '1') {
-      gameState.selectedBuildingType = 'storageSpot';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '2') {
-      gameState.selectedBuildingType = 'plantingZone';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '3') {
-      gameState.selectedBuildingType = 'palisade';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '4') {
-      gameState.selectedBuildingType = 'bonfire';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '5') {
-      gameState.selectedBuildingType = 'borderPost';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '6') {
-      gameState.selectedBuildingType = 'removal';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    } else if (key === '7') {
-      gameState.selectedBuildingType = 'gate';
-      playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
-      return;
-    }
-  }
-
-  if (key === 'escape') {
-    if (gameState.selectedBuildingType) {
-      gameState.selectedBuildingType = null;
-      return;
-    }
-  }
-
   if (key === 'e') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.gathering = !gameState.autopilotControls.behaviors.gathering;
-      return;
-    }
     const gatherBushTarget = findClosestEntity<BerryBushEntity>(
       playerEntity,
       gameState,
@@ -123,10 +79,6 @@ export const handlePlayerActionKeyDown = (
       playSoundAt(updateContext, SoundType.Gather, playerEntity.position);
     }
   } else if (key === 'r') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.procreation = !gameState.autopilotControls.behaviors.procreation;
-      return;
-    }
     const potentialPartner = findClosestEntity<HumanEntity>(
       playerEntity,
       gameState,
@@ -144,10 +96,6 @@ export const handlePlayerActionKeyDown = (
       playSoundAt(updateContext, SoundType.Eat, playerEntity.position);
     }
   } else if (key === 'h') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.feedChildren = !gameState.autopilotControls.behaviors.feedChildren;
-      return;
-    }
     const feedAction = playerActionHints.find((a) => a.type === PlayerActionType.FeedChild);
     if (feedAction && feedAction.targetEntity) {
       playerEntity.activeAction = 'feeding';
@@ -182,10 +130,6 @@ export const handlePlayerActionKeyDown = (
     gameState.autopilotControls.isManuallyMoving = true;
     gameState.autopilotControls.activeAutopilotAction = undefined;
   } else if (key === 'q') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.attack = !gameState.autopilotControls.behaviors.attack;
-      return;
-    }
     const target =
       findClosestEntity<HumanEntity>(playerEntity, gameState, 'human', HUMAN_ATTACK_RANGED_RANGE, (h) =>
         isHostile(playerEntity, h as HumanEntity, gameState),
@@ -198,11 +142,6 @@ export const handlePlayerActionKeyDown = (
       playerEntity.attackTargetId = target.id;
     }
   } else if (key === 'b') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.planting = !gameState.autopilotControls.behaviors.planting;
-      return;
-    }
-
     const plantAction = playerActionHints.find((a) => a.type === PlayerActionType.Plant);
     if (plantAction) {
       const plantingSpot = findValidPlantingSpot(playerEntity.position, gameState, 50, BERRY_BUSH_SPREAD_RADIUS);
@@ -213,12 +152,6 @@ export const handlePlayerActionKeyDown = (
       }
     }
   } else if (key === 'x') {
-    // Deposit to storage
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.gathering = !gameState.autopilotControls.behaviors.gathering;
-      return;
-    }
-
     // Check for refueling bonfire first
     const bonfire = findClosestEntity<BuildingEntity>(
       playerEntity,
@@ -265,12 +198,6 @@ export const handlePlayerActionKeyDown = (
       playSoundAt(updateContext, SoundType.StorageDeposit, playerEntity.position);
     }
   } else if (key === 'z') {
-    // Retrieve from storage
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.feedChildren = !gameState.autopilotControls.behaviors.feedChildren;
-      return;
-    }
-
     const storageSpot = findClosestEntity<BuildingEntity>(
       playerEntity,
       gameState,
@@ -294,18 +221,7 @@ export const handlePlayerActionKeyDown = (
     }
   } else if (key === 'k') {
     performTribeSplit(playerEntity, gameState);
-  } else if (key === 'l') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.build = !gameState.autopilotControls.behaviors.build;
-      return;
-    }
-    gameState.buildMenuOpen = !gameState.buildMenuOpen;
-    playSoundAt(updateContext, SoundType.ButtonClick, playerEntity.position);
   } else if (key === 'c') {
-    if (shiftKey) {
-      gameState.autopilotControls.behaviors.chopping = !gameState.autopilotControls.behaviors.chopping;
-      return;
-    }
     const treeTarget = findClosestEntity<TreeEntity>(
       playerEntity,
       gameState,

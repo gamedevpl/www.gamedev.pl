@@ -13,7 +13,6 @@ import { defineHumanTask } from '../human-task-utils';
 export const humanFeedChildDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanFeedChild,
   requireAdult: true,
-  autopilotBehavior: 'feedChildren',
   producer: (child, context) => {
     const tasks: Record<string, Task> = {};
 

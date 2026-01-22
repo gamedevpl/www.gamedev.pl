@@ -20,15 +20,8 @@ import {
   isEnemyBuilding,
 } from '../utils';
 import { Vector2D } from '../utils/math-types';
-import {
-  createBuilding,
-  canPlaceBuilding,
-  findBuildingAtPosition,
-  startBuildingDestruction,
-} from '../utils/building-placement-utils';
 import { BuildingEntity, BuildingType } from '../entities/buildings/building-types';
 import { isSoilDepleted } from '../entities/plants/soil-depletion-update.ts';
-import { calculateWrappedDistance } from '../utils/math-utils.ts';
 import { checkTakeoverContiguity } from '../entities/tribe/territory-utils';
 import { TERRITORY_BUILDING_RADIUS } from '../entities/tribe/territory-consts';
 
@@ -87,18 +80,7 @@ export const determineHoveredAutopilotAction = (
     } else if (hoveredEntity.type === 'building') {
       const building = hoveredEntity as BuildingEntity;
 
-      if (gameState.selectedBuildingType === 'removal') {
-        // Removal tool selected - if enemy building, show RemoveEnemyBuilding; else just Removal
-        if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState) && building.isConstructed) {
-          determinedAction = { action: PlayerActionType.RemoveEnemyBuilding, targetEntityId: building.id };
-        } else {
-          determinedAction = { action: PlayerActionType.Removal, position: hoveredEntity.position };
-        }
-      } else if (
-        player.leaderId === player.id &&
-        isEnemyBuilding(player, building, gameState) &&
-        building.isConstructed
-      ) {
+      if (player.leaderId === player.id && isEnemyBuilding(player, building, gameState) && building.isConstructed) {
         // Enemy building - only leaders can take over
         // Check if takeover is valid (must be adjacent to territory)
         const contiguityCheck = checkTakeoverContiguity(
@@ -226,50 +208,6 @@ export const handleAutopilotClick = (gameState: GameWorldState, worldPos: Vector
 
   const player = findPlayerEntity(gameState);
   if (!player) return;
-
-  // Handle building placement
-  if (gameState.selectedBuildingType && gameState.selectedBuildingType !== 'removal') {
-    const buildingType = gameState.selectedBuildingType as BuildingType;
-
-    // Check if player is within proximity to place building
-    const distance = calculateWrappedDistance(
-      player.position,
-      worldPos,
-      gameState.mapDimensions.width,
-      gameState.mapDimensions.height,
-    );
-
-    // Use a reasonable proximity threshold (100px)
-    const placementProximity = 100;
-
-    if (distance <= placementProximity) {
-      // Player is close enough, place immediately
-      if (canPlaceBuilding(worldPos, buildingType, player.leaderId, gameState, player.position, placementProximity)) {
-        createBuilding(worldPos, buildingType, player.leaderId!, gameState);
-        gameState.selectedBuildingType = null;
-      }
-    } else {
-      // Player is too far, trigger movement to placement location
-      if (canPlaceBuilding(worldPos, buildingType, player.leaderId, gameState)) {
-        gameState.autopilotControls.activeAutopilotAction = {
-          action: PlayerActionType.AutopilotBuildingPlacement,
-          position: worldPos,
-          buildingType: buildingType,
-        };
-        gameState.selectedBuildingType = null;
-      }
-    }
-    return;
-  }
-
-  // Handle building removal
-  if (gameState.selectedBuildingType === 'removal') {
-    const building = findBuildingAtPosition(worldPos, gameState);
-    if (building) {
-      startBuildingDestruction(building.id, gameState);
-    }
-    return;
-  }
 
   const hoveredAction = gameState.autopilotControls.hoveredAutopilotAction;
 

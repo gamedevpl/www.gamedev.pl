@@ -13,7 +13,6 @@ import { defineHumanTask } from '../human-task-utils';
 export const humanRetrieveDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanRetrieve,
   requireAdult: false,
-  autopilotBehavior: 'gathering',
   scorer: (human, task, context) => {
     // Only consider retrieving if hungry and has no food
     if (human.hunger <= HUMAN_AI_HUNGER_THRESHOLD_FOR_EATING || human.food.length > 0) {

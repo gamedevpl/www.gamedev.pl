@@ -3,27 +3,27 @@ import { IndexedWorldState } from '../world-index/world-index-types';
 import {
   BUILDING_DEFINITIONS,
   BuildingType,
-  BUILDING_GHOST_OPACITY,
   BUILDING_CONSTRUCTION_BAR_COLOR,
   BUILDING_DESTRUCTION_BAR_COLOR,
   BUILDING_PROGRESS_BAR_HEIGHT,
   BUILDING_PROGRESS_BAR_OFFSET,
+  BUILDING_GHOST_OPACITY,
 } from '../entities/buildings/building-consts';
 import { Vector2D } from '../utils/math-types';
 import { getDirectionVectorOnTorus } from '../utils/math-utils';
 import { drawProgressBar } from './render-ui';
 import { UI_BAR_BACKGROUND_COLOR } from '../ui/ui-consts';
-import { renderWithWrapping, pseudoRandom } from './render-utils';
+import { pseudoRandom, renderWithWrapping } from './render-utils';
 import { Entity, EntityId } from '../entities/entities-types';
 import { FOOD_TYPE_EMOJIS, FoodType } from '../entities/food-types';
 import { ITEM_TYPE_EMOJIS, ItemType } from '../entities/item-types';
 import { isEnemyBuilding } from '../utils/human-utils';
 import { findPlayerEntity } from '../utils';
 import { SpriteCache } from './sprite-cache';
-import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 import { TERRITORY_COLORS, TERRITORY_OWNERSHIP_RESOLUTION } from '../entities/tribe/territory-consts';
 import { drawPalisade, PalisadeConnections } from './render-palisade';
 import { drawGate } from './render-gate';
+import { Blackboard } from '../ai/behavior-tree/behavior-tree-blackboard';
 
 // Visual Constants for the stones
 const STONE_SPACING = 8; // Distance between stones
@@ -83,7 +83,8 @@ function getBuildingSpriteKey(
         const dist = Math.round(c.distance / 2) * 2; // Round to 2px
         return `${deg}:${dist}`;
       })
-      .join(',') + `_inner:${connections.isInner}_vert:${connections.isVertical}_ang:${Math.round(connections.wallAngle * 10)}`;
+      .join(',') +
+    `_inner:${connections.isInner}_vert:${connections.isVertical}_ang:${Math.round(connections.wallAngle * 10)}`;
 
   const tribeKey = b.ownerId ?? 'neutral';
 
@@ -428,15 +429,8 @@ export function renderBuilding(
   building: BuildingEntity,
   indexedWorld: IndexedWorldState,
 ): void {
-  const {
-    position,
-    width,
-    height,
-    constructionProgress,
-    destructionProgress,
-    isConstructed,
-    isBeingDestroyed,
-  } = building;
+  const { position, width, height, constructionProgress, destructionProgress, isConstructed, isBeingDestroyed } =
+    building;
 
   const player = findPlayerEntity(indexedWorld);
   const isHostile = !!(player && isEnemyBuilding(player, building, indexedWorld));

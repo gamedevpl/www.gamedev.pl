@@ -45,15 +45,11 @@ export const handleGameControlKeyDown = (
       if (
         autopilotControls.activeAutopilotAction ||
         autopilotControls.isManuallyMoving ||
-        autopilotControls.isManuallyPlanting ||
-        gameState.buildMenuOpen ||
-        gameState.selectedBuildingType
+        autopilotControls.isManuallyPlanting
       ) {
         autopilotControls.activeAutopilotAction = undefined;
         autopilotControls.isManuallyMoving = false;
         autopilotControls.isManuallyPlanting = false;
-        gameState.buildMenuOpen = false;
-        gameState.selectedBuildingType = null;
       } else {
         // Otherwise, handle exit confirmation.
         if (newState.exitConfirmation === 'pending') {

@@ -145,7 +145,6 @@ export interface GameWorldState {
   isPaused: boolean;
   exitConfirmation: 'inactive' | 'pending';
   autopilotControls: AutopilotControls;
-  buildMenuOpen: boolean;
   tribeModalOpen: boolean;
   strategicMenuOpen: boolean;
   cameraFollowingPlayer: boolean;
@@ -158,7 +157,6 @@ export interface GameWorldState {
   isDraggingViewport: boolean;
   viewportDragButton: number | null;
   viewportDragDistance: number;
-  selectedBuildingType: 'storageSpot' | 'plantingZone' | 'borderPost' | 'bonfire' | 'palisade' | 'gate' | 'removal' | null;
   selectedBuildingForRemoval: EntityId | null;
   hasPlayerMovedEver: boolean;
   hasPlayerPlantedBush: boolean;
@@ -213,15 +211,6 @@ export type UpdateContext = {
 };
 
 export type AutopilotControls = {
-  behaviors: {
-    procreation: boolean;
-    planting: boolean;
-    gathering: boolean;
-    attack: boolean;
-    feedChildren: boolean;
-    build: boolean;
-    chopping: boolean;
-  };
   hoveredAutopilotAction?: HoveredAutopilotAction;
   activeAutopilotAction?: HoveredAutopilotAction;
   isManuallyMoving: boolean;

@@ -10,7 +10,6 @@ import { isWithinOperatingRange } from '../../../../entities/tribe/territory-uti
 export const humanGatherBerriesDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherBerries,
   requireAdult: true,
-  autopilotBehavior: 'gathering',
   scorer: (human, task, context) => {
     if (typeof task.target !== 'number') {
       return null;
