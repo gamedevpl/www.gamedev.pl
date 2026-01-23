@@ -1,3 +1,4 @@
+import { HumanEntity } from './entities/characters/human/human-types';
 import { GameWorldState } from './world-types';
 import { GAME_DAY_IN_REAL_SECONDS, HOURS_PER_GAME_DAY, VIEWPORT_FOLLOW_SPEED } from './game-consts.ts';
 import { interactionsUpdate } from './interactions/interactions-update';
@@ -18,6 +19,7 @@ import { produceTribeBuildingTasks, updateTribeFrontier } from './ai/task/tribes
 import { produceTribeDiplomacyTasks } from './ai/task/tribes/tribe-diplomacy-task-producer';
 import { cleanupExpiredTasks } from './ai/task/task-utils';
 import { updateNavigationAI } from './ai/navigation-ai-update';
+import { updateTribeStrategy } from './ai/task/tribes/tribe-strategy';
 
 const MAX_REAL_TIME_DELTA = 1 / 60; // Maximum delta time to prevent large jumps
 
@@ -98,6 +100,15 @@ export function updateWorld(currentState: GameWorldState, realDeltaTimeSeconds: 
     // We run this once per game hour to maintain performance and avoid UI churn
     if (Math.floor(indexedState.time) > Math.floor(indexedState.time - gameHoursDelta)) {
       checkAndExecuteTribeMerges(indexedState);
+
+      // Update AI Tribe Strategies
+      const allHumans = indexedState.search.human.all();
+      for (const human of allHumans) {
+        if (human.leaderId === human.id && !human.isPlayer) {
+          updateTribeStrategy(human as HumanEntity, indexedState);
+        }
+      }
+
       produceTribeBuildingTasks({ gameState: indexedState, deltaTime });
       produceTribeDiplomacyTasks({ gameState: indexedState, deltaTime });
     }

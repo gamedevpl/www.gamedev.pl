@@ -1,4 +1,5 @@
 import { HumanEntity } from '../../../entities/characters/human/human-types';
+import { StrategicObjective } from '../../../entities/tribe/tribe-types';
 import { UpdateContext } from '../../../world-types';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../task-consts';
 import { TaskType, Task, TaskResult, TaskDefinition } from '../task-types';
@@ -61,4 +62,15 @@ export function defineHumanTask<T extends HumanEntity>(options: {
     scorer: wrappedScorer,
     executor: wrappedExecutor,
   };
+}
+
+export function getStrategyMultiplier(
+  human: HumanEntity,
+  context: UpdateContext,
+  objective: StrategicObjective,
+  multiplier: number,
+): number {
+  if (!human.leaderId) return 1;
+  const leader = context.gameState.entities.entities[human.leaderId] as HumanEntity | undefined;
+  return leader?.tribeControl?.strategicObjective === objective ? multiplier : 1;
 }

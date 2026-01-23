@@ -4,10 +4,11 @@ import { HUMAN_CHOPPING_PROXIMITY } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
 import { getTribeLeaderForCoordination } from '../../../../entities/tribe/tribe-task-utils';
 import { getTribeWoodNeed, getTribeAvailableWoodOnGround } from '../../../../entities/tribe/tribe-food-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 import {
   TREE_GROWING,
   TREE_FULL,
@@ -71,7 +72,8 @@ export const humanChopTreeDefinition = defineHumanTask<HumanEntity>({
     // Need factor: higher need = higher priority.
     const needFactor = Math.min(1, (woodNeed - availableOnGround) / 10);
 
-    return (distanceFactor + needFactor) / 2;
+    const baseScore = (distanceFactor + needFactor) / 2;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.LumberjackFever, 3.0);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {

@@ -4,8 +4,9 @@ import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 
 export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanHuntPredator,
@@ -35,7 +36,8 @@ export const humanHuntPredatorDefinition = defineHumanTask<HumanEntity>({
 
     const distanceFactor = getDistanceScore(distance);
     // Predators are high priority targets but slightly reduced to balance with survival/gathering
-    return (distanceFactor + 0.3) / 1.3;
+    const baseScore = (distanceFactor + 0.3) / 1.3;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.ActiveDefense, 2.5);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') return [TaskResult.Failure, 'Invalid target'];

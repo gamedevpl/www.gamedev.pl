@@ -5,7 +5,8 @@ import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 import { BONFIRE_STORAGE_CAPACITY } from '../../../../temperature/temperature-consts';
 
 /**
@@ -48,7 +49,8 @@ export const humanFuelBonfireDefinition = defineHumanTask<HumanEntity>({
     );
 
     // Distance factor: closer is better
-    return getDistanceScore(distance);
+    const baseScore = getDistanceScore(distance);
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.WinterPrep, 2.0);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {

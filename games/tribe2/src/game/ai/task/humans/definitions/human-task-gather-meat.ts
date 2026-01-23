@@ -4,8 +4,9 @@ import { HUMAN_HUNGER_DEATH, HUMAN_INTERACTION_RANGE } from '../../../../human-c
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
 import { isWithinOperatingRange } from '../../../../entities/tribe/territory-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 
 export const humanGatherMeatDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanGatherMeat,
@@ -43,7 +44,8 @@ export const humanGatherMeatDefinition = defineHumanTask<HumanEntity>({
     const hungerFactor = human.hunger / HUMAN_HUNGER_DEATH;
 
     // Base score + hunger weight (normalized 0-1)
-    return (distanceFactor + hungerFactor) / 2;
+    const baseScore = (distanceFactor + hungerFactor) / 2;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.GreatHarvest, 2.5);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {

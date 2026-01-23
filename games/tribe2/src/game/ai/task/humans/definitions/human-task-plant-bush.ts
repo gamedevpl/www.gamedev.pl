@@ -7,7 +7,8 @@ import { Vector2D } from '../../../../utils/math-types';
 import { BuildingEntity } from '../../../../entities/buildings/building-types';
 import { HUMAN_INTERACTION_PROXIMITY } from '../../../../human-consts';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 import { TASK_PLANTING_COMPLETION_RADIUS } from '../../task-consts';
 
 export const humanPlantBushDefinition = defineHumanTask<HumanEntity>({
@@ -33,7 +34,8 @@ export const humanPlantBushDefinition = defineHumanTask<HumanEntity>({
     );
 
     // Normalized distance score (0 to 1)
-    return getDistanceScore(distance);
+    const baseScore = getDistanceScore(distance);
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.GreenThumb, 4.0);
   },
   executor: (task, human, context) => {
     // Check if we still have enough berries

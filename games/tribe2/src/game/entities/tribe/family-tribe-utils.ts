@@ -481,6 +481,7 @@ export function getTribesInfo(gameState: GameWorldState, playerLeaderId?: Entity
       leaderGender: leader?.gender ?? 'male',
       diplomacyStatus: playerDiplomacy?.[tribe.leaderId ?? -1] ?? DiplomacyStatus.Friendly,
       territoryCenter,
+      strategicObjective: leader?.tribeControl?.strategicObjective,
     };
   });
 

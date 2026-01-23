@@ -22,6 +22,8 @@ import { drawFoodBar, drawProgressBar } from './render-bars';
 import { drawFamilyMemberBar, renderMiniatureCharacter } from './render-characters-ui';
 import { EntityId } from '../../entities/entities-types';
 import { Rect2D } from '../../utils/math-types';
+import { getObjectiveIcon, getObjectiveName } from './render-strategic-menu';
+import { StrategicObjective } from '../../entities/tribe/tribe-types';
 
 export function renderTopLeftPanel(
   ctx: CanvasRenderingContext2D,
@@ -252,6 +254,21 @@ export function renderTopLeftPanel(
     height: UI_BERRY_ICON_SIZE + UI_BAR_PADDING,
   };
   ctx.textBaseline = 'alphabetic';
+
+  // Strategic Objective
+  uiLineY += UI_BERRY_ICON_SIZE + UI_BAR_PADDING;
+  const leader = player.leaderId ? (gameState.entities.entities[player.leaderId] as HumanEntity | undefined) : undefined;
+  const objective = leader?.tribeControl?.strategicObjective || StrategicObjective.None;
+
+  if (objective !== StrategicObjective.None) {
+    const icon = getObjectiveIcon(objective);
+    const name = getObjectiveName(objective).toUpperCase();
+    ctx.font = `${UI_FONT_SIZE * 0.7}px "Press Start 2P", Arial`;
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${icon} ${name}`, UI_PADDING, uiLineY);
+  }
 
   return { hungerBarRect, foodBarRect };
 }

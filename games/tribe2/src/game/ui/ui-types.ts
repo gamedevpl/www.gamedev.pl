@@ -119,6 +119,7 @@ export interface TribeInfo {
   leaderGender: 'male' | 'female';
   diplomacyStatus?: DiplomacyStatus;
   territoryCenter?: Vector2D;
+  strategicObjective?: StrategicObjective;
 }
 
 export enum UIStatusType {

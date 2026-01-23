@@ -7,8 +7,9 @@ import { BuildingType } from '../../../../entities/buildings/building-consts';
 import { LEADER_BUILDING_PLACEMENT_PROXIMITY, BORDER_POST_PLACEMENT_PROXIMITY } from '../../../../ai-consts';
 import { Vector2D } from '../../../../utils/math-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
 import { getTribeCenter } from '../../../../utils/spatial-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 import { convertPositionToTerritoryGrid } from '../../../../entities/tribe/territory-utils';
 import { TERRITORY_OWNERSHIP_RESOLUTION } from '../../../../entities/tribe/territory-consts';
 
@@ -33,7 +34,8 @@ function createPlacementScorer(human: HumanEntity, task: Task, context: UpdateCo
   );
 
   // Score increases as distance decreases (0 to 1 range)
-  return getDistanceScore(distance);
+  const baseScore = getDistanceScore(distance);
+  return baseScore;
 }
 
 /**
@@ -79,7 +81,8 @@ function borderPostScorer(human: HumanEntity, task: Task, context: UpdateContext
   }
   const convexityScore = (friendlyNeighbors / 8) * 0.25;
 
-  return distanceScore + roundnessScore + convexityScore;
+  const baseScore = distanceScore + roundnessScore + convexityScore;
+  return baseScore * getStrategyMultiplier(human, context, StrategicObjective.ManifestDestiny, 2.0);
 }
 
 /**
@@ -148,7 +151,11 @@ export const humanPlaceBorderPostDefinition = defineHumanTask<HumanEntity>({
 export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlacePalisade,
   requireAdult: true,
-  scorer: createPlacementScorer,
+  scorer: (human, task, context) => {
+    const baseScore = createPlacementScorer(human, task, context);
+    if (baseScore === null) return null;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.IronCurtain, 3.5);
+  },
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.Palisade, LEADER_BUILDING_PLACEMENT_PROXIMITY),
 });
@@ -156,7 +163,11 @@ export const humanPlacePalisadeDefinition = defineHumanTask<HumanEntity>({
 export const humanPlaceGateDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanPlaceGate,
   requireAdult: true,
-  scorer: createPlacementScorer,
+  scorer: (human, task, context) => {
+    const baseScore = createPlacementScorer(human, task, context);
+    if (baseScore === null) return null;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.IronCurtain, 3.5);
+  },
   executor: (task, human, context) =>
     createPlacementExecutor(task, human, context, BuildingType.Gate, LEADER_BUILDING_PLACEMENT_PROXIMITY),
 });

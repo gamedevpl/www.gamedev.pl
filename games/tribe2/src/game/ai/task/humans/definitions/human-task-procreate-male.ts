@@ -1,6 +1,7 @@
 import { HumanEntity } from '../../../../entities/characters/human/human-types';
 import {
   HUMAN_FEMALE_MAX_PROCREATION_AGE,
+  HUMAN_HUNGER_DEATH,
   HUMAN_HUNGER_THRESHOLD_CRITICAL,
   HUMAN_INTERACTION_RANGE,
   HUMAN_MIN_PROCREATION_AGE,
@@ -9,7 +10,8 @@ import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-ut
 import { TASK_DEFAULT_VALIDITY_DURATION, TASK_PROCREATION_SCORE_MULTIPLIER } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 
 export const humanProcreateMaleDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanProcreateMale,
@@ -17,10 +19,13 @@ export const humanProcreateMaleDefinition = defineHumanTask<HumanEntity>({
   producer: (human, context) => {
     const tasks: Record<string, Task> = {};
 
+    const isBabyBoom = getStrategyMultiplier(human, context, StrategicObjective.BabyBoom, 2) === 2;
+    const hungerThreshold = isBabyBoom ? HUMAN_HUNGER_DEATH * 0.95 : HUMAN_HUNGER_THRESHOLD_CRITICAL;
+
     const isFertile =
       human.gender === 'male' &&
       human.age >= HUMAN_MIN_PROCREATION_AGE &&
-      human.hunger < HUMAN_HUNGER_THRESHOLD_CRITICAL &&
+      human.hunger < hungerThreshold &&
       (human.procreationCooldown || 0) <= 0;
 
     if (isFertile) {
@@ -43,18 +48,21 @@ export const humanProcreateMaleDefinition = defineHumanTask<HumanEntity>({
       return null;
     }
 
+    const isBabyBoom = getStrategyMultiplier(female, context, StrategicObjective.BabyBoom, 2) === 2;
+    const hungerThreshold = isBabyBoom ? HUMAN_HUNGER_DEATH * 0.95 : HUMAN_HUNGER_THRESHOLD_CRITICAL;
+
     // Check female's own fertility/readiness
     if (
       female.age < HUMAN_MIN_PROCREATION_AGE ||
       female.age > HUMAN_FEMALE_MAX_PROCREATION_AGE ||
-      female.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL ||
+      female.hunger >= hungerThreshold ||
       (female.procreationCooldown || 0) > 0
     ) {
       return null;
     }
 
     const male = context.gameState.entities.entities[task.creatorEntityId] as HumanEntity | undefined;
-    if (!male || male.gender !== 'male' || male.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+    if (!male || male.gender !== 'male' || male.hunger >= hungerThreshold) {
       return null;
     }
 
@@ -74,13 +82,14 @@ export const humanProcreateMaleDefinition = defineHumanTask<HumanEntity>({
     const distanceFactor = getDistanceScore(distance);
 
     // Base score for procreation
-    return distanceFactor * TASK_PROCREATION_SCORE_MULTIPLIER;
+    const baseScore = distanceFactor * TASK_PROCREATION_SCORE_MULTIPLIER;
+    return baseScore * getStrategyMultiplier(female, context, StrategicObjective.BabyBoom, 4.0);
   },
   executor: (task, female, context) => {
     const male = context.gameState.entities.entities[task.creatorEntityId] as HumanEntity | undefined;
 
     // If male is gone or no longer eligible, fail the task
-    if (!male || male.gender !== 'male' || male.hunger >= HUMAN_HUNGER_THRESHOLD_CRITICAL) {
+    if (!male || male.gender !== 'male' || male.hunger >= HUMAN_HUNGER_DEATH) {
       return TaskResult.Failure;
     }
 

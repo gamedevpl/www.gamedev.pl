@@ -34,6 +34,7 @@ import {
   COLD_THRESHOLD,
   HEALTH_DRAIN_PER_HOUR_PER_DEGREE_BELOW_THRESHOLD,
 } from '../../../temperature/temperature-consts';
+import { StrategicObjective } from '../../tribe/tribe-types';
 
 export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, deltaTime: number) {
   const { gameState } = updateContext;
@@ -106,8 +107,12 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
     }
   }
 
+  const leader = entity.leaderId ? (gameState.entities.entities[entity.leaderId] as HumanEntity | undefined) : undefined;
+  const isBabyBoom = leader?.tribeControl?.strategicObjective === StrategicObjective.BabyBoom;
+  const cooldownMultiplier = isBabyBoom ? 2 : 1;
+
   if (entity.procreationCooldown) {
-    entity.procreationCooldown -= gameHoursDelta;
+    entity.procreationCooldown -= gameHoursDelta * cooldownMultiplier;
     if (entity.procreationCooldown < 0) entity.procreationCooldown = 0;
   }
 
@@ -124,7 +129,7 @@ export function humanUpdate(entity: HumanEntity, updateContext: UpdateContext, d
   }
 
   if (entity.feedChildCooldownTime) {
-    entity.feedChildCooldownTime -= gameHoursDelta;
+    entity.feedChildCooldownTime -= gameHoursDelta * cooldownMultiplier;
     if (entity.feedChildCooldownTime < 0) entity.feedChildCooldownTime = 0;
   }
 

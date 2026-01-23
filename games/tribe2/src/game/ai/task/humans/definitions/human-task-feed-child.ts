@@ -8,7 +8,8 @@ import { calculateWrappedDistance, dirToTarget } from '../../../../utils/math-ut
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 
 export const humanFeedChildDefinition = defineHumanTask<HumanEntity>({
   type: TaskType.HumanFeedChild,
@@ -61,7 +62,8 @@ export const humanFeedChildDefinition = defineHumanTask<HumanEntity>({
     const hungerFactor = child.hunger / HUMAN_HUNGER_DEATH;
 
     // Base score for feeding child (normalized 0-1)
-    return (distanceFactor + hungerFactor) / 2;
+    const baseScore = (distanceFactor + hungerFactor) / 2;
+    return baseScore * getStrategyMultiplier(adult, context, StrategicObjective.BabyBoom, 3.0);
   },
   executor: (task, adult, context) => {
     const child = context.gameState.entities.entities[task.creatorEntityId] as HumanEntity | undefined;

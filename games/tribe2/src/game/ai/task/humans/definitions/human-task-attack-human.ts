@@ -3,8 +3,9 @@ import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { Task, TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
 import { getOwnerOfPoint, isHostile, isTribeHostile } from '../../../../utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 import { TASK_DEFAULT_VALIDITY_DURATION } from '../../task-consts';
 
 export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
@@ -73,7 +74,10 @@ export const humanAttackHumanDefinition = defineHumanTask<HumanEntity>({
       baseScore += 0.1;
     }
 
-    return (distanceFactor + baseScore) / 2;
+    const rawScore = (distanceFactor + baseScore) / 2;
+    const activeDefenseMultiplier = getStrategyMultiplier(attacker, context, StrategicObjective.ActiveDefense, 2.5);
+    const warpathMultiplier = getStrategyMultiplier(attacker, context, StrategicObjective.Warpath, 5.0);
+    return rawScore * Math.max(activeDefenseMultiplier, warpathMultiplier);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') return [TaskResult.Failure, 'Invalid target'];

@@ -12,6 +12,8 @@ import {
 import { ClickableUIButton, TribeInfo, UIButtonActionType } from '../../ui/ui-types';
 import { renderMiniatureCharacter } from './render-characters-ui';
 import { DiplomacyStatus, GameWorldState } from '../../world-types';
+import { getObjectiveIcon } from './render-strategic-menu';
+import { StrategicObjective } from '../../entities/tribe/tribe-types';
 
 export function renderTribeList(
   ctx: CanvasRenderingContext2D,
@@ -37,7 +39,9 @@ export function renderTribeList(
   const panelWidth =
     UI_TRIBE_LIST_PADDING + // left padding
     UI_TRIBE_LIST_BADGE_SIZE + // badge size
-    UI_TRIBE_LIST_PADDING + // padding between badge and diplomacy icon
+    UI_TRIBE_LIST_PADDING + // padding between badge and strategy icon
+    UI_TRIBE_LIST_BADGE_SIZE + // strategy icon size
+    UI_TRIBE_LIST_PADDING + // padding between strategy and diplomacy
     UI_TRIBE_LIST_BADGE_SIZE + // diplomacy icon size
     UI_TRIBE_LIST_PADDING + // padding between diplomacy and counts
     UI_TRIBE_LIST_MINIATURE_SIZE + // adult icon
@@ -72,6 +76,15 @@ export function renderTribeList(
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillText(tribe.tribeBadge, currentX, centerY - UI_TRIBE_LIST_BADGE_SIZE / 4);
+    currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
+
+    // --- Strategic Objective ---
+    if (tribe.strategicObjective && tribe.strategicObjective !== StrategicObjective.None) {
+      const objectiveIcon = getObjectiveIcon(tribe.strategicObjective);
+      ctx.font = `${UI_TRIBE_LIST_BADGE_SIZE * 0.8}px "Press Start 2P", Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText(objectiveIcon, currentX + UI_TRIBE_LIST_BADGE_SIZE / 2, centerY);
+    }
     currentX += UI_TRIBE_LIST_BADGE_SIZE + UI_TRIBE_LIST_PADDING;
 
     // --- Diplomacy Status & Button ---

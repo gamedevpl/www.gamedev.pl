@@ -5,7 +5,8 @@ import { HUMAN_INTERACTION_RANGE } from '../../../../human-consts';
 import { calculateWrappedDistance } from '../../../../utils/math-utils';
 import { TaskResult, TaskType } from '../../task-types';
 import { getDistanceScore } from '../../task-utils';
-import { defineHumanTask } from '../human-task-utils';
+import { defineHumanTask, getStrategyMultiplier } from '../human-task-utils';
+import { StrategicObjective } from '../../../../entities/tribe/tribe-types';
 
 /**
  * Task definition for humans to stockpile resources in storage spots.
@@ -54,7 +55,8 @@ export const humanStockpileDefinition = defineHumanTask<HumanEntity>({
     // Resource factor: prioritize if holding wood or more food
     const resourceFactor = hasWood ? 0.6 : (human.food.length / human.maxFood) * 0.4;
 
-    return (distanceFactor + resourceFactor) / 2;
+    const baseScore = (distanceFactor + resourceFactor) / 2;
+    return baseScore * getStrategyMultiplier(human, context, StrategicObjective.WinterPrep, 2.0);
   },
   executor: (task, human, context) => {
     if (typeof task.target !== 'number') {
