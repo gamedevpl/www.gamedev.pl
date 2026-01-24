@@ -3,7 +3,7 @@ import { HumanEntity } from '../../../entities/characters/human/human-types';
 import { IndexedWorldState } from '../../../world-index/world-index-types';
 import { updateTribeStrategy } from './tribe-strategy';
 import { StrategicObjective, TribeControl } from '../../../entities/tribe/tribe-types';
-import { Blackboard, BlackboardData } from '../../behavior-tree/behavior-tree-blackboard';
+import { Blackboard } from '../../behavior-tree/behavior-tree-blackboard';
 
 // Mock dependencies
 vi.mock('../../../entities/tribe/tribe-food-utils', () => ({
@@ -27,10 +27,9 @@ import { getTribeMembers } from '../../../entities/tribe/family-tribe-utils';
 describe('Tribe Strategy Selection', () => {
   let gameState: IndexedWorldState;
   let leader: HumanEntity;
-  let blackboardData: BlackboardData;
 
   function createLeader(tribeControl?: Partial<TribeControl>): HumanEntity {
-    blackboardData = Blackboard.create();
+    const blackboardData = Blackboard.create();
     return {
       id: 1,
       type: 'human',

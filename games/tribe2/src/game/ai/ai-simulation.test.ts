@@ -10,6 +10,11 @@
  * 3. Handling of sudden prey influx and ecosystem changes
  * 4. Strategic objective effectiveness
  * 5. Long-term simulation stability
+ *
+ * Configuration:
+ * - YEARS_TO_SIMULATE: Environment variable to control simulation duration (default: varies per test)
+ *   Example: YEARS_TO_SIMULATE=10 npm run test:run
+ *   This follows the same pattern as game.test.ts for consistency.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
