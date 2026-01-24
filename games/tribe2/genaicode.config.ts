@@ -67,4 +67,11 @@ export default defineConfig({
       },
     },
   },
+  importantContext: {
+    systemPrompt: [
+      `Also remember to:
+- run git diff after each code change to ensure no unintended changes were made.
+- run build and type check and lint commands to ensure code quality and no errors.`,
+    ],
+  },
 });
