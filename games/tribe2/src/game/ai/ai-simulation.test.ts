@@ -275,6 +275,8 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
         tribeColor: TERRITORY_COLORS[1],
       };
       leader2.tribeControl = { diplomacy: {} };
+      // Give initial food to prevent starvation
+      leader2.food = Array(5).fill({ type: 'berry', id: 20001 });
 
       // Create tribe members for second tribe
       for (let i = 0; i < 3; i++) {
@@ -288,6 +290,8 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
         );
         member.leaderId = leader2.id;
         member.tribeInfo = leader2.tribeInfo;
+        // Give initial food to prevent starvation
+        member.food = Array(5).fill({ type: 'berry', id: 20002 + i });
       }
 
       const yearsToSimulate = parseInt(process.env.YEARS_TO_SIMULATE || '5', 10);
@@ -314,6 +318,8 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
         tribeColor: TERRITORY_COLORS[0],
       };
       tribe1Leader.tribeControl = { diplomacy: {} };
+      // Give initial food to prevent starvation
+      tribe1Leader.food = Array(5).fill({ type: 'berry', id: 10001 });
 
       const tribe2Leader = createHuman(
         gameState.entities,
@@ -329,6 +335,8 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
         tribeColor: TERRITORY_COLORS[1],
       };
       tribe2Leader.tribeControl = { diplomacy: {} };
+      // Give initial food to prevent starvation
+      tribe2Leader.food = Array(5).fill({ type: 'berry', id: 10002 });
 
       // Disable player control
       const humans = Object.values(gameState.entities.entities).filter(

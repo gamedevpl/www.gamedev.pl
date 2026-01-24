@@ -74,7 +74,7 @@ describe('Tribe Strategy Selection', () => {
 
     it('should select GreatHarvest when food security is critically low', () => {
       vi.mocked(findNearbyEnemiesOfTribe).mockReturnValue([]);
-      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.2); // Below 0.3 threshold
+      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.4); // Below 0.5 threshold (FOOD_SECURITY_CRITICAL)
       vi.mocked(getTribeWoodNeed).mockReturnValue(0);
       vi.mocked(getTribeMembers).mockReturnValue([
         { isAdult: true } as HumanEntity,
@@ -88,7 +88,7 @@ describe('Tribe Strategy Selection', () => {
 
     it('should select LumberjackFever when wood need is high', () => {
       vi.mocked(findNearbyEnemiesOfTribe).mockReturnValue([]);
-      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.5);
+      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.6); // Above 0.5 threshold
       vi.mocked(getTribeWoodNeed).mockReturnValue(20); // High wood need > adultCount * 2
       vi.mocked(getTribeMembers).mockReturnValue([
         { isAdult: true } as HumanEntity,
@@ -103,7 +103,7 @@ describe('Tribe Strategy Selection', () => {
 
     it('should select GreenThumb when bush ratio is low and food is adequate', () => {
       vi.mocked(findNearbyEnemiesOfTribe).mockReturnValue([]);
-      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.6); // Above 0.5
+      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.55); // Above 0.5 (FOOD_SECURITY_CRITICAL)
       vi.mocked(getTribeWoodNeed).mockReturnValue(2);
       vi.mocked(getTribeMembers).mockReturnValue([
         { isAdult: true } as HumanEntity,
@@ -118,7 +118,7 @@ describe('Tribe Strategy Selection', () => {
 
     it('should select BabyBoom when tribe is small and food is secure', () => {
       vi.mocked(findNearbyEnemiesOfTribe).mockReturnValue([]);
-      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.9); // Above 0.8
+      vi.mocked(calculateTribeFoodSecurity).mockReturnValue(0.7); // Above 0.6 (FOOD_SECURITY_STABLE)
       vi.mocked(getTribeWoodNeed).mockReturnValue(2);
       vi.mocked(getTribeMembers).mockReturnValue([
         { isAdult: true } as HumanEntity,
