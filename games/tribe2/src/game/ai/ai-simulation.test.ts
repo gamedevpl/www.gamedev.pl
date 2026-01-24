@@ -30,6 +30,18 @@ import { StrategicObjective } from '../entities/tribe/tribe-types';
 import { generateTribeBadge } from '../utils/general-utils';
 import { TERRITORY_COLORS } from '../entities/tribe/territory-consts';
 import { generateRandomPreyGeneCode } from '../entities/characters/prey/prey-utils';
+import { FoodItem, FoodType } from '../entities/food-types';
+
+/**
+ * Creates an array of unique food items for testing
+ */
+function createFoodItems(count: number, startId: number): FoodItem[] {
+  return Array.from({ length: count }, (_, i) => ({
+    itemType: 'food' as const,
+    type: FoodType.Berry,
+    id: startId + i,
+  }));
+}
 
 /**
  * Simulation statistics tracker for debugging
@@ -276,7 +288,7 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
       };
       leader2.tribeControl = { diplomacy: {} };
       // Give initial food to prevent starvation
-      leader2.food = Array(5).fill({ type: 'berry', id: 20001 });
+      leader2.food = createFoodItems(5, 20001);
 
       // Create tribe members for second tribe
       for (let i = 0; i < 3; i++) {
@@ -291,7 +303,7 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
         member.leaderId = leader2.id;
         member.tribeInfo = leader2.tribeInfo;
         // Give initial food to prevent starvation
-        member.food = Array(5).fill({ type: 'berry', id: 20002 + i });
+        member.food = createFoodItems(5, 20010 + i * 10);
       }
 
       const yearsToSimulate = parseInt(process.env.YEARS_TO_SIMULATE || '5', 10);
@@ -319,7 +331,7 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
       };
       tribe1Leader.tribeControl = { diplomacy: {} };
       // Give initial food to prevent starvation
-      tribe1Leader.food = Array(5).fill({ type: 'berry', id: 10001 });
+      tribe1Leader.food = createFoodItems(5, 10001);
 
       const tribe2Leader = createHuman(
         gameState.entities,
@@ -336,7 +348,7 @@ describe('AI Behaviors and Tribe Simulation Debug Suite', () => {
       };
       tribe2Leader.tribeControl = { diplomacy: {} };
       // Give initial food to prevent starvation
-      tribe2Leader.food = Array(5).fill({ type: 'berry', id: 10002 });
+      tribe2Leader.food = createFoodItems(5, 10010);
 
       // Disable player control
       const humans = Object.values(gameState.entities.entities).filter(
