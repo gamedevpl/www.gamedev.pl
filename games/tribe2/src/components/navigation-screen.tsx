@@ -402,7 +402,7 @@ export const NavigationScreen: React.FC = () => {
 
       const human = createHuman(
         gameState.entities,
-        startPos,
+        { ...startPos },
         gameState.time,
         'male',
         false,
