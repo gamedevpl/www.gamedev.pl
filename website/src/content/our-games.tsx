@@ -15,35 +15,19 @@ export default function OurGames() {
   return (
     <Section>
       <GameBox
-        title={t('XMAS')}
-        description={t('Świąteczna platformówka')}
-        highlight={xmasHighlight}
-        href={'/games/xmas/'}
-        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/xmas"
-        inProgress={false}
+        title={t('Tribe 2')}
+        description={t('A game about managing a tribe.')}
+        highlight={tribeGameHighlight}
+        href={'/games/tribe2/'}
+        githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/tribe2'}
+        inProgress={true}
       />
       <GameBox
-        title={t('Nukes')}
-        description={t('Symulacja wojny nuklearnej')}
-        highlight={nukesHighlight}
-        href={'/games/nukes/'}
-        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/nukes"
-        inProgress={false}
-      />
-      <GameBox
-        title={t('Monster steps')}
-        description={t('Turowa gra logiczna')}
-        highlight={monsterStepsHighlight}
-        href={'/games/monster-steps/'}
-        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/monster-steps"
-        inProgress={false}
-      />
-      <GameBox
-        title={t('MasterPlan')}
-        description={t('Offline multiplayer strategy game')}
-        highlight={masterplanHighlight}
-        href={'/games/masterplan/'}
-        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/masterplan"
+        title={t('Tribe Game')}
+        description={t('A game about managing a tribe.')}
+        highlight={tribeGameHighlight}
+        href={'/games/tribe/'}
+        githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/tribe'}
         inProgress={false}
       />
       <GameBox
@@ -55,11 +39,35 @@ export default function OurGames() {
         inProgress={false}
       />
       <GameBox
-        title={t('Tribe Game')}
-        description={t('A game about managing a tribe.')}
-        highlight={tribeGameHighlight}
-        href={'/games/tribe/'}
-        githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/tribe'}
+        title={t('MasterPlan')}
+        description={t('Offline multiplayer strategy game')}
+        highlight={masterplanHighlight}
+        href={'/games/masterplan/'}
+        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/masterplan"
+        inProgress={false}
+      />
+      <GameBox
+        title={t('Monster steps')}
+        description={t('Turowa gra logiczna')}
+        highlight={monsterStepsHighlight}
+        href={'/games/monster-steps/'}
+        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/monster-steps"
+        inProgress={false}
+      />
+      <GameBox
+        title={t('Nukes')}
+        description={t('Symulacja wojny nuklearnej')}
+        highlight={nukesHighlight}
+        href={'/games/nukes/'}
+        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/nukes"
+        inProgress={false}
+      />
+      <GameBox
+        title={t('XMAS')}
+        description={t('Świąteczna platformówka')}
+        highlight={xmasHighlight}
+        href={'/games/xmas/'}
+        githubUrl="https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/xmas"
         inProgress={false}
       />
     </Section>
