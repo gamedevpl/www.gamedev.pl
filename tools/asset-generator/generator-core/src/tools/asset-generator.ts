@@ -3,7 +3,7 @@ import { generateCode } from './genaicode-executor.js';
 import { ASSET_GENERATOR_PROMPT } from './prompts.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Asset } from '../assets-types.js';
+import { VisualAsset } from '../assets-types.js';
 import { FileState, GoogleGenAI } from '@google/genai';
 import { getServiceConfig } from 'genaicode/ai-service/service-configurations.js';
 
@@ -45,7 +45,7 @@ const generateCompleteAssetDef: FunctionDef = {
 export async function generateImprovedAsset(
   assetName: string,
   assetPath: string,
-  asset: Asset | null, // Can be null if asset doesn't exist yet
+  asset: VisualAsset | null, // Can be null if asset doesn't exist yet
   currentImplementation: string | null,
   renderedMedia: { stance: string; mediaType: string; dataUrl: string; filePath: string }[] | null,
   additionalPrompt?: string,

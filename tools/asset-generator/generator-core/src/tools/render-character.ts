@@ -1,5 +1,5 @@
 import { createCanvas } from 'canvas';
-import { Asset } from '../assets-types.js';
+import { VisualAsset } from '../assets-types.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import videoshow from 'videoshow';
@@ -13,7 +13,7 @@ import * as os from 'os';
  */
 export async function renderAsset(
   assetName: string,
-  asset: Asset,
+  asset: VisualAsset,
   assetPath: string,
 ): Promise<
   {
@@ -109,7 +109,7 @@ function log(message: string, verbosity: VerbosityLevel, requiredLevel: Verbosit
 
 export async function renderAssetVideos(
   assetName: string,
-  asset: Asset,
+  asset: VisualAsset,
   assetPath: string,
   options: VideoRenderOptions = {},
 ): Promise<
@@ -156,7 +156,7 @@ export async function renderAssetVideos(
 
 async function renderStanceVideo(
   assetName: string,
-  asset: Asset,
+  asset: VisualAsset,
   assetPath: string,
   stance: string,
   tempDir: string,
@@ -209,7 +209,7 @@ async function renderStanceVideo(
  * @returns Array of frame file paths
  */
 async function generateFrames(
-  asset: Asset,
+  asset: VisualAsset,
   frameDir: string,
   stance: string,
   totalFrames: number,

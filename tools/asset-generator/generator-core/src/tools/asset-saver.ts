@@ -17,3 +17,20 @@ export async function saveAsset(assetPath: string, content: string): Promise<voi
     throw new Error(`Failed to save asset: ${(error as Error).message}`);
   }
 }
+
+/**
+ * Save an audio buffer to a file
+ * @param filePath Path where the audio file should be saved
+ * @param buffer Buffer containing the audio data
+ * @returns Promise that resolves when the audio is saved
+ * @throws Error if directory creation or file writing fails
+ */
+export async function saveAudioFile(filePath: string, buffer: Buffer): Promise<void> {
+  try {
+    const dir = path.dirname(filePath);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(filePath, buffer);
+  } catch (error) {
+    throw new Error(`Failed to save audio file: ${(error as Error).message}`);
+  }
+}

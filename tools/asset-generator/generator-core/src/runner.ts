@@ -4,9 +4,12 @@ import { runAssetGenerationPipeline } from './tools/asset-pipeline.js';
  * Display help message for the CLI
  */
 function displayHelp() {
-  console.log(`\nAsset Generator - Create and improve game assets
+  console.log(`\nAsset Generator - Create and improve game assets (Visuals & Sounds)
 
 Usage: asset-generator <asset-name> [options]
+
+Note on Sounds: Sound generation uses the Stability AI API.
+You must set the STABILITY_API_KEY environment variable to use it.
 
 Options:
   --render-only     Only render the asset without assessment or improvement
@@ -22,6 +25,7 @@ Examples:
   asset-generator prey-2d --render-only
   asset-generator lion-2d --lint-only
   asset-generator hunter-2d --prompt "Make the hunter more aggressive looking"
+  asset-generator explosion-sfx --prompt "A loud booming explosion"
   asset-generator lion-2d --from-scratch
 `);
 }

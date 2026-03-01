@@ -1,7 +1,7 @@
 import { LintResult, formatLintErrors } from './asset-linter.js';
 import { FunctionDef, ModelType } from 'genaicode';
 import { generateImprovedAsset } from './asset-generator.js';
-import { Asset } from '../assets-types.js';
+import { VisualAsset } from '../assets-types.js';
 
 /**
  * Interface for the result of fixing linting errors
@@ -23,7 +23,7 @@ export interface LintFixResult {
  * @returns Promise resolving to the fixed code and summary
  * @throws Error if fixing fails
  */
-export async function fixLintErrors(lintResult: LintResult, asset: Asset | null, assetPath: string): Promise<LintFixResult> {
+export async function fixLintErrors(lintResult: LintResult, asset: VisualAsset | null, assetPath: string): Promise<LintFixResult> {
   try {
     if (!lintResult.hasErrors && !lintResult.hasWarnings) {
       return {
@@ -65,7 +65,7 @@ export async function fixLintErrors(lintResult: LintResult, asset: Asset | null,
   }
 }
 
-async function generateFixedContent(assetName: string, assetPath: string, asset: Asset | null, sourceCode: string, formattedErrors: string) {
+async function generateFixedContent(assetName: string, assetPath: string, asset: VisualAsset | null, sourceCode: string, formattedErrors: string) {
   // Create the prompt for GenAIcode
   // The `formattedErrors` string now serves as the `additionalPrompt` to `generateImprovedAsset`
 

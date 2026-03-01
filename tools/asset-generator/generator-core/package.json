@@ -30,8 +30,10 @@
   },
   "dependencies": {
     "@google/genai": "^0.14.1",
+    "axios": "^1.6.8",
     "canvas": "^3.1.0",
     "eslint": "^8.54.0",
+    "form-data": "^4.0.0",
     "genaicode": "^0.15.0",
     "please-upgrade-node": "^3.2.0",
     "tmp-promise": "^3.0.3",

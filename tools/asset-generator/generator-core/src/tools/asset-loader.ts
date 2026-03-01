@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Asset } from '../assets-types';
+import { Asset, isSoundAsset, isVisualAsset } from '../assets-types.js';
 import * as fs from 'fs/promises';
 
 /**
@@ -14,24 +14,24 @@ export function getAssetFilePath(assetName: string): string {
 }
 
 /**
- * Validate and resolve the reference image path for an asset
+ * Validate that a file exists relative to the asset path
  * @param assetPath Path to the asset file
- * @param referenceImage Reference image filename specified in the asset
- * @returns Promise resolving to true if reference image exists, false otherwise
- * @throws Error if reference image is specified but doesn't exist
+ * @param filename Filename to check (e.g., reference image or audio file)
+ * @returns Promise resolving to true if file exists, false otherwise
+ * @throws Error if file is specified but doesn't exist
  */
-async function validateReferenceImage(assetPath: string, referenceImage: string | undefined): Promise<boolean> {
-  if (!referenceImage) {
+async function validateFileExists(assetPath: string, filename: string | undefined): Promise<boolean> {
+  if (!filename) {
     return false;
   }
 
   const assetDir = path.dirname(assetPath);
-  const imagePath = path.join(assetDir, referenceImage);
+  const filePath = path.join(assetDir, filename);
   const exists = await fs
-    .access(imagePath)
+    .access(filePath)
     .then(() => true)
     .catch(() => false);
-  if (!exists) throw new Error(`Reference image not found: ${referenceImage}`);
+  if (!exists) throw new Error(`File not found: ${filename}`);
   return true;
 }
 
@@ -46,20 +46,30 @@ export async function loadAsset(assetPath: string): Promise<Asset | null> {
     const module = await import(`file://${assetPath}?${Date.now()}`);
     const asset = module[Object.keys(module)[0]] as Asset;
 
-    if (!asset || typeof asset.render !== 'function') {
-      throw new Error('Invalid asset format');
+    if (!asset) {
+       throw new Error('Invalid asset format: Asset is null or undefined');
     }
 
-    // Validate reference image if specified
-    if (asset.referenceImage) {
-      await validateReferenceImage(assetPath, asset.referenceImage);
+    // Check if it's a valid VisualAsset or SoundAsset
+    const isValidVisual = typeof (asset as any).render === 'function';
+    const isValidSound = asset.type === 'sound';
+
+    if (!isValidVisual && !isValidSound) {
+      throw new Error('Invalid asset format: Must be a VisualAsset (with a render function) or a SoundAsset (with type: "sound")');
+    }
+
+    // Validate optional files based on asset type
+    if (isVisualAsset(asset) && asset.referenceImage) {
+      await validateFileExists(assetPath, asset.referenceImage);
+    } else if (isSoundAsset(asset) && asset.audioFile) {
+      await validateFileExists(assetPath, asset.audioFile);
     }
 
     return asset;
   } catch (error) {
     if (
       (error as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND' ||
-      (error.message.includes('Cannot find module') && error.message.includes(assetPath))
+      ((error as Error).message.includes('Cannot find module') && (error as Error).message.includes(assetPath))
     ) {
       console.error(error);
       return null;

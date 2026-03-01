@@ -1,7 +1,10 @@
-export interface Asset {
+export interface BaseAsset {
   name: string;
-
   description: string;
+}
+
+export interface VisualAsset extends BaseAsset {
+  type?: 'visual';
 
   // Optional reference image for the asset
   // DO NOT specify the path here, if it was not present in the original asset
@@ -21,6 +24,23 @@ export interface Asset {
   ): void;
 }
 
+export interface SoundAsset extends BaseAsset {
+  type: 'sound';
+  prompt: string;
+  duration?: number;
+  audioFile?: string;
+}
+
+export type Asset = VisualAsset | SoundAsset;
+
+export function isSoundAsset(asset: Asset): asset is SoundAsset {
+  return asset.type === 'sound';
+}
+
+export function isVisualAsset(asset: Asset): asset is VisualAsset {
+  return asset.type !== 'sound';
+}
+
 /**
  * Result of asset generation process
  */
@@ -32,9 +52,11 @@ export interface AssetGenerationResult {
   /** Whether asset was regenerated or just rendered */
   regenerated: boolean;
   /** Results of asset rendering */
-  renderingResult?: { stance: string; mediaType: string; dataUrl: string }[];
+  renderingResult?: { stance: string; mediaType: string; dataUrl: string; filePath: string }[];
   /** Results of linting process */
   linting?: AssetLintingResult;
+  /** Path to the generated audio file (if sound asset) */
+  audioFile?: string;
 }
 
 /**

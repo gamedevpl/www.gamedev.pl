@@ -1,15 +1,15 @@
-
 import * as fs from 'fs/promises';
 import { getAssetFilePath, loadAsset } from './asset-loader.js';
 import { renderAsset, renderAssetVideos, VerbosityLevel } from './render-character.js';
 import { generateImprovedAsset } from './asset-generator.js';
-import { saveAsset } from './asset-saver.js';
+import { saveAsset, saveAudioFile } from './asset-saver.js';
 import { lintAssetFile, LintResult, formatLintErrors } from './asset-linter.js';
 import { fixLintErrors, LintFixResult } from './asset-linter-fixer.js';
 import * as path from 'path';
-import { Asset } from '../assets-types.js';
+import { Asset, isSoundAsset, isVisualAsset, SoundAsset, VisualAsset } from '../assets-types.js';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { generateStabilityAudio } from './stability-audio-generator.js';
 
 /**
  * Interface for asset generation options
@@ -70,6 +70,8 @@ export interface AssetGenerationResult {
   renderingResult?: { stance: string; mediaType: string; dataUrl: string; filePath: string }[];
   /** Results of linting process */
   linting?: AssetLintingResult;
+  /** Path to the generated audio file (if sound asset) */
+  audioFile?: string;
 }
 
 /**
@@ -86,15 +88,28 @@ function pascalCase(str: string): string {
  * Generates the initial TypeScript content for a new asset.
  * @param assetName The original name of the asset (e.g., kebab-case).
  * @param assetDescription The user-provided description for the asset.
+ * @param assetType The type of asset ('visual' or 'sound').
  * @returns A string containing the initial TypeScript code for the asset.
  */
-function generateInitialAssetContent(assetName: string, assetDescription: string): string {
+function generateInitialAssetContent(assetName: string, assetDescription: string, assetType: 'visual' | 'sound'): string {
   const pascalAssetName = pascalCase(assetName);
   const escapedDescription = assetDescription.replace(/'/g, "\\'");
 
-  return `import { Asset } from '../../../generator-core/src/assets-types.ts';
+  if (assetType === 'sound') {
+    return `import { SoundAsset } from '../../../generator-core/src/assets-types.js';
 
-export const ${pascalAssetName}: Asset = {
+export const ${pascalAssetName}: SoundAsset = {
+  type: 'sound',
+  name: '${assetName}',
+  description: '${escapedDescription}',
+  prompt: '${escapedDescription}',
+};
+`;
+  }
+
+  return `import { VisualAsset } from '../../../generator-core/src/assets-types.js';
+
+export const ${pascalAssetName}: VisualAsset = {
   name: '${assetName}',
   description: '${escapedDescription}',
   stances: ['idle'], // Default stance
@@ -159,8 +174,12 @@ export async function runAssetGenerationPipeline(
     try {
       const answer = await rl.question(`Create new asset '${assetName}'? (yes/no): `);
       if (answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y') {
+        let assetTypeAnswer = await rl.question(`Is this a visual or sound asset? (visual/sound): `);
+        assetTypeAnswer = assetTypeAnswer.toLowerCase().trim();
+        const assetType = assetTypeAnswer === 'sound' ? 'sound' : 'visual';
+        
         const description = await rl.question(`Enter a brief description for '${assetName}': `);
-        const initialContent = generateInitialAssetContent(assetName, description || `Initial description for new asset '${assetName}'.`);
+        const initialContent = generateInitialAssetContent(assetName, description || `Initial description for new asset '${assetName}'.`, assetType);
         await saveAsset(assetPath, initialContent);
         console.log(`Asset '${assetName}' created successfully at ${assetPath}.`);
         currentAsset = await loadAsset(assetPath);
@@ -194,6 +213,79 @@ export async function runAssetGenerationPipeline(
     throw new Error(`Asset '${assetName}' could not be loaded or created. Critical error.`);
   }
 
+  // --- SOUND ASSET PIPELINE ---
+  if (isSoundAsset(currentAsset)) {
+    console.log(`Processing sound asset: ${assetName}`);
+    
+    if (options.lintOnly) {
+       console.log('Skipping linting for sound asset.');
+       return { assetPath, regenerated: false };
+    }
+    
+    if (options.renderOnly) {
+       console.log('Skipping rendering for sound asset.');
+       return { assetPath, regenerated: false };
+    }
+
+    const generationPrompt = options.additionalPrompt || currentAsset.prompt;
+    let audioBuffer: Buffer | undefined;
+
+    if (!options.fromScratch && currentAsset.audioFile) {
+      const audioFilePath = path.join(path.dirname(assetPath), currentAsset.audioFile);
+      try {
+        audioBuffer = await fs.readFile(audioFilePath);
+        console.log(`Loaded existing audio file for refinement: ${currentAsset.audioFile}`);
+      } catch (error) {
+        console.warn(`Could not load existing audio file ${currentAsset.audioFile}. Falling back to text-to-audio.`, error);
+      }
+    }
+
+    try {
+      const generatedBuffer = await generateStabilityAudio({
+        prompt: generationPrompt,
+        audioBuffer,
+      });
+
+      const audioFileName = `${assetName}.mp3`;
+      const audioFilePath = path.join(path.dirname(assetPath), audioFileName);
+      
+      console.log(`Saving generated audio to ${audioFilePath}...`);
+      await saveAudioFile(audioFilePath, generatedBuffer);
+      
+      // Update the .ts file if the prompt changed or if it's the first time generating
+      let newContent = currentContent || '';
+      if (!currentAsset.audioFile || (options.additionalPrompt && options.additionalPrompt !== currentAsset.prompt)) {
+        // Simple string replacement to update prompt and audioFile
+        // In a more robust system, we'd use an AST parser, but this works for our simple format
+        if (options.additionalPrompt) {
+          newContent = newContent.replace(/prompt:\s*['"].*['"]/, `prompt: '${options.additionalPrompt.replace(/'/g, "\\'")}'`);
+        }
+        if (!newContent.includes('audioFile:')) {
+           newContent = newContent.replace(/};\s*$/, `  audioFile: '${audioFileName}',\n};\n`);
+        } else {
+           newContent = newContent.replace(/audioFile:\s*['"].*['"]/, `audioFile: '${audioFileName}'`);
+        }
+        await saveAsset(assetPath, newContent);
+      }
+
+      console.log('Sound asset processed successfully.');
+      return {
+        assetPath,
+        regenerated: true,
+        audioFile: audioFileName,
+      };
+
+    } catch (error) {
+      console.error('Failed to generate sound asset:', error);
+      throw error;
+    }
+  }
+
+  // --- VISUAL ASSET PIPELINE ---
+  
+  // We know it's a VisualAsset at this point
+  const visualAsset = currentAsset as VisualAsset;
+
   let descriptionForGenerator: string;
   // definitiveDescription is set either from existing asset or from user prompt for new asset
   descriptionForGenerator = definitiveDescription!;
@@ -202,13 +294,13 @@ export async function runAssetGenerationPipeline(
   if (options.fromScratch && !options.renderOnly) { // If fromScratch (could be new or explicit), skip initial render unless renderOnly
     console.log('Skipping rendering of existing/new asset as --from-scratch is enabled (and not --render-only)');
   } else if ((!options.skipRender || options.renderOnly)) {
-    renderingResult = await renderAsset(assetName, currentAsset, assetPath);
+    renderingResult = await renderAsset(assetName, visualAsset, assetPath);
     console.log('Asset rendered successfully');
     if (!options.skipVideos) {
       try {
         console.log('Generating videos for each stance...');
         renderingResult.push(
-          ...(await renderAssetVideos(assetName, currentAsset, assetPath, {
+          ...(await renderAssetVideos(assetName, visualAsset, assetPath, {
             fps: options.videoOptions?.fps,
             duration: options.videoOptions?.duration,
             verbosity: options.videoOptions?.verbosity || 'minimal',
@@ -249,7 +341,7 @@ export async function runAssetGenerationPipeline(
     const improvedImplementation = await generateImprovedAsset(
       assetName,
       assetPath, 
-      currentAsset, 
+      visualAsset, 
       currentContent, // This will be null if fromScratch is true (new or explicit)
       mediaForGenerator, 
       options.additionalPrompt,
@@ -261,10 +353,12 @@ export async function runAssetGenerationPipeline(
     await saveAsset(assetPath, improvedImplementation);
     console.log('Asset saved successfully');
     currentContent = improvedImplementation; 
-    currentAsset = await loadAsset(assetPath); 
-    if (!currentAsset) {
-      throw new Error('Failed to reload asset after saving improved version.');
+    
+    const reloadedAsset = await loadAsset(assetPath);
+    if (!reloadedAsset || !isVisualAsset(reloadedAsset)) {
+      throw new Error('Failed to reload asset as VisualAsset after saving improved version.');
     }
+    currentAsset = reloadedAsset;
   } else {
     console.log('Skipping asset improvement (--render-only or --lint-only flag is enabled)');
   }
@@ -290,7 +384,7 @@ export async function runAssetGenerationPipeline(
         console.log(formatLintErrors(lintResults));
 
         console.log('\nAttempting to fix linting issues...');
-        const fixResult: LintFixResult = await fixLintErrors(lintResults, currentAsset, assetPath);
+        const fixResult: LintFixResult = await fixLintErrors(lintResults, currentAsset as VisualAsset, assetPath);
 
         if (fixResult.success) {
           console.log('\nLinting issues fixed successfully');
@@ -298,10 +392,12 @@ export async function runAssetGenerationPipeline(
           console.log('Fixed asset code saved successfully');
           lintingResult.errorsFixed = true;
           currentContent = fixResult.code; 
-          currentAsset = await loadAsset(assetPath); // Reload after fixing
-          if (!currentAsset) {
-             throw new Error('Failed to reload asset after lint fixes.');
+          
+          const reloadedAfterLint = await loadAsset(assetPath); // Reload after fixing
+          if (!reloadedAfterLint || !isVisualAsset(reloadedAfterLint)) {
+             throw new Error('Failed to reload asset as VisualAsset after lint fixes.');
           }
+          currentAsset = reloadedAfterLint;
           break; 
         } else {
           console.error('\nFailed to fix linting issues after attempt', tryCount + 1, fixResult.error);
@@ -315,23 +411,13 @@ export async function runAssetGenerationPipeline(
     }
   }
 
-  // Reload currentAsset if it might have changed (e.g. due to generation or linting fixes)
-  // and it's not renderOnly or lintOnly (where it might not exist or not be relevant to reload)
-  if (!(options.renderOnly || options.lintOnly)) {
-      currentAsset = await loadAsset(assetPath);
-      if (!currentAsset) {
-          throw new Error('Failed to load current asset after potential modifications.');
-      }
-  }
-
-
   // Final Rendering Logic
   // Re-render if:
   // 1. An asset exists (currentAsset is not null).
   // 2. Rendering is not skipped (options.skipRender is false).
   // 3. It's NOT (renderOnly AND we already have rendering results from the initial render pass).
   // 4. It's NOT lintOnly.
-  if (currentAsset && 
+  if (currentAsset && isVisualAsset(currentAsset) && 
       !options.skipRender && 
       !((options.renderOnly || options.fromScratch) && renderingResult.length > 0) && // if renderOnly/fromScratch, and we already rendered, don't re-render
       !options.lintOnly) {
