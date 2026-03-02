@@ -27,7 +27,7 @@ export interface VisualAsset extends BaseAsset {
 export interface SoundAsset extends BaseAsset {
   type: 'sound';
   prompt: string;
-  duration?: number;
+  duration: number;
   audioFile?: string;
 }
 

@@ -3,7 +3,7 @@ import FormData from 'form-data';
 
 export interface StabilityAudioOptions {
   prompt: string;
-  duration?: number;
+  duration: number;
   audioBuffer?: Buffer;
 }
 
@@ -35,15 +35,13 @@ export async function generateStabilityAudio(options: StabilityAudioOptions): Pr
     // Audio-to-Audio workflow
     endpointUrl = 'https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio';
     formData.append('audio', audioBuffer, { filename: 'input.mp3', contentType: 'audio/mpeg' });
-    // Duration is not strictly required for audio-to-audio, it might inherit from input if not provided
-    if (duration) {
-      formData.append('duration', duration.toString());
-    }
+    // Duration is required for audio-to-audio
+    formData.append('duration', duration.toString());
   } else {
     // Text-to-Audio workflow
     endpointUrl = 'https://api.stability.ai/v2beta/audio/stable-audio-2/text-to-audio';
-    // Default duration to 30s if not provided for text-to-audio
-    formData.append('duration', (duration || 30).toString());
+    // Duration is required for text-to-audio
+    formData.append('duration', duration.toString());
   }
 
   try {

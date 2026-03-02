@@ -89,9 +89,10 @@ function pascalCase(str: string): string {
  * @param assetName The original name of the asset (e.g., kebab-case).
  * @param assetDescription The user-provided description for the asset.
  * @param assetType The type of asset ('visual' or 'sound').
+ * @param duration The duration of the sound asset in seconds (only for sound assets).
  * @returns A string containing the initial TypeScript code for the asset.
  */
-function generateInitialAssetContent(assetName: string, assetDescription: string, assetType: 'visual' | 'sound'): string {
+function generateInitialAssetContent(assetName: string, assetDescription: string, assetType: 'visual' | 'sound', duration?: number): string {
   const pascalAssetName = pascalCase(assetName);
   const escapedDescription = assetDescription.replace(/'/g, "\\'");
 
@@ -103,6 +104,7 @@ export const ${pascalAssetName}: SoundAsset = {
   name: '${assetName}',
   description: '${escapedDescription}',
   prompt: '${escapedDescription}',
+  duration: ${duration || 5},
 };
 `;
   }
@@ -178,8 +180,18 @@ export async function runAssetGenerationPipeline(
         assetTypeAnswer = assetTypeAnswer.toLowerCase().trim();
         const assetType = assetTypeAnswer === 'sound' ? 'sound' : 'visual';
         
+        let duration: number | undefined;
+        if (assetType === 'sound') {
+          const durationAnswer = await rl.question(`Enter duration in seconds (e.g., 5): `);
+          duration = parseInt(durationAnswer.trim(), 10);
+          if (isNaN(duration) || duration <= 0) {
+            console.log('Invalid duration, defaulting to 5 seconds.');
+            duration = 5;
+          }
+        }
+        
         const description = await rl.question(`Enter a brief description for '${assetName}': `);
-        const initialContent = generateInitialAssetContent(assetName, description || `Initial description for new asset '${assetName}'.`, assetType);
+        const initialContent = generateInitialAssetContent(assetName, description || `Initial description for new asset '${assetName}'.`, assetType, duration);
         await saveAsset(assetPath, initialContent);
         console.log(`Asset '${assetName}' created successfully at ${assetPath}.`);
         currentAsset = await loadAsset(assetPath);
@@ -244,6 +256,7 @@ export async function runAssetGenerationPipeline(
       const generatedBuffer = await generateStabilityAudio({
         prompt: generationPrompt,
         audioBuffer,
+        duration: currentAsset.duration || 5, // Fallback for old assets
       });
 
       const audioFileName = `${assetName}.mp3`;
