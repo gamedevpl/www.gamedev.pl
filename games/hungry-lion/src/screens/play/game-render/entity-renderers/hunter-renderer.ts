@@ -3,6 +3,7 @@ import { vectorLength } from '../../game-world/utils/math-utils';
 import { Hunter2d } from '../../../../../../../tools/asset-generator/generator-assets/src/hunter-2d/hunter-2d';
 import { HunterStateType } from '../../game-world/state-machine/states/hunter';
 import { GameWorldState } from '../../game-world/game-world-types';
+import { isVisualAsset } from '../../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 // Constants for hunter rendering
 const HUNTER_WIDTH = 40;
@@ -48,14 +49,16 @@ export function drawHunter(ctx: CanvasRenderingContext2D, _: GameWorldState, hun
   const currentStateType = hunter.stateMachine?.[0] || 'HUNTER_PATROLLING';
   const stance = getHunterStance(currentStateType, isMoving);
 
-  Hunter2d.render(
-    ctx,
-    position.x - width / 2,
-    position.y - height / 2,
-    width,
-    height,
-    (Date.now() % 1000) / 1000,
-    stance,
-    getHunterFacingDirection(hunter),
-  );
+  if (isVisualAsset(Hunter2d)) {
+    Hunter2d.render(
+      ctx,
+      position.x - width / 2,
+      position.y - height / 2,
+      width,
+      height,
+      (Date.now() % 1000) / 1000,
+      stance,
+      getHunterFacingDirection(hunter),
+    );
+  }
 }

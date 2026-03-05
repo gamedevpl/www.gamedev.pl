@@ -1,6 +1,7 @@
 import { RenderState } from './render-state';
 import { Ground2D } from '../../../../../../tools/asset-generator/generator-assets/src/ground-2d/ground-2d';
 import { GAME_WORLD_WIDTH, GAME_WORLD_HEIGHT } from '../game-world/game-world-consts';
+import { isVisualAsset } from '../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 // Module-level cached canvas and context
 let cachedCanvas: HTMLCanvasElement | null = null;
@@ -35,7 +36,9 @@ function updateGroundCache() {
   // Render all ground tiles to the cached canvas
   for (let x = 0; x < GAME_WORLD_WIDTH; x += TILE_SIZE) {
     for (let y = 0; y < GAME_WORLD_HEIGHT; y += TILE_SIZE) {
-      Ground2D.render(cachedContext, x, y, TILE_SIZE, TILE_SIZE, 0, 'default', 'right');
+      if (isVisualAsset(Ground2D)) {
+        Ground2D.render(cachedContext, x, y, TILE_SIZE, TILE_SIZE, 0, 'default', 'right');
+      }
     }
   }
 }

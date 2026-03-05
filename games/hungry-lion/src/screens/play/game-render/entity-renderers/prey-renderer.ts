@@ -2,6 +2,7 @@ import { PreyEntity } from '../../game-world/entities/entities-types';
 
 import { Prey2d } from '../../../../../../../tools/asset-generator/generator-assets/src/prey-2d/prey-2d';
 import { GameWorldState } from '../../game-world/game-world-types';
+import { isVisualAsset } from '../../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 function getPreyFacingDirection(prey: PreyEntity): 'left' | 'right' {
   return prey.targetDirection > -Math.PI / 2 && prey.targetDirection < Math.PI / 2 ? 'right' : 'left';
@@ -31,14 +32,16 @@ export function renderPrey(ctx: CanvasRenderingContext2D, _: GameWorldState, pre
       stance = 'standing';
   }
 
-  Prey2d.render(
-    ctx,
-    prey.position.x - 20,
-    prey.position.y - 20,
-    40,
-    40,
-    (Date.now() % 1000) / 1000,
-    stance,
-    getPreyFacingDirection(prey),
-  );
+  if (isVisualAsset(Prey2d)) {
+    Prey2d.render(
+      ctx,
+      prey.position.x - 20,
+      prey.position.y - 20,
+      40,
+      40,
+      (Date.now() % 1000) / 1000,
+      stance,
+      getPreyFacingDirection(prey),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import { getPlayerLion } from '../game-world/game-world-query';
 import { LionActionType } from '../game-world/entities/entities-types';
 // Adjust the import path based on your project structure
 import { Lion2d } from '../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
+import { isVisualAsset } from '../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 // --- Layout Constants ---
 export const ACTION_BUTTON_WIDTH = 70;
@@ -121,7 +122,9 @@ export function drawActionBar(
     // Position icon towards the top
     const iconY = buttonLayout.y + (buttonLayout.height - ICON_HEIGHT - TEXT_FONT_SIZE - ICON_MARGIN_BOTTOM) / 2;
 
-    Lion2d.render(ctx, iconX, iconY, ICON_WIDTH, ICON_HEIGHT, 0, stance, 'right');
+    if (isVisualAsset(Lion2d)) {
+      Lion2d.render(ctx, iconX, iconY, ICON_WIDTH, ICON_HEIGHT, 0, stance, 'right');
+    }
 
     // Draw Text
     ctx.fillStyle = TEXT_COLOR;

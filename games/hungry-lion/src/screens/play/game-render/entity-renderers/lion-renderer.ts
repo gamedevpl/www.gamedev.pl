@@ -5,6 +5,7 @@ import { vectorLength } from '../../game-world/utils/math-utils';
 import { Lion2d } from '../../../../../../../tools/asset-generator/generator-assets/src/lion-2d/lion-2d';
 import { drawTargetIcon } from '../notifications/target-notification';
 import { GameWorldState } from '../../game-world/game-world-types';
+import { isVisualAsset } from '../../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 // Hunger threshold constants
 export const HUNGER_CRITICAL_THRESHOLD = 25; // When to make warnings more urgent
@@ -50,16 +51,18 @@ export function drawLion(ctx: CanvasRenderingContext2D, gameState: GameWorldStat
   const animationTime = (Date.now() % 1000) / 1000;
 
   // Render the lion with the appropriate stance and direction
-  Lion2d.render(
-    ctx,
-    position.x - width / 2,
-    position.y - height / 2,
-    width,
-    height,
-    animationTime,
-    stance,
-    facingDirection,
-  );
+  if (isVisualAsset(Lion2d)) {
+    Lion2d.render(
+      ctx,
+      position.x - width / 2,
+      position.y - height / 2,
+      width,
+      height,
+      animationTime,
+      stance,
+      facingDirection,
+    );
+  }
 
   // Draw target notification if lion has a target
   drawTargetIcon(ctx, gameState, lion);

@@ -10,6 +10,7 @@ import {
   Sector,
   WaterSector,
 } from '../game-world/environment/environment-types';
+import { isVisualAsset } from '../../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 export function renderEnvironment(
   ctx: CanvasRenderingContext2D,
@@ -57,28 +58,32 @@ export function renderEnvironment(
 
 // Updated to accept explicit x, y coordinates
 function renderGrassSector(ctx: CanvasRenderingContext2D, sector: GrassSector, x: number, y: number): void {
-  Grass2d.render(
-    ctx,
-    x, // Use passed x
-    y, // Use passed y
-    sector.rect.width,
-    sector.rect.height,
-    (Date.now() % 10000) / 10000,
-    'windy',
-    'right',
-  );
+  if (isVisualAsset(Grass2d)) {
+    Grass2d.render(
+      ctx,
+      x, // Use passed x
+      y, // Use passed y
+      sector.rect.width,
+      sector.rect.height,
+      (Date.now() % 10000) / 10000,
+      'windy',
+      'right',
+    );
+  }
 }
 
 // Updated to accept explicit x, y coordinates
 function renderWaterSector(ctx: CanvasRenderingContext2D, sector: WaterSector, x: number, y: number): void {
-  Water2D.render(
-    ctx,
-    x, // Use passed x
-    y, // Use passed y
-    sector.rect.width,
-    sector.rect.height,
-    (Date.now() % 10000) / 10000,
-    'default',
-    'right',
-  );
+  if (isVisualAsset(Water2D)) {
+    Water2D.render(
+      ctx,
+      x, // Use passed x
+      y, // Use passed y
+      sector.rect.width,
+      sector.rect.height,
+      (Date.now() % 10000) / 10000,
+      'default',
+      'right',
+    );
+  }
 }
