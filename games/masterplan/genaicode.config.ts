@@ -12,8 +12,9 @@ export default {
   ],
   modelOverrides: {
     aiStudio: {
-      default: 'gemini-2.5-pro-preview-05-06',
-      cheap: 'gemini-2.5-flash-preview-05-20',
+      default: 'gemini-3.1-pro-preview',
+      cheap: 'gemini-3-flash-preview',
+      lite: 'gemini-3.1-flash-lite-preview',
     },
   },
 };

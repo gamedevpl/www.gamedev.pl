@@ -7,8 +7,9 @@ export default {
   ignorePaths: ['dist', 'build', 'node_modules', 'package-lock.json'],
   modelOverrides: {
     aiStudio: {
-      default: 'gemini-3-flash-preview',
+      default: 'gemini-3.1-pro-preview',
       cheap: 'gemini-3-flash-preview',
+      lite: 'gemini-3.1-flash-lite-preview',
     },
   },
 };

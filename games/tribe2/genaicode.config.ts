@@ -49,6 +49,7 @@ export default defineConfig({
     aiStudio: {
       default: 'gemini-3.1-pro-preview',
       cheap: 'gemini-3-flash-preview',
+      lite: 'gemini-3.1-flash-lite-preview',
     },
     openai: {
       default: 'gpt-5.2-codex',
