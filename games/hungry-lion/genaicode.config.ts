@@ -1,0 +1,23 @@
+export default {
+  rootDir: '.',
+  lintCommand: 'npm run type-check && npm run lint',
+  ignorePaths: ['dist', 'node_modules', 'package-lock.json', 'genaicode-debug.js', 'genaicode-plugin.js'],
+  importantContext: {
+    systemPrompt: [
+      'MANDATORY: Always adhere to instructions from `GENAICODE_INSTRUCTIONS.md` file when making changes to this project.',
+      'Whenever you are reasoning about code changes, always incorporate relevant information from `GENAICODE_INSTRUCTIONS.md` file.',
+      'MANDATORY: Always update `GENAICODE_TRACKER.md` file with the status of your work.',
+    ],
+    files: ['GENAICODE_INSTRUCTIONS.md', 'GENAICODE_TRACKER.md'],
+  },
+  featuresEnabled: {
+    appContext: true,
+  },
+  modelOverrides: {
+    aiStudio: {
+      default: 'gemini-3.1-pro-preview',
+      cheap: 'gemini-3-flash-preview',
+      lite: 'gemini-3.1-flash-lite-preview',
+    },
+  },
+};
