@@ -5,6 +5,7 @@ import {
 } from '../ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { renderBehaviorTreeDebug } from './render-behavior-tree-debug';
+import { isVisualAsset } from '../../../../../tools/asset-generator/generator-core/src/assets-types';
 
 // Map predator actions to sprite stances
 const predatorStanceMap: Record<string, string> = {
@@ -63,24 +64,26 @@ export function renderPredator(
 
   const stance = predatorStanceMap[activeAction] || 'idle';
 
-  // Use asset generator to render the predator sprite
-  TribePredator2D.render(
-    ctx,
-    position.x - currentRadius,
-    position.y - currentRadius,
-    currentRadius * 2,
-    currentRadius * 2,
-    predator.animationProgress || 0,
-    stance,
-    {
-      gender: predator.gender,
-      age: predator.age,
-      direction: [predator.direction?.x || 1, predator.direction?.y || 0],
-      isPregnant: predator.isPregnant ?? false,
-      hungryLevel: predator.hunger,
-      geneCode: predator.geneCode, // Use actual genetic code
-    },
-  );
+  if (isVisualAsset(TribePredator2D)) {
+    // Use asset generator to render the predator sprite
+    TribePredator2D.render(
+      ctx,
+      position.x - currentRadius,
+      position.y - currentRadius,
+      currentRadius * 2,
+      currentRadius * 2,
+      predator.animationProgress || 0,
+      stance,
+      {
+        gender: predator.gender,
+        age: predator.age,
+        direction: [predator.direction?.x || 1, predator.direction?.y || 0],
+        isPregnant: predator.isPregnant ?? false,
+        hungryLevel: predator.hunger,
+        geneCode: predator.geneCode, // Use actual genetic code
+      },
+    );
+  }
 
   // Health bar if injured
   if (predator.hitpoints < predator.maxHitpoints) {

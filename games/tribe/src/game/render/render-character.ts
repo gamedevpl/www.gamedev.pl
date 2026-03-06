@@ -21,11 +21,9 @@ import {
   TRIBE_BADGE_SIZE,
   CHARACTER_CHILD_RADIUS,
 } from '../ui-consts';
-import {
-  HUMAN_ATTACK_BUILDUP_HOURS,
-  HUMAN_ATTACK_COOLDOWN_HOURS,
-} from '../human-consts';
+import { HUMAN_ATTACK_BUILDUP_HOURS, HUMAN_ATTACK_COOLDOWN_HOURS } from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
+import { isVisualAsset } from '../../../../../tools/asset-generator/generator-core/src/assets-types';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
 import { drawProgressBar } from './render-ui';
 import { EntityId } from '../entities/entities-types';
@@ -221,20 +219,22 @@ export function renderCharacter(
 
   const stance: Stance = actionToStanceMap[activeAction] || 'idle';
 
-  TribeHuman2D.render(
-    ctx,
-    position.x - currentCharacterRadius,
-    position.y - currentCharacterRadius,
-    currentCharacterRadius * 2,
-    currentCharacterRadius * 2,
-    human.animationProgress || 0,
-    stance,
-    human.gender,
-    human.age,
-    [human.direction.x, human.direction.y],
-    human.isPregnant ?? false,
-    human.hunger,
-  );
+  if (isVisualAsset(TribeHuman2D)) {
+    TribeHuman2D.render(
+      ctx,
+      position.x - currentCharacterRadius,
+      position.y - currentCharacterRadius,
+      currentCharacterRadius * 2,
+      currentCharacterRadius * 2,
+      human.animationProgress || 0,
+      stance,
+      human.gender,
+      human.age,
+      [human.direction.x, human.direction.y],
+      human.isPregnant ?? false,
+      human.hunger,
+    );
+  }
 
   // Draw attack target highlight
   if (isPlayerAttackTarget) {
