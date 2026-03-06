@@ -10,7 +10,7 @@
     "@typescript-eslint/eslint-plugin": "^8.6.0",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^8.54.0",
-    "genaicode": "^0.11.0",
+    "genaicode": "^0.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-use": "^17.5.1",
@@ -24,7 +24,8 @@
     "preview": "vite preview",
     "start": "vite",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0",
-    "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --allow-directory-create --imagen=dall-e --vision"
+    "genaicode": "genaicode --ui --allow-file-create --allow-file-delete --allow-file-move --allow-directory-create --imagen=dall-e --vision",
+    "type-check": "tsc --noEmit"
   },
   "author": "gtanczyk",
   "license": "ISC"

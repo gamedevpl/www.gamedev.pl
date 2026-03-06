@@ -1,0 +1,13 @@
+export default {
+  rootDir: '.',
+  lintCommand: 'npm run type-check && npm run lint',
+  ignorePaths: [
+    'dist',
+    'node_modules',
+    'package-lock.json',
+    'tfmodel/weights.bin',
+    'tfmodel/model.json',
+    'result-chain.cache.json',
+    'simulate.cache.json',
+  ],
+};
