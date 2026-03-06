@@ -19,8 +19,9 @@
   },
   "modelOverrides": {
     "aiStudio": {
-      "default": "gemini-2.5-pro",
-      "cheap": "gemini-2.5-flash"
+      "default": "gemini-3.1-pro-preview",
+      "cheap": "gemini-3-flash-preview",
+      "lite": "gemini-3.1-flash-lite-preview"
     }
   }
 }
