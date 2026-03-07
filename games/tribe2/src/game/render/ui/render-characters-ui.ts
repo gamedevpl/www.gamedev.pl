@@ -11,6 +11,7 @@ import {
 } from '../../ui/ui-consts.ts';
 import { Vector2D } from '../../utils/math-types';
 import { TribeHuman2D } from '../../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
+import { isVisualAsset } from '../../../../../../tools/asset-generator/generator-core/src/assets-types';
 import { HumanEntity } from '../../entities/characters/human/human-types';
 
 /**
@@ -78,20 +79,22 @@ export function renderMiniatureCharacter(
   }
   // The TribeHuman2D.render function handles the visual representation of age and gender.
   // It will render characters with gray hair when they reach old age, and children smaller if size is adjusted.
-  TribeHuman2D.render(
-    ctx,
-    position.x - size / 2,
-    position.y - size / 2,
-    size,
-    size,
-    0, // animationProgress
-    'idle', // stance
-    gender,
-    age,
-    [0, 0], // direction
-    false, // isPregnant
-    0, // hunger
-  );
+  if (isVisualAsset(TribeHuman2D)) {
+    TribeHuman2D.render(
+      ctx,
+      position.x - size / 2,
+      position.y - size / 2,
+      size,
+      size,
+      0, // animationProgress
+      'idle', // stance
+      gender,
+      age,
+      [0, 0], // direction
+      false, // isPregnant
+      0, // hunger
+    );
+  }
 
   // Draw crowns for highlighted characters
   let crownSize: number | undefined;

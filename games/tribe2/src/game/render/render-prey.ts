@@ -1,5 +1,6 @@
 import { PreyEntity } from '../entities/characters/prey/prey-types';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
+import { isVisualAsset } from '../../../../../tools/asset-generator/generator-core/src/assets-types';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.ts';
 import { EntityId } from '../entities/entities-types';
 import { SpriteCache } from './sprite-cache';
@@ -82,14 +83,16 @@ export function renderPrey(
   const sprite = preyCache.getOrRender(key, size, size, (cacheCtx) => {
     cacheCtx.translate(size / 2, size / 2);
     const discreteDir = getDiscretizedDirectionVector(dirStep, 8);
-    TribePrey2D.render(cacheCtx, -size / 2 + 2, -size / 2 + 2, size - 4, size - 4, animStep, stance, {
-      gender: prey.gender,
-      age: ageStep,
-      direction: discreteDir,
-      isPregnant: prey.isPregnant ?? false,
-      hungryLevel: hungerStep,
-      geneCode: prey.geneCode,
-    });
+    if (isVisualAsset(TribePrey2D)) {
+      TribePrey2D.render(cacheCtx, -size / 2 + 2, -size / 2 + 2, size - 4, size - 4, animStep, stance, {
+        gender: prey.gender,
+        age: ageStep,
+        direction: discreteDir,
+        isPregnant: prey.isPregnant ?? false,
+        hungryLevel: hungerStep,
+        geneCode: prey.geneCode,
+      });
+    }
   });
 
   ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);

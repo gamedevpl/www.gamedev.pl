@@ -24,6 +24,7 @@ import {
 import { HUMAN_ATTACK_MELEE_BUILDUP_HOURS, HUMAN_ATTACK_MELEE_COOLDOWN_HOURS } from '../human-consts';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { HUMAN_ATTACKING, HumanAttackingStateData } from '../entities/characters/human/states/human-state-types';
+import { isVisualAsset } from '../../../../../tools/asset-generator/generator-core/src/assets-types';
 import { drawProgressBar } from './render-ui';
 import { GameWorldState } from '../world-types.js';
 import { getDirectionVectorOnTorus } from '../utils/math-utils';
@@ -302,20 +303,22 @@ export function renderCharacter(
   const sprite = characterCache.getOrRender(key, size, size, (cacheCtx) => {
     cacheCtx.translate(size / 2, size / 2);
     const discreteDir = getDiscretizedDirectionVector(dirStep, 8);
-    TribeHuman2D.render(
-      cacheCtx,
-      -size / 2 + 2,
-      -size / 2 + 2,
-      size - 4,
-      size - 4,
-      animStep,
-      stance,
-      human.gender,
-      ageStep,
-      discreteDir,
-      human.isPregnant ?? false,
-      hungerStep,
-    );
+    if (isVisualAsset(TribeHuman2D)) {
+      TribeHuman2D.render(
+        cacheCtx,
+        -size / 2 + 2,
+        -size / 2 + 2,
+        size - 4,
+        size - 4,
+        animStep,
+        stance,
+        human.gender,
+        ageStep,
+        discreteDir,
+        human.isPregnant ?? false,
+        hungerStep,
+      );
+    }
   });
 
   ctx.drawImage(sprite, position.x - sprite.width / 2, position.y - sprite.height / 2);

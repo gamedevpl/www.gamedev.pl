@@ -2,6 +2,7 @@ import { CorpseEntity } from '../entities/characters/corpse-types';
 import { TribeHuman2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-human-2d/tribe-human-2d.js';
 import { TribePrey2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-prey-2d/tribe-prey-2d.js';
 import { TribePredator2D } from '../../../../../tools/asset-generator/generator-assets/src/tribe-predator-2d/tribe-predator-2d.js';
+import { isVisualAsset } from '../../../../../tools/asset-generator/generator-core/src/assets-types';
 import { CHARACTER_RADIUS } from '../ui/ui-consts.js';
 import { HUMAN_MAX_FOOD } from '../human-consts';
 import { FOOD_TYPE_EMOJIS } from '../entities/food-types.js';
@@ -30,56 +31,62 @@ export function renderCorpse(ctx: CanvasRenderingContext2D, corpse: CorpseEntity
   const sprite = corpseCache.getOrRender(key, size, size, (cacheCtx) => {
     cacheCtx.translate(size / 2, size / 2);
     if (originalEntityType === 'human') {
-      TribeHuman2D.render(
-        cacheCtx,
-        -size / 2 + 2,
-        -size / 2 + 2,
-        size - 4,
-        size - 4,
-        decayStep,
-        'dead', // Stance
-        gender,
-        ageStep,
-        [0, 0], // No direction
-        false, // Not pregnant
-        0, // No hunger
-      );
+      if (isVisualAsset(TribeHuman2D)) {
+        TribeHuman2D.render(
+          cacheCtx,
+          -size / 2 + 2,
+          -size / 2 + 2,
+          size - 4,
+          size - 4,
+          decayStep,
+          'dead', // Stance
+          gender,
+          ageStep,
+          [0, 0], // No direction
+          false, // Not pregnant
+          0, // No hunger
+        );
+      }
     } else if (originalEntityType === 'prey') {
-      TribePrey2D.render(
-        cacheCtx,
-        -size / 2 + 2,
-        -size / 2 + 2,
-        size - 4,
-        size - 4,
-        decayStep,
-        'dead', // Stance
-        {
-          gender,
-          age: ageStep,
-          direction: [0, 0], // No direction
-          isPregnant: false,
-          hungryLevel: 0, // No hunger
-          geneCode: geneCode || 0x804020,
-        },
-      );
+      if (isVisualAsset(TribePrey2D)) {
+        TribePrey2D.render(
+          cacheCtx,
+          -size / 2 + 2,
+          -size / 2 + 2,
+          size - 4,
+          size - 4,
+          decayStep,
+          'dead', // Stance
+          {
+            gender,
+            age: ageStep,
+            direction: [0, 0], // No direction
+            isPregnant: false,
+            hungryLevel: 0, // No hunger
+            geneCode: geneCode || 0x804020,
+          },
+        );
+      }
     } else if (originalEntityType === 'predator') {
-      TribePredator2D.render(
-        cacheCtx,
-        -size / 2 + 2,
-        -size / 2 + 2,
-        size - 4,
-        size - 4,
-        decayStep,
-        'dead', // Stance
-        {
-          gender,
-          age: ageStep,
-          direction: [0, 0], // No direction
-          isPregnant: false,
-          hungryLevel: 0, // No hunger
-          geneCode: geneCode || 0x804020,
-        },
-      );
+      if (isVisualAsset(TribePredator2D)) {
+        TribePredator2D.render(
+          cacheCtx,
+          -size / 2 + 2,
+          -size / 2 + 2,
+          size - 4,
+          size - 4,
+          decayStep,
+          'dead', // Stance
+          {
+            gender,
+            age: ageStep,
+            direction: [0, 0], // No direction
+            isPregnant: false,
+            hungryLevel: 0, // No hunger
+            geneCode: geneCode || 0x804020,
+          },
+        );
+      }
     }
   });
 
