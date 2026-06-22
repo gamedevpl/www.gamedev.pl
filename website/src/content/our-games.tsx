@@ -20,7 +20,7 @@ export default function OurGames() {
         highlight={tribeGameHighlight}
         href={'/games/tribe2/'}
         githubUrl={'https://github.com/gamedevpl/www.gamedev.pl/tree/master/games/tribe2'}
-        inProgress={true}
+        inProgress={false}
       />
       <GameBox
         title={t('Tribe Game')}
