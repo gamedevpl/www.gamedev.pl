@@ -2,7 +2,7 @@
 
 ## Introduction
 
-On Gamedev.pl, we create indie games which are open source.
+On [Gamedev.pl](https://www.gamedev.pl), we create indie games which are open source.
 
 ## List of Games
 
