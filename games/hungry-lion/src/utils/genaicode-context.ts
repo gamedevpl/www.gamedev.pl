@@ -1,13 +1,9 @@
-import { contextManager } from 'genaicode/vite-context';
-
-// Those functions can be used to store and retrieve app context data in GenAICode:
-// - GenAIcode can use this data to optimize the code generation process
-// - GenAIcode can update context to modify the application behavior
+const contextStorage = new Map<string, string>();
 
 export async function updateAppContext(key: string, value: string) {
-  await contextManager.setContext(key, value);
+  contextStorage.set(key, value);
 }
 
 export async function getAppContext(key: string) {
-  return await contextManager.getContext(key);
+  return contextStorage.get(key);
 }

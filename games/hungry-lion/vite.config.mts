@@ -1,8 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import checker from 'vite-plugin-checker';
-import genaicodeVite from 'genaicode/vite-plugin';
-import { genaicodeTracker, deepseekAiService, grokAiService } from './genaicode_plugins';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -13,15 +11,6 @@ export default defineConfig({
   plugins: [
     react(),
     checker({ typescript: true }),
-    genaicodeVite(
-      {
-        imagen: 'vertex-ai',
-        disableContextOptimization: false,
-      },
-      {
-        plugins: [genaicodeTracker, deepseekAiService, grokAiService],
-      },
-    ),
   ],
   publicDir: './src/public',
 });
