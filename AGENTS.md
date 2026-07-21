@@ -10,8 +10,10 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 
 - npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `containers/`,
   `infra/`, `docs/`.
-- Branch: `the-new-gamedevpl`. Product: prompt → AI-generated game (real HTML/JS/CSS
-  `GameProject`) → played in a sandboxed iframe.
+- Branch: `the-new-gamedevpl` — **also the repo's default branch, on purpose.** Product: prompt →
+  AI-generated game (real HTML/JS/CSS `GameProject`) → played in a sandboxed iframe.
+- **`master` is off-limits.** It's the previous hand-built games site, unrelated to this rewrite.
+  Never target a PR at `master`, and never merge/rebase `master`'s history into this branch.
 - **Safety invariant (never break):** generated games render only in an iframe with
   `sandbox="allow-scripts"` and **no `allow-same-origin`**.
 - **ESM only**, TypeScript strict, `.js` extensions in relative imports, Prettier + ESLint

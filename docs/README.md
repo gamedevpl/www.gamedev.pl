@@ -15,6 +15,11 @@ proves the core slice: **prompt → generated game → play it in a sandboxed if
 running locally with no external services. The previous hand-built games site still lives
 on the `master` branch.
 
+> ⚠️ **`the-new-gamedevpl` is the repository's default branch — deliberately.** This makes
+> tools that implicitly target "the default branch" (like assigning a GitHub issue to Copilot's
+> coding agent) land here, not on `master`. `master` is frozen, unrelated legacy content:
+> **never open a PR against it, and never merge/rebase its history into this branch.**
+
 ## Current state of this branch
 
 | Aspect                     | State                                                                                                                                              |

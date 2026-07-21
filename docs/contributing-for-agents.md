@@ -4,6 +4,14 @@ For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up wor
 **`the-new-gamedevpl`** branch. Read [`README.md`](./README.md) and
 [`architecture.md`](./architecture.md) first for context.
 
+> ⚠️ **`the-new-gamedevpl` is the repository's default branch, by deliberate choice** — so that
+> tools which implicitly target "the default branch" (e.g. assigning a GitHub issue to Copilot's
+> coding agent) land here rather than on `master`. `master` is the previous hand-built games
+> site and is **off-limits**: never open a PR against it, and never merge or rebase `master`'s
+> history into this branch. This was learned the hard way — an early Copilot task ran before the
+> default branch was switched, forked from `master`, and produced a PR that duplicated `apps/api`
+> from scratch instead of building on the real one (closed as PR #206).
+
 ## Where the current plan lives
 
 - **These docs** (`docs/`) are the plan of record — start here.

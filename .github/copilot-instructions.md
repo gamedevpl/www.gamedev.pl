@@ -4,6 +4,14 @@ You are working on the **`the-new-gamedevpl`** branch of gamedev.pl — a SaaS t
 natural-language prompt into a playable browser game. Read [`docs/README.md`](../docs/README.md)
 first; the `docs/` folder is the **plan of record**. This file is the short actionable summary.
 
+> ⚠️ **`the-new-gamedevpl` is the repository's default branch — this is deliberate, not an
+> accident.** It exists so tools that implicitly work off "the default branch" (including
+> assigning a GitHub issue to this Copilot coding agent) land here rather than on `master`.
+> **Never open a PR against `master`, and never merge, rebase from, or otherwise pull `master`'s
+> history into this branch.** `master` is the previous hand-built games site, frozen in place —
+> unrelated to this rewrite. If a PR you're working on shows `master` as its base, that's a bug:
+> stop and retarget it to `the-new-gamedevpl` before continuing.
+
 ## What this is
 
 - Monorepo, **npm workspaces**: `apps/web` (Vite + React + TS), `apps/api` (Fastify + TS),
