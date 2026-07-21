@@ -3,7 +3,7 @@ import type { GameGenerator } from '@gamedevpl/game-generator';
 import { generatorRunner, Orchestrator, QueueFullError } from '@gamedevpl/orchestrator';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { assembleGameHtml, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createGenerator } from './generator.js';
 
 const GenerateRequestSchema = z.object({
@@ -47,7 +47,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const html = assembleGameHtml(project);
       return { title: project.title, description: project.description, html };
     } catch (error) {
-      if (error instanceof EmptyProjectError || error instanceof ProjectTooLargeError) {
+      if (
+        error instanceof EmptyProjectError ||
+        error instanceof ProjectTooLargeError ||
+        error instanceof CredentialLeakError
+      ) {
         request.log.error({ err: error }, 'generated project failed hygiene checks');
         return reply.status(502).send({ error: 'game generation failed' });
       }
@@ -108,7 +112,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           html: assembleGameHtml(job.result),
         };
       } catch (error) {
-        if (error instanceof EmptyProjectError || error instanceof ProjectTooLargeError) {
+        if (
+          error instanceof EmptyProjectError ||
+          error instanceof ProjectTooLargeError ||
+          error instanceof CredentialLeakError
+        ) {
           request.log.error({ err: error }, 'generated project failed hygiene checks');
           return { ...base, state: 'failed' as const, error: 'game generation failed' };
         }
