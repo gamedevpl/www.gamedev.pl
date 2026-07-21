@@ -61,7 +61,13 @@ make model calls that the proxy meters, budgets, attributes to a job, and logs.
 This inverts the problem from "prevent exfiltration" (unwinnable) to "there is nothing to
 exfiltrate" (structural).
 
-**2. Deny egress by default; allowlist only the proxy.**
+**2. Deny egress by default; allowlist only the proxy.** ⚠️ _confirmed still open_
+
+Verified empirically: a container run in external mode reached `https://example.com` and got
+`200`. So the silent-leak channel is currently wide open — the job token can't be used against
+the provider directly, but a subverted agent could still post it (or any other data) anywhere.
+This is the most significant outstanding gap in B0.
+
 The container should reach the auth proxy and nothing else. Removes the silent-leak channel
 and also blocks using our compute to attack third parties. Locally this means a restricted
 docker network; in the cloud, VPC egress controls (see [`deployment.md`](./deployment.md)).
