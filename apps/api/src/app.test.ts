@@ -29,6 +29,12 @@ describe('api', () => {
     await app.close();
   });
 
+  it('returns version info', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/version' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ name: 'gamedev-pl', version: '0.0.0' });
+  });
+
   it('reports health with the active provider', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(200);
