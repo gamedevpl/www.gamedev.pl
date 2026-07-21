@@ -54,6 +54,19 @@ on the `master` branch.
 | [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                        |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                      |
 
+## Shared agent playbooks
+
+Kept under `.claude/skills/` so Claude Code auto-loads them, but written to be
+**agent-agnostic** — read them whichever agent you are:
+
+| Playbook                                                                    | When it applies                                                 |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`verify-agent-work`](../.claude/skills/verify-agent-work/SKILL.md)         | Reviewing, verifying, or merging work you didn't write yourself |
+| [`copilot-orchestration`](../.claude/skills/copilot-orchestration/SKILL.md) | Delegating work to GitHub Copilot's remote coding agent         |
+
+Both must be **updated when they turn out to be wrong or incomplete** — see the
+self-improvement clause at the end of each.
+
 ## Status legend
 
 ✅ Done / in place &nbsp;&nbsp; 🚧 In progress &nbsp;&nbsp; 📋 Planned / not built &nbsp;&nbsp; ⚠️ Risk or open question

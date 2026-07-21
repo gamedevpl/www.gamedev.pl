@@ -58,3 +58,14 @@ Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next) and
 [`docs/risks-and-open-questions.md`](../docs/risks-and-open-questions.md) (safety invariants and
 open questions). Don't resurrect the removed `@gamedevpl/engine` / `@gamedevpl/llm-provider`
 DSL — the `GameProject` model is authoritative.
+
+## Reviewing or verifying work you didn't write
+
+If your task involves reviewing, verifying, or merging someone else's changes, read
+[`.claude/skills/verify-agent-work/SKILL.md`](../.claude/skills/verify-agent-work/SKILL.md).
+Despite the Claude-specific directory, it is agent-agnostic: it covers verifying in an
+isolated checkout, what to scrutinise in a diff (scope creep, invariants, supply chain), and
+why a CI check that never ran is not a pass.
+
+If it turns out to be wrong or incomplete, update it as part of your change — that file
+carries a mandatory self-improvement clause.
