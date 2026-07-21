@@ -41,15 +41,18 @@ on the `master` branch.
 
 ## Documents in this folder
 
-| File                                                           | What's in it                                                                            |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                         |
-| [`architecture.md`](./architecture.md)                         | Current MVP architecture + target orchestration architecture, with diagrams             |
-| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                |
-| [`container-orchestration.md`](./container-orchestration.md)   | Design for the ephemeral-container agent-runner layer (queue, scale-to-zero, job model) |
-| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                        |
-| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                  |
-| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                |
+| File                                                           | What's in it                                                                                  |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                               |
+| [`architecture.md`](./architecture.md)                         | Current MVP architecture + target orchestration architecture, with diagrams                   |
+| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                      |
+| [`security-model.md`](./security-model.md)                     | **Threat model + a live credential-exfiltration finding — read before wiring a real API key** |
+| [`agent-adapters.md`](./agent-adapters.md)                     | Making Claude Code / Codex / agy / Copilot interchangeable                                    |
+| [`deployment.md`](./deployment.md)                             | Terraform + GCP shape, and securing the GitHub Actions pipeline                               |
+| [`container-orchestration.md`](./container-orchestration.md)   | Design for the ephemeral-container agent-runner layer (queue, scale-to-zero, job model)       |
+| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                              |
+| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                        |
+| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                      |
 
 ## Status legend
 
