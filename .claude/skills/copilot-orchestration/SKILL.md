@@ -99,9 +99,14 @@ re-dispatch.
 Poll patiently with real `sleep` between checks. Signals:
 
 - Title initially carries a `[WIP]` prefix; **losing the prefix means Copilot considers it
-  done**. It may still be marked draft.
+  done**. It may still be marked draft — draft status is not a completion signal either way.
 - ⚠️ `gh pr list --search "<issue number>"` often **doesn't match**, because the PR title and
-  body may not contain the issue number. Use `gh pr list --state all` or `gh pr view <N>`.
+  body may not contain the issue number. Use `gh pr list --state open --json number,title,baseRefName,headRefName`.
+- ⚠️ **Branch names vary** and are not a reliable identifier. Observed both
+  `copilot/<default-branch-name>` and descriptive `copilot/<task-slug>` forms across runs, so
+  match on the PR's content, not on an expected branch name.
+- **It won't ping you.** Nothing notifies you when the PR is ready, so either poll deliberately
+  or hand the babysitting to a subagent — otherwise finished PRs sit unmerged and forgotten.
 
 ### 5. Verify independently — never trust the PR's own claims
 
@@ -128,6 +133,14 @@ gh pr diff N
 ```
 
 Check: scope matches the issue, **project invariants untouched**, no secrets, no scope creep.
+
+**For security- or correctness-critical logic, exercise the code yourself** — don't infer
+behaviour from the fact that its own tests pass. Import the built module in the verify clone
+and run the properties you actually care about against real project data. For a credential
+scanner that meant checking real generated bundles for false positives (the failure mode that
+would make it useless) rather than only that its own fixtures matched. Agent-written tests
+tend to assert what the implementation does, which makes them weak evidence that it does the
+_right_ thing.
 
 ### 6. Merge
 
