@@ -1,6 +1,12 @@
 name: Copilot Task Dispatch
 
 on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task description for Copilot'
+        required: true
+        type: string
   issue_comment:
     types: [created]
   repository_dispatch:
@@ -8,15 +14,13 @@ on:
 
 jobs:
   dispatch-copilot-task:
-    # Trigger on repository_dispatch or issue comments starting with /copilot
-    if: github.event_name == 'repository_dispatch' || (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/copilot'))
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: the-new-gamedevpl
+          ref: ${{ github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,3 +33,7 @@ jobs:
 
       - name: Verify Baseline (Green Gate)
         run: npm run type-check && npm run lint && npm run test && npm run build
+
+      - name: Echo Task Payload
+        run: |
+          echo "Executing task: ${{ github.event.inputs.task || github.event.client_payload.task }}"
