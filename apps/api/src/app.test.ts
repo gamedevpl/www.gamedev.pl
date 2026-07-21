@@ -128,6 +128,47 @@ describe('api', () => {
       expect(res.statusCode).toBe(404);
     });
 
+    it('GET /api/jobs returns an array of recent jobs', async () => {
+      const submitted = await app.inject({ method: 'POST', url: '/api/jobs', payload: { prompt: 'recent test game' } });
+      const { id } = submitted.json();
+
+      const list = await app.inject({ method: 'GET', url: '/api/jobs' });
+      expect(list.statusCode).toBe(200);
+      const body = list.json() as Array<{ id: string; state: string; createdAt: string; title?: string }>;
+      expect(Array.isArray(body)).toBe(true);
+      const entry = body.find((j) => j.id === id);
+      expect(entry).toBeDefined();
+      expect(entry?.createdAt).toBeTruthy();
+    });
+
+    it('GET /api/jobs respects the limit query param', async () => {
+      const list = await app.inject({ method: 'GET', url: '/api/jobs?limit=1' });
+      expect(list.statusCode).toBe(200);
+      const body = list.json() as unknown[];
+      expect(body.length).toBeLessThanOrEqual(1);
+    });
+
+    it('GET /api/jobs includes title only for succeeded jobs', async () => {
+      const isolated = await buildApp();
+      const submitted = await isolated.inject({ method: 'POST', url: '/api/jobs', payload: { prompt: 'title check' } });
+      const { id } = submitted.json();
+
+      // Wait for the job to succeed.
+      let body: Record<string, unknown>[] = [];
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const res = await isolated.inject({ method: 'GET', url: '/api/jobs' });
+        body = res.json() as Record<string, unknown>[];
+        const entry = body.find((j) => j.id === id);
+        if (entry?.state === 'succeeded' || entry?.state === 'failed') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      const entry = body.find((j) => j.id === id);
+      expect(entry?.state).toBe('succeeded');
+      expect(typeof entry?.title).toBe('string');
+      await isolated.close();
+    });
+
     it('surfaces a failed generation as a failed job', async () => {
       const failing = await buildApp({
         generator: {

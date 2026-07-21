@@ -26,5 +26,12 @@
   },
   "errors": {
     "generic": "Coś poszło nie tak"
+  },
+  "recentGames": {
+    "title": "Ostatnie gry",
+    "empty": "Nie wygenerowano jeszcze żadnych gier.",
+    "play": "Zagraj",
+    "stateLabel": "{{state}}",
+    "loadError": "Nie udało się załadować ostatnich gier."
   }
 }

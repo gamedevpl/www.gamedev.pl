@@ -6,6 +6,13 @@ export interface GeneratedGame {
 
 export type JobState = 'queued' | 'provisioning' | 'running' | 'succeeded' | 'failed';
 
+export interface RecentJob {
+  id: string;
+  state: JobState;
+  createdAt: string;
+  title?: string;
+}
+
 interface JobStatus {
   id: string;
   state: JobState;
@@ -47,6 +54,13 @@ async function fetchJob(id: string): Promise<JobStatus> {
   const response = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
   if (!response.ok) throw new Error(await readError(response));
   return (await response.json()) as JobStatus;
+}
+
+/** Fetches the list of recent jobs from the server (newest first). */
+export async function fetchRecentJobs(limit = 20): Promise<RecentJob[]> {
+  const response = await fetch(`/api/jobs?limit=${encodeURIComponent(limit)}`);
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as RecentJob[];
 }
 
 export interface GenerateOptions {

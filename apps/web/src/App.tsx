@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { generateGameViaJob, type GeneratedGame, type JobState } from './api';
+import { fetchRecentJobs, generateGameViaJob, type GeneratedGame, type JobState, type RecentJob } from './api';
 import { GameFrame } from './GameFrame';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import githubIcon from './assets/github-mark-white.svg';
@@ -14,8 +14,16 @@ export function App() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [jobState, setJobState] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
+  const [recentError, setRecentError] = useState<string | null>(null);
 
   const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
+
+  useEffect(() => {
+    fetchRecentJobs()
+      .then(setRecentJobs)
+      .catch(() => setRecentError(t('recentGames.loadError')));
+  }, [t]);
 
   async function handleGenerate(text: string) {
     const trimmed = text.trim();
@@ -26,13 +34,37 @@ export function App() {
     setJobState(null);
     setSubmittedPrompt(trimmed);
     try {
-      setGame(await generateGameViaJob(trimmed, { onState: setJobState }));
+      const generated = await generateGameViaJob(trimmed, { onState: setJobState });
+      setGame(generated);
       setStatus('idle');
+      // Refresh the recent jobs list after a successful generation.
+      fetchRecentJobs()
+        .then(setRecentJobs)
+        .catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.generic'));
       setStatus('error');
     } finally {
       setJobState(null);
+    }
+  }
+
+  async function handlePlayRecent(id: string) {
+    setStatus('loading');
+    setError(null);
+    setGame(null);
+    setJobState(null);
+    setSubmittedPrompt('');
+    try {
+      const response = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      const job = (await response.json()) as { title?: string; description?: string; html?: string; state: string };
+      if (job.state !== 'succeeded' || !job.html) throw new Error('game not available');
+      setGame({ title: job.title ?? 'Game', description: job.description ?? '', html: job.html });
+      setStatus('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.generic'));
+      setStatus('error');
     }
   }
 
@@ -103,6 +135,33 @@ export function App() {
             <div className="empty-stage">{status === 'loading' ? busyLabel : t('home.emptyStage')}</div>
           )}
         </section>
+
+        {(recentJobs.length > 0 || recentError) && (
+          <section className="panel recent-games">
+            <h2 className="recent-games-title">{t('recentGames.title')}</h2>
+            {recentError ? (
+              <p className="error">{recentError}</p>
+            ) : recentJobs.length === 0 ? (
+              <p className="recent-games-empty">{t('recentGames.empty')}</p>
+            ) : (
+              <ul className="recent-games-list">
+                {recentJobs.map((job) => (
+                  <li key={job.id} className="recent-games-item">
+                    <span className="recent-games-item-title">{job.title ?? t(`jobState.${job.state}`)}</span>
+                    <span className={`recent-games-item-state recent-games-item-state--${job.state}`}>
+                      {t(`jobState.${job.state}`)}
+                    </span>
+                    {job.state === 'succeeded' && (
+                      <button className="chip recent-games-play" onClick={() => handlePlayRecent(job.id)}>
+                        {t('recentGames.play')}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
