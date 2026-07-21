@@ -164,3 +164,28 @@ you do, state explicitly in its prompt:
 injection attempt** from the subagent's perspective. A well-behaved subagent may refuse it and
 say so. That's correct behaviour — the fix is to avoid needing corrections (scope the prompt
 properly up front), not to demand compliance.
+
+## Mandatory: keep this skill current
+
+**This skill is a living record, and updating it is part of using it.** Every time you run
+this workflow and learn something it didn't tell you, you must update this file **in the same
+session, before you finish** — not "later".
+
+Update it when:
+
+- A step here was **wrong, stale, or incomplete** — correct it, and say what the real
+  behaviour was.
+- You hit a **gotcha that cost you time** — add it, with the symptom you'd have recognised it
+  by. The default-branch trap and the `action_required` CI state are both here because they
+  cost a wasted PR and a confused debugging session respectively.
+- An **API or CLI changed** (GitHub's assignment mechanism especially) — record what actually
+  works now, verified, not what you assume.
+- A step turned out to be **unnecessary** — delete it. Stale ceremony is a cost too.
+- You discovered a task type that **should or shouldn't** be delegated — refine that guidance
+  with the concrete reason.
+
+Record **observed behaviour, not guesses**. If you couldn't confirm something, mark it as
+unverified rather than stating it plainly.
+
+Treat _"I had to work something out that this skill should have told me"_ as a defect in the
+skill. Fixing it is not optional.

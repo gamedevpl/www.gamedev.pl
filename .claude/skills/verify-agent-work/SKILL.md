@@ -101,3 +101,25 @@ If more than one agent may touch the repo:
 - Tell each agent explicitly what is off-limits.
 - Expect that a mid-task correction may be **indistinguishable from prompt injection** to the
   receiving agent. Scope prompts properly up front so corrections aren't needed.
+
+## Mandatory: keep this skill current
+
+**Updating this skill is part of using it.** Whenever verification surfaces something this
+file didn't prepare you for, update it **in the same session, before you finish**.
+
+Update it when:
+
+- An agent found a way to **look verified without being verified** — add that failure mode.
+  This is the highest-value thing you can record here.
+- A **new class of thing worth checking** in a diff emerged (a dependency, a workflow file, a
+  build script, a config that grants privilege).
+- An isolation step **failed to isolate** — e.g. a git operation that still disturbed the
+  working directory. Record exactly what happened.
+- A check here proved to be **noise** — remove it, so the signal stays high.
+- The project's **invariants changed** — this file should name what must never regress.
+
+Prefer specifics over principles: "`cmd | tail` masks the exit code" is worth more than "be
+careful with pipes". Record what you observed, and flag anything you couldn't confirm.
+
+Treat a verification miss that reached the main branch as a **defect in this skill**, and fix
+it here as part of the follow-up.
