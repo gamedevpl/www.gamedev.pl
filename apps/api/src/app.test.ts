@@ -87,6 +87,19 @@ describe('api', () => {
     await empty.close();
   });
 
+  it('returns non-2xx and redacts response details when generated code contains credential-like strings', async () => {
+    const fakeKey = `sk-ant-${'A'.repeat(40)}`;
+    const leaky = await buildApp({ generator: stubGenerator({ js: `const apiKey = "${fakeKey}";` }) });
+    const res = await leaky.inject({
+      method: 'POST',
+      url: '/api/generate-game',
+      payload: { prompt: 'leaky game' },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.body).not.toContain(fakeKey);
+    await leaky.close();
+  });
+
   describe('async jobs', () => {
     it('accepts a submission with 202 and reports it back', async () => {
       const res = await app.inject({ method: 'POST', url: '/api/jobs', payload: { prompt: 'dodge rocks' } });

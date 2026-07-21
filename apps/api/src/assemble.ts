@@ -1,10 +1,12 @@
 import type { GameProject } from '@gamedevpl/game-generator';
+import { findCredentialLikeStrings } from './credential-scan.js';
 
 /** Combined html+js+css size cap. Generated code is served, not stored, so keep it modest. */
 export const MAX_PROJECT_BYTES = 200 * 1024;
 
 export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
+export class CredentialLeakError extends Error {}
 
 /**
  * Assembles a GameProject into one self-contained HTML document for iframe srcdoc.
@@ -20,6 +22,11 @@ export function assembleGameHtml(project: GameProject): string {
   const totalBytes = Buffer.byteLength(project.html + project.js + project.css, 'utf8');
   if (totalBytes > MAX_PROJECT_BYTES) {
     throw new ProjectTooLargeError(`generated project is ${totalBytes} bytes, over the ${MAX_PROJECT_BYTES} cap`);
+  }
+
+  const findings = findCredentialLikeStrings(project.html + project.js + project.css);
+  if (findings.length > 0) {
+    throw new CredentialLeakError('generated project contains credential-like strings');
   }
 
   return `<!doctype html>
