@@ -1,10 +1,14 @@
 # Security Model
 
-> **Status: 🚧 Primary mitigation built; layers outstanding.** The credential-exfiltration
-> finding below has had its **structural fix landed** — the container no longer receives a
-> provider key at all (see "What is built" under the finding). The remaining layers (egress
-> allowlisting, tool narrowing, output scanning) are not built yet, so a real key should
-> still only be used for trusted-prompt experiments until the checklist at the end is clear.
+> **Status: ✅ The credential finding is DISSOLVED, not merely fixed.** The architecture
+> pivoted: gamedev.pl no longer runs coding agents on behalf of creators, so there is no
+> container of ours processing untrusted prompts and therefore no credential to place in one.
+> See [`games-repo.md`](./games-repo.md). The container, auth proxy, and job tokens described
+> below have all been **removed**.
+>
+> The rest of this document still applies: the **sandboxed-iframe invariant**, the untrusted
+> nature of generated game code, and the supply-chain concerns. The container-hardening and
+> egress sections are retained as history — they describe a system we no longer run.
 
 ## The core assumption
 

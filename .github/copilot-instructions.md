@@ -59,6 +59,12 @@ Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next) and
 open questions). Don't resurrect the removed `@gamedevpl/engine` / `@gamedevpl/llm-provider`
 DSL — the `GameProject` model is authoritative.
 
+## ⚠️ Architecture pivot in progress
+
+Games are moving to a **dedicated games repo maintained by coding agents**; this app becomes a
+catalog, player, and spec-submission surface. Self-hosted agent execution was **removed for
+legal reasons**. Read [`games-repo.md`](../docs/games-repo.md) before making architectural assumptions.
+
 ## Reviewing or verifying work you didn't write
 
 If your task involves reviewing, verifying, or merging someone else's changes, read

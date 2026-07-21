@@ -18,6 +18,10 @@ infra/               Placeholder for future Terraform/GCP deployment (not used y
 docs/                Project documentation — the plan of record; read this first
 ```
 
+> **Architecture pivot:** games are moving to a **dedicated games repo maintained by coding
+> agents**, rather than being generated on demand by this app. Self-hosted agent execution was
+> removed for legal reasons. Read [`docs/games-repo.md`](./docs/games-repo.md) first.
+
 ## How generation works
 
 The AI produces **real, unconstrained game code** (HTML + JS + CSS), not a schema-filled template. Because arbitrary generated code can't be safety-validated the way structured data can, safety comes from **sandboxed execution**: every generated game is assembled into one self-contained document and rendered in an `<iframe sandbox="allow-scripts">` with **no `allow-same-origin`**, so it can't reach the parent page, cookies, or storage. Today a deterministic **mock** generator drives the loop offline; a real containerized coding agent replaces it later.

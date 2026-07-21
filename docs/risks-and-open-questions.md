@@ -6,7 +6,15 @@ answered.
 
 ---
 
-## Blockers — resolve before building 🚩
+## Blockers — ✅ all dissolved by the games-repo pivot
+
+> B0, B1 and B2 below were all consequences of gamedev.pl running coding agents on behalf of
+> creators. That architecture was abandoned for legal reasons — agents now maintain a games
+> repo we own, which is ordinary licensed use. There is no multi-tenant agent compute and no
+> provider credential in an untrusted container, so **none of these blockers apply any more**.
+> Retained for history; see [`games-repo.md`](./games-repo.md).
+
+## Blockers (historical) 🚩
 
 ### B0 — Credential exfiltration via the agent container 🟡 **primary fix landed; layers outstanding**
 

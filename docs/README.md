@@ -31,8 +31,8 @@ on the `master` branch.
 | Generator                  | `packages/game-generator` — the seam; deterministic **mock** for now ✅                                                                            |
 | Execution model            | ✅ Generated game is assembled into one self-contained HTML doc, run in a **sandboxed iframe** (`sandbox="allow-scripts"`, no `allow-same-origin`) |
 | Core loop (Phase 0)        | ✅ Green — `prompt → generated game → play` works locally; full gate (type-check/lint/test/build) passes; verified in-browser                      |
-| Real AI generation         | 📋 Not built (mock only)                                                                                                                           |
-| Orchestration / containers | 🚧 First foundation landing — see `container-orchestration.md`                                                                                     |
+| Game creation              | 🚧 **Pivoted** — games live in a dedicated repo maintained by coding agents; see `games-repo.md`                                                   |
+| Orchestration / containers | ❌ Removed — self-hosted agent execution was abandoned for legal reasons (see `games-repo.md`)                                                     |
 | Deployment (GCP/Terraform) | 📋 Not built — `infra/` is a placeholder                                                                                                           |
 
 > ✅ **Phase 0 is green.** The earlier DSL approach (`@gamedevpl/engine` /
@@ -41,18 +41,19 @@ on the `master` branch.
 
 ## Documents in this folder
 
-| File                                                           | What's in it                                                                                  |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                               |
-| [`architecture.md`](./architecture.md)                         | Current MVP architecture + target orchestration architecture, with diagrams                   |
-| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                      |
-| [`security-model.md`](./security-model.md)                     | **Threat model + a live credential-exfiltration finding — read before wiring a real API key** |
-| [`agent-adapters.md`](./agent-adapters.md)                     | Making Claude Code / Codex / agy / Copilot interchangeable                                    |
-| [`deployment.md`](./deployment.md)                             | Terraform + GCP shape, and securing the GitHub Actions pipeline                               |
-| [`container-orchestration.md`](./container-orchestration.md)   | Design for the ephemeral-container agent-runner layer (queue, scale-to-zero, job model)       |
-| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                              |
-| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                        |
-| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                      |
+| File                                                           | What's in it                                                                                      |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                                   |
+| [`architecture.md`](./architecture.md)                         | Current MVP architecture + target orchestration architecture, with diagrams                       |
+| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                          |
+| [`games-repo.md`](./games-repo.md)                             | **The current architecture — games live in a repo maintained by coding agents. Read this first.** |
+| [`security-model.md`](./security-model.md)                     | Threat model. The credential-exfiltration finding is **dissolved** by the games-repo pivot        |
+| [`agent-adapters.md`](./agent-adapters.md)                     | Making Claude Code / Codex / agy / Copilot interchangeable                                        |
+| [`deployment.md`](./deployment.md)                             | Terraform + GCP shape, and securing the GitHub Actions pipeline                                   |
+| [`container-orchestration.md`](./container-orchestration.md)   | Design for the ephemeral-container agent-runner layer (queue, scale-to-zero, job model)           |
+| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                                  |
+| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                            |
+| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                          |
 
 ## Shared agent playbooks
 

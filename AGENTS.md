@@ -29,6 +29,13 @@ npm run type-check && npm run lint && npm run test && npm run build
 `npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
 so no cloud or API keys are needed.
 
+## ⚠️ Architecture pivot in progress
+
+Games are moving to a **dedicated games repo maintained by coding agents**; this app becomes a
+catalog, player, and spec-submission surface. Self-hosted agent execution (the agent-runner
+container, auth proxy, and job tokens) was **removed for legal reasons**. Read
+[`games-repo.md`](docs/games-repo.md) before making architectural assumptions.
+
 ## Shared playbooks (read these — they apply to you too)
 
 These live under `.claude/skills/` because that path makes them auto-loadable for Claude Code,
