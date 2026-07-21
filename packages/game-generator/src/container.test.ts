@@ -82,4 +82,46 @@ describe('ContainerGameGenerator', () => {
     });
     await expect(generator.generate('anything')).rejects.toThrow(/container agent-runner failed/);
   });
+
+  describe('docker argv', () => {
+    it('denies the network in mock mode, which needs none', () => {
+      const args = new ContainerGameGenerator({ mode: 'mock' }).buildDockerArgs('p');
+      expect(args.join(' ')).toContain('--network none');
+    });
+
+    it('allows the network in external mode, which must reach a model API', () => {
+      const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
+      expect(args.join(' ')).toContain('--network bridge');
+      expect(args.join(' ')).not.toContain('--network none');
+    });
+
+    it('forwards credentials by name only, keeping values out of argv', () => {
+      const KEY = 'ANTHROPIC_API_KEY';
+      const previous = process.env[KEY];
+      process.env[KEY] = 'sk-ant-super-secret-value';
+      try {
+        const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
+        // The name is forwarded so docker reads the value from our env...
+        expect(args).toContain(KEY);
+        // ...but the secret itself must never appear in the argv we spawn.
+        expect(args.join(' ')).not.toContain('sk-ant-super-secret-value');
+        expect(args).not.toContain(`${KEY}=sk-ant-super-secret-value`);
+      } finally {
+        if (previous === undefined) delete process.env[KEY];
+        else process.env[KEY] = previous;
+      }
+    });
+
+    it('omits env vars that are not set on the host', () => {
+      const KEY = 'ANTHROPIC_API_KEY';
+      const previous = process.env[KEY];
+      delete process.env[KEY];
+      try {
+        const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
+        expect(args).not.toContain(KEY);
+      } finally {
+        if (previous !== undefined) process.env[KEY] = previous;
+      }
+    });
+  });
 });

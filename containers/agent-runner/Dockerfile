@@ -13,6 +13,19 @@
 # ToS question — see ../../docs/risks-and-open-questions.md (B1/B2).
 FROM node:20-slim
 
+# Prerequisites for the Claude Code CLI (git is required; ripgrep backs its search
+# tools — a copy ships with the CLI on glibc, the system package is belt-and-braces;
+# ca-certificates for HTTPS to the API).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installed as ROOT, on purpose: npm's global prefix (/usr/local/lib/node_modules)
+# is root-owned, so a global install after `USER agent` would fail with EACCES.
+# Installing here puts `claude` on PATH for every user, including `agent`.
+# Nothing is authenticated at build time — no key is baked into the image.
+RUN npm install -g @anthropic-ai/claude-code && claude --version
+
 # Non-root: the job runs as an unprivileged user. stdout is the primary output
 # contract, so no writable host mount is required for the default flow.
 RUN useradd --create-home --shell /bin/bash agent
@@ -29,9 +42,15 @@ COPY --chown=agent:agent template ./template
 
 # Defaults; callers override with -e. OUTPUT_PATH is the conventional file mount
 # point; stdout is the primary contract that ContainerGameGenerator parses.
+#
+# HOME must be set and writable: the Claude Code CLI creates ~/.claude on first run,
+# and fails without it. DISABLE_AUTOUPDATER stops the CLI trying to update itself in
+# an ephemeral container (pointless, and it would fail as non-root anyway).
 ENV AGENT_MODE=mock \
     PROMPT="" \
-    OUTPUT_PATH=/out/game-project.json
+    OUTPUT_PATH=/out/game-project.json \
+    HOME=/home/agent \
+    DISABLE_AUTOUPDATER=1
 
 USER agent
 ENTRYPOINT ["node", "/app/runner.mjs"]

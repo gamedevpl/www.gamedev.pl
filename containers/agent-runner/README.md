@@ -168,13 +168,46 @@ AGENT_MODE=external AGENT_CMD="$PWD/fake/agent.sh" AGENT_ARGS='["--yes"]' \
   node containers/agent-runner/runner.mjs > game-project.json
 ```
 
-### With a real coding CLI
+### With a real coding CLI — Claude Code
 
-Swap `AGENT_CMD` for the CLI you are licensed to run here, and put its
-non-interactive flags in `AGENT_ARGS` — e.g. `AGENT_CMD=claude` with
-`AGENT_ARGS='["--print"]'`, or `AGENT_CMD=codex` with `AGENT_ARGS='["exec"]'`.
-Credentials are injected at run time (`-e`, mounted config); never bake them into
-the image. Re-read the ToS caveats above (B1/B2) before doing this in production.
+> 💸 **Everything below spends real money per run.** Nothing here happens unless you
+> explicitly set `AGENT_CMD` and supply a credential.
+
+The image ships the Claude Code CLI (`@anthropic-ai/claude-code`, binary `claude`),
+installed as root so it is on `PATH` for the non-root `agent` user. Nothing is
+authenticated at build time — no key is baked into the image.
+
+```sh
+docker run --rm \
+  -e AGENT_MODE=external \
+  -e AGENT_CMD=claude \
+  -e AGENT_ARGS='["-p","--permission-mode","acceptEdits"]' \
+  -e ANTHROPIC_API_KEY \
+  -e PROMPT="a game where you dodge falling rocks" \
+  gamedevpl/agent-runner > game-project.json
+```
+
+Why each part matters:
+
+- **`-p`** runs Claude Code headless (one-shot, non-interactive). The runner feeds
+  the prompt on **stdin**, which `-p` reads, so no positional prompt arg is needed.
+- **`--permission-mode acceptEdits`** is the crux: it auto-approves file edits, so
+  the agent can actually rewrite `index.html` / `game.js` / `style.css` in its
+  working copy without an interactive approval prompt. Without it the run stalls
+  or changes nothing. (`bypassPermissions` also exists and disables _all_ safety
+  checks — deliberately not used here.)
+- **`-e ANTHROPIC_API_KEY`** — note the **name only, no `=value`**. Docker reads the
+  value from your environment, so the secret never lands in the command line or the
+  process list. `ContainerGameGenerator` forwards credentials the same way.
+- **No `--network none`** — unlike mock mode, a real agent must reach the model API.
+
+Auth: `ANTHROPIC_API_KEY` is the simplest path and needs no prior interactive login.
+The image sets a writable `HOME` (the CLI creates `~/.claude` on first run) and
+`DISABLE_AUTOUPDATER=1`, since self-updating in an ephemeral container is pointless.
+
+Other CLIs work the same way — set `AGENT_CMD` to the executable and put its
+non-interactive flags in `AGENT_ARGS`. Re-read the ToS caveats above (B1/B2) before
+running a subscription CLI as backend compute.
 
 ## Files
 
