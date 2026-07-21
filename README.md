@@ -1,29 +1,46 @@
 # Gamedev.pl
 
-## Introduction
+Gamedev.pl is becoming a SaaS for AI-created games: describe a game in plain text, an AI agent builds it as **real runnable code**, and you play it in the browser — then play games made by other creators, and (later) remix them into pull requests for the original creator.
 
-On Gamedev.pl, we create indie games which are open source.
+This branch (`the-new-gamedevpl`) is a fresh start proving the core loop first: **prompt → AI-generated game → play it in a sandboxed iframe**, running entirely locally with no external services. Accounts, sharing, real agentic generation, and deployment come after. The previous hand-built games site lives on the `master` branch.
 
-## List of Games
+## Repo layout
 
-- [hungry-lion](./games/hungry-lion): Hungry Lion is a 2D top-down survival sandbox game where you take on the role of a lion surviving in the African savanna. Hunt prey, defend your territory, and survive against natural elements and other predators.
-- [masterplan](./games/masterplan): A 2D strategy game, prepare a battle plan, and start the battle. The AI will learn from the battle and propose a better plan.
-- [monster-steps](./games/monster-steps): Monster Steps is a strategic puzzle game created for the js13k 2024 competition. Players navigate through a grid-based world, avoiding monsters that appear every 13 steps while trying to reach their goal.
-- [nukes](./games/nukes): A thermonuclear simulation game.
-- [xmas](./games/xmas): Being Santa Claus is serious business! A fast-paced arcade game combining strategic gift delivery with Dragon Ball-inspired combat mechanics.
-- [tribe](./games/tribe): You start as Adam and Eve!
-- [tribe2](./games/tribe2): In this game you grow your village.
+```
+apps/
+  web/               Vite + React + TS frontend — prompt form + sandboxed game player
+  api/               Fastify + TS backend — POST /api/generate-game, GET /api/health
+packages/
+  game-generator/    The generator seam: GameGenerator interface + GameProject type,
+                     a deterministic mock, and real HTML/JS/CSS game templates
+containers/          Container-based agent-runner foundation (Phase 1)
+infra/               Placeholder for future Terraform/GCP deployment (not used yet)
+docs/                Project documentation — the plan of record; read this first
+```
 
-## Website
+## How generation works
 
-Gamedev.pl website source code is located in [website][./website] directory.
+The AI produces **real, unconstrained game code** (HTML + JS + CSS), not a schema-filled template. Because arbitrary generated code can't be safety-validated the way structured data can, safety comes from **sandboxed execution**: every generated game is assembled into one self-contained document and rendered in an `<iframe sandbox="allow-scripts">` with **no `allow-same-origin`**, so it can't reach the parent page, cookies, or storage. Today a deterministic **mock** generator drives the loop offline; a real containerized coding agent replaces it later.
+
+## Getting started
+
+```bash
+npm install
+npm run dev
+```
+
+Starts the API and web app together. Open the printed URL, describe a game, and click Generate.
+
+Other scripts: `npm run build`, `npm run test`, `npm run lint`, `npm run type-check`.
+
+## Documentation
+
+Start with [`docs/README.md`](./docs/README.md). It links the product vision, architecture (current + target container orchestration), roadmap, the remix→PR spec, and the risk log. Coding agents (Copilot, Claude Code, Codex) should read [`docs/contributing-for-agents.md`](./docs/contributing-for-agents.md) before making changes.
 
 ## Contribution Guidelines
 
-To contribute to the Gamedev.pl project:
-
 - Submit issues for bugs or feature requests.
 - Fork the repository and submit pull requests for code contributions.
-- Follow the project's coding conventions and ensure that your code is well-documented.
+- Follow the project's coding conventions and ensure your code is well-documented.
 
 This repository is developed using [Genaicode](https://github.com/gtanczyk/genaicode).

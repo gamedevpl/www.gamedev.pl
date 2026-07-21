@@ -1,5 +1,0 @@
-export default {
-  rootDir: '.',
-  ignorePaths: ['dist', 'node_modules', 'package-lock.json'],
-  lintCommand: 'npm run build',
-};

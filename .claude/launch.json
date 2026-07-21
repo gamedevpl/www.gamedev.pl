@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "dev:container",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:container"],
+      "port": 5173
+    }
+  ]
+}

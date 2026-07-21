@@ -1,0 +1,31 @@
+name: Copilot Task Dispatch
+
+on:
+  issue_comment:
+    types: [created]
+  repository_dispatch:
+    types: [copilot-task]
+
+jobs:
+  dispatch-copilot-task:
+    # Trigger on repository_dispatch or issue comments starting with /copilot
+    if: github.event_name == 'repository_dispatch' || (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/copilot'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: the-new-gamedevpl
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Baseline (Green Gate)
+        run: npm run type-check && npm run lint && npm run test && npm run build

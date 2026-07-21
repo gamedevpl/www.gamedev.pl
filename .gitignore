@@ -1,5 +1,7 @@
 node_modules
 dist
+build
+coverage
 .project
 .publish
 .idea
@@ -7,3 +9,6 @@ dist
 .vscode/settings.json
 .DS_Store
 .vscode
+.env
+.env.local
+*.tsbuildinfo

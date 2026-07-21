@@ -1,5 +1,5 @@
 export default {
   rootDir: '.',
   lintCommand: 'npm run type-check && npm run lint',
-  ignorePaths: ['design', 'games', 'dist', 'build', 'node_modules', 'package-lock.json'],
+  ignorePaths: ['dist', 'build', 'coverage', 'node_modules', 'package-lock.json'],
 };

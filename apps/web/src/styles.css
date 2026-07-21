@@ -1,0 +1,230 @@
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('./font/ProximaNovaLight.woff2') format('woff2'),
+    url('./font/ProximaNovaLight.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('./font/ProximaNovaSemibold.woff2') format('woff2'),
+    url('./font/ProximaNovaSemibold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('./font/ProximaNovaBold.woff2') format('woff2'),
+    url('./font/ProximaNovaBold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #454545;
+  --panel: #1d2123;
+  --text: #e5e5e5;
+  --muted: #a9adb0;
+  --turquoise: #00e4ac;
+  --error: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family:
+    'Proxima Nova',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background-color: var(--panel);
+  color: #fff;
+}
+
+.app-header .logo {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  text-transform: uppercase;
+  font-size: 2.4em;
+  font-weight: 700;
+  line-height: 60px;
+  color: #fff;
+}
+
+.app-header .logo img {
+  margin-right: 10px;
+}
+
+.app-header .logo .turquoise {
+  color: var(--turquoise);
+  font-weight: 300;
+}
+
+.app-header .github img {
+  height: 40px;
+}
+
+.content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 25px 20px 64px;
+}
+
+.page-title {
+  font-size: 2.4em;
+  font-weight: 300;
+  color: var(--turquoise);
+  margin: 10px 0 25px;
+}
+
+.panel {
+  border-radius: 5px;
+  margin-bottom: 25px;
+  padding: 25px 20px;
+  background-color: var(--panel);
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  background: #14171a;
+  color: var(--text);
+  border: 1px solid #2c3236;
+  border-radius: 5px;
+  padding: 12px;
+  font: inherit;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
+.prompt-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.job-state {
+  color: var(--turquoise);
+  font-size: 0.9rem;
+}
+
+button {
+  background: var(--turquoise);
+  color: #10312a;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button.chip {
+  background: #14171a;
+  border: 1px solid #2c3236;
+  color: var(--muted);
+  font-weight: 400;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+button.chip:hover {
+  color: var(--text);
+  border-color: var(--turquoise);
+}
+
+.error {
+  color: var(--error);
+  margin: 12px 0 0;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.game-meta {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.game-meta h2 {
+  margin: 0;
+  color: var(--turquoise);
+  font-weight: 600;
+}
+
+.game-meta p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  max-width: 520px;
+}
+
+.empty-stage {
+  color: var(--muted);
+  padding: 64px 0;
+}
+
+.game-frame {
+  border: 1px solid #2c3236;
+  border-radius: 5px;
+  background: #000;
+  max-width: 100%;
+}
