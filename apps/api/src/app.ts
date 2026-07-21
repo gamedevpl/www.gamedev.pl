@@ -57,6 +57,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Async path: submissions queue instead of holding a request open, so bursts
   // are absorbed and expensive generation stays under a concurrency cap.
+  app.get('/api/jobs', async (request) => {
+    const rawLimit = (request.query as { limit?: string }).limit;
+    const limit = rawLimit !== undefined ? Math.min(Math.max(1, parseInt(rawLimit, 10) || 20), 50) : 20;
+    const jobs = orchestrator.list(limit);
+    return jobs.map((job) => ({
+      id: job.id,
+      state: job.state,
+      createdAt: job.createdAt,
+      ...(job.state === 'succeeded' && job.result ? { title: job.result.title } : {}),
+    }));
+  });
+
   app.post('/api/jobs', async (request, reply) => {
     const parsedRequest = SubmitJobSchema.safeParse(request.body);
     if (!parsedRequest.success) {

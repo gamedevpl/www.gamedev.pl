@@ -182,4 +182,61 @@ describe('Orchestrator', () => {
     expect(orchestrator.get(ids[0])).toBeUndefined();
     expect(orchestrator.get(ids[5])?.state).toBe('succeeded');
   });
+
+  describe('list()', () => {
+    it('returns jobs newest first', async () => {
+      let ms = 0;
+      const orchestrator = new Orchestrator({
+        runner: async () => project(),
+        now: () => new Date(ms++),
+        maxConcurrent: 1,
+        maxConcurrentPerCreator: 1,
+      });
+
+      const a = orchestrator.submit({ creatorId: 'c1', prompt: 'a' });
+      await orchestrator.drain();
+      const b = orchestrator.submit({ creatorId: 'c1', prompt: 'b' });
+      await orchestrator.drain();
+      const c = orchestrator.submit({ creatorId: 'c1', prompt: 'c' });
+      await orchestrator.drain();
+
+      const listed = orchestrator.list();
+      expect(listed.map((j) => j.id)).toEqual([c.id, b.id, a.id]);
+    });
+
+    it('respects the limit parameter', async () => {
+      const orchestrator = new Orchestrator({ runner: async () => project() });
+
+      for (let i = 0; i < 5; i += 1) {
+        orchestrator.submit({ creatorId: 'c1', prompt: `game ${i}` });
+        await orchestrator.drain();
+      }
+
+      expect(orchestrator.list(3)).toHaveLength(3);
+    });
+
+    it('caps at 50 regardless of the requested limit', async () => {
+      const orchestrator = new Orchestrator({
+        runner: async () => project(),
+        maxConcurrent: 10,
+        maxConcurrentPerCreator: 10,
+      });
+
+      for (let i = 0; i < 55; i += 1) {
+        orchestrator.submit({ creatorId: 'c1', prompt: `game ${i}` });
+      }
+      await orchestrator.drain();
+
+      expect(orchestrator.list(100)).toHaveLength(50);
+    });
+
+    it('returns all jobs when fewer than the limit exist', async () => {
+      const orchestrator = new Orchestrator({ runner: async () => project() });
+
+      orchestrator.submit({ creatorId: 'c1', prompt: 'one' });
+      await orchestrator.drain();
+
+      expect(orchestrator.list(20)).toHaveLength(1);
+    });
+  });
 });

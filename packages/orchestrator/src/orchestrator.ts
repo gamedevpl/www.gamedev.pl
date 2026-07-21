@@ -99,6 +99,18 @@ export class Orchestrator {
     return this.store.get(id);
   }
 
+  /**
+   * Returns recent jobs, newest first, capped at `limit` (default 20, max 50).
+   * Titles are only available on succeeded jobs.
+   */
+  list(limit = 20): GenerationJob[] {
+    const cap = Math.min(Math.max(1, limit), 50);
+    return this.store
+      .all()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, cap);
+  }
+
   stats(): OrchestratorStats {
     return {
       queued: this.store.countByState('queued'),

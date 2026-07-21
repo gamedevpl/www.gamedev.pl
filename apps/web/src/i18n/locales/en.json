@@ -26,5 +26,12 @@
   },
   "errors": {
     "generic": "Something went wrong"
+  },
+  "recentGames": {
+    "title": "Recent games",
+    "empty": "No games generated yet.",
+    "play": "Play",
+    "stateLabel": "{{state}}",
+    "loadError": "Could not load recent games."
   }
 }
