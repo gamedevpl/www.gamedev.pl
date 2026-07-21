@@ -31,6 +31,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
 
+  app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
+
   app.post('/api/generate-game', async (request, reply) => {
     const parsedRequest = GenerateRequestSchema.safeParse(request.body);
     if (!parsedRequest.success) {
