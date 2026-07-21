@@ -52,7 +52,15 @@ games as real code, run inside a **container** rather than via a per-token hoste
   earlier "only the Node entrypoint was exercised" caveat no longer applies. One real bug found
   and fixed this pass: the non-root user couldn't `mkdir /out`, so the file-artifact output
   silently failed (stdout still worked) — fixed by pre-creating `/out` in the Dockerfile.
-- 📋 Actually pointing `AGENT_CMD` at a real coding CLI (still nothing paid wired in)
+- 🚧 Pointing `AGENT_CMD` at a real coding CLI — **the wiring is proven; only a valid key is
+  missing.** Verified with the real Claude Code CLI running inside the container against the
+  auth proxy: the CLI honours `ANTHROPIC_BASE_URL`, sends the job token, and our proxy
+  verified it (logged with the correct `jobId`) and forwarded two requests upstream. Anthropic
+  then rejected the deliberately-fake upstream key with "Invalid API key · Fix external API
+  key". So a real credential on **the proxy** (never the container) is the only remaining step
+  before a genuine generation run.
+  - Minor: the CLI probes `HEAD /` on the base URL, which the proxy answers 404. Harmless — it
+    proceeded to the `/v1` calls regardless — but worth handling if a future client is stricter.
 - 📋 Cost/latency measurement vs the mock baseline
 
 **Dependencies:** Phase 0 stable. The plumbing is deliberately built so it does **not** depend
