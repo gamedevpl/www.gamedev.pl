@@ -12,13 +12,6 @@
     "emptyStage": "Twoja gra pojawi się tutaj.",
     "generatedFrom": "Wygenerowane z Twojego pomysłu: „{{prompt}}”"
   },
-  "jobState": {
-    "queued": "Oczekiwanie na wolne miejsce…",
-    "provisioning": "Uruchamianie…",
-    "running": "Budowanie gry…",
-    "succeeded": "Gotowe",
-    "failed": "Niepowodzenie"
-  },
   "suggestions": {
     "dodge": "Unikaj spadających skał",
     "collect": "Zbieraj monety zanim czas się skończy",
@@ -26,12 +19,5 @@
   },
   "errors": {
     "generic": "Coś poszło nie tak"
-  },
-  "recentGames": {
-    "title": "Ostatnie gry",
-    "empty": "Nie wygenerowano jeszcze żadnych gier.",
-    "play": "Zagraj",
-    "stateLabel": "{{state}}",
-    "loadError": "Nie udało się załadować ostatnich gier."
   }
 }

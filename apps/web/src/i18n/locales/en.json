@@ -12,13 +12,6 @@
     "emptyStage": "Your game will appear here.",
     "generatedFrom": "Generated from your idea: \"{{prompt}}\""
   },
-  "jobState": {
-    "queued": "Waiting for a free slot…",
-    "provisioning": "Starting up…",
-    "running": "Building your game…",
-    "succeeded": "Done",
-    "failed": "Failed"
-  },
   "suggestions": {
     "dodge": "Dodge the falling rocks",
     "collect": "Collect the coins before time runs out",
@@ -26,12 +19,5 @@
   },
   "errors": {
     "generic": "Something went wrong"
-  },
-  "recentGames": {
-    "title": "Recent games",
-    "empty": "No games generated yet.",
-    "play": "Play",
-    "stateLabel": "{{state}}",
-    "loadError": "Could not load recent games."
   }
 }
