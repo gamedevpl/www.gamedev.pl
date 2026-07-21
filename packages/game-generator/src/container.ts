@@ -1,11 +1,13 @@
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
+import { mintJobToken } from '@gamedevpl/job-auth';
 import type { GameGenerator, GameProject } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
 /** Runs docker and returns stdout. Injected in tests so no test shells out. */
-export type DockerRunner = (args: string[]) => Promise<string>;
+export type DockerRunner = (args: string[], env?: Record<string, string>) => Promise<string>;
 
 export interface ContainerGeneratorOptions {
   /** Image to run. Default: env AGENT_RUNNER_IMAGE or 'gamedevpl/agent-runner:latest'. */
@@ -26,23 +28,35 @@ export interface ContainerGeneratorOptions {
    * list. Defaults to the agent config vars plus the common API-key vars.
    */
   passEnv?: string[];
+  /**
+   * Base URL of the auth proxy the agent should talk to instead of the provider
+   * directly. Required for external mode. Default: env AUTH_PROXY_URL.
+   */
+  authProxyUrl?: string;
+  /** HMAC secret used to mint per-job tokens. Default: env AUTH_PROXY_SECRET. */
+  tokenSecret?: string;
+  /** Job id the minted token is scoped to (for attribution and budgeting). */
+  jobId?: string;
   /** Override the docker invocation entirely (used by tests to avoid docker). */
   runDocker?: DockerRunner;
 }
 
 /**
- * Forwarded by name when present in the host env. `AGENT_CMD`/`AGENT_ARGS` select
- * and configure the real agent CLI; the key vars authenticate it. Nothing here is
- * required for mock mode.
+ * Forwarded by name when present in the host env — agent *configuration* only.
+ *
+ * Deliberately contains NO credentials. The container must never receive a real
+ * provider key: it processes untrusted creator prompts and its output is published,
+ * so a key in there is exfiltratable (docs/security-model.md, blocker B0). Auth is
+ * supplied instead as a short-lived per-job token pointed at the auth proxy.
  */
-const DEFAULT_PASS_ENV = [
-  'AGENT_CMD',
-  'AGENT_ARGS',
-  'AGENT_TIMEOUT_MS',
-  'AGENT_PROMPT_ENV',
+const DEFAULT_PASS_ENV = ['AGENT_CMD', 'AGENT_ARGS', 'AGENT_TIMEOUT_MS', 'AGENT_PROMPT_ENV'];
+
+/** Provider keys that must never be handed to the container. */
+const FORBIDDEN_IN_CONTAINER = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
   'CLAUDE_CODE_OAUTH_TOKEN',
+  'OPENAI_API_KEY',
 ];
 
 function fieldsPresent(value: Record<string, unknown>): boolean {
@@ -98,9 +112,10 @@ export function parseGameProject(raw: string): GameProject {
   };
 }
 
-async function defaultRunDocker(dockerPath: string, args: string[]): Promise<string> {
+async function defaultRunDocker(dockerPath: string, args: string[], env?: Record<string, string>): Promise<string> {
   const { stdout } = await execFileAsync(dockerPath, args, {
     maxBuffer: 16 * 1024 * 1024,
+    ...(env ? { env } : {}),
   });
   return stdout;
 }
@@ -119,6 +134,9 @@ export class ContainerGameGenerator implements GameGenerator {
   private readonly dockerPath: string;
   private readonly network: string;
   private readonly passEnv: string[];
+  private readonly authProxyUrl: string;
+  private readonly tokenSecret: string;
+  private readonly jobId: string;
   private readonly runDocker: DockerRunner;
 
   constructor(options: ContainerGeneratorOptions = {}) {
@@ -126,25 +144,53 @@ export class ContainerGameGenerator implements GameGenerator {
     this.mode = options.mode ?? process.env.AGENT_MODE ?? 'mock';
     this.dockerPath = options.dockerPath ?? process.env.DOCKER_PATH ?? 'docker';
     // Mock generates entirely offline, so it gets no network at all. A real agent
-    // has to reach its model API, so external can't be locked down the same way.
+    // has to reach the auth proxy, so external can't be locked down the same way.
     this.network = options.network ?? (this.mode === 'mock' ? 'none' : 'bridge');
     this.passEnv = options.passEnv ?? DEFAULT_PASS_ENV;
-    this.runDocker = options.runDocker ?? ((args) => defaultRunDocker(this.dockerPath, args));
+    this.authProxyUrl = options.authProxyUrl ?? process.env.AUTH_PROXY_URL ?? '';
+    this.tokenSecret = options.tokenSecret ?? process.env.AUTH_PROXY_SECRET ?? '';
+    this.jobId = options.jobId ?? `run_${randomUUID().replace(/-/g, '')}`;
+    this.runDocker = options.runDocker ?? ((args, env) => defaultRunDocker(this.dockerPath, args, env));
+  }
+
+  /**
+   * Credentials handed to the container. Never the provider key — only a
+   * short-lived token scoped to this job, which is worthless anywhere but our
+   * proxy. Returned separately from argv so the value stays out of the process list.
+   */
+  private buildAuthEnv(): Record<string, string> {
+    if (this.mode === 'mock') return {};
+
+    if (!this.authProxyUrl || !this.tokenSecret) {
+      throw new Error(
+        'external mode requires AUTH_PROXY_URL and AUTH_PROXY_SECRET. The container is never given a real ' +
+          'provider key: it processes untrusted prompts and its output is published, so a key there is ' +
+          'exfiltratable. Run the auth proxy (apps/auth-proxy) and point the agent at it. ' +
+          'See docs/security-model.md (blocker B0).',
+      );
+    }
+
+    return {
+      // The CLI reads its key from this var; we give it a job token instead.
+      ANTHROPIC_API_KEY: mintJobToken(this.jobId, this.tokenSecret),
+      ANTHROPIC_BASE_URL: this.authProxyUrl,
+    };
   }
 
   /** Builds the `docker run` argv. Split out so tests can assert on it directly. */
-  buildDockerArgs(prompt: string): string[] {
+  buildDockerArgs(prompt: string, authEnvNames: string[] = []): string[] {
     const args = ['run', '--rm', '--network', this.network];
 
     // Values are inlined here only for non-secret config. AGENT_MODE is a fixed
     // keyword and PROMPT is user text — neither is a credential.
     args.push('-e', `AGENT_MODE=${this.mode}`, '-e', `PROMPT=${prompt}`);
 
-    // Secrets and agent config are forwarded BY NAME (`-e NAME`), so docker reads
-    // the value from our environment and it never appears in argv — which would
+    // Config and credentials are forwarded BY NAME (`-e NAME`), so docker reads
+    // the value from the environment and it never appears in argv — which would
     // otherwise leak it to the process list and to any command logging.
-    for (const name of this.passEnv) {
-      if (process.env[name]) args.push('-e', name);
+    for (const name of [...this.passEnv, ...authEnvNames]) {
+      if (FORBIDDEN_IN_CONTAINER.includes(name) && !authEnvNames.includes(name)) continue;
+      args.push('-e', name);
     }
 
     args.push(this.image);
@@ -152,12 +198,13 @@ export class ContainerGameGenerator implements GameGenerator {
   }
 
   async generate(prompt: string): Promise<GameProject> {
+    const authEnv = this.buildAuthEnv();
     // Args are passed as an array (no shell), so the prompt can't inject.
-    const args = this.buildDockerArgs(prompt);
+    const args = this.buildDockerArgs(prompt, Object.keys(authEnv));
 
     let stdout: string;
     try {
-      stdout = await this.runDocker(args);
+      stdout = await this.runDocker(args, { ...process.env, ...authEnv } as Record<string, string>);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       const hint =

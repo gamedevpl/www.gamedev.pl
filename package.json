@@ -7,8 +7,8 @@
     "apps/*"
   ],
   "scripts": {
-    "build:packages": "npm run build -w @gamedevpl/game-generator && npm run build -w @gamedevpl/orchestrator",
-    "build": "npm run build:packages && npm run build -w @gamedevpl/api && npm run build -w @gamedevpl/web",
+    "build:packages": "npm run build -w @gamedevpl/job-auth && npm run build -w @gamedevpl/game-generator && npm run build -w @gamedevpl/orchestrator",
+    "build": "npm run build:packages && npm run build -w @gamedevpl/auth-proxy && npm run build -w @gamedevpl/api && npm run build -w @gamedevpl/web",
     "dev": "npm run build:packages && concurrently -n api,web -c blue,green \"npm run dev -w @gamedevpl/api\" \"npm run dev -w @gamedevpl/web\"",
     "dev:container": "LLM_PROVIDER=container npm run dev",
     "agent-runner:build": "docker build -t gamedevpl/agent-runner containers/agent-runner",

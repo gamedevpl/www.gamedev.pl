@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mintJobToken, verifyJobToken } from '@gamedevpl/job-auth';
 import { ContainerGameGenerator, parseGameProject } from './container.js';
 
 const sampleRunnerOutput = JSON.stringify({
@@ -89,39 +90,74 @@ describe('ContainerGameGenerator', () => {
       expect(args.join(' ')).toContain('--network none');
     });
 
-    it('allows the network in external mode, which must reach a model API', () => {
-      const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
+    it('allows the network in external mode, which must reach the auth proxy', () => {
+      const args = new ContainerGameGenerator({
+        mode: 'external',
+        authProxyUrl: 'http://proxy:3002',
+        tokenSecret: 's',
+      }).buildDockerArgs('p');
       expect(args.join(' ')).toContain('--network bridge');
       expect(args.join(' ')).not.toContain('--network none');
     });
 
-    it('forwards credentials by name only, keeping values out of argv', () => {
+    it('refuses external mode without an auth proxy, rather than falling back to a real key', () => {
+      const generator = new ContainerGameGenerator({ mode: 'external' });
+      expect(() => generator.buildDockerArgs('p')).not.toThrow(); // argv alone is fine...
+      // ...but generating must refuse, because there is nowhere safe to get auth from.
+      return expect(generator.generate('p')).rejects.toThrow(/AUTH_PROXY_URL/);
+    });
+
+    it('never hands the container a real provider key', async () => {
       const KEY = 'ANTHROPIC_API_KEY';
       const previous = process.env[KEY];
-      process.env[KEY] = 'sk-ant-super-secret-value';
+      process.env[KEY] = 'sk-ant-REAL-SECRET-VALUE';
+      let seenArgs: string[] = [];
+      let seenEnv: Record<string, string> = {};
       try {
-        const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
-        // The name is forwarded so docker reads the value from our env...
-        expect(args).toContain(KEY);
-        // ...but the secret itself must never appear in the argv we spawn.
-        expect(args.join(' ')).not.toContain('sk-ant-super-secret-value');
-        expect(args).not.toContain(`${KEY}=sk-ant-super-secret-value`);
+        const generator = new ContainerGameGenerator({
+          mode: 'external',
+          authProxyUrl: 'http://proxy:3002',
+          tokenSecret: 'signing-secret',
+          jobId: 'job_x',
+          runDocker: async (args, env) => {
+            seenArgs = args;
+            seenEnv = env ?? {};
+            return sampleRunnerOutput;
+          },
+        });
+        await generator.generate('make a game');
+
+        // The real key must never reach the container, by any route.
+        expect(seenArgs.join(' ')).not.toContain('sk-ant-REAL-SECRET-VALUE');
+        expect(seenEnv[KEY]).not.toBe('sk-ant-REAL-SECRET-VALUE');
+        // What it gets instead is a job-scoped token, and a base URL aimed at the proxy.
+        expect(seenEnv[KEY]).toBeTruthy();
+        expect(seenEnv.ANTHROPIC_BASE_URL).toBe('http://proxy:3002');
+        // Verifiable as a token for exactly this job.
+        expect(verifyJobToken(seenEnv[KEY] as string, 'signing-secret').jobId).toBe('job_x');
       } finally {
         if (previous === undefined) delete process.env[KEY];
         else process.env[KEY] = previous;
       }
     });
 
-    it('omits env vars that are not set on the host', () => {
-      const KEY = 'ANTHROPIC_API_KEY';
-      const previous = process.env[KEY];
-      delete process.env[KEY];
-      try {
-        const args = new ContainerGameGenerator({ mode: 'external' }).buildDockerArgs('p');
-        expect(args).not.toContain(KEY);
-      } finally {
-        if (previous !== undefined) process.env[KEY] = previous;
-      }
+    it('keeps the job token out of argv, so it is not in the process list', async () => {
+      let seenArgs: string[] = [];
+      const generator = new ContainerGameGenerator({
+        mode: 'external',
+        authProxyUrl: 'http://proxy:3002',
+        tokenSecret: 'signing-secret',
+        jobId: 'job_y',
+        runDocker: async (args) => {
+          seenArgs = args;
+          return sampleRunnerOutput;
+        },
+      });
+      await generator.generate('make a game');
+
+      const token = mintJobToken('job_y', 'signing-secret');
+      expect(seenArgs).toContain('ANTHROPIC_API_KEY'); // forwarded by name...
+      expect(seenArgs.join(' ')).not.toContain(token.split('.')[1]); // ...never by value
     });
   });
 });

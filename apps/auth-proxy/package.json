@@ -1,20 +1,25 @@
 {
-  "name": "@gamedevpl/game-generator",
+  "name": "@gamedevpl/auth-proxy",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "dev": "PORT=3002 tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "@gamedevpl/job-auth": "*"
+  },
   "devDependencies": {
+    "@types/node": "^20.14.15",
+    "tsx": "^4.16.5",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
-  },
-  "dependencies": {
-    "@gamedevpl/job-auth": "*"
   }
 }

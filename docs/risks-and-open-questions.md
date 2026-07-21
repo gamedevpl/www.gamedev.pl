@@ -8,7 +8,19 @@ answered.
 
 ## Blockers — resolve before building 🚩
 
-### B0 — Credential exfiltration via the agent container 🔴 **must fix before any real key**
+### B0 — Credential exfiltration via the agent container 🟡 **primary fix landed; layers outstanding**
+
+> **Update:** the structural fix is built. `apps/auth-proxy` holds the provider key and the
+> container now receives only a short-lived, job-scoped token plus a base URL pointing at the
+> proxy — so there is no provider credential in the blast radius to steal. External mode
+> **refuses to run** without a configured proxy instead of falling back to a real key.
+> Verified end-to-end over real HTTP (valid token forwarded upstream, forged/absent tokens
+> rejected, key never returned to the caller) and by tests asserting a real key never reaches
+> the container by any route.
+>
+> Still outstanding before this is fully closed: egress allowlisting, narrowing the agent's
+> tool set, output scanning for credential-shaped strings, and per-creator (not just per-job)
+> budget caps. The original analysis is kept below for context.
 
 The container currently receives `ANTHROPIC_API_KEY` in its environment, the agent process
 inherits it, and the agent's output files are **published to players**. A creator-supplied

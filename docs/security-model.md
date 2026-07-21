@@ -1,9 +1,10 @@
 # Security Model
 
-> **Status: 🚧 Threat model agreed; mitigations mostly not built.** The finding in
-> "Critical: credential exfiltration" below is **live in the current code** and must be
-> fixed before any real API key is ever supplied. Nothing is currently at risk only
-> because no credential has been configured yet.
+> **Status: 🚧 Primary mitigation built; layers outstanding.** The credential-exfiltration
+> finding below has had its **structural fix landed** — the container no longer receives a
+> provider key at all (see "What is built" under the finding). The remaining layers (egress
+> allowlisting, tool narrowing, output scanning) are not built yet, so a real key should
+> still only be used for trusted-prompt experiments until the checklist at the end is clear.
 
 ## The core assumption
 
@@ -23,7 +24,10 @@ make misbehaviour _worthless_ — nothing valuable in reach, nowhere to send it.
 
 ### The finding
 
-Today the chain is:
+> ✅ **Fixed.** Described in the present tense below as originally found; see
+> "What is built" at the end of this section for the current state.
+
+The chain was:
 
 1. `ContainerGameGenerator` forwards `ANTHROPIC_API_KEY` into the container.
 2. `runner.mjs` spawns the agent with `env: { ...process.env }` — so **the agent process
@@ -81,6 +85,31 @@ if it can't leak the key. Ties into the existing per-creator throttling in
 > **Rule:** a long-lived provider API key must never be an environment variable inside a
 > container that processes untrusted prompts. If you find yourself adding one, stop.
 
+### What is built ✅
+
+Mitigation (1) — the structural one — is implemented:
+
+- **`packages/job-auth`** mints and verifies stateless, HMAC-signed tokens scoped to a single
+  job with a short expiry. Stateless so the proxy stays scale-to-zero friendly.
+- **`apps/auth-proxy`** holds the real provider key and is the only component that ever sees
+  it. It validates the job token, charges a per-job budget, forwards the request upstream with
+  the real key attached, and logs attribution (job id, path, status) — never prompt or
+  completion content.
+- **`ContainerGameGenerator`** no longer forwards provider keys at all. Its `passEnv` list
+  contains only agent _configuration_, and a `FORBIDDEN_IN_CONTAINER` list guards against
+  provider keys being reintroduced. For external mode it mints a job token and sets
+  `ANTHROPIC_BASE_URL` to the proxy — and **refuses to run** if no proxy is configured, rather
+  than quietly falling back to a real key. The token is passed by env, never in argv.
+
+Verified end-to-end over real HTTP: a valid token is forwarded upstream (Anthropic replied
+with a genuine `request_id`), absent and forged tokens are rejected `401`, an over-budget job
+gets `429`, and the real key never appears in any response. Tests assert that a real key set
+in the host environment never reaches the container by any route.
+
+**Net effect:** a fully subverted agent now finds no provider credential to steal. The worst
+it can do is spend its own job's capped budget through a proxy that knows exactly which job
+did it.
+
 ---
 
 ## Second boundary: the generated game in players' browsers
@@ -135,11 +164,16 @@ removed rather than grown.
 
 ## Checklist before the first real credential is used
 
-- [ ] Auth proxy in front of the model API; **no provider key inside the container**
+- [x] **Auth proxy in front of the model API; no provider key inside the container** —
+      `apps/auth-proxy` holds the real key; the container gets a short-lived, job-scoped
+      HMAC token (`packages/job-auth`) and `ANTHROPIC_BASE_URL` aimed at the proxy.
+      `ContainerGameGenerator` now **refuses to run external mode** unless a proxy is
+      configured, rather than silently falling back to a real key.
 - [ ] Egress denied by default, allowlisted to the proxy only
 - [ ] Agent restricted to file read/edit/write tools
 - [ ] Output scanned for credential-shaped strings before publishing
-- [ ] Per-job and per-creator spend caps enforced at the proxy
+- [x] **Per-job spend cap enforced at the proxy** (`BudgetTracker`) — per-_creator_ caps
+      still outstanding, and the tracker is in-memory so the cap is per-instance for now
 - [ ] Container hardening flags (cap-drop, no-new-privileges, read-only rootfs, resource limits)
 - [ ] Generated games served from a separate, cookieless origin
 
