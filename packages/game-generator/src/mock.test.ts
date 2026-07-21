@@ -47,4 +47,21 @@ describe('MockGameGenerator', () => {
     expect(game.title.length).toBeGreaterThan(0);
     expect(game.html).not.toContain('__TITLE__');
   });
+
+  describe('Polish prompts', () => {
+    it('selects the collect template', async () => {
+      const game = await generator.generate('Zbieraj monety zanim czas się skończy');
+      expect(game.js).toContain('🧺');
+    });
+
+    it('selects the space template', async () => {
+      const game = await generator.generate('Poleć rakietą przez asteroidy');
+      expect(game.js).toContain('Wrap around every edge');
+    });
+
+    it('selects the dodge template', async () => {
+      const game = await generator.generate('Unikaj spadających skał');
+      expect(game.js).toContain('dodge the falling hazards');
+    });
+  });
 });

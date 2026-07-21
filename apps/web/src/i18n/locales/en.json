@@ -1,0 +1,30 @@
+{
+  "header": {
+    "logoAlt": "Gamedev.pl",
+    "githubAria": "GitHub",
+    "languageAria": "Language"
+  },
+  "home": {
+    "title": "Describe a game. We build it. You play it.",
+    "promptPlaceholder": "e.g. dodge the falling rocks and survive as long as you can",
+    "generate": "Generate game",
+    "building": "Building…",
+    "emptyStage": "Your game will appear here.",
+    "generatedFrom": "Generated from your idea: \"{{prompt}}\""
+  },
+  "jobState": {
+    "queued": "Waiting for a free slot…",
+    "provisioning": "Starting up…",
+    "running": "Building your game…",
+    "succeeded": "Done",
+    "failed": "Failed"
+  },
+  "suggestions": {
+    "dodge": "Dodge the falling rocks",
+    "collect": "Collect the coins before time runs out",
+    "space": "Fly a rocket ship through asteroids"
+  },
+  "errors": {
+    "generic": "Something went wrong"
+  }
+}

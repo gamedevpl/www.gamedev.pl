@@ -11,14 +11,39 @@ interface TemplateMatcher {
 }
 
 // Ordered by specificity: the first template with a keyword hit wins.
+// Keywords include Polish equivalents so prompts/suggestions in either
+// language (the app ships English + Polish, see apps/web/src/i18n) resolve to
+// a matching template rather than always falling through to the default.
 const TEMPLATES: TemplateMatcher[] = [
-  { name: 'collect', keywords: ['collect', 'coin', 'gather', 'catch', 'pick'], defaultTitle: 'Coin Catcher' },
+  {
+    name: 'collect',
+    keywords: ['collect', 'coin', 'gather', 'catch', 'pick', 'zbieraj', 'zbierz', 'monet', 'moneta', 'łap'],
+    defaultTitle: 'Coin Catcher',
+  },
   {
     name: 'space',
-    keywords: ['space', 'ship', 'rocket', 'asteroid', 'star', 'galaxy'],
+    // 'asteroid' also matches Polish "asteroidy"/"asteroidę" as a substring.
+    keywords: ['space', 'ship', 'rocket', 'asteroid', 'star', 'galaxy', 'kosmos', 'rakiet', 'statek', 'gwiazd'],
     defaultTitle: 'Asteroid Drift',
   },
-  { name: 'dodge', keywords: ['dodge', 'avoid', 'evade', 'survive', 'escape', 'run'], defaultTitle: 'Hazard Dodge' },
+  {
+    name: 'dodge',
+    keywords: [
+      'dodge',
+      'avoid',
+      'evade',
+      'survive',
+      'escape',
+      'run',
+      'unikaj',
+      'unikanie',
+      'ucieczka',
+      'uciekaj',
+      'przetrwaj',
+      'skał',
+    ],
+    defaultTitle: 'Hazard Dodge',
+  },
 ];
 
 const DEFAULT_TEMPLATE = TEMPLATES[2]; // 'dodge'

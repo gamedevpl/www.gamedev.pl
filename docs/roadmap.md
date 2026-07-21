@@ -44,8 +44,15 @@ games as real code, run inside a **container** rather than via a per-token hoste
 - ✅ Output capture: `AGENT_MODE=external` copies the template to a scratch dir, runs the
   configured CLI against it, and collects `index.html`/`game.js`/`style.css` back into a
   `GameProject`. Verified end-to-end with a fake agent (zero cost).
-- 📋 Actually pointing `AGENT_CMD` at a real coding CLI, and a real `docker build`/`docker run`
-  (no Docker daemon was available in the dev environment — only the Node entrypoint was exercised)
+- ✅ **Real `docker build` + `docker run`** — verified with the Docker daemon actually running:
+  the image builds (313MB), `AGENT_MODE=mock` runs `--network none` and emits a valid
+  `GameProject`, `AGENT_MODE=external` ran a real (fake, zero-cost) agent binary inside the
+  container as the non-root `agent` user and correctly collected its edits, and the full stack
+  (`LLM_PROVIDER=container`) served a generated game through the queue into the browser — the
+  earlier "only the Node entrypoint was exercised" caveat no longer applies. One real bug found
+  and fixed this pass: the non-root user couldn't `mkdir /out`, so the file-artifact output
+  silently failed (stdout still worked) — fixed by pre-creating `/out` in the Dockerfile.
+- 📋 Actually pointing `AGENT_CMD` at a real coding CLI (still nothing paid wired in)
 - 📋 Cost/latency measurement vs the mock baseline
 
 **Dependencies:** Phase 0 stable. The plumbing is deliberately built so it does **not** depend

@@ -100,6 +100,38 @@ a {
   height: 40px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.language-switcher {
+  display: flex;
+  gap: 4px;
+}
+
+.language-switcher button {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #2c3236;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.language-switcher button.active {
+  background: var(--turquoise);
+  color: #10312a;
+  border-color: var(--turquoise);
+}
+
+.language-switcher button:not(.active):hover {
+  color: var(--text);
+  border-color: var(--turquoise);
+}
+
 .content {
   max-width: 900px;
   margin: 0 auto;

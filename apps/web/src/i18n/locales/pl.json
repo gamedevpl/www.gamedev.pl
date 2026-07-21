@@ -1,0 +1,30 @@
+{
+  "header": {
+    "logoAlt": "Gamedev.pl",
+    "githubAria": "GitHub",
+    "languageAria": "Język"
+  },
+  "home": {
+    "title": "Opisz grę. My ją zbudujemy. Ty w nią zagrasz.",
+    "promptPlaceholder": "np. unikaj spadających skał i przetrwaj jak najdłużej",
+    "generate": "Stwórz grę",
+    "building": "Budowanie…",
+    "emptyStage": "Twoja gra pojawi się tutaj.",
+    "generatedFrom": "Wygenerowane z Twojego pomysłu: „{{prompt}}”"
+  },
+  "jobState": {
+    "queued": "Oczekiwanie na wolne miejsce…",
+    "provisioning": "Uruchamianie…",
+    "running": "Budowanie gry…",
+    "succeeded": "Gotowe",
+    "failed": "Niepowodzenie"
+  },
+  "suggestions": {
+    "dodge": "Unikaj spadających skał",
+    "collect": "Zbieraj monety zanim czas się skończy",
+    "space": "Poleć rakietą przez asteroidy"
+  },
+  "errors": {
+    "generic": "Coś poszło nie tak"
+  }
+}
