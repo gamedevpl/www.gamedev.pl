@@ -16,6 +16,7 @@ describe('catalog playback', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
+    window.location.hash = '#/';
     vi.restoreAllMocks();
   });
 
@@ -30,6 +31,7 @@ describe('catalog playback', () => {
     );
 
     await i18n.changeLanguage('en');
+    window.location.hash = '#/';
 
     const container = document.createElement('div');
     document.body.appendChild(container);

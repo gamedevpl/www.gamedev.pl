@@ -23,6 +23,61 @@
     "controlsSummary": "Sterowanie: {{controls}}",
     "play": "Graj"
   },
+  "submit": {
+    "title": "Wyślij pomysł na nową grę",
+    "description": "Opisz, w co chcesz zagrać, a my zamienimy to w zgłoszenie gry do przeglądu.",
+    "titleLabel": "Tytuł gry",
+    "titlePlaceholder": "np. Sky Dodge Deluxe",
+    "titleHint": "3–80 znaków",
+    "conceptLabel": "Opis pomysłu",
+    "conceptPlaceholder": "Opisz główną pętlę rozgrywki, cel, sterowanie i klimat gry, którą chcesz zobaczyć.",
+    "conceptHint": "30–4000 znaków",
+    "displayNameLabel": "Nazwa wyświetlana (opcjonalnie)",
+    "displayNamePlaceholder": "Jak mamy Cię podpisać?",
+    "displayNameHint": "Maksymalnie 40 znaków",
+    "submit": "Wyślij specyfikację",
+    "submitting": "Wysyłanie…",
+    "demoToggle": "Zamiast tego wypróbuj generator demonstracyjny",
+    "demoHide": "Ukryj generator demonstracyjny"
+  },
+  "statusView": {
+    "title": "Status zgłoszenia",
+    "loading": "Sprawdzanie Twojego zgłoszenia…",
+    "saveLink": "Zapisz ten link, aby śledzić swoją grę:",
+    "invalidToken": "Ten link śledzący jest nieprawidłowy lub wygasł.",
+    "invalidTokenHelp": "Wróć na stronę główną i wyślij pomysł ponownie, jeśli potrzebujesz nowego linku śledzącego.",
+    "fetchErrorHelp": "Nie udało się teraz odświeżyć tego zgłoszenia. Spróbuj ponownie za chwilę.",
+    "backHome": "Wróć do strony głównej",
+    "play": "Zagraj w swoją grę",
+    "slug": "Opublikowany slug: {{slug}}",
+    "publishedGameTitle": "Opublikowana gra",
+    "states": {
+      "queued": {
+        "label": "W kolejce",
+        "description": "Twoje zgłoszenie zostało odebrane i czeka na podjęcie."
+      },
+      "building": {
+        "label": "W budowie",
+        "description": "Gra jest właśnie zamieniana w grywalną wersję."
+      },
+      "in_review": {
+        "label": "W przeglądzie",
+        "description": "Recenzent sprawdza grę przed publikacją."
+      },
+      "publishing": {
+        "label": "Publikowanie…",
+        "description": "Gra została zaakceptowana i jest właśnie publikowana."
+      },
+      "published": {
+        "label": "Gotowe do gry!",
+        "description": "Twoja gra jest już dostępna i gotowa do uruchomienia w sandboxowanym odtwarzaczu."
+      },
+      "needs_changes": {
+        "label": "Wymaga zmian",
+        "description": "Tego zgłoszenia nie udało się jeszcze opublikować. Popraw pomysł i wyślij go ponownie."
+      }
+    }
+  },
   "suggestions": {
     "dodge": "Unikaj spadających skał",
     "collect": "Zbieraj monety zanim czas się skończy",
