@@ -1,87 +1,135 @@
 {
   "header": {
     "logoAlt": "Gamedev.pl",
-    "githubAria": "GitHub",
-    "languageAria": "Język"
+    "githubAria": "Język",
+    "languageAria": "Język",
+    "statusOnline": "Sieć Agentów Online",
+    "navPrompt": "Stwórz Grę",
+    "navArcade": "Arcade",
+    "navStudio": "Moje Projekty",
+    "navFeed": "Strumień Agentów",
+    "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
+  },
+  "hero": {
+    "mainTitle": "W jaką grę chcesz zagrać?",
+    "mainSubtitle": "Opisz swój pomysł na grę. Autonomiczne agenty AI stworzą, przetestują i opublikują ją na GitHubie.",
+    "bigPromptPlaceholder": "Opisz swoją wymarzoną grę szczegółowo — sterowanie, mechanikę, styl wizualny, punkty... (np. Retro gra kosmiczna, w której omijasz asteroidy i zbierasz świecące kryształy)",
+    "buildGameButton": "Stwórz Grę z AI",
+    "instantMockButton": "Natychmiastowy Podgląd Mock"
   },
   "home": {
-    "title": "Opisz grę. My ją zbudujemy. Ty w nią zagrasz.",
-    "mockTitle": "Wypróbuj generator demonstracyjny",
+    "title": "Opisz grę. My ją budujemy. Ty grasz.",
+    "mockTitle": "Podgląd generatora lokalnego",
     "promptPlaceholder": "np. unikaj spadających skał i przetrwaj jak najdłużej",
-    "generate": "Stwórz grę",
+    "generate": "Generuj grę",
     "building": "Budowanie…",
-    "emptyStage": "Twoja gra pojawi się tutaj.",
-    "generatedFrom": "Wygenerowane z Twojego pomysłu: „{{prompt}}”"
+    "emptyStage": "Twoja wygenerowana lub wybrana gra pojawi się tutaj.",
+    "generatedFrom": "Wygenerowano z Twojego pomysłu: \"{{prompt}}\""
   },
   "catalog": {
-    "title": "Opublikowane gry",
-    "loading": "Ładowanie gier…",
-    "empty": "Nie ma jeszcze opublikowanych gier. Zajrzyj ponownie wkrótce.",
+    "title": "Gry i Arcade",
+    "subtitle": "Odkrywaj i graj w gry stworzone przez agenty AI lub zremiksuj dowolną grę, aby stworzyć własną wersję.",
+    "loading": "Wczytywanie gier…",
+    "empty": "Brak jeszcze opublikowanych gier. Wpisz pomysł powyżej, aby stworzyć pierwszą z nich!",
     "error": "Nie udało się wczytać katalogu. {{message}}",
     "genre": "Gatunek",
     "controls": "Sterowanie",
     "controlsSummary": "Sterowanie: {{controls}}",
-    "play": "Graj"
+    "play": "Zagraj",
+    "remix": "Zremiksuj"
+  },
+  "studio": {
+    "title": "Aktywne Projekty i Śledzenie",
+    "subtitle": "Śledź swoje zgłoszone specyfikacje, oglądaj wersje robocze PR i zgłaszaj poprawki.",
+    "tabGreenfield": "💡 Zaawansowany Formularz Specyfikacji",
+    "tabActive": "📂 Moje Projekty i Iteracje ({{count}})",
+    "mySpecsTitle": "Twoje Aktywne Projekty Gier",
+    "noSpecs": "Nie wysłano jeszcze żadnych specyfikacji z tej przeglądarki.",
+    "enterTokenTitle": "Śledź po Tokenie lub URL",
+    "tokenPlaceholder": "Wklej swój token śledzenia specyfikacji…",
+    "trackButton": "Śledź Projekt",
+    "remixHeader": "Remiksowanie: {{title}}",
+    "remixHint": "Tworzysz wariant specyfikacji na podstawie istniejącej gry."
   },
   "submit": {
-    "title": "Wyślij pomysł na nową grę",
-    "description": "Opisz, w co chcesz zagrać, a my zamienimy to w zgłoszenie gry do przeglądu.",
+    "title": "Zgłoś nową specyfikację gry",
+    "description": "Opisz w co chcesz zagrać. Autonomiczny agent zrealizuje Twój pomysł jako Pull Request na GitHubie.",
     "titleLabel": "Tytuł gry",
     "titlePlaceholder": "np. Sky Dodge Deluxe",
     "titleHint": "3–80 znaków",
-    "conceptLabel": "Opis pomysłu",
-    "conceptPlaceholder": "Opisz główną pętlę rozgrywki, cel, sterowanie i klimat gry, którą chcesz zobaczyć.",
+    "conceptLabel": "Koncept i Mechanika",
+    "conceptPlaceholder": "Opisz pętlę rozgrywki, sterowanie, klimat wizualny i warunki wygranej/przegranej.",
     "conceptHint": "30–4000 znaków",
     "displayNameLabel": "Nazwa wyświetlana (opcjonalnie)",
-    "displayNamePlaceholder": "Jak mamy Cię podpisać?",
-    "displayNameHint": "Maksymalnie 40 znaków",
-    "submit": "Wyślij specyfikację",
+    "displayNamePlaceholder": "Jak mamy się do Ciebie zwracać?",
+    "displayNameHint": "Do 40 znaków",
+    "submit": "Wyślij Specyfikację do Agenta",
     "submitting": "Wysyłanie…",
-    "demoToggle": "Zamiast tego wypróbuj generator demonstracyjny",
-    "demoHide": "Ukryj generator demonstracyjny"
+    "demoToggle": "Wypróbuj lokalny podgląd demo",
+    "demoHide": "Ukryj podgląd demo"
+  },
+  "transparency": {
+    "title": "Strumień Agentów i Przejrzystość",
+    "subtitle": "Każda gra na gamedev.pl jest open-source, utrzymywana przez agenty i bezpiecznie odizolowana.",
+    "liveActivityTitle": "Aktywność w Repozytorium",
+    "activity1": "Agent Copilot zweryfikował PR dla Sky Dodge Deluxe — 100% testów przechodzi",
+    "activity2": "Otrzymano nową specyfikację dla Coin Catcher v2",
+    "activity3": "Statyczna paczka gry opublikowana w katalogu gamedev.pl",
+    "securityTitle": "Inwariant Bezpieczeństwa Sandboksa",
+    "securityBody": "Wygenerowany kod jest niezaufany i działa w odizolowanym iframe z sandbox=\"allow-scripts\" bez allow-same-origin. Zero dostępu do ciasteczek, zero wycieków poświadczeń.",
+    "openSourceTitle": "Ekosystem 100% Open Source",
+    "openSourceBody": "Wszystkie gry znajdują się w naszym publicznym repozytorium gier utrzymywanym przez agenty AI.",
+    "viewGithub": "Zobacz Repozytorium Gier na GitHubie"
   },
   "statusView": {
     "title": "Status zgłoszenia",
     "loading": "Sprawdzanie Twojego zgłoszenia…",
     "saveLink": "Zapisz ten link, aby śledzić swoją grę:",
-    "invalidToken": "Ten link śledzący jest nieprawidłowy lub wygasł.",
-    "invalidTokenHelp": "Wróć na stronę główną i wyślij pomysł ponownie, jeśli potrzebujesz nowego linku śledzącego.",
+    "invalidToken": "Ten link śledzenia jest nieprawidłowy lub wygasł.",
+    "invalidTokenHelp": "Wróć do strony głównej i zgłoś swój pomysł ponownie, jeśli potrzebujesz nowego linku śledzenia.",
     "fetchErrorHelp": "Nie udało się teraz odświeżyć tego zgłoszenia. Spróbuj ponownie za chwilę.",
-    "backHome": "Wróć do strony głównej",
+    "backHome": "Powrót do strony głównej",
     "play": "Zagraj w swoją grę",
     "slug": "Opublikowany slug: {{slug}}",
     "publishedGameTitle": "Opublikowana gra",
+    "previewPlay": "Zobacz wersję roboczą",
+    "previewLoading": "Wczytywanie podglądu…",
+    "previewNote": "Zagraj w grę prosto z otwartego pull requesta — zanim zostanie scalona i opublikowana.",
+    "previewBadge": "Podgląd — niescalona wersja robocza",
+    "previewGameTitle": "Podgląd wersji roboczej",
+    "previewNotReady": "Na gałęzi nie ma jeszcze grywalnej wersji. Wróć, gdy agent doda kod gry.",
+    "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
     "states": {
       "queued": {
         "label": "W kolejce",
-        "description": "Twoje zgłoszenie zostało odebrane i czeka na podjęcie."
+        "description": "Twoje zgłoszenie zostało odebrane i czeka na podjęcie przez agenta."
       },
       "building": {
-        "label": "W budowie",
-        "description": "Gra jest właśnie zamieniana w grywalną wersję."
+        "label": "Tworzenie przez Agenta",
+        "description": "Agent kodujący generuje kod i otwiera pull request."
       },
       "in_review": {
-        "label": "W przeglądzie",
-        "description": "Recenzent sprawdza grę przed publikacją."
+        "label": "W trakcie przeglądu",
+        "description": "Automatyczne testy i recenzenci weryfikują wersję gry."
       },
       "publishing": {
         "label": "Publikowanie…",
-        "description": "Gra została zaakceptowana i jest właśnie publikowana."
+        "description": "Gra została zatwierdzona i jest wdrożona do katalogu."
       },
       "published": {
-        "label": "Gotowe do gry!",
-        "description": "Twoja gra jest już dostępna i gotowa do uruchomienia w sandboxowanym odtwarzaczu."
+        "label": "Gotowa do gry!",
+        "description": "Twoja gra jest opublikowana i gotowa do uruchomienia w bezpiecznym odtwarzaczu."
       },
       "needs_changes": {
-        "label": "Wymaga zmian",
-        "description": "Tego zgłoszenia nie udało się jeszcze opublikować. Popraw pomysł i wyślij go ponownie."
+        "label": "Wymaga poprawek",
+        "description": "To zgłoszenie nie mogło jeszcze zostać opublikowane. Popraw pomysł i zgłoś go ponownie."
       }
     }
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",
-    "collect": "Zbieraj monety zanim czas się skończy",
-    "space": "Poleć rakietą przez asteroidy"
+    "collect": "Zbieraj monety zanim skończy się czas",
+    "space": "Lataj statkiem kosmicznym pośród asteroid"
   },
   "errors": {
     "generic": "Coś poszło nie tak"

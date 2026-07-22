@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
-import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from './submissionApi';
+import {
+  getSubmissionPreview,
+  getSubmissionStatus,
+  type SubmissionApiError,
+  type SubmissionPreview,
+  type SubmissionStatus,
+} from './submissionApi';
 import { statusHash } from './router';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes']);
@@ -19,6 +25,9 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [showGame, setShowGame] = useState(false);
+  const [preview, setPreview] = useState<SubmissionPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(statusHash(token), window.location.href).toString(),
@@ -34,6 +43,9 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
     setErrorMessage(null);
     setIsInvalidToken(false);
     setShowGame(false);
+    setPreview(null);
+    setPreviewLoading(false);
+    setPreviewError(null);
 
     const stopPolling = () => {
       if (intervalId !== undefined) {
@@ -85,6 +97,23 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
 
+  const loadPreview = async () => {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const result = await getSubmissionPreview(token);
+      setPreview(result);
+    } catch (err) {
+      const apiError = err as SubmissionApiError;
+      setPreview(null);
+      setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
+
   return (
     <>
       <section className="panel status-panel">
@@ -120,6 +149,16 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
               </div>
             ) : null}
 
+            {status.preview && !preview ? (
+              <div className="status-actions">
+                <button onClick={() => void loadPreview()} disabled={previewLoading}>
+                  {previewLoading ? t('statusView.previewLoading') : t('statusView.previewPlay')}
+                </button>
+                <p className="status-preview-note">{t('statusView.previewNote')}</p>
+                {previewError && <p className="error">{previewError}</p>}
+              </div>
+            ) : null}
+
             <a className="inline-link" href="#/">
               {t('statusView.backHome')}
             </a>
@@ -134,6 +173,16 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
             {status.slug && <p>{t('statusView.slug', { slug: status.slug })}</p>}
           </div>
           <GameFrame title={publishedGameTitle} src={status.playUrl} />
+        </section>
+      ) : null}
+
+      {preview ? (
+        <section className="panel stage">
+          <div className="game-meta">
+            <h2>{previewTitle}</h2>
+            <p className="status-preview-badge">{t('statusView.previewBadge')}</p>
+          </div>
+          <GameFrame title={previewTitle} html={preview.html} />
         </section>
       ) : null}
     </>

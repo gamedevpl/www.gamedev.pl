@@ -6,6 +6,14 @@ export type SubmissionStatus = {
   status: SubmissionState;
   slug?: string;
   playUrl?: string;
+  /** Present while an unmerged PR is open: the game can be previewed from its branch. */
+  preview?: { slug: string };
+};
+
+export type SubmissionPreview = {
+  slug: string;
+  title: string;
+  html: string;
 };
 
 export type SubmissionApiError = Error & { status?: number };
@@ -47,4 +55,14 @@ export async function getSubmissionStatus(token: string): Promise<SubmissionStat
   }
 
   return (await response.json()) as SubmissionStatus;
+}
+
+export async function getSubmissionPreview(token: string): Promise<SubmissionPreview> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview`);
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as SubmissionPreview;
 }

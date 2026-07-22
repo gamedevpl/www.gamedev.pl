@@ -10,13 +10,29 @@ export interface LinkedPullRequest {
   merged: boolean;
   isDraft: boolean;
   titleHasWip: boolean;
+  /** Head branch name — used to fetch the game sources for an unmerged preview. */
+  headRefName: string;
   changedFiles: string[];
+}
+
+/** The three source files that make up a game in the games repo. */
+export interface GameSources {
+  indexHtml: string;
+  gameJs: string;
+  styleCss: string;
+  /** SPEC.md frontmatter title, when present. */
+  title: string | null;
 }
 
 export interface GitHubClient {
   createIssue(input: CreateIssueInput): Promise<{ number: number }>;
   getIssueState(issueNumber: number): Promise<{ state: 'open' | 'closed' }>;
   findLinkedPR(issueNumber: number): Promise<LinkedPullRequest | null>;
+  /**
+   * Reads a game's source files from a branch (typically an unmerged PR head).
+   * Returns null if the game directory or a required file is missing on that ref.
+   */
+  getGameSources(ref: string, slug: string): Promise<GameSources | null>;
 }
 
 export interface GitHubClientOptions {
@@ -89,6 +105,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                     merged: boolean;
                     isDraft: boolean;
                     title: string;
+                    headRefName: string;
                     files: { nodes: Array<{ path: string }> };
                   } | null;
                 }>;
@@ -114,6 +131,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                             merged
                             isDraft
                             title
+                            headRefName
                             files(first: 100) {
                               nodes {
                                 path
@@ -150,8 +168,63 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         merged: pullRequestNode.merged,
         isDraft: pullRequestNode.isDraft,
         titleHasWip: /^\[WIP\]/i.test(pullRequestNode.title),
-        changedFiles: pullRequestNode.merged ? pullRequestNode.files.nodes.map((node) => node.path) : [],
+        headRefName: pullRequestNode.headRefName,
+        // Populated for every linked PR (the files connection is already queried):
+        // merged PRs use it to resolve the published slug, open PRs to locate the
+        // game directory for an unmerged preview.
+        changedFiles: pullRequestNode.files.nodes.map((node) => node.path),
       };
     },
+
+    async getGameSources(ref, slug) {
+      // Only well-formed slugs address a game directory; reject anything that could
+      // escape it (path traversal, nested paths) before it reaches the contents API.
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+        return null;
+      }
+
+      async function readFile(fileName: string): Promise<string | null> {
+        const url =
+          `https://api.github.com/repos/${repo}/contents/games/${slug}/${fileName}` + `?ref=${encodeURIComponent(ref)}`;
+        const response = await fetchImpl(url, {
+          headers: {
+            // Ask for the raw file bytes rather than the base64 JSON envelope.
+            Accept: 'application/vnd.github.raw',
+            Authorization: ['Bearer', token].join(' '),
+          },
+        });
+        if (response.status === 404) {
+          return null;
+        }
+        if (!response.ok) {
+          throw new Error(`github contents request failed with status ${response.status}`);
+        }
+        return response.text();
+      }
+
+      const [indexHtml, gameJs, styleCss, specMd] = await Promise.all([
+        readFile('index.html'),
+        readFile('game.js'),
+        readFile('style.css'),
+        readFile('SPEC.md'),
+      ]);
+
+      if (indexHtml === null || gameJs === null || styleCss === null) {
+        return null;
+      }
+
+      return { indexHtml, gameJs, styleCss, title: specMd ? parseSpecTitle(specMd) : null };
+    },
   };
+}
+
+/** Extracts the `title:` value from a game's SPEC.md YAML frontmatter, if any. */
+function parseSpecTitle(specMd: string): string | null {
+  const frontmatter = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
+  const body = frontmatter?.[1] ?? specMd;
+  const matched = /^title:\s*(.+?)\s*$/m.exec(body);
+  if (!matched?.[1]) {
+    return null;
+  }
+  return matched[1].replace(/^["']|["']$/g, '').trim() || null;
 }

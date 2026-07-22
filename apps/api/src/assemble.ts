@@ -8,13 +8,31 @@ export class ProjectTooLargeError extends Error {}
 export class EmptyProjectError extends Error {}
 export class CredentialLeakError extends Error {}
 
+export interface AssembleOptions {
+  /**
+   * Inject a strict Content-Security-Policy meta so the game cannot reach the
+   * network (no external scripts, images, fonts, or fetch/beacon). Games are
+   * self-contained by construction, so this is a no-op for legitimate games but
+   * closes the "phone home" gap when serving code that has not been reviewed yet
+   * (e.g. an unmerged PR preview). Defaults to off.
+   */
+  restrictNetwork?: boolean;
+}
+
+// default-src 'none' denies everything, then we re-allow only inline script/style
+// (the game's own code) and data: images (procedural sprites). No connect-src, so
+// fetch/XHR/WebSocket/beacon are all blocked.
+const RESTRICTIVE_CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+  "img-src data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'";
+
 /**
  * Assembles a GameProject into one self-contained HTML document for iframe srcdoc.
  * The document runs in a sandboxed iframe (no allow-same-origin) on the client, so
  * we don't sanitize the code — isolation, not inspection, is the safety boundary.
  * We only enforce basic hygiene: non-empty markup/logic and a size cap.
  */
-export function assembleGameHtml(project: GameProject): string {
+export function assembleGameHtml(project: GameProject, options: AssembleOptions = {}): string {
   if (!project.html.trim() || !project.js.trim()) {
     throw new EmptyProjectError('generated project is missing html or js');
   }
@@ -29,11 +47,15 @@ export function assembleGameHtml(project: GameProject): string {
     throw new CredentialLeakError('generated project contains credential-like strings');
   }
 
+  const cspMeta = options.restrictNetwork
+    ? `\n    <meta http-equiv="Content-Security-Policy" content="${RESTRICTIVE_CSP}" />`
+    : '';
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />${cspMeta}
     <title>${escapeHtml(project.title)}</title>
     <style>${project.css}</style>
   </head>

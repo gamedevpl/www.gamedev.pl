@@ -1,5 +1,7 @@
+import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createGitHubClient, type GitHubClient, type LinkedPullRequest } from './github-client.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 
@@ -17,6 +19,12 @@ type SubmissionStatus = 'queued' | 'building' | 'in_review' | 'publishing' | 'pu
 
 interface SubmissionStatusResponseBase {
   status: SubmissionStatus;
+  /**
+   * Present while an unmerged PR is open (building/in_review): the creator can
+   * play the in-progress game straight from the PR branch, before the human
+   * merge. `slug` is the game directory on that branch.
+   */
+  preview?: { slug: string };
 }
 
 interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {
@@ -151,11 +159,16 @@ async function deriveStatus(
     return issueState === 'closed' ? { status: 'needs_changes' } : { status: 'queued' };
   }
 
+  // The PR is open and unmerged. If it already contains a game directory, the
+  // creator can preview it from the branch — surface that so the UI can offer it.
+  const slug = extractSlugFromChangedFiles(linkedPr.changedFiles);
+  const preview = slug ? { preview: { slug } } : {};
+
   if (linkedPr.isDraft || linkedPr.titleHasWip) {
-    return { status: 'building' };
+    return { status: 'building', ...preview };
   }
 
-  return { status: 'in_review' };
+  return { status: 'in_review', ...preview };
 }
 
 export async function registerSubmissionRoutes(
@@ -182,6 +195,11 @@ export async function registerSubmissionRoutes(
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
   const statusCache = new Map<number, CachedStatus>();
+  // Previews are heavier (several GitHub reads + assembly) and never cached — a
+  // fresh preview must reflect the branch's latest commit — so cap them per IP.
+  const previewRateLimitWindowMs = 60 * 1000;
+  const maxPreviewsPerWindow = 30;
+  const previewsByIp = new Map<string, number[]>();
 
   app.post('/api/submissions', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
@@ -269,6 +287,87 @@ export async function registerSubmissionRoutes(
     } catch (error) {
       request.log.error({ err: error }, 'failed to resolve submission status');
       return reply.status(502).send({ error: 'failed to load submission status' });
+    }
+  });
+
+  // Play the in-progress game straight from its (unmerged) PR branch. This runs the
+  // same trust model as any generated game: the assembled document is served into a
+  // sandboxed, opaque-origin iframe on the client, so the human merge is a curation
+  // gate, not the safety boundary. A preview is only reachable by the token holder for
+  // that specific submission, and only resolves the PR cross-linked to their issue.
+  app.get('/api/submissions/:token/preview', async (request, reply) => {
+    if (!githubClient || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    const token = z.string().parse((request.params as { token?: string }).token);
+    const currentTime = now();
+    if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many preview requests, please try again later' });
+    }
+
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    let linkedPr: LinkedPullRequest | null;
+    try {
+      linkedPr = await githubClient.findLinkedPR(issueNumber);
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to resolve submission for preview');
+      return reply.status(502).send({ error: 'failed to load preview' });
+    }
+
+    if (!linkedPr || linkedPr.merged || linkedPr.state !== 'OPEN') {
+      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    }
+
+    const slug = extractSlugFromChangedFiles(linkedPr.changedFiles);
+    if (!slug) {
+      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    }
+
+    let sources: Awaited<ReturnType<GitHubClient['getGameSources']>>;
+    try {
+      sources = await githubClient.getGameSources(linkedPr.headRefName, slug);
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to fetch preview sources');
+      return reply.status(502).send({ error: 'failed to load preview' });
+    }
+
+    if (!sources) {
+      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    }
+
+    const project: GameProject = {
+      title: sources.title ?? slug,
+      description: '',
+      html: sources.indexHtml,
+      js: sources.gameJs,
+      css: sources.styleCss,
+    };
+
+    try {
+      // restrictNetwork: this is unreviewed code, so lock it to its own inline
+      // assets — it cannot fetch, beacon, or load anything from the network.
+      const html = assembleGameHtml(project, { restrictNetwork: true });
+      return reply.send({ slug, title: project.title, html });
+    } catch (error) {
+      if (
+        error instanceof EmptyProjectError ||
+        error instanceof ProjectTooLargeError ||
+        error instanceof CredentialLeakError
+      ) {
+        request.log.warn({ err: error, slug }, 'preview failed hygiene checks');
+        return reply.status(422).send({ error: 'this game could not be previewed' });
+      }
+      throw error;
     }
   });
 }

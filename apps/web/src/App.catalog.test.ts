@@ -43,7 +43,7 @@ describe('catalog playback', () => {
     });
 
     const playButton = container.querySelector('.catalog-card button');
-    expect(playButton?.textContent).toBe('Play');
+    expect(playButton?.textContent).toContain('Play');
 
     await act(async () => {
       playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
