@@ -1,7 +1,35 @@
 # Deployment
 
-> **Status: 📋 Not selected or built.** `infra/` is intentionally non-deployable until the
-> games repository defines its catalog and bundle publishing contract.
+> **Status: 🚧 M5 in progress (2026-07-22).** The new app (web + API) deploys as **one
+> Cloud Run service**, on its own `*.run.app` URL. The live `www.gamedev.pl` GitHub Pages
+> site is **not touched** — the new app is entirely separate until an owner decides to point
+> a domain at it. See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5 for the acceptance
+> scenario.
+
+## How to deploy (concrete)
+
+### The app → Cloud Run, single same-origin service (owner-run)
+
+[`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
+(monorepo context). It builds both the API and the static web bundle, and the Fastify server
+serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes only same-origin
+requests to `/api` — no CORS, no second service, and the Pages site is never involved.
+
+[`infra/deploy-api.sh`](../infra/deploy-api.sh) builds the image via Cloud Build, pushes it to
+Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). Two secrets
+live in Secret Manager (never in the repo): `github-token` (a fine-grained PAT — Issues
+read/write, Pull requests read, Contents read, scoped to the games repo only) and
+`submission-token-secret` (`openssl rand -hex 32`). Non-secret config (`GAMES_REPO`,
+`CATALOG_URL`) is plain env. The script wires the secrets **only if both exist**, so a first
+deploy without them is browse/play-only (submission routes return 503); add the secrets and
+redeploy to enable submissions. See the header comment in the script for the one-time
+secret-creation commands.
+
+If the owner prefers another host (Fly.io, a VPS), nothing in `apps/api` assumes Cloud Run — it
+reads `PORT`/`HOST`/`WEB_DIST_DIR` from env.
+
+Pointing a domain (e.g. `next.gamedev.pl`) at the Cloud Run service, and eventually replacing
+the old Pages site, are separate owner decisions after the thread works end-to-end.
 
 ## What production needs
 
