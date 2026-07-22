@@ -144,14 +144,16 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
 
             {status.status === 'published' && status.playUrl ? (
               <div className="status-actions">
-                <button onClick={() => setShowGame(true)}>{t('statusView.play')}</button>
+                <button className="primary-btn" onClick={() => setShowGame(true)}>
+                  {t('statusView.play')}
+                </button>
                 {status.slug && <p className="status-slug">{t('statusView.slug', { slug: status.slug })}</p>}
               </div>
             ) : null}
 
             {status.preview && !preview ? (
               <div className="status-actions">
-                <button onClick={() => void loadPreview()} disabled={previewLoading}>
+                <button className="secondary-btn" onClick={() => void loadPreview()} disabled={previewLoading}>
                   {previewLoading ? t('statusView.previewLoading') : t('statusView.previewPlay')}
                 </button>
                 <p className="status-preview-note">{t('statusView.previewNote')}</p>
