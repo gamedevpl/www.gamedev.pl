@@ -1,6 +1,6 @@
 # Games Repo — concrete blueprint
 
-> **Status: 📋 Proposed, nothing created yet.** This is the reviewable plan for the repo
+> **Status: 📋 Agreed blueprint, repository not created yet.** This is the implementation plan for the repo
 > described in [`games-repo.md`](./games-repo.md). Read that first for _why_; this is _what_.
 
 ## 1. Layout
@@ -175,11 +175,11 @@ The three templates in `packages/game-generator/templates` are real, working gam
 the repo's first entries, each with a `SPEC.md` **written to describe what the game already
 does** — not aspirationally.
 
-| Template                | Slug                      |
-| ----------------------- | ------------------------- |
-| `dodge`                 | `dodge-the-falling-rocks` |
-| `collect`               | `collect-the-coins`       |
-| `fly-through-asteroids` | `fly-through-asteroids`   |
+| Template  | Slug                      |
+| --------- | ------------------------- |
+| `dodge`   | `dodge-the-falling-rocks` |
+| `collect` | `collect-the-coins`       |
+| `space`   | `fly-through-asteroids`   |
 
 This matters for a practical reason: it means the repo has **working reference games and passing
 CI from day one**, so the first agent task is "add a game like these" rather than "invent

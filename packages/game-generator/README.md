@@ -23,8 +23,8 @@ export interface GameGenerator {
 }
 ```
 
-Any implementation is a `GameGenerator`. Callers depend only on this interface, so
-the mock and a future real generator are swappable without touching consumers.
+The interface supports the local preview. Production creation no longer swaps in a real-time
+generator: games are maintained in a dedicated repository and published as static bundles.
 
 ## `MockGameGenerator`
 
@@ -45,21 +45,9 @@ movement, collision, score, win/lose overlay). The mock exists so the whole
 prompt → game → play loop runs locally with zero external dependencies — proving
 the loop before spending on model calls.
 
-## Extension point: a real agentic generator (future)
+## Production role
 
-The real generator will not fill in a fixed template. It will implement the same
-`GameGenerator` interface but **shell out to an agentic coding CLI** (Claude Code /
-Codex) running in a **sandboxed container** against a starter template repo. The
-agent iterates on real files and produces a richer, multi-file project, which is
-then collapsed into the `GameProject` shape (or the shape is widened later) and run
-in the same sandboxed iframe. No output is ever trusted enough to run
-un-sandboxed.
-
-### Licensing note (check before building the cost model)
-
-Running those CLIs under **individual Pro/Max subscriptions** as multi-tenant SaaS
-backend compute — and **rotating across multiple accounts** to spread load — is a
-licensing / Terms-of-Service question, not just an engineering one. It needs a
-direct check with the vendor before any cost model is built on top of it. Assume
-per-seat/interactive terms until confirmed otherwise; the compliant path may be a
-metered API / commercial tier rather than subscription seats.
+The templates are intended to seed the dedicated games repository and keep the local player
+surface exercisable until the catalog lands. Do not add a container or hosted-agent
+`GameGenerator`: the removed self-hosted generation architecture is not a future extension
+point. See [`docs/games-repo.md`](../../docs/games-repo.md).

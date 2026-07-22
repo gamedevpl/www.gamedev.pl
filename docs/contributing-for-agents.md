@@ -27,7 +27,7 @@ apps/
   api/       Fastify + TS backend (POST /api/generate-game, GET /api/health)
 packages/
   game-generator/   The generator seam: GameGenerator + GameProject; a mock; templates/
-infra/       Placeholder for future Terraform/GCP (nothing used yet)
+infra/       Non-deployable placeholder until hosting is selected
 docs/        This documentation set
 ```
 
@@ -83,7 +83,7 @@ runs `lint-staged` (Prettier) on staged files.
 Generated games run **only** inside a sandboxed iframe with `sandbox="allow-scripts"` and
 **no `allow-same-origin`**. This is the entire reason it's safe to run arbitrary generated
 code. Do not add `allow-same-origin`, and do not render generated HTML/JS outside the iframe.
-See [`architecture.md`](./architecture.md#sandboxed-iframe-execution-model).
+See [`architecture.md`](./architecture.md#sandboxed-game-execution).
 
 ## Prior art: agent instructions on `master`
 
@@ -93,9 +93,10 @@ instruction file for agents on this branch, follow that pattern (concise, projec
 actionable). This repo is developed with [Genaicode](https://github.com/gtanczyk/genaicode);
 see `genaicode.config.ts` (its `lintCommand` is `npm run type-check && npm run lint`).
 
-## When you hit the mid-refactor
+## Removed approaches
 
 If you encounter imports of `@gamedevpl/engine` or `@gamedevpl/llm-provider`, those belong to a
 removed DSL approach. **Migrate to the `GameProject` (HTML/JS/CSS) model** in
-`packages/game-generator/src/types.ts` — don't resurrect the DSL. See the known-issue section
-in [`risks-and-open-questions.md`](./risks-and-open-questions.md#known-issue-mid-refactor-inconsistency).
+`packages/game-generator/src/types.ts` — don't resurrect the DSL. Likewise, do not restore the
+removed container runner, auth proxy, job queue, or in-app agent execution path; production
+games belong in the dedicated games repository described in [`games-repo.md`](./games-repo.md).

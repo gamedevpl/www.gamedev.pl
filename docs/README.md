@@ -6,14 +6,12 @@
 
 ## Elevator pitch
 
-gamedev.pl is pivoting from a static site of hand-built open-source games into a SaaS
-for **AI-created games**: a creator describes a game in plain language, an AI agent builds
-it as _real_ runnable code, and it is immediately playable in the browser. Players can play
-games made by other creators, and — later — request changes while playing that an agent
-turns into a pull request against the original creator's repository. The current branch
-proves the core slice: **prompt → generated game → play it in a sandboxed iframe**,
-running locally with no external services. The previous hand-built games site still lives
-on the `master` branch.
+gamedev.pl is pivoting from a static site of hand-built open-source games into a catalog and
+creation surface for **AI-assisted games**. A creator submits a spec, a coding agent proposes
+real HTML/CSS/JS in a dedicated games repository, and review plus validation gate publication.
+Players can later request changes through the same spec-and-PR workflow. The current branch
+proves the player surface locally with a deterministic mock; the repository-backed catalog and
+submission flow are not built yet. The previous hand-built games site still lives on `master`.
 
 > ⚠️ **`the-new-gamedevpl` is the repository's default branch — deliberately.** This makes
 > tools that implicitly target "the default branch" (like assigning a GitHub issue to Copilot's
@@ -31,7 +29,7 @@ on the `master` branch.
 | Generator                  | `packages/game-generator` — the seam; deterministic **mock** for now ✅                                                                            |
 | Execution model            | ✅ Generated game is assembled into one self-contained HTML doc, run in a **sandboxed iframe** (`sandbox="allow-scripts"`, no `allow-same-origin`) |
 | Core loop (Phase 0)        | ✅ Green — `prompt → generated game → play` works locally; full gate (type-check/lint/test/build) passes; verified in-browser                      |
-| Game creation              | 🚧 **Pivoted** — games live in a dedicated repo maintained by coding agents; see `games-repo.md`                                                   |
+| Game creation              | 📋 **Pivoted** — games will live in a dedicated repo maintained by coding agents; see `games-repo.md`                                              |
 | Orchestration / containers | ❌ Removed — self-hosted agent execution was abandoned for legal reasons (see `games-repo.md`)                                                     |
 | Deployment (GCP/Terraform) | 📋 Not built — `infra/` is a placeholder                                                                                                           |
 
@@ -41,19 +39,20 @@ on the `master` branch.
 
 ## Documents in this folder
 
-| File                                                           | What's in it                                                                                      |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                                   |
-| [`architecture.md`](./architecture.md)                         | Current MVP architecture + target orchestration architecture, with diagrams                       |
-| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                          |
-| [`games-repo.md`](./games-repo.md)                             | **The current architecture — games live in a repo maintained by coding agents. Read this first.** |
-| [`security-model.md`](./security-model.md)                     | Threat model. The credential-exfiltration finding is **dissolved** by the games-repo pivot        |
-| [`agent-adapters.md`](./agent-adapters.md)                     | Making Claude Code / Codex / agy / Copilot interchangeable                                        |
-| [`deployment.md`](./deployment.md)                             | Terraform + GCP shape, and securing the GitHub Actions pipeline                                   |
-| [`container-orchestration.md`](./container-orchestration.md)   | Design for the ephemeral-container agent-runner layer (queue, scale-to-zero, job model)           |
-| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                                  |
-| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Living risk log, with two ToS diligence blockers called out at the top                            |
-| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                          |
+| File                                                           | What's in it                                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`vision.md`](./vision.md)                                     | Product vision and the three core loops (create / play / remix)                                        |
+| [`architecture.md`](./architecture.md)                         | Working local preview + agreed games-repo product architecture                                         |
+| [`roadmap.md`](./roadmap.md)                                   | Phased milestones with goals, deliverables, dependencies, open questions                               |
+| [`games-repo.md`](./games-repo.md)                             | **The current architecture — games will live in a repo maintained by coding agents. Read this first.** |
+| [`games-repo-blueprint.md`](./games-repo-blueprint.md)         | Concrete layout, validation, publishing, and issue-first implementation plan                           |
+| [`security-model.md`](./security-model.md)                     | Threat model. The credential-exfiltration finding is **dissolved** by the games-repo pivot             |
+| [`agent-adapters.md`](./agent-adapters.md)                     | Common repository contract for Claude Code / Codex / agy / Copilot                                     |
+| [`deployment.md`](./deployment.md)                             | Minimal delivery shape for the app, games origin, and submission API                                   |
+| [`container-orchestration.md`](./container-orchestration.md)   | **Archived** design for the removed self-hosted generation direction                                   |
+| [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                                       |
+| [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Active product blockers, security risks, and resolved architecture decisions                           |
+| [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                               |
 
 ## Shared agent playbooks
 

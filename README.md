@@ -1,8 +1,14 @@
 # Gamedev.pl
 
-Gamedev.pl is becoming a SaaS for AI-created games: describe a game in plain text, an AI agent builds it as **real runnable code**, and you play it in the browser — then play games made by other creators, and (later) remix them into pull requests for the original creator.
+Gamedev.pl is becoming a catalog and creation surface for AI-assisted games: describe a game,
+a coding agent implements it as **real runnable code** in a dedicated games repository, and a
+reviewed build becomes playable in the browser. Players can later propose changes through the
+same spec-and-pull-request workflow.
 
-This branch (`the-new-gamedevpl`) is a fresh start proving the core loop first: **prompt → AI-generated game → play it in a sandboxed iframe**, running entirely locally with no external services. Accounts, sharing, real agentic generation, and deployment come after. The previous hand-built games site lives on the `master` branch.
+This branch (`the-new-gamedevpl`) contains a local proof of the player loop: **prompt →
+deterministic template → sandboxed iframe**, with no external services. The production catalog,
+games repository, spec submission, and deployment are not built yet. The previous hand-built
+games site lives on the `master` branch.
 
 ## Repo layout
 
@@ -13,7 +19,7 @@ apps/
 packages/
   game-generator/    The generator seam: GameGenerator interface + GameProject type,
                      a deterministic mock, and real HTML/JS/CSS game templates
-infra/               Placeholder for future Terraform/GCP deployment (not used yet)
+infra/               Non-deployable placeholder until hosting is selected
 docs/                Project documentation — the plan of record; read this first
 ```
 
@@ -38,7 +44,10 @@ Other scripts: `npm run build`, `npm run test`, `npm run lint`, `npm run type-ch
 
 ## Documentation
 
-Start with [`docs/README.md`](./docs/README.md). It links the product vision, architecture (current + target container orchestration), roadmap, the remix→PR spec, and the risk log. Coding agents (Copilot, Claude Code, Codex) should read [`docs/contributing-for-agents.md`](./docs/contributing-for-agents.md) before making changes.
+Start with [`docs/README.md`](./docs/README.md). It links the product vision, current and target
+games-repo architecture, roadmap, remix→PR spec, and risk log. Coding agents (Copilot, Claude
+Code, Codex) should read [`docs/contributing-for-agents.md`](./docs/contributing-for-agents.md)
+before making changes.
 
 ## Contribution Guidelines
 

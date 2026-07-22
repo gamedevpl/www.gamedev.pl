@@ -1,8 +1,9 @@
 # Copilot / coding-agent instructions
 
-You are working on the **`the-new-gamedevpl`** branch of gamedev.pl — a SaaS that turns a
-natural-language prompt into a playable browser game. Read [`docs/README.md`](../docs/README.md)
-first; the `docs/` folder is the **plan of record**. This file is the short actionable summary.
+You are working on the **`the-new-gamedevpl`** branch of gamedev.pl — a catalog, sandboxed
+player, and spec-submission surface for agent-maintained browser games. Read
+[`docs/README.md`](../docs/README.md) first; the `docs/` folder is the **plan of record**. This
+file is the short actionable summary.
 
 > ⚠️ **`the-new-gamedevpl` is the repository's default branch — this is deliberate, not an
 > accident.** It exists so tools that implicitly work off "the default branch" (including
@@ -15,19 +16,17 @@ first; the `docs/` folder is the **plan of record**. This file is the short acti
 ## What this is
 
 - Monorepo, **npm workspaces**: `apps/web` (Vite + React + TS), `apps/api` (Fastify + TS),
-  `packages/game-generator` (the generator seam), `containers/` (container-based agent runner),
-  `infra/` (placeholder), `docs/` (docs).
-- The generator turns a prompt into a **`GameProject`** — real, unconstrained `html`/`js`/`css`,
-  not a schema document. Today a deterministic **mock** drives it offline; a containerized real
-  agent replaces it later. Depend only on the `GameGenerator` interface in
-  `packages/game-generator/src/types.ts`.
+  `packages/game-generator` (local preview seam), `infra/` (placeholder), `docs/` (docs).
+- The deterministic mock proves the local player loop. Production games are maintained by
+  coding agents in a dedicated games repository and published as static bundles; do not replace
+  the mock with an in-app agent runtime.
 
 ## The one safety rule — do not break it
 
 Generated games run **only** inside an iframe with **`sandbox="allow-scripts"` and no
 `allow-same-origin`**. This is the entire reason it is safe to run arbitrary generated code. Do
 not add `allow-same-origin`, and never render generated HTML/JS outside the sandboxed iframe.
-See [`docs/architecture.md`](../docs/architecture.md#sandboxed-iframe-execution-model).
+See [`docs/architecture.md`](../docs/architecture.md#sandboxed-game-execution).
 
 ## Conventions
 
@@ -59,11 +58,12 @@ Read [`docs/roadmap.md`](../docs/roadmap.md) (what's done vs next) and
 open questions). Don't resurrect the removed `@gamedevpl/engine` / `@gamedevpl/llm-provider`
 DSL — the `GameProject` model is authoritative.
 
-## ⚠️ Architecture pivot in progress
+## Current architecture
 
-Games are moving to a **dedicated games repo maintained by coding agents**; this app becomes a
+Production games will live in a **dedicated games repo maintained by coding agents**; this app is becoming a
 catalog, player, and spec-submission surface. Self-hosted agent execution was **removed for
-legal reasons**. Read [`games-repo.md`](../docs/games-repo.md) before making architectural assumptions.
+legal reasons** and is not a future phase. Read [`games-repo.md`](../docs/games-repo.md) before
+making architectural assumptions.
 
 ## Reviewing or verifying work you didn't write
 

@@ -1,109 +1,86 @@
 # Product Vision
 
-## The pivot
+## The product
 
-gamedev.pl began as a static site of hand-built, open-source browser games (React + TS +
-Canvas). Those games — `tribe2`, `tribe`, `masterplan`, `hungry-lion`, and others — still
-live on the `master` branch and remain the source of the project's visual identity.
+gamedev.pl is becoming a catalog and creation surface for AI-assisted browser games:
 
-The new direction is a **SaaS for AI-created games**:
+1. A creator describes a game as a structured, human-readable spec.
+2. A coding agent implements it as real HTML/CSS/JS in a dedicated games repository.
+3. A human reviews the spec and implementation together.
+4. A publish workflow makes the game immediately playable from the catalog.
+5. Players can later propose changes that follow the same spec → PR → review path.
 
-1. A **creator** describes a game in plain language.
-2. An **AI agent builds it as real, runnable code** — not a constrained template document,
-   but an actual self-contained HTML/JS/CSS game.
-3. The game is **immediately playable in the browser**.
-4. **Players** can play games made by other creators, and eventually request changes that
-   an agent turns into a pull request for the creator to review.
+This is intentionally **not** real-time generation. Creation is closer to commissioning a
+game: asynchronous, visible, and reviewable. The local deterministic generator remains a
+useful player-surface demo, not the future production backend.
 
-The differentiator is that generation produces _real code_ rather than filling slots in a
-fixed DSL. Because arbitrary generated code cannot be schema-validated for safety, the
-safety model is **sandboxed execution**: every generated game runs inside an iframe with
-`sandbox="allow-scripts"` and **no** `allow-same-origin`, so it cannot reach the parent
-page, cookies, or same-origin storage.
+Games are unconstrained code, so safety comes from sandboxed execution. Every game runs inside
+an iframe with `sandbox="allow-scripts"` and no `allow-same-origin`, and production games are
+served from a separate cookieless origin.
 
-## Visual identity (inherited from `master`)
+## Visual identity
 
-| Token             | Value                                             |
-| ----------------- | ------------------------------------------------- |
-| Header background | `#1d2123` (dark)                                  |
-| Accent            | `#00e4ac` (turquoise)                             |
-| Body background   | `#454545`                                         |
-| Font              | Proxima Nova                                      |
-| Wordmark          | `gamedev.pl` with **`.pl`** rendered in turquoise |
+The new product inherits the established gamedev.pl identity from the legacy `master` branch:
 
-Keep new UI consistent with this identity.
+| Token             | Value                                |
+| ----------------- | ------------------------------------ |
+| Header background | `#1d2123`                            |
+| Accent            | `#00e4ac`                            |
+| Body background   | `#454545`                            |
+| Font              | Proxima Nova                         |
+| Wordmark          | `gamedev.pl` with `.pl` in turquoise |
 
 ## The three core loops
 
-### 1. Create loop ✅ (mock) / 🚧 (real generation planned)
+### 1. Create 📋
 
-The heart of the product. Today it runs end-to-end with a deterministic mock generator.
-
-```
-Creator writes a prompt
-        │
-        ▼
-Frontend POSTs the prompt to the API
-        │
-        ▼
-Generator produces a real self-contained game (HTML + JS + CSS)
-        │
-        ▼
-The game is assembled into one document and rendered in a sandboxed iframe
-        │
-        ▼
-Creator plays it instantly; iterates on the prompt
+```text
+Creator submits a spec
+        ↓
+The app validates it and files a games-repo issue
+        ↓
+A coding agent proposes SPEC.md + implementation in a PR
+        ↓
+Human review and automated validation gate the merge
+        ↓
+The publish workflow adds the game to the catalog
 ```
 
-Future: the generator becomes a real agentic coding CLI (Claude Code / Codex / "agy") run
-inside an ephemeral container against a game-template repo, instead of a mock.
+The creator sees honest asynchronous states such as submitted, under review, agent working,
+PR open, and published.
 
-### 2. Play loop 📋 (multi-creator not built)
+### 2. Play 📋 (player surface proven locally)
 
-Once games are persisted and attributable to creators, any player can browse and play games
-made by others. The play surface is the same sandboxed iframe used in the create loop, so
-the safety guarantees are identical whether you are playing your own game or someone else's.
-
-```
-Player opens a creator's game
-        │
-        ▼
-The stored game bundle is served and rendered in a sandboxed iframe
-        │
-        ▼
-Player plays; optionally requests a change (→ remix loop)
+```text
+Player browses the published catalog
+        ↓
+The selected bundle loads from the games origin
+        ↓
+The game runs in the sandboxed iframe
 ```
 
-### 3. Remix loop 📋 (not built)
+The existing mock proves the last step with three playable templates. Catalog ingestion and
+published hosting are not built yet.
 
-The growth flywheel. While playing a game, a player can request a change in plain language.
-An agent makes the change and **opens a pull request** against the original creator's
-repository — it does **not** auto-merge. The creator reviews and merges through normal
-GitHub review. This preserves the trust boundary: nobody's code is changed without the
-owner's approval.
+### 3. Remix 📋
 
-```
-Player requests a change while playing
-        │
-        ▼
-An agent produces a diff against the creator's game repo
-        │
-        ▼
-The agent opens a PULL REQUEST (never auto-merges)
-        │
-        ▼
-Creator reviews & merges via GitHub → the game updates
+```text
+Player proposes a behavior change
+        ↓
+The request becomes a proposed spec change
+        ↓
+An agent updates the spec and implementation in a PR
+        ↓
+Maintainers review; the agent never auto-merges
+        ↓
+Merge republishes the game
 ```
 
-See [`remix-to-pr.md`](./remix-to-pr.md) for the full spec.
+## Why one games repository
 
-## Why GitHub is central (future)
+A shared repository makes the spec the durable source of truth and gives every coding agent
+the same working contract. It provides normal diffs, review, CI, history, attribution, and
+rollback without gamedev.pl operating agent compute or holding model credentials.
 
-The long-term plan uses GitHub as a growth engine: each creator's game lives in a real
-GitHub repository, built from a public game-template repo, with a "publish" GitHub Action
-that pushes the static bundle to gamedev.pl. This makes games hackable by Copilot, Claude
-Code, Codex, and humans alike, and makes the remix→PR loop a natural fit for how developers
-already collaborate.
-
-> These future milestones are directional, not committed. See [`roadmap.md`](./roadmap.md)
-> and [`risks-and-open-questions.md`](./risks-and-open-questions.md).
+The tradeoff is asynchronous creation and a central moderation burden. The UI and operating
+model must acknowledge both rather than presenting an instant-generation promise.

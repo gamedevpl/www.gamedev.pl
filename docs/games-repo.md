@@ -1,6 +1,6 @@
 # The Games Repo — agent-maintained games
 
-> **Status: 🚧 Design agreed, not built.** This supersedes the container-based
+> **Status: 📋 Design agreed, not built.** This supersedes the container-based
 > generation architecture, which has been removed (see "Why this replaced the previous
 > design" below).
 
@@ -12,8 +12,7 @@ directory containing a **spec** (the source of truth) and its implementation:
 ```
 games/
   dodge-the-rocks/
-    SPEC.md          ← source of truth: what this game IS
-    meta.json        ← title, slug, author, status, tags
+    SPEC.md          ← source of truth, including catalog frontmatter
     index.html
     game.js
     style.css
@@ -106,8 +105,8 @@ than the one we just removed, but not nothing:
   working the repo must treat spec content as **data, not instructions**, and the repo's
   agent-instructions file should say so explicitly.
 
-The credential scanner already built in `apps/api` stays useful: it now guards what gets
-served out of the repo.
+The credential-scanner logic already built in `apps/api` should be ported into the games-repo
+validation gate so it guards published bundles.
 
 ## What the gamedev.pl app becomes
 
@@ -118,16 +117,10 @@ served out of the repo.
 
 ## Open questions
 
-- **How does the app read games?** Directly from the GitHub API, from a published build
-  artifact, or from a synced store? Affects latency, rate limits, and whether the app needs
-  any backend state at all.
-- **Do the existing template games seed the repo?** The three working games in
-  `packages/game-generator/templates` are real, playable, and could be its first entries,
-  each gaining a `SPEC.md` written to match.
-- **What happens to `packages/orchestrator` and the `/api/jobs` endpoints?** They were built to
-  queue generation work that no longer exists. Likely removable, but not removed yet.
-- **Spec format.** Free-form Markdown is easiest for agents to read and humans to write;
-  some structure (frontmatter for title/genre/controls) makes validation and the catalog
-  easier. Probably: structured frontmatter + free-form body.
-- **Who reviews agent PRs in the games repo**, and what's the merge gate?
+- **Where are published bundles hosted?** The agreed interface is `catalog.json` plus static
+  bundles; GitHub Pages is the simplest first origin, while a bucket/CDN scales further.
+- **Repository ownership and merge authority.** Agent PRs need a human gate initially,
+  especially because review is also the moderation point.
+- **Submission identity, attribution, rights, and abuse controls.** These must be decided before
+  the app writes public issues under its own credentials.
 - **One repo's scaling limits** — fine for tens of games; revisit if it reaches hundreds.

@@ -1,3 +1,2 @@
-project_id  = "my-gcp-project-id"
-region      = "europe-west1"
-environment = "dev"
+# No variables are currently defined. This file is retained as a placeholder for the future
+# deployment selected in docs/deployment.md.

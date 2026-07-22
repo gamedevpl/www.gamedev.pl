@@ -1,8 +1,9 @@
-# Container Orchestration — Design
+# Container Orchestration — Archived Design
 
-> **Status: 📋 Design only. Not built.** This documents the intended shape of the layer that
-> will run real agentic generation. It exists so the current generator seam stays compatible
-> with it. Nothing here is implemented on this branch.
+> **Status: 🗃️ Retired. Do not implement.** This records the removed self-hosted generation
+> direction for historical context. The product now uses a dedicated games repository where
+> agents propose pull requests; see [`games-repo.md`](./games-repo.md). The container runner,
+> auth proxy, job tokens, orchestrator, and job endpoints were removed.
 
 ## Why this layer exists
 

@@ -8,10 +8,9 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 
 ## Fast facts
 
-- npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `containers/`,
-  `infra/`, `docs/`.
-- Branch: `the-new-gamedevpl` — **also the repo's default branch, on purpose.** Product: prompt →
-  AI-generated game (real HTML/JS/CSS `GameProject`) → played in a sandboxed iframe.
+- npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
+- Branch: `the-new-gamedevpl` — **also the repo's default branch, on purpose.** Product: a
+  catalog, sandboxed player, and spec-submission surface for an agent-maintained games repo.
 - **`master` is off-limits.** It's the previous hand-built games site, unrelated to this rewrite.
   Never target a PR at `master`, and never merge/rebase `master`'s history into this branch.
 - **Safety invariant (never break):** generated games render only in an iframe with
@@ -29,11 +28,12 @@ npm run type-check && npm run lint && npm run test && npm run build
 `npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
 so no cloud or API keys are needed.
 
-## ⚠️ Architecture pivot in progress
+## Current architecture
 
-Games are moving to a **dedicated games repo maintained by coding agents**; this app becomes a
-catalog, player, and spec-submission surface. Self-hosted agent execution (the agent-runner
-container, auth proxy, and job tokens) was **removed for legal reasons**. Read
+Production games will live in a **dedicated games repo maintained by coding agents**; this app
+is becoming a catalog, player, and spec-submission surface. Self-hosted agent execution (the
+agent-runner container, auth proxy, job tokens, and orchestrator) was **removed for legal
+reasons** and is not a future phase. Read
 [`games-repo.md`](docs/games-repo.md) before making architectural assumptions.
 
 ## Shared playbooks (read these — they apply to you too)
