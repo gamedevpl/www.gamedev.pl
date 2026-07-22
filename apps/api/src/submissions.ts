@@ -46,6 +46,24 @@ export interface SubmissionRoutesOptions {
   now?: () => number;
 }
 
+function isRateLimited(
+  buckets: Map<string, number[]>,
+  ip: string,
+  currentTime: number,
+  maxRequests: number,
+  windowMs: number,
+): boolean {
+  const requests = (buckets.get(ip) ?? []).filter((timestamp) => currentTime - timestamp < windowMs);
+  if (requests.length >= maxRequests) {
+    buckets.set(ip, requests);
+    return true;
+  }
+
+  requests.push(currentTime);
+  buckets.set(ip, requests);
+  return false;
+}
+
 function sanitizeCreatorText(raw: string, options: { singleLine: boolean }): string {
   const withoutHtml = raw.replace(/<[^>]+>/g, ' ');
   const withoutMarkdownLinks = withoutHtml
@@ -160,6 +178,9 @@ export async function registerSubmissionRoutes(
   const rateLimitWindowMs = 60 * 60 * 1000;
   const maxSubmissionsPerWindow = 5;
   const submissionsByIp = new Map<string, number[]>();
+  const statusRateLimitWindowMs = 60 * 1000;
+  const maxStatusChecksPerWindow = 120;
+  const statusChecksByIp = new Map<string, number[]>();
   const statusCache = new Map<number, CachedStatus>();
 
   app.post('/api/submissions', async (request, reply) => {
@@ -173,16 +194,9 @@ export async function registerSubmissionRoutes(
     }
 
     const currentTime = now();
-    const clientIp = request.ip;
-    const recentSubmissions = (submissionsByIp.get(clientIp) ?? []).filter(
-      (timestamp) => currentTime - timestamp < rateLimitWindowMs,
-    );
-    if (recentSubmissions.length >= maxSubmissionsPerWindow) {
+    if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many submissions, please try again later' });
     }
-
-    recentSubmissions.push(currentTime);
-    submissionsByIp.set(clientIp, recentSubmissions);
 
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
     const sanitizedConcept = sanitizeCreatorText(parsed.data.concept, { singleLine: false });
@@ -226,6 +240,10 @@ export async function registerSubmissionRoutes(
     }
 
     const token = z.string().parse((request.params as { token?: string }).token);
+    const currentTime = now();
+    if (isRateLimited(statusChecksByIp, request.ip, currentTime, maxStatusChecksPerWindow, statusRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many status checks, please try again later' });
+    }
 
     let issueNumber: number;
     try {
@@ -238,7 +256,6 @@ export async function registerSubmissionRoutes(
     }
 
     const cached = statusCache.get(issueNumber);
-    const currentTime = now();
     if (cached && cached.expiresAt > currentTime) {
       return reply.send(cached.value);
     }
