@@ -75,6 +75,46 @@ Check explicitly:
 - **Supply chain** — new dependencies, changed lockfiles, modified CI workflows, or altered
   build scripts deserve real scrutiny. A workflow change is a pipeline-privilege change.
 
+## Runtime-verify agent-authored games (canvas + requestAnimationFrame)
+
+An agent-authored game passing the games-repo `validate` gate is **not** proof it runs —
+`tools/validate.mjs` is static only (frontmatter, secret scan, no-external-refs, size cap). It
+never executes the game. You must drive it yourself.
+
+The trap: the in-app Browser pane runs the preview tab as **hidden**
+(`document.visibilityState === 'hidden'`), which **throttles/pauses `requestAnimationFrame`**.
+The game draws one frame and freezes; sampling the canvas shows an unchanging pixel count. That
+is the preview, not the game — do not conclude the game is broken.
+
+Workaround — a manual-clock harness (drives the loop deterministically):
+
+```html
+<script>
+  window.__clock = 0;
+  performance.now = () => window.__clock; // control the clock
+  window.__rafQ = [];
+  window.requestAnimationFrame = (cb) => (window.__rafQ.push(cb), window.__rafQ.length);
+  window.__pump = (steps, dtMs) => {
+    for (let i = 0; i < steps; i++) {
+      window.__clock += dtMs;
+      const q = window.__rafQ;
+      window.__rafQ = [];
+      q.forEach((cb) => cb(window.__clock));
+    }
+  };
+</script>
+<!-- the game's canvas markup, then -->
+<script src="./game.js"></script>
+```
+
+Serve it from the same origin as `game.js`, then from your JS: `__pump()` to advance time,
+`dispatchEvent` real input events, and assert against **canvas pixels** (the game state is
+usually closured and unreadable). Prove the three things the spec promises: spawn/motion
+(bright-pixel count rises), input effect (popping/scoring changes pixels), and the lose/win
+transition (the game-over overlay floods the canvas dark). The definitive proof is still
+playing the _published_ game on the live site, where a foregrounded real-user tab runs rAF
+normally.
+
 ## Verify claims, don't relay them
 
 If an agent reports "all tests pass" or "I verified X", reproduce it. Report what **you**
