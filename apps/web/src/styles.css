@@ -145,6 +145,13 @@ a {
   margin: 10px 0 25px;
 }
 
+.section-title {
+  margin: 0 0 16px;
+  color: var(--turquoise);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
 .panel {
   border-radius: 5px;
   margin-bottom: 25px;
@@ -219,6 +226,56 @@ button.chip:hover {
 .error {
   color: var(--error);
   margin: 12px 0 0;
+}
+
+.catalog-state {
+  color: var(--muted);
+  margin: 0;
+}
+
+.catalog-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #2c3236;
+  border-radius: 5px;
+  background: #14171a;
+}
+
+.catalog-card h3 {
+  margin: 0;
+}
+
+.catalog-meta {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.catalog-meta div {
+  display: grid;
+  gap: 4px;
+}
+
+.catalog-meta dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.catalog-meta dd {
+  margin: 0;
+}
+
+.catalog-card button {
+  align-self: flex-start;
 }
 
 .stage {

@@ -6,11 +6,22 @@
   },
   "home": {
     "title": "Describe a game. We build it. You play it.",
+    "mockTitle": "Try the mock generator",
     "promptPlaceholder": "e.g. dodge the falling rocks and survive as long as you can",
     "generate": "Generate game",
     "building": "Building…",
     "emptyStage": "Your game will appear here.",
     "generatedFrom": "Generated from your idea: \"{{prompt}}\""
+  },
+  "catalog": {
+    "title": "Published games",
+    "loading": "Loading games…",
+    "empty": "No published games yet. Check back soon.",
+    "error": "Could not load the catalog. {{message}}",
+    "genre": "Genre",
+    "controls": "Controls",
+    "controlsSummary": "Controls: {{controls}}",
+    "play": "Play"
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",
