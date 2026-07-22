@@ -64,6 +64,7 @@ autonomous agents here. Read them directly:
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`.claude/skills/verify-agent-work/SKILL.md`](.claude/skills/verify-agent-work/SKILL.md)         | **Any time you review, verify, or merge work you didn't write** — from Copilot, another agent, or a subagent. Covers verifying in a throwaway clone, what to check in a diff, and why a passing-looking CI check may be no signal at all. |
 | [`.claude/skills/copilot-orchestration/SKILL.md`](.claude/skills/copilot-orchestration/SKILL.md) | When **delegating** work to GitHub Copilot's remote coding agent — dispatch mechanics, which tasks are worth delegating, and the traps (default-branch forking, `action_required` CI).                                                    |
+| [`.claude/skills/game-asset-generation/SKILL.md`](.claude/skills/game-asset-generation/SKILL.md) | When **generating, styling, or composing game assets** (sprites, audio, UI) for any game specification using modern procedural and tool-assisted workflows.                                                                               |
 
 Both carry a **mandatory self-improvement clause**: if you use one and it turns out to be
 wrong, stale, or missing something that cost you time, update it in the same session. That

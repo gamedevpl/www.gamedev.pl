@@ -63,6 +63,7 @@ Kept under `.claude/skills/` so Claude Code auto-loads them, but written to be
 | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | [`verify-agent-work`](../.claude/skills/verify-agent-work/SKILL.md)         | Reviewing, verifying, or merging work you didn't write yourself |
 | [`copilot-orchestration`](../.claude/skills/copilot-orchestration/SKILL.md) | Delegating work to GitHub Copilot's remote coding agent         |
+| [`game-asset-generation`](../.claude/skills/game-asset-generation/SKILL.md) | Dynamically generating, styling, and composing game assets      |
 
 Both must be **updated when they turn out to be wrong or incomplete** — see the
 self-improvement clause at the end of each.
