@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+.git
+**/.env
+**/.env.local
+**/*.log
+apps/web/dist
+coverage
+.husky

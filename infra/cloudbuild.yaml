@@ -1,0 +1,12 @@
+# Builds the submission API image from the repo root using apps/api/Dockerfile
+# and pushes it to Artifact Registry. Invoked by infra/deploy-api.sh via
+# `gcloud builds submit --config infra/cloudbuild.yaml`.
+substitutions:
+  _IMAGE: '' # e.g. europe-central2-docker.pkg.dev/PROJECT/gamedev/api:latest
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/api/Dockerfile', '-t', '${_IMAGE}', '.']
+images:
+  - '${_IMAGE}'
+options:
+  logging: CLOUD_LOGGING_ONLY

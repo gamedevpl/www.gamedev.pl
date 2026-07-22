@@ -20,7 +20,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const generator = options.generator ?? createGenerator();
   const app = Fastify({ logger: options.logger ?? false });
 
-  await app.register(cors, { origin: true });
+  // In production, WEB_ORIGIN pins CORS to the deployed site (e.g. https://www.gamedev.pl);
+  // a comma-separated list is allowed. Unset (local dev) reflects any origin so the Vite
+  // dev server and same-origin proxy both work.
+  const webOrigin = process.env.WEB_ORIGIN?.trim();
+  await app.register(cors, {
+    origin: webOrigin ? webOrigin.split(',').map((entry) => entry.trim()) : true,
+  });
   await registerSubmissionRoutes(app, options.submissionRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));

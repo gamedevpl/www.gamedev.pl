@@ -1,7 +1,32 @@
 # Deployment
 
-> **Status: 📋 Not selected or built.** `infra/` is intentionally non-deployable until the
-> games repository defines its catalog and bundle publishing contract.
+> **Status: 🚧 M5 in progress (2026-07-22).** Hosts are chosen and the API deploy is built:
+> the web app publishes to `www.gamedev.pl/next/` (Pages `gh-pages` branch) and the submission
+> API runs on Cloud Run (scale-to-zero) via [`infra/deploy-api.sh`](../infra/deploy-api.sh).
+> See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5 for the acceptance scenario.
+
+## How to deploy (concrete)
+
+### Submission API → Cloud Run (owner-run)
+
+[`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
+(monorepo context). [`infra/deploy-api.sh`](../infra/deploy-api.sh) builds it via Cloud Build,
+pushes to Artifact Registry, and deploys to Cloud Run with `--min-instances 0`. Two secrets live
+in Secret Manager (never in the repo): `github-token` (a fine-grained PAT — Issues read/write,
+Pull requests read, Contents read, scoped to the games repo only) and `submission-token-secret`
+(`openssl rand -hex 32`). Non-secret config (`GAMES_REPO`, `CATALOG_URL`, `WEB_ORIGIN`) is passed
+as plain env. `WEB_ORIGIN=https://www.gamedev.pl` pins CORS to the site. See the header comment
+in the script for the one-time secret-creation commands.
+
+If the owner prefers another host (Fly.io, a VPS), nothing in `apps/api` assumes Cloud Run — it
+reads `PORT`/`HOST` from env and needs only the four env vars plus two secrets above.
+
+### Web app → `www.gamedev.pl/next/` (CI)
+
+A workflow in this repo builds `apps/web` with `base: '/next/'`, `VITE_GAMES_ORIGIN`, and
+`VITE_API_BASE_URL` (the Cloud Run URL), then publishes the output into the `next/` directory of
+the `gh-pages` branch **without touching the root** (the old site stays live). Flipping the root
+to the new app is a separate owner decision after the thread works end-to-end.
 
 ## What production needs
 
