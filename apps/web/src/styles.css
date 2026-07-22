@@ -244,6 +244,10 @@ button.chip:hover {
   max-width: 520px;
 }
 
+.game-description {
+  color: var(--text);
+}
+
 .empty-stage {
   color: var(--muted);
   padding: 64px 0;

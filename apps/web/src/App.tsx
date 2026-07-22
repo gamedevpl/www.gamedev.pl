@@ -87,7 +87,10 @@ export function App() {
             <>
               <div className="game-meta">
                 <h2>{game.title}</h2>
-                {submittedPrompt && <p>{t('home.generatedFrom', { prompt: submittedPrompt })}</p>}
+                {game.description && <p className="game-description">{game.description}</p>}
+                {submittedPrompt && (
+                  <p className="game-source">{t('home.generatedFrom', { prompt: submittedPrompt })}</p>
+                )}
               </div>
               <GameFrame key={game.html} title={game.title} html={game.html} />
             </>
