@@ -38,14 +38,13 @@ serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes o
 requests to `/api` — no CORS, no second service, and the Pages site is never involved.
 
 [`infra/deploy-api.sh`](../infra/deploy-api.sh) builds the image via Cloud Build, pushes it to
-Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). Two secrets
-live in Secret Manager (never in the repo): `github-token` (a fine-grained PAT — Issues
-read/write, Pull requests read, Contents read, scoped to the games repo only) and
-`submission-token-secret` (`openssl rand -hex 32`). Non-secret config (`GAMES_REPO`,
-`CATALOG_URL`) is plain env. The script wires the secrets **only if both exist**, so a first
-deploy without them is browse/play-only (submission routes return 503); add the secrets and
-redeploy to enable submissions. See the header comment in the script for the one-time
-secret-creation commands.
+Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). It reads
+its secrets from Secret Manager (never the repo) and wires whichever exist — see the
+**Secrets & access** table above for the three (`github-token`, `submission-token-secret`,
+optional `site-basic-auth`) and their current state. Submissions require **both**
+`github-token` and `submission-token-secret`, so a first deploy without them is browse/play-only
+(submission routes return 503). Non-secret config (`GAMES_REPO`, `CATALOG_URL`) is plain env.
+See the header comment in the script for the one-time secret-creation commands.
 
 If the owner prefers another host (Fly.io, a VPS), nothing in `apps/api` assumes Cloud Run — it
 reads `PORT`/`HOST`/`WEB_DIST_DIR` from env.
