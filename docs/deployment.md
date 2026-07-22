@@ -1,6 +1,6 @@
 # Deployment
 
-> **Status: ✅ Deployed & live (2026-07-22).** The app (web + API) runs as **one Cloud Run
+> **Status: ✅ Automated via GitHub Actions (`deploy.yml`).** The app (web + API) runs as **one Cloud Run
 > service** at `https://gamedev-app-334141807880.europe-central2.run.app` (GCP project
 > `gamedevpl`, region `europe-central2`, service `gamedev-app`, scale-to-zero). The live
 > `www.gamedev.pl` GitHub Pages site is **not touched**. **The app is currently locked behind
@@ -8,11 +8,22 @@
 > **submissions are pending the `github-token` secret** (submission routes return 503 until
 > it is added — see below). See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5.
 
+## Automated CD Pipeline (`.github/workflows/deploy.yml`)
+
+Deployments to Cloud Run are triggered on push to `the-new-gamedevpl`:
+
+1. **CI Gate (`ci-gate`):** Runs `npm run lint`, `npm run type-check`, `npm run test`, `npm run build` on Node 20.
+2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
+3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry.
+4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
+5. **Candidate Smoke Test:** Performs HTTP status check on `${CANDIDATE_URL}/api/health`.
+6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.
+
 ## Secrets & access (current live state)
 
 Secrets live only in GCP Secret Manager (never in the repo); the Cloud Run runtime service
 account (`<project-number>-compute@developer.gserviceaccount.com`) needs
-`roles/secretmanager.secretAccessor` on each. `infra/deploy-api.sh` wires whichever exist into
+`roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
 | Secret                    | Purpose                                                                | State (2026-07-22)      |
@@ -28,87 +39,16 @@ a single `--set-secrets` list.
   redeploy (or deploy without wiring it). Basic Auth over HTTPS is a stopgap; a domain +
   proper auth is a later decision.
 
-## How to deploy (concrete)
-
-### The app → Cloud Run, single same-origin service (owner-run)
+## How to deploy manually
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
 (monorepo context). It builds both the API and the static web bundle, and the Fastify server
 serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes only same-origin
 requests to `/api` — no CORS, no second service, and the Pages site is never involved.
 
-[`infra/deploy-api.sh`](../infra/deploy-api.sh) builds the image via Cloud Build, pushes it to
-Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). It reads
-its secrets from Secret Manager (never the repo) and wires whichever exist — see the
-**Secrets & access** table above for the three (`github-token`, `submission-token-secret`,
-optional `site-basic-auth`) and their current state. Submissions require **both**
-`github-token` and `submission-token-secret`, so a first deploy without them is browse/play-only
-(submission routes return 503). Non-secret config (`GAMES_REPO`, `CATALOG_URL`) is plain env.
-See the header comment in the script for the one-time secret-creation commands.
+[`infra/deploy-api.sh`](../infra/deploy-api.sh) can be used to manually trigger Cloud Build, push to
+Artifact Registry, and deploy to Cloud Run with `--min-instances 0` (scale-to-zero) from a local environment.
 
-If the owner prefers another host (Fly.io, a VPS), nothing in `apps/api` assumes Cloud Run — it
-reads `PORT`/`HOST`/`WEB_DIST_DIR` from env.
+## Infrastructure
 
-Pointing a domain (e.g. `next.gamedev.pl`) at the Cloud Run service, and eventually replacing
-the old Pages site, are separate owner decisions after the thread works end-to-end.
-
-## What production needs
-
-The games-repo pivot removes agent compute, job queues, auth proxies, and agent-runner images
-from the deployment. The expected components are:
-
-| Component            | Responsibility                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| Web app              | Static catalog and player UI                                                             |
-| Games origin         | Published `catalog.json` and self-contained game bundles on a separate cookieless origin |
-| Submission API       | Validate/rate-limit specs and create narrowly scoped repository issues                   |
-| Repository workflows | Validate agent PRs and publish merged games                                              |
-
-Browsing and playing should not require the submission API. GitHub Pages is the simplest first
-games origin; a bucket/CDN is the scaling option. The choice remains open.
-
-## Required security properties
-
-- Separate app and games origins; the games origin has no app cookies or privileged endpoints.
-- Restrictive CSP for game documents, especially `connect-src`, navigation, framing, and
-  external assets.
-- Repository credentials remain server-side and have only the permissions the submission flow
-  needs.
-- Untrusted PR validation receives no deployment credentials.
-- Deployments use GitHub OIDC/workload identity rather than long-lived cloud keys.
-- Third-party actions are pinned to commit SHAs and workflows declare least-privilege
-  `permissions:`.
-- Production publishing runs only from a protected branch/environment with rollback support.
-
-## Current CI
-
-`.github/workflows/ci.yml` installs dependencies and runs lint, type-check, tests, and build on
-pushes and pull requests. It is a development gate, not a deployment workflow. No production
-deploy workflow currently exists.
-
-The dedicated games repository will need two additional workflows:
-
-1. Validate changed games on every PR without secrets.
-2. Publish catalog and bundles after a reviewed merge to its protected default branch.
-
-## Infrastructure as code
-
-The previous Terraform described deleted container-generation services and was intentionally
-retired. New infrastructure must be written only after these decisions are recorded:
-
-- games-repo location and output contract;
-- GitHub Pages versus bucket/CDN;
-- hosting platform for the web app and submission API;
-- identity, moderation, and expected submission volume;
-- custom domains, retention, rollback, and takedown operations.
-
-Until then, `infra/` is a documented placeholder and `terraform apply` must create nothing.
-
-## Suggested sequence
-
-1. Create the games repository and its validation/publish contract.
-2. Publish seed games to a separate origin.
-3. Connect the catalog/player without adding backend state.
-4. Design submission identity, rights, moderation, and abuse controls.
-5. Add the minimal submission API.
-6. Select hosting and implement narrowly scoped infrastructure and deployment workflows.
+Infrastructure provision and deployment rely on GCP Cloud Run, Artifact Registry, Cloud Build, and Secret Manager. No Terraform configuration is used or required.

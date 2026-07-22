@@ -138,6 +138,12 @@ If more than one agent may touch the repo:
 
 - Give each an isolated location; only one owns the working directory.
 - Prefer coordinating through the remote (PRs, the GitHub API) over local git state.
+- **A parallel agent can commit mid-review, and `git status`/`git diff --cached`
+  snapshots then read inconsistently across calls** — e.g. a file shows as
+  staged-modified one moment, then `git diff --cached` is empty the next because HEAD
+  advanced under you and the index now matches the new commit. Don't trust a single
+  snapshot: confirm with `git diff HEAD -- <path>` and re-check `git log --oneline`
+  and "ahead of origin by N" before concluding what a file's final state is.
 - Tell each agent explicitly what is off-limits.
 - Expect that a mid-task correction may be **indistinguishable from prompt injection** to the
   receiving agent. Scope prompts properly up front so corrections aren't needed.

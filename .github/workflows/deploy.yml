@@ -1,0 +1,125 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ the-new-gamedevpl ]
+
+concurrency:
+  group: cloud-run-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  ci-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run test
+      - run: npm run build
+
+  deploy:
+    needs: ci-gate
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: 'gamedevpl'
+      REGION: 'europe-central2'
+      SERVICE: 'gamedev-app'
+      REPO: 'gamedev'
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+      CATALOG_URL: 'https://gamedevpl.github.io/www.gamedev.pl-games/catalog.json'
+      WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build image via Cloud Build
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:${SHORT_SHA}"
+          echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
+          gcloud builds submit . \
+            --config infra/cloudbuild.yaml \
+            --substitutions "_IMAGE=${IMAGE}" \
+            --project "$PROJECT_ID"
+
+      - name: Deploy candidate revision to Cloud Run
+        run: |
+          SECRET_MAPPINGS=()
+          if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
+             && gcloud secrets describe submission-token-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("GITHUB_TOKEN=github-token:latest" "SUBMISSION_TOKEN_SECRET=submission-token-secret:latest")
+          fi
+
+          if gcloud secrets describe site-basic-auth --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("SITE_BASIC_AUTH=site-basic-auth:latest")
+          fi
+
+          SECRET_FLAGS=()
+          if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
+            joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
+            SECRET_FLAGS=(--set-secrets "$joined")
+          fi
+
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --platform managed \
+            --no-traffic \
+            --tag candidate \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 4 \
+            --port 8080 \
+            --set-env-vars "GAMES_REPO=${GAMES_REPO},CATALOG_URL=${CATALOG_URL}" \
+            "${SECRET_FLAGS[@]}"
+
+      - name: Smoke test candidate revision
+        run: |
+          CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format=json \
+            | jq -r '.status.traffic[]? | select(.tag=="candidate") | .url')
+
+          [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL is empty"; exit 1; }
+          echo "Candidate URL: ${CANDIDATE_URL}"
+
+          BASIC_AUTH=$(gcloud secrets versions access latest --secret=site-basic-auth --project="$PROJECT_ID" 2>/dev/null || true)
+          AUTH_HEADER=()
+          if [ -n "$BASIC_AUTH" ]; then
+            AUTH_HEADER=(-u "$BASIC_AUTH")
+          fi
+
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/health")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Smoke test failed with HTTP status ${STATUS_CODE}"
+            exit 1
+          fi
+          echo "Smoke test passed on candidate URL!"
+
+      - name: Promote candidate revision to 100% traffic
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --to-latest \
+            --remove-tags candidate
