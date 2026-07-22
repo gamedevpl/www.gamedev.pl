@@ -1,5 +1,7 @@
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import type { GameGenerator } from '@gamedevpl/game-generator';
+import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
@@ -58,6 +60,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       throw error;
     }
   });
+
+  // In production (single Cloud Run service) the API also serves the built web app from the
+  // same origin, so the browser makes only same-origin requests and no CORS is involved.
+  // WEB_DIST_DIR points at apps/web/dist; unset in local dev, where Vite serves the app.
+  const webDistDir = process.env.WEB_DIST_DIR?.trim();
+  if (webDistDir && existsSync(webDistDir)) {
+    await app.register(fastifyStatic, { root: webDistDir, wildcard: false });
+    // SPA fallback: any non-/api GET that isn't a real file returns index.html
+    // (the app is hash-routed, so this mainly covers a hard refresh on any path).
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method !== 'GET' || request.url.startsWith('/api')) {
+        return reply.status(404).send({ error: 'not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+  }
 
   return app;
 }
