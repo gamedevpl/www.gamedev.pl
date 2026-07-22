@@ -49,12 +49,16 @@ bundle + catalog to the games origin, and the app picked it up. The creator saw 
 3. **No database.** The tracking token is stateless:
    `base64url(issueNumber + "." + HMAC-SHA256(SUBMISSION_TOKEN_SECRET, issueNumber))`.
    Status is derived live from the GitHub API on each request.
-4. **The web app deploys to the existing Pages site under `/next/`** (i.e.
-   `www.gamedev.pl/next/`), leaving the old site at the root untouched. Flipping the root is
-   an owner decision after the thread works.
-5. **The API deploys as one small container, scale-to-zero** (Cloud Run; `infra/` is already
-   GCP-oriented). It is the only component holding a secret. If the owner prefers another
-   host (Fly.io, a VPS), nothing in the code may assume Cloud Run specifics.
+4. **The new app deploys as ONE Cloud Run service (web + API, same origin)**, on its own
+   `*.run.app` URL — **the live `www.gamedev.pl` Pages site is not touched at all.** _(Revised
+   2026-07-22 from the earlier "publish web to `www.gamedev.pl/next/`" idea, at the owner's
+   direction: keep the live site entirely separate rather than sharing its `gh-pages` branch.)_
+   Pointing a domain at the service, and eventually replacing the old site, are later owner
+   decisions. Same origin means no CORS and `VITE_API_BASE_URL=''`.
+5. **That service is one small container, scale-to-zero** (Cloud Run; `infra/` is already
+   GCP-oriented). The Fastify server serves the static web bundle (`WEB_DIST_DIR`) and is the
+   only component holding a secret. If the owner prefers another host (Fly.io, a VPS), nothing
+   in the code assumes Cloud Run specifics — it reads `PORT`/`HOST`/`WEB_DIST_DIR` from env.
 6. **The mock generator path stays** (`POST /api/generate-game`) as a local-dev toy; it is
    not part of the thread and must not be wired into the catalog.
 
@@ -218,25 +222,26 @@ assigned and a PR appearing, hands-off.
 
 ---
 
-### M5 — Deploy to www.gamedev.pl
+### M5 — Deploy the app to Cloud Run (live site untouched)
 
-**Goal:** the thread runs on the real domain, not localhost.
+**Goal:** the thread runs on a real deployed URL, not localhost — **without touching the live
+`www.gamedev.pl` Pages site.**
 
-- **Web:** a workflow in the app repo builds `apps/web` with
-  `VITE_GAMES_ORIGIN` + `VITE_API_BASE_URL` set, Vite `base: '/next/'`, and publishes the
-  output into the `next/` directory of the `gh-pages` branch **without touching anything
-  else on that branch** (the old site stays at the root). Result:
-  `https://www.gamedev.pl/next/`.
-- **API:** containerize `apps/api` (multi-stage Dockerfile, non-root, `PORT` env) and
-  deploy to Cloud Run, scale-to-zero, min instances 0, with the three secrets from M2 in
-  Secret Manager. 🔑 Owner provisions the GCP project + secrets (or chooses an alternate
-  host). CORS on the API allows origin `https://www.gamedev.pl` only.
-- Set `VITE_API_BASE_URL` to the Cloud Run URL for the web build (an `api.gamedev.pl`
-  CNAME can come later).
+- **One service (web + API, same origin).** The multi-stage `apps/api/Dockerfile` (built from
+  the repo root, non-root, `PORT`/`HOST` from env) builds both `apps/api` and `apps/web` and
+  the Fastify server serves the static bundle via `@fastify/static` (`WEB_DIST_DIR`) with an
+  SPA fallback. No CORS (same origin), `VITE_API_BASE_URL=''`, no gh-pages involvement.
+- Deploy with [`infra/deploy-api.sh`](../infra/deploy-api.sh) (Cloud Build → Artifact Registry
+  → Cloud Run, scale-to-zero, min instances 0). Submission secrets (`GITHUB_TOKEN`,
+  `SUBMISSION_TOKEN_SECRET`) come from Secret Manager and are wired **only if both exist** —
+  a first deploy without them is browse/play-only (submissions 503). 🔑 Owner provisions the
+  GCP project (+ optional secrets), then runs the script.
+- Status/verification of the container is done in real Docker before deploy (image builds,
+  boots, `/` serves the app, `/api/*` works same-origin, a seed game plays sandboxed).
 
-**Acceptance — the steel thread itself:** on `https://www.gamedev.pl/next/`, run the §0
-scenario end-to-end: play a seed game; submit a real spec; watch the status page; operator
-verifies + merges Copilot's PR; status flips to `published`; play the new game. Done.
+**Acceptance — the steel thread itself:** on the Cloud Run URL, run the §0 scenario
+end-to-end: play a seed game; submit a real spec; watch the status page; operator verifies +
+merges Copilot's PR; status flips to `published`; play the new game. Done.
 
 ---
 
