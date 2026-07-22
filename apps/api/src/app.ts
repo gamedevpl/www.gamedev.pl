@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createGenerator } from './generator.js';
+import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 
 const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
@@ -12,6 +13,7 @@ const GenerateRequestSchema = z.object({
 export interface BuildAppOptions {
   generator?: GameGenerator;
   logger?: boolean;
+  submissionRoutes?: SubmissionRoutesOptions;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -19,6 +21,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const app = Fastify({ logger: options.logger ?? false });
 
   await app.register(cors, { origin: true });
+  await registerSubmissionRoutes(app, options.submissionRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
 
