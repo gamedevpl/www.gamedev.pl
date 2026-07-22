@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import type { GameGenerator } from '@gamedevpl/game-generator';
+import { timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -29,6 +30,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(cors, {
     origin: webOrigin ? webOrigin.split(',').map((entry) => entry.trim()) : true,
   });
+
+  // Optional site-wide HTTP Basic Auth gate. When SITE_BASIC_AUTH ("user:password")
+  // is set, every request must carry matching credentials — a lightweight "not public
+  // yet" lock over the whole app (web + API). Unset (local dev, tests) leaves it open.
+  // CORS preflight (OPTIONS) is exempt: browsers never send credentials on preflight.
+  const basicAuth = process.env.SITE_BASIC_AUTH?.trim();
+  if (basicAuth) {
+    const expected = Buffer.from(`Basic ${Buffer.from(basicAuth).toString('base64')}`);
+    app.addHook('onRequest', async (request, reply) => {
+      if (request.method === 'OPTIONS') return;
+      const provided = Buffer.from(request.headers.authorization ?? '');
+      const ok = provided.length === expected.length && timingSafeEqual(provided, expected);
+      if (!ok) {
+        reply.header('WWW-Authenticate', 'Basic realm="gamedev.pl (private)"');
+        return reply.status(401).send({ error: 'authentication required' });
+      }
+    });
+  }
+
   await registerSubmissionRoutes(app, options.submissionRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
