@@ -6,11 +6,22 @@
   },
   "home": {
     "title": "Opisz grę. My ją zbudujemy. Ty w nią zagrasz.",
+    "mockTitle": "Wypróbuj generator demonstracyjny",
     "promptPlaceholder": "np. unikaj spadających skał i przetrwaj jak najdłużej",
     "generate": "Stwórz grę",
     "building": "Budowanie…",
     "emptyStage": "Twoja gra pojawi się tutaj.",
     "generatedFrom": "Wygenerowane z Twojego pomysłu: „{{prompt}}”"
+  },
+  "catalog": {
+    "title": "Opublikowane gry",
+    "loading": "Ładowanie gier…",
+    "empty": "Nie ma jeszcze opublikowanych gier. Zajrzyj ponownie wkrótce.",
+    "error": "Nie udało się wczytać katalogu. {{message}}",
+    "genre": "Gatunek",
+    "controls": "Sterowanie",
+    "controlsSummary": "Sterowanie: {{controls}}",
+    "play": "Graj"
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",
