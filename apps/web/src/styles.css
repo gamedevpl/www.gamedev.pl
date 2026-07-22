@@ -175,6 +175,21 @@ textarea:focus {
   border-color: var(--turquoise);
 }
 
+input {
+  width: 100%;
+  background: #14171a;
+  color: var(--text);
+  border: 1px solid #2c3236;
+  border-radius: 5px;
+  padding: 12px;
+  font: inherit;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
 .prompt-actions {
   margin-top: 12px;
   display: flex;
@@ -228,6 +243,58 @@ button.chip:hover {
   margin: 12px 0 0;
 }
 
+.panel-copy {
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.submission-form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-weight: 600;
+}
+
+.field-hint {
+  color: var(--muted);
+}
+
+.toggle-link,
+.inline-link {
+  color: var(--turquoise);
+}
+
+.toggle-link {
+  background: none;
+  padding: 0;
+  margin-top: 16px;
+  border: 0;
+  font-weight: 600;
+}
+
+.toggle-link:hover {
+  filter: none;
+  text-decoration: underline;
+}
+
+.demo-generator {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #2c3236;
+}
+
+.demo-title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
 .catalog-state {
   color: var(--muted);
   margin: 0;
@@ -276,6 +343,42 @@ button.chip:hover {
 
 .catalog-card button {
   align-self: flex-start;
+}
+
+.status-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.status-note,
+.status-description,
+.status-slug {
+  margin: 0;
+  color: var(--muted);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  font-weight: 700;
+}
+
+.status-needs_changes {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--error);
+}
+
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 }
 
 .stage {

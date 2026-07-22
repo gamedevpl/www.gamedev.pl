@@ -23,6 +23,61 @@
     "controlsSummary": "Controls: {{controls}}",
     "play": "Play"
   },
+  "submit": {
+    "title": "Submit a new game idea",
+    "description": "Tell us what you want to play and we will turn it into a game submission for review.",
+    "titleLabel": "Game title",
+    "titlePlaceholder": "e.g. Sky Dodge Deluxe",
+    "titleHint": "3–80 characters",
+    "conceptLabel": "Concept",
+    "conceptPlaceholder": "Describe the core loop, goal, controls, and vibe of the game you want.",
+    "conceptHint": "30–4000 characters",
+    "displayNameLabel": "Display name (optional)",
+    "displayNamePlaceholder": "How should we refer to you?",
+    "displayNameHint": "Up to 40 characters",
+    "submit": "Submit spec",
+    "submitting": "Submitting…",
+    "demoToggle": "Try the demo generator instead",
+    "demoHide": "Hide the demo generator"
+  },
+  "statusView": {
+    "title": "Submission status",
+    "loading": "Checking your submission…",
+    "saveLink": "Save this link to track your game:",
+    "invalidToken": "This tracking link is invalid or has expired.",
+    "invalidTokenHelp": "Please return to the main page and submit your idea again if you still need a new tracking link.",
+    "fetchErrorHelp": "We could not refresh this submission right now. You can try again in a moment.",
+    "backHome": "Back to the main page",
+    "play": "Play your game",
+    "slug": "Published slug: {{slug}}",
+    "publishedGameTitle": "Published game",
+    "states": {
+      "queued": {
+        "label": "In the queue",
+        "description": "Your submission has been received and is waiting to be picked up."
+      },
+      "building": {
+        "label": "Being built",
+        "description": "The game is being turned into a playable build."
+      },
+      "in_review": {
+        "label": "In review",
+        "description": "A reviewer is checking the game before publication."
+      },
+      "publishing": {
+        "label": "Publishing…",
+        "description": "The game is approved and is being published now."
+      },
+      "published": {
+        "label": "Ready to play!",
+        "description": "Your game is live and ready to open in the sandboxed player."
+      },
+      "needs_changes": {
+        "label": "Needs changes",
+        "description": "This submission could not be published yet. Please revise the idea and submit again."
+      }
+    }
+  },
   "suggestions": {
     "dodge": "Dodge the falling rocks",
     "collect": "Collect the coins before time runs out",
