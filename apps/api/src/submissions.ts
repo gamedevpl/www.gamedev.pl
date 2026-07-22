@@ -222,7 +222,7 @@ export async function registerSubmissionRoutes(
 
     try {
       const issue = await githubClient.createIssue({
-        title: `New game: ${sanitizedTitle}`,
+        title: sanitizedTitle,
         body: issueBody,
         labels: ['new-game'],
       });

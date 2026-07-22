@@ -106,7 +106,7 @@ describe('submission routes', () => {
 
     expect(createIssue).toHaveBeenCalledTimes(1);
     expect(createIssue.mock.calls[0]?.[0]).toEqual({
-      title: 'New game: My cool title',
+      title: 'My cool title',
       labels: ['new-game'],
       body: [
         'New game spec submitted via www.gamedev.pl.',
