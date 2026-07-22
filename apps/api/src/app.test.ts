@@ -1,6 +1,7 @@
 import type { GameGenerator, GameProject } from '@gamedevpl/game-generator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import packageJson from '../../../package.json';
 import { buildApp } from './app.js';
 import { MAX_PROJECT_BYTES } from './assemble.js';
 
@@ -32,7 +33,7 @@ describe('api', () => {
   it('returns version info', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/version' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ name: 'gamedev-pl', version: '0.0.0' });
+    expect(res.json()).toEqual({ name: packageJson.name, version: packageJson.version });
   });
 
   it('reports health with the active provider', async () => {
