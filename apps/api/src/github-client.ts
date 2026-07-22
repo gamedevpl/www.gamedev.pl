@@ -114,7 +114,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                             merged
                             isDraft
                             title
-                            files(first: 200) {
+                            files(first: 100) {
                               nodes {
                                 path
                               }

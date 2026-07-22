@@ -36,6 +36,24 @@ agent-runner container, auth proxy, job tokens, and orchestrator) was **removed 
 reasons** and is not a future phase. Read
 [`games-repo.md`](docs/games-repo.md) before making architectural assumptions.
 
+## Deployment status (2026-07-22)
+
+The steel thread is **built and deployed** — all milestones M0–M5 merged. The app (web + API,
+one same-origin service) is **live on Cloud Run** at
+`https://gamedev-app-334141807880.europe-central2.run.app` (GCP project `gamedevpl`); the live
+`www.gamedev.pl` GitHub Pages site is untouched.
+
+- **The deployed app is locked behind HTTP Basic Auth** (`site-basic-auth` secret) — a
+  temporary "not public yet" gate. Browse/play is live and verified in production.
+- **Submissions are pending one owner secret** (`github-token`, a games-repo-scoped PAT); until
+  it exists, submission routes return 503 by design.
+- **M4 auto-assign requires the `COPILOT_ASSIGN_TOKEN` PAT** on the games repo — the default
+  Actions `GITHUB_TOKEN` cannot assign the Copilot bot (empirically verified).
+- Deploy via [`infra/deploy-api.sh`](infra/deploy-api.sh) (imperative `gcloud`, **not**
+  Terraform — the `infra/*.tf` files are an intentional no-op placeholder). Full deploy state,
+  the secret table, and how to enable submissions / remove the lock are in
+  [`docs/deployment.md`](docs/deployment.md).
+
 ## Shared playbooks (read these — they apply to you too)
 
 These live under `.claude/skills/` because that path makes them auto-loadable for Claude Code,

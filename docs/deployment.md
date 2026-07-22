@@ -1,10 +1,32 @@
 # Deployment
 
-> **Status: 🚧 M5 in progress (2026-07-22).** The new app (web + API) deploys as **one
-> Cloud Run service**, on its own `*.run.app` URL. The live `www.gamedev.pl` GitHub Pages
-> site is **not touched** — the new app is entirely separate until an owner decides to point
-> a domain at it. See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5 for the acceptance
-> scenario.
+> **Status: ✅ Deployed & live (2026-07-22).** The app (web + API) runs as **one Cloud Run
+> service** at `https://gamedev-app-334141807880.europe-central2.run.app` (GCP project
+> `gamedevpl`, region `europe-central2`, service `gamedev-app`, scale-to-zero). The live
+> `www.gamedev.pl` GitHub Pages site is **not touched**. **The app is currently locked behind
+> HTTP Basic Auth** (a temporary "not public yet" gate — see below). Browse/play is live;
+> **submissions are pending the `github-token` secret** (submission routes return 503 until
+> it is added — see below). See [`steel-thread-plan.md`](./steel-thread-plan.md) §M5.
+
+## Secrets & access (current live state)
+
+Secrets live only in GCP Secret Manager (never in the repo); the Cloud Run runtime service
+account (`<project-number>-compute@developer.gserviceaccount.com`) needs
+`roles/secretmanager.secretAccessor` on each. `infra/deploy-api.sh` wires whichever exist into
+a single `--set-secrets` list.
+
+| Secret                    | Purpose                                                                | State (2026-07-22)      |
+| ------------------------- | ---------------------------------------------------------------------- | ----------------------- |
+| `site-basic-auth`         | `"user:password"` → `SITE_BASIC_AUTH`; locks the whole app (web + API) | ✅ set (app is private) |
+| `submission-token-secret` | HMAC key for the stateless status token → `SUBMISSION_TOKEN_SECRET`    | ✅ set                  |
+| `github-token`            | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)     | ❌ **not yet created**  |
+
+- **Enable submissions:** create `github-token`, grant the runtime SA accessor on it, and
+  redeploy. Both `github-token` and `submission-token-secret` must be present for submissions
+  to leave 503.
+- **Remove the access lock (make public):** `gcloud secrets delete site-basic-auth` and
+  redeploy (or deploy without wiring it). Basic Auth over HTTPS is a stopgap; a domain +
+  proper auth is a later decision.
 
 ## How to deploy (concrete)
 
@@ -16,14 +38,13 @@ serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes o
 requests to `/api` — no CORS, no second service, and the Pages site is never involved.
 
 [`infra/deploy-api.sh`](../infra/deploy-api.sh) builds the image via Cloud Build, pushes it to
-Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). Two secrets
-live in Secret Manager (never in the repo): `github-token` (a fine-grained PAT — Issues
-read/write, Pull requests read, Contents read, scoped to the games repo only) and
-`submission-token-secret` (`openssl rand -hex 32`). Non-secret config (`GAMES_REPO`,
-`CATALOG_URL`) is plain env. The script wires the secrets **only if both exist**, so a first
-deploy without them is browse/play-only (submission routes return 503); add the secrets and
-redeploy to enable submissions. See the header comment in the script for the one-time
-secret-creation commands.
+Artifact Registry, and deploys to Cloud Run with `--min-instances 0` (scale-to-zero). It reads
+its secrets from Secret Manager (never the repo) and wires whichever exist — see the
+**Secrets & access** table above for the three (`github-token`, `submission-token-secret`,
+optional `site-basic-auth`) and their current state. Submissions require **both**
+`github-token` and `submission-token-secret`, so a first deploy without them is browse/play-only
+(submission routes return 503). Non-secret config (`GAMES_REPO`, `CATALOG_URL`) is plain env.
+See the header comment in the script for the one-time secret-creation commands.
 
 If the owner prefers another host (Fly.io, a VPS), nothing in `apps/api` assumes Cloud Run — it
 reads `PORT`/`HOST`/`WEB_DIST_DIR` from env.
