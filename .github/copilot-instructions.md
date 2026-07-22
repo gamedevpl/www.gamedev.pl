@@ -65,6 +65,15 @@ catalog, player, and spec-submission surface. Self-hosted agent execution was **
 legal reasons** and is not a future phase. Read [`games-repo.md`](../docs/games-repo.md) before
 making architectural assumptions.
 
+## Deployment status (2026-07-22)
+
+Built and **deployed** (M0–M5 merged). The app (web + API, one same-origin service) is **live on
+Cloud Run** at `https://gamedev-app-334141807880.europe-central2.run.app` (project `gamedevpl`);
+the live `www.gamedev.pl` Pages site is untouched. The deployed app is **locked behind HTTP Basic
+Auth** (temporary). Browse/play is live; **submissions are pending the `github-token` secret** and
+return 503 until it exists. Deploy is imperative `gcloud` via `infra/deploy-api.sh` (not Terraform).
+Full state and secret table: [`docs/deployment.md`](../docs/deployment.md).
+
 ## Reviewing or verifying work you didn't write
 
 If your task involves reviewing, verifying, or merging someone else's changes, read

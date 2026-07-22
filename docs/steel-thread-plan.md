@@ -1,9 +1,23 @@
 # Steel thread plan — from current state to a working loop on www.gamedev.pl
 
-> **Status: 📋 Plan of record, 2026-07-22.** Written to be executed by a coding agent
-> milestone-by-milestone. Read [`games-repo.md`](./games-repo.md) for the architecture's
+> **Status: ✅ Executed — the thread is deployed and live, 2026-07-22.** All milestones
+> M0–M5 are merged; M4 and M5 are verified in production. Written to be executed by a coding
+> agent milestone-by-milestone. Read [`games-repo.md`](./games-repo.md) for the architecture's
 > _why_ and [`games-repo-blueprint.md`](./games-repo-blueprint.md) for the games repo's
 > internal contract. This document is the _how do we ship it_.
+>
+> **Live deployment (as of 2026-07-22):**
+>
+> - **URL:** `https://gamedev-app-334141807880.europe-central2.run.app` (GCP project
+>   `gamedevpl`, region `europe-central2`, Cloud Run service `gamedev-app`, scale-to-zero).
+>   The live `www.gamedev.pl` GitHub Pages site is **not** touched.
+> - **Access is locked** behind HTTP Basic Auth (`SITE_BASIC_AUTH` secret) as a temporary
+>   "not public yet" gate — see [`deployment.md`](./deployment.md).
+> - **Browse/play is fully live**; games play sandboxed from the games origin. **Submissions
+>   go live once the `github-token` secret is added** (see M5 below) — until then submission
+>   routes return 503 by design.
+> - **M4 auto-assign works but requires the `COPILOT_ASSIGN_TOKEN` PAT** (the default Actions
+>   `GITHUB_TOKEN` cannot assign the Copilot bot). That secret is set on the games repo.
 
 ## 0. Definition of done — the steel thread
 
@@ -203,7 +217,7 @@ the game plays.
 
 ---
 
-### M4 — Auto-assign Copilot in the games repo
+### M4 — Auto-assign Copilot in the games repo ✅ _done & verified_
 
 **Goal:** an issue labeled `new-game` gets assigned to Copilot with no operator.
 
@@ -213,16 +227,18 @@ In `www.gamedev.pl-games`:
   `new-game`: resolve the bot via GraphQL `suggestedActors(capabilities: [CAN_BE_ASSIGNED])`
   (login `copilot-swe-agent`), then `replaceActorsForAssignable`, preserving existing
   assignees.
-- ⚠️ **Unverified:** the default `GITHUB_TOKEN` may not be allowed to assign the Copilot
-  bot. Try it first; if it fails, 🔑 owner adds a PAT secret (`COPILOT_ASSIGN_TOKEN`) and
-  the workflow uses that. Record the outcome in the workflow file as a comment.
+- ✅ **Empirical outcome (verified 2026-07-22):** the default `GITHUB_TOKEN` is
+  **insufficient** — it returns an empty `suggestedActors` set and cannot assign the Copilot
+  bot. A repo-secret PAT **`COPILOT_ASSIGN_TOKEN`** (fine-grained, Issues: read/write) is
+  **required** and is set on the games repo; the workflow uses it via
+  `${{ secrets.COPILOT_ASSIGN_TOKEN || secrets.GITHUB_TOKEN }}`.
 
-**Acceptance:** filing a labeled test issue (manually or via M2) results in Copilot
-assigned and a PR appearing, hands-off.
+**Acceptance ✅:** a labeled test issue was assigned to `copilot-swe-agent` hands-off and
+Copilot opened a PR from it (verified with throwaway issues, since closed).
 
 ---
 
-### M5 — Deploy the app to Cloud Run (live site untouched)
+### M5 — Deploy the app to Cloud Run (live site untouched) ✅ _deployed 2026-07-22_
 
 **Goal:** the thread runs on a real deployed URL, not localhost — **without touching the live
 `www.gamedev.pl` Pages site.**
@@ -232,16 +248,25 @@ assigned and a PR appearing, hands-off.
   the Fastify server serves the static bundle via `@fastify/static` (`WEB_DIST_DIR`) with an
   SPA fallback. No CORS (same origin), `VITE_API_BASE_URL=''`, no gh-pages involvement.
 - Deploy with [`infra/deploy-api.sh`](../infra/deploy-api.sh) (Cloud Build → Artifact Registry
-  → Cloud Run, scale-to-zero, min instances 0). Submission secrets (`GITHUB_TOKEN`,
-  `SUBMISSION_TOKEN_SECRET`) come from Secret Manager and are wired **only if both exist** —
-  a first deploy without them is browse/play-only (submissions 503). 🔑 Owner provisions the
-  GCP project (+ optional secrets), then runs the script.
-- Status/verification of the container is done in real Docker before deploy (image builds,
-  boots, `/` serves the app, `/api/*` works same-origin, a seed game plays sandboxed).
+  → Cloud Run, scale-to-zero, min instances 0). Secrets come from Secret Manager and are wired
+  into one `--set-secrets` list when present: submission needs **both** `github-token` and
+  `submission-token-secret`; the optional `site-basic-auth` locks the whole app.
+- ✅ **Live at** `https://gamedev-app-334141807880.europe-central2.run.app` (project
+  `gamedevpl`). Verified in production: app serves in house style, catalog loads the 3 seed
+  games cross-origin, a seed game plays in an `iframe sandbox="allow-scripts"`, `/api/health`
+  works same-origin. **Access is gated by HTTP Basic Auth** (`site-basic-auth` secret) as a
+  temporary lock; credentials are held by the owner (not in the repo).
+- 🟡 **Submissions pending one secret:** `submission-token-secret` (HMAC) is set, but
+  `github-token` (a fine-grained PAT — Issues rw + PRs r + Contents r on the games repo) is
+  **not** yet created, so submission routes still return 503. Add it and redeploy to enable
+  the full loop:
+  `printf '%s' "<PAT>" | gcloud secrets create github-token --data-file=- --replication-policy=automatic --project gamedevpl`
+  then grant the runtime SA `roles/secretmanager.secretAccessor` on it and rerun the deploy.
 
 **Acceptance — the steel thread itself:** on the Cloud Run URL, run the §0 scenario
 end-to-end: play a seed game; submit a real spec; watch the status page; operator verifies +
-merges Copilot's PR; status flips to `published`; play the new game. Done.
+merges Copilot's PR; status flips to `published`; play the new game. _Browse/play verified;
+the submit→publish half unlocks once `github-token` is added (above)._
 
 ---
 
