@@ -2,12 +2,23 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type SubmissionState = 'queued' | 'building' | 'in_review' | 'publishing' | 'published' | 'needs_changes';
 
+export type BuildProgress = {
+  /** Head commit SHA of the PR — changes when the agent pushes new work. */
+  headSha: string;
+  /** Running build log — recent commit subject lines, oldest→newest. Untrusted text. */
+  commits: Array<{ message: string; committedDate: string }>;
+  /** The agent's task checklist parsed from the PR body. Untrusted text. */
+  checklist: Array<{ text: string; checked: boolean }>;
+};
+
 export type SubmissionStatus = {
   status: SubmissionState;
   slug?: string;
   playUrl?: string;
   /** Present while an unmerged PR is open: the game can be previewed from its branch. */
   preview?: { slug: string };
+  /** Present while an unmerged PR is open: live build signals mined from the PR. */
+  progress?: BuildProgress;
 };
 
 export type SubmissionPreview = {

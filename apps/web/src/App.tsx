@@ -64,6 +64,9 @@ export function App() {
         setCatalogEntries(entries);
         setCatalogError(null);
         setCatalogStatus('ready');
+        if (entries.length > 0) {
+          setStageContent((prev) => (prev === null ? { type: 'catalog', game: entries[0] } : prev));
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -98,12 +101,11 @@ export function App() {
     try {
       const generatedGame = await generateGame(trimmed);
       setStageContent({ type: 'generated', game: generatedGame, prompt: trimmed });
-      setMockStatus('idle');
-      // Scroll stage into view
-      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
-    } catch (err) {
+    } catch (err: unknown) {
       setMockError(err instanceof Error ? err.message : t('errors.generic'));
       setMockStatus('error');
+    } finally {
+      setMockStatus('idle');
     }
   }
 
@@ -169,6 +171,8 @@ export function App() {
           <>
             <div id="hero-prompt">
               <HeroPromptSection
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
                 onSubmitSpec={(title, concept) => void handleSubmitSpec(title, concept)}

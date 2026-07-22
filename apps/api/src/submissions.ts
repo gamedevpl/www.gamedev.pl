@@ -17,6 +17,23 @@ const CreateSubmissionRequestSchema = z.object({
 
 type SubmissionStatus = 'queued' | 'building' | 'in_review' | 'publishing' | 'published' | 'needs_changes';
 
+interface ChecklistItem {
+  text: string;
+  checked: boolean;
+}
+
+interface BuildProgress {
+  /**
+   * Head commit SHA of the PR. Changes each time the agent pushes, so the client
+   * can tell when there's fresh work and refresh the live preview.
+   */
+  headSha: string;
+  /** Running build log — recent commit subject lines, oldest→newest. */
+  commits: Array<{ message: string; committedDate: string }>;
+  /** The agent's task checklist parsed from the PR body, in order. */
+  checklist: ChecklistItem[];
+}
+
 interface SubmissionStatusResponseBase {
   status: SubmissionStatus;
   /**
@@ -25,6 +42,12 @@ interface SubmissionStatusResponseBase {
    * merge. `slug` is the game directory on that branch.
    */
   preview?: { slug: string };
+  /**
+   * Present while an unmerged PR is open: live signals mined from the PR (commits,
+   * task checklist) so the UI can show the build taking shape. All fields are
+   * agent-authored text influenced by the creator prompt — render escaped only.
+   */
+  progress?: BuildProgress;
 }
 
 interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {
@@ -89,6 +112,47 @@ function sanitizeCreatorText(raw: string, options: { singleLine: boolean }): str
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[^\S\n]{2,}/g, ' ')
     .trim();
+}
+
+// The agent maintains a GitHub task list in the PR body (`- [ ]` / `- [x]`).
+// Mine it as a plan-with-progress. Cap the count so a hostile/huge body can't
+// bloat the response, and sanitize each label (it's untrusted, prompt-influenced
+// text) even though the client also escapes on render.
+const MAX_CHECKLIST_ITEMS = 30;
+const MAX_COMMITS = 20;
+
+function parseChecklist(body: string | undefined): ChecklistItem[] {
+  if (!body) {
+    return [];
+  }
+
+  const items: ChecklistItem[] = [];
+  const pattern = /^[ \t]*[-*]\s+\[([ xX])\]\s+(.+?)\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(body)) !== null && items.length < MAX_CHECKLIST_ITEMS) {
+    const text = sanitizeCreatorText(match[2] ?? '', { singleLine: true });
+    if (text) {
+      items.push({ text, checked: match[1]?.toLowerCase() === 'x' });
+    }
+  }
+  return items;
+}
+
+function buildProgress(linkedPr: LinkedPullRequest): BuildProgress | undefined {
+  if (!linkedPr.headRefOid) {
+    return undefined;
+  }
+
+  const commits = (linkedPr.commits ?? []).slice(-MAX_COMMITS).map((commit) => ({
+    message: sanitizeCreatorText(commit.message, { singleLine: true }),
+    committedDate: commit.committedDate,
+  }));
+
+  return {
+    headSha: linkedPr.headRefOid,
+    commits,
+    checklist: parseChecklist(linkedPr.body),
+  };
 }
 
 function extractSlugFromChangedFiles(changedFiles: string[]): string | null {
@@ -163,12 +227,14 @@ async function deriveStatus(
   // creator can preview it from the branch — surface that so the UI can offer it.
   const slug = extractSlugFromChangedFiles(linkedPr.changedFiles);
   const preview = slug ? { preview: { slug } } : {};
+  const progress = buildProgress(linkedPr);
+  const progressField = progress ? { progress } : {};
 
   if (linkedPr.isDraft || linkedPr.titleHasWip) {
-    return { status: 'building', ...preview };
+    return { status: 'building', ...preview, ...progressField };
   }
 
-  return { status: 'in_review', ...preview };
+  return { status: 'in_review', ...preview, ...progressField };
 }
 
 export async function registerSubmissionRoutes(

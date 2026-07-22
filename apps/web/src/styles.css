@@ -298,6 +298,98 @@ a {
   transition: border-color 0.2s;
 }
 
+/* SMART INTENT CARDS */
+.smart-intent-card {
+  margin: 8px 0 4px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  text-align: left;
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.matched-card {
+  background: rgba(0, 228, 172, 0.08);
+  border: 1px solid rgba(0, 228, 172, 0.35);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.matched-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.smart-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--turquoise);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.matched-title {
+  margin: 2px 0 4px;
+  font-size: 1.3rem;
+  color: #fff;
+  font-weight: 700;
+}
+
+.matched-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.matched-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.play-match-btn {
+  background: var(--turquoise);
+  color: #0b221d;
+  font-weight: 700;
+}
+
+.remix-match-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+}
+
+.creation-card {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.creation-badge {
+  color: var(--accent-blue);
+  font-size: 0.85rem;
+}
+
+.creation-sub {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
 .big-prompt-input:focus {
   outline: none;
   border-color: var(--turquoise);
@@ -848,4 +940,148 @@ textarea:focus {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 8px 0 0;
+}
+
+/* MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .logo-brand {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .nav-link {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .header-actions {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .content {
+    padding: 20px 12px 60px;
+    width: 100%;
+  }
+
+  .hero-headline {
+    font-size: 2.1rem;
+  }
+
+  .hero-subheadline {
+    font-size: 1rem;
+  }
+
+  .hero-prompt-card {
+    padding: 14px;
+  }
+
+  .prompt-controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .chip-container {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .action-buttons button {
+    width: 100%;
+  }
+
+  .matched-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .matched-actions {
+    flex-direction: column;
+  }
+
+  .matched-actions button {
+    width: 100%;
+  }
+
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transparency-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.build-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.build-progress-heading {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.build-progress ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.build-progress-checklist li {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.build-progress-checklist li.checklist-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.build-progress-commits {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.build-progress-commits li {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-family: monospace;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.build-progress-commits li:last-child {
+  border-bottom: none;
 }

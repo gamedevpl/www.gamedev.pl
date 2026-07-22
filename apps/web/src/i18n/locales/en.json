@@ -11,11 +11,18 @@
     "mySpecs": "My Active Specs ({{count}})"
   },
   "hero": {
-    "mainTitle": "What game do you want to build?",
-    "mainSubtitle": "Describe your game idea. Autonomous AI coding agents will implement, test, and host it on GitHub.",
-    "bigPromptPlaceholder": "Describe your dream game in detail — controls, mechanics, visual style, high score rules... (e.g. A retro space shooter where you dodge asteroids and collect glowing energy orbs)",
-    "buildGameButton": "Build Game with AI",
-    "instantMockButton": "Instant Local Preview"
+    "mainTitle": "Turn any game idea into a playable web game in minutes",
+    "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live on GitHub.",
+    "bigPromptPlaceholder": "Type what you want to play or build... (e.g. mario, space shooter, dodge falling rocks, cyberpunk rhythm game)",
+    "buildGameButton": "Build My Game with AI",
+    "instantMockButton": "Quick Local Mock",
+    "smartFoundTitle": "Found matching game: {{title}}",
+    "smartPlayBtn": "Play {{title}} Now",
+    "smartRemixBtn": "Remix this game with AI",
+    "smartNoMatchTitle": "No exact game found yet for \"{{query}}\"",
+    "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
+    "smartBuildBtn": "Build \"{{query}}\" with AI",
+    "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit"
   },
   "home": {
     "title": "Describe a game. We build it. You play it.",
@@ -92,13 +99,16 @@
     "play": "Play your game",
     "slug": "Published slug: {{slug}}",
     "publishedGameTitle": "Published game",
-    "previewPlay": "Preview work-in-progress build",
-    "previewLoading": "Loading preview…",
-    "previewNote": "Play the game straight from the open pull request — before it's merged and published.",
-    "previewBadge": "Preview — unmerged work in progress",
+    "previewLoading": "Loading a live preview from the agent's work-in-progress…",
+    "previewBadge": "Live preview — unmerged work in progress",
+    "previewUpdating": "Updating with the agent's latest commit…",
     "previewGameTitle": "Work-in-progress preview",
     "previewNotReady": "There's no playable build on the branch yet. Check back once the agent has committed the game.",
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
+    "progress": {
+      "checklistTitle": "Build checklist",
+      "commitsTitle": "Recent activity"
+    },
     "states": {
       "queued": {
         "label": "In the queue",

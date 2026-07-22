@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import {
   getSubmissionPreview,
   getSubmissionStatus,
+  type BuildProgress,
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
@@ -11,6 +12,16 @@ import {
 import { statusHash } from './router';
 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes']);
+// The agent is actively working during these — poll tightly so progress feels live.
+// Everything else (queued/publishing) changes slowly, so poll gently.
+const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review']);
+const ACTIVE_POLL_MS = 6000;
+const IDLE_POLL_MS = 20000;
+
+function pollDelayMs(status: SubmissionStatus['status']): number | null {
+  if (TERMINAL_STATUSES.has(status)) return null;
+  return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+}
 
 type SubmissionStatusViewProps = {
   token: string;
@@ -27,7 +38,14 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
   const [showGame, setShowGame] = useState(false);
   const [preview, setPreview] = useState<SubmissionPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewRefreshing, setPreviewRefreshing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Tracks the PR head SHA the currently-displayed preview was built from, so we
+  // only re-fetch (and reload the iframe) when the agent has actually pushed new
+  // work — not on every status poll.
+  const loadedPreviewShaRef = useRef<string | null>(null);
+  const previewInFlightRef = useRef(false);
 
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(statusHash(token), window.location.href).toString(),
@@ -36,7 +54,7 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
 
   useEffect(() => {
     let cancelled = false;
-    let intervalId: number | undefined;
+    let timeoutId: number | undefined;
 
     setStatus(null);
     setLoading(true);
@@ -45,13 +63,24 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
     setShowGame(false);
     setPreview(null);
     setPreviewLoading(false);
+    setPreviewRefreshing(false);
     setPreviewError(null);
+    loadedPreviewShaRef.current = null;
+    previewInFlightRef.current = false;
 
     const stopPolling = () => {
-      if (intervalId !== undefined) {
-        window.clearInterval(intervalId);
-        intervalId = undefined;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+        timeoutId = undefined;
       }
+    };
+
+    const scheduleNext = (nextStatus: SubmissionStatus['status']) => {
+      const delay = pollDelayMs(nextStatus);
+      if (delay === null || cancelled) return;
+      timeoutId = window.setTimeout(() => {
+        void poll();
+      }, delay);
     };
 
     const poll = async () => {
@@ -63,10 +92,7 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
         setLoading(false);
         setErrorMessage(null);
         setIsInvalidToken(false);
-
-        if (TERMINAL_STATUSES.has(nextStatus.status)) {
-          stopPolling();
-        }
+        scheduleNext(nextStatus.status);
       } catch (err) {
         if (cancelled) return;
 
@@ -78,16 +104,14 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
           apiError.status === 400 ? t('statusView.invalidToken') : apiError.message || t('errors.generic'),
         );
 
-        if (apiError.status === 400) {
-          stopPolling();
+        if (apiError.status !== 400) {
+          // Transient failure (network blip, rate limit) — keep trying at the idle cadence.
+          scheduleNext('queued');
         }
       }
     };
 
     void poll();
-    intervalId = window.setInterval(() => {
-      void poll();
-    }, 30000);
 
     return () => {
       cancelled = true;
@@ -97,20 +121,44 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
 
   const publishedGameTitle = submittedTitle ?? status?.slug ?? t('statusView.publishedGameTitle');
 
-  const loadPreview = async () => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const result = await getSubmissionPreview(token);
-      setPreview(result);
-    } catch (err) {
-      const apiError = err as SubmissionApiError;
-      setPreview(null);
-      setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
-    } finally {
-      setPreviewLoading(false);
+  // Auto-load the live preview as soon as one is available, and silently refresh it
+  // whenever the agent pushes a new commit (headSha changes) — no click required.
+  useEffect(() => {
+    const previewSlug = status?.preview?.slug;
+    const headSha = status?.progress?.headSha;
+    if (!previewSlug || previewInFlightRef.current) return;
+    if (headSha && headSha === loadedPreviewShaRef.current) return;
+    // Without a headSha we can't tell if there's anything new — only load once.
+    if (!headSha && loadedPreviewShaRef.current !== null) return;
+
+    previewInFlightRef.current = true;
+    const isRefresh = loadedPreviewShaRef.current !== null;
+    if (isRefresh) {
+      setPreviewRefreshing(true);
+    } else {
+      setPreviewLoading(true);
     }
-  };
+    setPreviewError(null);
+
+    getSubmissionPreview(token)
+      .then((result) => {
+        setPreview(result);
+        loadedPreviewShaRef.current = headSha ?? 'unknown';
+      })
+      .catch((err: unknown) => {
+        const apiError = err as SubmissionApiError;
+        // On a refresh failure, keep showing the last-good preview rather than clearing it.
+        if (!isRefresh) {
+          setPreview(null);
+        }
+        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+      })
+      .finally(() => {
+        previewInFlightRef.current = false;
+        setPreviewLoading(false);
+        setPreviewRefreshing(false);
+      });
+  }, [status?.preview?.slug, status?.progress?.headSha, t, token]);
 
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
 
@@ -151,15 +199,9 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
               </div>
             ) : null}
 
-            {status.preview && !preview ? (
-              <div className="status-actions">
-                <button className="secondary-btn" onClick={() => void loadPreview()} disabled={previewLoading}>
-                  {previewLoading ? t('statusView.previewLoading') : t('statusView.previewPlay')}
-                </button>
-                <p className="status-preview-note">{t('statusView.previewNote')}</p>
-                {previewError && <p className="error">{previewError}</p>}
-              </div>
-            ) : null}
+            {status.progress ? <BuildProgressPanel progress={status.progress} /> : null}
+
+            {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
             <a className="inline-link" href="#/">
               {t('statusView.backHome')}
@@ -178,15 +220,61 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
         </section>
       ) : null}
 
+      {previewLoading && !preview ? (
+        <section className="panel stage">
+          <p className="catalog-state">{t('statusView.previewLoading')}</p>
+        </section>
+      ) : null}
+
       {preview ? (
         <section className="panel stage">
           <div className="game-meta">
             <h2>{previewTitle}</h2>
-            <p className="status-preview-badge">{t('statusView.previewBadge')}</p>
+            <p className="status-preview-badge">
+              {previewRefreshing ? t('statusView.previewUpdating') : t('statusView.previewBadge')}
+            </p>
           </div>
           <GameFrame title={previewTitle} html={preview.html} />
         </section>
       ) : null}
     </>
+  );
+}
+
+function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
+  const { t } = useTranslation();
+  if (progress.checklist.length === 0 && progress.commits.length === 0) {
+    return null;
+  }
+
+  // Newest activity first — that's what makes the build feel "live".
+  const recentCommits = [...progress.commits].reverse();
+
+  return (
+    <div className="build-progress">
+      {progress.checklist.length > 0 ? (
+        <div className="build-progress-checklist">
+          <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
+          <ul>
+            {progress.checklist.map((item, index) => (
+              <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
+                <span aria-hidden="true">{item.checked ? '✅' : '⬜'}</span> {item.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {recentCommits.length > 0 ? (
+        <div className="build-progress-commits">
+          <h3 className="build-progress-heading">{t('statusView.progress.commitsTitle')}</h3>
+          <ul>
+            {recentCommits.map((commit, index) => (
+              <li key={index}>{commit.message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }

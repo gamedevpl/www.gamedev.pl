@@ -285,6 +285,141 @@ describe('submission routes', () => {
 
     await app.close();
   });
+
+  it('mines a live build progress feed (checklist + commits) from the open PR', async () => {
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        headRefOid: 'abc123',
+        changedFiles: ['games/foo/index.html'],
+        body: [
+          'Building the game.',
+          '',
+          '- [x] Scaffold index.html and game.js',
+          '- [X] Draw the player and background',
+          '- [ ] Add collision detection',
+        ].join('\n'),
+        commits: [
+          { message: 'Scaffold project files', committedDate: '2026-01-01T00:00:00Z' },
+          { message: 'Draw player sprite', committedDate: '2026-01-01T00:05:00Z' },
+        ],
+      },
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: 'building',
+      preview: { slug: 'foo' },
+      progress: {
+        headSha: 'abc123',
+        commits: [
+          { message: 'Scaffold project files', committedDate: '2026-01-01T00:00:00Z' },
+          { message: 'Draw player sprite', committedDate: '2026-01-01T00:05:00Z' },
+        ],
+        checklist: [
+          { text: 'Scaffold index.html and game.js', checked: true },
+          { text: 'Draw the player and background', checked: true },
+          { text: 'Add collision detection', checked: false },
+        ],
+      },
+    });
+
+    await app.close();
+  });
+
+  it('omits progress when the PR has no head SHA (lightweight fixtures / older clients)', async () => {
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        changedFiles: [],
+      },
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: 'building' });
+
+    await app.close();
+  });
+
+  it('sanitizes agent-authored checklist and commit text (creator-influenced, untrusted)', async () => {
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        headRefOid: 'def456',
+        changedFiles: [],
+        body: '- [ ] <script>alert(1)</script> add [a link](https://evil.example)',
+        commits: [{ message: '<img src=x> fix `bug` in **renderer**', committedDate: '2026-01-01T00:00:00Z' }],
+      },
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    const body = response.json();
+    expect(body.progress.checklist).toEqual([{ text: 'alert(1) add a link', checked: false }]);
+    expect(body.progress.commits).toEqual([{ message: 'fix bug in renderer', committedDate: '2026-01-01T00:00:00Z' }]);
+
+    await app.close();
+  });
+
+  it('caps checklist items and commits to guard against a bloated PR body', async () => {
+    const manyChecklistItems = Array.from({ length: 50 }, (_, i) => `- [ ] step ${i}`).join('\n');
+    const manyCommits = Array.from({ length: 40 }, (_, i) => ({
+      message: `commit ${i}`,
+      committedDate: '2026-01-01T00:00:00Z',
+    }));
+    const { githubClient } = createGithubClientStub({
+      issueState: 'open',
+      linkedPr: {
+        number: 30,
+        state: 'OPEN',
+        merged: false,
+        isDraft: true,
+        titleHasWip: false,
+        headRefName: 'copilot/foo',
+        headRefOid: 'ghi789',
+        changedFiles: [],
+        body: manyChecklistItems,
+        commits: manyCommits,
+      },
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const token = mintToken(123, secret);
+
+    const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    const body = response.json();
+    expect(body.progress.checklist).toHaveLength(30);
+    expect(body.progress.commits).toHaveLength(20);
+    // Commits are capped to the most recent ones.
+    expect(body.progress.commits[0]).toEqual({ message: 'commit 20', committedDate: '2026-01-01T00:00:00Z' });
+    expect(body.progress.commits[19]).toEqual({ message: 'commit 39', committedDate: '2026-01-01T00:00:00Z' });
+
+    await app.close();
+  });
 });
 
 const openPreviewPr: LinkedPullRequest = {

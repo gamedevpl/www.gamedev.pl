@@ -4,6 +4,13 @@ interface CreateIssueInput {
   labels: string[];
 }
 
+export interface PullRequestCommit {
+  /** First line of the commit message — a human-readable step in the build. */
+  message: string;
+  /** ISO-8601 timestamp the commit was authored. */
+  committedDate: string;
+}
+
 export interface LinkedPullRequest {
   number: number;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
@@ -13,6 +20,15 @@ export interface LinkedPullRequest {
   /** Head branch name — used to fetch the game sources for an unmerged preview. */
   headRefName: string;
   changedFiles: string[];
+  /**
+   * Head commit SHA of the PR. Used to detect when the agent has pushed new work
+   * so the live preview can refresh. Optional so lightweight test fixtures can omit it.
+   */
+  headRefOid?: string;
+  /** Raw PR body — mined for the agent's task checklist. Untrusted text. */
+  body?: string;
+  /** Recent commits, oldest→newest, as a running build log. Untrusted text. */
+  commits?: PullRequestCommit[];
 }
 
 /** The three source files that make up a game in the games repo. */
@@ -105,8 +121,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                     merged: boolean;
                     isDraft: boolean;
                     title: string;
+                    body: string;
                     headRefName: string;
+                    headRefOid: string;
                     files: { nodes: Array<{ path: string }> };
+                    commits: {
+                      nodes: Array<{ commit: { messageHeadline: string; committedDate: string } }>;
+                    };
                   } | null;
                 }>;
               };
@@ -131,10 +152,20 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                             merged
                             isDraft
                             title
+                            body
                             headRefName
+                            headRefOid
                             files(first: 100) {
                               nodes {
                                 path
+                              }
+                            }
+                            commits(last: 20) {
+                              nodes {
+                                commit {
+                                  messageHeadline
+                                  committedDate
+                                }
                               }
                             }
                           }
@@ -169,10 +200,16 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         isDraft: pullRequestNode.isDraft,
         titleHasWip: /^\[WIP\]/i.test(pullRequestNode.title),
         headRefName: pullRequestNode.headRefName,
+        headRefOid: pullRequestNode.headRefOid,
+        body: pullRequestNode.body ?? '',
         // Populated for every linked PR (the files connection is already queried):
         // merged PRs use it to resolve the published slug, open PRs to locate the
         // game directory for an unmerged preview.
         changedFiles: pullRequestNode.files.nodes.map((node) => node.path),
+        commits: pullRequestNode.commits.nodes.map((node) => ({
+          message: node.commit.messageHeadline,
+          committedDate: node.commit.committedDate,
+        })),
       };
     },
 

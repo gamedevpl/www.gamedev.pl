@@ -11,11 +11,18 @@
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
   },
   "hero": {
-    "mainTitle": "W jaką grę chcesz zagrać?",
-    "mainSubtitle": "Opisz swój pomysł na grę. Autonomiczne agenty AI stworzą, przetestują i opublikują ją na GitHubie.",
-    "bigPromptPlaceholder": "Opisz swoją wymarzoną grę szczegółowo — sterowanie, mechanikę, styl wizualny, punkty... (np. Retro gra kosmiczna, w której omijasz asteroidy i zbierasz świecące kryształy)",
-    "buildGameButton": "Stwórz Grę z AI",
-    "instantMockButton": "Natychmiastowy Podgląd Mock"
+    "mainTitle": "Zmień dowolny pomysł w grywalną grę w kilka minut",
+    "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują ją na GitHubie.",
+    "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub co stworzyć... (np. mario, strzelanka kosmiczna, unikaj spadających skał)",
+    "buildGameButton": "Stwórz Moją Grę z AI",
+    "instantMockButton": "Szybki Lokalny Podgląd",
+    "smartFoundTitle": "Znaleziono pasującą grę: {{title}}",
+    "smartPlayBtn": "Zagraj w {{title}} teraz",
+    "smartRemixBtn": "Stwórz nową wersję z AI",
+    "smartNoMatchTitle": "Brak dokładnej gry dla \"{{query}}\"",
+    "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
+    "smartBuildBtn": "Stwórz \"{{query}}\" z AI",
+    "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać"
   },
   "home": {
     "title": "Opisz grę. My ją budujemy. Ty grasz.",
@@ -92,13 +99,16 @@
     "play": "Zagraj w swoją grę",
     "slug": "Opublikowany slug: {{slug}}",
     "publishedGameTitle": "Opublikowana gra",
-    "previewPlay": "Zobacz wersję roboczą",
-    "previewLoading": "Wczytywanie podglądu…",
-    "previewNote": "Zagraj w grę prosto z otwartego pull requesta — zanim zostanie scalona i opublikowana.",
-    "previewBadge": "Podgląd — niescalona wersja robocza",
+    "previewLoading": "Wczytywanie podglądu na żywo z wersji roboczej agenta…",
+    "previewBadge": "Podgląd na żywo — niescalona wersja robocza",
+    "previewUpdating": "Aktualizowanie o najnowszy commit agenta…",
     "previewGameTitle": "Podgląd wersji roboczej",
     "previewNotReady": "Na gałęzi nie ma jeszcze grywalnej wersji. Wróć, gdy agent doda kod gry.",
     "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
+    "progress": {
+      "checklistTitle": "Lista zadań budowy",
+      "commitsTitle": "Ostatnia aktywność"
+    },
     "states": {
       "queued": {
         "label": "W kolejce",
