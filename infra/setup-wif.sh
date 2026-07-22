@@ -27,7 +27,7 @@ gcloud iam service-accounts create "$SA_NAME" \
   || echo "    (already exists, continuing)"
 
 echo "==> 2/5 Granting IAM roles to ${SA_EMAIL}"
-for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.writer roles/secretmanager.secretAccessor roles/iam.serviceAccountUser; do
+for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.writer roles/secretmanager.secretAccessor roles/iam.serviceAccountUser roles/serviceusage.serviceUsageConsumer roles/storage.admin; do
   echo "    - ${ROLE}"
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \

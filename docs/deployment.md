@@ -14,7 +14,7 @@ Deployments to Cloud Run are triggered on push to `the-new-gamedevpl`:
 
 1. **CI Gate (`ci-gate`):** Runs `npm run lint`, `npm run type-check`, `npm run test`, `npm run build` on Node 20.
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
-3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry.
+3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
 5. **Candidate Smoke Test:** Performs HTTP status check on `${CANDIDATE_URL}/api/health`.
 6. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if the smoke test succeeds.

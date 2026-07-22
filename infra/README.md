@@ -25,7 +25,7 @@ gcloud iam service-accounts create "$SA_NAME" \
 export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # 2. Grant required roles to the Service Account
-for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.writer roles/secretmanager.secretAccessor roles/iam.serviceAccountUser; do
+for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.writer roles/secretmanager.secretAccessor roles/iam.serviceAccountUser roles/serviceusage.serviceUsageConsumer roles/storage.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="$ROLE"
@@ -60,3 +60,5 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
 ```
 
 > **Note:** The Artifact Registry repository (`gamedev` in `europe-central2`) must already exist prior to running deployments. If not already present, bootstrap it by running `infra/deploy-api.sh` once.
+>
+> If the deploy job fails at `gcloud builds submit` with `forbidden from accessing the bucket [<project>_cloudbuild]`, the WIF deployer service account is missing the `roles/serviceusage.serviceUsageConsumer` and/or storage access that Cloud Build's source upload path needs. Re-run the setup above (or grant those roles manually) and retry the workflow.
