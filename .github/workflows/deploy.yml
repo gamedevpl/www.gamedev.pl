@@ -79,6 +79,16 @@ jobs:
             SECRET_FLAGS=(--set-secrets "$joined")
           fi
 
+          # Safety guard: in private-beta mode, deploying with an empty allowlist
+          # would produce a site that nobody can sign into. Fail fast here rather
+          # than silently serving a broken login flow.
+          BETA_ALLOWED_UIDS_VAL="${{ vars.BETA_ALLOWED_UIDS }}"
+          BETA_ALLOWED_EMAILS_VAL="${{ vars.BETA_ALLOWED_EMAILS }}"
+          if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
+            echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
+            exit 1
+          fi
+
           # PRIVATE_BETA=true gates all data reads behind session + allowlist.
           # BETA_ALLOWED_UIDS / BETA_ALLOWED_EMAILS are comma-separated allow lists.
           # Set to false (config, not code) when opening the site publicly.
@@ -109,6 +119,13 @@ jobs:
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Smoke test failed: health returned ${STATUS_CODE}"
+            exit 1
+          fi
+
+          # SPA shell must be publicly reachable so the sign-in button loads (chicken-and-egg)
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Smoke test failed: GET / returned ${STATUS_CODE} (shell must be publicly reachable)"
             exit 1
           fi
 

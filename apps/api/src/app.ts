@@ -90,10 +90,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
-  // In private-beta mode all data reads require a session so the app is usable only after sign-in.
-  // /api/health and /api/auth/* stay public (probes + login flow).
+  // In private-beta mode all API data reads require a session so the app is usable only
+  // after sign-in. IMPORTANT: the wall must gate only /api/* paths — the static SPA shell
+  // must load freely so the visitor can reach the sign-in button (chicken-and-egg otherwise).
+  // /api/health and /api/auth/* stay public within the API (probes + login flow).
   app.addHook('onRequest', async (request, reply) => {
     if (!privateBeta) return;
+    if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });

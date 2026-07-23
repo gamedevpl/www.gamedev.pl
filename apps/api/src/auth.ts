@@ -32,6 +32,9 @@ export class GoogleAuthVerificationError extends Error {
 export interface GoogleAuthPayload {
   sub: string;
   email?: string;
+  // Whether Google has verified the email address — must be true before using
+  // email for access-control decisions (e.g. private-beta email allowlist).
+  emailVerified?: boolean;
   name?: string;
   picture?: string;
 }
@@ -63,6 +66,7 @@ export class DefaultGoogleAuthVerifier implements GoogleAuthVerifier {
       return {
         sub: payload.sub,
         email: payload.email,
+        emailVerified: payload.email_verified === true,
         name: payload.name,
         picture: payload.picture,
       };
@@ -258,11 +262,13 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
       // Private-beta allowlist check — before creating/upserting the user doc so
       // rejected sign-ins leave no trace in Firestore. Allow if uid OR verified email matches.
+      // NOTE: email is only consulted when Google has verified it (email_verified === true);
+      // an unverified email claim must never satisfy an access-control allowlist.
       if (options.privateBeta) {
-        const emailLower = googleUser.email?.toLowerCase() ?? '';
+        const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
         const allowed =
           (options.betaAllowedUids?.has(uid) ?? false) ||
-          (emailLower && (options.betaAllowedEmails?.has(emailLower) ?? false));
+          (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false));
         if (!allowed) {
           return reply.status(403).send({ error: 'private beta — sign-ups are closed' });
         }

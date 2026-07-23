@@ -164,6 +164,14 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('non-API paths are never 401 in private-beta mode (shell must be reachable)', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'GET', url: '/some-path' });
+    // Static files not present in tests — expect 404 (not found), never 401 (auth wall)
+    expect(res.statusCode).not.toBe(401);
+    await app.close();
+  });
+
   it('allowed uid can sign in in private-beta mode', async () => {
     const store = new InMemoryStore();
     const mockVerifier = {
@@ -208,7 +216,7 @@ describe('private beta gate', () => {
   it('allowed email can sign in in private-beta mode (uid not listed)', async () => {
     const store = new InMemoryStore();
     const mockVerifier = {
-      verifyIdToken: async () => ({ sub: 'owner-sub-123', email: ownerEmail }),
+      verifyIdToken: async () => ({ sub: 'owner-sub-123', email: ownerEmail, emailVerified: true }),
     };
     const app = await buildApp({
       store,
