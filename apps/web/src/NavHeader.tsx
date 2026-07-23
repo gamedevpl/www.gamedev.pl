@@ -15,28 +15,21 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleNavClick = (sectionId: string) => {
+    onNavigate(sectionId);
+    setIsMenuOpen(false);
+  };
 
   return (
     <header className="app-header">
       <div className="logo-brand">
         <a href="#/" className="logo">
-          <img src={logo} alt={t('header.logoAlt')} width="40" height="35" />
+          <img src={logo} alt={t('header.logoAlt')} width="36" height="32" />
           gamedev<span className="turquoise">.pl</span>
         </a>
       </div>
-
-      <nav className="header-nav">
-        <button className="nav-link" onClick={() => onNavigate('hero-prompt')}>
-          {t('header.navPrompt')}
-        </button>
-        <button className="nav-link" onClick={() => onNavigate('arcade')}>
-          {t('header.navArcade')}
-        </button>
-        <button className="nav-link" onClick={() => onNavigate('studio')}>
-          {t('header.navStudio')}
-          {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
-        </button>
-      </nav>
 
       <div className="header-actions">
         {user ? (
@@ -58,6 +51,7 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
         )}
 
         <LanguageSwitcher />
+
         <a
           className="github"
           href="https://github.com/gamedevpl/www.gamedev.pl"
@@ -67,6 +61,33 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
         >
           <img src={githubIcon} alt="" width="20" height="20" />
         </a>
+
+        <div className="hamburger-container">
+          <button
+            type="button"
+            className="hamburger-btn"
+            aria-expanded={isMenuOpen}
+            aria-label="Toggle Navigation Menu"
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+          >
+            {isMenuOpen ? '✕' : '☰'}
+          </button>
+
+          {isMenuOpen && (
+            <nav className="dropdown-menu">
+              <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
+                ✨ {t('header.navPrompt')}
+              </button>
+              <button className="nav-link" onClick={() => handleNavClick('arcade')}>
+                🕹️ {t('header.navArcade')}
+              </button>
+              <button className="nav-link" onClick={() => handleNavClick('studio')}>
+                📂 {t('header.navStudio')}
+                {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
+              </button>
+            </nav>
+          )}
+        </div>
       </div>
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />

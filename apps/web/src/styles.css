@@ -218,6 +218,60 @@ a {
   opacity: 1;
 }
 
+/* HAMBURGER MENU */
+.hamburger-container {
+  position: relative;
+}
+
+.hamburger-btn {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.2rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hamburger-btn:hover {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  background: rgba(22, 28, 34, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 1px var(--turquoise-glow);
+  z-index: 200;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.dropdown-menu .nav-link {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.dropdown-menu .nav-link:hover {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+}
+
 /* MAIN CONTENT LAYOUT */
 .content {
   max-width: 1050px;
