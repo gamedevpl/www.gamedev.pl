@@ -54,6 +54,14 @@ export function App() {
     };
   }, []);
 
+  // Lock page scroll while the full-viewport game player is open so the fixed
+  // overlay is the only scrollable surface (the game handles its own scroll).
+  useEffect(() => {
+    if (!stageContent) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [stageContent]);
+
   useEffect(() => {
     // In private-beta mode /api/catalog requires a session — an anonymous fetch
     // would just 401. Don't fetch (and don't render an error) until signed in.

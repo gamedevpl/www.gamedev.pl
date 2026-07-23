@@ -275,7 +275,7 @@ a {
 
 /* MAIN CONTENT LAYOUT */
 .content {
-  max-width: 1050px;
+  max-width: 1280px;
   width: 100%;
   margin: 0 auto;
   padding: 40px 24px 80px;
@@ -470,10 +470,10 @@ a {
 
 .chip-container {
   display: flex;
-  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
 .chip-btn {
@@ -603,8 +603,8 @@ button:disabled {
 
 .catalog-grid {
   display: grid;
-  gap: 24px;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
 .catalog-card {
@@ -631,7 +631,7 @@ button:disabled {
   position: relative;
   display: grid;
   place-items: center;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.14), transparent 55%), #0a0e12;
   border-bottom: 1px solid var(--panel-border);
@@ -698,14 +698,14 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
-  min-height: 50px;
-  padding: 8px 10px 0;
+  min-height: 40px;
+  padding: 6px 10px 0;
   background: rgba(0, 0, 0, 0.12);
 }
 
 .catalog-moment {
   overflow: hidden;
-  height: 44px;
+  height: 34px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -734,9 +734,8 @@ button:disabled {
   display: flex;
   flex: 1;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px 20px;
+  gap: 10px;
+  padding: 14px 16px 16px;
 }
 
 .card-header {
@@ -761,21 +760,39 @@ button:disabled {
   text-transform: uppercase;
 }
 
+/* Controls on a single compact line: "CONTROLS  <value…>" with ellipsis, so a long
+   control description (esp. in Polish) doesn't add 2–3 lines of height to the card.
+   The full text is still shown in the game player. */
+.catalog-meta div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
 .catalog-meta dt {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .catalog-meta dd {
-  margin: 2px 0 0;
-  font-size: 0.9rem;
-  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-actions {
   display: flex;
   gap: 10px;
+  margin-top: auto;
 }
 
 .card-actions button {
@@ -1059,6 +1076,12 @@ textarea:focus {
     0 0 1px var(--turquoise-glow);
   overflow: hidden;
   transition: box-shadow 0.3s ease;
+}
+
+/* While the full-viewport player is open, lock page scroll so the fixed overlay is
+   the only thing on screen — no scrolling the hidden hero/catalog behind it. */
+body.player-open {
+  overflow: hidden;
 }
 
 /* FULL VIEWPORT GAME THEATER MODE */
