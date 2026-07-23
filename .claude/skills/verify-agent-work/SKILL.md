@@ -65,6 +65,12 @@ Two concrete instances of that (observed 2026-07-23):
   8.30.1 (local) each flagged _different_ false positives over full history — a local "no
   leaks" pass said nothing about CI's verdict. Verify with the exact version CI pins, and
   pin CI to a version you can run locally.
+- **A green local gate does not prove `npm ci` will pass.** lint/type-check/test/build all
+  run against whatever is already in `node_modules`; only `npm ci` checks that
+  `package.json` and `package-lock.json` agree, and CI runs it first. Observed: an agent
+  edited dependency ranges in `package.json` without regenerating the lock — every local
+  check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
+  `npm install --package-lock-only` must produce a zero lockfile diff before committing.
 
 ## Read the diff against the spec
 
