@@ -7,6 +7,8 @@ import { AuthProvider } from './AuthContext';
 import { ClosedBetaSplash } from './ClosedBetaSplash';
 import i18n from './i18n';
 
+import { AppLoadingScreen } from './AppLoadingScreen';
+
 async function flushEffects() {
   await Promise.resolve();
   await Promise.resolve();
@@ -19,31 +21,20 @@ describe('ClosedBetaSplash', () => {
     delete (globalThis as { google?: unknown }).google;
   });
 
-  it('renders the loading skeleton when loading=true', async () => {
+  it('renders the full screen AppLoadingScreen component', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({}), { status: 401 });
-      if (url.endsWith('/api/health')) {
-        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
-      }
-      throw new Error(`unexpected fetch: ${url}`);
-    });
 
-    await i18n.changeLanguage('en');
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(createElement(AuthProvider, null, createElement(ClosedBetaSplash, { loading: true })));
+      root.render(createElement(AppLoadingScreen));
       await flushEffects();
     });
 
-    // Should show spinner, not the sign-in button
-    expect(container.querySelector('.beta-splash__spinner')).not.toBeNull();
-    expect(container.querySelector('.google-sign-in-container')).toBeNull();
-    expect(container.querySelector('#btn-join-waitlist')).toBeNull();
+    expect(container.querySelector('.app-loading-screen__spinner')).not.toBeNull();
+    expect(container.querySelector('.app-loading-screen__logo')).not.toBeNull();
 
     await act(async () => root.unmount());
   });

@@ -5,11 +5,7 @@ import { GoogleSignInButton } from './GoogleSignInButton';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 
-interface ClosedBetaSplashProps {
-  loading?: boolean;
-}
-
-export function ClosedBetaSplash({ loading }: ClosedBetaSplashProps) {
+export function ClosedBetaSplash() {
   const { t, i18n } = useTranslation();
   const { joinWaitlist, waitlistStatus } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -44,11 +40,7 @@ export function ClosedBetaSplash({ loading }: ClosedBetaSplashProps) {
 
         <div className="beta-splash__badge">{t('betaSplash.badge')}</div>
 
-        {loading ? (
-          <div className="beta-splash__loading">
-            <div className="beta-splash__spinner" />
-          </div>
-        ) : isBlocked ? (
+        {isBlocked ? (
           <div className="beta-splash__blocked">
             <p className="beta-splash__blocked-msg">{t('betaSplash.blockedMsg')}</p>
             {waitlistState === 'joined' || (hasKnownStatus && waitlistState !== 'error') ? (

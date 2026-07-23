@@ -16,7 +16,16 @@ function getAuthHeaders(uid = 'g:test-user') {
 }
 
 function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
-  return { slug, title: slug, genre: 'arcade', controls: 'arrows', status: 'published', media: null, ...overrides };
+  return {
+    slug,
+    title: slug,
+    genre: 'arcade',
+    controls: 'arrows',
+    status: 'published',
+    media: null,
+    multiplayer: null,
+    ...overrides,
+  };
 }
 
 function createGithubClientStub(params: {
@@ -700,6 +709,7 @@ describe('catalog route', () => {
         controls: 'arrows',
         status: 'published',
         media: null,
+        multiplayer: null,
       },
     ]);
 

@@ -14,6 +14,7 @@ import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { ClosedBetaSplash } from './ClosedBetaSplash';
+import { AppLoadingScreen } from './AppLoadingScreen';
 
 type StageContent =
   { type: 'catalog'; game: CatalogEntry } | { type: 'generated'; game: GeneratedGame; prompt: string };
@@ -193,7 +194,7 @@ export function App() {
   }
 
   if (authLoading) {
-    return <ClosedBetaSplash loading />;
+    return <AppLoadingScreen />;
   }
 
   if (privateBeta && !user) {
