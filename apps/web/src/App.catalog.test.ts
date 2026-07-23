@@ -22,11 +22,11 @@ describe('catalog playback', () => {
 
   it('renders a catalog game in a sandboxed iframe served by the app API', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function () {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
       this.dispatchEvent(new Event('play'));
       return Promise.resolve();
     });
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function () {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
       this.dispatchEvent(new Event('pause'));
     });
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
