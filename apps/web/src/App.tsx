@@ -210,6 +210,7 @@ export function App() {
             token={route.token}
             submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}
             submittedConcept={savedSpecs.find((spec) => spec.token === route.token)?.concept}
+            submittedAt={savedSpecs.find((spec) => spec.token === route.token)?.createdAt}
           />
         ) : (
           <>

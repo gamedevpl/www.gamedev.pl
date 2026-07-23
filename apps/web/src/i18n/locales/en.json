@@ -106,9 +106,9 @@
     "viewGithub": "View Games Repository on GitHub"
   },
   "statusView": {
-    "title": "Submission status",
-    "loading": "Checking your submission…",
-    "saveLink": "Save this link to track your game:",
+    "title": "Your game is in the works",
+    "loading": "Finding your game…",
+    "saveLink": "Bookmark this link to check back anytime:",
     "invalidToken": "This tracking link is invalid or has expired.",
     "invalidTokenHelp": "Please return to the main page and submit your idea again if you still need a new tracking link.",
     "fetchErrorHelp": "We could not refresh this submission right now. You can try again in a moment.",
@@ -116,42 +116,45 @@
     "play": "Play your game",
     "slug": "Published slug: {{slug}}",
     "publishedGameTitle": "Published game",
-    "previewLoading": "Loading a live preview from the agent's work-in-progress…",
-    "previewBadge": "Live preview — unmerged work in progress",
-    "previewUpdating": "Updating with the agent's latest commit…",
-    "previewGameTitle": "Work-in-progress preview",
-    "previewNotReady": "There's no playable build on the branch yet. Check back once the agent has committed the game.",
+    "previewLoading": "Grabbing the agent's latest build…",
+    "previewBadge": "Playable right now — work in progress",
+    "previewUpdating": "New code just landed — reloading…",
+    "previewGameTitle": "Work-in-progress build",
+    "previewNotReady": "No playable build yet. The agent is still laying down code — this page updates itself the moment there is something to play.",
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
     "progress": {
-      "checklistTitle": "Build checklist",
-      "commitsTitle": "Recent activity"
+      "checklistTitle": "What the agent is doing",
+      "commitsTitle": "Build log",
+      "checklistCount": "{{done}} of {{total}} done"
     },
     "states": {
       "queued": {
         "label": "In the queue",
-        "description": "Your submission has been received and is waiting to be picked up by an agent."
+        "description": "Your idea is in line. An AI agent picks it up any moment now."
       },
       "building": {
-        "label": "Being built by Agent",
-        "description": "The coding agent is generating code and opening a pull request."
+        "label": "Writing code",
+        "description": "An agent is coding your game right now. Watch it take shape below — no need to refresh."
       },
       "in_review": {
-        "label": "In review",
-        "description": "Automated checks and reviewers are verifying the game build."
+        "label": "Play-testing",
+        "description": "Automated checks are making sure your game actually runs clean."
       },
       "publishing": {
-        "label": "Publishing…",
-        "description": "The game is approved and being deployed to the static catalog."
+        "label": "Going live",
+        "description": "Approved! Your game is being deployed to the arcade."
       },
       "published": {
-        "label": "Ready to play!",
-        "description": "Your game is live and ready to open in the sandboxed player."
+        "label": "Live!",
+        "description": "Your game is on the arcade. Go play it."
       },
       "needs_changes": {
-        "label": "Needs changes",
-        "description": "This submission could not be published yet. Please revise the idea and submit again."
+        "label": "Needs a tweak",
+        "description": "This one didn't make it through. Tweak the idea and submit it again."
       }
-    }
+    },
+    "elapsed": "In progress for {{duration}}",
+    "live": "Live"
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",

@@ -106,9 +106,9 @@
     "viewGithub": "Zobacz Repozytorium Gier na GitHubie"
   },
   "statusView": {
-    "title": "Status zgłoszenia",
-    "loading": "Sprawdzanie Twojego zgłoszenia…",
-    "saveLink": "Zapisz ten link, aby śledzić swoją grę:",
+    "title": "Twoja gra powstaje",
+    "loading": "Szukamy Twojej gry…",
+    "saveLink": "Zapisz ten link, aby wrócić tu w każdej chwili:",
     "invalidToken": "Ten link śledzenia jest nieprawidłowy lub wygasł.",
     "invalidTokenHelp": "Wróć do strony głównej i zgłoś swój pomysł ponownie, jeśli potrzebujesz nowego linku śledzenia.",
     "fetchErrorHelp": "Nie udało się teraz odświeżyć tego zgłoszenia. Spróbuj ponownie za chwilę.",
@@ -116,42 +116,45 @@
     "play": "Zagraj w swoją grę",
     "slug": "Opublikowany slug: {{slug}}",
     "publishedGameTitle": "Opublikowana gra",
-    "previewLoading": "Wczytywanie podglądu na żywo z wersji roboczej agenta…",
-    "previewBadge": "Podgląd na żywo — niescalona wersja robocza",
-    "previewUpdating": "Aktualizowanie o najnowszy commit agenta…",
-    "previewGameTitle": "Podgląd wersji roboczej",
-    "previewNotReady": "Na gałęzi nie ma jeszcze grywalnej wersji. Wróć, gdy agent doda kod gry.",
+    "previewLoading": "Pobieramy najnowszą wersję od agenta…",
+    "previewBadge": "Możesz już grać — wersja robocza",
+    "previewUpdating": "Właśnie doszedł nowy kod — przeładowuję…",
+    "previewGameTitle": "Wersja robocza",
+    "previewNotReady": "Nie ma jeszcze grywalnej wersji. Agent wciąż pisze kod — ta strona odświeży się sama, gdy będzie w co zagrać.",
     "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
     "progress": {
-      "checklistTitle": "Lista zadań budowy",
-      "commitsTitle": "Ostatnia aktywność"
+      "checklistTitle": "Nad czym pracuje agent",
+      "commitsTitle": "Dziennik budowy",
+      "checklistCount": "{{done}} z {{total}} gotowe"
     },
     "states": {
       "queued": {
         "label": "W kolejce",
-        "description": "Twoje zgłoszenie zostało odebrane i czeka na podjęcie przez agenta."
+        "description": "Twój pomysł czeka w kolejce. Agent AI podejmie go lada moment."
       },
       "building": {
-        "label": "Tworzenie przez Agenta",
-        "description": "Agent kodujący generuje kod i otwiera pull request."
+        "label": "Powstaje kod",
+        "description": "Agent właśnie pisze Twoją grę. Obserwuj poniżej, jak powstaje — nie musisz odświeżać."
       },
       "in_review": {
-        "label": "W trakcie przeglądu",
-        "description": "Automatyczne testy i recenzenci weryfikują wersję gry."
+        "label": "Testujemy",
+        "description": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu."
       },
       "publishing": {
-        "label": "Publikowanie…",
-        "description": "Gra została zatwierdzona i jest wdrożona do katalogu."
+        "label": "Publikujemy",
+        "description": "Zatwierdzone! Twoja gra trafia właśnie do arcade."
       },
       "published": {
-        "label": "Gotowa do gry!",
-        "description": "Twoja gra jest opublikowana i gotowa do uruchomienia w bezpiecznym odtwarzaczu."
+        "label": "Gotowe!",
+        "description": "Twoja gra jest w arcade. Zagraj w nią!"
       },
       "needs_changes": {
-        "label": "Wymaga poprawek",
-        "description": "To zgłoszenie nie mogło jeszcze zostać opublikowane. Popraw pomysł i zgłoś go ponownie."
+        "label": "Wymaga poprawki",
+        "description": "Ta wersja nie przeszła. Popraw pomysł i zgłoś go ponownie."
       }
-    }
+    },
+    "elapsed": "Trwa od {{duration}}",
+    "live": "Na żywo"
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",

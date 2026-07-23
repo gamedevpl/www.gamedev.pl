@@ -16,8 +16,9 @@ const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'nee
 // The agent is actively working during these — poll tightly so progress feels live.
 // Everything else (queued/publishing) changes slowly, so poll gently.
 const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review']);
-const ACTIVE_POLL_MS = 6000;
-const IDLE_POLL_MS = 20000;
+/** Exported so tests advance timers by the real cadence instead of a magic number. */
+export const ACTIVE_POLL_MS = 3000;
+const IDLE_POLL_MS = 10000;
 
 function pollDelayMs(status: SubmissionStatus['status']): number | null {
   if (TERMINAL_STATUSES.has(status)) return null;
@@ -36,6 +37,35 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], string> = {
 // The linear happy path the timeline visualizes. needs_changes branches off it,
 // so it's handled as a separate "halted" state rather than a timeline position.
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
+
+/** "4s" / "2m 14s" / "1h 03m" — compact, and it keeps ticking so the page feels alive. */
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  return `${seconds}s`;
+}
+
+/**
+ * Ticking "in progress for 2m 14s" readout. The submission time only exists in
+ * localStorage (the API doesn't return it), so this is hidden when the link is
+ * opened on a device that didn't submit it.
+ */
+function ElapsedTimer({ since, running }: { since: number; running: boolean }) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
+
+  return <span className="status-elapsed">{t('statusView.elapsed', { duration: formatDuration(now - since) })}</span>;
+}
 
 function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
   const { t } = useTranslation();
@@ -74,6 +104,7 @@ type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
   submittedConcept?: string;
+  submittedAt?: number;
   trackingUrl?: string;
 };
 
@@ -81,6 +112,7 @@ export function SubmissionStatusView({
   token,
   submittedTitle,
   submittedConcept,
+  submittedAt,
   trackingUrl,
 }: SubmissionStatusViewProps) {
   const { t } = useTranslation();
@@ -218,7 +250,21 @@ export function SubmissionStatusView({
   return (
     <>
       <section className="panel status-panel">
-        <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
+        <div className="status-heading">
+          <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
+          {status && !TERMINAL_STATUSES.has(status.status) ? (
+            <span className="status-live">
+              <span className="live-dot" aria-hidden="true" />
+              {t('statusView.live')}
+              {submittedAt ? (
+                <>
+                  {' · '}
+                  <ElapsedTimer since={submittedAt} running />
+                </>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
         {submittedConcept ? <p className="status-brief">“{submittedConcept}”</p> : null}
         <p className="status-note">
           {t('statusView.saveLink')}{' '}
@@ -304,12 +350,28 @@ function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
 
   // Newest activity first — that's what makes the build feel "live".
   const recentCommits = [...progress.commits].reverse();
+  const doneCount = progress.checklist.filter((item) => item.checked).length;
+  const donePercent = progress.checklist.length === 0 ? 0 : (doneCount / progress.checklist.length) * 100;
 
   return (
     <div className="build-progress">
       {progress.checklist.length > 0 ? (
         <div className="build-progress-checklist">
-          <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
+          <div className="build-progress-heading-row">
+            <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
+            <span className="build-progress-count">
+              {t('statusView.progress.checklistCount', { done: doneCount, total: progress.checklist.length })}
+            </span>
+          </div>
+          <div
+            className="build-progress-bar"
+            role="progressbar"
+            aria-valuenow={doneCount}
+            aria-valuemin={0}
+            aria-valuemax={progress.checklist.length}
+          >
+            <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
+          </div>
           <ul>
             {progress.checklist.map((item, index) => (
               <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>

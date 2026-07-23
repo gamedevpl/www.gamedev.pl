@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
-import { SubmissionStatusView } from './SubmissionStatusView';
+import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView';
 import { getSubmissionPreview, getSubmissionStatus } from './submissionApi';
 
 vi.mock('./submissionApi', async () => {
@@ -54,6 +54,38 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('shows the submitted prompt and a ticking elapsed timer while the build is running', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
+    await i18n.changeLanguage('en');
+    window.location.hash = '#/status/elapsed-token';
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(SubmissionStatusView, {
+          token: 'elapsed-token',
+          submittedTitle: 'Circus Cat',
+          submittedConcept: 'A black cat dodging hula hoops',
+          submittedAt: Date.now() - 134_000,
+        }),
+      );
+      await flushEffects();
+    });
+
+    // The prompt the player typed is echoed back, so they can see what they asked for.
+    expect(container.textContent).toContain('A black cat dodging hula hoops');
+    // 134s -> "2m 14s", proving the duration formatting and that the timer is mounted.
+    expect(container.textContent).toContain('2m 14s');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('renders needs changes state copy', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'needs_changes' });
@@ -69,7 +101,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.textContent).toContain('Needs changes');
+    expect(container.textContent).toContain('Needs a tweak');
 
     await act(async () => {
       root.unmount();
@@ -100,7 +132,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.textContent).toContain('Ready to play!');
+    expect(container.textContent).toContain('Live!');
 
     const playButton = container.querySelector('button');
     expect(playButton?.textContent).toBe('Play your game');
@@ -202,7 +234,7 @@ describe('SubmissionStatusView', () => {
 
       // A status poll fires (still headSha "sha-1") — must NOT re-fetch the preview.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(6000);
+        await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
         await flushEffects();
       });
       expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
@@ -212,7 +244,7 @@ describe('SubmissionStatusView', () => {
       // must trigger a silent preview refresh (no click needed).
       currentSha = 'sha-2';
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(6000);
+        await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
         await flushEffects();
       });
 

@@ -1197,6 +1197,34 @@ body.player-open {
 }
 
 /* SUBMISSION STATUS VIEW */
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* "Live · 2m 14s" — the page polls on its own, so say so rather than leaving
+   the reader wondering whether they need to refresh. */
+.status-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--accent-blue);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
 .status-brief {
   color: var(--text);
   font-size: 0.98rem;
@@ -1516,6 +1544,35 @@ body.player-open {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--muted);
+}
+
+.build-progress-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.build-progress-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--turquoise);
+  font-variant-numeric: tabular-nums;
+}
+
+.build-progress-bar {
+  height: 6px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.build-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-blue), var(--turquoise));
+  transition: width 0.5s ease;
 }
 
 .build-progress ul {
