@@ -68,9 +68,6 @@ export function App() {
         setCatalogEntries(entries);
         setCatalogError(null);
         setCatalogStatus('ready');
-        if (entries.length > 0) {
-          setStageContent((prev) => (prev === null ? { type: 'catalog', game: entries[0] } : prev));
-        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
