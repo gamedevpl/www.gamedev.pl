@@ -1,5 +1,5 @@
 import type { GameProject } from '@gamedevpl/game-generator';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import {
@@ -8,6 +8,7 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
+import { type Store } from './store.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 
 const CreateSubmissionRequestSchema = z.object({
@@ -74,6 +75,20 @@ export interface SubmissionRoutesOptions {
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  store?: Store;
+  dailySubmissionQuota?: number;
+}
+
+function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
+  if (!request.user) {
+    reply.status(401).send({ error: 'authentication required' });
+    return false;
+  }
+  if (request.user.tier === 'blocked') {
+    reply.status(403).send({ error: 'account is blocked' });
+    return false;
+  }
+  return true;
 }
 
 function isRateLimited(
@@ -216,6 +231,9 @@ export async function registerSubmissionRoutes(
   const submissionTokenSecret = options.submissionTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
+  const store = options.store;
+  const dailySubmissionQuota = options.dailySubmissionQuota ?? 5;
+
   // Published games live on the games repo's default branch.
   const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
 
@@ -231,6 +249,7 @@ export async function registerSubmissionRoutes(
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
   const statusCache = new Map<number, CachedStatus>();
+
   // Previews are heavier (several GitHub reads + assembly) and never cached — a
   // fresh preview must reflect the branch's latest commit — so cap them per IP.
   const previewRateLimitWindowMs = 60 * 1000;
@@ -269,14 +288,33 @@ export async function registerSubmissionRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+
+    // 1. Validate request payload first
     const parsed = CreateSubmissionRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
     const currentTime = now();
+
+    // 2. Coarse per-IP rate limit
     if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many submissions, please try again later' });
+    }
+
+    // 3. User daily quota check (only increment after payload & IP checks pass)
+    const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+    if (store) {
+      const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');
+      if (!quota.allowed) {
+        if (quota.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+        return reply.status(429).send({ error: 'daily submission quota exceeded' });
+      }
     }
 
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
@@ -285,6 +323,8 @@ export async function registerSubmissionRoutes(
       ? sanitizeCreatorText(parsed.data.displayName, { singleLine: true })
       : 'anonymous';
 
+    // Privacy invariant: Creator UID is never written into GitHub issues (issues are
+    // immutable history and GitHub is a public pipeline). Ownership is stored in Firestore.
     const issueBody = [
       'New game spec submitted via www.gamedev.pl.',
       '',
@@ -307,6 +347,11 @@ export async function registerSubmissionRoutes(
         body: issueBody,
         labels: ['new-game'],
       });
+
+      if (store) {
+        await store.createSubmission(issue.number, request.user!.uid, sanitizedTitle);
+      }
+
       const token = mintToken(issue.number, submissionTokenSecret);
       return reply.send({ token, statusUrl: `/api/submissions/${token}` });
     } catch (error) {
@@ -361,6 +406,10 @@ export async function registerSubmissionRoutes(
   app.get('/api/submissions/:token/preview', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    if (!checkUserAccess(request, reply)) {
+      return;
     }
 
     const token = z.string().parse((request.params as { token?: string }).token);

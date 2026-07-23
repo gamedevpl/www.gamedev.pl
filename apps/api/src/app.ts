@@ -6,7 +6,9 @@ import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
+import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 
 const GenerateRequestSchema = z.object({
@@ -16,19 +18,34 @@ const GenerateRequestSchema = z.object({
 export interface BuildAppOptions {
   generator?: GameGenerator;
   logger?: boolean;
+  store?: Store;
+  sessionSecret?: string;
+  sessionSecretPrev?: string;
+  googleClientId?: string;
+  googleAuthVerifier?: GoogleAuthVerifier;
+  dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const generator = options.generator ?? createGenerator();
   const app = Fastify({ logger: options.logger ?? false });
+  const store = options.store ?? new InMemoryStore();
+  const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const webOrigin = process.env.WEB_ORIGIN?.trim();
 
   // In production, WEB_ORIGIN pins CORS to the deployed site (e.g. https://www.gamedev.pl);
-  // a comma-separated list is allowed. Unset (local dev) reflects any origin so the Vite
-  // dev server and same-origin proxy both work.
-  const webOrigin = process.env.WEB_ORIGIN?.trim();
+  // a comma-separated list is allowed. Unset in dev reflects any origin.
+  // Fail-closed in prod if WEB_ORIGIN is missing while credentials are configured.
+  if (isProd && !webOrigin) {
+    throw new Error('WEB_ORIGIN environment variable is required in production');
+  }
+
   await app.register(cors, {
     origin: webOrigin ? webOrigin.split(',').map((entry) => entry.trim()) : true,
+    credentials: true,
   });
 
   // Optional site-wide HTTP Basic Auth gate. When SITE_BASIC_AUTH ("user:password")
@@ -49,16 +66,43 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  await registerSubmissionRoutes(app, options.submissionRoutes);
+  // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator
+  await registerAuthPlugin(app, {
+    store,
+    sessionSecret: options.sessionSecret,
+    sessionSecretPrev: options.sessionSecretPrev,
+    googleClientId: options.googleClientId,
+    googleAuthVerifier: options.googleAuthVerifier,
+  });
+
+  await registerSubmissionRoutes(app, {
+    ...options.submissionRoutes,
+    store,
+  });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
   app.post('/api/generate-game', async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'authentication required' });
+    }
+
+    // 1. Validate request payload first so malformed requests don't burn daily quota
     const parsedRequest = GenerateRequestSchema.safeParse(request.body);
     if (!parsedRequest.success) {
       return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    // 2. Daily user generation quota check
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const quota = await store.checkAndIncrementQuota(request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
+    if (!quota.allowed) {
+      if (quota.tier === 'blocked') {
+        return reply.status(403).send({ error: 'account is blocked' });
+      }
+      return reply.status(429).send({ error: 'daily generation quota exceeded' });
     }
 
     const project = await generator.generate(parsedRequest.data.prompt);

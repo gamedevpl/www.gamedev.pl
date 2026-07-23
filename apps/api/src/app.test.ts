@@ -1,9 +1,12 @@
 import type { GameGenerator, GameProject } from '@gamedevpl/game-generator';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import packageJson from '../../../package.json';
 import { buildApp } from './app.js';
+
 import { MAX_PROJECT_BYTES } from './assemble.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { InMemoryStore } from './store.js';
 
 function stubGenerator(project: Partial<GameProject>): GameGenerator {
   return {
@@ -19,11 +22,25 @@ function stubGenerator(project: Partial<GameProject>): GameGenerator {
   };
 }
 
+const sessionSecret = 'dev-session-secret-change-me';
+
+async function createAuthenticatedApp(generator?: GameGenerator) {
+  const store = new InMemoryStore();
+  await store.upsertUser({ uid: 'g:test-user' });
+  const app = await buildApp({ generator, store, sessionSecret });
+  const token = mintSessionToken('g:test-user', sessionSecret);
+  const authHeaders = { cookie: `${SESSION_COOKIE_NAME}=${token}` };
+  return { app, store, authHeaders };
+}
+
 describe('api', () => {
   let app: FastifyInstance;
+  let authHeaders: Record<string, string>;
 
   beforeAll(async () => {
-    app = await buildApp();
+    const setup = await createAuthenticatedApp();
+    app = setup.app;
+    authHeaders = setup.authHeaders;
   });
 
   afterAll(async () => {
@@ -42,10 +59,20 @@ describe('api', () => {
     expect(res.json()).toMatchObject({ status: 'ok', provider: 'mock' });
   });
 
-  it('returns a self-contained playable HTML document for a prompt', async () => {
+  it('rejects /api/generate-game without authentication with 401', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/generate-game',
+      payload: { prompt: 'collect coins in space' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns a self-contained playable HTML document for a prompt when authenticated', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/generate-game',
+      headers: authHeaders,
       payload: { prompt: 'collect coins in space' },
     });
     expect(res.statusCode).toBe(200);
@@ -61,16 +88,20 @@ describe('api', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/generate-game',
+      headers: authHeaders,
       payload: { prompt: '   ' },
     });
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 502 when the generated project exceeds the size cap', async () => {
-    const oversized = await buildApp({ generator: stubGenerator({ js: 'x'.repeat(MAX_PROJECT_BYTES + 1) }) });
+    const { app: oversized, authHeaders: headers } = await createAuthenticatedApp(
+      stubGenerator({ js: 'x'.repeat(MAX_PROJECT_BYTES + 1) }),
+    );
     const res = await oversized.inject({
       method: 'POST',
       url: '/api/generate-game',
+      headers,
       payload: { prompt: 'huge game' },
     });
     expect(res.statusCode).toBe(502);
@@ -78,10 +109,11 @@ describe('api', () => {
   });
 
   it('returns 502 when the generated project is empty', async () => {
-    const empty = await buildApp({ generator: stubGenerator({ html: '', js: '' }) });
+    const { app: empty, authHeaders: headers } = await createAuthenticatedApp(stubGenerator({ html: '', js: '' }));
     const res = await empty.inject({
       method: 'POST',
       url: '/api/generate-game',
+      headers,
       payload: { prompt: 'empty game' },
     });
     expect(res.statusCode).toBe(502);
@@ -90,10 +122,13 @@ describe('api', () => {
 
   it('returns non-2xx and redacts response details when generated code contains credential-like strings', async () => {
     const fakeKey = `sk-ant-${'A'.repeat(40)}`;
-    const leaky = await buildApp({ generator: stubGenerator({ js: `const apiKey = "${fakeKey}";` }) });
+    const { app: leaky, authHeaders: headers } = await createAuthenticatedApp(
+      stubGenerator({ js: `const apiKey = "${fakeKey}";` }),
+    );
     const res = await leaky.inject({
       method: 'POST',
       url: '/api/generate-game',
+      headers,
       payload: { prompt: 'leaky game' },
     });
     expect(res.statusCode).toBe(502);

@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from './AuthContext';
+import { AuthModal } from './AuthModal';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import githubIcon from './assets/github-mark-white.svg';
 import logo from './logo-gamedev.png';
@@ -10,6 +13,8 @@ type NavHeaderProps = {
 
 export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
   const { t } = useTranslation();
+  const { user, logout } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
     <header className="app-header">
@@ -45,6 +50,25 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
             📂 {t('header.mySpecs', { count: activeSpecsCount })}
           </button>
         )}
+
+        {user ? (
+          <div className="user-profile-badge">
+            {user.picture ? (
+              <img src={user.picture} alt="" className="user-avatar" width="28" height="28" />
+            ) : (
+              <span className="user-avatar-placeholder">👤</span>
+            )}
+            <span className="user-name">{user.name || user.email || 'User'}</span>
+            <button className="logout-btn" onClick={logout} title="Sign Out">
+              🚪
+            </button>
+          </div>
+        ) : (
+          <button className="sign-in-btn" onClick={() => setIsAuthModalOpen(true)}>
+            🔑 Sign in
+          </button>
+        )}
+
         <LanguageSwitcher />
         <a
           className="github"
@@ -56,6 +80,8 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
           <img src={githubIcon} alt="" />
         </a>
       </div>
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </header>
   );
 }

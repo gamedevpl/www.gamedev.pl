@@ -10,6 +10,8 @@
 #     | gcloud secrets create github-token --data-file=- --replication-policy=automatic
 #   openssl rand -hex 32 \
 #     | gcloud secrets create submission-token-secret --data-file=- --replication-policy=automatic
+#   openssl rand -hex 32 \
+#     | gcloud secrets create session-secret --data-file=- --replication-policy=automatic
 # (To rotate later: `gcloud secrets versions add <name> --data-file=-`.)
 # The API boots without these; submission routes just return 503 until they exist,
 # so browsing/playing works on a secret-less first deploy.
@@ -37,7 +39,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "==> Enabling required services"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com secretmanager.googleapis.com --project "$PROJECT_ID"
+  artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com --project "$PROJECT_ID"
 
 echo "==> Ensuring Artifact Registry repo '${REPO}' exists in ${REGION}"
 gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$PROJECT_ID" >/dev/null 2>&1 \
@@ -60,6 +62,11 @@ if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 
   echo "==> Submission secrets found; submissions will be enabled."
 else
   echo "==> Submission secrets not found; deploying browse/play-only (submissions return 503)."
+fi
+
+if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
+  echo "==> session-secret found; session authentication enabled."
 fi
 
 if gcloud secrets describe site-basic-auth --project "$PROJECT_ID" >/dev/null 2>&1; then

@@ -1085,3 +1085,125 @@ textarea:focus {
 .build-progress-commits li:last-child {
   border-bottom: none;
 }
+
+/* AUTHENTICATION UI */
+.sign-in-btn {
+  background: var(--turquoise);
+  color: #0f1418;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sign-in-btn:hover {
+  box-shadow: 0 0 12px var(--turquoise-glow);
+  transform: translateY(-1px);
+}
+
+.user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-card);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--panel-border);
+}
+
+.user-avatar {
+  border-radius: 50%;
+}
+
+.user-avatar-placeholder {
+  font-size: 1.1rem;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.7;
+  padding: 2px 4px;
+  transition: opacity 0.2s ease;
+}
+
+.logout-btn:hover {
+  opacity: 1;
+}
+
+/* AUTH MODAL */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.auth-modal-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 440px;
+  width: 90%;
+  position: relative;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.auth-modal-header h2 {
+  margin-top: 0;
+  font-size: 1.4rem;
+}
+
+.auth-modal-header p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 24px;
+}
+
+.auth-modal-body {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.auth-error-banner {
+  background: rgba(255, 107, 107, 0.15);
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}

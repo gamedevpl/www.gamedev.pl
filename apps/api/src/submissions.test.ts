@@ -1,11 +1,19 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import { InMemoryStore, type Store } from './store.js';
 import { mintToken } from './submission-token.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
+const sessionSecret = 'dev-session-secret-change-me';
+
+function getAuthHeaders(uid = 'g:test-user') {
+  const token = mintSessionToken(uid, sessionSecret);
+  return { cookie: `${SESSION_COOKIE_NAME}=${token}` };
+}
 
 function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
   return { slug, title: slug, genre: 'arcade', controls: 'arrows', status: 'published', ...overrides };
@@ -31,20 +39,97 @@ async function createApp(params: {
   githubClient?: GitHubClient;
   now?: () => number;
   submissionTokenSecret?: string;
-}): Promise<FastifyInstance> {
-  return buildApp({
+  store?: Store;
+  dailySubmissionQuota?: number;
+}): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
+  const store = params.store ?? new InMemoryStore();
+  await store.upsertUser({ uid: 'g:test-user' });
+  const app = await buildApp({
+    store,
+    sessionSecret,
     submissionRoutes: {
       githubToken: params.githubClient ? 'token' : undefined,
       submissionTokenSecret: params.submissionTokenSecret,
       gamesRepo: repo,
       githubClient: params.githubClient,
       now: params.now,
+      dailySubmissionQuota: params.dailySubmissionQuota,
     },
   });
+  return { app, store, authHeaders: getAuthHeaders('g:test-user') };
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('submission routes authentication & quota', () => {
+  it('rejects unauthenticated requests to gated routes with 401', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const postSub = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      payload: { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' },
+    });
+    expect(postSub.statusCode).toBe(401);
+
+    const getPreview = await app.inject({ method: 'GET', url: '/api/submissions/token/preview' });
+    expect(getPreview.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rejects submissions when daily quota is exceeded', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 2,
+    });
+
+    for (let i = 0; i < 2; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title: `Game ${i}`, concept: 'A concept long enough to pass validation rules.' },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    const exceeded = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Game 3', concept: 'A concept long enough to pass validation rules.' },
+    });
+    expect(exceeded.statusCode).toBe(429);
+    expect(exceeded.json()).toEqual({ error: 'daily submission quota exceeded' });
+
+    await app.close();
+  });
+
+  it('rejects blocked users with 403', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:blocked-user', tier: 'blocked' });
+
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: getAuthHeaders('g:blocked-user'),
+      payload: { title: 'Game Idea', concept: 'A concept long enough to pass validation rules.' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'account is blocked' });
+
+    await app.close();
+  });
 });
 
 describe('submission routes', () => {
@@ -54,6 +139,7 @@ describe('submission routes', () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/submissions',
+      headers: getAuthHeaders(),
       payload: { title: 'Game idea', concept: 'A concept long enough to pass the schema checks.' },
     });
     expect(createRes.statusCode).toBe(503);
@@ -68,10 +154,11 @@ describe('submission routes', () => {
 
   it('validates submission payload and returns first zod error', async () => {
     const { githubClient } = createGithubClientStub({});
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
     const response = await app.inject({
       method: 'POST',
       url: '/api/submissions',
+      headers: authHeaders,
       payload: { title: 'ab', concept: 'too short' },
     });
 
@@ -82,11 +169,12 @@ describe('submission routes', () => {
 
   it('creates an issue, sanitizes user text, and returns token + status URL', async () => {
     const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 77 });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/submissions',
+      headers: authHeaders,
       payload: {
         title: '<b>My [cool](https://example.com) title</b>',
         concept: 'This is a sufficiently long [concept](https://example.com) with <i>markup</i> and details.',
@@ -125,16 +213,18 @@ describe('submission routes', () => {
   it('rate limits submissions to 5 per hour per IP', async () => {
     const { githubClient } = createGithubClientStub({});
     let currentTime = 1_000_000;
-    const app = await createApp({
+    const { app, authHeaders } = await createApp({
       githubClient,
       submissionTokenSecret: secret,
       now: () => currentTime,
+      dailySubmissionQuota: 100,
     });
 
     for (let index = 0; index < 5; index += 1) {
       const response = await app.inject({
         method: 'POST',
         url: '/api/submissions',
+        headers: authHeaders,
         payload: {
           title: `Game title ${index}`,
           concept: 'A concept long enough to pass validation for this submission endpoint.',
@@ -146,6 +236,7 @@ describe('submission routes', () => {
     const limited = await app.inject({
       method: 'POST',
       url: '/api/submissions',
+      headers: authHeaders,
       payload: {
         title: 'Game title 6',
         concept: 'A concept long enough to pass validation for this submission endpoint.',
@@ -157,6 +248,7 @@ describe('submission routes', () => {
     const reset = await app.inject({
       method: 'POST',
       url: '/api/submissions',
+      headers: authHeaders,
       payload: {
         title: 'Game title 7',
         concept: 'A concept long enough to pass validation for this submission endpoint.',
@@ -238,7 +330,7 @@ describe('submission routes', () => {
       linkedPr,
       catalog: catalogSlugs.map((slug) => catalogEntry(slug)),
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -250,7 +342,7 @@ describe('submission routes', () => {
 
   it('rejects invalid status tokens', async () => {
     const { githubClient } = createGithubClientStub({});
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const response = await app.inject({ method: 'GET', url: '/api/submissions/not-a-token' });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: 'invalid submission token' });
@@ -270,7 +362,7 @@ describe('submission routes', () => {
         changedFiles: ['games/foo/SPEC.md', 'games/foo/index.html'],
       },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -305,7 +397,7 @@ describe('submission routes', () => {
         ],
       },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -343,7 +435,7 @@ describe('submission routes', () => {
         changedFiles: [],
       },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -369,7 +461,7 @@ describe('submission routes', () => {
         commits: [{ message: '<img src=x> fix `bug` in **renderer**', committedDate: '2026-01-01T00:00:00Z' }],
       },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -401,14 +493,13 @@ describe('submission routes', () => {
         commits: manyCommits,
       },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
     const body = response.json();
     expect(body.progress.checklist).toHaveLength(30);
     expect(body.progress.commits).toHaveLength(20);
-    // Commits are capped to the most recent ones.
     expect(body.progress.commits[0]).toEqual({ message: 'commit 20', committedDate: '2026-01-01T00:00:00Z' });
     expect(body.progress.commits[19]).toEqual({ message: 'commit 39', committedDate: '2026-01-01T00:00:00Z' });
 
@@ -436,15 +527,15 @@ const sampleSources: GameSources = {
 describe('submission preview route', () => {
   it('returns 503 when submissions are not configured', async () => {
     const app = await buildApp({ submissionRoutes: { githubToken: undefined, submissionTokenSecret: undefined } });
-    const res = await app.inject({ method: 'GET', url: '/api/submissions/token/preview' });
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/token/preview', headers: getAuthHeaders() });
     expect(res.statusCode).toBe(503);
     await app.close();
   });
 
   it('rejects an invalid token with 400', async () => {
     const { githubClient } = createGithubClientStub({});
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
-    const res = await app.inject({ method: 'GET', url: '/api/submissions/not-a-token/preview' });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/not-a-token/preview', headers: authHeaders });
     expect(res.statusCode).toBe(400);
     await app.close();
   });
@@ -454,23 +545,20 @@ describe('submission preview route', () => {
       linkedPr: openPreviewPr,
       gameSources: sampleSources,
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
-    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview` });
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.slug).toBe('foo');
     expect(body.title).toBe('Bubble Pop Rush');
-    // Assembled from the branch sources, into one self-contained document…
     expect(body.html).toContain('<script>');
     expect(body.html).toContain('<style>');
     expect(body.html).toContain(sampleSources.gameJs);
     expect(body.html).toContain(sampleSources.styleCss);
-    // …with a strict CSP because the code is unreviewed (no network egress).
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
-    // Sources are read from the PR head branch, not the default branch.
     expect(getGameSources).toHaveBeenCalledWith('copilot/foo', 'foo');
 
     await app.close();
@@ -481,10 +569,10 @@ describe('submission preview route', () => {
       linkedPr: openPreviewPr,
       gameSources: { ...sampleSources, title: null },
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
-    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview` });
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
     expect(res.statusCode).toBe(200);
     expect(res.json().title).toBe('foo');
     await app.close();
@@ -505,10 +593,10 @@ describe('submission preview route', () => {
     { label: 'branch has no playable build', linkedPr: openPreviewPr, gameSources: null },
   ])('returns 409 when there is no preview ($label)', async ({ linkedPr, gameSources }) => {
     const { githubClient } = createGithubClientStub({ linkedPr, gameSources });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
-    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview` });
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${token}/preview`, headers: authHeaders });
     expect(res.statusCode).toBe(409);
     await app.close();
   });
@@ -526,7 +614,7 @@ describe('submission preview route', () => {
       },
     });
     let currentTime = 50_000;
-    const app = await createApp({
+    const { app } = await createApp({
       githubClient,
       submissionTokenSecret: secret,
       now: () => currentTime,
@@ -566,7 +654,7 @@ describe('catalog route', () => {
         catalogEntry('wip-game', { status: 'draft' }),
       ],
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(res.statusCode).toBe(200);
@@ -580,7 +668,7 @@ describe('catalog route', () => {
   it('caches the catalog for 60 seconds', async () => {
     const { githubClient, getCatalog } = createGithubClientStub({ catalog: [catalogEntry('bubble-pop')] });
     let currentTime = 10_000;
-    const app = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
 
     await app.inject({ method: 'GET', url: '/api/catalog' });
     await app.inject({ method: 'GET', url: '/api/catalog' });
@@ -596,7 +684,7 @@ describe('catalog route', () => {
   it('returns 502 when the catalog cannot be loaded', async () => {
     const { githubClient, getCatalog } = createGithubClientStub({});
     getCatalog.mockRejectedValueOnce(new Error('boom'));
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(res.statusCode).toBe(502);
@@ -611,7 +699,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('foo', { title: 'Bubble Pop Rush' })],
       gameSources: sampleSources,
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
     expect(res.statusCode).toBe(200);
@@ -622,7 +710,6 @@ describe('published game route', () => {
     expect(body.html).toContain(sampleSources.styleCss);
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
-    // Sources come from the games repo's default branch.
     expect(getGameSources).toHaveBeenCalledWith('main', 'foo');
 
     await app.close();
@@ -633,7 +720,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('wip-game', { status: 'draft' })],
       gameSources: sampleSources,
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     for (const slug of ['wip-game', 'unknown-game']) {
       const res = await app.inject({ method: 'GET', url: `/api/games/${slug}` });
@@ -649,7 +736,7 @@ describe('published game route', () => {
       catalog: [catalogEntry('foo')],
       gameSources: null,
     });
-    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
     expect(res.statusCode).toBe(404);
@@ -663,7 +750,7 @@ describe('published game route', () => {
       gameSources: sampleSources,
     });
     let currentTime = 10_000;
-    const app = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
 
     await app.inject({ method: 'GET', url: '/api/games/foo' });
     await app.inject({ method: 'GET', url: '/api/games/foo' });
