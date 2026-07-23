@@ -209,7 +209,8 @@ a {
 }
 
 .app-header .github img {
-  height: 28px;
+  width: 24px;
+  height: 24px;
   opacity: 0.8;
   transition: opacity 0.2s;
 }
