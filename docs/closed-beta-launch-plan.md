@@ -9,8 +9,14 @@
 
 ## Current state (verified live 2026-07-23)
 
-- New app live on Cloud Run: `https://gamedev-app-334141807880.europe-central2.run.app`
-  (project `gamedevpl`, region `europe-central2`, service `gamedev-app`).
+- App live on Cloud Run in BOTH regions during the migration:
+  - NEW (cutover target): `https://gamedev-app-334141807880.europe-west1.run.app`
+    — bootstrapped 2026-07-23 (rev gamedev-app-00001-4wf), verified: `GET /`
+    200, catalog 401, auth/me 401, health `privateBeta:true`, assets served
+    brotli (72KB vs 250KB) + immutable, index.html no-cache. Deploy pipeline
+    now targets this region.
+  - OLD (frozen, delete after cutover):
+    `https://gamedev-app-334141807880.europe-central2.run.app`.
 - `PRIVATE_BETA=true`; anonymous `GET /` → 200 (closed-beta splash),
   `/api/catalog` → 401, `/api/health` reports `privateBeta: true`.
 - Allowlist: `BETA_ALLOWED_UIDS` = owner's uid; `BETA_ALLOWED_EMAILS` unset.
@@ -91,9 +97,9 @@ domain will get organic traffic the run.app URL never did.
    1.0/1.1. `europe-west1` chosen: Tier-1 pricing (cheaper per CPU-s than
    europe-central2), ~25ms from the Warsaw Firestore. Migration steps:
    - Create Artifact Registry repo `gamedev` in `europe-west1` (one-time).
-   - deploy.yml + infra/deploy-api.sh: `REGION=europe-west1`; `WEB_ORIGIN`
-     becomes the new deterministic URL + `https://www.gamedev.pl` +
-     `https://gamedev.pl` (comma-separated).
+   - deploy.yml + infra/deploy-api.sh: set the region to `europe-west1`;
+     `WEB_ORIGIN` becomes the new deterministic URL + `https://www.gamedev.pl`
+     - `https://gamedev.pl` (comma-separated).
    - Push → deploys the service fresh in europe-west1 (old europe-central2
      service keeps serving its URL untouched during transition; delete it
      - the old AR repo only after cutover is verified).
