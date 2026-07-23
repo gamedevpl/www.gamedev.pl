@@ -170,6 +170,14 @@
     "footer": "Access is invite-only during the closed beta."
   },
   "errors": {
-    "generic": "Something went wrong"
+    "generic": "Something went wrong",
+    "contentRejected": {
+      "profanity": "That includes language we can't publish. Please rephrase and try again.",
+      "adult": "That describes adult content, which we can't generate. Please rephrase and try again.",
+      "violence": "That describes graphic violence or self-harm, which we can't generate. Please rephrase and try again.",
+      "pii": "That looks like it contains personal contact details (email, phone, address) — please remove them and try again.",
+      "injection": "That looks like it's trying to instruct the build agent rather than describe a game. Please rephrase and try again.",
+      "other": "We can't accept that as written. Please rephrase and try again."
+    }
   }
 }

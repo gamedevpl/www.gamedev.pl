@@ -176,6 +176,31 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('rejects a submission that trips content moderation with 422, before creating an issue or spending quota', async () => {
+    const { githubClient, createIssue } = createGithubClientStub({});
+    const { app, store, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Fine title', concept: 'A concept describing a porn game with adult content in it.' },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({ error: 'content_rejected', category: 'adult' });
+    expect(createIssue).not.toHaveBeenCalled();
+
+    const quota = await store.checkAndIncrementQuota(
+      'g:test-user',
+      new Date().toISOString().slice(0, 10),
+      5,
+      'submissions',
+    );
+    expect(quota.current).toBe(1); // the moderated attempt didn't count
+    await app.close();
+  });
+
   it('creates an issue, sanitizes user text, and returns token + status URL', async () => {
     const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 77 });
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });

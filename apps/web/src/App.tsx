@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { generateGame, type GeneratedGame } from './api';
+import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api';
 import { fetchCatalog, type CatalogEntry } from './catalog';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
@@ -11,7 +11,7 @@ import { CreatorStudio } from './CreatorStudio';
 import { TransparencySection } from './TransparencySection';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { parseHashRoute, statusHash } from './router';
-import { submitSpec } from './submissionApi';
+import { submitSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
@@ -119,7 +119,10 @@ export function App() {
       setStageContent({ type: 'generated', game: generatedGame, prompt: trimmed });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('errors.generic');
-      if (message.includes('quota')) {
+      const category = err instanceof Error ? (err as GenerateGameApiError).category : undefined;
+      if (message === 'content_rejected') {
+        setMockError(t(`errors.contentRejected.${category ?? 'other'}`));
+      } else if (message.includes('quota')) {
         setMockError(t('auth.quotaExceeded'));
       } else if (message.includes('blocked')) {
         setMockError(t('auth.accountBlocked'));
@@ -169,7 +172,10 @@ export function App() {
       window.location.hash = statusHash(response.token);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
-      if (message.includes('quota')) {
+      const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
+      if (message === 'content_rejected') {
+        setSubmissionError(t(`errors.contentRejected.${category ?? 'other'}`));
+      } else if (message.includes('quota')) {
         setSubmissionError(t('auth.quotaExceeded'));
       } else if (message.includes('blocked')) {
         setSubmissionError(t('auth.accountBlocked'));

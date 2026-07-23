@@ -4,6 +4,8 @@ export interface GeneratedGame {
   html: string;
 }
 
+export type GenerateGameApiError = Error & { category?: string };
+
 /**
  * Local preview only. Games are not generated on demand in the real design —
  * they live in the games repo and are maintained there by coding agents
@@ -18,8 +20,10 @@ export async function generateGame(prompt: string): Promise<GeneratedGame> {
   });
 
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Request failed (${response.status})`);
+    const body = (await response.json().catch(() => null)) as { error?: string; category?: string } | null;
+    const error = new Error(body?.error ?? `Request failed (${response.status})`) as GenerateGameApiError;
+    error.category = body?.category;
+    throw error;
   }
 
   return (await response.json()) as GeneratedGame;

@@ -170,6 +170,14 @@
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
   },
   "errors": {
-    "generic": "Coś poszło nie tak"
+    "generic": "Coś poszło nie tak",
+    "contentRejected": {
+      "profanity": "To zawiera słownictwo, którego nie możemy opublikować. Popraw treść i spróbuj ponownie.",
+      "adult": "To opisuje treści dla dorosłych, których nie możemy wygenerować. Popraw treść i spróbuj ponownie.",
+      "violence": "To opisuje drastyczną przemoc lub samookaleczenie, czego nie możemy wygenerować. Popraw treść i spróbuj ponownie.",
+      "pii": "Wygląda na to, że tekst zawiera dane kontaktowe (e-mail, telefon, adres) — usuń je i spróbuj ponownie.",
+      "injection": "Wygląda na to, że to próba wydania poleceń agentowi budującemu grę, a nie opis gry. Popraw treść i spróbuj ponownie.",
+      "other": "Nie możemy przyjąć tego w tej formie. Popraw treść i spróbuj ponownie."
+    }
   }
 }

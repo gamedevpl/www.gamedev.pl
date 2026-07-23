@@ -26,16 +26,17 @@ export type SubmissionPreview = {
   html: string;
 };
 
-export type SubmissionApiError = Error & { status?: number };
+export type SubmissionApiError = Error & { status?: number; category?: string };
 
 async function readJson(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
 }
 
 async function throwResponseError(response: Response): Promise<never> {
-  const body = (await readJson(response)) as { error?: string } | null;
+  const body = (await readJson(response)) as { error?: string; category?: string } | null;
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as SubmissionApiError;
   error.status = response.status;
+  error.category = body?.category;
   throw error;
 }
 

@@ -93,6 +93,28 @@ describe('api', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('rejects a prompt that trips content moderation with 422, before spending quota', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:mod-test' });
+    const app = await buildApp({ store, sessionSecret });
+    const token = mintSessionToken('g:mod-test', sessionSecret);
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${token}` };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/generate-game',
+      headers,
+      payload: { prompt: 'make a porn game' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ error: 'content_rejected', category: 'adult' });
+
+    // Quota must not have been spent on a rejected prompt.
+    const quota = await store.checkAndIncrementQuota('g:mod-test', new Date().toISOString().slice(0, 10), 20, 'mocks');
+    expect(quota.current).toBe(1); // first real increment — the moderated attempt didn't count
+    await app.close();
+  });
+
   it('returns 502 when the generated project exceeds the size cap', async () => {
     const { app: oversized, authHeaders: headers } = await createAuthenticatedApp(
       stubGenerator({ js: 'x'.repeat(MAX_PROJECT_BYTES + 1) }),

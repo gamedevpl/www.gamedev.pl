@@ -8,6 +8,7 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
+import { moderateFields } from './moderation.js';
 import { type Store } from './store.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 
@@ -303,14 +304,20 @@ export async function registerSubmissionRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
+    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1)
+    const moderation = moderateFields([parsed.data.title, parsed.data.concept]);
+    if (!moderation.allowed) {
+      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+    }
+
     const currentTime = now();
 
-    // 2. Coarse per-IP rate limit
+    // 3. Coarse per-IP rate limit
     if (isRateLimited(submissionsByIp, request.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many submissions, please try again later' });
     }
 
-    // 3. User daily quota check (only increment after payload & IP checks pass)
+    // 4. User daily quota check (only increment after payload & IP checks pass)
     const dateStr = new Date(currentTime).toISOString().slice(0, 10);
     if (store) {
       const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailySubmissionQuota, 'submissions');

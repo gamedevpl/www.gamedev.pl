@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
+import { moderateText } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 
@@ -116,7 +117,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    // 2. Daily user generation quota check
+    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1)
+    const moderation = moderateText(parsedRequest.data.prompt);
+    if (!moderation.allowed) {
+      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+    }
+
+    // 3. Daily user generation quota check
     const dateStr = new Date().toISOString().slice(0, 10);
     const quota = await store.checkAndIncrementQuota(request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
     if (!quota.allowed) {
