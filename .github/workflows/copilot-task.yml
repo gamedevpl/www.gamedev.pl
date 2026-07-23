@@ -12,6 +12,11 @@ on:
   repository_dispatch:
     types: [copilot-task]
 
+# Least-privilege GITHUB_TOKEN: the job only checks out + runs the gate; it
+# writes nothing back to the repo.
+permissions:
+  contents: read
+
 jobs:
   dispatch-copilot-task:
     runs-on: ubuntu-latest

@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
 
+# Least-privilege GITHUB_TOKEN: both jobs only read the repo (checkout, npm,
+# gitleaks, gate). No writes to issues/PRs/contents.
+permissions:
+  contents: read
+
 jobs:
   gitleaks:
     name: Secret Scanning
