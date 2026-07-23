@@ -13,8 +13,17 @@
 #   openssl rand -hex 32 \
 #     | gcloud secrets create session-secret --data-file=- --replication-policy=automatic
 # (To rotate later: `gcloud secrets versions add <name> --data-file=-`.)
-# The API boots without these; submission routes just return 503 until they exist,
+# The API boots without these; submission/auth routes return 503 until configured,
 # so browsing/playing works on a secret-less first deploy.
+#
+# Optional access lock (make the whole app private "for now"):
+#   printf '%s' "myuser:mypassword" \
+#     | gcloud secrets create site-basic-auth --data-file=- --replication-policy=automatic
+# When present, every request needs those HTTP Basic Auth credentials. Remove the lock
+# by deleting the secret (`gcloud secrets delete site-basic-auth`) and redeploying.
+#
+# Optional env vars:
+#   GOOGLE_OAUTH_CLIENT_ID=... (public client ID for Sign in with Google)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -27,6 +36,7 @@ REGION="${REGION:-europe-central2}"
 SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
+GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,12 +52,13 @@ gcloud artifacts repositories describe "$REPO" --location "$REGION" --project "$
 
 echo "==> Building image via Cloud Build: ${IMAGE}"
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "_IMAGE=${IMAGE}" --project "$PROJECT_ID"
+  --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}" --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
 # flags overwrite each other, so mappings must be joined). Submissions need BOTH
 # github-token and submission-token-secret; without them the app is browse/play-only
-# (submission routes return 503).
+# (submission routes return 503). site-basic-auth is optional and locks the whole app
+# (web + API) behind HTTP Basic Auth ("user:password").
 SECRET_MAPPINGS=()
 if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
    && gcloud secrets describe submission-token-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -62,10 +73,22 @@ if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&
   echo "==> session-secret found; session authentication enabled."
 fi
 
+if gcloud secrets describe site-basic-auth --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SITE_BASIC_AUTH=site-basic-auth:latest")
+  echo "==> site-basic-auth found; the app will be locked behind HTTP Basic Auth."
+else
+  echo "==> site-basic-auth not found; the app will be publicly reachable."
+fi
+
 SECRET_FLAGS=()
 if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
   SECRET_FLAGS=(--set-secrets "$joined")
+fi
+
+ENV_VARS="GAMES_REPO=${GAMES_REPO}"
+if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
+  ENV_VARS="${ENV_VARS},GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"
@@ -78,7 +101,7 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --port 8080 \
-  --set-env-vars "GAMES_REPO=${GAMES_REPO}" \
+  --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
 
 echo "==> Done. The app (web + API) is live at:"

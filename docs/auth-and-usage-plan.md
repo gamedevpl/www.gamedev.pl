@@ -1,8 +1,8 @@
 # Auth & per-user usage: plan (v2 — rethought)
 
-> Status: **M1, M2, M3 built and verified** (2026-07-23). Goal: no anonymous
+> Status: **M1 code built, awaiting GCP OAuth console setup & live verification** (2026-07-23). Goal: no anonymous
 > interaction with the system; every submission attributable to a signed-in user; per-user
-> usage accounting and quotas. Basic-Auth retired; Google sign-in is the single boundary.
+> usage accounting and quotas. Basic-Auth stays as outer wall until live verification & M3.
 
 ## What changed in the rethink (v1 → v2)
 
@@ -133,11 +133,11 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 
 ## Rollout milestones (each independently shippable; Basic-Auth on until M3)
 
-- **M1 — Sign-in + gated spend.** (COMPLETE) Google sign-in, sessions, Firestore provisioned, `users` +
+- **M1 — Sign-in + gated spend.** (CODE BUILT, awaiting GCP console setup & live verification) Google sign-in, sessions, Firestore provisioned, `users` +
   `submissions.ownerUid` + daily quota (default: 5 submissions/day, env-tunable; `trusted`
   tier bypasses), preview/mock gated.
-- **M2 — Read-side decision + UX.** (COMPLETE) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
-- **M3 — Retire Basic-Auth.** (COMPLETE) Deleted `site-basic-auth` + hook; smoke tests updated. Google sign-in is the single auth boundary.
+- **M2 — Read-side decision + UX.** (IN PROGRESS — quota UX & public read decision implemented) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
+- **M3 — Retire Basic-Auth.** (NOT STARTED — awaiting owner authorization) Delete `site-basic-auth` + hook; smoke tests flip to session-only checks. Google sign-in is the single auth boundary.
 - **M4 — Visibility + reach.** Admin usage view (allowlisted uids) / BigQuery log sink; optionally add GitHub as a second provider for power-creators.
 
 ## Adjacent safeguards (unchanged from v1, still required)

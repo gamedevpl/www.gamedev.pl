@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   InvalidSessionError,
   mintSessionToken,
@@ -16,7 +16,7 @@ class MockGoogleVerifier implements GoogleAuthVerifier {
   async verifyIdToken(idToken: string) {
     const found = this.mockUsers[idToken];
     if (!found) {
-      throw new Error('invalid id token');
+      throw new Error('invalid google authentication');
     }
     return found;
   }
@@ -52,6 +52,12 @@ describe('Session Token Minting & Verification', () => {
 });
 
 describe('Auth API Routes', () => {
+  const originalEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
   const setupTestServer = async (
     mockUsers: Record<string, { sub: string; email?: string; name?: string; picture?: string }> = {},
   ) => {
@@ -176,5 +182,20 @@ describe('Auth API Routes', () => {
     expect(res.statusCode).toBe(200);
     const setCookie = res.headers['set-cookie'] as string;
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+  });
+
+  it('returns 503 when authentication is unconfigured in production', async () => {
+    process.env.NODE_ENV = 'production';
+    const store = new InMemoryStore();
+    const app = Fastify();
+    await registerAuthPlugin(app, { store });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'some-token' },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toEqual({ error: 'authentication is not configured' });
   });
 });

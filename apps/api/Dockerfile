@@ -17,6 +17,8 @@ WORKDIR /app
 # the authenticated GitHub API), so no games origin is baked into the bundle.
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_GOOGLE_OAUTH_CLIENT_ID=
+ENV VITE_GOOGLE_OAUTH_CLIENT_ID=$VITE_GOOGLE_OAUTH_CLIENT_ID
 
 COPY . .
 # --ignore-scripts: skip the repo's `prepare`/husky hook (dev-only) during image builds.

@@ -6,129 +6,136 @@ import { z } from 'zod';
 import type { Store, User } from './store.js';
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
-const DEFAULT_SESSION_DURATION_SECONDS = 12 * 3600; // 12 hours
-const HALF_LIFE_SECONDS = 6 * 3600; // 6 hours
+export const DEFAULT_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
+export const HALF_LIFE_SECONDS = 6 * 60 * 60; // 6 hours (sliding renewal threshold)
+
+export interface SessionPayload {
+  uid: string;
+  iat: number;
+  exp: number;
+}
 
 export class InvalidSessionError extends Error {
-  constructor(message = 'invalid session') {
+  constructor(message = 'invalid session token') {
     super(message);
     this.name = 'InvalidSessionError';
   }
 }
 
-export interface SessionPayload {
-  uid: string;
-  exp: number;
+export class GoogleAuthVerificationError extends Error {
+  constructor(message = 'google token verification failed') {
+    super(message);
+    this.name = 'GoogleAuthVerificationError';
+  }
 }
 
-function signPayload(payloadStr: string, secret: string): string {
-  return createHmac('sha256', secret).update(payloadStr).digest('hex');
+export interface GoogleAuthPayload {
+  sub: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+}
+
+export interface GoogleAuthVerifier {
+  verifyIdToken(idToken: string): Promise<GoogleAuthPayload>;
+}
+
+export class DefaultGoogleAuthVerifier implements GoogleAuthVerifier {
+  private client: OAuth2Client;
+
+  constructor(private clientId: string) {
+    this.client = new OAuth2Client(clientId);
+  }
+
+  async verifyIdToken(idToken: string): Promise<GoogleAuthPayload> {
+    if (!this.clientId) {
+      throw new GoogleAuthVerificationError('GOOGLE_OAUTH_CLIENT_ID is not configured');
+    }
+    try {
+      const ticket = await this.client.verifyIdToken({
+        idToken,
+        audience: this.clientId,
+      });
+      const payload = ticket.getPayload();
+      if (!payload || !payload.sub) {
+        throw new GoogleAuthVerificationError('missing sub in google payload');
+      }
+      return {
+        sub: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+      };
+    } catch (err: unknown) {
+      if (err instanceof GoogleAuthVerificationError) throw err;
+      throw new GoogleAuthVerificationError(err instanceof Error ? err.message : 'failed to verify token');
+    }
+  }
 }
 
 export function mintSessionToken(
   uid: string,
   secret: string,
-  durationSeconds: number = DEFAULT_SESSION_DURATION_SECONDS,
+  durationSeconds = DEFAULT_SESSION_DURATION_SECONDS,
+  nowSeconds = Math.floor(Date.now() / 1000),
 ): string {
-  const exp = Math.floor(Date.now() / 1000) + durationSeconds;
-  const payloadStr = `${uid}:${exp}`;
-  const signature = signPayload(payloadStr, secret);
-  const tokenRaw = `${payloadStr}.${signature}`;
-  return Buffer.from(tokenRaw, 'utf8').toString('base64url');
+  const payload: SessionPayload = {
+    uid,
+    iat: nowSeconds,
+    exp: nowSeconds + durationSeconds,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
+  return `${encodedPayload}.${signature}`;
 }
 
-export function verifySessionToken(token: string, secret: string, prevSecret?: string): SessionPayload {
+export function verifySessionToken(
+  token: string,
+  secret: string,
+  prevSecret?: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): SessionPayload {
+  const parts = token.split('.');
+  if (parts.length !== 2) throw new InvalidSessionError('malformed session token');
+  const [encodedPayload, signature] = parts;
+  if (!encodedPayload || !signature) throw new InvalidSessionError('malformed session token');
+
+  const expectedSig = createHmac('sha256', secret).update(encodedPayload).digest('base64url');
+
+  let sigMatch =
+    signature.length === expectedSig.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig));
+
+  if (!sigMatch && prevSecret) {
+    const prevSig = createHmac('sha256', prevSecret).update(encodedPayload).digest('base64url');
+    sigMatch = signature.length === prevSig.length && timingSafeEqual(Buffer.from(signature), Buffer.from(prevSig));
+  }
+
+  if (!sigMatch) {
+    throw new InvalidSessionError('invalid session signature');
+  }
+
   try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    const parts = decoded.split('.');
-    if (parts.length !== 2) {
-      throw new InvalidSessionError();
+    const raw = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+    const payload = JSON.parse(raw) as SessionPayload;
+    if (typeof payload.uid !== 'string' || typeof payload.exp !== 'number') {
+      throw new InvalidSessionError('invalid payload structure');
     }
 
-    const [payloadStr, signature] = parts;
-    if (!payloadStr || !signature || !/^[a-f0-9]{64}$/i.test(signature)) {
-      throw new InvalidSessionError();
-    }
-
-    const lastColonIdx = payloadStr.lastIndexOf(':');
-    if (lastColonIdx <= 0) {
-      throw new InvalidSessionError();
-    }
-
-    const uid = payloadStr.slice(0, lastColonIdx);
-    const expRaw = payloadStr.slice(lastColonIdx + 1);
-    const exp = Number.parseInt(expRaw, 10);
-
-    if (!uid || !Number.isSafeInteger(exp)) {
-      throw new InvalidSessionError();
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    if (exp <= now) {
+    if (nowSeconds >= payload.exp) {
       throw new InvalidSessionError('session expired');
     }
 
-    const verifyWith = (key: string): boolean => {
-      const expected = signPayload(payloadStr, key);
-      const actualBuffer = Buffer.from(signature, 'utf8');
-      const expectedBuffer = Buffer.from(expected, 'utf8');
-      return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
-    };
-
-    let valid = verifyWith(secret);
-    if (!valid && prevSecret) {
-      valid = verifyWith(prevSecret);
-    }
-
-    if (!valid) {
-      throw new InvalidSessionError();
-    }
-
-    return { uid, exp };
-  } catch (error) {
-    if (error instanceof InvalidSessionError) throw error;
-    throw new InvalidSessionError();
+    return payload;
+  } catch (err) {
+    if (err instanceof InvalidSessionError) throw err;
+    throw new InvalidSessionError('failed to parse session payload');
   }
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: User;
-    needsSessionRenewal?: boolean;
-  }
-}
-
-export interface GoogleAuthVerifier {
-  verifyIdToken(idToken: string): Promise<{ sub: string; email?: string; name?: string; picture?: string }>;
-}
-
-export class DefaultGoogleAuthVerifier implements GoogleAuthVerifier {
-  private client: OAuth2Client;
-  private clientId: string;
-
-  constructor(clientId: string) {
-    if (!clientId && process.env.NODE_ENV === 'production') {
-      throw new Error('GOOGLE_OAUTH_CLIENT_ID environment variable is required in production');
-    }
-    this.clientId = clientId;
-    this.client = new OAuth2Client();
-  }
-
-  async verifyIdToken(idToken: string): Promise<{ sub: string; email?: string; name?: string; picture?: string }> {
-    const ticket = await this.client.verifyIdToken({
-      idToken,
-      audience: this.clientId,
-    });
-    const payload = ticket.getPayload();
-    if (!payload || !payload.sub) {
-      throw new Error('Invalid ID token payload');
-    }
-    return {
-      sub: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-    };
+    user: User | null;
+    needsSessionRenewal: boolean;
   }
 }
 
@@ -167,16 +174,11 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const isProd = process.env.NODE_ENV === 'production';
 
   const sessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
-  if (!sessionSecret && isProd) {
-    throw new Error('SESSION_SECRET environment variable is required in production');
-  }
+  const googleClientId = options.googleClientId ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
+  const isAuthConfigured = Boolean(sessionSecret && (googleClientId || options.googleAuthVerifier)) || !isProd;
+
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
-
-  const googleClientId = options.googleClientId ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
-  if (!googleClientId && !options.googleAuthVerifier && isProd) {
-    throw new Error('GOOGLE_OAUTH_CLIENT_ID environment variable is required in production');
-  }
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
 
@@ -210,6 +212,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   app.decorateRequest('needsSessionRenewal', false);
 
   app.addHook('onRequest', async (request) => {
+    if (!isAuthConfigured) return;
     const { user, needsRenewal } = await getSessionUser(request);
     if (user) {
       request.user = user;
@@ -218,7 +221,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   });
 
   app.addHook('onSend', async (request, reply) => {
-    if (request.user && request.needsSessionRenewal && request.user.tier !== 'blocked') {
+    if (isAuthConfigured && request.user && request.needsSessionRenewal && request.user.tier !== 'blocked') {
       const renewedToken = mintSessionToken(request.user.uid, effectiveSessionSecret);
       reply.setCookie(SESSION_COOKIE_NAME, renewedToken, {
         path: '/',
@@ -231,6 +234,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   });
 
   app.post('/api/auth/google', async (request, reply) => {
+    if (!isAuthConfigured) {
+      return reply.status(503).send({ error: 'authentication is not configured' });
+    }
+
     const currentTime = Date.now();
     if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many login attempts, please try again later' });
@@ -245,17 +252,16 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
       const uid = `g:${googleUser.sub}`;
 
-      const existingUser = await store.getUser(uid);
-      if (existingUser?.tier === 'blocked') {
-        return reply.status(403).send({ error: 'account is blocked' });
-      }
-
       const user = await store.upsertUser({
         uid,
         email: googleUser.email,
         name: googleUser.name,
         picture: googleUser.picture,
       });
+
+      if (user.tier === 'blocked') {
+        return reply.status(403).send({ error: 'account is blocked' });
+      }
 
       const sessionToken = mintSessionToken(uid, effectiveSessionSecret);
 
@@ -267,37 +273,40 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         maxAge: DEFAULT_SESSION_DURATION_SECONDS,
       });
 
-      return reply.send({ user });
+      return { user };
     } catch (err) {
-      request.log.error({ err }, 'Google ID token verification failed');
-      return reply.status(401).send({ error: 'invalid google authentication' });
+      const message = err instanceof Error ? err.message : 'google token verification failed';
+      return reply.status(401).send({ error: message });
     }
   });
 
   app.post('/api/auth/logout', async (_request, reply) => {
     reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
-    return reply.send({ status: 'ok' });
+    return { status: 'ok' };
   });
 
   app.get('/api/auth/me', async (request, reply) => {
+    if (!isAuthConfigured) {
+      return reply.status(503).send({ error: 'authentication is not configured' });
+    }
     if (!request.user) {
       return reply.status(401).send({ error: 'unauthenticated' });
     }
     if (request.user.tier === 'blocked') {
       return reply.status(403).send({ error: 'account is blocked' });
     }
-    return reply.send({ user: request.user });
+    return { user: request.user };
   });
 }
 
-export function requireSession(request: FastifyRequest, reply: FastifyReply, done: (err?: Error) => void): void {
+export function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
   if (!request.user) {
     reply.status(401).send({ error: 'authentication required' });
-    return;
+    return false;
   }
   if (request.user.tier === 'blocked') {
     reply.status(403).send({ error: 'account is blocked' });
-    return;
+    return false;
   }
-  done();
+  return true;
 }

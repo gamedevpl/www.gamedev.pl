@@ -1,6 +1,6 @@
 import type { GameGenerator, GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import packageJson from '../../../package.json';
 import { buildApp } from './app.js';
 import { MAX_PROJECT_BYTES } from './assemble.js';
@@ -133,5 +133,69 @@ describe('api', () => {
     expect(res.statusCode).toBe(502);
     expect(res.body).not.toContain(fakeKey);
     await leaky.close();
+  });
+});
+
+describe('site basic auth gate', () => {
+  const creds = 'gamedev:s3cret';
+  const authHeader = `Basic ${Buffer.from(creds).toString('base64')}`;
+
+  afterEach(() => {
+    delete process.env.SITE_BASIC_AUTH;
+  });
+
+  it('is open when SITE_BASIC_AUTH is unset', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('rejects requests without credentials when configured', async () => {
+    process.env.SITE_BASIC_AUTH = creds;
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers['www-authenticate']).toContain('Basic');
+    await app.close();
+  });
+
+  it('rejects wrong credentials', async () => {
+    process.env.SITE_BASIC_AUTH = creds;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { authorization: 'Basic wrong' },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('accepts matching credentials', async () => {
+    process.env.SITE_BASIC_AUTH = creds;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { authorization: authHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('allows OPTIONS preflight without authorization header', async () => {
+    process.env.SITE_BASIC_AUTH = creds;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/submissions',
+      headers: {
+        origin: 'https://example.com',
+        'access-control-request-method': 'POST',
+      },
+    });
+    expect(res.statusCode).toBe(204);
+    await app.close();
   });
 });
