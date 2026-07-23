@@ -84,20 +84,20 @@ if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   SECRET_FLAGS=(--set-secrets "$joined")
 fi
 
-# ^@^ switches gcloud's env-var separator to @ so WEB_ORIGIN may hold a
-# comma-separated origin list (the app splits it on commas).
-ENV_VARS="^@^GAMES_REPO=${GAMES_REPO}@WEB_ORIGIN=${WEB_ORIGIN}@PRIVATE_BETA=${PRIVATE_BETA}"
+# ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
+# commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
+ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}"
 if [ -n "${CANONICAL_HOST:-}" ]; then
-  ENV_VARS="${ENV_VARS}@CANONICAL_HOST=${CANONICAL_HOST}"
+  ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
 fi
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
-  ENV_VARS="${ENV_VARS}@GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
+  ENV_VARS="${ENV_VARS}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
 if [ -n "$BETA_ALLOWED_UIDS" ]; then
-  ENV_VARS="${ENV_VARS}@BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}"
+  ENV_VARS="${ENV_VARS}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}"
 fi
 if [ -n "$BETA_ALLOWED_EMAILS" ]; then
-  ENV_VARS="${ENV_VARS}@BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
+  ENV_VARS="${ENV_VARS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"
