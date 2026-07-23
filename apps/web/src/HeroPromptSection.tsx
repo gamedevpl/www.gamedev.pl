@@ -83,14 +83,9 @@ export function HeroPromptSection({
     e.preventDefault();
     const trimmed = promptText.trim();
     if (!trimmed) return;
+    onGenerateMock(trimmed);
     const autoTitle = trimmed.slice(0, 40).trim() || 'My AI Game';
     onSubmitSpec(autoTitle, trimmed);
-  };
-
-  const handleMockClick = () => {
-    const trimmed = promptText.trim();
-    if (!trimmed) return;
-    onGenerateMock(trimmed);
   };
 
   return (
@@ -170,17 +165,12 @@ export function HeroPromptSection({
               <button
                 type="submit"
                 className="primary-btn build-btn"
-                disabled={submissionStatus === 'loading' || !promptText.trim()}
+                disabled={submissionStatus === 'loading' || mockStatus === 'loading' || !promptText.trim()}
               >
-                🚀 {submissionStatus === 'loading' ? t('submit.submitting') : t('hero.buildGameButton')}
-              </button>
-              <button
-                type="button"
-                className="secondary-btn mock-btn"
-                disabled={mockStatus === 'loading' || !promptText.trim()}
-                onClick={handleMockClick}
-              >
-                ⚡ {mockStatus === 'loading' ? t('home.building') : t('hero.instantMockButton')}
+                🚀{' '}
+                {submissionStatus === 'loading' || mockStatus === 'loading'
+                  ? t('submit.submitting')
+                  : t('hero.buildGameButton')}
               </button>
             </div>
           </div>

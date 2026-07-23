@@ -217,64 +217,64 @@ export function App() {
               />
             </div>
 
-            <section id="stage" className={`panel stage ${stageContent ? 'is-playing-full-viewport' : ''}`}>
-              {stageContent?.type === 'catalog' ? (
-                <>
-                  <div className="game-theater-bar">
-                    <div className="game-theater-meta">
-                      <span className="theater-badge">🎮 Playing</span>
-                      <h2 className="theater-title">{stageContent.game.title}</h2>
-                      <span className="theater-controls">
-                        {t('catalog.controlsSummary', { controls: stageContent.game.controls })}
-                      </span>
-                    </div>
-                    <div className="game-theater-actions">
-                      <button className="secondary-btn remix-btn" onClick={() => handleRemixGame(stageContent.game)}>
-                        ⚡ {t('catalog.remix')}
-                      </button>
-                      <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                        ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="game-viewport-container">
-                    <PublishedGameFrame
-                      key={stageContent.game.slug}
-                      slug={stageContent.game.slug}
-                      title={stageContent.game.title}
-                    />
-                  </div>
-                </>
-              ) : stageContent?.type === 'generated' ? (
-                <>
-                  <div className="game-theater-bar">
-                    <div className="game-theater-meta">
-                      <span className="theater-badge">🚀 AI Generated Game</span>
-                      <h2 className="theater-title">{stageContent.game.title}</h2>
-                      {stageContent.prompt && (
+            {stageContent && (
+              <section id="stage" className="panel stage is-playing-full-viewport">
+                {stageContent.type === 'catalog' ? (
+                  <>
+                    <div className="game-theater-bar">
+                      <div className="game-theater-meta">
+                        <span className="theater-badge">🎮 Playing</span>
+                        <h2 className="theater-title">{stageContent.game.title}</h2>
                         <span className="theater-controls">
-                          {t('home.generatedFrom', { prompt: stageContent.prompt })}
+                          {t('catalog.controlsSummary', { controls: stageContent.game.controls })}
                         </span>
-                      )}
+                      </div>
+                      <div className="game-theater-actions">
+                        <button className="secondary-btn remix-btn" onClick={() => handleRemixGame(stageContent.game)}>
+                          ⚡ {t('catalog.remix')}
+                        </button>
+                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
+                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                        </button>
+                      </div>
                     </div>
-                    <div className="game-theater-actions">
-                      <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                        ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
-                      </button>
+                    <div className="game-viewport-container">
+                      <PublishedGameFrame
+                        key={stageContent.game.slug}
+                        slug={stageContent.game.slug}
+                        title={stageContent.game.title}
+                      />
                     </div>
-                  </div>
-                  <div className="game-viewport-container">
-                    <GameFrame
-                      key={stageContent.game.html}
-                      title={stageContent.game.title}
-                      html={stageContent.game.html}
-                    />
-                  </div>
-                </>
-              ) : (
-                <div className="empty-stage">{t('home.emptyStage')}</div>
-              )}
-            </section>
+                  </>
+                ) : (
+                  <>
+                    <div className="game-theater-bar">
+                      <div className="game-theater-meta">
+                        <span className="theater-badge">🚀 AI Generated Game</span>
+                        <h2 className="theater-title">{stageContent.game.title}</h2>
+                        {stageContent.prompt && (
+                          <span className="theater-controls">
+                            {t('home.generatedFrom', { prompt: stageContent.prompt })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="game-theater-actions">
+                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
+                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="game-viewport-container">
+                      <GameFrame
+                        key={stageContent.game.html}
+                        title={stageContent.game.title}
+                        html={stageContent.game.html}
+                      />
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
 
             <ArcadeCatalog
               catalogStatus={catalogStatus}
