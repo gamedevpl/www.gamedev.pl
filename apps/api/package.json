@@ -8,12 +8,14 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "beta:approve": "tsx scripts/beta-approve.ts"
   },
   "dependencies": {
-    "@fastify/cors": "^11.3.0",
     "@fastify/cookie": "11.1.0",
+    "@fastify/cors": "^11.3.0",
     "@fastify/static": "^10.1.2",
+    "@fastify/websocket": "^11.3.0",
     "@gamedevpl/game-generator": "*",
     "@google-cloud/firestore": "^8.7.0",
     "fastify": "^5.10.0",

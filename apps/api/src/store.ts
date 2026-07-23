@@ -48,6 +48,8 @@ export interface Store {
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
+  isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
+  setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
 }
 
 export class InMemoryStore implements Store {
@@ -159,6 +161,28 @@ export class InMemoryStore implements Store {
   async getWaitlistEntry(uid: string): Promise<WaitlistEntry | null> {
     const entry = this.waitlist.get(uid);
     return entry ? { ...entry } : null;
+  }
+
+  async isWaitlistApproved(uid: string, email?: string): Promise<boolean> {
+    const byUid = this.waitlist.get(uid);
+    if (byUid?.status === 'approved') return true;
+    if (email) {
+      const emailLower = email.toLowerCase();
+      for (const entry of this.waitlist.values()) {
+        if (entry.email?.toLowerCase() === emailLower && entry.status === 'approved') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  async setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null> {
+    const existing = this.waitlist.get(uid);
+    if (!existing) return null;
+    const updated: WaitlistEntry = { ...existing, status };
+    this.waitlist.set(uid, updated);
+    return { ...updated };
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -298,5 +322,32 @@ export class FirestoreStore implements Store {
     const snap = await this.db.collection('waitlist').doc(uid).get();
     if (!snap.exists) return null;
     return snap.data() as WaitlistEntry;
+  }
+
+  async isWaitlistApproved(uid: string, email?: string): Promise<boolean> {
+    const uidSnap = await this.db.collection('waitlist').doc(uid).get();
+    if (uidSnap.exists && (uidSnap.data() as WaitlistEntry).status === 'approved') {
+      return true;
+    }
+    if (email) {
+      const emailLower = email.toLowerCase();
+      const emailQuery = await this.db
+        .collection('waitlist')
+        .where('email', '==', emailLower)
+        .where('status', '==', 'approved')
+        .limit(1)
+        .get();
+      if (!emailQuery.empty) return true;
+    }
+    return false;
+  }
+
+  async setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null> {
+    const docRef = this.db.collection('waitlist').doc(uid);
+    const snap = await docRef.get();
+    if (!snap.exists) return null;
+    await docRef.update({ status });
+    const updatedSnap = await docRef.get();
+    return updatedSnap.data() as WaitlistEntry;
   }
 }

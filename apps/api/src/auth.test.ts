@@ -365,4 +365,32 @@ describe('beta rejection includes waitlistStatus', () => {
     const body = JSON.parse(res.body) as { error: string; waitlistStatus: string | null };
     expect(body.waitlistStatus).toBeNull();
   });
+
+  it('allows sign-in in private-beta mode when user waitlist entry is approved in store', async () => {
+    const store = new InMemoryStore();
+    await store.upsertWaitlistEntry({ uid: 'g:30003', email: 'approved-waitlist@example.com' });
+    await store.setWaitlistStatus('g:30003', 'approved');
+
+    const verifier = new MockGoogleVerifier({
+      'beta-token': { sub: '30003', email: 'approved-waitlist@example.com', emailVerified: true },
+    });
+    const app: FastifyInstance = Fastify({ logger: false });
+
+    await registerAuthPlugin(app, {
+      store,
+      sessionSecret: 'test-secret-key',
+      googleAuthVerifier: verifier,
+      privateBeta: true,
+      // Note: betaAllowedEmails and betaAllowedUids do NOT contain this user!
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'beta-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['set-cookie']).toBeDefined();
+  });
 });

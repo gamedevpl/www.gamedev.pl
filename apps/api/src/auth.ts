@@ -273,7 +273,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
         const allowed =
           (options.betaAllowedUids?.has(uid) ?? false) ||
-          (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false));
+          (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
+          (await store.isWaitlistApproved(uid, emailLower));
         if (!allowed) {
           // Look up existing waitlist status so the client can show it
           const waitlistEntry = await store.getWaitlistEntry(uid);

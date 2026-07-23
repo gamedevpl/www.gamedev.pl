@@ -111,4 +111,15 @@ describe('InMemoryStore', () => {
     const entry = await store.getWaitlistEntry('g:789');
     expect(entry).toMatchObject({ uid: 'g:789', email: 'test@example.com', status: 'pending' });
   });
+
+  it('isWaitlistApproved returns true when entry status is approved (by uid or email)', async () => {
+    const store = new InMemoryStore();
+    await store.upsertWaitlistEntry({ uid: 'g:789', email: 'approved@example.com' });
+    expect(await store.isWaitlistApproved('g:789', 'approved@example.com')).toBe(false);
+
+    await store.setWaitlistStatus('g:789', 'approved');
+    expect(await store.isWaitlistApproved('g:789')).toBe(true);
+    expect(await store.isWaitlistApproved('g:other', 'APPROVED@example.com')).toBe(true);
+    expect(await store.isWaitlistApproved('g:other', 'unknown@example.com')).toBe(false);
+  });
 });
