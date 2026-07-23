@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import type { GameGenerator } from '@gamedevpl/game-generator';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
@@ -170,7 +171,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // WEB_DIST_DIR points at apps/web/dist; unset in local dev, where Vite serves the app.
   const webDistDir = process.env.WEB_DIST_DIR?.trim();
   if (webDistDir && existsSync(webDistDir)) {
-    await app.register(fastifyStatic, { root: webDistDir, wildcard: false });
+    await app.register(fastifyStatic, {
+      root: webDistDir,
+      wildcard: false,
+      // Serve build-time .br/.gz siblings (apps/web/scripts/precompress.mjs) —
+      // never compress per-request: Cloud Run bills CPU.
+      preCompressed: true,
+      setHeaders: (reply, filePath) => {
+        // Vite content-hashes everything under /assets/, so those URLs are
+        // immutable; index.html is the rollout pivot and must revalidate.
+        // Long-lived caching here is also what lets the CDN in front of the
+        // service (docs/closed-beta-launch-plan.md) actually cache anything.
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          reply.header('cache-control', 'public, max-age=31536000, immutable');
+        } else {
+          reply.header('cache-control', 'no-cache');
+        }
+      },
+    });
     // SPA fallback: any non-/api GET that isn't a real file returns index.html
     // (the app is hash-routed, so this mainly covers a hard refresh on any path).
     app.setNotFoundHandler((request, reply) => {
