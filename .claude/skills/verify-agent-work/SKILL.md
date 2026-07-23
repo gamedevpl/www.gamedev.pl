@@ -55,6 +55,17 @@ Treat a passing gate as the **minimum**, not proof of correctness. And note: a C
 shows as pending, skipped, or `action_required` is **not** a pass. Absence of signal is not
 signal.
 
+Two concrete instances of that (observed 2026-07-23):
+
+- **A push can silently spawn zero workflow runs.** GitHub dropped the push event for one
+  commit — CodeQL ran but `on: push` CI/Deploy workflows never got runs created (no failed
+  run, just _nothing_). Always confirm runs exist for the exact head SHA
+  (`gh api "repos/<r>/actions/runs?head_sha=<sha>"`); if none, retrigger with an empty commit.
+- **Scanner version drift makes local verification meaningless.** gitleaks 8.18.2 (CI) and
+  8.30.1 (local) each flagged _different_ false positives over full history — a local "no
+  leaks" pass said nothing about CI's verdict. Verify with the exact version CI pins, and
+  pin CI to a version you can run locally.
+
 ## Read the diff against the spec
 
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
