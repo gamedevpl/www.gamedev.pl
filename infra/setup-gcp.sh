@@ -41,13 +41,19 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 5/5 Ensuring session-secret exists in Secret Manager"
+echo "==> 5/5 Ensuring session-secret exists in Secret Manager and granting secretAccessor"
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   echo "    Secret 'session-secret' already exists."
 else
   openssl rand -hex 32 | gcloud secrets create session-secret --data-file=- --replication-policy=automatic --project="$PROJECT_ID"
   echo "    Created secret 'session-secret'."
 fi
+
+gcloud secrets add-iam-policy-binding session-secret \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/secretmanager.secretAccessor" \
+  --project="$PROJECT_ID" \
+  >/dev/null
 
 echo ""
 echo "==> Done. Firestore database, IAM roles, and session-secret configured for project ${PROJECT_ID}."
