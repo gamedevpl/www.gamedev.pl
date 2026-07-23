@@ -1,31 +1,29 @@
 # Closed-beta launch on www.gamedev.pl
 
-> Status: IN PROGRESS (started 2026-07-23; Phase A complete, Phase B next).
-> This is the umbrella plan for
-> pointing www.gamedev.pl at the new app and inviting beta users. It sequences
-> existing approved plans (`closed-beta-splash-plan.md`,
-> `content-safety-plan.md`, `creator-qa-plan.md`) plus the domain cutover,
-> which is new scope. Owner decisions required are marked **[OWNER]**.
+> Status: ✅ LAUNCHED 2026-07-23. www.gamedev.pl serves the new app in closed
+> beta. This umbrella plan sequenced the approved plans
+> (`closed-beta-splash-plan.md`, `content-safety-plan.md`,
+> `creator-qa-plan.md`) plus the domain cutover. Kept as the launch record;
+> ongoing beta operations (more invites, going public) continue from the
+> "Phase C" notes. Owner decisions were marked **[OWNER]**.
 
-## Current state (verified live 2026-07-23)
+## Final state (verified live 2026-07-23)
 
-- App live on Cloud Run in BOTH regions during the migration:
-  - NEW (cutover target): `https://gamedev-app-334141807880.europe-west1.run.app`
-    — bootstrapped 2026-07-23 (rev gamedev-app-00001-4wf), verified: `GET /`
-    200, catalog 401, auth/me 401, health `privateBeta:true`, assets served
-    brotli (72KB vs 250KB) + immutable, index.html no-cache. Deploy pipeline
-    now targets this region.
-  - OLD (frozen, delete after cutover):
-    `https://gamedev-app-334141807880.europe-central2.run.app`.
-- `PRIVATE_BETA=true`; anonymous `GET /` → 200 (closed-beta splash),
-  `/api/catalog` → 401, `/api/health` reports `privateBeta: true`.
-- Allowlist: `BETA_ALLOWED_UIDS` = owner's uid; `BETA_ALLOWED_EMAILS` unset.
-  `email_verified` is enforced on the email path; deploy fails fast if both
-  allowlist vars are empty while `PRIVATE_BETA=true`.
-- **www.gamedev.pl still serves the OLD site** via GitHub Pages
-  (`gh-pages` branch, legacy build, CNAME `www.gamedev.pl`, cert covers
-  www + apex, HTTPS enforced). The new app is not reachable on the real
-  domain yet.
+- **Live**: https://www.gamedev.pl serves the new app; `gamedev.pl` 301s to
+  it. Cloud Run service `gamedev-app` in **europe-west1** (native domain
+  mapping; migrated off europe-central2 which mapping doesn't support).
+  Google-managed certs on both hosts. Firestore stays in europe-central2.
+- Verified: `GET /` 200 (branded closed-beta splash), `/api/catalog` 401,
+  `/api/auth/me` 401, `/api/health` `privateBeta:true`; assets served brotli
+  (72KB vs 250KB raw) + `immutable`, `index.html` `no-cache`; apex → 301 www.
+- `PRIVATE_BETA=true`; allowlist `BETA_ALLOWED_UIDS` (owner) +
+  `BETA_ALLOWED_EMAILS` (initial invitees). `email_verified` enforced;
+  deploy fails fast on an empty allowlist.
+- **Old GitHub Pages site retired** (CNAME claim released, `gh-pages`
+  deleted, Pages 404). Frozen europe-central2 Cloud Run service + its
+  Artifact Registry repo deleted.
+- Repo is **PR-based on `master`** (mainline; `the-new-gamedevpl` retired);
+  merge to master auto-deploys prod.
 
 ## Phase A — finish the product queue (before invites)
 
@@ -77,16 +75,19 @@ This is the actual "launch on www.gamedev.pl" moment. Do it after A1
 (security) at minimum; A2 (waitlist) strongly recommended first, since the
 domain will get organic traffic the run.app URL never did.
 
-5. **Delete the old site** (owner decision made 2026-07-23: delete, no
-   archive subdomain). Concretely, at cutover time:
+5. **DONE** — Delete the old site (owner decision 2026-07-23: delete, no
+   archive subdomain). Executed post-cutover: CNAME claim released, Pages
+   deactivated (404), `gh-pages` branch deleted. Concretely:
    - remove the custom domain from the repo's Pages settings (releases the
      cert claim on www + apex);
    - disable GitHub Pages on the repo / delete the `gh-pages` branch — the
      content also stops being served at `gamedevpl.github.io`;
    - the branch history remains in git, so this is reversible in the repo
      sense even though the site itself is gone.
-6. **Build the domain wiring — DECIDED 2026-07-23 (owner): Cloud Run native
-   domain mapping, which requires migrating the service to `europe-west1`.**
+6. **DONE** — Build the domain wiring. DECIDED 2026-07-23 (owner): Cloud Run
+   native domain mapping, which required migrating the service to
+   `europe-west1`. Executed: AR repo created, service migrated + deployed,
+   mappings created for both hosts, certs provisioned, apex 301 shipped.
    Rationale: owner ruled out the ~$20/mo global LB and a Firebase Hosting
    proxy layer; native mapping is $0 with no extra layer. Constraints
    accepted with eyes open: domain mapping doesn't support the current
@@ -114,21 +115,22 @@ domain will get organic traffic the run.app URL never did.
      Note: no CDN in this option — A4's immutable cache headers make browsers
      cache hard after first load, which is the optimization that matters at
      beta scale.
-7. **Config for the new origin** (before DNS moves, both are additive-safe):
+7. **DONE** — Config for the new origin (before DNS moves, additive-safe):
    - Append `https://www.gamedev.pl` to `WEB_ORIGIN` (comma-separated; app
      already splits) in `deploy.yml` + `infra/deploy-api.sh`, redeploy.
    - **[OWNER]** GCP console: add `https://www.gamedev.pl` to the OAuth
      client's Authorized JavaScript origins (console-only action; without it
      sign-in on the new domain fails with `origin_mismatch`). Keep the
      run.app origins too.
-8. **DNS switch:**
+8. **DONE** (owner did the Route53 changes) — DNS switch:
    - Lower TTL on `www` (and apex) a day ahead.
    - Repoint `www` (and apex) from the GitHub Pages IPs (185.199.108–111.153)
      to the target issued by the step-6 wiring.
    - Execute step 5 (Pages domain removal + Pages shutdown) in the same
      window so nothing contests the cert.
    - Wait for the managed cert to go ACTIVE before announcing anything.
-9. **Post-cutover verification on https://www.gamedev.pl:**
+9. **DONE** (all green; owner did the browser sign-in check) —
+   Post-cutover verification on https://www.gamedev.pl:
    - anonymous `GET /` → 200, splash renders (en + pl);
    - `GET /api/catalog` → 401; `GET /api/health` → 200;
    - no mixed-content / CORS errors in the browser console;
@@ -141,7 +143,8 @@ domain will get organic traffic the run.app URL never did.
 
 ## Phase C — invites & running the beta
 
-10. **Invite flow (deliberately manual v1, per splash plan):** owner reads the
+10. **STARTED** (first invitees allowlisted 2026-07-23). **Invite flow
+    (deliberately manual v1, per splash plan):** owner reads the
     `waitlist` collection in the Firestore console → adds chosen emails to
     `BETA_ALLOWED_EMAILS` (safe now that `email_verified` is enforced) or uids
     to `BETA_ALLOWED_UIDS` → redeploy (or asks Claude to). Batch invites to
@@ -154,7 +157,7 @@ domain will get organic traffic the run.app URL never did.
       revisit before public launch.
 12. **Announce** to the invited circle only — the domain itself will leak
     (that's fine; splash + waitlist is the designed landing for strangers).
-13. **Repo housekeeping — merge to master (only after cutover is verified
+13. **DONE** — Repo housekeeping — merge to master (only after cutover is verified
     stable; owner asked for explicit timing):** nothing launch-side blocks
     on it — the default branch and deploy.yml trigger are already
     `the-new-gamedevpl`, and `master` holds only the doomed old-site source.
