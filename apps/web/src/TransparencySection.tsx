@@ -5,11 +5,11 @@ export function TransparencySection() {
   const { t } = useTranslation();
 
   return (
-    <section id="transparency" className="panel transparency-panel">
-      <div className="section-header">
-        <h2 className="section-title">{t('transparency.title')}</h2>
-        <p className="panel-copy">{t('transparency.subtitle')}</p>
-      </div>
+    <details id="transparency" className="panel transparency-accordion">
+      <summary className="section-header transparency-summary">
+        <h2 className="section-title">📡 {t('transparency.title')}</h2>
+        <span className="summary-hint">{t('transparency.subtitle')}</span>
+      </summary>
 
       <div className="transparency-grid">
         <div className="transparency-card activity-feed">
@@ -49,6 +49,6 @@ export function TransparencySection() {
           </a>
         </div>
       </div>
-    </section>
+    </details>
   );
 }

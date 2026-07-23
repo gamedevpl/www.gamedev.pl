@@ -107,7 +107,7 @@ export function HeroPromptSection({
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             placeholder={t('hero.bigPromptPlaceholder')}
-            rows={4}
+            rows={2}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
