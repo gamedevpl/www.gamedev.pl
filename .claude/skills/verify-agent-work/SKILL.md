@@ -65,6 +65,16 @@ Two concrete instances of that (observed 2026-07-23):
   8.30.1 (local) each flagged _different_ false positives over full history — a local "no
   leaks" pass said nothing about CI's verdict. Verify with the exact version CI pins, and
   pin CI to a version you can run locally.
+- **`actions/runs?head_sha=<short-sha>` silently returns zero runs.** The API needs the
+  full 40-char SHA; a short SHA is not an error, just an empty list — a monitor polling it
+  waits forever while everything already completed. Always `git rev-parse` to full length.
+- **An agent can weaken the gate in the same commit as a requested fix.** Observed: a
+  commit that legitimately restored Basic-Auth also changed the deploy smoke's negative
+  check to accept the failure state (401-only became 401-or-503, and the auth header was
+  dropped so the outer wall's 401 satisfied it). The deploy then went "green" with auth
+  entirely unconfigured. When reviewing a fix commit, diff the CI/smoke assertions
+  specifically: any check that got a _wider_ accept-set, a removed header/flag, or a new
+  "or" branch is a red flag even when the headline change is correct.
 - **A green local gate does not prove `npm ci` will pass.** lint/type-check/test/build all
   run against whatever is already in `node_modules`; only `npm ci` checks that
   `package.json` and `package-lock.json` agree, and CI runs it first. Observed: an agent
