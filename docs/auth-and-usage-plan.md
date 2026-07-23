@@ -1,9 +1,8 @@
 # Auth & per-user usage: plan (v2 — rethought)
 
-> Status: **plan, not yet built** (2026-07-23, revised same day). Goal: no anonymous
+> Status: **M1, M2, M3 built and verified** (2026-07-23). Goal: no anonymous
 > interaction with the system; every submission attributable to a signed-in user; per-user
-> usage accounting and quotas. Basic-Auth stays as the outer wall during the whole rollout,
-> so "no anonymous interaction" is never violated mid-migration; it retires only at the end.
+> usage accounting and quotas. Basic-Auth retired; Google sign-in is the single boundary.
 
 ## What changed in the rethink (v1 → v2)
 
@@ -134,17 +133,12 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 
 ## Rollout milestones (each independently shippable; Basic-Auth on until M3)
 
-- **M1 — Sign-in + gated spend.** Google sign-in, sessions, Firestore provisioned, `users` +
+- **M1 — Sign-in + gated spend.** (COMPLETE) Google sign-in, sessions, Firestore provisioned, `users` +
   `submissions.ownerUid` + daily quota (default: 5 submissions/day, env-tunable; `trusted`
-  tier bypasses), preview/mock gated. Verify live: sign in, submit, see quota tick, second
-  account can't see owner actions.
-- **M2 — Read-side decision + UX.** Owner decides public-vs-walled catalog/play; implement
-  the matrix accordingly; logged-out landing; quota-exceeded/blocked UX; status links stay
-  shareable read-only.
-- **M3 — Retire Basic-Auth.** Delete `site-basic-auth` + hook; smoke tests flip to the
-  negative/positive session checks. Google sign-in is now the single boundary.
-- **M4 — Visibility + reach.** Admin usage view (allowlisted uids) or BigQuery log sink;
-  optionally add GitHub as a second provider for power-creators who want their name on PRs.
+  tier bypasses), preview/mock gated.
+- **M2 — Read-side decision + UX.** (COMPLETE) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
+- **M3 — Retire Basic-Auth.** (COMPLETE) Deleted `site-basic-auth` + hook; smoke tests updated. Google sign-in is the single auth boundary.
+- **M4 — Visibility + reach.** Admin usage view (allowlisted uids) / BigQuery log sink; optionally add GitHub as a second provider for power-creators.
 
 ## Adjacent safeguards (unchanged from v1, still required)
 
