@@ -1,6 +1,6 @@
 import type { GameGenerator, GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import packageJson from '../../../package.json';
 import { buildApp } from './app.js';
 import { MAX_PROJECT_BYTES } from './assemble.js';
@@ -136,66 +136,113 @@ describe('api', () => {
   });
 });
 
-describe('site basic auth gate', () => {
-  const creds = 'gamedev:s3cret';
-  const authHeader = `Basic ${Buffer.from(creds).toString('base64')}`;
+describe('private beta gate', () => {
+  const ownerUid = 'g:owner-sub-123';
+  const ownerEmail = 'owner@example.com';
+  const strangerUid = 'g:stranger-sub-456';
+  const strangerEmail = 'stranger@example.com';
 
-  afterEach(() => {
-    delete process.env.SITE_BASIC_AUTH;
+  it('catalog is open when privateBeta is false (default)', async () => {
+    const app = await buildApp({ store: new InMemoryStore() });
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    // No session wall — public reads. 503 means GitHub token not configured (no auth gate).
+    expect([200, 404, 503]).toContain(res.statusCode);
+    await app.close();
   });
 
-  it('is open when SITE_BASIC_AUTH is unset', async () => {
-    const app = await buildApp();
+  it('health is always open even in private-beta mode', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
 
-  it('rejects requests without credentials when configured', async () => {
-    process.env.SITE_BASIC_AUTH = creds;
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+  it('catalog requires a session in private-beta mode', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(res.statusCode).toBe(401);
-    expect(res.headers['www-authenticate']).toContain('Basic');
     await app.close();
   });
 
-  it('rejects wrong credentials', async () => {
-    process.env.SITE_BASIC_AUTH = creds;
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/health',
-      headers: { authorization: 'Basic wrong' },
+  it('allowed uid can sign in in private-beta mode', async () => {
+    const store = new InMemoryStore();
+    const mockVerifier = {
+      verifyIdToken: async () => ({ sub: 'owner-sub-123', email: ownerEmail }),
+    };
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      googleAuthVerifier: mockVerifier,
+      betaAllowedUids: ownerUid,
     });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-
-  it('accepts matching credentials', async () => {
-    process.env.SITE_BASIC_AUTH = creds;
-    const app = await buildApp();
     const res = await app.inject({
-      method: 'GET',
-      url: '/api/health',
-      headers: { authorization: authHeader },
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'valid-token' },
     });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
 
-  it('allows OPTIONS preflight without authorization header', async () => {
-    process.env.SITE_BASIC_AUTH = creds;
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'OPTIONS',
-      url: '/api/submissions',
-      headers: {
-        origin: 'https://example.com',
-        'access-control-request-method': 'POST',
-      },
+  it('non-allowlisted uid is rejected with 403 in private-beta mode', async () => {
+    const store = new InMemoryStore();
+    const mockVerifier = {
+      verifyIdToken: async () => ({ sub: 'stranger-sub-456', email: strangerEmail }),
+    };
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      googleAuthVerifier: mockVerifier,
+      betaAllowedUids: ownerUid,
     });
-    expect(res.statusCode).toBe(204);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'valid-token' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toContain('private beta');
+    await app.close();
+  });
+
+  it('allowed email can sign in in private-beta mode (uid not listed)', async () => {
+    const store = new InMemoryStore();
+    const mockVerifier = {
+      verifyIdToken: async () => ({ sub: 'owner-sub-123', email: ownerEmail }),
+    };
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      googleAuthVerifier: mockVerifier,
+      betaAllowedEmails: ownerEmail,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'valid-token' },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('rejected sign-in leaves no user doc in the store', async () => {
+    const store = new InMemoryStore();
+    const mockVerifier = {
+      verifyIdToken: async () => ({ sub: 'stranger-sub-456', email: strangerEmail }),
+    };
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      googleAuthVerifier: mockVerifier,
+      betaAllowedUids: ownerUid,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'valid-token' },
+    });
+    const doc = await store.getUser(strangerUid);
+    expect(doc).toBeNull();
     await app.close();
   });
 });

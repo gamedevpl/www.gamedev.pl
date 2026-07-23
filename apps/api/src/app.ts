@@ -1,7 +1,6 @@
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import type { GameGenerator } from '@gamedevpl/game-generator';
-import { timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -25,6 +24,10 @@ export interface BuildAppOptions {
   googleAuthVerifier?: GoogleAuthVerifier;
   dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
+  // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
+  betaAllowedUids?: string;
+  // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
+  betaAllowedEmails?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -44,31 +47,38 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     credentials: true,
   });
 
-  // Optional site-wide HTTP Basic Auth gate. When SITE_BASIC_AUTH ("user:password")
-  // is set, every request must carry matching credentials — a lightweight "not public
-  // yet" lock over the whole app (web + API). Unset (local dev, tests) leaves it open.
-  // CORS preflight (OPTIONS) is exempt: browsers never send credentials on preflight.
-  const basicAuth = process.env.SITE_BASIC_AUTH?.trim();
-  if (basicAuth) {
-    const expected = Buffer.from(`Basic ${Buffer.from(basicAuth).toString('base64')}`);
-    app.addHook('onRequest', async (request, reply) => {
-      if (request.method === 'OPTIONS') return;
-      const provided = Buffer.from(request.headers.authorization ?? '');
-      const ok = provided.length === expected.length && timingSafeEqual(provided, expected);
-      if (!ok) {
-        reply.header('WWW-Authenticate', 'Basic realm="gamedev.pl (private)"');
-        return reply.status(401).send({ error: 'authentication required' });
-      }
-    });
-  }
+  // Private beta controls. When PRIVATE_BETA=true, all data routes require a session
+  // and sign-in is restricted to uids/emails in the allowlist.
+  // Flip to false (config, not code) to open the site. Tests/dev default to false.
+  const privateBeta =
+    options.betaAllowedUids !== undefined || options.betaAllowedEmails !== undefined
+      ? true // explicit test injection implies beta mode
+      : (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
 
-  // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator
+  const betaAllowedUids = new Set(
+    (options.betaAllowedUids ?? process.env.BETA_ALLOWED_UIDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const betaAllowedEmails = new Set(
+    (options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS ?? '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
+  // The private-beta allowlist is enforced inside the plugin on /api/auth/google.
   await registerAuthPlugin(app, {
     store,
     sessionSecret: options.sessionSecret,
     sessionSecretPrev: options.sessionSecretPrev,
     googleClientId: options.googleClientId,
     googleAuthVerifier: options.googleAuthVerifier,
+    privateBeta,
+    betaAllowedUids,
+    betaAllowedEmails,
   });
 
   await registerSubmissionRoutes(app, {
@@ -79,6 +89,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
+
+  // In private-beta mode all data reads require a session so the app is usable only after sign-in.
+  // /api/health and /api/auth/* stay public (probes + login flow).
+  app.addHook('onRequest', async (request, reply) => {
+    if (!privateBeta) return;
+    if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
+    if (!request.user) {
+      return reply.status(401).send({ error: 'authentication required' });
+    }
+  });
 
   app.post('/api/generate-game', async (request, reply) => {
     if (!request.user) {

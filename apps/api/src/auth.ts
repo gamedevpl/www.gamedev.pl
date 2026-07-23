@@ -145,6 +145,10 @@ export interface AuthPluginOptions {
   sessionSecretPrev?: string;
   googleClientId?: string;
   googleAuthVerifier?: GoogleAuthVerifier;
+  // Private beta: when true, /api/auth/google rejects uids/emails not in the allowlists
+  privateBeta?: boolean;
+  betaAllowedUids?: Set<string>;
+  betaAllowedEmails?: Set<string>;
 }
 
 const GoogleAuthSchema = z.object({
@@ -251,6 +255,18 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     try {
       const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
       const uid = `g:${googleUser.sub}`;
+
+      // Private-beta allowlist check — before creating/upserting the user doc so
+      // rejected sign-ins leave no trace in Firestore. Allow if uid OR verified email matches.
+      if (options.privateBeta) {
+        const emailLower = googleUser.email?.toLowerCase() ?? '';
+        const allowed =
+          (options.betaAllowedUids?.has(uid) ?? false) ||
+          (emailLower && (options.betaAllowedEmails?.has(emailLower) ?? false));
+        if (!allowed) {
+          return reply.status(403).send({ error: 'private beta — sign-ups are closed' });
+        }
+      }
 
       const user = await store.upsertUser({
         uid,
