@@ -164,6 +164,9 @@
     "badge": "Closed beta",
     "blockedMsg": "The beta is closed right now — access is invite-only.",
     "joinWaitlist": "Join the waitlist",
+    "joiningWaitlist": "Joining…",
+    "waitlistJoined": "You're on the list — we'll email you when a spot opens up.",
+    "waitlistError": "Couldn't join the waitlist right now. Please try again.",
     "footer": "Access is invite-only during the closed beta."
   },
   "errors": {

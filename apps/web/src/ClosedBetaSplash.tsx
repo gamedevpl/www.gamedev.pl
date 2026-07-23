@@ -1,15 +1,28 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from './AuthContext';
 import { GoogleSignInButton } from './GoogleSignInButton';
 
-interface ClosedBetaSplashProps {
-  onJoinWaitlist?: () => void;
-}
+type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 
-export function ClosedBetaSplash({ onJoinWaitlist }: ClosedBetaSplashProps) {
-  const { t } = useTranslation();
+export function ClosedBetaSplash() {
+  const { t, i18n } = useTranslation();
+  const { joinWaitlist } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
+  const [waitlistState, setWaitlistState] = useState<WaitlistState>('idle');
   const isBlocked = error != null;
+
+  const handleJoinWaitlist = async () => {
+    if (!idToken || waitlistState === 'joining' || waitlistState === 'joined') return;
+    setWaitlistState('joining');
+    try {
+      await joinWaitlist(idToken, i18n.language);
+      setWaitlistState('joined');
+    } catch {
+      setWaitlistState('error');
+    }
+  };
 
   return (
     <div className="beta-splash">
@@ -27,15 +40,30 @@ export function ClosedBetaSplash({ onJoinWaitlist }: ClosedBetaSplashProps) {
         {isBlocked ? (
           <div className="beta-splash__blocked">
             <p className="beta-splash__blocked-msg">{t('betaSplash.blockedMsg')}</p>
-            {onJoinWaitlist && (
-              <button id="btn-join-waitlist" className="beta-splash__waitlist-btn" onClick={onJoinWaitlist}>
-                {t('betaSplash.joinWaitlist')}
+            {waitlistState === 'joined' ? (
+              <p className="beta-splash__waitlist-confirm">{t('betaSplash.waitlistJoined')}</p>
+            ) : (
+              <button
+                id="btn-join-waitlist"
+                className="beta-splash__waitlist-btn"
+                onClick={handleJoinWaitlist}
+                disabled={waitlistState === 'joining'}
+              >
+                {waitlistState === 'joining' ? t('betaSplash.joiningWaitlist') : t('betaSplash.joinWaitlist')}
               </button>
+            )}
+            {waitlistState === 'error' && (
+              <p className="beta-splash__waitlist-error">{t('betaSplash.waitlistError')}</p>
             )}
           </div>
         ) : (
           <div className="beta-splash__signin">
-            <GoogleSignInButton onError={(msg) => setError(msg)} />
+            <GoogleSignInButton
+              onError={(msg, token) => {
+                setError(msg);
+                setIdToken(token ?? null);
+              }}
+            />
           </div>
         )}
 

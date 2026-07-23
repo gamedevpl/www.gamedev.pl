@@ -1420,6 +1420,24 @@ textarea:focus {
   opacity: 0.9;
 }
 
+.beta-splash__waitlist-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.beta-splash__waitlist-confirm {
+  color: var(--turquoise);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.beta-splash__waitlist-error {
+  color: #ff8080;
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+}
+
 .beta-splash__footer {
   color: var(--muted);
   font-size: 0.8rem;

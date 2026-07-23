@@ -11,7 +11,12 @@ import {
 import { InMemoryStore } from './store.js';
 
 class MockGoogleVerifier implements GoogleAuthVerifier {
-  constructor(private mockUsers: Record<string, { sub: string; email?: string; name?: string; picture?: string }>) {}
+  constructor(
+    private mockUsers: Record<
+      string,
+      { sub: string; email?: string; emailVerified?: boolean; name?: string; picture?: string }
+    >,
+  ) {}
 
   async verifyIdToken(idToken: string) {
     const found = this.mockUsers[idToken];
@@ -197,5 +202,104 @@ describe('Auth API Routes', () => {
     });
     expect(res.statusCode).toBe(503);
     expect(JSON.parse(res.body)).toEqual({ error: 'authentication is not configured' });
+  });
+});
+
+describe('POST /api/waitlist', () => {
+  const setupTestServer = async (
+    mockUsers: Record<
+      string,
+      { sub: string; email?: string; emailVerified?: boolean; name?: string; picture?: string }
+    > = {},
+  ) => {
+    const store = new InMemoryStore();
+    const verifier = new MockGoogleVerifier(mockUsers);
+    const app: FastifyInstance = Fastify({ logger: false });
+
+    await registerAuthPlugin(app, {
+      store,
+      sessionSecret: 'test-secret-key',
+      googleAuthVerifier: verifier,
+    });
+
+    return { app, store };
+  };
+
+  it('works without a session, verifying the token server-side and storing the entry', async () => {
+    const { app, store } = await setupTestServer({
+      'rejected-token': { sub: '20001', email: 'waiter@example.com', emailVerified: true, name: 'Waiter' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'rejected-token', locale: 'en' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
+
+    const entries = store.waitlistEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      uid: 'g:20001',
+      email: 'waiter@example.com',
+      name: 'Waiter',
+      locale: 'en',
+    });
+
+    // Never wrote a users/ doc — the caller was never signed in.
+    expect(await store.getUser('g:20001')).toBeNull();
+  });
+
+  it('is idempotent — joining twice keeps a single entry and only bumps requestedAt', async () => {
+    const { app, store } = await setupTestServer({
+      'rejected-token': { sub: '20002', email: 'waiter2@example.com', emailVerified: true },
+    });
+
+    await app.inject({ method: 'POST', url: '/api/waitlist', payload: { idToken: 'rejected-token' } });
+    const firstRequestedAt = store.waitlistEntries()[0]!.requestedAt;
+
+    await app.inject({ method: 'POST', url: '/api/waitlist', payload: { idToken: 'rejected-token' } });
+    const entries = store.waitlistEntries();
+
+    expect(entries).toHaveLength(1);
+    expect(new Date(entries[0]!.requestedAt).getTime()).toBeGreaterThanOrEqual(new Date(firstRequestedAt).getTime());
+  });
+
+  it('never stores an unverified email', async () => {
+    const { app, store } = await setupTestServer({
+      'unverified-token': { sub: '20003', email: 'unverified@example.com', emailVerified: false },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'unverified-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(store.waitlistEntries()[0]).toMatchObject({ uid: 'g:20003', email: undefined });
+  });
+
+  it('rejects an invalid/forged token, storing nothing', async () => {
+    const { app, store } = await setupTestServer();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'bad-token' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(store.waitlistEntries()).toHaveLength(0);
+  });
+
+  it('returns 400 for a missing/empty body', async () => {
+    const { app } = await setupTestServer();
+
+    const res = await app.inject({ method: 'POST', url: '/api/waitlist' });
+
+    expect(res.statusCode).toBe(400);
   });
 });

@@ -17,6 +17,9 @@ interface AuthContextType {
   // normal public-reads app. Defaults to false (open) until known.
   privateBeta: boolean;
   signInWithGoogleToken: (idToken: string) => Promise<void>;
+  // Closed-beta waitlist: works without a session (the caller is by definition
+  // not on the allowlist). Re-verifies the same Google ID token server-side.
+  joinWaitlist: (idToken: string, locale?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -26,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   privateBeta: false,
   signInWithGoogleToken: async () => {},
+  joinWaitlist: async () => {},
   logout: async () => {},
   refreshUser: async () => {},
 });
@@ -81,13 +85,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
   };
 
+  const joinWaitlist = async (idToken: string, locale?: string) => {
+    const res = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, locale }),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(err?.error ?? 'Failed to join waitlist');
+    }
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, privateBeta, signInWithGoogleToken, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, privateBeta, signInWithGoogleToken, joinWaitlist, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

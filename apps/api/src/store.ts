@@ -23,6 +23,14 @@ export interface UsageCounters {
   mocks: number;
 }
 
+export interface WaitlistEntry {
+  uid: string;
+  email?: string;
+  name?: string;
+  requestedAt: string;
+  locale?: string;
+}
+
 export interface Store {
   getUser(uid: string): Promise<User | null>;
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
@@ -34,12 +42,14 @@ export interface Store {
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
+  upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
 }
 
 export class InMemoryStore implements Store {
   private users = new Map<string, User>();
   private submissions = new Map<number, SubmissionRecord>();
   private usage = new Map<string, UsageCounters>();
+  private waitlist = new Map<string, WaitlistEntry>();
 
   async getUser(uid: string): Promise<User | null> {
     const user = this.users.get(uid);
@@ -112,6 +122,33 @@ export class InMemoryStore implements Store {
     this.usage.set(key, newCounters);
 
     return { allowed: true, current: newCounters[action], tier };
+  }
+
+  async upsertWaitlistEntry(entry: {
+    uid: string;
+    email?: string;
+    name?: string;
+    locale?: string;
+  }): Promise<WaitlistEntry> {
+    const now = new Date().toISOString();
+    const existing = this.waitlist.get(entry.uid);
+
+    const updated: WaitlistEntry = {
+      uid: entry.uid,
+      email: entry.email ?? existing?.email,
+      name: entry.name ?? existing?.name,
+      requestedAt: now,
+      locale: entry.locale ?? existing?.locale,
+    };
+
+    this.waitlist.set(entry.uid, updated);
+    return { ...updated };
+  }
+
+  // Test/inspection only — not part of the Store interface. Production code never
+  // reads the waitlist back (v1 promotion is manual, via the Firestore console).
+  waitlistEntries(): WaitlistEntry[] {
+    return Array.from(this.waitlist.values());
   }
 }
 
@@ -216,5 +253,23 @@ export class FirestoreStore implements Store {
 
       return { allowed: true, current: nextVal, tier };
     });
+  }
+
+  async upsertWaitlistEntry(entry: {
+    uid: string;
+    email?: string;
+    name?: string;
+    locale?: string;
+  }): Promise<WaitlistEntry> {
+    const now = new Date().toISOString();
+    const record: WaitlistEntry = {
+      uid: entry.uid,
+      email: entry.email,
+      name: entry.name,
+      requestedAt: now,
+      locale: entry.locale,
+    };
+    await this.db.collection('waitlist').doc(entry.uid).set(record, { merge: true });
+    return record;
   }
 }

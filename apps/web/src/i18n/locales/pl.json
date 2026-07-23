@@ -164,6 +164,9 @@
     "badge": "Zamknięta beta",
     "blockedMsg": "Beta jest obecnie zamknięta — dostęp tylko na zaproszenie.",
     "joinWaitlist": "Dołącz do listy oczekujących",
+    "joiningWaitlist": "Dołączanie…",
+    "waitlistJoined": "Jesteś na liście — napiszemy, gdy zwolni się miejsce.",
+    "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
   },
   "errors": {

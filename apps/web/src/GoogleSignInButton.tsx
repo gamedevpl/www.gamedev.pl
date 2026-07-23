@@ -17,7 +17,10 @@ declare global {
 
 interface GoogleSignInButtonProps {
   onSuccess?: () => void;
-  onError?: (err: string) => void;
+  // idToken is passed alongside a sign-in error (e.g. private-beta 403) so a
+  // caller can offer a follow-up action — like joining the waitlist — that
+  // re-verifies the same token server-side without asking the user to sign in twice.
+  onError?: (err: string, idToken?: string) => void;
 }
 
 export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonProps) {
@@ -55,7 +58,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
           onSuccess?.();
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Sign in failed';
-          onError?.(message);
+          onError?.(message, response.credential);
         }
       },
     });

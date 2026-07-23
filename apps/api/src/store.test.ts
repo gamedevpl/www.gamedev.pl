@@ -72,4 +72,22 @@ describe('InMemoryStore', () => {
     expect(res.allowed).toBe(false);
     expect(res.tier).toBe('blocked');
   });
+
+  it('upserts a waitlist entry, idempotently updating requestedAt on repeat joins', async () => {
+    const store = new InMemoryStore();
+
+    const first = await store.upsertWaitlistEntry({
+      uid: 'g:456',
+      email: 'joiner@example.com',
+      name: 'Joiner',
+      locale: 'en',
+    });
+    expect(first).toMatchObject({ uid: 'g:456', email: 'joiner@example.com', name: 'Joiner', locale: 'en' });
+    expect(store.waitlistEntries()).toHaveLength(1);
+
+    // Joining again with only uid — email/name/locale carry over from the existing entry.
+    const second = await store.upsertWaitlistEntry({ uid: 'g:456' });
+    expect(second).toMatchObject({ uid: 'g:456', email: 'joiner@example.com', name: 'Joiner', locale: 'en' });
+    expect(store.waitlistEntries()).toHaveLength(1);
+  });
 });

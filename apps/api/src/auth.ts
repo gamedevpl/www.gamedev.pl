@@ -159,6 +159,11 @@ const GoogleAuthSchema = z.object({
   idToken: z.string().trim().min(1, 'idToken is required'),
 });
 
+const WaitlistSchema = z.object({
+  idToken: z.string().trim().min(1, 'idToken is required'),
+  locale: z.string().trim().max(10).optional(),
+});
+
 function isRateLimited(
   buckets: Map<string, number[]>,
   ip: string,
@@ -296,6 +301,46 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       });
 
       return { user };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'google token verification failed';
+      return reply.status(401).send({ error: message });
+    }
+  });
+
+  // Deliberately usable WITHOUT a session — the caller is by definition someone
+  // whose sign-in was just rejected (not on the private-beta allowlist). Shares
+  // the auth rate limiter since it's the same abuse surface (unauthenticated
+  // Google-token verification). Re-verifies the token server-side rather than
+  // trusting any client-asserted identity.
+  app.post('/api/waitlist', async (request, reply) => {
+    if (!isAuthConfigured) {
+      return reply.status(503).send({ error: 'authentication is not configured' });
+    }
+
+    const currentTime = Date.now();
+    if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many requests, please try again later' });
+    }
+
+    const parseResult = WaitlistSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    try {
+      const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
+      const uid = `g:${googleUser.sub}`;
+      // Same rule as the beta allowlist: an unverified email claim must never be stored.
+      const email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
+
+      await store.upsertWaitlistEntry({
+        uid,
+        email,
+        name: googleUser.name,
+        locale: parseResult.data.locale,
+      });
+
+      return { status: 'ok' };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'google token verification failed';
       return reply.status(401).send({ error: message });

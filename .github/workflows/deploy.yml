@@ -150,6 +150,14 @@ jobs:
             exit 1
           fi
 
+          # Waitlist route exists and works WITHOUT a session; an empty body still
+          # proves the route + validation are live without needing a real Google token.
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/waitlist")
+          if [ "$STATUS_CODE" -ne 400 ]; then
+            echo "Smoke test failed: expected 400 for empty-body /api/waitlist (got ${STATUS_CODE})"
+            exit 1
+          fi
+
           echo "Smoke test passed on candidate URL!"
 
       - name: Promote candidate revision to 100% traffic
