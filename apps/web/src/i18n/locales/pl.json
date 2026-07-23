@@ -83,6 +83,15 @@
     "demoToggle": "Wypróbuj lokalny podgląd demo",
     "demoHide": "Ukryj podgląd demo"
   },
+  "qa": {
+    "title": "Doprecyzuj swój pomysł (Opcjonalnie)",
+    "subtitle": "Kliknij sugerowane opcje, aby doprecyzować specyfikację, lub naciśnij 'Stwórz teraz', aby natychmiast wysłać.",
+    "createNow": "Stwórz teraz",
+    "analyzing": "Analizowanie pomysłu i generowanie sugestii…",
+    "otherPlaceholder": "Inna / Własna odpowiedź…",
+    "clarificationsTitle": "Doprecyzowania Twórcy",
+    "skipAll": "Pomiń doprecyzowania"
+  },
   "transparency": {
     "title": "Strumień Agentów i Przejrzystość",
     "subtitle": "Każda gra na gamedev.pl jest open-source, utrzymywana przez agenty i bezpiecznie odizolowana.",

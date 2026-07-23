@@ -158,6 +158,13 @@ jobs:
             exit 1
           fi
 
+          # Refine route requires session: no session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions/refine")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions/refine (got ${STATUS_CODE})"
+            exit 1
+          fi
+
           echo "Smoke test passed on candidate URL!"
 
       - name: Promote candidate revision to 100% traffic

@@ -83,6 +83,15 @@
     "demoToggle": "Try local instant mock generator",
     "demoHide": "Hide local mock generator"
   },
+  "qa": {
+    "title": "Refine Your Game Idea (Optional)",
+    "subtitle": "Click any proposed options to clarify your spec, or hit 'Create Now' to submit immediately.",
+    "createNow": "Create Now",
+    "analyzing": "Analyzing your idea for suggestions…",
+    "otherPlaceholder": "Other / Custom answer…",
+    "clarificationsTitle": "Creator Clarifications",
+    "skipAll": "Skip Clarifications"
+  },
   "transparency": {
     "title": "Agent Stream & Transparency",
     "subtitle": "Every game on gamedev.pl is open-source, maintained by coding agents, and safely isolated.",

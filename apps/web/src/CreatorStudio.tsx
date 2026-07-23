@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SavedSpec } from './mySpecs';
 
+import { CreatorQA, type QAQuestion } from './CreatorQA';
+import { refineSpec } from './submissionApi';
+
 type CreatorStudioProps = {
   savedSpecs: SavedSpec[];
   initialTitle?: string;
@@ -38,14 +41,42 @@ export function CreatorStudio({
   mockError,
   onGenerateMock,
 }: CreatorStudioProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<'greenfield' | 'active'>('greenfield');
   const [title, setTitle] = useState(initialTitle);
   const [concept, setConcept] = useState(initialConcept);
   const [displayName, setDisplayName] = useState('');
   const [inputToken, setInputToken] = useState('');
 
+  const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>([]);
+  const [refineStatus, setRefineStatus] = useState<'idle' | 'loading'>('idle');
+  const [refineError, setRefineError] = useState<string | null>(null);
+
   const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
+
+  const handleRefine = async () => {
+    if (!title.trim() || !concept.trim()) return;
+    setRefineStatus('loading');
+    setRefineError(null);
+    try {
+      const res = await refineSpec({
+        title: title.trim(),
+        concept: concept.trim(),
+        locale: i18n.language,
+      });
+      if (res.questions && res.questions.length > 0) {
+        setQaQuestions(res.questions);
+      } else {
+        // Fail-open or clean prompt: directly submit
+        onSubmitSpec(title.trim(), concept.trim(), displayName.trim());
+      }
+    } catch (err) {
+      // Fail-open on error: proceed to submit directly
+      onSubmitSpec(title.trim(), concept.trim(), displayName.trim());
+    } finally {
+      setRefineStatus('idle');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,14 +164,39 @@ export function CreatorStudio({
               <button
                 type="submit"
                 className="primary-btn"
-                disabled={submissionStatus === 'loading' || !title.trim() || !concept.trim()}
+                disabled={
+                  submissionStatus === 'loading' || refineStatus === 'loading' || !title.trim() || !concept.trim()
+                }
               >
                 {submissionStatus === 'loading' ? t('submit.submitting') : t('submit.submit')}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => void handleRefine()}
+                disabled={
+                  submissionStatus === 'loading' || refineStatus === 'loading' || !title.trim() || !concept.trim()
+                }
+              >
+                {refineStatus === 'loading' ? t('qa.analyzing') : `✨ ${t('qa.title')}`}
               </button>
             </div>
           </form>
 
+          {qaQuestions.length > 0 && (
+            <CreatorQA
+              questions={qaQuestions}
+              initialConcept={concept}
+              onSubmitWithConcept={(finalConcept) => {
+                setQaQuestions([]);
+                onSubmitSpec(title.trim(), finalConcept, displayName.trim());
+              }}
+              onCancel={() => setQaQuestions([])}
+            />
+          )}
+
           {submissionError && <p className="error">{submissionError}</p>}
+          {refineError && <p className="error">{refineError}</p>}
 
           <div className="demo-toggle-container">
             <button className="toggle-link" onClick={onToggleDemoGenerator} type="button">

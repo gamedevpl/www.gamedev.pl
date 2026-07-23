@@ -8,6 +8,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 
@@ -26,6 +27,7 @@ export interface BuildAppOptions {
   dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
   contentChecker?: ContentChecker;
+  specRefiner?: SpecRefiner;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -89,6 +91,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+  });
+
+  await registerRefineRoute(app, {
+    store,
+    contentChecker,
+    specRefiner: options.specRefiner,
   });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));

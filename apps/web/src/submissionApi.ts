@@ -77,3 +77,36 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
 
   return (await response.json()) as SubmissionPreview;
 }
+
+export async function refineSpec(input: {
+  title: string;
+  concept: string;
+  locale?: string;
+}): Promise<{
+  questions: Array<{
+    id: string;
+    question: string;
+    options: Array<{ label: string; detail?: string }>;
+    allowFreeText?: boolean;
+  }>;
+}> {
+  const response = await fetch(`${API_BASE}/api/submissions/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as {
+    questions: Array<{
+      id: string;
+      question: string;
+      options: Array<{ label: string; detail?: string }>;
+      allowFreeText?: boolean;
+    }>;
+  };
+}

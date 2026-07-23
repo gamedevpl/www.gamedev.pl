@@ -21,6 +21,7 @@ export interface UsageCounters {
   submissions: number;
   previews: number;
   mocks: number;
+  refines: number;
 }
 
 export interface WaitlistEntry {
@@ -108,7 +109,12 @@ export class InMemoryStore implements Store {
     }
 
     const key = `${uid}:${dateStr}`;
-    const currentCounters = this.usage.get(key) ?? { submissions: 0, previews: 0, mocks: 0 };
+    const currentCounters: UsageCounters = this.usage.get(key) ?? {
+      submissions: 0,
+      previews: 0,
+      mocks: 0,
+      refines: 0,
+    };
     const currentVal = currentCounters[action] ?? 0;
 
     if (currentVal >= limit) {
