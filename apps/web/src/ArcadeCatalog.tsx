@@ -192,10 +192,10 @@ export function ArcadeCatalog({
   const { t } = useTranslation();
 
   return (
-    <section id="arcade" className="panel catalog-panel">
-      <div className="section-header">
-        <h2 className="section-title">🕹️ {t('catalog.title')}</h2>
-        <p className="panel-copy">{t('catalog.subtitle')}</p>
+    <section id="arcade" className="arcade-section">
+      <div className="arcade-header">
+        <h2 className="arcade-title">{t('catalog.title')}</h2>
+        <p className="arcade-subtitle">{t('catalog.subtitle')}</p>
       </div>
 
       {catalogStatus === 'loading' ? (

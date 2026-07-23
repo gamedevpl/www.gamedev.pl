@@ -557,11 +557,35 @@ button:disabled {
   line-height: 1.4;
 }
 
-/* ARCADE CATALOG */
+/* UNBOXED ARCADE CATALOG */
+.arcade-section {
+  width: 100%;
+  margin-top: 40px;
+  margin-bottom: 60px;
+}
+
+.arcade-header {
+  margin-bottom: 24px;
+}
+
+.arcade-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--turquoise);
+  margin: 0 0 6px;
+  letter-spacing: -0.5px;
+}
+
+.arcade-subtitle {
+  color: var(--muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
 .catalog-grid {
   display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .catalog-card {

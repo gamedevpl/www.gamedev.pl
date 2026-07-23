@@ -7,8 +7,6 @@ import { PublishedGameFrame } from './PublishedGameFrame';
 import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
-import { CreatorStudio } from './CreatorStudio';
-import { TransparencySection } from './TransparencySection';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { parseHashRoute, statusHash } from './router';
 import { submitSpec, type SubmissionApiError } from './submissionApi';
@@ -38,15 +36,10 @@ export function App() {
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
 
   // Greenfield submission state
-  const [submissionTitle, setSubmissionTitle] = useState('');
-  const [submissionConcept, setSubmissionConcept] = useState('');
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'loading'>('idle');
   const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [remixSourceTitle, setRemixSourceTitle] = useState<string | null>(null);
 
   // Demo generator state
-  const [showDemoGenerator, setShowDemoGenerator] = useState(false);
-  const [mockPrompt, setMockPrompt] = useState('');
   const [mockStatus, setMockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [mockError, setMockError] = useState<string | null>(null);
 
@@ -164,9 +157,6 @@ export function App() {
       });
       setSavedSpecs(updatedSpecs);
 
-      setSubmissionTitle('');
-      setSubmissionConcept('');
-      setRemixSourceTitle(null);
       setSubmissionStatus('idle');
 
       window.location.hash = statusHash(response.token);
@@ -187,13 +177,9 @@ export function App() {
   }
 
   function handleRemixGame(game: CatalogEntry) {
-    setSubmissionTitle(`Remix: ${game.title}`);
-    setSubmissionConcept(
-      `A custom remix of "${game.title}" (${game.genre}). Controls: ${game.controls}.\n\nDesired changes:\n- Add new game mechanics and visual effects.\n- Enhance speed and score multiplier system.`,
-    );
-    setRemixSourceTitle(game.title);
-    window.location.hash = '#studio';
-    document.getElementById('studio')?.scrollIntoView?.({ behavior: 'smooth' });
+    const remixPrompt = `Remix of "${game.title}" (${game.genre}): add higher difficulty, new powerups, and neon visual effects!`;
+    void handleGenerateMock(remixPrompt);
+    document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
   }
 
   function handlePlayGame(game: CatalogEntry) {
@@ -297,28 +283,6 @@ export function App() {
               onPlayGame={handlePlayGame}
               onRemixGame={handleRemixGame}
             />
-
-            <CreatorStudio
-              savedSpecs={savedSpecs}
-              initialTitle={submissionTitle}
-              initialConcept={submissionConcept}
-              remixSourceTitle={remixSourceTitle}
-              submissionStatus={submissionStatus}
-              submissionError={submissionError}
-              onSubmitSpec={(title, concept, displayName) => void handleSubmitSpec(title, concept, displayName)}
-              onTrackToken={(token) => {
-                window.location.hash = statusHash(token);
-              }}
-              showDemoGenerator={showDemoGenerator}
-              onToggleDemoGenerator={() => setShowDemoGenerator((v) => !v)}
-              mockPrompt={mockPrompt}
-              onMockPromptChange={setMockPrompt}
-              mockStatus={mockStatus}
-              mockError={mockError}
-              onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
-            />
-
-            <TransparencySection />
           </>
         )}
       </main>
