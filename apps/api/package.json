@@ -16,7 +16,7 @@
     "@fastify/static": "^7.0.4",
     "@gamedevpl/game-generator": "*",
     "@google-cloud/firestore": "^8.7.0",
-    "fastify": "^4.28.1",
+    "fastify": "^5.10.0",
     "google-auth-library": "^10.9.0",
     "zod": "^3.23.8"
   },
@@ -24,6 +24,6 @@
     "@types/node": "^20.14.15",
     "tsx": "^4.16.5",
     "typescript": "^5.5.4",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.10"
   }
 }
