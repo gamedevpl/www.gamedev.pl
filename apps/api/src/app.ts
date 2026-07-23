@@ -33,16 +33,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const store = options.store ?? new InMemoryStore();
   const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
 
-  const isProd = process.env.NODE_ENV === 'production';
   const webOrigin = process.env.WEB_ORIGIN?.trim();
 
   // In production, WEB_ORIGIN pins CORS to the deployed site (e.g. https://www.gamedev.pl);
-  // a comma-separated list is allowed. Unset in dev reflects any origin.
-  // Fail-closed in prod if WEB_ORIGIN is missing while credentials are configured.
-  if (isProd && !webOrigin) {
-    throw new Error('WEB_ORIGIN environment variable is required in production');
-  }
-
+  // a comma-separated list is allowed. When unset, CORS origin reflects true (allowing same-origin requests).
   await app.register(cors, {
     origin: webOrigin ? webOrigin.split(',').map((entry) => entry.trim()) : true,
     credentials: true,

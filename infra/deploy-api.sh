@@ -24,6 +24,7 @@
 #
 # Optional env vars:
 #   GOOGLE_OAUTH_CLIENT_ID=... (public client ID for Sign in with Google)
+#   WEB_ORIGIN=... (CORS allowed origins)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -37,6 +38,7 @@ SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
+WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-central2.run.app}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -86,7 +88,7 @@ if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   SECRET_FLAGS=(--set-secrets "$joined")
 fi
 
-ENV_VARS="GAMES_REPO=${GAMES_REPO}"
+ENV_VARS="GAMES_REPO=${GAMES_REPO},WEB_ORIGIN=${WEB_ORIGIN}"
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
   ENV_VARS="${ENV_VARS},GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
