@@ -126,10 +126,10 @@ export class VertexChecker implements ContentChecker {
 
   constructor(options: VertexCheckerOptions = {}) {
     this.projectId = options.projectId ?? process.env.VERTEX_PROJECT_ID ?? process.env.PROJECT_ID ?? 'gamedevpl';
-    // Gemini 3 Flash is served only on the global endpoint (locations/global), so
-    // 'global' is the default. VERTEX_REGION can override without a code change.
+    // The Gemini 3 family is served on the global endpoint (locations/global), so
+    // 'global' is the safe default. VERTEX_REGION can override without a code change.
     this.region = options.region ?? process.env.VERTEX_REGION ?? 'global';
-    this.model = options.model ?? process.env.VERTEX_MODEL ?? 'gemini-3-flash-preview';
+    this.model = options.model ?? process.env.VERTEX_MODEL ?? 'gemini-3.6-flash';
     this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'minimal';
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.patternChecker = new PatternChecker();
