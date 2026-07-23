@@ -1018,6 +1018,87 @@ textarea:focus {
   transition: box-shadow 0.3s ease;
 }
 
+/* FULL VIEWPORT GAME THEATER MODE */
+.stage.is-playing-full-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: #06090c;
+  display: flex;
+  flex-direction: column;
+  box-shadow: none;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.game-theater-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(18, 24, 30, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--panel-border);
+  width: 100%;
+}
+
+.game-theater-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.theater-badge {
+  background: rgba(0, 228, 172, 0.12);
+  border: 1px solid rgba(0, 228, 172, 0.3);
+  color: var(--turquoise);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.theater-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.theater-controls {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.game-theater-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.game-viewport-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+.is-playing-full-viewport .game-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .empty-stage {
   color: var(--muted);
   padding: 32px 20px;
