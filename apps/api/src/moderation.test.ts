@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moderateFields, moderateText } from './moderation.js';
+import { moderateFields, moderateText, VertexChecker } from './moderation.js';
 
 describe('moderateText', () => {
   it('allows clean, ordinary game prompts', () => {
@@ -74,5 +74,57 @@ describe('moderateFields', () => {
       allowed: false,
       category: 'profanity',
     });
+  });
+});
+
+describe('VertexChecker', () => {
+  it('short-circuits on PatternChecker regex hit before calling Vertex', async () => {
+    let vertexCalled = false;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        vertexCalled = true;
+        return { allowed: true };
+      },
+    });
+
+    const verdict = await checker.check('make a porn game');
+    expect(verdict).toEqual({ allowed: false, category: 'adult' });
+    expect(vertexCalled).toBe(false);
+  });
+
+  it('calls Vertex AI for clean prompts and accepts allowed verdict', async () => {
+    let checkedPrompt = '';
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        checkedPrompt = prompt;
+        return { allowed: true };
+      },
+    });
+
+    const verdict = await checker.check('A cozy farming game where you grow carrots');
+    expect(verdict).toEqual({ allowed: true });
+    expect(checkedPrompt).toBe('A cozy farming game where you grow carrots');
+  });
+
+  it('rejects when Vertex AI classifies prompt as inappropriate', async () => {
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        return { allowed: false, category: 'violence' };
+      },
+    });
+
+    const verdict = await checker.check('Create a subtle violence game');
+    expect(verdict).toEqual({ allowed: false, category: 'violence' });
+  });
+
+  it('fails closed when Vertex AI fetcher throws an error or times out', async () => {
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        throw new Error('Vertex AI network timeout');
+      },
+    });
+
+    const verdict = await checker.check('A completely clean game concept');
+    expect(verdict).toEqual({ allowed: false, category: 'other' });
   });
 });

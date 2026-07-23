@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# One-time GCP provisioning for Firestore Native database, IAM permissions, and session secret.
+# One-time GCP provisioning for Firestore Native database, IAM permissions, Vertex AI, and session secret.
 # OWNER-RUN: needs a GCP project with billing, and `gcloud` authenticated.
 #
 # Usage:
@@ -16,6 +16,7 @@ DEPLOYER_SA="${SA_NAME:-github-actions-deployer}@${PROJECT_ID}.iam.gserviceaccou
 echo "==> 1/5 Enabling required GCP APIs"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com firestore.googleapis.com \
+  aiplatform.googleapis.com \
   --project "$PROJECT_ID"
 
 echo "==> 2/5 Provisioning Firestore (Native Mode) in ${REGION}"
@@ -32,12 +33,18 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 4/5 Ensuring Cloud Run runtime SA has datastore.user role"
+echo "==> 4/5 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/datastore.user" \
+  --condition=None \
+  >/dev/null
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/aiplatform.user" \
   --condition=None \
   >/dev/null
 
@@ -56,4 +63,4 @@ gcloud secrets add-iam-policy-binding session-secret \
   >/dev/null
 
 echo ""
-echo "==> Done. Firestore database, IAM roles, and session-secret configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, IAM roles (datastore.user, aiplatform.user), and session-secret configured for project ${PROJECT_ID}."

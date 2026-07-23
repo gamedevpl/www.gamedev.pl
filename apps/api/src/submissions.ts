@@ -8,7 +8,7 @@ import {
   type GitHubClient,
   type LinkedPullRequest,
 } from './github-client.js';
-import { moderateFields } from './moderation.js';
+import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { type Store } from './store.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 
@@ -78,6 +78,7 @@ export interface SubmissionRoutesOptions {
   now?: () => number;
   store?: Store;
   dailySubmissionQuota?: number;
+  contentChecker?: ContentChecker;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -235,6 +236,8 @@ export async function registerSubmissionRoutes(
   const store = options.store;
   const dailySubmissionQuota = options.dailySubmissionQuota ?? 5;
 
+  const contentChecker = options.contentChecker ?? createDefaultContentChecker();
+
   // Published games live on the games repo's default branch.
   const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
 
@@ -304,8 +307,8 @@ export async function registerSubmissionRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1)
-    const moderation = moderateFields([parsed.data.title, parsed.data.concept]);
+    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
+    const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }

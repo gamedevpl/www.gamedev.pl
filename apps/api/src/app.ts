@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
-import { moderateText } from './moderation.js';
+import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 
@@ -25,6 +25,7 @@ export interface BuildAppOptions {
   googleAuthVerifier?: GoogleAuthVerifier;
   dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
+  contentChecker?: ContentChecker;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -69,6 +70,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
 
+  const contentChecker = options.contentChecker ?? createDefaultContentChecker();
+
   // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
   // The private-beta allowlist is enforced inside the plugin on /api/auth/google.
   await registerAuthPlugin(app, {
@@ -85,6 +88,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     store,
+    contentChecker,
   });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
@@ -117,8 +121,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1)
-    const moderation = moderateText(parsedRequest.data.prompt);
+    // 2. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
+    const moderation = await contentChecker.check(parsedRequest.data.prompt);
     if (!moderation.allowed) {
       return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
