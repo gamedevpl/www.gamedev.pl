@@ -32,7 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: 'gamedevpl'
-      REGION: 'europe-central2'
+      # europe-west1 (not europe-central2): Cloud Run native domain mapping for
+      # www.gamedev.pl requires a supported region (docs/closed-beta-launch-plan.md
+      # Phase B step 6). Firestore stays in europe-central2 (its location is fixed).
+      REGION: 'europe-west1'
       SERVICE: 'gamedev-app'
       REPO: 'gamedev'
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
@@ -103,7 +106,7 @@ jobs:
             --min-instances 0 \
             --max-instances 4 \
             --port 8080 \
-            --set-env-vars "GAMES_REPO=${GAMES_REPO},GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }},WEB_ORIGIN=https://gamedev-app-334141807880.europe-central2.run.app,PRIVATE_BETA=true,BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }},BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}" \
+            --set-env-vars "^@^GAMES_REPO=${GAMES_REPO}@GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}@WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl@PRIVATE_BETA=true@BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}@BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision

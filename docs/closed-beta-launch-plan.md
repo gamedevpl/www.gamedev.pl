@@ -1,6 +1,7 @@
 # Closed-beta launch on www.gamedev.pl
 
-> Status: plan (2026-07-23, not yet actioned). This is the umbrella plan for
+> Status: IN PROGRESS (started 2026-07-23; Phase A complete, Phase B next).
+> This is the umbrella plan for
 > pointing www.gamedev.pl at the new app and inviting beta users. It sequences
 > existing approved plans (`closed-beta-splash-plan.md`,
 > `content-safety-plan.md`, `creator-qa-plan.md`) plus the domain cutover,
@@ -24,23 +25,26 @@
 
 Order matches the approved queue in the coordination channel. All agent work.
 
-1. **Dependency security bumps** — fastify Content-Type body-validation
+1. **DONE (5742bc36, 10f929ad)** — dependency security bumps — fastify Content-Type body-validation
    bypass (HIGH, prod-relevant: public `/api/auth/*` routes parse JSON);
    vitest/vite/launch-editor while in the lockfile. Lockfile discipline:
    `npm install --package-lock-only` must produce zero diff vs `npm ci`.
    Confirm Dependabot alerts close after push.
-2. **Waitlist** — per `closed-beta-splash-plan.md`: `POST /api/waitlist`
+2. **DONE (5363739f + 9353826d wall fix; verified live: POST /api/waitlist
+   no-body → 400)** — waitlist — per `closed-beta-splash-plan.md`: `POST /api/waitlist`
    (ID token re-verified server-side), `waitlist/{uid}` upsert, 403 sign-in →
    join CTA. This is what makes a closed beta on a public domain work:
    visitors who find the site can request access instead of hitting a dead
    end. Privacy invariants in that plan are hard requirements.
-3. **Content-safety slice 1 (regex layer) + 1b (Vertex layer)** — per
+3. **DONE (slice 1: 7591ef8c; slice 1b: 59d944c0)** — content-safety
+   slice 1 (regex layer) + 1b (Vertex layer) — per
    `content-safety-plan.md`. The hard sequencing rule there only blocks
    `PRIVATE_BETA=false` (going public), not the closed beta itself.
    **[OWNER]** decide: invite only personally-trusted people before slice 1
    lands, or hold invites until slice 1 is live. Recommendation: slice 1
    before any invitee the owner wouldn't vouch for.
-4. **Static-serving fixes** (small, self-contained; measured live
+4. **DONE (28ebdde7; verify live headers after deploy)** — static-serving
+   fixes (small, self-contained; measured live
    2026-07-23: main JS bundle served 250 KB uncompressed with
    `cache-control: public, max-age=0` — every load revalidates everything
    against Cloud Run, no compression at all):
@@ -75,18 +79,35 @@ domain will get organic traffic the run.app URL never did.
      content also stops being served at `gamedevpl.github.io`;
    - the branch history remains in git, so this is reversible in the repo
      sense even though the site itself is gone.
-6. **Choose + build the domain wiring.** Verify first whether Cloud Run
-   domain mapping supports `europe-central2` (believed NOT supported —
-   domain mappings are region-limited preview). Options, pick one — CDN for
-   static assets is a selection criterion, not an afterthought (depends on
-   A4's cache headers being live):
-   - **Global external HTTPS LB + serverless NEG** + Google-managed cert —
-     canonical, ~few $/mo, gives a static IP for DNS; enable **Cloud CDN**
-     on the backend so `/assets/*` serves from Google's edge and most static
-     requests never reach Cloud Run (also shrinks cold-start exposure).
-   - **Firebase Hosting rewrite to Cloud Run** — lighter/cheaper, CDN built
-     in for free, but adds a second serving layer in front of the app.
-     Also handle the apex: `gamedev.pl` → 301 to `https://www.gamedev.pl`.
+6. **Build the domain wiring — DECIDED 2026-07-23 (owner): Cloud Run native
+   domain mapping, which requires migrating the service to `europe-west1`.**
+   Rationale: owner ruled out the ~$20/mo global LB and a Firebase Hosting
+   proxy layer; native mapping is $0 with no extra layer. Constraints
+   accepted with eyes open: domain mapping doesn't support the current
+   `europe-central2` (docs verified 2026-07-23: asia-east1, asia-northeast1,
+   asia-southeast1, europe-north1, europe-west1, europe-west4, us-central1,
+   us-east1, us-east4, us-west1); the feature is _preview_ (documented
+   added-latency caveat — acceptable at beta scale) and cannot disable TLS
+   1.0/1.1. `europe-west1` chosen: Tier-1 pricing (cheaper per CPU-s than
+   europe-central2), ~25ms from the Warsaw Firestore. Migration steps:
+   - Create Artifact Registry repo `gamedev` in `europe-west1` (one-time).
+   - deploy.yml + infra/deploy-api.sh: `REGION=europe-west1`; `WEB_ORIGIN`
+     becomes the new deterministic URL + `https://www.gamedev.pl` +
+     `https://gamedev.pl` (comma-separated).
+   - Push → deploys the service fresh in europe-west1 (old europe-central2
+     service keeps serving its URL untouched during transition; delete it
+     - the old AR repo only after cutover is verified).
+   - **[OWNER]** add the new run.app URL to the OAuth client's JS origins
+     (needed to test sign-in on it pre-cutover).
+   - **[OWNER]** verify domain ownership with Google (Search Console TXT
+     record for gamedev.pl) — prerequisite for creating domain mappings.
+   - Create domain mappings for `www.gamedev.pl` AND `gamedev.pl` → service
+     (mapping can't 301; both domains serve the app, canonicalization can
+     be app-side later). Retrieve the DNS records (CNAME
+     ghs.googlehosted.com for www; A/AAAA set for apex) for step 8.
+     Note: no CDN in this option — A4's immutable cache headers make browsers
+     cache hard after first load, which is the optimization that matters at
+     beta scale.
 7. **Config for the new origin** (before DNS moves, both are additive-safe):
    - Append `https://www.gamedev.pl` to `WEB_ORIGIN` (comma-separated; app
      already splits) in `deploy.yml` + `infra/deploy-api.sh`, redeploy.
@@ -96,8 +117,8 @@ domain will get organic traffic the run.app URL never did.
      run.app origins too.
 8. **DNS switch:**
    - Lower TTL on `www` (and apex) a day ahead.
-   - Repoint `www` from the GitHub Pages IPs (185.199.108–111.153) to the
-     LB IP / Firebase target per step 6.
+   - Repoint `www` (and apex) from the GitHub Pages IPs (185.199.108–111.153)
+     to the target issued by the step-6 wiring.
    - Execute step 5 (Pages domain removal + Pages shutdown) in the same
      window so nothing contests the cert.
    - Wait for the managed cert to go ACTIVE before announcing anything.
@@ -108,8 +129,7 @@ domain will get organic traffic the run.app URL never did.
    - **[OWNER]** sign in with Google on the new domain → works, catalog loads;
    - a non-allowlisted account → 403 + waitlist CTA (once A2 is live);
    - static assets served compressed + long-cache on the new domain (and,
-     if Cloud CDN is on, a second request for the same asset shows a CDN
-     cache hit);
+     if a CDN fronts the service, a repeat asset request shows a cache hit);
    - smoke gates in `deploy.yml` still green (they probe the run.app URL —
      optionally add a www probe once DNS is stable).
 
@@ -128,6 +148,14 @@ domain will get organic traffic the run.app URL never did.
       revisit before public launch.
 12. **Announce** to the invited circle only — the domain itself will leak
     (that's fine; splash + waitlist is the designed landing for strangers).
+13. **Repo housekeeping — merge to master (only after cutover is verified
+    stable; owner asked for explicit timing):** nothing launch-side blocks
+    on it — the default branch and deploy.yml trigger are already
+    `the-new-gamedevpl`, and `master` holds only the doomed old-site source.
+    Doing it mid-launch would churn workflow triggers at the worst moment.
+    After cutover: merge `the-new-gamedevpl` → `master`, flip `deploy.yml`
+    (and `ci.yml`) triggers to `master`, set `master` as default branch
+    again, then retire the feature branch.
 
 ## Exit criteria for "closed beta launched"
 

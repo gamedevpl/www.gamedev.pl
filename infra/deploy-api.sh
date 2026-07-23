@@ -30,12 +30,14 @@
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID to your GCP project id}"
-REGION="${REGION:-europe-central2}"
+# europe-west1 (not europe-central2): Cloud Run native domain mapping for
+# www.gamedev.pl requires a supported region (docs/closed-beta-launch-plan.md).
+REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
-WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-central2.run.app}"
+WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl}"
 PRIVATE_BETA="${PRIVATE_BETA:-true}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
@@ -80,15 +82,17 @@ if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
   SECRET_FLAGS=(--set-secrets "$joined")
 fi
 
-ENV_VARS="GAMES_REPO=${GAMES_REPO},WEB_ORIGIN=${WEB_ORIGIN},PRIVATE_BETA=${PRIVATE_BETA}"
+# ^@^ switches gcloud's env-var separator to @ so WEB_ORIGIN may hold a
+# comma-separated origin list (the app splits it on commas).
+ENV_VARS="^@^GAMES_REPO=${GAMES_REPO}@WEB_ORIGIN=${WEB_ORIGIN}@PRIVATE_BETA=${PRIVATE_BETA}"
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
-  ENV_VARS="${ENV_VARS},GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
+  ENV_VARS="${ENV_VARS}@GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
 if [ -n "$BETA_ALLOWED_UIDS" ]; then
-  ENV_VARS="${ENV_VARS},BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}"
+  ENV_VARS="${ENV_VARS}@BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}"
 fi
 if [ -n "$BETA_ALLOWED_EMAILS" ]; then
-  ENV_VARS="${ENV_VARS},BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
+  ENV_VARS="${ENV_VARS}@BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}"
 fi
 
 echo "==> Deploying to Cloud Run (scale-to-zero)"
