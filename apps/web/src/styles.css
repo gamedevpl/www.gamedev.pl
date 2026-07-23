@@ -291,15 +291,23 @@ a {
 }
 
 .hero-headline {
-  font-size: 3.2rem;
+  font-size: 2.75rem;
   font-weight: 700;
   color: #fff;
   margin: 0 0 12px;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .hero-headline {
+    font-size: 1.9rem;
+    white-space: normal;
+  }
 }
 
 .hero-subheadline {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   color: var(--muted);
   max-width: 680px;
   margin: 0 auto;
@@ -310,12 +318,12 @@ a {
   max-width: 820px;
   margin: 0 auto;
   background: var(--panel);
-  border: 1px solid var(--panel-border);
+  border: 1px solid rgba(0, 228, 172, 0.3);
   border-radius: 16px;
   padding: 20px;
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.4),
-    0 0 1px rgba(0, 228, 172, 0.2);
+    0 0 16px rgba(0, 228, 172, 0.12);
   transition:
     border-color 0.3s,
     box-shadow 0.3s;
@@ -325,7 +333,7 @@ a {
   border-color: var(--turquoise);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.5),
-    0 0 20px var(--turquoise-glow);
+    0 0 24px var(--turquoise-glow);
 }
 
 .prompt-box-form {
@@ -336,16 +344,26 @@ a {
 
 .big-prompt-input {
   width: 100%;
-  background: #0d1115;
-  border: 1px solid var(--panel-border);
+  background: #090d11;
+  border: 1.5px solid rgba(0, 228, 172, 0.4);
   border-radius: 12px;
   padding: 18px 20px;
   color: #fff;
   font-family: inherit;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   line-height: 1.5;
   resize: vertical;
-  transition: border-color 0.2s;
+  box-shadow: 0 0 12px rgba(0, 228, 172, 0.12);
+  transition: all 0.25s ease;
+}
+
+.big-prompt-input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+  box-shadow:
+    0 0 20px var(--turquoise-glow),
+    0 0 2px var(--turquoise);
+  background: #0d1218;
 }
 
 /* SMART INTENT CARDS */
@@ -440,22 +458,21 @@ a {
   color: var(--text);
 }
 
-.big-prompt-input:focus {
-  outline: none;
-  border-color: var(--turquoise);
-}
-
 .prompt-controls-bar {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
   gap: 14px;
+  flex-wrap: nowrap;
 }
 
 .chip-container {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .chip-btn {
@@ -465,6 +482,7 @@ a {
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -477,9 +495,9 @@ a {
 
 .action-buttons {
   display: flex;
-  justify-content: center;
-  gap: 14px;
-  margin-top: 4px;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .build-btn {

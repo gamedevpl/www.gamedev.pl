@@ -99,6 +99,7 @@ export function HeroPromptSection({
         <form onSubmit={handlePrimarySubmit} className="prompt-box-form">
           <textarea
             className="big-prompt-input"
+            autoFocus
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             placeholder={t('hero.bigPromptPlaceholder')}

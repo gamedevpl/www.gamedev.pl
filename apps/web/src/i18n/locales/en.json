@@ -11,10 +11,10 @@
     "mySpecs": "My Active Specs ({{count}})"
   },
   "hero": {
-    "mainTitle": "Turn any game idea into a playable web game in minutes",
-    "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live on GitHub.",
+    "mainTitle": "Turn any idea into a playable web game",
+    "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live.",
     "bigPromptPlaceholder": "Type what you want to play or build... (e.g. mario, space shooter, dodge falling rocks, cyberpunk rhythm game)",
-    "buildGameButton": "Build My Game with AI",
+    "buildGameButton": "Build My Game",
     "instantMockButton": "Quick Local Mock",
     "smartFoundTitle": "Found matching game: {{title}}",
     "smartPlayBtn": "Play {{title}} Now",

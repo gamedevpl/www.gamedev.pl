@@ -11,10 +11,10 @@
     "mySpecs": "Moje Aktywne Specyfikacje ({{count}})"
   },
   "hero": {
-    "mainTitle": "Zmień dowolny pomysł w grywalną grę w kilka minut",
-    "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują ją na GitHubie.",
+    "mainTitle": "Zamień dowolny pomysł w grywalną grę",
+    "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują grę na żywo.",
     "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub co stworzyć... (np. mario, strzelanka kosmiczna, unikaj spadających skał)",
-    "buildGameButton": "Stwórz Moją Grę z AI",
+    "buildGameButton": "Stwórz Moją Grę",
     "instantMockButton": "Szybki Lokalny Podgląd",
     "smartFoundTitle": "Znaleziono pasującą grę: {{title}}",
     "smartPlayBtn": "Zagraj w {{title}} teraz",
