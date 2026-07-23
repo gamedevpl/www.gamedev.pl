@@ -104,6 +104,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 
+  // Apex → www canonical-host redirect. Cloud Run domain mappings can't emit a
+  // 301, and both www.gamedev.pl and gamedev.pl terminate at this same service,
+  // so we canonicalize here. When CANONICAL_HOST=www.gamedev.pl, a request whose
+  // Host header is the bare apex (gamedev.pl) 301s to https://www.gamedev.pl +
+  // same path. Only the exact apex is redirected — the run.app URL, localhost,
+  // and the canonical host itself are untouched, so health probes, smoke tests,
+  // and dev keep working. Unset (dev/tests) → no-op.
+  const canonicalHost = process.env.CANONICAL_HOST?.trim();
+  const apexHost = canonicalHost?.startsWith('www.') ? canonicalHost.slice(4) : undefined;
+  if (canonicalHost && apexHost) {
+    app.addHook('onRequest', async (request, reply) => {
+      if (request.headers.host === apexHost) {
+        return reply.redirect(`https://${canonicalHost}${request.url}`, 301);
+      }
+    });
+  }
+
   // In private-beta mode all API data reads require a session so the app is usable only
   // after sign-in. IMPORTANT: the wall must gate only /api/* paths — the static SPA shell
   // must load freely so the visitor can reach the sign-in button (chicken-and-egg otherwise).

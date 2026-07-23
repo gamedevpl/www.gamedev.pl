@@ -38,6 +38,8 @@ REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-334141807880-t8qsj5n6p3g9imbs3jfut82cecvr87pu.apps.googleusercontent.com}"
 WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl}"
+# Apex → www 301 canonicalization (app-side; Cloud Run mappings can't redirect).
+CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 PRIVATE_BETA="${PRIVATE_BETA:-true}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
@@ -85,6 +87,9 @@ fi
 # ^@^ switches gcloud's env-var separator to @ so WEB_ORIGIN may hold a
 # comma-separated origin list (the app splits it on commas).
 ENV_VARS="^@^GAMES_REPO=${GAMES_REPO}@WEB_ORIGIN=${WEB_ORIGIN}@PRIVATE_BETA=${PRIVATE_BETA}"
+if [ -n "${CANONICAL_HOST:-}" ]; then
+  ENV_VARS="${ENV_VARS}@CANONICAL_HOST=${CANONICAL_HOST}"
+fi
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
   ENV_VARS="${ENV_VARS}@GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}"
 fi
