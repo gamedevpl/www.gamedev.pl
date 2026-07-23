@@ -275,7 +275,12 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           (options.betaAllowedUids?.has(uid) ?? false) ||
           (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false));
         if (!allowed) {
-          return reply.status(403).send({ error: 'private beta — sign-ups are closed' });
+          // Look up existing waitlist status so the client can show it
+          const waitlistEntry = await store.getWaitlistEntry(uid);
+          return reply.status(403).send({
+            error: 'private beta — sign-ups are closed',
+            waitlistStatus: waitlistEntry?.status ?? null,
+          });
         }
       }
 
@@ -333,14 +338,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // Same rule as the beta allowlist: an unverified email claim must never be stored.
       const email = googleUser.emailVerified && googleUser.email ? googleUser.email : undefined;
 
-      await store.upsertWaitlistEntry({
+      const entry = await store.upsertWaitlistEntry({
         uid,
         email,
         name: googleUser.name,
         locale: parseResult.data.locale,
       });
 
-      return { status: 'ok' };
+      return { status: 'ok', waitlistStatus: entry.status };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'google token verification failed';
       return reply.status(401).send({ error: message });

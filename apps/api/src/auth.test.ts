@@ -237,7 +237,7 @@ describe('POST /api/waitlist', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ status: 'ok' });
+    expect(JSON.parse(res.body)).toEqual({ status: 'ok', waitlistStatus: 'pending' });
 
     const entries = store.waitlistEntries();
     expect(entries).toHaveLength(1);
@@ -301,5 +301,68 @@ describe('POST /api/waitlist', () => {
     const res = await app.inject({ method: 'POST', url: '/api/waitlist' });
 
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('beta rejection includes waitlistStatus', () => {
+  it('403 on beta rejection includes waitlistStatus when the user is on the waitlist', async () => {
+    const store = new InMemoryStore();
+    const verifier = new MockGoogleVerifier({
+      'beta-token': { sub: '30001', email: 'outsider@example.com', emailVerified: true },
+    });
+    const app: FastifyInstance = Fastify({ logger: false });
+
+    await registerAuthPlugin(app, {
+      store,
+      sessionSecret: 'test-secret-key',
+      googleAuthVerifier: verifier,
+      privateBeta: true,
+      betaAllowedEmails: new Set(['insider@example.com']),
+    });
+
+    // First, join the waitlist
+    await app.inject({
+      method: 'POST',
+      url: '/api/waitlist',
+      payload: { idToken: 'beta-token' },
+    });
+
+    // Now attempt sign-in — should 403 with waitlistStatus
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'beta-token' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = JSON.parse(res.body) as { error: string; waitlistStatus: string | null };
+    expect(body.error).toBe('private beta \u2014 sign-ups are closed');
+    expect(body.waitlistStatus).toBe('pending');
+  });
+
+  it('403 on beta rejection returns null waitlistStatus when user is not on the waitlist', async () => {
+    const store = new InMemoryStore();
+    const verifier = new MockGoogleVerifier({
+      'beta-token': { sub: '30002', email: 'newbie@example.com', emailVerified: true },
+    });
+    const app: FastifyInstance = Fastify({ logger: false });
+
+    await registerAuthPlugin(app, {
+      store,
+      sessionSecret: 'test-secret-key',
+      googleAuthVerifier: verifier,
+      privateBeta: true,
+      betaAllowedEmails: new Set(['insider@example.com']),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'beta-token' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = JSON.parse(res.body) as { error: string; waitlistStatus: string | null };
+    expect(body.waitlistStatus).toBeNull();
   });
 });

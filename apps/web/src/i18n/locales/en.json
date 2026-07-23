@@ -175,6 +175,9 @@
     "joinWaitlist": "Join the waitlist",
     "joiningWaitlist": "Joining…",
     "waitlistJoined": "You're on the list — we'll email you when a spot opens up.",
+    "waitlistPending": "✓ You're on the waitlist — we'll email you when a spot opens up.",
+    "waitlistApproved": "🎉 You've been approved! Please sign in again to access the beta.",
+    "waitlistRejected": "Your application wasn't accepted this time. Thanks for your interest.",
     "waitlistError": "Couldn't join the waitlist right now. Please try again.",
     "footer": "Access is invite-only during the closed beta."
   },

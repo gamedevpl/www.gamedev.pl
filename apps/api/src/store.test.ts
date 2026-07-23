@@ -82,12 +82,33 @@ describe('InMemoryStore', () => {
       name: 'Joiner',
       locale: 'en',
     });
-    expect(first).toMatchObject({ uid: 'g:456', email: 'joiner@example.com', name: 'Joiner', locale: 'en' });
+    expect(first).toMatchObject({
+      uid: 'g:456',
+      email: 'joiner@example.com',
+      name: 'Joiner',
+      locale: 'en',
+      status: 'pending',
+    });
     expect(store.waitlistEntries()).toHaveLength(1);
 
     // Joining again with only uid — email/name/locale carry over from the existing entry.
     const second = await store.upsertWaitlistEntry({ uid: 'g:456' });
-    expect(second).toMatchObject({ uid: 'g:456', email: 'joiner@example.com', name: 'Joiner', locale: 'en' });
+    expect(second).toMatchObject({
+      uid: 'g:456',
+      email: 'joiner@example.com',
+      name: 'Joiner',
+      locale: 'en',
+      status: 'pending',
+    });
     expect(store.waitlistEntries()).toHaveLength(1);
+  });
+
+  it('getWaitlistEntry returns the entry or null', async () => {
+    const store = new InMemoryStore();
+    expect(await store.getWaitlistEntry('g:nonexistent')).toBeNull();
+
+    await store.upsertWaitlistEntry({ uid: 'g:789', email: 'test@example.com' });
+    const entry = await store.getWaitlistEntry('g:789');
+    expect(entry).toMatchObject({ uid: 'g:789', email: 'test@example.com', status: 'pending' });
   });
 });

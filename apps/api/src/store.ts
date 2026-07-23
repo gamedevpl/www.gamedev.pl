@@ -24,12 +24,15 @@ export interface UsageCounters {
   refines: number;
 }
 
+export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
+
 export interface WaitlistEntry {
   uid: string;
   email?: string;
   name?: string;
   requestedAt: string;
   locale?: string;
+  status: WaitlistStatus;
 }
 
 export interface Store {
@@ -44,6 +47,7 @@ export interface Store {
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
+  getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
 }
 
 export class InMemoryStore implements Store {
@@ -145,10 +149,16 @@ export class InMemoryStore implements Store {
       name: entry.name ?? existing?.name,
       requestedAt: now,
       locale: entry.locale ?? existing?.locale,
+      status: existing?.status ?? 'pending',
     };
 
     this.waitlist.set(entry.uid, updated);
     return { ...updated };
+  }
+
+  async getWaitlistEntry(uid: string): Promise<WaitlistEntry | null> {
+    const entry = this.waitlist.get(uid);
+    return entry ? { ...entry } : null;
   }
 
   // Test/inspection only — not part of the Store interface. Production code never
@@ -268,14 +278,25 @@ export class FirestoreStore implements Store {
     locale?: string;
   }): Promise<WaitlistEntry> {
     const now = new Date().toISOString();
+    const docRef = this.db.collection('waitlist').doc(entry.uid);
+    const snap = await docRef.get();
+    const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
+
     const record: WaitlistEntry = {
       uid: entry.uid,
       email: entry.email,
       name: entry.name,
       requestedAt: now,
       locale: entry.locale,
+      status: existing?.status ?? 'pending',
     };
-    await this.db.collection('waitlist').doc(entry.uid).set(record, { merge: true });
+    await docRef.set(record, { merge: true });
     return record;
+  }
+
+  async getWaitlistEntry(uid: string): Promise<WaitlistEntry | null> {
+    const snap = await this.db.collection('waitlist').doc(uid).get();
+    if (!snap.exists) return null;
+    return snap.data() as WaitlistEntry;
   }
 }

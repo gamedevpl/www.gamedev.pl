@@ -8,6 +8,8 @@ export interface User {
   tier: 'standard' | 'trusted' | 'blocked';
 }
 
+export type WaitlistStatus = 'unknown' | 'not_on_list' | 'pending' | 'approved' | 'rejected';
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -16,6 +18,7 @@ interface AuthContextType {
   // decide whether an anonymous visitor sees the closed-beta splash or the
   // normal public-reads app. Defaults to false (open) until known.
   privateBeta: boolean;
+  waitlistStatus: WaitlistStatus;
   signInWithGoogleToken: (idToken: string) => Promise<void>;
   // Closed-beta waitlist: works without a session (the caller is by definition
   // not on the allowlist). Re-verifies the same Google ID token server-side.
@@ -28,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   privateBeta: false,
+  waitlistStatus: 'unknown',
   signInWithGoogleToken: async () => {},
   joinWaitlist: async () => {},
   logout: async () => {},
@@ -38,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [privateBeta, setPrivateBeta] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('unknown');
 
   const refreshUser = async () => {
     try {
@@ -77,7 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (!res.ok) {
-      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      const err = (await res.json().catch(() => null)) as { error?: string; waitlistStatus?: string } | null;
+      if (err?.waitlistStatus) {
+        setWaitlistStatus(err.waitlistStatus as WaitlistStatus);
+      }
       throw new Error(err?.error ?? 'Sign in failed');
     }
 
@@ -96,6 +104,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const err = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(err?.error ?? 'Failed to join waitlist');
     }
+
+    const data = (await res.json()) as { status: string; waitlistStatus?: string };
+    if (data.waitlistStatus) {
+      setWaitlistStatus(data.waitlistStatus as WaitlistStatus);
+    } else {
+      setWaitlistStatus('pending');
+    }
   };
 
   const logout = async () => {
@@ -105,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, privateBeta, signInWithGoogleToken, joinWaitlist, logout, refreshUser }}
+      value={{ user, loading, privateBeta, waitlistStatus, signInWithGoogleToken, joinWaitlist, logout, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

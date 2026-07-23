@@ -175,6 +175,9 @@
     "joinWaitlist": "Dołącz do listy oczekujących",
     "joiningWaitlist": "Dołączanie…",
     "waitlistJoined": "Jesteś na liście — napiszemy, gdy zwolni się miejsce.",
+    "waitlistPending": "✓ Jesteś na liście oczekujących — napiszemy, gdy zwolni się miejsce.",
+    "waitlistApproved": "🎉 Twoja aplikacja została zaakceptowana! Zaloguj się ponownie, aby uzyskać dostęp.",
+    "waitlistRejected": "Twoja aplikacja nie została zaakceptowana tym razem. Dziękujemy za zainteresowanie.",
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
   },

@@ -5,9 +5,13 @@ import { GoogleSignInButton } from './GoogleSignInButton';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 
-export function ClosedBetaSplash() {
+interface ClosedBetaSplashProps {
+  loading?: boolean;
+}
+
+export function ClosedBetaSplash({ loading }: ClosedBetaSplashProps) {
   const { t, i18n } = useTranslation();
-  const { joinWaitlist } = useAuth();
+  const { joinWaitlist, waitlistStatus } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [waitlistState, setWaitlistState] = useState<WaitlistState>('idle');
@@ -24,6 +28,9 @@ export function ClosedBetaSplash() {
     }
   };
 
+  // Determine if we should show a known waitlist status (from the API 403 or a previous join)
+  const hasKnownStatus = waitlistStatus === 'pending' || waitlistStatus === 'approved' || waitlistStatus === 'rejected';
+
   return (
     <div className="beta-splash">
       <div className="beta-splash__card">
@@ -37,11 +44,25 @@ export function ClosedBetaSplash() {
 
         <div className="beta-splash__badge">{t('betaSplash.badge')}</div>
 
-        {isBlocked ? (
+        {loading ? (
+          <div className="beta-splash__loading">
+            <div className="beta-splash__spinner" />
+          </div>
+        ) : isBlocked ? (
           <div className="beta-splash__blocked">
             <p className="beta-splash__blocked-msg">{t('betaSplash.blockedMsg')}</p>
-            {waitlistState === 'joined' ? (
-              <p className="beta-splash__waitlist-confirm">{t('betaSplash.waitlistJoined')}</p>
+            {waitlistState === 'joined' || (hasKnownStatus && waitlistState !== 'error') ? (
+              <div className="beta-splash__status">
+                {(waitlistStatus === 'pending' || waitlistState === 'joined') && (
+                  <p className="beta-splash__waitlist-confirm">{t('betaSplash.waitlistPending')}</p>
+                )}
+                {waitlistStatus === 'approved' && (
+                  <p className="beta-splash__waitlist-confirm">{t('betaSplash.waitlistApproved')}</p>
+                )}
+                {waitlistStatus === 'rejected' && (
+                  <p className="beta-splash__waitlist-rejected">{t('betaSplash.waitlistRejected')}</p>
+                )}
+              </div>
             ) : (
               <button
                 id="btn-join-waitlist"
