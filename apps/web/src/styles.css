@@ -177,18 +177,14 @@ a {
   gap: 16px;
 }
 
-.my-specs-badge {
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: var(--accent-blue);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.my-specs-badge:hover {
-  background: rgba(56, 189, 248, 0.2);
+.specs-count-badge {
+  background: var(--turquoise);
+  color: #0b221d;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-left: 6px;
 }
 
 .language-switcher {

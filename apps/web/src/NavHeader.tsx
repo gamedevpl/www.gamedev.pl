@@ -20,52 +20,40 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
     <header className="app-header">
       <div className="logo-brand">
         <a href="#/" className="logo">
-          <img src={logo} alt={t('header.logoAlt')} width="60" height="52" />
+          <img src={logo} alt={t('header.logoAlt')} width="40" height="35" />
           gamedev<span className="turquoise">.pl</span>
         </a>
-        <div className="status-indicator">
-          <span className="pulse-dot"></span>
-          <span className="status-text">{t('header.statusOnline')}</span>
-        </div>
       </div>
 
       <nav className="header-nav">
         <button className="nav-link" onClick={() => onNavigate('hero-prompt')}>
-          ✨ {t('header.navPrompt')}
+          {t('header.navPrompt')}
         </button>
         <button className="nav-link" onClick={() => onNavigate('arcade')}>
-          🕹️ {t('header.navArcade')}
+          {t('header.navArcade')}
         </button>
         <button className="nav-link" onClick={() => onNavigate('studio')}>
-          📂 {t('header.navStudio')}
-        </button>
-        <button className="nav-link" onClick={() => onNavigate('transparency')}>
-          📡 {t('header.navFeed')}
+          {t('header.navStudio')}
+          {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
         </button>
       </nav>
 
       <div className="header-actions">
-        {activeSpecsCount > 0 && (
-          <button className="my-specs-badge" onClick={() => onNavigate('studio-active')}>
-            📂 {t('header.mySpecs', { count: activeSpecsCount })}
-          </button>
-        )}
-
         {user ? (
           <div className="user-profile-badge">
             {user.picture ? (
-              <img src={user.picture} alt="" className="user-avatar" width="28" height="28" />
+              <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
             ) : (
               <span className="user-avatar-placeholder">👤</span>
             )}
             <span className="user-name">{user.name || user.email || 'User'}</span>
             <button className="logout-btn" onClick={logout} title="Sign Out">
-              🚪
+              Sign out
             </button>
           </div>
         ) : (
           <button className="sign-in-btn" onClick={() => setIsAuthModalOpen(true)}>
-            🔑 Sign in
+            Sign in
           </button>
         )}
 
@@ -77,7 +65,7 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
           rel="noopener noreferrer"
           aria-label={t('header.githubAria')}
         >
-          <img src={githubIcon} alt="" />
+          <img src={githubIcon} alt="" width="20" height="20" />
         </a>
       </div>
 
