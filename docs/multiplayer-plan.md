@@ -1,7 +1,8 @@
 # Multiplayer games — design & implementation plan
 
-Status: **proposed** (not started). The open questions at the bottom carry best-guess working
-answers; owner can override any of them before M1 starts.
+Status: **in progress** (M1 building). Revised 2026-07-23 after reading the actual games-repo
+runtime — the first draft assumed an architecture this project no longer has. See
+[§8 Plan revisions](#8-plan-revisions-what-changed-from-the-first-draft) for what changed and why.
 
 ---
 
@@ -27,26 +28,49 @@ minutes, see [vision.md](./vision.md)). The CUJ therefore has two flavors:
   wait is shared, but it depends on the whole creation pipeline's latency. It ships after
   the instant flavor works.
 
-To make the instant flavor real on day one, we seed **3–5 first-party multiplayer games**
-(same approach as the existing templates in `packages/game-generator/templates`).
+To make the instant flavor real on day one we seed **two first-party multiplayer games**
+(owner decision, 2026-07-23 — down from five): one turn-based tactical, one real-time arcade.
+Two is enough to prove the contract across both latency regimes and to give an agent two
+house-style references to copy.
 
 ---
 
 ## 2. Product scope: multiplayer modes
 
-| Mode                                     | What it means                                                                                                                                                                                 | Ships        |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| **A. Shared screen + phone controllers** | The game runs on ONE device (the host's screen). Phones render a platform-provided controller (d-pad + buttons + name). Phones send inputs; the game never synchronizes state across devices. | **v1**       |
-| B. Game-defined controllers              | Same as A, but the game supplies a custom controller layout (e.g., a drawing pad, a trivia answer sheet) rendered on phones.                                                                  | v2           |
-| C. Each-device play                      | Every device runs the game with synchronized state (host-authoritative).                                                                                                                      | later, maybe |
+| Mode                                     | What it means                                                                                                                                                                                | Ships        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| **A. Shared screen + phone controllers** | The game runs on ONE device (the host's screen). Phones render a platform-provided controller (d-pad + action button). Phones send inputs; the game never synchronizes state across devices. | **v1**       |
+| B. Game-defined controllers              | Same as A, but the game supplies a custom controller layout (e.g., a drawing pad, a trivia answer sheet) rendered on phones.                                                                 | v2           |
+| C. Each-device play                      | Every device runs the game with synchronized state (host-authoritative).                                                                                                                     | later, maybe |
 
 **Why mode A first**: state synchronization is the hardest problem in multiplayer, and our
 games are written by coding agents from prompts — they will get distributed state wrong
 constantly, and the failures are invisible to validation. Mode A keeps the game a _single_
 program with multiple input sources: the game runs in exactly one iframe, and the only new
-concept a generated game must handle is "inputs arrive tagged with a player id." That is a
+concept a generated game must handle is "input arrives tagged with a slot number." That is a
 contract an agent can reliably implement and our CI can reliably validate. Modes B and C
 reuse the same session plumbing, so nothing is thrown away.
+
+### 2.1 The slot model (the idea that makes everything else simple)
+
+A multiplayer game declares **N player slots**. Every slot has a **keyboard binding on the
+host machine** and can be **claimed by a phone**:
+
+```
+slot 1  →  WASD + Space        …until a phone claims it, then that phone drives slot 1
+slot 2  →  Arrows + Enter      …until a phone claims it, then that phone drives slot 2
+```
+
+The game asks `party.down(1, 'left')` and never learns or cares which input source answered.
+This single decision buys:
+
+- **Hot-seat play for free** — two people on one keyboard, no lobby, no server, no phones.
+- **Deterministic capture/CI** — the games repo's `CAPTURE.json` harness drives games by
+  synthesizing key events. Because every slot has a keyboard binding, multiplayer games are
+  capturable and assertable by the _existing_ pipeline with zero new tooling.
+- **A graceful solo state** — a multiplayer game opened by one person with no phones is
+  still a playable (hot-seat) game rather than a "waiting for players" dead end.
+- **No special-casing in game code** — one input path, whatever the source.
 
 ---
 
@@ -54,36 +78,37 @@ reuse the same session plumbing, so nothing is thrown away.
 
 ### 3.1 Host flow (the shared screen)
 
-1. **Entry point**: on a game page of a multiplayer-capable game, a primary
-   **"Play together"** button (next to the existing play surface). Multiplayer-capable games
-   also get a badge + filter in the catalog (`ArcadeCatalog.tsx`).
+1. **Entry point**: multiplayer-capable games show a **"Play together"** button next to Play,
+   plus a badge in the catalog card (`ArcadeCatalog.tsx`). Plain **Play** still works and
+   gives hot-seat.
 2. **Lobby overlay** (over the game area, game not started yet):
    - A **large QR code** (the star of the screen — scannable from across a table) plus the
-     short room code (e.g. `GDPL-7K3M`) and the join URL for manual entry.
-   - A live **player list**: each guest appears the moment they join, with nickname and a
-     color/avatar chip. Their controller shows the same color so people can find themselves.
-   - Player count vs. the game's `minPlayers`/`maxPlayers`; **Start** enables at min.
+     short room code and the join URL for manual entry.
+   - A live **slot list**: each slot shows either "press WASD" (keyboard) or the guest's
+     nickname + color chip once a phone claims it. Their controller shows the same color so
+     people can find themselves.
+   - **Start** enables once the game's `min_players` is met (counting keyboard slots).
    - Host can kick a player (mis-scans, duplicates).
-3. **In game**: small persistent strip showing players + connection dots. A guest
-   disconnecting shows a toast and (if the game asks for it via the SDK) pauses.
+3. **In game**: the slot strip stays visible with connection dots. A guest disconnecting
+   shows a toast; the slot falls back to its keyboard binding rather than breaking the game.
 4. **End / replay**: "Play again" keeps the room and controllers alive — no re-scanning.
-   Room dies when the host leaves or after inactivity timeout.
+   Room dies when the host leaves or after the idle timeout.
 
-For the **prompted** flavor: the Creator flow (and the planned creator Q&A,
-[creator-qa-plan.md](./creator-qa-plan.md)) gets a "playable with friends" option that puts a
-multiplayer block into the spec; the submission status view gains "start a lobby while you
+For the **prompted** flavor: the creator flow (and the creator Q&A,
+[creator-qa-plan.md](./creator-qa-plan.md)) gets a "playable with friends" option that writes
+the multiplayer keys into the spec; the submission status view gains "start a lobby while you
 wait" once that flavor ships.
 
 ### 3.2 Guest flow (the phone)
 
-1. Scan QR → phone browser opens `https://<app>/join/<roomCode>#<joinToken>`.
+1. Scan QR → phone browser opens `https://<app>/#/join/<code>/<token>`.
 2. **No account, no install.** One screen: pick a nickname (pre-filled with a fun default,
    e.g. "Green Fox") → **Join**.
-3. Controller renders: the layout requested by the game (v1: from a small set of stock
-   layouts — `dpad-2`, `dpad-1`, `buttons-4`, `tilt` later), in the player's assigned color,
-   fullscreen-friendly, wake-lock requested so the screen doesn't sleep mid-game.
+3. Controller renders: a d-pad plus one action button, in the slot's color, sized for thumbs,
+   `touch-action: none` so it never scrolls or zooms, wake-lock requested so the screen
+   doesn't sleep mid-game.
 4. States the controller must handle honestly: _waiting for host to start_,
-   _connected/playing_, _reconnecting…_ (auto-retry with the same player slot), _room ended_.
+   _connected/playing_, _reconnecting…_ (auto-retry into the same slot), _room ended_.
 
 The join page is part of our own web shell (trusted code, normal origin) — **not** game code.
 
@@ -93,9 +118,9 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
   controller must be under ~10 seconds. No consent walls, no forms beyond the nickname.
 - i18n en/pl for everything, same as the rest of the app.
 - Latency expectations are honest: this is a couch platform (server round-trip ~30–80 ms in
-  region). Games the agents write should be genre-guided toward latency-tolerant designs
-  (party, trivia, turn-based, one-button reaction games) — that guidance lives in the games
-  repo agent instructions, not enforced by code.
+  region). Agent-written games should be steered toward latency-tolerant designs (party,
+  trivia, turn-based, one-button reaction games) — guidance in the games-repo agent
+  instructions, not enforced by code.
 
 ---
 
@@ -104,15 +129,16 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
 ### 4.1 The sandbox constraint decides the topology
 
 The load-bearing invariant of this codebase: games run in an iframe with
-`sandbox="allow-scripts"`, **no** `allow-same-origin` (`GameFrame.tsx`), and an injected CSP
-with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
-([assemble.ts](../apps/api/src/assemble.ts)). Games are also validated to be offline-only
-self-contained bundles ([games-repo-blueprint.md](./games-repo-blueprint.md) rule 6).
+`sandbox="allow-scripts"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
+carry a CSP with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
+([assemble.ts](../apps/api/src/assemble.ts)). Games are also validated to be offline-only and
+self-contained ([validate.mjs](https://github.com/gamedevpl/www.gamedev.pl-games) Check 6:
+no `fetch(`, no `XMLHttpRequest`, no remote assets).
 
 **Multiplayer must not weaken any of that.** Therefore: games never touch the network.
 The trusted shell (our React app) owns the one WebSocket, and the game iframe communicates
-with the shell exclusively via `postMessage`. CSP does not restrict `postMessage`, so the
-restrictive CSP stays exactly as-is, including for multiplayer games.
+with the shell exclusively via `postMessage`, which CSP does not restrict. The restrictive
+CSP and the sandbox attribute stay byte-identical for multiplayer games.
 
 ```mermaid
 flowchart LR
@@ -125,241 +151,254 @@ flowchart LR
     subgraph Host["Host device (shared screen)"]
       Shell[Web shell - lobby, QR, bridge]
       IF["Sandboxed iframe<br/>sandbox=allow-scripts, CSP no-network"]
-      Shell <-->|postMessage - versioned SDK protocol| IF
+      Shell <-->|postMessage - versioned bridge protocol| IF
     end
-    C1 -->|WSS| S[Session service - apps/api, Cloud Run]
+    C1 -->|WSS| S[Room relay - apps/api, Cloud Run]
     C2 -->|WSS| S
     Shell <-->|WSS| S
 ```
 
-### 4.2 Session service (in `apps/api`)
+### 4.2 Room relay (in `apps/api`)
 
 A room service inside the existing Fastify app (no new deployable) using
 `@fastify/websocket`:
 
-- `POST /api/mp/sessions` — host creates a room. **Requires a session** (the existing auth;
-  the private-beta wall applies to hosts as normal). Body: `{ slug }` of the game. Returns
-  `{ roomCode, joinUrl, hostToken }`. Rate-limited per user (reuse the existing per-IP/user
-  limiter patterns).
-- `GET /join/:roomCode` — serves the SPA shell (normal SPA fallback; the join route is a
-  client route).
-- `GET /api/mp/ws?token=…` → WebSocket upgrade. One endpoint for hosts and guests; the
-  token says which.
+- `POST /api/mp/sessions` — host creates a room. **Requires a session** (the private-beta
+  wall applies to hosts as normal). Body: `{ slug }`. Returns
+  `{ code, joinPath, hostToken, joinToken, maxPlayers }`. Rate-limited per user.
+- `GET /api/mp/ws` → WebSocket upgrade. One endpoint for hosts and guests. **No credential in
+  the URL** — the first frame carries the token, so nothing secret lands in access logs.
 
-**Room model**: in-memory (`Map<roomCode, Room>`), same pattern as the existing in-memory
-rate limiter. A room: code, game slug, host connection, guest slots (id, nickname, color,
-connection, last-seen), state (`lobby | playing | ended`), created/expires timestamps.
-Rooms are **ephemeral by design** — nothing is persisted to Firestore. Caps: guests per
-room (default 8, game can lower via spec), rooms per host (1–2), TTL ~2 h, idle reap ~10 min.
+**Room model**: in-memory `Map<code, Room>`, same pattern as the existing in-memory rate
+limiter. A room holds: code, slug, host socket, `slots[]` (nickname, color, socket,
+lastSeen), phase (`lobby | playing | ended`), timestamps. Rooms are **ephemeral by design** —
+nothing is persisted to Firestore. Caps: `max_players` from the game's spec (≤8), one open
+room per host, 2 h TTL, 10 min idle reap.
 
-**Message protocol** (versioned, `v: 1`, JSON, size-capped ~4 KB, schema-validated with zod
-server-side — malformed frames close the connection):
+**Wire protocol** (`v: 1`, JSON, ≤2 KB/frame, zod-validated — malformed frames close the
+connection):
 
-| Direction      | Messages                                                                                                                                  |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| guest → server | `join { nickname }`, `input { seq, payload }`, `ping`                                                                                     |
-| server → guest | `joined { playerId, color, layout }`, `roomState { phase, players }`, `feedback { payload }` (v2: rumble/prompts), `kicked`, `roomClosed` |
-| host → server  | `start`, `kick { playerId }`, `toPlayer { playerId, payload }`, `end`                                                                     |
-| server → host  | `playerJoined/Left { player }`, `input { playerId, seq, payload }`, `roomClosed`                                                          |
+| Direction      | Frames                                                                         |
+| -------------- | ------------------------------------------------------------------------------ |
+| guest → server | `hello { code, token, nick }`, `input { k, v }`, `bye`                         |
+| server → guest | `welcome { slot, color, nick, phase }`, `phase { phase }`, `closed { reason }` |
+| host → server  | `hello { code, token }`, `phase { phase }`, `kick { slot }`                    |
+| server → host  | `roster { slots }`, `input { slot, k, v }`, `closed { reason }`                |
 
-The server is a **relay with admission control**, not a game engine: it validates, tags with
-`playerId`, rate-limits (per-connection input cap, e.g. 30 msg/s, token bucket), and
-forwards. Input payloads are opaque to the server but size- and rate-bounded.
+`k` is one of `up|down|left|right|a` (the v1 layout) and `v` is `0|1`. The server is a **relay
+with admission control**, not a game engine: it validates, tags with the slot number,
+rate-limits (token bucket, ~40 frames/s/connection), and forwards.
 
 ### 4.3 Join security (the QR that lets strangers in)
 
-The join URL must let unauthenticated guests in **without weakening the beta wall**:
+- `POST /api/mp/sessions` mints a **signed join token** (HMAC over `code|exp`, same discipline
+  as `submission-token.ts`, keyed off `SESSION_SECRET` with a distinct scope string so a room
+  token can never be confused with a session cookie).
+- The QR encodes `https://<app>/#/join/<code>/<token>` — the token rides in the **fragment**,
+  which browsers never send to the server, so it stays out of access logs and Referer headers.
+  It is then presented in the WS `hello` **frame body** (not the URL) — same reasoning.
+- Guests get an ephemeral slot — **no account, no user doc, no cookie**. Nickname lives only
+  in room memory and dies with the room.
+- Beta reconciliation: the SPA shell is already public; `/api/mp/ws` is the **only** API a
+  guest can reach, and it is useless without a valid room token. The beta `onRequest` wall
+  exempts exactly that one path; everything else stays 401. Hosting still requires an
+  allowlisted signed-in user, so a guest can only ever reach a room an allowlisted member
+  opened for them.
+- Room codes use an unambiguous alphabet (no `0/O/1/I`) so they can be read aloud; the
+  **token**, not the code, is the credential.
 
-- `POST /api/mp/sessions` mints a **signed room join token** (HMAC, same discipline as
-  `submission-token.ts`: signed payload `{ roomCode, exp }`, secret server-side). The QR
-  encodes `https://<app>/join/<code>#<token>` — the token rides in the **fragment**, which
-  never reaches server logs or Referer headers.
-- The WS upgrade for guests requires a valid, unexpired token for that room. Guests get an
-  ephemeral `playerId` — **no account, no user doc, no cookie**. Nickname lives only in room
-  memory and dies with the room.
-- Beta reconciliation: the SPA shell is already public (P0 shell fix); `/api/mp/ws` with a
-  valid room token is the _only_ API a guest can reach — the beta `onRequest` wall exempts
-  it explicitly (narrow, token-gated exemption; everything else stays walled). Hosting a
-  room still requires an allowlisted signed-in user, so beta guests can only ever reach a
-  room an allowlisted member opened for them.
-- Room codes are short for humans but the token is the credential — guessing a code without
-  its token gets you nothing. Reap tokens on room close.
+### 4.4 The game-facing SDK: a GameKit `party` module
 
-### 4.4 The game-facing SDK (postMessage bridge)
-
-Games get a tiny, versioned API. The SDK script is **injected by `assembleGameHtml`** (like
-the CSP meta) when the game is multiplayer — game code never bundles it, so the platform
-can evolve the wire protocol without touching published games:
+Games opt in via `GAME.json` (`"engine": { "modules": [..., "party"] }`) exactly like `input`
+or `audio`. The module ships in the games repo at `shared/modules/party.js` and is bundled at
+serve time by both assemblers.
 
 ```js
-// Inside the game iframe (mode A, host side). Injected as window.GamedevParty.
-GamedevParty.init({ onReady, onPlayerJoin, onPlayerLeave, onInput, onPauseRequest });
-GamedevParty.players(); // [{ id, nickname, color }]
-GamedevParty.sendToPlayer(id, payload); // v2: controller feedback
+const party = GameKit.createParty({
+  slots: [
+    { name: 'P1', color: '#00e4ac', keys: { up: 'w', left: 'a', down: 's', right: 'd', a: ' ' } },
+    { name: 'P2', color: '#ff7edb', keys: { up: 'arrowup', left: 'arrowleft', /* … */ a: 'enter' } },
+  ],
+});
+
+party.down(1, 'left'); // held — keyboard or phone, the game can't tell
+party.consume(2, 'a'); // edge-triggered, one-shot
+party.slots(); // [{ slot, name, color, remote, connected }]
+party.connected; // is a lobby attached at all?
 ```
 
-Bridge rules in the shell (`GameFrame` gains a `bridge` prop):
+Feature detection is the module's job, not the game's: with no parent window (capture
+harness, direct file open) or no shell reply within 500 ms, the module simply stays in
+keyboard-only mode. A game written against `createParty` therefore runs identically in the
+lobby, in hot-seat, and in the deterministic capture harness.
 
-- The shell treats messages **from** the iframe as hostile input: zod-validated, size-capped,
-  rate-limited, unknown types dropped. Nothing from a game message is ever rendered as HTML
-  or eval'd, and game messages can never reach any API other than the room relay.
-- Messages **to** the iframe carry only platform-constructed data (typed inputs, sanitized
-  nicknames) — never raw client frames.
-- `postMessage` uses `targetOrigin: '*'` of necessity (opaque origin) but the shell only
-  listens on the specific iframe's `contentWindow` source — standard for this sandbox model.
-- Single-player games are untouched: no bridge prop, no injected SDK, zero behavior change.
-  A regression test asserts the sandbox attribute and CSP are byte-identical for
-  single-player output.
+**Bridge protocol** (`postMessage`, namespaced `gdp` + `v: 1`):
+
+| Direction    | Messages                                                      |
+| ------------ | ------------------------------------------------------------- |
+| game → shell | `hello { slots }` (announce slot count), `phase { phase }`    |
+| shell → game | `roster { slots }`, `input { slot, k, v }`, `phase { phase }` |
+
+Bridge rules in the shell (`GameFrame` gains an optional `bridge` prop):
+
+- Messages **from** the iframe are hostile input: validated, size-capped, unknown types
+  dropped, never rendered as HTML, never eval'd, never forwarded anywhere but the room relay.
+- Messages **to** the iframe carry only platform-constructed data (typed inputs, moderated
+  nicknames) — never a raw client frame.
+- `postMessage` must use `targetOrigin: '*'` (the sandboxed frame has an opaque origin); the
+  shell only accepts messages whose `event.source` is that specific iframe's `contentWindow`.
+- Single-player games are untouched: no bridge prop, no `party` module, zero behavior change.
+  A regression test asserts the sandbox attribute and CSP output are unchanged.
 
 ### 4.5 Games-repo contract
 
-- `SPEC.md` frontmatter gains an optional block; it flows into `catalog.json` (schema
-  version bump) so the web app can badge/filter and the lobby knows the player bounds:
+`SPEC.md` frontmatter is a **flat `key: value` map** — both parsers (the repo's
+`tools/lib/spec.mjs` and the API's `parseSpecFrontmatter`) reject nested YAML, so the
+multiplayer metadata is flat, snake_case, matching `submitted_by`:
 
-  ```yaml
-  multiplayer:
-    mode: controllers # v1: the only allowed value
-    minPlayers: 2
-    maxPlayers: 8
-    layout: dpad-2 # stock controller layout id
-  ```
+```yaml
+multiplayer: controllers # v1: the only allowed value
+min_players: 2
+max_players: 4
+```
 
-- Validation (`validate.mjs`) additions: frontmatter schema; a multiplayer game must
-  reference `GamedevParty` guardedly (feature-detect, so the game still boots to a sane
-  "needs a lobby" screen when played solo); the offline-only rule is **unchanged** — no new
+- `validate.mjs`: new Check 12 — if `multiplayer` is present it must be `controllers`,
+  `min_players`/`max_players` must be integers with `2 ≤ min ≤ max ≤ 8`, `GAME.json` must
+  select the `party` module, and `game.js` must call `createParty(`. Conversely, selecting
+  `party` without the frontmatter fails. The offline-only rule is **unchanged** — no new
   network allowances of any kind.
-- Agent instructions get an SDK reference + a complete example game + design guidance
-  (latency-tolerant genres, input semantics per layout, handle join/leave mid-game).
-- Seed games: 3–5 first-party controller games proving the contract before any agent writes
-  one.
+- `GAME_KIT_MODULES` gains `party` (canonical order: `input, collision, drawing, effects,
+audio, party`) in both `tools/lib/assemble.mjs` and the API's `github-client.ts`, which
+  keep independent copies of that list.
+- The catalog carries `multiplayer`, `minPlayers`, `maxPlayers` through `CatalogGameEntry` →
+  `/api/catalog` → the web `CatalogEntry`.
+- Agent instructions get a multiplayer section + the two seed games as house-style references.
 
 ### 4.6 Cloud Run realities
 
-- WebSockets work on Cloud Run; enable **session affinity** on the service so a room's
-  connections land on the instance holding it. With beta-scale traffic (max a few instances)
-  this is sufficient; the failure mode (affinity miss → "room not found") is handled
-  client-side by surfacing "room ended — rescan to restart".
-- WS connections cap at the request timeout (≤60 min): the shell and controllers
-  **auto-reconnect with a resume token** (same slot, same color) — this also covers phones
-  sleeping/backgrounding, which will be the #1 real-world event.
-- Instance scale-down kills in-memory rooms: acceptable for ephemeral party sessions in
-  beta. If multiplayer sticks, the upgrade path is externalizing room state
-  (Memorystore/Redis pub-sub) — explicitly **out of scope** now; the protocol is designed so
-  this swap is server-internal.
-- Deploy: no new env/secrets beyond a `MP_ROOM_TOKEN_SECRET` (mint in Secret Manager, wire
-  like `session-secret` incl. the accessor grant in `setup-gcp.sh`). Smoke gate: WS upgrade
-  without token → 401; `POST /api/mp/sessions` anonymous → 401.
+- WebSockets work on Cloud Run, but **rooms are in-memory and the service autoscales to 4
+  instances** — a guest can land on an instance that doesn't hold the host's room. Session
+  affinity does not fix this (it pins a _client_, not a _room_). For the closed beta the
+  service therefore runs **`--max-instances 1`** while multiplayer is enabled: with an
+  allowlisted handful of users and Cloud Run's default concurrency of 80, one instance is
+  ample. This is the one genuine trade in this design and it is one flag to revert.
+  Upgrade paths when it matters: a separate `gamedev-party` service pinned to one instance
+  (same image, host authenticated by a short-lived HMAC ticket since cookies don't cross
+  origins), or externalized room state (Memorystore). The wire protocol is unchanged by
+  either, and the client already handles `room_not_found` by telling the host to restart the
+  lobby — so raising the cap later degrades visibly rather than mysteriously.
+- WS connections cap at the request timeout (≤60 min); shell and controllers **auto-reconnect
+  into the same slot**, which also covers phones sleeping/backgrounding — the #1 real-world
+  event.
+- Instance scale-down kills rooms: acceptable for ephemeral party sessions.
+- No new secret: room tokens are HMAC'd from the already-mounted `SESSION_SECRET` under a
+  distinct scope string. Smoke gate: anonymous `POST /api/mp/sessions` → 401.
 
 ### 4.7 Alternatives considered
 
-- **WebRTC P2P (host authoritative, server only signaling)**: best latency, but NAT/carrier
-  quirks on guest phones make "scan → it just works" flaky, and debugging is brutal. The
-  relay keeps one boring failure domain. Revisit only if relay latency actually hurts.
-- **Firestore/Realtime-DB as transport**: write-per-input cost and latency are wrong for
-  input streams; fine for lobbies only — not worth splitting the transport.
-- **Third-party realtime (PartyKit, Ably, Liveblocks)**: new vendor, new credentials, new
-  ToS surface — against the project's decentralization posture, and the relay is small.
-- **Letting games open their own WebSocket** (relax CSP for multiplayer games): rejected
-  outright — it would break the security model's core invariant and give untrusted generated
-  code a network exfiltration path.
+- **WebRTC P2P** (server only signals): best latency and it would sidestep the
+  instance-affinity problem entirely, but NAT/carrier quirks on guest phones make
+  "scan → it just works" flaky, and it needs STUN/TURN to be reliable when phones are on LTE
+  and the laptop is on WiFi. The relay keeps one boring failure domain. Revisit if relay
+  latency actually hurts.
+- **Firestore as transport**: write-per-input cost and latency are wrong for input streams.
+- **Third-party realtime** (PartyKit, Ably, Liveblocks): new vendor, new credentials, new ToS
+  surface — against the project's decentralization posture.
+- **Injecting the SDK from `assembleGameHtml`** (the first draft's design): rejected once the
+  GameKit module system was understood — see §8.
+- **Letting games open their own WebSocket**: rejected outright; it would break the security
+  model's core invariant and hand untrusted generated code a network exfiltration path.
 
 ---
 
 ## 5. Security & privacy invariants (additions)
 
-1. Game iframes stay exactly `sandbox="allow-scripts"`; the no-network CSP stays on for
-   multiplayer games. The bridge is the only channel, and it is typed and rate-limited.
-2. Everything from a game or a guest phone is untrusted data: schema-validate at the server
-   edge AND in the shell; render nicknames escaped everywhere; nickname text goes through
-   the moderation deny-list (reuse `moderation.ts` from the content-safety work) since
-   nicknames appear on a shared screen.
+1. Game iframes stay exactly `sandbox="allow-scripts"`; the no-network CSP stays on. The
+   bridge is the only channel, and it is typed and rate-limited.
+2. Everything from a game or a guest phone is untrusted data: validate at the server edge AND
+   in the shell; render nicknames escaped everywhere; nicknames go through the existing
+   `moderation.ts` deny-list, since they appear on a shared screen.
 3. Guests are anonymous and ephemeral: no user docs, no cookies, no analytics identity, no
-   persistence of nicknames or inputs. Room tokens expire; nothing about a session outlives
-   the room's memory.
-4. Join tokens never appear in URL query/paths (fragment only), server logs, or Referer.
+   persistence of nicknames or inputs. Nothing about a session outlives the room's memory.
+4. Join tokens never appear in URL query/paths (fragment + frame body only), server logs, or
+   Referer.
 5. Room creation is authenticated + rate-limited; relay connections are per-connection
-   rate-limited and size-capped (DoS containment).
-6. The beta wall exemption is exactly one endpoint, token-gated (`/api/mp/ws`), and its test
-   asserts everything else stays 401 for guests.
+   rate-limited and size-capped.
+6. The beta wall exemption is exactly one path (`/api/mp/ws`), and a test asserts everything
+   else still 401s for guests.
 
 ---
 
 ## 6. Implementation plan
 
-Each milestone is independently shippable and gated by the full local gate + deploy smoke,
-same discipline as everything else in this repo.
+**M1 — Room relay** (`apps/api/src/mp.ts`) · room store, HMAC join tokens, admission control,
+relay, rate limits, beta-wall exemption, full unit-test matrix.
 
-**M0 — Contracts on paper** _(this doc + protocol appendix)_
-Freeze: wire protocol v1, SDK surface, spec frontmatter, catalog schema bump. Exit: owner
-sign-off on open questions below.
+**M2 — Party module + two seed games** (games repo) · `shared/modules/party.js`, validate
+Check 12, `GAME_KIT_MODULES` update, agent instructions, and the two games below.
 
-**M1 — Session service** _(apps/api)_
-`@fastify/websocket`, room store, join tokens, relay + admission control, rate limits, beta
-wall exemption. Full unit-test matrix (join/leave/kick/reconnect/expiry/malformed frames/
-token misuse). Exit: two `wscat` clients relay through a local room; anonymous non-token
-probes all 401.
+**M3 — Lobby, QR, controller, bridge** (`apps/web`) · "Play together", lobby overlay with QR,
+`#/join/:code/:token` route, nickname screen, d-pad controller, `GameFrame` bridge,
+catalog badge, i18n en/pl.
 
-**M2 — Host lobby + phone controller** _(apps/web)_
-"Play together" button, lobby overlay with QR (small client-side QR lib — vet + pin, or
-vendored encoder; no CDN), `/join/:code` route, nickname screen, stock `dpad-2` controller
-with reconnect + wake-lock, i18n en/pl. Exit: laptop + two real phones over the deployed
-service reach a live lobby in <10 s from click.
+**M4 — Metadata plumbing** · flat frontmatter → `CatalogGameEntry` → `/api/catalog` → web.
 
-**M3 — Bridge + SDK + first playable** _(apps/api assemble + apps/web + one seed game)_
-SDK injection in `assembleGameHtml`, GameFrame bridge with hostile-input handling, one
-first-party 2–4 player game (e.g. shared-screen "tag" or pong-party). Sandbox/CSP regression
-tests. Exit: **the CUJ end-to-end on production hardware** — click → scan → play, latency
-felt acceptable on phones over LTE.
+**M5 — Gate, deploy, verify** · full gate in both repos, `--max-instances 1`, smoke additions,
+then the CUJ end-to-end on real hardware: laptop + two phones, click → scan → play.
 
-**M4 — Games-repo contract + seeds** _(games repo + catalog)_
-Frontmatter, `validate.mjs` rules, catalog schema + web badges/filter, agent instructions +
-SDK docs + example, remaining seed games. Exit: an agent-built multiplayer game passes CI
-and plays correctly with zero human code fixes.
+### The two seed games
 
-**M5 — Prompted-flavor + polish**
-"Playable with friends" option in the creator flow (and creator Q&A when it lands),
-lobby-while-generating, play-again flow, kick UX, observability (room counts, join success
-rate, reconnect rate, WS error taxonomy in Cloud Run logs). Exit: full CUJ including
-"one of them prompts it".
+| Slug           | Kind                    | Why it's the right first pair                                                                                                                                                                                              |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tactics-duel` | Turn-based tactical, 2P | Latency is _irrelevant_ — proves the platform on the forgiving end. Alternating turns, three units each on a small grid, move-and-strike. D-pad moves a cursor, A confirms; the exact shape a phone controller is good at. |
+| `arena-tag`    | Real-time arcade, 2–4P  | The honest stress test: continuous input, held directions, everyone moving at once. If this feels good on phones over the relay, the latency budget is real.                                                               |
 
-Sequencing vs. the current queue: this starts **after** the in-flight beta/safety queue
-(P0 shell fix → dep bumps → waitlist → safety slices → creator Q&A) — multiplayer touches
-`app.ts` auth walls and `assemble.ts`, so landing it mid-queue would collide with AGY's work.
+Both ship hot-seat playable (slot model), both pass the existing capture/validate pipeline.
 
 ---
 
 ## 7. Open questions — working answers
 
-Answered with best-guess defaults (Claude, 2026-07-23) so M0 isn't blocked; the owner can
-override any of these before M1 starts. Each answer is the working assumption the milestones
-build against.
+Answered with best-guess defaults (Claude, 2026-07-23); the owner can override any of them.
 
-1. **Seed games** — five titles, all latency-tolerant and 2+ player from the stock layouts:
-   - _Party Pong_ (2–4, `dpad-1`): paddles on each screen edge; the classic proof that
-     input relay feels good.
-   - _Tag Arena_ (2–8, `dpad-2`): one player is "it", roles swap on touch; pure chase fun,
-     trivially fair under latency.
-   - _Quick Draw_ (2–8, `buttons-4`): reaction duels — wait for the signal, first press
-     wins the round; timing is server-tagged so it's honest.
-   - _Color Quiz_ (2–8, `buttons-4`): trivia-style prompts on the shared screen, answers on
-     phones; the most latency-proof genre and the best demo of the "answer sheet" idea that
-     motivates v2 custom layouts.
-   - _Snake Royale_ (2–8, `dpad-2`): last snake alive on one board; showcases the max
-     player count.
+1. **Seed games** — **two, per owner direction (2026-07-23)**: `tactics-duel` (turn-based
+   tactical) and `arena-tag` (real-time arcade). The earlier five-title list is deferred; two
+   is enough to prove both latency regimes and to give agents house-style references.
 2. **Guest anonymity vs. beta optics** — **yes, anonymous guests are in**. Guests can only
    reach a room an allowlisted host opened, hold a token scoped to that one room, and touch
-   exactly one endpoint. That preserves the spirit of the beta wall (an invited member vouches
-   for the session) without forcing sign-ins on someone's phone mid-party, which would kill
-   the CUJ. Revisit only if abuse shows up in the room-creation logs.
-3. **Player cap** — **default 8 stands** (games can lower it via `maxPlayers`). Eight fits a
-   living room, a distinguishable color palette, and one lobby row; anything higher strains
-   both the palette and a single Cloud Run relay instance for no real party-size gain.
-4. **QR library** — **small zero-dependency npm package, pinned exact** (e.g. `uqr` or
-   equivalent: pure encoder, no transitive deps, renders to SVG string client-side). Pinning
-   exact + zero transitive deps gives vendoring-grade supply-chain surface without taking on
-   maintenance of crypto-adjacent encoder math ourselves; the lockfile + gitleaks/CI
-   discipline already in place covers the rest. Vet the package at M2 (repo activity, no
-   install scripts, no network code) before adding.
+   exactly one endpoint. Forcing a sign-in on someone's phone mid-party would kill the CUJ.
+3. **Player cap** — **8 platform-wide**; per-game via `max_players` (the seed games use 2
+   and 4). Eight fits a living room, a distinguishable color palette, and one lobby row.
+4. **QR library** — **no dependency at all.** QR encoding for a short ASCII URL is ~200 lines;
+   a vendored, test-covered encoder beats auditing a package for the one place we need it,
+   and it keeps the supply-chain surface at zero. (Revised from "pinned npm package".)
 5. **Mode C (each-device sync)** — **formally out of scope** until modes A/B prove demand.
-   No protocol work, no spec fields, no agent guidance for it; the only concession already
-   in the design is that the relay protocol doesn't preclude it later.
+6. **`--max-instances 1` during beta** — flagged for the owner as the one real operational
+   trade (§4.6). Reverting it means multiplayer rooms break intermittently until a relay
+   service or shared room state exists.
+
+---
+
+## 8. Plan revisions (what changed from the first draft)
+
+The first draft was written against `docs/architecture.md`, which describes the older
+"self-contained bundle" world. Reading the actual games repo changed four decisions:
+
+1. **The SDK is a GameKit module, not an injected script.** The games repo has a real shared
+   engine (`shared/modules/{core,input,collision,drawing,effects,audio}.js`) selected per game
+   through `GAME.json` and bundled at serve time by `github-client.ts`. Injecting a parallel
+   SDK from `assembleGameHtml` would have created a second, invisible module system that the
+   repo's own validate/capture/smoke tooling knows nothing about. Cost of the change: the
+   module lives in the games repo, so the bridge protocol is versioned across two repos —
+   handled by the `v: 1` handshake and the shell tolerating silence.
+2. **Frontmatter must be flat.** Both spec parsers are strict flat `key: value` and the repo's
+   parser _throws_ on a nested block, so the planned `multiplayer:` YAML object would have
+   failed validation on every game in the repo. Now flat snake_case keys.
+3. **The slot model replaced "needs a lobby" solo handling.** Discovering `CAPTURE.json` —
+   deterministic keyboard-driven capture with assertions, required for any `published` game —
+   forced the question of how a multiplayer game gets captured in CI. Giving every slot a
+   keyboard binding answers that _and_ yields hot-seat play, a sane solo state, and a single
+   input path in game code. This is the biggest improvement over the first draft.
+4. **Cloud Run instance affinity is a real constraint, not a footnote.** The first draft
+   waved at session affinity; affinity pins clients, not rooms, so with `--max-instances 4` a
+   guest can simply miss the host's room. Now an explicit, owner-visible trade (§4.6).
