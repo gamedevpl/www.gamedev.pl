@@ -98,6 +98,19 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **Unit tests for a new route can pass while the route is still 401'd by a wall that
+  lives elsewhere.** Observed (self-authored, 2026-07-23): a new `POST /api/waitlist`
+  route was added inside `registerAuthPlugin` (`auth.ts`) and its unit tests called
+  `registerAuthPlugin` directly — green. But the private-beta all-`/api/*` wall hook lives
+  in `app.ts` (`buildApp`), a separate file, and its exemption list (`/api/health`,
+  `/api/auth/*`) didn't include the new route. Every local check (lint/type-check/test/
+  build) passed; only the CI _deploy smoke test_ against the real assembled app caught it
+  (expected 400, got 401), and the candidate revision never got promoted — no prod
+  incident, but it should have been caught locally. Lesson: when a new route is added
+  under a project that has a cross-cutting auth/allowlist wall, test it through the
+  _fully assembled app_ (`buildApp`/equivalent), not just the plugin that defines the
+  route — and grep for the wall's exemption list explicitly to confirm the new path
+  matches it.
 
 ## Read the diff against the spec
 
