@@ -23,4 +23,9 @@ regexes = [
   # Prose in docs/risks-and-open-questions.md ("…forged/absent tokens rejected…")
   # that generic-api-key mistakes for a token value.
   '''forged/absent''',
+  # Launch-plan prose (docs/closed-beta-launch-plan.md, git history commit
+  # 8fc3e64e) describing the Cloud Run region change. generic-api-key reads
+  # the `REGION=europe-west1` KEY=value token as high-entropy. Not a secret —
+  # it's a public region name.
+  '''REGION=europe-west1''',
 ]
