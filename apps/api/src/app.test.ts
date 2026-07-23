@@ -176,6 +176,15 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('waitlist works without a session in private-beta mode (rejected sign-ins must reach it)', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    // No cookie header — this route exists precisely for people who are NOT signed in.
+    const res = await app.inject({ method: 'POST', url: '/api/waitlist', payload: {} });
+    // 400 (validation) not 401 (wall) — proves the private-beta gate exempts this route.
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('non-API paths are never 401 in private-beta mode (shell must be reachable)', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/some-path' });
