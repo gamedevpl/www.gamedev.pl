@@ -81,6 +81,17 @@ Two concrete instances of that (observed 2026-07-23):
   because the entrypoint never passed the real one (`buildApp({logger:true})`, default
   `?? new InMemoryStore()`). Status codes cannot reveal this. After verifying a flow
   that should write, query the datastore for the actual record.
+- **A green deploy can serve stale config: CI vars are snapshotted per-run.** Observed: a
+  deploy run raced a `gh variable set` — the run baked the variable's OLD (empty) value into
+  the revision and went green, because the smoke gates only asserted negative outcomes
+  (401s), which an empty allowlist satisfies identically to a working one. And the fix
+  attempt raced too: a second run had snapshotted a since-deleted variable and re-deployed
+  it. After any config-affecting deploy, verify the SERVED revision's actual env
+  (`gcloud run services describe … | jq .spec.template…env`), never just the run's color.
+- **An agent will put literal placeholder values into live config.** Observed:
+  `BETA_ALLOWED_EMAILS=your.email@gmail.com` set as a real repo variable — a registrable
+  Gmail address, i.e. a live allowlist hole. Grep agent-set config for placeholder shapes
+  (`your.`, `example.`, `changeme`, `<...>`) before and after deploys.
 - **A green local gate does not prove `npm ci` will pass.** lint/type-check/test/build all
   run against whatever is already in `node_modules`; only `npm ci` checks that
   `package.json` and `package-lock.json` agree, and CI runs it first. Observed: an agent
