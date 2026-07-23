@@ -24,13 +24,65 @@ function pollDelayMs(status: SubmissionStatus['status']): number | null {
   return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
 }
 
+const STATUS_ICONS: Record<SubmissionStatus['status'], string> = {
+  queued: '🕓',
+  building: '🛠️',
+  in_review: '👀',
+  publishing: '🚀',
+  published: '🎉',
+  needs_changes: '✏️',
+};
+
+// The linear happy path the timeline visualizes. needs_changes branches off it,
+// so it's handled as a separate "halted" state rather than a timeline position.
+const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
+
+function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
+  const { t } = useTranslation();
+
+  if (current === 'needs_changes') {
+    return (
+      <div className="status-timeline-halted">
+        <span className="status-timeline-halted-icon" aria-hidden="true">
+          {STATUS_ICONS.needs_changes}
+        </span>
+        <span className="status-timeline-halted-label">{t('statusView.states.needs_changes.label')}</span>
+      </div>
+    );
+  }
+
+  const currentIndex = TIMELINE_STEPS.indexOf(current);
+
+  return (
+    <ol className="status-timeline">
+      {TIMELINE_STEPS.map((step, index) => {
+        const stepState = index < currentIndex ? 'done' : index === currentIndex ? 'active' : 'upcoming';
+        return (
+          <li key={step} className={`status-timeline-step status-timeline-${stepState}`}>
+            <span className="status-timeline-dot" aria-hidden="true">
+              {stepState === 'done' ? '✓' : STATUS_ICONS[step]}
+            </span>
+            <span className="status-timeline-label">{t(`statusView.states.${step}.label`)}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 type SubmissionStatusViewProps = {
   token: string;
   submittedTitle?: string;
+  submittedConcept?: string;
   trackingUrl?: string;
 };
 
-export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: SubmissionStatusViewProps) {
+export function SubmissionStatusView({
+  token,
+  submittedTitle,
+  submittedConcept,
+  trackingUrl,
+}: SubmissionStatusViewProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,7 +218,8 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
   return (
     <>
       <section className="panel status-panel">
-        <h2 className="section-title">{t('statusView.title')}</h2>
+        <h2 className="section-title">{submittedTitle ?? t('statusView.title')}</h2>
+        {submittedConcept ? <p className="status-brief">“{submittedConcept}”</p> : null}
         <p className="status-note">
           {t('statusView.saveLink')}{' '}
           <a className="inline-link" href={currentTrackingUrl}>
@@ -188,7 +241,7 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
           </>
         ) : status ? (
           <>
-            <p className={`status-badge status-${status.status}`}>{t(`statusView.states.${status.status}.label`)}</p>
+            <StatusTimeline current={status.status} />
             <p className="status-description">{t(`statusView.states.${status.status}.description`)}</p>
 
             {status.status === 'published' && status.slug ? (
@@ -232,6 +285,7 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
           <div className="game-meta">
             <h2>{previewTitle}</h2>
             <p className="status-preview-badge">
+              <span className="live-dot" aria-hidden="true" />
               {previewRefreshing ? t('statusView.previewUpdating') : t('statusView.previewBadge')}
             </p>
           </div>
@@ -271,7 +325,9 @@ function BuildProgressPanel({ progress }: { progress: BuildProgress }) {
           <h3 className="build-progress-heading">{t('statusView.progress.commitsTitle')}</h3>
           <ul>
             {recentCommits.map((commit, index) => (
-              <li key={index}>{commit.message}</li>
+              <li key={index} className={index === 0 ? 'build-progress-commit-latest' : undefined}>
+                {commit.message}
+              </li>
             ))}
           </ul>
         </div>

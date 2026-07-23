@@ -1070,7 +1070,12 @@ textarea:focus {
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   background: #000;
+  width: 100%;
   max-width: 100%;
+  /* Outside the full-viewport theater (e.g. the submission status page), the iframe's
+     height:100% has no ancestor with a defined height to resolve against and collapses
+     to 0. Give it a real height here so preview/published games actually render. */
+  height: min(66vh, 640px);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.6),
     0 0 1px var(--turquoise-glow);
@@ -1192,6 +1197,18 @@ body.player-open {
 }
 
 /* SUBMISSION STATUS VIEW */
+.status-brief {
+  color: var(--text);
+  font-size: 0.98rem;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  background: var(--panel-card);
+  border-left: 3px solid var(--turquoise);
+  border-radius: 4px;
+}
+
 .status-note {
   color: var(--muted);
   font-size: 0.9rem;
@@ -1212,42 +1229,108 @@ body.player-open {
   color: var(--muted);
 }
 
-.status-badge {
-  display: inline-block;
-  border-radius: 999px;
-  padding: 4px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  /* Neutral default; per-state variants below tint it. */
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  color: var(--muted);
+/* Horizontal progress tracker for the happy path (queued -> ... -> published). */
+.status-timeline {
+  display: flex;
+  list-style: none;
+  margin: 18px 0 20px;
+  padding: 0;
 }
 
-.status-queued {
-  background: rgba(148, 163, 184, 0.12);
-  border-color: rgba(148, 163, 184, 0.3);
-  color: var(--muted);
+.status-timeline-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
-.status-building,
-.status-in_review,
-.status-publishing {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.3);
-  color: var(--accent-blue);
+.status-timeline-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: rgba(148, 163, 184, 0.25);
+  z-index: 0;
 }
 
-.status-published {
-  background: rgba(0, 228, 172, 0.1);
-  border-color: rgba(0, 228, 172, 0.3);
+.status-timeline-done:not(:last-child)::after {
+  background: var(--turquoise);
+}
+
+.status-timeline-dot {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  background: var(--panel-card);
+  font-size: 0.85rem;
+}
+
+.status-timeline-done .status-timeline-dot {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.15);
   color: var(--turquoise);
 }
 
-.status-needs_changes {
-  background: rgba(255, 107, 107, 0.1);
-  border-color: rgba(255, 107, 107, 0.3);
+.status-timeline-active .status-timeline-dot {
+  border-color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.18);
+  animation: timeline-pulse 1.8s ease-in-out infinite;
+}
+
+.status-timeline-upcoming .status-timeline-dot {
+  opacity: 0.5;
+}
+
+.status-timeline-label {
+  max-width: 84px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.status-timeline-active .status-timeline-label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+@keyframes timeline-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(56, 189, 248, 0);
+  }
+}
+
+.status-timeline-halted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 20px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.status-timeline-halted-icon {
+  font-size: 1.3rem;
+}
+
+.status-timeline-halted-label {
   color: var(--error);
+  font-weight: 700;
 }
 
 .status-description {
@@ -1277,7 +1360,9 @@ body.player-open {
 }
 
 .status-preview-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: rgba(56, 189, 248, 0.12);
   border: 1px solid rgba(56, 189, 248, 0.3);
   color: var(--accent-blue);
@@ -1288,6 +1373,26 @@ body.player-open {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 8px 0 0;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  animation: live-dot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
 }
 
 /* MOBILE RESPONSIVENESS */
@@ -1376,6 +1481,21 @@ body.player-open {
   .transparency-grid {
     grid-template-columns: 1fr;
   }
+
+  .status-timeline-dot {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+  }
+
+  .status-timeline-step:not(:last-child)::after {
+    top: 12px;
+  }
+
+  .status-timeline-label {
+    font-size: 0.6rem;
+    max-width: 60px;
+  }
 }
 
 .build-progress {
@@ -1434,6 +1554,11 @@ body.player-open {
   border-bottom: none;
 }
 
+.build-progress-commits li.build-progress-commit-latest {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* AUTHENTICATION UI */
 .sign-in-btn {
   background: var(--turquoise);
@@ -1479,14 +1604,18 @@ body.player-open {
 .logout-btn {
   background: none;
   border: none;
+  color: var(--muted);
   cursor: pointer;
   font-size: 0.9rem;
   opacity: 0.7;
   padding: 2px 4px;
-  transition: opacity 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
 }
 
 .logout-btn:hover {
+  color: var(--text);
   opacity: 1;
 }
 
@@ -1663,6 +1792,37 @@ body.player-open {
   color: var(--muted);
   font-size: 0.8rem;
   margin: 20px 0 0;
+}
+
+.beta-splash__loading {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.beta-splash__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--panel-border);
+  border-top-color: var(--turquoise);
+  border-radius: 50%;
+  animation: beta-splash-spin 0.8s linear infinite;
+}
+
+@keyframes beta-splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.beta-splash__status {
+  margin-bottom: 8px;
+}
+
+.beta-splash__waitlist-rejected {
+  color: #ff8080;
+  font-size: 0.95rem;
+  margin: 0;
 }
 
 /* Creator Q&A Clarifications */

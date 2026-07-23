@@ -193,7 +193,7 @@ export function App() {
   }
 
   if (authLoading) {
-    return null;
+    return <ClosedBetaSplash loading />;
   }
 
   if (privateBeta && !user) {
@@ -206,7 +206,11 @@ export function App() {
 
       <main className="content">
         {route.view === 'status' ? (
-          <SubmissionStatusView token={route.token} />
+          <SubmissionStatusView
+            token={route.token}
+            submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}
+            submittedConcept={savedSpecs.find((spec) => spec.token === route.token)?.concept}
+          />
         ) : (
           <>
             <div id="hero-prompt">
