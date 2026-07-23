@@ -2,7 +2,12 @@ import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { createGitHubClient, type GitHubClient, type LinkedPullRequest } from './github-client.js';
+import {
+  createGitHubClient,
+  type CatalogGameEntry,
+  type GitHubClient,
+  type LinkedPullRequest,
+} from './github-client.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
 
 const CreateSubmissionRequestSchema = z.object({
@@ -53,7 +58,6 @@ interface SubmissionStatusResponseBase {
 interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {
   status: 'published';
   slug: string;
-  playUrl: string;
 }
 
 type SubmissionStatusResponse = SubmissionStatusResponseBase | SubmissionPublishedResponse;
@@ -63,15 +67,10 @@ interface CachedStatus {
   value: SubmissionStatusResponse;
 }
 
-interface CatalogEntry {
-  slug: string;
-}
-
 export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
   submissionTokenSecret?: string;
-  catalogUrl?: string;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -165,37 +164,10 @@ function extractSlugFromChangedFiles(changedFiles: string[]): string | null {
   return null;
 }
 
-function getGamesOrigin(catalogUrl: string): string {
-  const url = new URL(catalogUrl);
-  url.pathname = url.pathname.replace(/\/catalog\.json$/, '');
-  return url.toString().replace(/\/$/, '');
-}
-
-async function isSlugPublished(catalogUrl: string, slug: string, fetchImpl: typeof fetch): Promise<boolean> {
-  const response = await fetchImpl(catalogUrl);
-  if (!response.ok) {
-    throw new Error(`catalog request failed with status ${response.status}`);
-  }
-
-  const json = (await response.json()) as unknown;
-  if (!Array.isArray(json)) {
-    return false;
-  }
-
-  return json.some((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return false;
-    }
-    const catalogEntry = entry as CatalogEntry;
-    return catalogEntry.slug === slug;
-  });
-}
-
 async function deriveStatus(
   issueState: 'open' | 'closed',
   linkedPr: LinkedPullRequest | null,
-  catalogUrl: string,
-  fetchImpl: typeof fetch,
+  isSlugPublished: (slug: string) => Promise<boolean>,
 ): Promise<SubmissionStatusResponse> {
   if (!linkedPr) {
     return issueState === 'closed' ? { status: 'needs_changes' } : { status: 'queued' };
@@ -207,16 +179,14 @@ async function deriveStatus(
       return { status: 'publishing' };
     }
 
-    const published = await isSlugPublished(catalogUrl, slug, fetchImpl);
+    const published = await isSlugPublished(slug);
     if (!published) {
       return { status: 'publishing' };
     }
 
-    return {
-      status: 'published',
-      slug,
-      playUrl: `${getGamesOrigin(catalogUrl)}/games/${slug}/index.html`,
-    };
+    // The web app plays a published game through GET /api/games/:slug — same
+    // origin, so the games repo itself never needs to be publicly reachable.
+    return { status: 'published', slug };
   }
 
   if (linkedPr.state !== 'OPEN') {
@@ -244,10 +214,10 @@ export async function registerSubmissionRoutes(
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN;
   const gamesRepo = options.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
   const submissionTokenSecret = options.submissionTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
-  const catalogUrl =
-    options.catalogUrl ?? process.env.CATALOG_URL ?? 'https://gamedevpl.github.io/www.gamedev.pl-games/catalog.json';
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
+  // Published games live on the games repo's default branch.
+  const publishedRef = process.env.GAMES_PUBLISHED_REF ?? 'main';
 
   const githubClient =
     githubToken && submissionTokenSecret
@@ -266,6 +236,33 @@ export async function registerSubmissionRoutes(
   const previewRateLimitWindowMs = 60 * 1000;
   const maxPreviewsPerWindow = 30;
   const previewsByIp = new Map<string, number[]>();
+
+  // The catalog and published games are read through the authenticated GitHub
+  // API (not public Pages), so the games repo can be private. Both are cached:
+  // the catalog briefly (it gates the publishing→published transition), games
+  // longer (a published game only changes on a new merge to main).
+  const catalogTtlMs = 60_000;
+  let catalogCache: { expiresAt: number; entries: CatalogGameEntry[] } | null = null;
+  const gameTtlMs = 5 * 60_000;
+  const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
+  const gamesRateLimitWindowMs = 60 * 1000;
+  const maxGamesPerWindow = 60;
+  const gamesByIp = new Map<string, number[]>();
+
+  async function getCatalogEntries(client: GitHubClient): Promise<CatalogGameEntry[]> {
+    const currentTime = now();
+    if (catalogCache && catalogCache.expiresAt > currentTime) {
+      return catalogCache.entries;
+    }
+    const entries = await client.getCatalog(publishedRef);
+    catalogCache = { entries, expiresAt: currentTime + catalogTtlMs };
+    return entries;
+  }
+
+  async function isSlugPublished(client: GitHubClient, slug: string): Promise<boolean> {
+    const entries = await getCatalogEntries(client);
+    return entries.some((entry) => entry.slug === slug && entry.status === 'published');
+  }
 
   app.post('/api/submissions', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
@@ -347,7 +344,7 @@ export async function registerSubmissionRoutes(
     try {
       const issue = await githubClient.getIssueState(issueNumber);
       const linkedPr = await githubClient.findLinkedPR(issueNumber);
-      const status = await deriveStatus(issue.state, linkedPr, catalogUrl, fetchImpl);
+      const status = await deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(githubClient, slug));
       statusCache.set(issueNumber, { value: status, expiresAt: currentTime + 60_000 });
       return reply.send(status);
     } catch (error) {
@@ -434,6 +431,82 @@ export async function registerSubmissionRoutes(
         return reply.status(422).send({ error: 'this game could not be previewed' });
       }
       throw error;
+    }
+  });
+
+  // The public game catalog, derived from SPEC.md frontmatter on the games repo's
+  // default branch via the authenticated API. This (not public GitHub Pages) is
+  // what the web app lists, so the games repo itself can be private — the app's
+  // own access gate is the single boundary.
+  app.get('/api/catalog', async (request, reply) => {
+    if (!githubClient) {
+      return reply.status(503).send({ error: 'catalog is not configured' });
+    }
+
+    try {
+      const entries = await getCatalogEntries(githubClient);
+      return reply.send(entries.filter((entry) => entry.status === 'published'));
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to load catalog');
+      return reply.status(502).send({ error: 'failed to load catalog' });
+    }
+  });
+
+  // Play a published game: sources are fetched from the games repo's default
+  // branch and assembled into one document for the sandboxed, opaque-origin
+  // iframe — the same trust model as the preview endpoint. Only slugs present
+  // in the catalog as published are served.
+  app.get('/api/games/:slug', async (request, reply) => {
+    if (!githubClient) {
+      return reply.status(503).send({ error: 'games are not configured' });
+    }
+
+    const slug = z.string().parse((request.params as { slug?: string }).slug);
+    const currentTime = now();
+    if (isRateLimited(gamesByIp, request.ip, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many game requests, please try again later' });
+    }
+
+    const cached = gameCache.get(slug);
+    if (cached && cached.expiresAt > currentTime) {
+      return reply.send(cached.value);
+    }
+
+    try {
+      if (!(await isSlugPublished(githubClient, slug))) {
+        return reply.status(404).send({ error: 'game not found' });
+      }
+
+      const sources = await githubClient.getGameSources(publishedRef, slug);
+      if (!sources) {
+        return reply.status(404).send({ error: 'game not found' });
+      }
+
+      const project: GameProject = {
+        title: sources.title ?? slug,
+        description: '',
+        html: sources.indexHtml,
+        js: sources.gameJs,
+        css: sources.styleCss,
+      };
+
+      // restrictNetwork: published games are self-contained by repo policy, so
+      // lock them to their own inline assets just like unreviewed previews.
+      const html = assembleGameHtml(project, { restrictNetwork: true });
+      const value = { slug, title: project.title, html };
+      gameCache.set(slug, { value, expiresAt: currentTime + gameTtlMs });
+      return reply.send(value);
+    } catch (error) {
+      if (
+        error instanceof EmptyProjectError ||
+        error instanceof ProjectTooLargeError ||
+        error instanceof CredentialLeakError
+      ) {
+        request.log.warn({ err: error, slug }, 'published game failed hygiene checks');
+        return reply.status(422).send({ error: 'this game could not be served' });
+      }
+      request.log.error({ err: error }, 'failed to serve game');
+      return reply.status(502).send({ error: 'failed to load game' });
     }
   });
 }

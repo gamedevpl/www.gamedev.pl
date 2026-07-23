@@ -36,7 +36,6 @@ jobs:
       SERVICE: 'gamedev-app'
       REPO: 'gamedev'
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
-      CATALOG_URL: 'https://gamedevpl.github.io/www.gamedev.pl-games/catalog.json'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
 
@@ -91,7 +90,7 @@ jobs:
             --min-instances 0 \
             --max-instances 4 \
             --port 8080 \
-            --set-env-vars "GAMES_REPO=${GAMES_REPO},CATALOG_URL=${CATALOG_URL}" \
+            --set-env-vars "GAMES_REPO=${GAMES_REPO}" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
@@ -112,6 +111,14 @@ jobs:
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/health")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Smoke test failed with HTTP status ${STATUS_CODE}"
+            exit 1
+          fi
+
+          # The catalog is served through the app from the games repo (authenticated
+          # GitHub API) — verify that path works before promoting traffic.
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/catalog")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Catalog smoke test failed with HTTP status ${STATUS_CODE}"
             exit 1
           fi
           echo "Smoke test passed on candidate URL!"

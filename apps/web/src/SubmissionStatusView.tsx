@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
+import { PublishedGameFrame } from './PublishedGameFrame';
 import {
   getSubmissionPreview,
   getSubmissionStatus,
@@ -190,7 +191,7 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
             <p className={`status-badge status-${status.status}`}>{t(`statusView.states.${status.status}.label`)}</p>
             <p className="status-description">{t(`statusView.states.${status.status}.description`)}</p>
 
-            {status.status === 'published' && status.playUrl ? (
+            {status.status === 'published' && status.slug ? (
               <div className="status-actions">
                 <button className="primary-btn" onClick={() => setShowGame(true)}>
                   {t('statusView.play')}
@@ -210,13 +211,13 @@ export function SubmissionStatusView({ token, submittedTitle, trackingUrl }: Sub
         ) : null}
       </section>
 
-      {showGame && status?.status === 'published' && status.playUrl ? (
+      {showGame && status?.status === 'published' && status.slug ? (
         <section className="panel stage">
           <div className="game-meta">
             <h2>{publishedGameTitle}</h2>
-            {status.slug && <p>{t('statusView.slug', { slug: status.slug })}</p>}
+            <p>{t('statusView.slug', { slug: status.slug })}</p>
           </div>
-          <GameFrame title={publishedGameTitle} src={status.playUrl} />
+          <PublishedGameFrame slug={status.slug} title={publishedGameTitle} />
         </section>
       ) : null}
 

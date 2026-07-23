@@ -13,10 +13,10 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 # Web build-time config (baked into the static bundle). Same-origin API, so no base URL.
-ARG VITE_GAMES_ORIGIN=https://gamedevpl.github.io/www.gamedev.pl-games
+# The catalog and published games are served by the API itself (from the games repo via
+# the authenticated GitHub API), so no games origin is baked into the bundle.
 ARG VITE_API_BASE_URL=
-ENV VITE_GAMES_ORIGIN=$VITE_GAMES_ORIGIN \
-    VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 COPY . .
 # --ignore-scripts: skip the repo's `prepare`/husky hook (dev-only) during image builds.

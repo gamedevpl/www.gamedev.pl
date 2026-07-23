@@ -76,13 +76,18 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('renders the published play flow with the published game URL', async () => {
+  it('renders the published play flow served by the app API', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'published',
       slug: 'sky-dodge',
-      playUrl: 'https://example.com/games/sky-dodge/index.html',
     });
+    // PublishedGameFrame fetches the assembled game from GET /api/games/:slug.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<canvas>published</canvas>' })),
+      );
     await i18n.changeLanguage('en');
     window.location.hash = '#/status/published-token';
 
@@ -103,11 +108,15 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
+      await flushEffects();
     });
 
+    expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge');
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
-    expect(iframe?.getAttribute('src')).toBe('https://example.com/games/sky-dodge/index.html');
+    expect(iframe?.getAttribute('srcdoc')).toBe('<canvas>published</canvas>');
+
+    fetchSpy.mockRestore();
 
     await act(async () => {
       root.unmount();

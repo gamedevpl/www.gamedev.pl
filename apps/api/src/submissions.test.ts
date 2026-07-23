@@ -1,40 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
-import type { GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintToken } from './submission-token.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
-const catalogUrl = 'https://gamedevpl.github.io/www.gamedev.pl-games/catalog.json';
+
+function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
+  return { slug, title: slug, genre: 'arcade', controls: 'arrows', status: 'published', ...overrides };
+}
 
 function createGithubClientStub(params: {
   issueState?: 'open' | 'closed';
   linkedPr?: LinkedPullRequest | null;
   issueNumber?: number;
   gameSources?: GameSources | null;
+  catalog?: CatalogGameEntry[];
 }) {
   const createIssue = vi.fn(async () => ({ number: params.issueNumber ?? 123 }));
   const getIssueState = vi.fn(async () => ({ state: params.issueState ?? 'open' }));
   const findLinkedPR = vi.fn(async () => params.linkedPr ?? null);
   const getGameSources = vi.fn(async () => params.gameSources ?? null);
-  const githubClient: GitHubClient = { createIssue, getIssueState, findLinkedPR, getGameSources };
-  return { githubClient, createIssue, getIssueState, findLinkedPR, getGameSources };
-}
-
-function createCatalogFetchStub(slugs: string[]): typeof fetch {
-  return vi.fn(
-    async () =>
-      new Response(JSON.stringify(slugs.map((slug) => ({ slug }))), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-  ) as unknown as typeof fetch;
+  const getCatalog = vi.fn(async () => params.catalog ?? []);
+  const githubClient: GitHubClient = { createIssue, getIssueState, findLinkedPR, getGameSources, getCatalog };
+  return { githubClient, createIssue, getIssueState, findLinkedPR, getGameSources, getCatalog };
 }
 
 async function createApp(params: {
   githubClient?: GitHubClient;
-  fetchImpl?: typeof fetch;
   now?: () => number;
   submissionTokenSecret?: string;
 }): Promise<FastifyInstance> {
@@ -43,9 +37,7 @@ async function createApp(params: {
       githubToken: params.githubClient ? 'token' : undefined,
       submissionTokenSecret: params.submissionTokenSecret,
       gamesRepo: repo,
-      catalogUrl,
       githubClient: params.githubClient,
-      fetchImpl: params.fetchImpl,
       now: params.now,
     },
   });
@@ -237,14 +229,16 @@ describe('submission routes', () => {
       expected: {
         status: 'published',
         slug: 'space-runner',
-        playUrl: 'https://gamedevpl.github.io/www.gamedev.pl-games/games/space-runner/index.html',
       },
       catalogSlugs: ['space-runner'],
     },
   ])('derives $label status from issue/pr state', async ({ issueState, linkedPr, expected, catalogSlugs = [] }) => {
-    const { githubClient } = createGithubClientStub({ issueState, linkedPr });
-    const fetchImpl = createCatalogFetchStub(catalogSlugs);
-    const app = await createApp({ githubClient, fetchImpl, submissionTokenSecret: secret });
+    const { githubClient } = createGithubClientStub({
+      issueState,
+      linkedPr,
+      catalog: catalogSlugs.map((slug) => catalogEntry(slug)),
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
     const token = mintToken(123, secret);
 
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
@@ -552,6 +546,132 @@ describe('submission preview route', () => {
     expect(third.statusCode).toBe(200);
     expect(getIssueState).toHaveBeenCalledTimes(2);
     expect(findLinkedPR).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+});
+
+describe('catalog route', () => {
+  it('returns 503 when the github client is not configured', async () => {
+    const app = await buildApp({ submissionRoutes: { githubToken: undefined, submissionTokenSecret: undefined } });
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('serves only published entries from the repo-derived catalog', async () => {
+    const { githubClient } = createGithubClientStub({
+      catalog: [
+        catalogEntry('bubble-pop', { title: 'Bubble Pop Rush', genre: 'arcade' }),
+        catalogEntry('wip-game', { status: 'draft' }),
+      ],
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { slug: 'bubble-pop', title: 'Bubble Pop Rush', genre: 'arcade', controls: 'arrows', status: 'published' },
+    ]);
+
+    await app.close();
+  });
+
+  it('caches the catalog for 60 seconds', async () => {
+    const { githubClient, getCatalog } = createGithubClientStub({ catalog: [catalogEntry('bubble-pop')] });
+    let currentTime = 10_000;
+    const app = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(getCatalog).toHaveBeenCalledTimes(1);
+
+    currentTime += 60_001;
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(getCatalog).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('returns 502 when the catalog cannot be loaded', async () => {
+    const { githubClient, getCatalog } = createGithubClientStub({});
+    getCatalog.mockRejectedValueOnce(new Error('boom'));
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(res.statusCode).toBe(502);
+
+    await app.close();
+  });
+});
+
+describe('published game route', () => {
+  it('assembles a published game from the default branch with a strict CSP', async () => {
+    const { githubClient, getGameSources } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { title: 'Bubble Pop Rush' })],
+      gameSources: sampleSources,
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.slug).toBe('foo');
+    expect(body.title).toBe('Bubble Pop Rush');
+    expect(body.html).toContain(sampleSources.gameJs);
+    expect(body.html).toContain(sampleSources.styleCss);
+    expect(body.html).toContain('Content-Security-Policy');
+    expect(body.html).toContain("default-src 'none'");
+    // Sources come from the games repo's default branch.
+    expect(getGameSources).toHaveBeenCalledWith('main', 'foo');
+
+    await app.close();
+  });
+
+  it('returns 404 for a slug that is not published in the catalog', async () => {
+    const { githubClient, getGameSources } = createGithubClientStub({
+      catalog: [catalogEntry('wip-game', { status: 'draft' })],
+      gameSources: sampleSources,
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    for (const slug of ['wip-game', 'unknown-game']) {
+      const res = await app.inject({ method: 'GET', url: `/api/games/${slug}` });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(getGameSources).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns 404 when the game directory is missing on the default branch', async () => {
+    const { githubClient } = createGithubClientStub({
+      catalog: [catalogEntry('foo')],
+      gameSources: null,
+    });
+    const app = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/games/foo' });
+    expect(res.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('caches an assembled game for 5 minutes', async () => {
+    const { githubClient, getGameSources } = createGithubClientStub({
+      catalog: [catalogEntry('foo')],
+      gameSources: sampleSources,
+    });
+    let currentTime = 10_000;
+    const app = await createApp({ githubClient, submissionTokenSecret: secret, now: () => currentTime });
+
+    await app.inject({ method: 'GET', url: '/api/games/foo' });
+    await app.inject({ method: 'GET', url: '/api/games/foo' });
+    expect(getGameSources).toHaveBeenCalledTimes(1);
+
+    currentTime += 5 * 60_000 + 1;
+    await app.inject({ method: 'GET', url: '/api/games/foo' });
+    expect(getGameSources).toHaveBeenCalledTimes(2);
 
     await app.close();
   });

@@ -6,14 +6,20 @@ export interface CatalogEntry {
   status: string;
 }
 
-const GAMES_ORIGIN = import.meta.env.VITE_GAMES_ORIGIN ?? 'https://gamedevpl.github.io/www.gamedev.pl-games';
-
-export function gameUrl(slug: string): string {
-  return `${GAMES_ORIGIN}/games/${slug}/index.html`;
+/** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */
+export interface PublishedGame {
+  slug: string;
+  title: string;
+  html: string;
 }
 
+// The catalog and published games are served by our own API (which reads the —
+// possibly private — games repo through the authenticated GitHub API), so the
+// only access boundary is the app's own gate. Same origin in production.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
-  const response = await fetch(`${GAMES_ORIGIN}/catalog.json`);
+  const response = await fetch(`${API_BASE}/api/catalog`);
 
   if (!response.ok) {
     throw new Error(`Catalog request failed (${response.status} ${response.statusText || 'Unknown error'})`);
@@ -36,4 +42,18 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
       typeof entry.status === 'string' &&
       entry.status === 'published',
   );
+}
+
+export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
+  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`);
+
+  if (!response.ok) {
+    throw new Error(`Game request failed (${response.status} ${response.statusText || 'Unknown error'})`);
+  }
+
+  const body = (await response.json()) as PublishedGame;
+  if (typeof body?.html !== 'string' || typeof body?.title !== 'string') {
+    throw new Error('Game response was malformed');
+  }
+  return body;
 }

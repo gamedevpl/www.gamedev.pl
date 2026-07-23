@@ -23,7 +23,7 @@
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
 #
-# Override any of these via env: REGION, SERVICE, REPO, GAMES_REPO, CATALOG_URL.
+# Override any of these via env: REGION, SERVICE, REPO, GAMES_REPO.
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID to your GCP project id}"
@@ -31,7 +31,6 @@ REGION="${REGION:-europe-central2}"
 SERVICE="${SERVICE:-gamedev-app}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
-CATALOG_URL="${CATALOG_URL:-https://gamedevpl.github.io/www.gamedev.pl-games/catalog.json}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -86,7 +85,7 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --port 8080 \
-  --set-env-vars "GAMES_REPO=${GAMES_REPO},CATALOG_URL=${CATALOG_URL}" \
+  --set-env-vars "GAMES_REPO=${GAMES_REPO}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
 
 echo "==> Done. The app (web + API) is live at:"

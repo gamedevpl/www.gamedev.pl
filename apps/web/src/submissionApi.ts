@@ -14,7 +14,6 @@ export type BuildProgress = {
 export type SubmissionStatus = {
   status: SubmissionState;
   slug?: string;
-  playUrl?: string;
   /** Present while an unmerged PR is open: the game can be previewed from its branch. */
   preview?: { slug: string };
   /** Present while an unmerged PR is open: live build signals mined from the PR. */

@@ -40,6 +40,19 @@ export interface GameSources {
   title: string | null;
 }
 
+/**
+ * One game's catalog entry, derived from its SPEC.md frontmatter on the default
+ * branch — the same fields the games repo's own tools/catalog.mjs emits. All
+ * text is agent-authored (prompt-influenced) — render escaped only.
+ */
+export interface CatalogGameEntry {
+  slug: string;
+  title: string;
+  genre: string;
+  controls: string;
+  status: string;
+}
+
 export interface GitHubClient {
   createIssue(input: CreateIssueInput): Promise<{ number: number }>;
   getIssueState(issueNumber: number): Promise<{ state: 'open' | 'closed' }>;
@@ -49,6 +62,13 @@ export interface GitHubClient {
    * Returns null if the game directory or a required file is missing on that ref.
    */
   getGameSources(ref: string, slug: string): Promise<GameSources | null>;
+  /**
+   * Builds the game catalog straight from the repo: lists `games/` directories
+   * on `ref` and reads each game's SPEC.md frontmatter. Replaces the old
+   * dependency on the public GitHub Pages `catalog.json` so the games repo can
+   * be private. Games with a missing or unparseable SPEC.md are skipped.
+   */
+  getCatalog(ref: string): Promise<CatalogGameEntry[]>;
 }
 
 export interface GitHubClientOptions {
@@ -74,6 +94,25 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const { token, repo } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
   const { owner, name } = parseRepo(repo);
+
+  /** Reads a file's raw bytes from the contents API; null when it doesn't exist on `ref`. */
+  async function readRawFile(path: string, ref: string): Promise<string | null> {
+    const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
+    const response = await fetchImpl(url, {
+      headers: {
+        // Ask for the raw file bytes rather than the base64 JSON envelope.
+        Accept: 'application/vnd.github.raw',
+        Authorization: ['Bearer', token].join(' '),
+      },
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`github contents request failed with status ${response.status}`);
+    }
+    return response.text();
+  }
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await fetchImpl(url, {
@@ -220,30 +259,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         return null;
       }
 
-      async function readFile(fileName: string): Promise<string | null> {
-        const url =
-          `https://api.github.com/repos/${repo}/contents/games/${slug}/${fileName}` + `?ref=${encodeURIComponent(ref)}`;
-        const response = await fetchImpl(url, {
-          headers: {
-            // Ask for the raw file bytes rather than the base64 JSON envelope.
-            Accept: 'application/vnd.github.raw',
-            Authorization: ['Bearer', token].join(' '),
-          },
-        });
-        if (response.status === 404) {
-          return null;
-        }
-        if (!response.ok) {
-          throw new Error(`github contents request failed with status ${response.status}`);
-        }
-        return response.text();
-      }
-
       const [indexHtml, gameJs, styleCss, specMd] = await Promise.all([
-        readFile('index.html'),
-        readFile('game.js'),
-        readFile('style.css'),
-        readFile('SPEC.md'),
+        readRawFile(`games/${slug}/index.html`, ref),
+        readRawFile(`games/${slug}/game.js`, ref),
+        readRawFile(`games/${slug}/style.css`, ref),
+        readRawFile(`games/${slug}/SPEC.md`, ref),
       ]);
 
       if (indexHtml === null || gameJs === null || styleCss === null) {
@@ -252,16 +272,73 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return { indexHtml, gameJs, styleCss, title: specMd ? parseSpecTitle(specMd) : null };
     },
+
+    async getCatalog(ref) {
+      const listing = await requestJson<Array<{ name: string; type: string }>>(
+        `https://api.github.com/repos/${repo}/contents/games?ref=${encodeURIComponent(ref)}`,
+      );
+
+      const slugs = listing
+        .filter((entry) => entry.type === 'dir' && /^[a-z0-9][a-z0-9-]*$/.test(entry.name))
+        .map((entry) => entry.name)
+        .sort();
+
+      const entries = await Promise.all(
+        slugs.map(async (slug): Promise<CatalogGameEntry | null> => {
+          const specMd = await readRawFile(`games/${slug}/SPEC.md`, ref);
+          if (specMd === null) {
+            return null;
+          }
+          const frontmatter = parseSpecFrontmatter(specMd);
+          const title = frontmatter.title;
+          if (!title) {
+            return null;
+          }
+          return {
+            slug,
+            title,
+            genre: frontmatter.genre ?? '',
+            controls: frontmatter.controls ?? '',
+            status: frontmatter.status ?? '',
+          };
+        }),
+      );
+
+      return entries.filter((entry): entry is CatalogGameEntry => entry !== null);
+    },
   };
+}
+
+/**
+ * Parses a game SPEC.md's YAML-ish frontmatter into a flat string map — the same
+ * lenient `key: value` format the games repo's tools/lib/spec.mjs uses (no nested
+ * YAML). Lines that don't look like `key: value` are skipped.
+ */
+function parseSpecFrontmatter(specMd: string): Record<string, string> {
+  const matched = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
+  if (!matched?.[1]) {
+    return {};
+  }
+
+  const data: Record<string, string> = {};
+  for (const line of matched[1].split(/\r?\n/)) {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line
+      .slice(separatorIndex + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
+    if (key) {
+      data[key] = value;
+    }
+  }
+  return data;
 }
 
 /** Extracts the `title:` value from a game's SPEC.md YAML frontmatter, if any. */
 function parseSpecTitle(specMd: string): string | null {
-  const frontmatter = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
-  const body = frontmatter?.[1] ?? specMd;
-  const matched = /^title:\s*(.+?)\s*$/m.exec(body);
-  if (!matched?.[1]) {
-    return null;
-  }
-  return matched[1].replace(/^["']|["']$/g, '').trim() || null;
+  return parseSpecFrontmatter(specMd).title || null;
 }

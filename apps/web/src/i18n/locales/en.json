@@ -37,6 +37,8 @@
     "title": "Arcade & Playable Games",
     "subtitle": "Discover and play open source AI-built games, or remix any game to create your own version.",
     "loading": "Loading games…",
+    "gameLoading": "Loading game…",
+    "gameLoadError": "Could not load this game. Please try again.",
     "empty": "No published games yet. Type a concept above to build the very first one!",
     "error": "Could not load the catalog. {{message}}",
     "genre": "Genre",

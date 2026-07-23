@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame } from './api';
-import { fetchCatalog, gameUrl, type CatalogEntry } from './catalog';
+import { fetchCatalog, type CatalogEntry } from './catalog';
 import { GameFrame } from './GameFrame';
+import { PublishedGameFrame } from './PublishedGameFrame';
 import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
@@ -192,10 +193,10 @@ export function App() {
                       {t('catalog.controlsSummary', { controls: stageContent.game.controls })}
                     </p>
                   </div>
-                  <GameFrame
+                  <PublishedGameFrame
                     key={stageContent.game.slug}
+                    slug={stageContent.game.slug}
                     title={stageContent.game.title}
-                    src={gameUrl(stageContent.game.slug)}
                   />
                 </>
               ) : stageContent?.type === 'generated' ? (
