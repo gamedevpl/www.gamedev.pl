@@ -40,7 +40,9 @@ export interface GameSources {
   title: string | null;
 }
 
-const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio'] as const;
+// Canonical order must match the games repo's tools/lib/assemble.mjs — the two
+// lists are independent copies and a mismatch silently breaks bundling.
+const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio', 'party'] as const;
 
 interface GameManifest {
   engine?: { modules?: unknown };
@@ -102,6 +104,42 @@ export interface CatalogGameEntry {
   controls: string;
   status: string;
   media: CatalogGameMedia | null;
+  /**
+   * Multiplayer capability, from the game's flat SPEC.md frontmatter
+   * (`multiplayer: controllers`). null for the single-player majority —
+   * the web app badges and offers "Play together" only when this is set.
+   */
+  multiplayer: CatalogGameMultiplayer | null;
+}
+
+export interface CatalogGameMultiplayer {
+  mode: 'controllers';
+  minPlayers: number;
+  maxPlayers: number;
+}
+
+/** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
+const MAX_MULTIPLAYER_SLOTS = 8;
+
+/**
+ * Reads the multiplayer keys out of a game's frontmatter. Frontmatter is a flat
+ * key:value map (nested YAML is rejected by both parsers), so the fields are
+ * flat and snake_case like `submitted_by`. Anything malformed degrades the game
+ * to single-player rather than failing the catalog.
+ */
+function parseMultiplayer(frontmatter: Record<string, string>): CatalogGameMultiplayer | null {
+  if (frontmatter.multiplayer !== 'controllers') {
+    return null;
+  }
+  const minPlayers = Number.parseInt(frontmatter.min_players ?? '', 10);
+  const maxPlayers = Number.parseInt(frontmatter.max_players ?? '', 10);
+  if (!Number.isInteger(minPlayers) || !Number.isInteger(maxPlayers)) {
+    return null;
+  }
+  if (minPlayers < 2 || maxPlayers < minPlayers || maxPlayers > MAX_MULTIPLAYER_SLOTS) {
+    return null;
+  }
+  return { mode: 'controllers', minPlayers, maxPlayers };
 }
 
 export interface GitHubClient {
@@ -428,6 +466,7 @@ ${gameJs}`;
             controls: frontmatter.controls ?? '',
             status,
             media: parseGameMedia(mediaMetadata),
+            multiplayer: parseMultiplayer(frontmatter),
           };
         }),
       );

@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
+import fastifyWebsocket from '@fastify/websocket';
 import type { GameGenerator } from '@gamedevpl/game-generator';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
@@ -29,6 +31,7 @@ export interface BuildAppOptions {
   submissionRoutes?: SubmissionRoutesOptions;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
+  multiplayerRoutes?: MultiplayerRoutesOptions;
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -94,6 +97,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contentChecker,
   });
 
+  // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
+  // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
+  // so the wall's /api/mp/ws exemption applies to a route that actually exists.
+  await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
+  await registerMultiplayerRoutes(app, options.multiplayerRoutes);
+
   await registerRefineRoute(app, {
     store,
     contentChecker,
@@ -131,6 +140,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (request.url.startsWith('/api/waitlist')) return;
+    // The controller websocket is the one door anonymous guests may reach: a phone
+    // that scanned a QR has no session and never will. It is useless without a
+    // room token (verified in the first frame, not here), and the room it opens
+    // was created by an allowlisted host. Everything else stays walled.
+    if (request.url.startsWith('/api/mp/ws')) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }

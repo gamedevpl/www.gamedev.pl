@@ -71,6 +71,7 @@ describe('getCatalog', () => {
           ],
           video: 'gameplay.mp4',
         },
+        multiplayer: null,
       },
     ]);
   });
@@ -103,8 +104,78 @@ describe('getCatalog', () => {
     const catalog = await client.getCatalog('main');
 
     expect(catalog).toEqual([
-      { slug: 'quoted', title: 'Quoted Title', genre: '', controls: '', status: 'published', media: null },
+      {
+        slug: 'quoted',
+        title: 'Quoted Title',
+        genre: '',
+        controls: '',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+      },
     ]);
+  });
+
+  it('reads flat multiplayer frontmatter keys, and ignores malformed ones', async () => {
+    const specs: Record<string, Record<string, string>> = {
+      // Well-formed: the shape the seed games ship.
+      party: {
+        title: 'Arena Tag',
+        status: 'published',
+        multiplayer: 'controllers',
+        min_players: '2',
+        max_players: '4',
+      },
+      // min > max — nonsense bounds must not reach the lobby.
+      backwards: {
+        title: 'Backwards',
+        status: 'published',
+        multiplayer: 'controllers',
+        min_players: '4',
+        max_players: '2',
+      },
+      // Over the platform slot ceiling.
+      crowded: {
+        title: 'Crowded',
+        status: 'published',
+        multiplayer: 'controllers',
+        min_players: '2',
+        max_players: '99',
+      },
+      // An unknown mode is not a mode we can host.
+      exotic: { title: 'Exotic', status: 'published', multiplayer: 'lockstep', min_players: '2', max_players: '4' },
+      // Declared multiplayer but no bounds at all.
+      vague: { title: 'Vague', status: 'published', multiplayer: 'controllers' },
+    };
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/contents/games?')) {
+        return new Response(JSON.stringify(Object.keys(specs).map((name) => ({ name, type: 'dir' }))), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      for (const [name, frontmatter] of Object.entries(specs)) {
+        if (url.includes(`/contents/games/${name}/SPEC.md`)) {
+          return new Response(specMd(frontmatter), { status: 200 });
+        }
+      }
+      if (url.includes('/media/metadata.json')) {
+        return new Response('not found', { status: 404 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+    const bySlug = Object.fromEntries(catalog.map((entry) => [entry.slug, entry.multiplayer]));
+
+    expect(bySlug.party).toEqual({ mode: 'controllers', minPlayers: 2, maxPlayers: 4 });
+    expect(bySlug.backwards).toBeNull();
+    expect(bySlug.crowded).toBeNull();
+    expect(bySlug.exotic).toBeNull();
+    expect(bySlug.vague).toBeNull();
   });
 });
 
