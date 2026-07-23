@@ -86,7 +86,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
   });
 
-  app.get('/api/health', async () => ({ status: 'ok', provider: generator.name }));
+  app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
 

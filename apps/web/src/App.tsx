@@ -15,13 +15,14 @@ import { submitSpec } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
+import { ClosedBetaSplash } from './ClosedBetaSplash';
 
 type StageContent =
   { type: 'catalog'; game: CatalogEntry } | { type: 'generated'; game: GeneratedGame; prompt: string };
 
 export function App() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, loading: authLoading, privateBeta } = useAuth();
   const [route, setRoute] = useState(() => parseHashRoute(window.location.hash));
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -61,6 +62,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // In private-beta mode /api/catalog requires a session — an anonymous fetch
+    // would just 401. Don't fetch (and don't render an error) until signed in.
+    // Outside private beta, catalog reads stay public (owner decision).
+    if (privateBeta && !user) return;
+
     let cancelled = false;
 
     void fetchCatalog()
@@ -83,7 +89,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user, privateBeta]);
 
   const handleNavigateSection = (sectionId: string) => {
     if (sectionId === 'studio-active') {
@@ -187,6 +193,14 @@ export function App() {
   function handlePlayGame(game: CatalogEntry) {
     setStageContent({ type: 'catalog', game });
     document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
+  }
+
+  if (authLoading) {
+    return null;
+  }
+
+  if (privateBeta && !user) {
+    return <ClosedBetaSplash />;
   }
 
   return (

@@ -152,6 +152,14 @@
     "accountBlocked": "Twoje konto jest obecnie zablokowane.",
     "signedInAs": "Zalogowano jako {{name}}"
   },
+  "betaSplash": {
+    "headline": "Twórz gry z AI. Graj w to, co stworzyli inni.",
+    "sub": "Opisz pomysł w jednym zdaniu — agent AI go zbuduje, a gra trafi na żywo dla wszystkich.",
+    "badge": "Zamknięta beta",
+    "blockedMsg": "Beta jest obecnie zamknięta — dostęp tylko na zaproszenie.",
+    "joinWaitlist": "Dołącz do listy oczekujących",
+    "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
+  },
   "errors": {
     "generic": "Coś poszło nie tak"
   }

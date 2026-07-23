@@ -11,6 +11,11 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  // Whether the API is running in private-beta mode (all data routes require a
+  // session). Learned from the always-public /api/health so the web app can
+  // decide whether an anonymous visitor sees the closed-beta splash or the
+  // normal public-reads app. Defaults to false (open) until known.
+  privateBeta: boolean;
   signInWithGoogleToken: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -19,6 +24,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  privateBeta: false,
   signInWithGoogleToken: async () => {},
   logout: async () => {},
   refreshUser: async () => {},
@@ -26,16 +32,26 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [privateBeta, setPrivateBeta] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
+      const [meRes, healthRes] = await Promise.all([
+        fetch('/api/auth/me', { credentials: 'include' }),
+        fetch('/api/health'),
+      ]);
+
+      if (meRes.ok) {
+        const data = await meRes.json();
         setUser(data.user);
       } else {
         setUser(null);
+      }
+
+      if (healthRes.ok) {
+        const health = (await healthRes.json()) as { privateBeta?: boolean };
+        setPrivateBeta(health.privateBeta === true);
       }
     } catch {
       setUser(null);
@@ -71,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogleToken, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, privateBeta, signInWithGoogleToken, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -152,6 +152,14 @@
     "accountBlocked": "Your account is currently restricted.",
     "signedInAs": "Signed in as {{name}}"
   },
+  "betaSplash": {
+    "headline": "Create games with AI. Play what others made.",
+    "sub": "Describe an idea in a sentence — an AI coding agent builds it, and it's live for everyone to play.",
+    "badge": "Closed beta",
+    "blockedMsg": "The beta is closed right now — access is invite-only.",
+    "joinWaitlist": "Join the waitlist",
+    "footer": "Access is invite-only during the closed beta."
+  },
   "errors": {
     "generic": "Something went wrong"
   }

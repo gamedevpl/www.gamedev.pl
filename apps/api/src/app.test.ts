@@ -157,6 +157,18 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('health reports privateBeta so the web client can decide whether to show the splash', async () => {
+    const closedApp = await buildApp({ betaAllowedUids: ownerUid });
+    const closedRes = await closedApp.inject({ method: 'GET', url: '/api/health' });
+    expect(closedRes.json()).toMatchObject({ privateBeta: true });
+    await closedApp.close();
+
+    const openApp = await buildApp({ store: new InMemoryStore() });
+    const openRes = await openApp.inject({ method: 'GET', url: '/api/health' });
+    expect(openRes.json()).toMatchObject({ privateBeta: false });
+    await openApp.close();
+  });
+
   it('catalog requires a session in private-beta mode', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });

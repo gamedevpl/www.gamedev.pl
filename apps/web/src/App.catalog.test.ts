@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { AuthProvider } from './AuthContext';
 import i18n from './i18n';
 
 async function flushEffects() {
@@ -23,6 +24,12 @@ describe('catalog playback', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
       if (url.endsWith('/api/catalog')) {
         return new Response(
           JSON.stringify([
@@ -44,7 +51,10 @@ describe('catalog playback', () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(createElement(App));
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
       await flushEffects();
     });
 
