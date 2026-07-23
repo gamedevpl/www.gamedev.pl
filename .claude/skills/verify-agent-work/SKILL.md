@@ -75,6 +75,12 @@ Two concrete instances of that (observed 2026-07-23):
   entirely unconfigured. When reviewing a fix commit, diff the CI/smoke assertions
   specifically: any check that got a _wider_ accept-set, a removed header/flag, or a new
   "or" branch is a red flag even when the headline change is correct.
+- **A green end-to-end UX proves nothing about persistence.** Observed: live Google
+  sign-in fully worked (token verify, session cookie, authenticated /api/auth/me) while
+  the database stayed empty — prod had silently fallen back to the in-memory store
+  because the entrypoint never passed the real one (`buildApp({logger:true})`, default
+  `?? new InMemoryStore()`). Status codes cannot reveal this. After verifying a flow
+  that should write, query the datastore for the actual record.
 - **A green local gate does not prove `npm ci` will pass.** lint/type-check/test/build all
   run against whatever is already in `node_modules`; only `npm ci` checks that
   `package.json` and `package-lock.json` agree, and CI runs it first. Observed: an agent
