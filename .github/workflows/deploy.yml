@@ -126,10 +126,17 @@ jobs:
             exit 1
           fi
 
-          # Negative check: POST /api/submissions without a session -> 401 (or 503 if unconfigured) proves inner wall is up
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions")
-          if [ "$STATUS_CODE" -ne 401 ] && [ "$STATUS_CODE" -ne 503 ]; then
-            echo "Smoke test failed: expected 401 or 503 for unauthenticated /api/submissions, got ${STATUS_CODE}"
+          # Verify auth endpoint is configured and active (requires session -> 401)
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/auth/me")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for /api/auth/me (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Negative check: POST /api/submissions with Basic Auth but without session cookie -> 401 proves session gate is active
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" -X POST "${CANDIDATE_URL}/api/submissions")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions (got ${STATUS_CODE})"
             exit 1
           fi
           echo "Smoke test passed on candidate URL!"
