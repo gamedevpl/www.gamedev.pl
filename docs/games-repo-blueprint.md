@@ -138,8 +138,10 @@ main ──▶ publish.yml ──▶ build.mjs per game ──▶ catalog.mjs �
 Output shape:
 
 ```
-/catalog.json                    [{ slug, title, genre, controls, status }]
+/catalog.json                    [{ slug, title, genre, controls, status, media }]
 /games/<slug>/index.html         self-contained, ready for iframe srcdoc or direct load
+/games/<slug>/media/*.png        stable, named gameplay screenshots
+/games/<slug>/media/gameplay.mp4 deterministic gameplay preview
 ```
 
 **This is what makes the app nearly static**: gamedev.pl fetches `catalog.json` and the bundles.

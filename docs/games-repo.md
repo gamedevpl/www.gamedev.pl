@@ -13,9 +13,16 @@ directory containing a **spec** (the source of truth) and its implementation:
 games/
   dodge-the-rocks/
     SPEC.md          ← source of truth, including catalog frontmatter
+    GAME.json        ← shared-engine module selection
+    CAPTURE.json     ← deterministic play, assertion, and capture scenario
     index.html
     game.js
     style.css
+    media/
+      opening.png
+      <named-moment>.png
+      gameplay.mp4
+      metadata.json  ← filenames plus source-freshness fingerprint
   coin-catcher/
     ...
 .github/
@@ -110,15 +117,20 @@ validation gate so it guards published bundles.
 
 ## What the gamedev.pl app becomes
 
-- **Catalog** — browse games from the repo.
+- **Catalog** — browse games from the repo, including committed gameplay
+  screenshots and on-demand video previews.
 - **Player** — the existing sandboxed-iframe surface, unchanged.
 - **Spec submission** — a "describe your game" flow that files an issue in the games repo, with
   status surfaced back to the creator.
 
 ## Open questions
 
-- **Where are published bundles hosted?** The agreed interface is `catalog.json` plus static
-  bundles; GitHub Pages is the simplest first origin, while a bucket/CDN scales further.
+- **Where are published bundles hosted?** Today the app reads the private games
+  repo through its authenticated API. `GET /api/catalog` exposes catalog
+  metadata, `GET /api/games/:slug` serves assembled sandbox content, and
+  `GET /api/games/:slug/media/:filename` proxies only metadata-listed gallery
+  images/videos. A separate bucket/CDN remains an optimization if the catalog
+  outgrows this delivery shape.
 - **Repository ownership and merge authority.** Agent PRs need a human gate initially,
   especially because review is also the moderation point.
 - **Submission identity, attribution, rights, and abuse controls.** These must be decided before

@@ -40,6 +40,16 @@ export interface GameSources {
   title: string | null;
 }
 
+export interface CatalogMediaScreenshot {
+  name: string;
+  file: string;
+}
+
+export interface CatalogGameMedia {
+  screenshots: CatalogMediaScreenshot[];
+  video: string | null;
+}
+
 /**
  * One game's catalog entry, derived from its SPEC.md frontmatter on the default
  * branch — the same fields the games repo's own tools/catalog.mjs emits. All
@@ -51,6 +61,7 @@ export interface CatalogGameEntry {
   genre: string;
   controls: string;
   status: string;
+  media: CatalogGameMedia | null;
 }
 
 export interface GitHubClient {
@@ -62,6 +73,12 @@ export interface GitHubClient {
    * Returns null if the game directory or a required file is missing on that ref.
    */
   getGameSources(ref: string, slug: string): Promise<GameSources | null>;
+  /**
+   * Reads a website-ready screenshot or gameplay video from a published game's
+   * media directory. Callers must still validate the filename against catalog
+   * metadata before exposing the bytes.
+   */
+  getGameMedia(ref: string, slug: string, filename: string): Promise<Uint8Array | null>;
   /**
    * Builds the game catalog straight from the repo: lists `games/` directories
    * on `ref` and reads each game's SPEC.md frontmatter. Replaces the old
@@ -112,6 +129,23 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       throw new Error(`github contents request failed with status ${response.status}`);
     }
     return response.text();
+  }
+
+  async function readRawBytes(path: string, ref: string): Promise<Uint8Array | null> {
+    const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
+    const response = await fetchImpl(url, {
+      headers: {
+        Accept: 'application/vnd.github.raw',
+        Authorization: ['Bearer', token].join(' '),
+      },
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`github contents request failed with status ${response.status}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -273,6 +307,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return { indexHtml, gameJs, styleCss, title: specMd ? parseSpecTitle(specMd) : null };
     },
 
+    async getGameMedia(ref, slug, filename) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug) || !/^[a-z0-9][a-z0-9-]*\.(?:png|mp4)$/.test(filename)) {
+        return null;
+      }
+      return readRawBytes(`games/${slug}/media/${filename}`, ref);
+    },
+
     async getCatalog(ref) {
       const listing = await requestJson<Array<{ name: string; type: string }>>(
         `https://api.github.com/repos/${repo}/contents/games?ref=${encodeURIComponent(ref)}`,
@@ -294,12 +335,16 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           if (!title) {
             return null;
           }
+          const status = frontmatter.status ?? '';
+          const mediaMetadata =
+            status === 'published' ? await readRawFile(`games/${slug}/media/metadata.json`, ref) : null;
           return {
             slug,
             title,
             genre: frontmatter.genre ?? '',
             controls: frontmatter.controls ?? '',
-            status: frontmatter.status ?? '',
+            status,
+            media: parseGameMedia(mediaMetadata),
           };
         }),
       );
@@ -307,6 +352,36 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return entries.filter((entry): entry is CatalogGameEntry => entry !== null);
     },
   };
+}
+
+function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
+  if (!metadataJson) {
+    return null;
+  }
+
+  try {
+    const metadata = JSON.parse(metadataJson) as {
+      captures?: Record<string, { file?: unknown }>;
+      video?: { file?: unknown };
+    };
+    const screenshots = Object.entries(metadata.captures ?? {})
+      .filter(
+        (entry): entry is [string, { file: string }] =>
+          /^[a-z0-9][a-z0-9-]*$/.test(entry[0]) &&
+          typeof entry[1]?.file === 'string' &&
+          /^[a-z0-9][a-z0-9-]*\.png$/.test(entry[1].file),
+      )
+      .slice(0, 8)
+      .map(([name, capture]) => ({ name, file: capture.file }));
+    const video =
+      typeof metadata.video?.file === 'string' && /^[a-z0-9][a-z0-9-]*\.mp4$/.test(metadata.video.file)
+        ? metadata.video.file
+        : null;
+
+    return screenshots.length > 0 || video ? { screenshots, video } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

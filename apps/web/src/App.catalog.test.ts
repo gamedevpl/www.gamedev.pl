@@ -22,6 +22,13 @@ describe('catalog playback', () => {
 
   it('renders a catalog game in a sandboxed iframe served by the app API', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function () {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    });
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function () {
+      this.dispatchEvent(new Event('pause'));
+    });
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/api/auth/me')) {
@@ -33,7 +40,20 @@ describe('catalog playback', () => {
       if (url.endsWith('/api/catalog')) {
         return new Response(
           JSON.stringify([
-            { slug: 'sky-dodge', title: 'Sky Dodge', genre: 'Arcade', controls: 'Arrow keys', status: 'published' },
+            {
+              slug: 'sky-dodge',
+              title: 'Sky Dodge',
+              genre: 'Arcade',
+              controls: 'Arrow keys',
+              status: 'published',
+              media: {
+                screenshots: [
+                  { name: 'opening', file: 'opening.png' },
+                  { name: 'close-call', file: 'close-call.png' },
+                ],
+                video: 'gameplay.mp4',
+              },
+            },
           ]),
         );
       }
@@ -58,8 +78,20 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    const playButton = container.querySelector('.catalog-card button');
+    const playButton = container.querySelector('.catalog-card .card-actions .primary-btn');
     expect(playButton?.textContent).toContain('Play');
+    const preview = container.querySelector<HTMLVideoElement>('.catalog-preview');
+    expect(preview?.getAttribute('src')).toBe('/api/games/sky-dodge/media/gameplay.mp4');
+    expect(preview?.getAttribute('poster')).toBe('/api/games/sky-dodge/media/opening.png');
+    expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
+
+    const previewButton = container.querySelector<HTMLButtonElement>('.preview-toggle');
+    await act(async () => {
+      previewButton?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      previewButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(previewButton?.textContent).toContain('Pause preview');
 
     await act(async () => {
       playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

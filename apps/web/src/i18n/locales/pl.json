@@ -44,6 +44,12 @@
     "genre": "Gatunek",
     "controls": "Sterowanie",
     "controlsSummary": "Sterowanie: {{controls}}",
+    "previewVideo": "Podgląd rozgrywki {{title}}",
+    "previewImage": "Zrzut ekranu z gry {{title}}",
+    "watchPreview": "Obejrzyj podgląd",
+    "pausePreview": "Wstrzymaj podgląd",
+    "gameMoments": "Moment rozgrywki z {{title}}",
+    "viewMoment": "Zobacz {{moment}} z {{title}}",
     "play": "Zagraj",
     "remix": "Zremiksuj"
   },

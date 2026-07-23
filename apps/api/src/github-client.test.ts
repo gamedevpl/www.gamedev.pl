@@ -35,6 +35,18 @@ describe('getCatalog', () => {
           { status: 200 },
         );
       }
+      if (url.includes('/contents/games/bubble-pop/media/metadata.json')) {
+        return new Response(
+          JSON.stringify({
+            captures: {
+              opening: { file: 'opening.png', frame: 0 },
+              'first-bubbles': { file: 'first-bubbles.png', frame: 55 },
+            },
+            video: { file: 'gameplay.mp4' },
+          }),
+          { status: 200 },
+        );
+      }
       if (url.includes('/contents/games/zig-zag/SPEC.md')) {
         // Missing SPEC.md — the game is skipped rather than failing the catalog.
         return new Response('not found', { status: 404 });
@@ -52,6 +64,13 @@ describe('getCatalog', () => {
         genre: 'arcade',
         controls: 'Mouse to aim and pop',
         status: 'published',
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'first-bubbles', file: 'first-bubbles.png' },
+          ],
+          video: 'gameplay.mp4',
+        },
       },
     ]);
   });
@@ -71,6 +90,9 @@ describe('getCatalog', () => {
       if (url.includes('/contents/games/quoted/SPEC.md')) {
         return new Response(specMd({ title: '"Quoted Title"', status: 'published' }), { status: 200 });
       }
+      if (url.includes('/contents/games/quoted/media/metadata.json')) {
+        return new Response('not found', { status: 404 });
+      }
       if (url.includes('/contents/games/untitled/SPEC.md')) {
         return new Response(specMd({ status: 'published' }), { status: 200 });
       }
@@ -80,6 +102,21 @@ describe('getCatalog', () => {
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
     const catalog = await client.getCatalog('main');
 
-    expect(catalog).toEqual([{ slug: 'quoted', title: 'Quoted Title', genre: '', controls: '', status: 'published' }]);
+    expect(catalog).toEqual([
+      { slug: 'quoted', title: 'Quoted Title', genre: '', controls: '', status: 'published', media: null },
+    ]);
+  });
+});
+
+describe('getGameMedia', () => {
+  it('reads allowed media paths as bytes and rejects unsafe paths', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameMedia('main', 'bubble-pop', 'opening.png')).resolves.toEqual(new Uint8Array([1, 2, 3]));
+    await expect(client.getGameMedia('main', 'bubble-pop', '../SPEC.md')).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

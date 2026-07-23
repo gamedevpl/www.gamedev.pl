@@ -44,6 +44,12 @@
     "genre": "Genre",
     "controls": "Controls",
     "controlsSummary": "Controls: {{controls}}",
+    "previewVideo": "{{title}} gameplay preview",
+    "previewImage": "{{title}} gameplay screenshot",
+    "watchPreview": "Watch preview",
+    "pausePreview": "Pause preview",
+    "gameMoments": "Gameplay moments from {{title}}",
+    "viewMoment": "View {{moment}} from {{title}}",
     "play": "Play Game",
     "remix": "Remix Game"
   },

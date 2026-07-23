@@ -16,7 +16,7 @@ function getAuthHeaders(uid = 'g:test-user') {
 }
 
 function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
-  return { slug, title: slug, genre: 'arcade', controls: 'arrows', status: 'published', ...overrides };
+  return { slug, title: slug, genre: 'arcade', controls: 'arrows', status: 'published', media: null, ...overrides };
 }
 
 function createGithubClientStub(params: {
@@ -24,15 +24,24 @@ function createGithubClientStub(params: {
   linkedPr?: LinkedPullRequest | null;
   issueNumber?: number;
   gameSources?: GameSources | null;
+  gameMedia?: Uint8Array | null;
   catalog?: CatalogGameEntry[];
 }) {
   const createIssue = vi.fn(async () => ({ number: params.issueNumber ?? 123 }));
   const getIssueState = vi.fn(async () => ({ state: params.issueState ?? 'open' }));
   const findLinkedPR = vi.fn(async () => params.linkedPr ?? null);
   const getGameSources = vi.fn(async () => params.gameSources ?? null);
+  const getGameMedia = vi.fn(async () => params.gameMedia ?? null);
   const getCatalog = vi.fn(async () => params.catalog ?? []);
-  const githubClient: GitHubClient = { createIssue, getIssueState, findLinkedPR, getGameSources, getCatalog };
-  return { githubClient, createIssue, getIssueState, findLinkedPR, getGameSources, getCatalog };
+  const githubClient: GitHubClient = {
+    createIssue,
+    getIssueState,
+    findLinkedPR,
+    getGameSources,
+    getGameMedia,
+    getCatalog,
+  };
+  return { githubClient, createIssue, getIssueState, findLinkedPR, getGameSources, getGameMedia, getCatalog };
 }
 
 async function createApp(params: {
@@ -659,7 +668,14 @@ describe('catalog route', () => {
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { slug: 'bubble-pop', title: 'Bubble Pop Rush', genre: 'arcade', controls: 'arrows', status: 'published' },
+      {
+        slug: 'bubble-pop',
+        title: 'Bubble Pop Rush',
+        genre: 'arcade',
+        controls: 'arrows',
+        status: 'published',
+        media: null,
+      },
     ]);
 
     await app.close();
@@ -688,6 +704,50 @@ describe('catalog route', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(res.statusCode).toBe(502);
+
+    await app.close();
+  });
+});
+
+describe('published game media route', () => {
+  const media = {
+    screenshots: [{ name: 'opening', file: 'opening.png' }],
+    video: 'gameplay.mp4',
+  };
+
+  it('serves metadata-listed screenshots with a cache policy', async () => {
+    const { githubClient, getGameMedia } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { media })],
+      gameMedia: new Uint8Array([137, 80, 78, 71]),
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/games/foo/media/opening.png' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect(res.headers['cache-control']).toContain('max-age=300');
+    expect(getGameMedia).toHaveBeenCalledWith('main', 'foo', 'opening.png');
+
+    await app.close();
+  });
+
+  it('does not expose unlisted media or media from unpublished games', async () => {
+    const { githubClient, getGameMedia } = createGithubClientStub({
+      catalog: [catalogEntry('foo', { media }), catalogEntry('draft', { status: 'draft', media })],
+      gameMedia: new Uint8Array([1]),
+    });
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    for (const url of [
+      '/api/games/foo/media/secret.png',
+      '/api/games/draft/media/opening.png',
+      '/api/games/foo/media/..%2FSPEC.md',
+    ]) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(getGameMedia).not.toHaveBeenCalled();
 
     await app.close();
   });

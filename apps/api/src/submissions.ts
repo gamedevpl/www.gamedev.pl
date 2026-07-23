@@ -283,6 +283,11 @@ export async function registerSubmissionRoutes(
     return entries.some((entry) => entry.slug === slug && entry.status === 'published');
   }
 
+  async function getPublishedCatalogEntry(client: GitHubClient, slug: string): Promise<CatalogGameEntry | null> {
+    const entries = await getCatalogEntries(client);
+    return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
+  }
+
   app.post('/api/submissions', async (request, reply) => {
     if (!githubClient || !submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
@@ -498,6 +503,54 @@ export async function registerSubmissionRoutes(
     } catch (error) {
       request.log.error({ err: error }, 'failed to load catalog');
       return reply.status(502).send({ error: 'failed to load catalog' });
+    }
+  });
+
+  // Gallery media is committed alongside each published game. Only filenames
+  // declared by the validated media metadata are proxyable; this keeps the
+  // private repository and arbitrary repository files behind the API boundary.
+  app.get('/api/games/:slug/media/:filename', async (request, reply) => {
+    if (!githubClient) {
+      return reply.status(503).send({ error: 'games are not configured' });
+    }
+
+    const parsedParams = z
+      .object({
+        slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+        filename: z.string().regex(/^[a-z0-9][a-z0-9-]*\.(?:png|mp4)$/),
+      })
+      .safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(404).send({ error: 'media not found' });
+    }
+
+    const currentTime = now();
+    if (isRateLimited(gamesByIp, request.ip, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
+      return reply.status(429).send({ error: 'too many game requests, please try again later' });
+    }
+
+    try {
+      const entry = await getPublishedCatalogEntry(githubClient, parsedParams.data.slug);
+      const allowedFiles = new Set([
+        ...(entry?.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
+        ...(entry?.media?.video ? [entry.media.video] : []),
+      ]);
+      if (!entry || !allowedFiles.has(parsedParams.data.filename)) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      const media = await githubClient.getGameMedia(publishedRef, parsedParams.data.slug, parsedParams.data.filename);
+      if (!media) {
+        return reply.status(404).send({ error: 'media not found' });
+      }
+
+      reply
+        .type(parsedParams.data.filename.endsWith('.png') ? 'image/png' : 'video/mp4')
+        .header('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+      return reply.send(Buffer.from(media));
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to serve game media');
+      return reply.status(502).send({ error: 'failed to load game media' });
     }
   });
 
