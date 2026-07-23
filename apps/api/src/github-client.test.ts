@@ -120,3 +120,48 @@ describe('getGameMedia', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('getGameSources', () => {
+  it('bundles selected GameKit modules, audio assets, and shared shell styles before the game', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/coin-catcher/index.html', '<canvas id="game"></canvas>'],
+      ['games/coin-catcher/game.js', 'GameKit.mount(game);'],
+      ['games/coin-catcher/style.css', '.game { color: gold; }'],
+      ['games/coin-catcher/SPEC.md', specMd({ title: 'Coin Catcher' })],
+      [
+        'games/coin-catcher/GAME.json',
+        JSON.stringify({ engine: { modules: ['input', 'audio'] }, audio: { sounds: ['ui-toggle', 'coin'] } }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.js', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.js', 'GameKit.createInput = function () {};'],
+      ['shared/modules/audio.js', 'GameKit.createAudio = function () {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/assets/coin.wav', new Uint8Array([3, 4])],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'coin-catcher');
+
+    expect(sources?.title).toBe('Coin Catcher');
+    expect(sources?.styleCss).toBe('.shell { display: grid; }\n.game { color: gold; }');
+    expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');
+    expect(sources?.gameJs).toContain('"coin":"data:audio/wav;base64,AwQ="');
+    expect(sources?.gameJs.indexOf('window.GameKit =')).toBeLessThan(
+      sources?.gameJs.indexOf('GameKit.createInput') ?? 0,
+    );
+    expect(sources?.gameJs.indexOf('GameKit.createInput')).toBeLessThan(
+      sources?.gameJs.indexOf('GameKit.createAudio') ?? 0,
+    );
+    expect(sources?.gameJs.indexOf('Object.freeze(window.GameKit)')).toBeLessThan(
+      sources?.gameJs.indexOf('GameKit.mount(game)') ?? 0,
+    );
+  });
+});

@@ -31,13 +31,53 @@ export interface LinkedPullRequest {
   commits?: PullRequestCommit[];
 }
 
-/** The three source files that make up a game in the games repo. */
+/** A game's sources, assembled with its selected shared engine modules. */
 export interface GameSources {
   indexHtml: string;
   gameJs: string;
   styleCss: string;
   /** SPEC.md frontmatter title, when present. */
   title: string | null;
+}
+
+const GAME_KIT_MODULES = ['input', 'collision', 'drawing', 'effects', 'audio'] as const;
+
+interface GameManifest {
+  engine?: { modules?: unknown };
+  audio?: { sounds?: unknown };
+}
+
+function parseGameManifest(source: string): { modules: string[]; sounds: string[] } {
+  const manifest = JSON.parse(source) as GameManifest;
+  const modules = manifest.engine?.modules;
+  if (
+    !Array.isArray(modules) ||
+    modules.some(
+      (moduleName) =>
+        typeof moduleName !== 'string' || !GAME_KIT_MODULES.some((allowedModule) => allowedModule === moduleName),
+    )
+  ) {
+    throw new Error('game manifest contains invalid engine modules');
+  }
+
+  const expectedOrder = GAME_KIT_MODULES.filter((moduleName) => modules.includes(moduleName));
+  if (new Set(modules).size !== modules.length || modules.join(',') !== expectedOrder.join(',')) {
+    throw new Error('game manifest engine modules are duplicated or out of order');
+  }
+
+  const sounds = manifest.audio?.sounds;
+  if (!modules.includes('audio')) {
+    return { modules, sounds: [] };
+  }
+  if (
+    !Array.isArray(sounds) ||
+    sounds.length === 0 ||
+    new Set(sounds).size !== sounds.length ||
+    sounds.some((soundName) => typeof soundName !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(soundName))
+  ) {
+    throw new Error('game manifest contains invalid audio sounds');
+  }
+  return { modules, sounds };
 }
 
 export interface CatalogMediaScreenshot {
@@ -293,18 +333,61 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         return null;
       }
 
-      const [indexHtml, gameJs, styleCss, specMd] = await Promise.all([
+      const [indexHtml, gameJs, styleCss, specMd, manifestSource, gameShellCss, coreJs] = await Promise.all([
         readRawFile(`games/${slug}/index.html`, ref),
         readRawFile(`games/${slug}/game.js`, ref),
         readRawFile(`games/${slug}/style.css`, ref),
         readRawFile(`games/${slug}/SPEC.md`, ref),
+        readRawFile(`games/${slug}/GAME.json`, ref),
+        readRawFile('shared/game-shell.css', ref),
+        readRawFile('shared/modules/core.js', ref),
       ]);
 
-      if (indexHtml === null || gameJs === null || styleCss === null) {
+      if (
+        indexHtml === null ||
+        gameJs === null ||
+        styleCss === null ||
+        manifestSource === null ||
+        gameShellCss === null ||
+        coreJs === null
+      ) {
         return null;
       }
 
-      return { indexHtml, gameJs, styleCss, title: specMd ? parseSpecTitle(specMd) : null };
+      const manifest = parseGameManifest(manifestSource);
+      const moduleSources = await Promise.all(
+        manifest.modules.map((moduleName) => readRawFile(`shared/modules/${moduleName}.js`, ref)),
+      );
+      if (moduleSources.some((source) => source === null)) {
+        return null;
+      }
+
+      const audioAssets = await Promise.all(
+        manifest.sounds.map(async (soundName) => {
+          const bytes = await readRawBytes(`shared/audio/assets/${soundName}.wav`, ref);
+          return bytes ? [soundName, `data:audio/wav;base64,${Buffer.from(bytes).toString('base64')}`] : null;
+        }),
+      );
+      if (audioAssets.some((asset) => asset === null)) {
+        return null;
+      }
+
+      const assetEntries = audioAssets.filter((asset): asset is [string, string] => asset !== null);
+      const assetsJs =
+        assetEntries.length > 0
+          ? `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});\n`
+          : '';
+      const bundledJs = `${assetsJs}${[coreJs, ...moduleSources].join('\n')}
+Object.freeze(window.GameKit);
+${gameJs}`;
+      const bundledCss = `${gameShellCss}\n${styleCss}`;
+
+      return {
+        indexHtml,
+        gameJs: bundledJs,
+        styleCss: bundledCss,
+        title: specMd ? parseSpecTitle(specMd) : null,
+      };
     },
 
     async getGameMedia(ref, slug, filename) {
