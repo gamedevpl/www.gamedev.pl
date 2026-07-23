@@ -16,12 +16,6 @@
 # The API boots without these; submission routes just return 503 until they exist,
 # so browsing/playing works on a secret-less first deploy.
 #
-# Optional access lock (make the whole app private "for now"):
-#   printf '%s' "myuser:mypassword" \
-#     | gcloud secrets create site-basic-auth --data-file=- --replication-policy=automatic
-# When present, every request needs those HTTP Basic Auth credentials. Remove the lock
-# by deleting the secret (`gcloud secrets delete site-basic-auth`) and redeploying.
-#
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
 #
@@ -53,8 +47,7 @@ gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
 # flags overwrite each other, so mappings must be joined). Submissions need BOTH
 # github-token and submission-token-secret; without them the app is browse/play-only
-# (submission routes return 503). site-basic-auth is optional and locks the whole app
-# (web + API) behind HTTP Basic Auth ("user:password").
+# (submission routes return 503).
 SECRET_MAPPINGS=()
 if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
    && gcloud secrets describe submission-token-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -67,13 +60,6 @@ fi
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
-fi
-
-if gcloud secrets describe site-basic-auth --project "$PROJECT_ID" >/dev/null 2>&1; then
-  SECRET_MAPPINGS+=("SITE_BASIC_AUTH=site-basic-auth:latest")
-  echo "==> site-basic-auth found; the app will be locked behind HTTP Basic Auth."
-else
-  echo "==> site-basic-auth not found; the app will be publicly reachable."
 fi
 
 SECRET_FLAGS=()

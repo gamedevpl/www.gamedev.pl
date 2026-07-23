@@ -13,13 +13,17 @@ import { SubmissionStatusView } from './SubmissionStatusView';
 import { parseHashRoute, statusHash } from './router';
 import { submitSpec } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
+import { useAuth } from './AuthContext';
+import { AuthModal } from './AuthModal';
 
 type StageContent =
   { type: 'catalog'; game: CatalogEntry } | { type: 'generated'; game: GeneratedGame; prompt: string };
 
 export function App() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [route, setRoute] = useState(() => parseHashRoute(window.location.hash));
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Catalog state
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -95,6 +99,11 @@ export function App() {
   };
 
   async function handleGenerateMock(text: string) {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     const trimmed = text.trim();
     if (!trimmed) return;
     setMockStatus('loading');
@@ -103,7 +112,14 @@ export function App() {
       const generatedGame = await generateGame(trimmed);
       setStageContent({ type: 'generated', game: generatedGame, prompt: trimmed });
     } catch (err: unknown) {
-      setMockError(err instanceof Error ? err.message : t('errors.generic'));
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      if (message.includes('quota')) {
+        setMockError(t('auth.quotaExceeded'));
+      } else if (message.includes('blocked')) {
+        setMockError(t('auth.accountBlocked'));
+      } else {
+        setMockError(message);
+      }
       setMockStatus('error');
     } finally {
       setMockStatus('idle');
@@ -111,6 +127,11 @@ export function App() {
   }
 
   async function handleSubmitSpec(title: string, concept: string, displayName: string = '') {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     const trimmedTitle = title.trim();
     const trimmedConcept = concept.trim();
     if (!trimmedTitle || !trimmedConcept) return;
@@ -141,7 +162,14 @@ export function App() {
 
       window.location.hash = statusHash(response.token);
     } catch (err) {
-      setSubmissionError(err instanceof Error ? err.message : t('errors.generic'));
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      if (message.includes('quota')) {
+        setSubmissionError(t('auth.quotaExceeded'));
+      } else if (message.includes('blocked')) {
+        setSubmissionError(t('auth.accountBlocked'));
+      } else {
+        setSubmissionError(message);
+      }
       setSubmissionStatus('idle');
     }
   }
@@ -253,6 +281,8 @@ export function App() {
           </>
         )}
       </main>
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 }

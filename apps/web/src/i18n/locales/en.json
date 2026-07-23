@@ -143,6 +143,15 @@
     "collect": "Collect the coins before time runs out",
     "space": "Fly a rocket ship through asteroids"
   },
+  "auth": {
+    "signInWithGoogle": "Sign in with Google",
+    "signOut": "Sign Out",
+    "authWallTitle": "Sign in with Google to Build & Create",
+    "authWallSubtitle": "Creating game specifications and instant mock previews requires a signed-in Google account.",
+    "quotaExceeded": "You've reached your daily quota limit (5 submissions/day). Try again tomorrow!",
+    "accountBlocked": "Your account is currently restricted.",
+    "signedInAs": "Signed in as {{name}}"
+  },
   "errors": {
     "generic": "Something went wrong"
   }

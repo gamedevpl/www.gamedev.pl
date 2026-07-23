@@ -73,10 +73,6 @@ jobs:
             SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
           fi
 
-          if gcloud secrets describe site-basic-auth --project "$PROJECT_ID" >/dev/null 2>&1; then
-            SECRET_MAPPINGS+=("SITE_BASIC_AUTH=site-basic-auth:latest")
-          fi
-
           SECRET_FLAGS=()
           if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
             joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
@@ -106,13 +102,7 @@ jobs:
           [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL is empty"; exit 1; }
           echo "Candidate URL: ${CANDIDATE_URL}"
 
-          BASIC_AUTH=$(gcloud secrets versions access latest --secret=site-basic-auth --project="$PROJECT_ID" 2>/dev/null || true)
-          AUTH_HEADER=()
-          if [ -n "$BASIC_AUTH" ]; then
-            AUTH_HEADER=(-u "$BASIC_AUTH")
-          fi
-
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/health")
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Smoke test failed with HTTP status ${STATUS_CODE}"
             exit 1
@@ -120,14 +110,14 @@ jobs:
 
           # The catalog is served through the app from the games repo (authenticated
           # GitHub API) — verify that path works before promoting traffic.
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/catalog")
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
           if [ "$STATUS_CODE" -ne 200 ]; then
             echo "Catalog smoke test failed with HTTP status ${STATUS_CODE}"
             exit 1
           fi
 
-          # Negative check: POST /api/submissions without a session -> 401 proves inner wall is up
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${AUTH_HEADER[@]}" "${CANDIDATE_URL}/api/submissions")
+          # Negative check: POST /api/submissions without a session -> 401 proves session wall is up
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions")
           if [ "$STATUS_CODE" -ne 401 ]; then
             echo "Smoke test failed: expected 401 for unauthenticated /api/submissions, got ${STATUS_CODE}"
             exit 1

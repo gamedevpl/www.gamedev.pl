@@ -143,6 +143,15 @@
     "collect": "Zbieraj monety zanim skończy się czas",
     "space": "Lataj statkiem kosmicznym pośród asteroid"
   },
+  "auth": {
+    "signInWithGoogle": "Zaloguj się przez Google",
+    "signOut": "Wyloguj się",
+    "authWallTitle": "Zaloguj się przez Google, aby tworzyć gry",
+    "authWallSubtitle": "Tworzenie specyfikacji gier i podglądu wymaga zalogowanego konta Google.",
+    "quotaExceeded": "Osiągnięto dzienny limit zgłoszeń (5 zgłoszeń/dzień). Spróbuj ponownie jutro!",
+    "accountBlocked": "Twoje konto jest obecnie zablokowane.",
+    "signedInAs": "Zalogowano jako {{name}}"
+  },
   "errors": {
     "generic": "Coś poszło nie tak"
   }
