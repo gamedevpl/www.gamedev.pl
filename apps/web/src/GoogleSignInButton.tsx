@@ -65,7 +65,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
 
     buttonRef.current.innerHTML = '';
     window.google.accounts.id.renderButton(buttonRef.current, {
-      theme: 'outline',
+      theme: 'filled_black',
       size: 'large',
       text: 'signin_with',
       shape: 'rectangular',
