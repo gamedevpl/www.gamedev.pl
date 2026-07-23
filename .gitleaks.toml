@@ -1,0 +1,23 @@
+# Gitleaks config — extends the default ruleset with an allowlist for known
+# false positives. CI scans the FULL git history (`gitleaks detect` with
+# fetch-depth: 0), so deliberate test fixtures and decade-old public IDs keep
+# re-flagging without this. These are NOT real leaks; do not rewrite history.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known false positives (not real secrets)"
+paths = [
+  # The credential scanner's own tests — they contain deliberately FAKE keys
+  # (e.g. a bogus "BEGIN RSA PRIVATE KEY" fixture) to prove the scanner trips.
+  '''apps/api/src/credential-scan\.test\.ts''',
+]
+regexes = [
+  # Google AdSense client id from the 2017 site (only in git history now).
+  # AdSense client ids ship in public page HTML by design — not a secret.
+  '''ca-pub-0288128369759519''',
+  # Prose in docs/risks-and-open-questions.md ("…forged/absent tokens rejected…")
+  # that generic-api-key mistakes for a token value.
+  '''forged/absent''',
+]
