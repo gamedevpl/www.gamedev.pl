@@ -51,6 +51,9 @@ submission flow are not built yet. The previous hand-built games site still live
 | [`deployment.md`](./deployment.md)                             | Minimal delivery shape for the app, games origin, and submission API                                   |
 | [`container-orchestration.md`](./container-orchestration.md)   | **Archived** design for the removed self-hosted generation direction                                   |
 | [`remix-to-pr.md`](./remix-to-pr.md)                           | Spec for the player-remix → pull-request feature                                                       |
+| [`mobile-app-plan.md`](./mobile-app-plan.md)                   | iOS/Android strategy: mobile web → PWA → Capacitor store apps; games touch contract                    |
+| [`notifications-plan.md`](./notifications-plan.md)             | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push       |
+| [`creator-qa-plan.md`](./creator-qa-plan.md)                   | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run           |
 | [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Active product blockers, security risks, and resolved architecture decisions                           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)   | How agents run, structure, and contribute to this branch                                               |
 
