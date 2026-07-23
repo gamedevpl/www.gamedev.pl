@@ -1,0 +1,36 @@
+{
+  "name": "gamedev-pl",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:packages": "npm run build -w @gamedevpl/game-generator",
+    "build": "npm run build:packages && npm run build -w @gamedevpl/api && npm run build -w @gamedevpl/web",
+    "dev": "npm run build:packages && concurrently -n api,web -c blue,green \"npm run dev -w @gamedevpl/api\" \"npm run dev -w @gamedevpl/web\"",
+    "test": "npm run build:packages && npm run test --workspaces --if-present",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "npm run build:packages && npm run type-check --workspaces --if-present",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.7",
+    "husky": "^9.1.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.2",
+    "esbuild": "^0.25.0"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,css,md,json}": "npx prettier --write"
+  }
+}

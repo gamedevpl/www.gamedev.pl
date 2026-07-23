@@ -1,0 +1,44 @@
+name: Copilot Task Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task description for Copilot'
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+  repository_dispatch:
+    types: [copilot-task]
+
+# Least-privilege GITHUB_TOKEN: the job only checks out + runs the gate; it
+# writes nothing back to the repo.
+permissions:
+  contents: read
+
+jobs:
+  dispatch-copilot-task:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Baseline (Green Gate)
+        run: npm run type-check && npm run lint && npm run test && npm run build
+
+      - name: Echo Task Payload
+        run: |
+          echo "Executing task: ${{ github.event.inputs.task || github.event.client_payload.task }}"

@@ -1,29 +1,58 @@
 # Gamedev.pl
 
-## Introduction
+Gamedev.pl is becoming a catalog and creation surface for AI-assisted games: describe a game,
+a coding agent implements it as **real runnable code** in a dedicated games repository, and a
+reviewed build becomes playable in the browser. Players can later propose changes through the
+same spec-and-pull-request workflow.
 
-On [Gamedev.pl](https://www.gamedev.pl), we create indie games which are open source.
+This branch (`the-new-gamedevpl`) contains a local proof of the player loop: **prompt →
+deterministic template → sandboxed iframe**, with no external services. The production catalog,
+games repository, spec submission, and deployment are not built yet. The previous hand-built
+games site lives on the `master` branch.
 
-## List of Games
+## Repo layout
 
-- [hungry-lion](./games/hungry-lion): Hungry Lion is a 2D top-down survival sandbox game where you take on the role of a lion surviving in the African savanna. Hunt prey, defend your territory, and survive against natural elements and other predators.
-- [masterplan](./games/masterplan): A 2D strategy game, prepare a battle plan, and start the battle. The AI will learn from the battle and propose a better plan.
-- [monster-steps](./games/monster-steps): Monster Steps is a strategic puzzle game created for the js13k 2024 competition. Players navigate through a grid-based world, avoiding monsters that appear every 13 steps while trying to reach their goal.
-- [nukes](./games/nukes): A thermonuclear simulation game.
-- [xmas](./games/xmas): Being Santa Claus is serious business! A fast-paced arcade game combining strategic gift delivery with Dragon Ball-inspired combat mechanics.
-- [tribe](./games/tribe): You start as Adam and Eve!
-- [tribe2](./games/tribe2): In this game you grow your village.
+```
+apps/
+  web/               Vite + React + TS frontend — prompt form + sandboxed game player
+  api/               Fastify + TS backend — POST /api/generate-game, GET /api/health
+packages/
+  game-generator/    The generator seam: GameGenerator interface + GameProject type,
+                     a deterministic mock, and real HTML/JS/CSS game templates
+infra/               Non-deployable placeholder until hosting is selected
+docs/                Project documentation — the plan of record; read this first
+```
 
-## Website
+> **Architecture pivot:** games are moving to a **dedicated games repo maintained by coding
+> agents**, rather than being generated on demand by this app. Self-hosted agent execution was
+> removed for legal reasons. Read [`docs/games-repo.md`](./docs/games-repo.md) first.
 
-Gamedev.pl website source code is located in [website][./website] directory.
+## How generation works
+
+Games are **real, unconstrained code** (HTML + JS + CSS), written and maintained by coding agents in a dedicated games repo — not generated on demand by this app. Because arbitrary generated code can't be safety-validated the way structured data can, safety comes from **sandboxed execution**: every game is assembled into one self-contained document and rendered in an `<iframe sandbox="allow-scripts">` with **no `allow-same-origin`**, so it can't reach the parent page, cookies, or storage. A deterministic **mock** generator still drives the local loop offline.
+
+## Getting started
+
+```bash
+npm install
+npm run dev
+```
+
+Starts the API and web app together. Open the printed URL, describe a game, and click Generate.
+
+Other scripts: `npm run build`, `npm run test`, `npm run lint`, `npm run type-check`.
+
+## Documentation
+
+Start with [`docs/README.md`](./docs/README.md). It links the product vision, current and target
+games-repo architecture, roadmap, remix→PR spec, and risk log. Coding agents (Copilot, Claude
+Code, Codex) should read [`docs/contributing-for-agents.md`](./docs/contributing-for-agents.md)
+before making changes.
 
 ## Contribution Guidelines
 
-To contribute to the Gamedev.pl project:
-
 - Submit issues for bugs or feature requests.
 - Fork the repository and submit pull requests for code contributions.
-- Follow the project's coding conventions and ensure that your code is well-documented.
+- Follow the project's coding conventions and ensure your code is well-documented.
 
 This repository is developed using [Genaicode](https://github.com/gtanczyk/genaicode).

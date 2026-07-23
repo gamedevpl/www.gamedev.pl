@@ -1,0 +1,179 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ master ]
+
+concurrency:
+  group: cloud-run-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  ci-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run test
+      - run: npm run build
+
+  deploy:
+    needs: ci-gate
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: 'gamedevpl'
+      # europe-west1 (not europe-central2): Cloud Run native domain mapping for
+      # www.gamedev.pl requires a supported region (docs/closed-beta-launch-plan.md
+      # Phase B step 6). Firestore stays in europe-central2 (its location is fixed).
+      REGION: 'europe-west1'
+      SERVICE: 'gamedev-app'
+      REPO: 'gamedev'
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+      WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build image via Cloud Build
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:${SHORT_SHA}"
+          echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
+          gcloud builds submit . \
+            --config infra/cloudbuild.yaml \
+            --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}" \
+            --project "$PROJECT_ID"
+
+      - name: Deploy candidate revision to Cloud Run
+        run: |
+          SECRET_MAPPINGS=()
+          if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
+             && gcloud secrets describe submission-token-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("GITHUB_TOKEN=github-token:latest" "SUBMISSION_TOKEN_SECRET=submission-token-secret:latest")
+          fi
+
+          if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
+          fi
+
+          SECRET_FLAGS=()
+          if [ ${#SECRET_MAPPINGS[@]} -gt 0 ]; then
+            joined=$(IFS=,; echo "${SECRET_MAPPINGS[*]}")
+            SECRET_FLAGS=(--set-secrets "$joined")
+          fi
+
+          # Safety guard: in private-beta mode, deploying with an empty allowlist
+          # would produce a site that nobody can sign into. Fail fast here rather
+          # than silently serving a broken login flow.
+          BETA_ALLOWED_UIDS_VAL="${{ vars.BETA_ALLOWED_UIDS }}"
+          BETA_ALLOWED_EMAILS_VAL="${{ vars.BETA_ALLOWED_EMAILS }}"
+          if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
+            echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
+            exit 1
+          fi
+
+          # PRIVATE_BETA=true gates all data reads behind session + allowlist.
+          # BETA_ALLOWED_UIDS / BETA_ALLOWED_EMAILS are comma-separated allow lists.
+          # Set to false (config, not code) when opening the site publicly.
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --platform managed \
+            --no-traffic \
+            --tag candidate \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 4 \
+            --port 8080 \
+            --set-env-vars "^@^GAMES_REPO=${GAMES_REPO}@GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}@WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl@CANONICAL_HOST=www.gamedev.pl@PRIVATE_BETA=true@BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}@BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}" \
+            "${SECRET_FLAGS[@]}"
+
+      - name: Smoke test candidate revision
+        run: |
+          CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format=json \
+            | jq -r '.status.traffic[]? | select(.tag=="candidate") | .url')
+
+          [ -n "$CANDIDATE_URL" ] || { echo "Error: CANDIDATE_URL is empty"; exit 1; }
+          echo "Candidate URL: ${CANDIDATE_URL}"
+
+          # Health is always public
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/health")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Smoke test failed: health returned ${STATUS_CODE}"
+            exit 1
+          fi
+
+          # SPA shell must be publicly reachable so the sign-in button loads (chicken-and-egg)
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/")
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "Smoke test failed: GET / returned ${STATUS_CODE} (shell must be publicly reachable)"
+            exit 1
+          fi
+
+          # In private-beta mode catalog requires a session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/catalog")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for /api/catalog in private-beta mode (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Auth endpoint configured and active: no session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${CANDIDATE_URL}/api/auth/me")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for /api/auth/me (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Spend routes require session: no session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Waitlist route exists and works WITHOUT a session; an empty body still
+          # proves the route + validation are live without needing a real Google token.
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/waitlist")
+          if [ "$STATUS_CODE" -ne 400 ]; then
+            echo "Smoke test failed: expected 400 for empty-body /api/waitlist (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          # Refine route requires session: no session → 401
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${CANDIDATE_URL}/api/submissions/refine")
+          if [ "$STATUS_CODE" -ne 401 ]; then
+            echo "Smoke test failed: expected 401 for unauthenticated /api/submissions/refine (got ${STATUS_CODE})"
+            exit 1
+          fi
+
+          echo "Smoke test passed on candidate URL!"
+
+      - name: Promote candidate revision to 100% traffic
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --to-latest \
+            --remove-tags candidate

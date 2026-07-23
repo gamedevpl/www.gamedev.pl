@@ -1,0 +1,192 @@
+{
+  "header": {
+    "logoAlt": "Gamedev.pl",
+    "githubAria": "GitHub",
+    "languageAria": "Language",
+    "statusOnline": "Agent Network Online",
+    "navPrompt": "Create Game",
+    "navArcade": "Arcade",
+    "navStudio": "My Projects",
+    "navFeed": "Agent Stream",
+    "mySpecs": "My Active Specs ({{count}})"
+  },
+  "hero": {
+    "mainTitle": "Turn any idea into a playable web game",
+    "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live.",
+    "bigPromptPlaceholder": "Type what you want to play or build... (e.g. mario, space shooter, dodge falling rocks, cyberpunk rhythm game)",
+    "buildGameButton": "Build My Game",
+    "instantMockButton": "Quick Local Mock",
+    "smartFoundTitle": "Found matching game: {{title}}",
+    "smartPlayBtn": "Play {{title}} Now",
+    "smartRemixBtn": "Remix this game with AI",
+    "smartNoMatchTitle": "No exact game found yet for \"{{query}}\"",
+    "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
+    "smartBuildBtn": "Build \"{{query}}\" with AI",
+    "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit"
+  },
+  "home": {
+    "title": "Describe a game. We build it. You play it.",
+    "mockTitle": "Instant Local Mock Preview",
+    "promptPlaceholder": "e.g. dodge the falling rocks and survive as long as you can",
+    "generate": "Generate game",
+    "building": "Building…",
+    "emptyStage": "Your generated or selected game will appear here.",
+    "generatedFrom": "Generated from your idea: \"{{prompt}}\""
+  },
+  "catalog": {
+    "title": "Arcade & Playable Games",
+    "subtitle": "Discover and play open source AI-built games, or remix any game to create your own version.",
+    "loading": "Loading games…",
+    "gameLoading": "Loading game…",
+    "gameLoadError": "Could not load this game. Please try again.",
+    "empty": "No published games yet. Type a concept above to build the very first one!",
+    "error": "Could not load the catalog. {{message}}",
+    "genre": "Genre",
+    "controls": "Controls",
+    "controlsSummary": "Controls: {{controls}}",
+    "previewVideo": "{{title}} gameplay preview",
+    "previewImage": "{{title}} gameplay screenshot",
+    "watchPreview": "Watch preview",
+    "pausePreview": "Pause preview",
+    "gameMoments": "Gameplay moments from {{title}}",
+    "viewMoment": "View {{moment}} from {{title}}",
+    "play": "Play Game",
+    "remix": "Remix Game"
+  },
+  "studio": {
+    "title": "Active Projects & Tracker",
+    "subtitle": "Track your submitted game specs, view live agent PR builds, and submit revisions.",
+    "tabGreenfield": "💡 Advanced Spec Form",
+    "tabActive": "📂 My Specs & Iterations ({{count}})",
+    "mySpecsTitle": "Your Active Game Projects",
+    "noSpecs": "You haven't submitted any specs yet from this browser.",
+    "enterTokenTitle": "Track by Token or URL",
+    "tokenPlaceholder": "Paste your submission tracking token here…",
+    "trackButton": "Track Project",
+    "remixHeader": "Remixing: {{title}}",
+    "remixHint": "You are creating a new spec variant based on this existing game."
+  },
+  "submit": {
+    "title": "Submit a new game spec",
+    "description": "Describe what you want to play. An autonomous coding agent will implement it as a pull request on GitHub.",
+    "titleLabel": "Game title",
+    "titlePlaceholder": "e.g. Sky Dodge Deluxe",
+    "titleHint": "3–80 characters",
+    "conceptLabel": "Concept & Mechanics",
+    "conceptPlaceholder": "Describe the core gameplay loop, controls, visual vibe, and winning/losing conditions.",
+    "conceptHint": "30–4000 characters",
+    "displayNameLabel": "Display name (optional)",
+    "displayNamePlaceholder": "How should we refer to you?",
+    "displayNameHint": "Up to 40 characters",
+    "submit": "Submit Spec to Agent",
+    "submitting": "Submitting…",
+    "demoToggle": "Try local instant mock generator",
+    "demoHide": "Hide local mock generator"
+  },
+  "qa": {
+    "title": "Refine Your Game Idea (Optional)",
+    "subtitle": "Click any proposed options to clarify your spec, or hit 'Create Now' to submit immediately.",
+    "createNow": "Create Now",
+    "analyzing": "Analyzing your idea for suggestions…",
+    "otherPlaceholder": "Other / Custom answer…",
+    "clarificationsTitle": "Creator Clarifications",
+    "skipAll": "Skip Clarifications"
+  },
+  "transparency": {
+    "title": "Agent Stream & Transparency",
+    "subtitle": "Every game on gamedev.pl is open-source, maintained by coding agents, and safely isolated.",
+    "liveActivityTitle": "Live Repo Activity",
+    "activity1": "Copilot Agent validated PR for Sky Dodge Deluxe — 100% tests passing",
+    "activity2": "New spec submission received for Coin Catcher v2",
+    "activity3": "Static game bundle published to gamedev.pl catalog",
+    "securityTitle": "Sandboxed Security Invariant",
+    "securityBody": "Generated code is untrusted and executes inside an isolated iframe with sandbox=\"allow-scripts\" and no allow-same-origin. Zero cookie access, zero credential leakage.",
+    "openSourceTitle": "100% Open Source Ecosystem",
+    "openSourceBody": "All games live in our public games repository maintained by autonomous AI coding agents.",
+    "viewGithub": "View Games Repository on GitHub"
+  },
+  "statusView": {
+    "title": "Submission status",
+    "loading": "Checking your submission…",
+    "saveLink": "Save this link to track your game:",
+    "invalidToken": "This tracking link is invalid or has expired.",
+    "invalidTokenHelp": "Please return to the main page and submit your idea again if you still need a new tracking link.",
+    "fetchErrorHelp": "We could not refresh this submission right now. You can try again in a moment.",
+    "backHome": "Back to main page",
+    "play": "Play your game",
+    "slug": "Published slug: {{slug}}",
+    "publishedGameTitle": "Published game",
+    "previewLoading": "Loading a live preview from the agent's work-in-progress…",
+    "previewBadge": "Live preview — unmerged work in progress",
+    "previewUpdating": "Updating with the agent's latest commit…",
+    "previewGameTitle": "Work-in-progress preview",
+    "previewNotReady": "There's no playable build on the branch yet. Check back once the agent has committed the game.",
+    "previewError": "We couldn't load the preview right now. Please try again in a moment.",
+    "progress": {
+      "checklistTitle": "Build checklist",
+      "commitsTitle": "Recent activity"
+    },
+    "states": {
+      "queued": {
+        "label": "In the queue",
+        "description": "Your submission has been received and is waiting to be picked up by an agent."
+      },
+      "building": {
+        "label": "Being built by Agent",
+        "description": "The coding agent is generating code and opening a pull request."
+      },
+      "in_review": {
+        "label": "In review",
+        "description": "Automated checks and reviewers are verifying the game build."
+      },
+      "publishing": {
+        "label": "Publishing…",
+        "description": "The game is approved and being deployed to the static catalog."
+      },
+      "published": {
+        "label": "Ready to play!",
+        "description": "Your game is live and ready to open in the sandboxed player."
+      },
+      "needs_changes": {
+        "label": "Needs changes",
+        "description": "This submission could not be published yet. Please revise the idea and submit again."
+      }
+    }
+  },
+  "suggestions": {
+    "dodge": "Dodge the falling rocks",
+    "collect": "Collect the coins before time runs out",
+    "space": "Fly a rocket ship through asteroids"
+  },
+  "auth": {
+    "signInWithGoogle": "Sign in with Google",
+    "signOut": "Sign Out",
+    "authWallTitle": "Sign in with Google to Build & Create",
+    "authWallSubtitle": "Creating game specifications and instant mock previews requires a signed-in Google account.",
+    "quotaExceeded": "You've reached your daily quota limit (5 submissions/day). Try again tomorrow!",
+    "accountBlocked": "Your account is currently restricted.",
+    "signedInAs": "Signed in as {{name}}"
+  },
+  "betaSplash": {
+    "headline": "Create games with AI. Play what others made.",
+    "sub": "Describe an idea in a sentence — an AI coding agent builds it, and it's live for everyone to play.",
+    "badge": "Closed beta",
+    "blockedMsg": "The beta is closed right now — access is invite-only.",
+    "joinWaitlist": "Join the waitlist",
+    "joiningWaitlist": "Joining…",
+    "waitlistJoined": "You're on the list — we'll email you when a spot opens up.",
+    "waitlistError": "Couldn't join the waitlist right now. Please try again.",
+    "footer": "Access is invite-only during the closed beta."
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "contentRejected": {
+      "profanity": "That includes language we can't publish. Please rephrase and try again.",
+      "adult": "That describes adult content, which we can't generate. Please rephrase and try again.",
+      "violence": "That describes graphic violence or self-harm, which we can't generate. Please rephrase and try again.",
+      "pii": "That looks like it contains personal contact details (email, phone, address) — please remove them and try again.",
+      "injection": "That looks like it's trying to instruct the build agent rather than describe a game. Please rephrase and try again.",
+      "other": "We can't accept that as written. Please rephrase and try again."
+    }
+  }
+}
