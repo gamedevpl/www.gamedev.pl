@@ -10,6 +10,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { registerEmailRoutes } from './email-routes.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -112,6 +113,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await registerNotificationRoutes(app, { store });
 
+  await registerEmailRoutes(app, { store, unsubscribeSecret: options.sessionSecret });
+
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
@@ -143,6 +146,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.url.startsWith('/api/')) return; // static shell always passes through
     if (request.url === '/api/health' || request.url.startsWith('/api/auth')) return;
     if (request.url.startsWith('/api/waitlist')) return;
+    // The unsubscribe link carries a signed token and is clicked from a mail client
+    // that has no session — it must reach its handler through the wall.
+    if (request.url.startsWith('/api/email/unsubscribe')) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

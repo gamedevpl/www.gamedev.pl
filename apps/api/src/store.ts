@@ -9,6 +9,10 @@ export interface User {
   createdAt: string;
   lastLoginAt: string;
   tier: 'standard' | 'trusted' | 'blocked';
+  /** Preferred locale for outbound email (defaults to 'en' when unset). */
+  locale?: string;
+  /** Global one-click email kill switch — set by the unsubscribe endpoint. */
+  emailUnsubscribedAt?: string | null;
 }
 
 export interface SubmissionRecord {
@@ -29,6 +33,7 @@ export interface UsageCounters {
   previews: number;
   mocks: number;
   refines: number;
+  feedback: number;
 }
 
 // Transactional creator events (docs/notifications-plan.md). Deliberately minimal —
@@ -69,6 +74,8 @@ export interface WaitlistEntry {
 export interface Store {
   getUser(uid: string): Promise<User | null>;
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
+  /** Set (or clear, with null) the global email-unsubscribe timestamp for a user. */
+  setEmailUnsubscribed(uid: string, at: string | null): Promise<void>;
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
   setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
@@ -126,10 +133,18 @@ export class InMemoryStore implements Store {
       createdAt: existing?.createdAt ?? now,
       lastLoginAt: now,
       tier: userData.tier ?? existing?.tier ?? 'standard',
+      // Preserve email prefs across logins — a re-login must not resubscribe.
+      locale: userData.locale ?? existing?.locale,
+      emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
     };
 
     this.users.set(userData.uid, updated);
     return { ...updated };
+  }
+
+  async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
+    const existing = this.users.get(uid);
+    if (existing) this.users.set(uid, { ...existing, emailUnsubscribedAt: at });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -182,6 +197,7 @@ export class InMemoryStore implements Store {
       previews: 0,
       mocks: 0,
       refines: 0,
+      feedback: 0,
     };
     const currentVal = currentCounters[action] ?? 0;
 
@@ -351,6 +367,10 @@ export class FirestoreStore implements Store {
       transaction.set(docRef, user, { merge: true });
       return user;
     });
+  }
+
+  async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
+    await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
