@@ -894,21 +894,16 @@ button:disabled {
 }
 
 .arcade-header {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
+/* A quiet section label, not a banner — the grid of games below speaks for itself. */
 .arcade-title {
-  font-size: 1.8rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--turquoise);
-  margin: 0 0 6px;
-  letter-spacing: -0.5px;
-}
-
-.arcade-subtitle {
-  color: var(--muted);
-  font-size: 1rem;
   margin: 0;
+  letter-spacing: -0.3px;
 }
 
 .catalog-grid {

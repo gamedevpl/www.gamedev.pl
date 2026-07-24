@@ -207,7 +207,6 @@ export function ArcadeCatalog({
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
         <h2 className="arcade-title">{t('catalog.title')}</h2>
-        <p className="arcade-subtitle">{t('catalog.subtitle')}</p>
       </div>
 
       {catalogStatus === 'loading' ? (
