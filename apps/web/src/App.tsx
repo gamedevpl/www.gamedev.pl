@@ -9,7 +9,7 @@ import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
 import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
-import { parseHashRoute, statusHash } from './router';
+import { parseHashRoute, statusHash, playHash } from './router';
 import { submitSpec, type SubmissionApiError } from './submissionApi';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs';
 import { useAuth } from './AuthContext';
@@ -70,6 +70,40 @@ export function App() {
     if (!stageContent) return;
     document.body.classList.add('player-open');
     return () => document.body.classList.remove('player-open');
+  }, [stageContent]);
+
+  // The URL is the source of truth for playing a *published* game: opening
+  // `#/play/<slug>` (via a click, a refresh, or a shared link) shows that game,
+  // and navigating away from it closes the player. Generated/party stages are
+  // ephemeral and are not represented in the route, so we only reconcile the
+  // 'catalog' stage here and leave those untouched.
+  useEffect(() => {
+    if (route.view === 'play') {
+      if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) return;
+      const entry = catalogEntries.find((game) => game.slug === route.slug);
+      // Wait for the catalog to load if it hasn't yet — this effect re-runs when
+      // catalogEntries arrives and opens the game then.
+      if (!entry) return;
+      setStageContent({ type: 'catalog', game: entry });
+      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
+    } else if (stageContent?.type === 'catalog') {
+      // Route moved off this game (Exit, back button, home) — close the player.
+      setStageContent(null);
+    }
+  }, [route, catalogEntries, stageContent]);
+
+  // Guard against accidental reload/close while a game is open. The browser shows
+  // its native "Leave site?" confirmation; games run in a sandboxed iframe with no
+  // access to parent storage, so their internal progress can't be persisted here —
+  // this at least prevents losing it by a stray Cmd-R.
+  useEffect(() => {
+    if (!stageContent) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
   }, [stageContent]);
 
   useEffect(() => {
@@ -191,9 +225,18 @@ export function App() {
     }
   }
 
+  function navigateHash(hash: string) {
+    // Update the URL (the source of truth) and the route synchronously. The
+    // browser's hashchange event fires asynchronously and re-sets the same route,
+    // so this stays consistent while making navigation immediate (and testable).
+    window.location.hash = hash;
+    setRoute(parseHashRoute(hash));
+  }
+
   function handlePlayGame(game: CatalogEntry) {
-    setStageContent({ type: 'catalog', game });
-    document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
+    // Published games are permalinked: drive play through the URL so a refresh or
+    // a shared link reopens the same game. The route→stage effect opens the stage.
+    navigateHash(playHash(game.slug));
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -290,9 +333,10 @@ export function App() {
                           <PixelIcon name="gamepad" size={14} />{' '}
                           {t('catalog.playingBadge', { defaultValue: 'Playing' })}
                         </span>
+                        <h2 className="theater-title">{stageContent.game.title}</h2>
                       </div>
                       <div className="game-theater-actions">
-                        <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
+                        <button className="secondary-btn exit-btn" onClick={() => navigateHash('#/')}>
                           <PixelIcon name="close" size={12} />{' '}
                           {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
                         </button>
