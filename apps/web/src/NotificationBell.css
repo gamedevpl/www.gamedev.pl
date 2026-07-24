@@ -1,0 +1,120 @@
+.notif {
+  position: relative;
+  display: inline-flex;
+}
+
+.notif-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.notif-trigger:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1000;
+  width: 320px;
+  max-width: 84vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #14161c;
+  color: #e9edf5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.notif-panel-head {
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.notif-empty {
+  padding: 20px 14px;
+  color: #9aa3b2;
+  font-size: 13px;
+  text-align: center;
+}
+
+.notif-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notif-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.notif-item.is-unread {
+  background: rgba(64, 224, 208, 0.08);
+}
+
+.notif-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.notif-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.notif-item-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notif-item-body {
+  font-size: 12px;
+  color: #aab2c0;
+}
+
+@media (prefers-color-scheme: light) {
+  .notif-panel {
+    background: #fff;
+    color: #1a1d24;
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+  .notif-item-body {
+    color: #55606f;
+  }
+  .notif-trigger:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}

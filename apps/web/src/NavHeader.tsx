@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { NotificationBell } from './NotificationBell';
 import { PixelIcon } from './PixelIcon';
 import githubIcon from './assets/github-mark-white.svg';
 import logo from './logo-gamedev.png';
@@ -43,6 +44,7 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
               </span>
             )}
             <span className="user-name">{user.name || user.email || 'User'}</span>
+            <NotificationBell />
             <button className="logout-btn" onClick={logout} title="Sign Out">
               Sign out
             </button>
