@@ -41,11 +41,20 @@ async function main() {
     const querySnap = await waitlistRef.where('email', '==', emailLower).get();
 
     if (querySnap.empty) {
-      console.error(`❌ No waitlist entry found matching email "${emailLower}".`);
-      console.log(
-        'The user must sign in or click "Join waitlist" once on www.gamedev.pl first, or approve by Google UID.',
-      );
-      process.exit(1);
+      const now = new Date().toISOString();
+      const newUid = `email:${emailLower}`;
+      docRef = waitlistRef.doc(newUid);
+      data = {
+        uid: newUid,
+        email: emailLower,
+        requestedAt: now,
+        status: targetStatus,
+      };
+      await docRef.set(data);
+      console.log(`✅ Created new waitlist entry and set status to "${targetStatus}" for:`);
+      console.log(`   UID:   ${newUid}`);
+      console.log(`   Email: ${emailLower}`);
+      return;
     }
 
     docRef = querySnap.docs[0].ref;
