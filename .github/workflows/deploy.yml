@@ -113,7 +113,7 @@ jobs:
             --min-instances 0 \
             --max-instances 4 \
             --port 8080 \
-            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}" \
+            --set-env-vars "^|^GAMES_REPO=${GAMES_REPO}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|PRIVATE_BETA=true|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${{ vars.NOTIFY_SWEEP_SA }}" \
             "${SECRET_FLAGS[@]}"
 
       - name: Smoke test candidate revision
