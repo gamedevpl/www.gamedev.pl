@@ -225,6 +225,9 @@ function parseRepo(repo: string): { owner: string; name: string } {
 
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const { token, repo } = options;
+  // Whether this token may read `statusCheckRollup`. Assumed yes, flipped off for the
+  // life of the process the first time GitHub rejects it (see findLinkedPR).
+  let checksFieldUsable = true;
   const fetchImpl = options.fetchImpl ?? fetch;
   const { owner, name } = parseRepo(repo);
 
@@ -374,45 +377,46 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     },
 
     async findLinkedPR(issueNumber) {
-      const response = await requestJson<
-        GraphQLResponse<{
-          repository: {
-            issue: {
-              timelineItems: {
-                nodes: Array<{
-                  source: {
-                    __typename: 'PullRequest';
-                    number: number;
-                    state: 'OPEN' | 'CLOSED' | 'MERGED';
-                    merged: boolean;
-                    isDraft: boolean;
-                    title: string;
-                    body: string;
-                    headRefName: string;
-                    headRefOid: string;
-                    files: { nodes: Array<{ path: string }> };
-                    commits: {
-                      nodes: Array<{
-                        commit: {
-                          messageHeadline: string;
-                          committedDate: string;
-                          statusCheckRollup?: { state: string } | null;
-                        };
-                      }>;
-                    };
-                    comments: {
-                      nodes: Array<{ body: string; createdAt: string }>;
-                    };
-                  } | null;
-                }>;
-              };
-            } | null;
-          };
-        }>
-      >('https://api.github.com/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: `
+      const runLinkedPrQuery = async (withChecks: boolean) =>
+        await requestJson<
+          GraphQLResponse<{
+            repository: {
+              issue: {
+                timelineItems: {
+                  nodes: Array<{
+                    source: {
+                      __typename: 'PullRequest';
+                      number: number;
+                      state: 'OPEN' | 'CLOSED' | 'MERGED';
+                      merged: boolean;
+                      isDraft: boolean;
+                      title: string;
+                      body: string;
+                      headRefName: string;
+                      headRefOid: string;
+                      files: { nodes: Array<{ path: string }> };
+                      commits: {
+                        nodes: Array<{
+                          commit: {
+                            messageHeadline: string;
+                            committedDate: string;
+                            statusCheckRollup?: { state: string } | null;
+                          };
+                        }>;
+                      };
+                      comments: {
+                        nodes: Array<{ body: string; createdAt: string }>;
+                      };
+                    } | null;
+                  }>;
+                };
+              } | null;
+            };
+          }>
+        >('https://api.github.com/graphql', {
+          method: 'POST',
+          body: JSON.stringify({
+            query: `
             query LinkedPullRequest($owner: String!, $name: String!, $issueNumber: Int!) {
               repository(owner: $owner, name: $name) {
                 issue(number: $issueNumber) {
@@ -440,9 +444,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                                 commit {
                                   messageHeadline
                                   committedDate
-                                  statusCheckRollup {
-                                    state
-                                  }
+                                  ${withChecks ? 'statusCheckRollup { state }' : ''}
                                 }
                               }
                             }
@@ -461,11 +463,23 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               }
             }
           `,
-          variables: { owner, name, issueNumber },
-        }),
-      });
+            variables: { owner, name, issueNumber },
+          }),
+        });
 
-      if (response.errors?.length) {
+      let response = await runLinkedPrQuery(checksFieldUsable);
+
+      // The CI rollup needs a token permission the status page must never depend on:
+      // without it GitHub fails the *whole* query, which would take the status page
+      // down with it. Drop the field and retry — once per process, then stop asking.
+      if (checksFieldUsable && response.errors?.length && !response.data?.repository?.issue) {
+        checksFieldUsable = false;
+        response = await runLinkedPrQuery(false);
+      }
+
+      // Field-level errors (a forbidden or null sub-field) come back alongside usable
+      // data — only a response with no data at all is a real failure.
+      if (response.errors?.length && !response.data?.repository) {
         throw new Error(response.errors[0]?.message ?? 'github graphql request failed');
       }
 

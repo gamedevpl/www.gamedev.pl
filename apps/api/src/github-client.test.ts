@@ -298,3 +298,85 @@ describe('getGameSources', () => {
     await expect(client.getGameSources('main', 'unsafe')).rejects.toThrow(expectedError);
   });
 });
+
+describe('findLinkedPR', () => {
+  const linkedPrData = {
+    repository: {
+      issue: {
+        timelineItems: {
+          nodes: [
+            {
+              source: {
+                __typename: 'PullRequest',
+                number: 30,
+                state: 'OPEN',
+                merged: false,
+                isDraft: true,
+                title: 'Add Space Runner',
+                body: '- [ ] Add collision detection',
+                headRefName: 'copilot/space-runner',
+                headRefOid: 'sha-1',
+                files: { nodes: [{ path: 'games/space-runner/index.html' }] },
+                commits: {
+                  nodes: [{ commit: { messageHeadline: 'Scaffold', committedDate: '2026-01-01T00:00:00Z' } }],
+                },
+                comments: { nodes: [] },
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  it('still resolves the PR when the token may not read the CI rollup', async () => {
+    const queries: string[] = [];
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const query = JSON.parse(String(init?.body)).query as string;
+      queries.push(query);
+      // GitHub rejects the whole query for a forbidden field — the status page must
+      // not go down with it.
+      if (query.includes('statusCheckRollup')) {
+        return new Response(
+          JSON.stringify({ errors: [{ message: 'Resource not accessible by personal access token' }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ data: linkedPrData }), { status: 200 });
+    });
+
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const first = await client.findLinkedPR(7);
+    expect(first?.number).toBe(30);
+    expect(first?.checksState).toBeNull();
+    expect(queries).toHaveLength(2);
+
+    // Having learned the field is unavailable, it stops asking for it.
+    const second = await client.findLinkedPR(7);
+    expect(second?.number).toBe(30);
+    expect(queries).toHaveLength(3);
+    expect(queries[2]).not.toContain('statusCheckRollup');
+  });
+
+  it('surfaces the CI rollup when the token can read it', async () => {
+    const withRollup = structuredClone(linkedPrData) as typeof linkedPrData & Record<string, unknown>;
+    (
+      withRollup.repository.issue.timelineItems.nodes[0]!.source.commits.nodes[0]!.commit as Record<string, unknown>
+    ).statusCheckRollup = { state: 'FAILURE' };
+
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: withRollup }), { status: 200 }));
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    expect((await client.findLinkedPR(7))?.checksState).toBe('FAILURE');
+  });
+
+  it('throws when the whole query fails for a reason other than the rollup field', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ errors: [{ message: 'Bad credentials' }] }), { status: 200 }),
+    );
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await expect(client.findLinkedPR(7)).rejects.toThrow('Bad credentials');
+  });
+});
