@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
+import { PixelIcon } from './PixelIcon.js';
 
 type HeroPromptSectionProps = {
   initialPrompt?: string;
@@ -298,7 +299,7 @@ export function HeroPromptSection({
                 title={isListening ? t('hero.micListening') : t('hero.micStart')}
                 aria-label={t('hero.micStart')}
               >
-                {isListening ? '🎙️' : '🎤'}
+                <PixelIcon name="mic" size={18} />
               </button>
               <button
                 type="button"
@@ -307,7 +308,7 @@ export function HeroPromptSection({
                 title={t('hero.uploadImage')}
                 aria-label={t('hero.uploadImage')}
               >
-                🖼️
+                <PixelIcon name="image" size={18} />
               </button>
               <button
                 type="button"
@@ -316,7 +317,7 @@ export function HeroPromptSection({
                 title={t('hero.drawSketch')}
                 aria-label={t('hero.drawSketch')}
               >
-                🎨
+                <PixelIcon name="palette" size={18} />
               </button>
               <input
                 ref={fileInputRef}
@@ -345,7 +346,7 @@ export function HeroPromptSection({
                       onClick={() => removeAttachment(item.id)}
                       title={t('hero.removeAttachment')}
                     >
-                      ✕
+                      <PixelIcon name="close" size={12} />
                     </button>
                   </div>
                 ))}
@@ -357,7 +358,7 @@ export function HeroPromptSection({
             <div className="smart-intent-card matched-card">
               <div className="matched-info">
                 <span className="smart-badge">
-                  🎮 {t('catalog.genre')}: {matchedGame.genre}
+                  <PixelIcon name="gamepad" size={14} /> {t('catalog.genre')}: {matchedGame.genre}
                 </span>
                 <h3 className="matched-title">{matchedGame.title}</h3>
                 <p className="matched-desc">
@@ -366,7 +367,7 @@ export function HeroPromptSection({
               </div>
               <div className="matched-actions">
                 <button type="button" className="primary-btn play-match-btn" onClick={() => onPlayGame?.(matchedGame)}>
-                  ▶ {t('hero.smartPlayBtn', { title: matchedGame.title })}
+                  <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
                 </button>
               </div>
             </div>
@@ -376,7 +377,7 @@ export function HeroPromptSection({
             <div className="smart-intent-card creation-card">
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
-                  ✨ {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
@@ -402,7 +403,7 @@ export function HeroPromptSection({
                   (!promptText.trim() && attachments.length === 0)
                 }
               >
-                🚀{' '}
+                <PixelIcon name="rocket" size={16} />{' '}
                 {submissionStatus === 'loading' || mockStatus === 'loading'
                   ? t('submit.submitting')
                   : t('hero.buildGameButton')}

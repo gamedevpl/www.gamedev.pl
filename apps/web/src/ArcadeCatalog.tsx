@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { catalogMediaUrl, type CatalogEntry } from './catalog';
+import { PixelIcon } from './PixelIcon';
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -134,7 +135,15 @@ function CatalogCard({
 
         {videoUrl && (
           <button type="button" className="preview-toggle" aria-pressed={isPreviewPlaying} onClick={togglePreview}>
-            {isPreviewPlaying ? `❚❚ ${t('catalog.pausePreview')}` : `▶ ${t('catalog.watchPreview')}`}
+            {isPreviewPlaying ? (
+              <>
+                <PixelIcon name="pause" size={11} /> {t('catalog.pausePreview')}
+              </>
+            ) : (
+              <>
+                <PixelIcon name="play" size={11} /> {t('catalog.watchPreview')}
+              </>
+            )}
           </button>
         )}
 
@@ -165,20 +174,17 @@ function CatalogCard({
             {entry.title}
             {entry.multiplayer && (
               <span className="card-party-badge">
-                📱 {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+                <PixelIcon name="phone" size={12} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
               </span>
             )}
           </h3>
-          <p className="card-desc">
-            <span className="card-desc-label">{t('catalog.controls')}</span> {entry.controls}
-          </p>
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
-              ▶ {t('catalog.play')}
+              <PixelIcon name="play" size={13} /> {t('catalog.play')}
             </button>
             {entry.multiplayer && (
               <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
-                📱 {t('party.playTogether')}
+                <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
               </button>
             )}
           </div>

@@ -7,6 +7,7 @@ import { PublishedGameFrame } from './PublishedGameFrame';
 import { NavHeader } from './NavHeader';
 import { HeroPromptSection } from './HeroPromptSection';
 import { ArcadeCatalog } from './ArcadeCatalog';
+import { PixelIcon } from './PixelIcon';
 import { SubmissionStatusView } from './SubmissionStatusView';
 import { parseHashRoute, statusHash } from './router';
 import { submitSpec, type SubmissionApiError } from './submissionApi';
@@ -260,12 +261,15 @@ export function App() {
                   <>
                     <div className="game-theater-bar">
                       <div className="game-theater-meta">
-                        <span className="theater-badge">📱 {t('party.badge')}</span>
+                        <span className="theater-badge">
+                          <PixelIcon name="phone" size={13} /> {t('party.badge')}
+                        </span>
                         <h2 className="theater-title">{stageContent.game.title}</h2>
                       </div>
                       <div className="game-theater-actions">
                         <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                          <PixelIcon name="close" size={12} />{' '}
+                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
                         </button>
                       </div>
                     </div>
@@ -282,15 +286,15 @@ export function App() {
                   <>
                     <div className="game-theater-bar">
                       <div className="game-theater-meta">
-                        <span className="theater-badge">🎮 Playing</span>
-                        <h2 className="theater-title">{stageContent.game.title}</h2>
-                        <span className="theater-controls">
-                          {t('catalog.controlsSummary', { controls: stageContent.game.controls })}
+                        <span className="theater-badge">
+                          <PixelIcon name="gamepad" size={14} />{' '}
+                          {t('catalog.playingBadge', { defaultValue: 'Playing' })}
                         </span>
                       </div>
                       <div className="game-theater-actions">
                         <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                          <PixelIcon name="close" size={12} />{' '}
+                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
                         </button>
                       </div>
                     </div>
@@ -306,7 +310,9 @@ export function App() {
                   <>
                     <div className="game-theater-bar">
                       <div className="game-theater-meta">
-                        <span className="theater-badge">🚀 AI Generated Game</span>
+                        <span className="theater-badge">
+                          <PixelIcon name="rocket" size={13} /> AI Generated Game
+                        </span>
                         <h2 className="theater-title">{stageContent.game.title}</h2>
                         {stageContent.prompt && (
                           <span className="theater-controls">
@@ -316,7 +322,8 @@ export function App() {
                       </div>
                       <div className="game-theater-actions">
                         <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
-                          ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
+                          <PixelIcon name="close" size={12} />{' '}
+                          {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
                         </button>
                       </div>
                     </div>

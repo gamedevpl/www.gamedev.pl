@@ -1071,9 +1071,9 @@ button:disabled {
   inset: auto 0 0 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 40px 12px 12px;
-  background: linear-gradient(to top, rgba(4, 7, 10, 0.95) 18%, rgba(4, 7, 10, 0.74) 52%, rgba(4, 7, 10, 0));
+  gap: 10px;
+  padding: 32px 12px 12px;
+  background: linear-gradient(to top, rgba(4, 7, 10, 0.92) 15%, rgba(4, 7, 10, 0.6) 55%, rgba(4, 7, 10, 0));
   /* Pass hovers through the scrim to the video underneath; only the buttons catch clicks. */
   pointer-events: none;
 }
@@ -1090,35 +1090,19 @@ button:disabled {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
-.card-desc {
-  margin: 0;
-  min-width: 0;
-  font-size: 0.78rem;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.82);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
-}
-
-.card-desc-label {
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.66rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
+/* Buttons hug their content and sit bottom-left instead of stretching the full card
+   width — a bright full-width CTA on every card turned the whole grid into a wall of
+   green. Play stays the obvious action without dominating the preview. */
 .card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 2px;
 }
 
 .card-actions button {
   pointer-events: auto;
-  flex: 1;
-  padding: 8px 12px;
+  flex: 0 0 auto;
+  padding: 7px 16px;
   font-size: 13px;
 }
 

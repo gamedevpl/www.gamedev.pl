@@ -71,6 +71,7 @@
     "gameMoments": "Gameplay moments from {{title}}",
     "viewMoment": "View {{moment}} from {{title}}",
     "play": "Play Game",
+    "playingBadge": "Playing",
     "remix": "Remix Game"
   },
   "studio": {

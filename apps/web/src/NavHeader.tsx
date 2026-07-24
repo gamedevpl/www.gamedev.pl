@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import { AuthModal } from './AuthModal';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { PixelIcon } from './PixelIcon';
 import githubIcon from './assets/github-mark-white.svg';
 import logo from './logo-gamedev.png';
 
@@ -37,7 +38,9 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
             {user.picture ? (
               <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
             ) : (
-              <span className="user-avatar-placeholder">👤</span>
+              <span className="user-avatar-placeholder">
+                <PixelIcon name="user" size={16} />
+              </span>
             )}
             <span className="user-name">{user.name || user.email || 'User'}</span>
             <button className="logout-btn" onClick={logout} title="Sign Out">
@@ -70,19 +73,19 @@ export function NavHeader({ activeSpecsCount, onNavigate }: NavHeaderProps) {
             aria-label="Toggle Navigation Menu"
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
-            {isMenuOpen ? '✕' : '☰'}
+            {isMenuOpen ? <PixelIcon name="close" size={16} /> : <PixelIcon name="menu" size={16} />}
           </button>
 
           {isMenuOpen && (
             <nav className="dropdown-menu">
               <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
-                ✨ {t('header.navPrompt')}
+                <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
               <button className="nav-link" onClick={() => handleNavClick('arcade')}>
-                🕹️ {t('header.navArcade')}
+                <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
               </button>
               <button className="nav-link" onClick={() => handleNavClick('studio')}>
-                📂 {t('header.navStudio')}
+                <PixelIcon name="folder" size={14} /> {t('header.navStudio')}
                 {activeSpecsCount > 0 && <span className="specs-count-badge">{activeSpecsCount}</span>}
               </button>
             </nav>

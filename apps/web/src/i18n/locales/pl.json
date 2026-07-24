@@ -71,6 +71,7 @@
     "gameMoments": "Moment rozgrywki z {{title}}",
     "viewMoment": "Zobacz {{moment}} z {{title}}",
     "play": "Zagraj",
+    "playingBadge": "Gramy",
     "remix": "Zremiksuj"
   },
   "studio": {
