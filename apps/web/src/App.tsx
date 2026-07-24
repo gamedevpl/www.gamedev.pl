@@ -190,12 +190,6 @@ export function App() {
     }
   }
 
-  function handleRemixGame(game: CatalogEntry) {
-    const remixPrompt = `Remix of "${game.title}" (${game.genre}): add higher difficulty, new powerups, and neon visual effects!`;
-    void handleGenerateMock(remixPrompt);
-    document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
-  }
-
   function handlePlayGame(game: CatalogEntry) {
     setStageContent({ type: 'catalog', game });
     document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
@@ -295,9 +289,6 @@ export function App() {
                         </span>
                       </div>
                       <div className="game-theater-actions">
-                        <button className="secondary-btn remix-btn" onClick={() => handleRemixGame(stageContent.game)}>
-                          ⚡ {t('catalog.remix')}
-                        </button>
                         <button className="secondary-btn exit-btn" onClick={() => setStageContent(null)}>
                           ✕ {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
                         </button>
@@ -348,7 +339,6 @@ export function App() {
               catalogError={catalogError}
               catalogEntries={catalogEntries}
               onPlayGame={handlePlayGame}
-              onRemixGame={handleRemixGame}
               onPlayTogether={(game) => void handlePlayTogether(game)}
             />
           </>

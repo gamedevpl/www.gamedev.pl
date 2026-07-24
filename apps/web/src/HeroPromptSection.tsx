@@ -92,7 +92,6 @@ export function HeroPromptSection({
     <section className="hero-prompt-section">
       <div className="hero-text-container">
         <h1 className="hero-headline">{t('hero.mainTitle')}</h1>
-        <p className="hero-subheadline">{t('hero.mainSubtitle')}</p>
       </div>
 
       <div className="hero-prompt-card">
@@ -126,17 +125,6 @@ export function HeroPromptSection({
               <div className="matched-actions">
                 <button type="button" className="primary-btn play-match-btn" onClick={() => onPlayGame?.(matchedGame)}>
                   ▶ {t('hero.smartPlayBtn', { title: matchedGame.title })}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-btn remix-match-btn"
-                  onClick={() => {
-                    setPromptText(
-                      `Remix of ${matchedGame.title}: add higher difficulty, new powerups, and neon visuals!`,
-                    );
-                  }}
-                >
-                  ⚡ {t('hero.smartRemixBtn')}
                 </button>
               </div>
             </div>

@@ -674,8 +674,8 @@ button:disabled {
 
 .preview-toggle {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
+  left: 10px;
+  top: 10px;
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
@@ -694,23 +694,30 @@ button:disabled {
   color: var(--turquoise);
 }
 
+/* The moment thumbnails sit on the preview, tucked under the genre chip in the top
+   corner so they stay clear of the title/Play overlay along the bottom. */
 .catalog-moments {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  min-height: 40px;
-  padding: 6px 10px 0;
-  background: rgba(0, 0, 0, 0.12);
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  /* Let pointer events through the gaps so the card's hover-to-play still works. */
+  pointer-events: none;
 }
 
 .catalog-moment {
+  pointer-events: auto;
   overflow: hidden;
-  height: 34px;
+  width: 42px;
+  height: 26px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
   background: #0a0e12;
-  opacity: 0.58;
+  opacity: 0.78;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   transition:
     opacity 0.15s,
     border-color 0.15s;
@@ -730,72 +737,76 @@ button:disabled {
   border-color: var(--turquoise);
 }
 
-.catalog-card-content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px 16px;
-}
-
-.card-header {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.card-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  line-height: 1.15;
-}
-
 .genre-pill {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--muted);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-/* Controls on a single compact line: "CONTROLS  <value…>" with ellipsis, so a long
-   control description (esp. in Polish) doesn't add 2–3 lines of height to the card.
-   The full text is still shown in the game player. */
-.catalog-meta div {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.catalog-meta dt {
-  color: var(--muted);
-  font-size: 0.72rem;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #fff;
+  background: rgba(6, 10, 14, 0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
-.catalog-meta dd {
+/* Title, one-line control hint and the Play CTA are overlaid on the bottom of the
+   preview over a scrim, so the whole card is just the 16:9 media box — no content
+   row underneath. The scrim keeps everything legible over bright game frames. */
+.catalog-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 40px 12px 12px;
+  background: linear-gradient(to top, rgba(4, 7, 10, 0.95) 18%, rgba(4, 7, 10, 0.74) 52%, rgba(4, 7, 10, 0));
+  /* Pass hovers through the scrim to the video underneath; only the buttons catch clicks. */
+  pointer-events: none;
+}
+
+.card-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.card-desc {
   margin: 0;
   min-width: 0;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   line-height: 1.3;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.82);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.card-desc-label {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .card-actions {
   display: flex;
-  gap: 10px;
-  margin-top: auto;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .card-actions button {
+  pointer-events: auto;
   flex: 1;
   padding: 8px 12px;
   font-size: 13px;

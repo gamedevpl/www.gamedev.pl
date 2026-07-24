@@ -7,7 +7,6 @@ type ArcadeCatalogProps = {
   catalogError: string | null;
   catalogEntries: CatalogEntry[];
   onPlayGame: (game: CatalogEntry) => void;
-  onRemixGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
 };
 
@@ -21,12 +20,10 @@ function humanizeMoment(name: string): string {
 function CatalogCard({
   entry,
   onPlayGame,
-  onRemixGame,
   onPlayTogether,
 }: {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry) => void;
-  onRemixGame: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
 }) {
   const { t } = useTranslation();
@@ -159,37 +156,32 @@ function CatalogCard({
             ))}
           </div>
         )}
-      </div>
 
-      <div className="catalog-card-content">
-        <h3 className="card-title">
-          {entry.title}
-          {entry.multiplayer && (
-            <span className="card-party-badge">
-              📱 {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
-            </span>
-          )}
-        </h3>
-
-        <dl className="catalog-meta">
-          <div>
-            <dt>{t('catalog.controls')}</dt>
-            <dd>{entry.controls}</dd>
-          </div>
-        </dl>
-
-        <div className="card-actions">
-          <button className="primary-btn" onClick={() => onPlayGame(entry)}>
-            ▶ {t('catalog.play')}
-          </button>
-          {entry.multiplayer && (
-            <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
-              📱 {t('party.playTogether')}
+        {/* Title, one-line control hint and the Play CTA sit on top of the preview over
+            a bottom scrim, so the card is just the media box — no separate content
+            row underneath. Saves ~90px of height per card without dropping any info. */}
+        <div className="catalog-overlay">
+          <h3 className="card-title">
+            {entry.title}
+            {entry.multiplayer && (
+              <span className="card-party-badge">
+                📱 {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+              </span>
+            )}
+          </h3>
+          <p className="card-desc">
+            <span className="card-desc-label">{t('catalog.controls')}</span> {entry.controls}
+          </p>
+          <div className="card-actions">
+            <button className="primary-btn" onClick={() => onPlayGame(entry)}>
+              ▶ {t('catalog.play')}
             </button>
-          )}
-          <button className="secondary-btn" onClick={() => onRemixGame(entry)}>
-            ⚡ {t('catalog.remix')}
-          </button>
+            {entry.multiplayer && (
+              <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
+                📱 {t('party.playTogether')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -201,7 +193,6 @@ export function ArcadeCatalog({
   catalogError,
   catalogEntries,
   onPlayGame,
-  onRemixGame,
   onPlayTogether,
 }: ArcadeCatalogProps) {
   const { t } = useTranslation();
@@ -222,13 +213,7 @@ export function ArcadeCatalog({
       ) : (
         <div className="catalog-grid">
           {catalogEntries.map((entry) => (
-            <CatalogCard
-              key={entry.slug}
-              entry={entry}
-              onPlayGame={onPlayGame}
-              onRemixGame={onRemixGame}
-              onPlayTogether={onPlayTogether}
-            />
+            <CatalogCard key={entry.slug} entry={entry} onPlayGame={onPlayGame} onPlayTogether={onPlayTogether} />
           ))}
         </div>
       )}
