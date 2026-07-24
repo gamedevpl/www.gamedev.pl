@@ -80,7 +80,11 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
       {TIMELINE_STEPS.map((step, index) => {
         const stepState = index < currentIndex ? 'done' : index === currentIndex ? 'active' : 'upcoming';
         return (
-          <li key={step} className={`status-timeline-step status-timeline-${stepState}`}>
+          <li
+            key={step}
+            className={`status-timeline-step status-timeline-${stepState}`}
+            aria-current={stepState === 'active' ? 'step' : undefined}
+          >
             <span className="status-timeline-dot" aria-hidden="true">
               <PixelIcon name={stepState === 'done' ? 'check' : STATUS_ICONS[step]} size={13} />
             </span>
@@ -320,7 +324,9 @@ export function SubmissionStatusView({
         ) : status ? (
           <>
             <StatusTimeline current={status.status} />
-            <p className="status-description">{t(`statusView.states.${status.status}.description`)}</p>
+            <p className="status-description" aria-live="polite">
+              {t(`statusView.states.${status.status}.description`)}
+            </p>
 
             {!TERMINAL_STATUSES.has(status.status) ? <BuildEta submittedAt={submittedAt} /> : null}
 
@@ -660,7 +666,7 @@ function BuildProgressPanel({
   return (
     <div className="build-progress">
       {progress.note ? (
-        <p className="build-progress-note">
+        <p className="build-progress-note" aria-live="polite">
           <span className="build-progress-note-label">{t('statusView.progress.agentSays')}</span>
           <span className="build-progress-note-text">{progress.note}</span>
         </p>
@@ -734,7 +740,7 @@ function BuildProgressPanel({
                   ) : null}
                   <span className="build-activity-text">{entry.text}</span>
                 </span>
-                <time className="build-activity-time">
+                <time className="build-activity-time" dateTime={new Date(entry.at).toISOString()}>
                   {entry.pending ? '' : formatRelativeTime(entry.at, i18n.language)}
                 </time>
               </li>

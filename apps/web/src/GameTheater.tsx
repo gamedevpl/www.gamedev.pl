@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
@@ -28,10 +28,29 @@ type GameTheaterProps = {
 export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const exitRef = useRef<HTMLButtonElement | null>(null);
   const player = useGamePlayer(frameRef, true);
 
+  // The theater takes over the whole viewport, so keyboard focus has to come with
+  // it — otherwise focus is left behind on the page underneath, and Escape (the
+  // reflex for "get me out of here") does nothing. Focus returns on unmount.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    exitRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onExit();
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [onExit]);
+
   return (
-    <section className="panel stage is-playing-full-viewport">
+    <section className="panel stage is-playing-full-viewport" role="dialog" aria-modal="true" aria-label={title}>
       <div className="game-theater-bar">
         <div className="game-theater-meta">
           <span className="theater-badge">
@@ -44,7 +63,7 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
           <button className="secondary-btn sound-btn" onClick={player.toggleSound} aria-pressed={player.muted}>
             {player.muted ? t('player.soundOff') : t('player.soundOn')}
           </button>
-          <button className="secondary-btn exit-btn" onClick={onExit}>
+          <button className="secondary-btn exit-btn" onClick={onExit} ref={exitRef}>
             <PixelIcon name="close" size={12} /> {t('catalog.exitPlayer', { defaultValue: 'Exit Player' })}
           </button>
         </div>
