@@ -16,6 +16,14 @@ describe('embedGameHtml', () => {
     expect(out).toContain('<canvas id="game">');
   });
 
+  it('relays Escape to the host, since the focused game swallows its own keys', () => {
+    const out = embedGameHtml('<html><body><canvas id="game"></canvas></body></html>');
+
+    expect(out).toContain("addEventListener('keydown'");
+    expect(out).toContain("e.key==='Escape'");
+    expect(out).toContain("type:'key'");
+  });
+
   it('appends the injection when there is no </body>', () => {
     const out = embedGameHtml('<canvas id="game"></canvas>');
     expect(out.startsWith('<canvas id="game"></canvas>')).toBe(true);

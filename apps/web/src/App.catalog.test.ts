@@ -179,8 +179,10 @@ describe('catalog playback', () => {
 
   it('opens game theater for direct play hash routes even before catalog is loaded', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const fetched: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
+      fetched.push(url);
       if (url.endsWith('/api/auth/me')) {
         return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
       }
@@ -215,6 +217,24 @@ describe('catalog playback', () => {
     expect(iframe).not.toBeNull();
     const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
     expect(srcdoc).toContain('<canvas>football</canvas>');
+
+    // A direct game link costs the game and nothing else: the gallery and the
+    // "your games" rail sit behind a full-viewport player, so they must not load.
+    expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(false);
+    expect(fetched.some((url) => url.includes('/api/submissions/mine'))).toBe(false);
+    expect(fetched.some((url) => url.includes('/api/games/football-3d-lite'))).toBe(true);
+
+    // The header title comes from the game itself over the player bridge, since a
+    // direct link has no catalog entry to take one from.
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'meta', title: 'Football 3D Lite', desc: 'Score a goal', muted: false },
+        }),
+      );
+      await flushEffects();
+    });
+    expect(container.querySelector('.theater-title')?.textContent).toBe('Football 3D Lite');
 
     await act(async () => {
       root.unmount();

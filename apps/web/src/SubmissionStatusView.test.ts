@@ -412,7 +412,25 @@ describe('SubmissionStatusView', () => {
       });
       expect(document.activeElement).toBe(iframe);
 
-      // Escape still exits, even though the handler now reads onExit through a ref.
+      // Escape still exits. While playing, the key never reaches the app's own
+      // listener — it goes to the focused game iframe, which relays it over the
+      // bridge — so that's the path exercised here.
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', { data: { source: 'gdpl-player', type: 'key', key: 'Escape' } }),
+        );
+        await flushEffects();
+      });
+      expect(container.querySelector('iframe')).toBeNull();
+
+      // And the app-side listener still covers Escape pressed on the player chrome.
+      await act(async () => {
+        container
+          .querySelector<HTMLButtonElement>('.status-play-cta')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(container.querySelector('iframe')).not.toBeNull();
       await act(async () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         await flushEffects();

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import i18n from './i18n';
 import { embedGameHtml, withGameLocale } from './gamePlayer';
 
@@ -35,13 +35,24 @@ export function GameFrame(props: GameFrameProps) {
     if (props.embed) srcDoc = embedGameHtml(srcDoc);
   }
 
+  // Hand keyboard focus to the game so arrow keys / WASD work without a click first.
+  const focusGame = useCallback(() => {
+    const frame = iframeRef.current;
+    if (!frame) return;
+    frame.focus();
+    // Focusing the element is not enough on its own: the focus has to land *inside*
+    // the game's document, and a document that commits after we focused the element
+    // takes it back. `focus()` is one of the few methods callable across an opaque
+    // origin, so this works under sandbox="allow-scripts".
+    frame.contentWindow?.focus();
+  }, [iframeRef]);
+
   useEffect(() => {
-    // Automatically focus the iframe so arrow keys / WASD controls work immediately
-    const timer = setTimeout(() => {
-      iframeRef.current?.focus();
-    }, 100);
+    // Backstop for the cases the load event doesn't cover — a document that had
+    // already loaded before this effect ran, or a re-render that swaps srcDoc.
+    const timer = setTimeout(focusGame, 100);
     return () => clearTimeout(timer);
-  }, [props.html, props.src, iframeRef]);
+  }, [props.html, props.src, focusGame]);
 
   return (
     <iframe
@@ -51,6 +62,9 @@ export function GameFrame(props: GameFrameProps) {
       sandbox="allow-scripts"
       src={props.src}
       srcDoc={srcDoc}
+      // The load event is the reliable moment to focus: the game's document exists
+      // and won't be replaced out from under the focus we just set.
+      onLoad={focusGame}
       tabIndex={0}
       width="100%"
       height="100%"

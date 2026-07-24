@@ -142,7 +142,11 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    if (route.view !== 'home' && route.view !== 'play') return;
+    // Only the home page shows the gallery. On `#/play/<slug>` the theater covers the
+    // whole viewport, so fetching the catalog (and, through it, every entry's media)
+    // is work nobody can see — a direct game link should cost the game, and nothing
+    // else. Leaving the route loads it, which is the first moment it's visible.
+    if (route.view !== 'home') return;
 
     let cancelled = false;
 
@@ -409,11 +413,15 @@ export function App() {
               />
             </div>
 
-            <MyGamesRail
-              refreshKey={myGamesRefreshKey}
-              onOpenStatus={(token) => navigateHash(statusHash(token))}
-              onPlayPublished={(slug) => navigateHash(playHash(slug))}
-            />
+            {/* Same reasoning as the catalog above: the rail polls its own submissions
+                every 30s, which is pure waste while the player covers it. */}
+            {route.view !== 'play' && (
+              <MyGamesRail
+                refreshKey={myGamesRefreshKey}
+                onOpenStatus={(token) => navigateHash(statusHash(token))}
+                onPlayPublished={(slug) => navigateHash(playHash(slug))}
+              />
+            )}
 
             {qaQuestions.length > 0 && pendingSpec && (
               <div ref={qaRef}>

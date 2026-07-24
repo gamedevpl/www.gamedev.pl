@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 // Message envelope tags. The host is the app; the player is the bridge script
 // that runs inside the sandboxed game iframe.
@@ -14,7 +14,11 @@ const PLAYER = 'gdpl-player';
 //   2. reports the (localized) title/description and mute state up to the host;
 //   3. drives the game's own #sound-toggle when the header control is clicked,
 //      so a single toggle stays authoritative (the in-game 'M' key still works
-//      and is mirrored back via a MutationObserver).
+//      and is mirrored back via a MutationObserver);
+//   4. forwards Escape to the host. The game iframe holds keyboard focus (that's
+//      what makes WASD work without a click first), and key events inside an
+//      opaque-origin frame never reach the app's own listener — so without this
+//      relay, "get me out of here" silently stops working.
 const BRIDGE = `(function(){
   function el(id){return document.getElementById(id);}
   function isMuted(){var s=el('sound-toggle');return s?s.getAttribute('aria-pressed')==='true':false;}
@@ -28,6 +32,10 @@ const BRIDGE = `(function(){
     if(m.source!=='${HOST}')return;
     if(m.type==='hello'){sendMeta();}
     else if(m.type==='setSound'){var s=el('sound-toggle');if(s&&isMuted()!==!!m.muted){s.click();}sendSound();}
+  });
+  addEventListener('keydown',function(e){
+    // Report only — the game keeps its own Escape handling (pause menus etc).
+    if(e.key==='Escape'){parent.postMessage({source:'${PLAYER}',type:'key',key:'Escape'},'*');}
   });
   function init(){
     sendMeta();
@@ -78,9 +86,18 @@ export type GamePlayerMeta = { title: string; desc: string };
  * exposes its title/description and a sound toggle the header can drive. `active`
  * gates the subscription so it only runs while a single-player game is on stage.
  */
-export function useGamePlayer(frameRef: MutableRefObject<HTMLIFrameElement | null>, active: boolean) {
+export function useGamePlayer(
+  frameRef: MutableRefObject<HTMLIFrameElement | null>,
+  active: boolean,
+  /** Called when Escape is pressed *inside* the game (see the bridge's job 4). */
+  onEscape?: () => void,
+) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [muted, setMuted] = useState(false);
+
+  // Held in a ref so a caller's inline closure can't resubscribe the listener below.
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
 
   useEffect(() => {
     if (!active) {
@@ -89,13 +106,22 @@ export function useGamePlayer(frameRef: MutableRefObject<HTMLIFrameElement | nul
       return;
     }
     function onMessage(event: MessageEvent) {
-      const data = event.data as { source?: string; type?: string; title?: string; desc?: string; muted?: boolean };
+      const data = event.data as {
+        source?: string;
+        type?: string;
+        title?: string;
+        desc?: string;
+        muted?: boolean;
+        key?: string;
+      };
       if (!data || data.source !== PLAYER) return;
       if (data.type === 'meta') {
         setMeta({ title: String(data.title ?? ''), desc: String(data.desc ?? '') });
         setMuted(Boolean(data.muted));
       } else if (data.type === 'sound') {
         setMuted(Boolean(data.muted));
+      } else if (data.type === 'key' && data.key === 'Escape') {
+        onEscapeRef.current?.();
       }
     }
     window.addEventListener('message', onMessage);

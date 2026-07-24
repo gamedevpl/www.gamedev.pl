@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame';
 import { PublishedGameFrame } from './PublishedGameFrame';
@@ -29,7 +29,6 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const exitRef = useRef<HTMLButtonElement | null>(null);
-  const player = useGamePlayer(frameRef, true);
 
   // Callers routinely pass a fresh `onExit` closure on every render (and the status
   // view re-renders every few seconds while a build polls). Keeping it in a ref lets
@@ -37,6 +36,17 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
   // would yank focus off the game and back onto the chrome mid-play.
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
+
+  const requestExit = useCallback(() => onExitRef.current(), []);
+  // Escape is handled twice on purpose: the window listener below covers the app's
+  // own chrome, and this covers the game iframe, which holds focus while playing
+  // and swallows its own key events.
+  const player = useGamePlayer(frameRef, true, requestExit);
+
+  // The game reports its own (localized) title over the bridge. Prefer it: on a
+  // direct `#/play/<slug>` link there's no catalog entry to take a title from, so
+  // the caller can only derive one from the slug.
+  const displayTitle = player.meta?.title?.trim() || title;
 
   // The theater takes over the whole viewport, so keyboard focus has to come with
   // it — otherwise focus is left behind on the page underneath, and Escape (the
@@ -57,13 +67,13 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
   }, []);
 
   return (
-    <section className="panel stage is-playing-full-viewport" role="dialog" aria-modal="true" aria-label={title}>
+    <section className="panel stage is-playing-full-viewport" role="dialog" aria-modal="true" aria-label={displayTitle}>
       <div className="game-theater-bar">
         <div className="game-theater-meta">
           <span className="theater-badge">
             <PixelIcon name={badge.icon} size={13} /> {badge.label}
           </span>
-          <h2 className="theater-title">{title}</h2>
+          <h2 className="theater-title">{displayTitle}</h2>
           {player.meta?.desc ? <span className="theater-desc">{player.meta.desc}</span> : meta}
         </div>
         <div className="game-theater-actions">
