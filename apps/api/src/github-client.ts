@@ -178,6 +178,13 @@ export interface GitHubClient {
    */
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
   /**
+   * Closes an issue (a creator abandoning their build) or an open pull request.
+   * The REST issues endpoint covers both — a PR is an issue for state purposes —
+   * but PRs are closed through the pulls endpoint so GitHub records it as such.
+   */
+  closeIssue(issueNumber: number): Promise<void>;
+  closePullRequest(pullNumber: number): Promise<void>;
+  /**
    * Reads a game's source files from a branch (typically an unmerged PR head).
    * Returns null if the game directory or a required file is missing on that ref.
    */
@@ -374,6 +381,20 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         { method: 'POST', body: JSON.stringify({ body }) },
       );
       return { id: result.id };
+    },
+
+    async closeIssue(issueNumber) {
+      await requestJson(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ state: 'closed' }),
+      });
+    },
+
+    async closePullRequest(pullNumber) {
+      await requestJson(`https://api.github.com/repos/${repo}/pulls/${pullNumber}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ state: 'closed' }),
+      });
     },
 
     async findLinkedPR(issueNumber) {

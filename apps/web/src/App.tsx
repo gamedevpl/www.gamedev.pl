@@ -44,6 +44,10 @@ export function App() {
   const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
   // Section to scroll to once the home route has rendered it (see handleNavigateSection).
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
+  // Idea loaded into the hero prompt by "try this again" on a failed/abandoned build.
+  // A failed build usually needs an edit before it is worth another submission, so
+  // this prefills rather than resubmitting.
+  const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
 
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
@@ -378,11 +382,19 @@ export function App() {
             submittedTitle={savedSpecs.find((spec) => spec.token === route.token)?.title}
             submittedConcept={savedSpecs.find((spec) => spec.token === route.token)?.concept}
             submittedAt={savedSpecs.find((spec) => spec.token === route.token)?.createdAt}
+            onRetry={(concept) => {
+              setRetryPrompt(concept);
+              setPendingScrollTarget('hero-prompt');
+              navigateHash('#/');
+            }}
           />
         ) : (
           <>
             <div id="hero-prompt">
               <HeroPromptSection
+                // Remount when a retry loads a new idea, so the prompt box picks it up.
+                key={retryPrompt ?? 'blank'}
+                initialPrompt={retryPrompt ?? ''}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}

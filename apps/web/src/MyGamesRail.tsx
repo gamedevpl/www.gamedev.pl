@@ -20,6 +20,7 @@ const STATUS_ICONS: Record<SubmissionState, PixelIconName> = {
   publishing: 'rocket',
   published: 'star',
   needs_changes: 'pencil',
+  abandoned: 'trash',
 };
 
 const LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
@@ -96,7 +97,8 @@ export function MyGamesRail({ refreshKey = 0, onOpenStatus, onPlayPublished }: M
           }
         }),
       );
-      if (!cancelled) setItems(resolved);
+      // A build the creator stopped is gone from their shelf, not greyed out on it.
+      if (!cancelled) setItems(resolved.filter((item) => item.status !== 'abandoned'));
     }
 
     void load();

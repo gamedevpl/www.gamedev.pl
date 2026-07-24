@@ -3228,3 +3228,53 @@ body.player-open {
     grid-template-columns: 1fr;
   }
 }
+
+/* Stop-this-build escape hatch: understated, and two-step so a mis-tap can't
+   discard an hour of agent work. */
+.status-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-abandon {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-abandon:hover {
+  color: var(--text);
+}
+
+.status-abandon.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.status-abandon-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Today's allowance, next to the build button. */
+.quota-note {
+  align-self: center;
+  margin-right: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.quota-note.is-spent {
+  color: #fbbf24;
+}

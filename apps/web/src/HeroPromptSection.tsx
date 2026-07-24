@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
+import { getQuota } from './submissionApi.js';
 
 type HeroPromptSectionProps = {
   initialPrompt?: string;
@@ -118,6 +119,23 @@ export function HeroPromptSection({
   const [micNotice, setMicNotice] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Today's allowance, shown next to the build button. Discovering the limit as a
+  // 429 after typing out an idea is the worst possible moment to learn about it.
+  const [quota, setQuota] = useState<{ used: number; limit: number | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getQuota()
+      .then((result) => {
+        if (!cancelled) setQuota(result.submissions);
+      })
+      .catch(() => {
+        // Signed out or unreachable — the line simply doesn't render.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Web Speech Recognition
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -394,6 +412,11 @@ export function HeroPromptSection({
             </div>
 
             <div className="action-buttons">
+              {quota && quota.limit !== null ? (
+                <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
+                  {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
+                </span>
+              ) : null}
               <button
                 type="submit"
                 className="primary-btn build-btn"

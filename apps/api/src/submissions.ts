@@ -430,6 +430,90 @@ export async function registerSubmissionRoutes(
     return reply.send(value);
   });
 
+  // What's left of today's allowance. Read-only (never increments), so the hero can
+  // show it before a creator spends their last submission on a surprise 429.
+  app.get('/api/me/quota', async (request, reply) => {
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+    if (!store) {
+      return reply.send({ submissions: { used: 0, limit: dailySubmissionQuota } });
+    }
+
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    const [usage, user] = await Promise.all([
+      store.getUsage(request.user!.uid, dateStr),
+      store.getUser(request.user!.uid),
+    ]);
+    return reply.send({
+      submissions: {
+        used: usage.submissions,
+        // Trusted accounts bypass the counter entirely — report no ceiling rather
+        // than a number that will never be enforced.
+        limit: user?.tier === 'trusted' ? null : dailySubmissionQuota,
+      },
+    });
+  });
+
+  /**
+   * The creator gives up on a build. Closes the issue and the agent's open PR, so
+   * neither the agent nor the human merge queue keeps working on something nobody
+   * wants. Deliberately does NOT refund the daily quota — the agent time was spent.
+   * Ownership is checked against the store, not just the token: abandoning is
+   * destructive, so holding a shared link must not be enough.
+   */
+  app.post('/api/submissions/:token/abandon', async (request, reply) => {
+    if (!githubClient || !submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+    if (!store) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+
+    const token = z.string().parse((request.params as { token?: string }).token);
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record || record.ownerUid !== request.user!.uid) {
+      return reply.status(403).send({ error: 'only the creator can abandon this build' });
+    }
+    if (record.abandonedAt) {
+      return reply.send({ ok: true, alreadyAbandoned: true });
+    }
+
+    try {
+      const linkedPr = await githubClient.findLinkedPR(issueNumber);
+      if (linkedPr && linkedPr.state === 'OPEN' && !linkedPr.merged) {
+        await githubClient.closePullRequest(linkedPr.number);
+      }
+      // A merged PR means the game shipped — closing the issue is still correct
+      // (the creator is done with it), but nothing is withdrawn.
+      await githubClient.closeIssue(issueNumber);
+    } catch (error) {
+      request.log.error({ err: error }, 'failed to abandon submission');
+      return reply.status(502).send({ error: 'failed to abandon this build' });
+    }
+
+    await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
+    // Drop every cached locale variant so the next poll reflects the new state.
+    for (const key of [...statusCache.keys()]) {
+      if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
+    }
+
+    return reply.send({ ok: true });
+  });
+
   app.get('/api/submissions/mine', async (request, reply) => {
     if (!submissionTokenSecret) {
       return reply.status(503).send({ error: 'submissions are not configured' });
@@ -443,14 +527,18 @@ export async function registerSubmissionRoutes(
 
     const records = await store.listSubmissionsByOwner(request.user!.uid, { limit: 12 });
     return reply.send({
-      submissions: records.map((record) => ({
-        token: mintToken(record.issueNumber, submissionTokenSecret),
-        title: record.title,
-        createdAt: record.createdAt,
-        // Last status we notified on — a cheap hint so the rail can render before
-        // the live per-game status polls come back.
-        lastKnownStatus: record.lastNotifiedStatus ?? null,
-      })),
+      // Abandoned builds are gone as far as the creator is concerned — they asked
+      // for them to stop, so they don't belong in "your games".
+      submissions: records
+        .filter((record) => !record.abandonedAt)
+        .map((record) => ({
+          token: mintToken(record.issueNumber, submissionTokenSecret),
+          title: record.title,
+          createdAt: record.createdAt,
+          // Last status we notified on — a cheap hint so the rail can render before
+          // the live per-game status polls come back.
+          lastKnownStatus: record.lastNotifiedStatus ?? null,
+        })),
     });
   });
 
@@ -480,6 +568,16 @@ export async function registerSubmissionRoutes(
     const cached = statusCache.get(cacheKey);
     if (cached && cached.expiresAt > currentTime) {
       return reply.send(cached.value);
+    }
+
+    // An abandoned build is terminal and self-declared: answer from the record
+    // rather than deriving from GitHub, where a closed issue reads as
+    // "needs_changes" — which would tell the creator the opposite of the truth.
+    if (store) {
+      const record = await store.getSubmission(issueNumber);
+      if (record?.abandonedAt) {
+        return reply.send({ status: 'abandoned' });
+      }
     }
 
     try {

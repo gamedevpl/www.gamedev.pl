@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater';
 import { PixelIcon, type PixelIconName } from './PixelIcon';
 import {
+  abandonSubmission,
   getBuildStats,
   getSubmissionPreview,
   getSubmissionStatus,
@@ -15,7 +16,9 @@ import {
 import { draftHash, playHash, statusHash } from './router';
 import { formatDuration, formatRelativeTime } from './relativeTime';
 
-const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes']);
+const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
+/** Statuses that halt the linear timeline rather than sitting on a step of it. */
+const HALTED_STATUSES = new Set<SubmissionStatus['status']>(['needs_changes', 'abandoned']);
 // The agent is actively working during these — poll tightly so progress feels live.
 // Everything else (queued/publishing) changes slowly, so poll gently.
 const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review']);
@@ -35,6 +38,7 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
   publishing: 'rocket',
   published: 'star',
   needs_changes: 'pencil',
+  abandoned: 'trash',
 };
 
 // The linear happy path the timeline visualizes. needs_changes branches off it,
@@ -62,13 +66,13 @@ function ElapsedTimer({ since, running }: { since: number; running: boolean }) {
 function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
   const { t } = useTranslation();
 
-  if (current === 'needs_changes') {
+  if (HALTED_STATUSES.has(current)) {
     return (
       <div className="status-timeline-halted">
         <span className="status-timeline-halted-icon" aria-hidden="true">
-          {STATUS_ICONS.needs_changes}
+          <PixelIcon name={STATUS_ICONS[current]} size={13} />
         </span>
-        <span className="status-timeline-halted-label">{t('statusView.states.needs_changes.label')}</span>
+        <span className="status-timeline-halted-label">{t(`statusView.states.${current}.label`)}</span>
       </div>
     );
   }
@@ -105,6 +109,8 @@ type SubmissionStatusViewProps = {
   submittedConcept?: string;
   submittedAt?: number;
   trackingUrl?: string;
+  /** Sends the creator home with this idea loaded, ready to edit and resubmit. */
+  onRetry?: (concept: string) => void;
 };
 
 export function SubmissionStatusView({
@@ -113,6 +119,7 @@ export function SubmissionStatusView({
   submittedConcept,
   submittedAt,
   trackingUrl,
+  onRetry,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -336,10 +343,10 @@ export function SubmissionStatusView({
               </p>
             ) : null}
 
-            {status.status === 'needs_changes' ? (
-              <a className="primary-btn status-retry" href="#/">
+            {TERMINAL_STATUSES.has(status.status) && status.status !== 'published' && submittedConcept && onRetry ? (
+              <button className="primary-btn status-retry" onClick={() => onRetry(submittedConcept)}>
                 <PixelIcon name="undo" size={13} /> {t('statusView.tryAgain')}
-              </a>
+              </button>
             ) : null}
 
             {status.status === 'published' && status.slug ? (
@@ -390,9 +397,12 @@ export function SubmissionStatusView({
 
             {previewError && !preview ? <p className="error">{previewError}</p> : null}
 
-            <a className="inline-link" href="#/">
-              {t('statusView.backHome')}
-            </a>
+            <div className="status-footer-actions">
+              <a className="inline-link" href="#/">
+                {t('statusView.backHome')}
+              </a>
+              {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
+            </div>
           </>
         ) : null}
       </section>
@@ -455,6 +465,60 @@ function BuildEta({ submittedAt }: { submittedAt?: number }) {
         ? t('statusView.eta.overrun', { minutes: median })
         : t('statusView.eta.typical', { minutes: median })}
     </p>
+  );
+}
+
+/**
+ * Stops the build for good. Two-step by design: the first click only arms it, so a
+ * mis-tap can't throw away an hour of agent work. Deliberately understated — it is
+ * an escape hatch, not something to invite.
+ */
+function AbandonControl({ token }: { token: string }) {
+  const { t } = useTranslation();
+  const [armed, setArmed] = useState(false);
+  const [state, setState] = useState<'idle' | 'sending'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const abandon = async () => {
+    setState('sending');
+    setError(null);
+    try {
+      await abandonSubmission(token);
+      // The poll picks up the terminal state on its next tick and re-renders.
+    } catch {
+      setError(t('statusView.abandon.error'));
+      setState('idle');
+      setArmed(false);
+    }
+  };
+
+  if (error) {
+    return <p className="error">{error}</p>;
+  }
+
+  if (!armed) {
+    return (
+      <button type="button" className="status-abandon" onClick={() => setArmed(true)}>
+        {t('statusView.abandon.start')}
+      </button>
+    );
+  }
+
+  return (
+    <span className="status-abandon-confirm">
+      {t('statusView.abandon.confirm')}
+      <button
+        type="button"
+        className="status-abandon is-danger"
+        disabled={state === 'sending'}
+        onClick={() => void abandon()}
+      >
+        {state === 'sending' ? t('statusView.abandon.sending') : t('statusView.abandon.yes')}
+      </button>
+      <button type="button" className="status-abandon" onClick={() => setArmed(false)}>
+        {t('statusView.abandon.no')}
+      </button>
+    </span>
   );
 }
 

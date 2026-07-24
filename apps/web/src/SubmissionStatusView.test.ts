@@ -5,7 +5,13 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n';
 import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView';
-import { getBuildStats, getSubmissionPreview, getSubmissionStatus, submitFeedback } from './submissionApi';
+import {
+  abandonSubmission,
+  getBuildStats,
+  getSubmissionPreview,
+  getSubmissionStatus,
+  submitFeedback,
+} from './submissionApi';
 
 vi.mock('./submissionApi', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi')>('./submissionApi');
@@ -15,6 +21,7 @@ vi.mock('./submissionApi', async () => {
     getSubmissionPreview: vi.fn(),
     submitFeedback: vi.fn(),
     getBuildStats: vi.fn(),
+    abandonSubmission: vi.fn(),
   };
 });
 
@@ -22,6 +29,7 @@ const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedGetBuildStats = vi.mocked(getBuildStats);
+const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -498,6 +506,96 @@ describe('SubmissionStatusView expectations & failures', () => {
     });
 
     expect(container.querySelector('.status-warning')?.textContent).toContain('Automatic checks are failing');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe('SubmissionStatusView stop & retry', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    window.location.hash = '#/';
+    vi.clearAllMocks();
+  });
+
+  it('requires a second click before stopping a build', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building' });
+    mockedAbandonSubmission.mockResolvedValue(undefined);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'stop-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const arm = container.querySelector<HTMLButtonElement>('.status-abandon');
+    expect(arm?.textContent).toContain('Stop this build');
+
+    // Arming must not call the API — this is the mis-tap guard.
+    await act(async () => {
+      arm?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(mockedAbandonSubmission).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Stop building this game?');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedAbandonSubmission).toHaveBeenCalledWith('stop-token');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('offers no stop control once the build is finished, and hands a stopped idea back for retry', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetBuildStats.mockResolvedValue({ medianMinutes: null, sampleSize: 0 });
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'abandoned' });
+    const onRetry = vi.fn();
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(SubmissionStatusView, {
+          token: 'stopped-token',
+          submittedConcept: 'a squad game like cannon fodder',
+          onRetry,
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.textContent).toContain('Stopped');
+    expect(container.querySelector('.status-abandon')).toBeNull();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-retry')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    // Prefill, not resubmit: the creator edits the idea that just failed.
+    expect(onRetry).toHaveBeenCalledWith('a squad game like cannon fodder');
 
     await act(async () => {
       root.unmount();

@@ -1,6 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type SubmissionState = 'queued' | 'building' | 'in_review' | 'publishing' | 'published' | 'needs_changes';
+export type SubmissionState =
+  | 'queued'
+  | 'building'
+  | 'in_review'
+  | 'publishing'
+  | 'published'
+  | 'needs_changes'
+  /** Creator-chosen terminal state: they stopped the build. */
+  | 'abandoned';
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */
@@ -146,6 +154,32 @@ export async function getDraftBySlug(slug: string): Promise<SubmissionPreview> {
   }
 
   return (await response.json()) as SubmissionPreview;
+}
+
+/**
+ * Stops a build for good: the API closes the issue and the agent's open PR. The
+ * daily quota is not refunded — the agent time was already spent.
+ */
+export async function abandonSubmission(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/abandon`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+}
+
+/** Today's submission allowance, so a creator sees it before they hit a 429. */
+export async function getQuota(): Promise<{ submissions: { used: number; limit: number | null } }> {
+  const response = await fetch(`${API_BASE}/api/me/quota`, { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as { submissions: { used: number; limit: number | null } };
 }
 
 /**

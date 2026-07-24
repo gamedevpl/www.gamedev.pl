@@ -58,7 +58,8 @@
     "drawSketch": "Narysuj szkic",
     "dragDropHint": "Upuść pliki graficzne tutaj, aby dołączyć do promptu",
     "attachmentsTitle": "Załączone elementy wizualne ({{count}}):",
-    "removeAttachment": "Usuń załącznik"
+    "removeAttachment": "Usuń załącznik",
+    "quotaLeft": "zostało dziś {{left}} z {{limit}} gier"
   },
   "sketch": {
     "title": "Szkicuj prosty rysunek",
@@ -236,6 +237,10 @@
       "needs_changes": {
         "label": "Wymaga poprawki",
         "description": "Ta wersja nie przeszła. Popraw pomysł i zgłoś go ponownie."
+      },
+      "abandoned": {
+        "label": "Zatrzymana",
+        "description": "Zatrzymałeś tę grę. Agent już nad nią nie pracuje — możesz zacząć nowy pomysł, kiedy zechcesz."
       }
     },
     "elapsed": "Trwa od {{duration}}",
@@ -249,6 +254,14 @@
       "unknown": "Większość gier jest gotowa w niecałą godzinę.",
       "typical": "Takie gry powstają zwykle około {{minutes}} min.",
       "overrun": "Ta powstaje dłużej niż typowe {{minutes}} min. Większe pomysły tak mają — możesz zamknąć tę stronę, damy Ci znać."
+    },
+    "abandon": {
+      "start": "Zatrzymaj tę grę",
+      "confirm": "Zatrzymać tworzenie tej gry?",
+      "yes": "Tak, zatrzymaj",
+      "no": "Twórz dalej",
+      "sending": "Zatrzymuję…",
+      "error": "Nie udało się teraz zatrzymać tej gry. Spróbuj ponownie za chwilę."
     }
   },
   "suggestions": {

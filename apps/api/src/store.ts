@@ -34,6 +34,12 @@ export interface SubmissionRecord {
    */
   publishedAt?: string;
   /**
+   * Set when the creator abandoned the build. A terminal state of its own: the
+   * issue and any open PR are closed, and the status page stops deriving from
+   * GitHub entirely (an abandoned build must not read as "needs a tweak").
+   */
+  abandonedAt?: string;
+  /**
    * The status we last emitted a notification for. Drives transition detection
    * (only notify when the mapped event changes) and lets the sweep stop scanning
    * a submission once it reaches a terminal, already-notified state.
@@ -105,6 +111,10 @@ export interface Store {
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
   /** Stamps the moment a submission was first seen published (for build-time stats). */
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
+  /** Marks a submission abandoned by its creator. */
+  setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /** Today's usage counters for a user, without incrementing anything. */
+  getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
   listRecentlyPublished(limit: number): Promise<SubmissionRecord[]>;
   /**
@@ -160,6 +170,11 @@ export interface Store {
 // re-subscribes for free.
 export function pushSubscriptionId(endpoint: string): string {
   return createHash('sha256').update(endpoint).digest('hex');
+}
+
+/** A zeroed counter set — the shape every usage read falls back to. */
+function emptyUsageCounters(): UsageCounters {
+  return { submissions: 0, previews: 0, mocks: 0, refines: 0, feedback: 0 };
 }
 
 export class InMemoryStore implements Store {
@@ -239,6 +254,15 @@ export class InMemoryStore implements Store {
     if (sub && !sub.publishedAt) this.submissions.set(issueNumber, { ...sub, publishedAt: at });
   }
 
+  async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, abandonedAt: at });
+  }
+
+  async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
+    return { ...(this.usage.get(`${uid}:${dateStr}`) ?? emptyUsageCounters()) };
+  }
+
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.publishedAt)
@@ -249,7 +273,7 @@ export class InMemoryStore implements Store {
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
-      .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
+      .filter((s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
       .map((s) => ({ ...s }));
   }
 
@@ -525,6 +549,15 @@ export class FirestoreStore implements Store {
     await ref.set({ publishedAt: at }, { merge: true });
   }
 
+  async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ abandonedAt: at }, { merge: true });
+  }
+
+  async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
+    const snap = await this.db.collection('usage').doc(uid).collection('counters').doc(dateStr).get();
+    return { ...emptyUsageCounters(), ...(snap.data() as Partial<UsageCounters> | undefined) };
+  }
+
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
     // orderBy on a single field uses Firestore's automatic index, and documents
     // without publishedAt are excluded by definition — exactly the sample we want.
@@ -548,7 +581,9 @@ export class FirestoreStore implements Store {
     const snap = await this.db.collection('submissions').get();
     return snap.docs
       .map((d) => d.data() as SubmissionRecord)
-      .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes');
+      .filter(
+        (s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes',
+      );
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {

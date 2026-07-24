@@ -46,12 +46,16 @@ function createGithubClientStub(params: {
   const getGameMedia = vi.fn(async () => params.gameMedia ?? null);
   const getCatalog = vi.fn(async () => params.catalog ?? []);
   const createIssueComment = vi.fn(async () => ({ id: 1 }));
+  const closeIssue = vi.fn(async () => {});
+  const closePullRequest = vi.fn(async () => {});
   const getProgressNotes = vi.fn(async () => params.progressNotes ?? null);
   const githubClient: GitHubClient = {
     createIssue,
     getIssueState,
     findLinkedPR,
     createIssueComment,
+    closeIssue,
+    closePullRequest,
     getGameSources,
     getGameMedia,
     getCatalog,
@@ -63,6 +67,8 @@ function createGithubClientStub(params: {
     getIssueState,
     findLinkedPR,
     createIssueComment,
+    closeIssue,
+    closePullRequest,
     getGameSources,
     getGameMedia,
     getCatalog,
@@ -1357,6 +1363,115 @@ describe('agent progress note', () => {
 
     const res = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}` });
     expect(res.json().progress.note).toBeUndefined();
+
+    await app.close();
+  });
+});
+
+describe('abandoning a build', () => {
+  const openPr: LinkedPullRequest = {
+    number: 30,
+    state: 'OPEN',
+    merged: false,
+    isDraft: true,
+    titleHasWip: false,
+    headRefName: 'copilot/foo',
+    headRefOid: 'sha-1',
+    changedFiles: ['games/foo/index.html'],
+  };
+
+  it('closes the PR and the issue, keeps the quota spent, and reports a terminal state', async () => {
+    const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ linkedPr: openPr });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:test-user', 'Space Runner');
+    const token = mintToken(123, secret);
+
+    const res = await app.inject({ method: 'POST', url: `/api/submissions/${token}/abandon`, headers: authHeaders });
+    expect(res.statusCode).toBe(200);
+    expect(closePullRequest).toHaveBeenCalledWith(30);
+    expect(closeIssue).toHaveBeenCalledWith(123);
+
+    // A closed issue would otherwise derive as "needs_changes" — the creator must be
+    // told what actually happened.
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+    expect(status.json()).toEqual({ status: 'abandoned' });
+
+    // Abandoned builds leave "your games" and stop being swept.
+    expect((await app.inject({ method: 'GET', url: '/api/submissions/mine', headers: authHeaders })).json()).toEqual({
+      submissions: [],
+    });
+    expect(await store.listActiveSubmissions()).toEqual([]);
+
+    await app.close();
+  });
+
+  it('refuses to abandon someone else’s build even with a valid token', async () => {
+    const { githubClient, closeIssue } = createGithubClientStub({ linkedPr: openPr });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:someone-else', 'Not yours');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(123, secret)}/abandon`,
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(closeIssue).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('is idempotent', async () => {
+    const { githubClient, closeIssue } = createGithubClientStub({ linkedPr: openPr });
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+    await store.createSubmission(123, 'g:test-user', 'Space Runner');
+    const url = `/api/submissions/${mintToken(123, secret)}/abandon`;
+
+    await app.inject({ method: 'POST', url, headers: authHeaders });
+    const second = await app.inject({ method: 'POST', url, headers: authHeaders });
+    expect(second.json()).toEqual({ ok: true, alreadyAbandoned: true });
+    expect(closeIssue).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+});
+
+describe('GET /api/me/quota', () => {
+  it('reports today’s submission usage against the limit', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      dailySubmissionQuota: 5,
+    });
+
+    const before = await app.inject({ method: 'GET', url: '/api/me/quota', headers: authHeaders });
+    expect(before.json()).toEqual({ submissions: { used: 0, limit: 5 } });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' },
+    });
+
+    const after = await app.inject({ method: 'GET', url: '/api/me/quota', headers: authHeaders });
+    expect(after.json()).toEqual({ submissions: { used: 1, limit: 5 } });
+
+    await app.close();
+  });
+
+  it('reports no ceiling for a trusted account', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user', tier: 'trusted' });
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const res = await app.inject({ method: 'GET', url: '/api/me/quota', headers: authHeaders });
+    expect(res.json()).toEqual({ submissions: { used: 0, limit: null } });
 
     await app.close();
   });
