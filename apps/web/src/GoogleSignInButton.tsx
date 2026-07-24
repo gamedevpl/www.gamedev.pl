@@ -13,6 +13,7 @@ declare global {
           }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
           prompt: () => void;
+          disableAutoSelect: () => void;
         };
       };
     };
@@ -56,11 +57,13 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
 
     window.google.accounts.id.initialize({
       client_id: clientId,
+      auto_select: true,
       callback: async (response) => {
         try {
           await signInWithGoogleToken(response.credential);
           onSuccess?.();
         } catch (err) {
+          window.google?.accounts?.id?.disableAutoSelect();
           const message = err instanceof Error ? err.message : 'Sign in failed';
           onError?.(message, response.credential);
         }
@@ -74,6 +77,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       text: 'signin_with',
       shape: 'rectangular',
     });
+    window.google.accounts.id.prompt();
   }, [scriptLoaded, signInWithGoogleToken, onSuccess, onError]);
 
   return <div ref={buttonRef} className="google-sign-in-container" />;

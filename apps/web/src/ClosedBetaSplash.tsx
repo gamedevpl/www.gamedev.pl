@@ -40,7 +40,7 @@ export function ClosedBetaSplash() {
 
         <div className="beta-splash__badge">{t('betaSplash.badge')}</div>
 
-        {isBlocked ? (
+        {isBlocked && (
           <div className="beta-splash__blocked">
             <p className="beta-splash__blocked-msg">{t('betaSplash.blockedMsg')}</p>
             {waitlistState === 'joined' || (hasKnownStatus && waitlistState !== 'error') ? (
@@ -69,16 +69,16 @@ export function ClosedBetaSplash() {
               <p className="beta-splash__waitlist-error">{t('betaSplash.waitlistError')}</p>
             )}
           </div>
-        ) : (
-          <div className="beta-splash__signin">
-            <GoogleSignInButton
-              onError={(msg, token) => {
-                setError(msg);
-                setIdToken(token ?? null);
-              }}
-            />
-          </div>
         )}
+
+        <div className="beta-splash__signin">
+          <GoogleSignInButton
+            onError={(msg, token) => {
+              setError(msg);
+              setIdToken(token ?? null);
+            }}
+          />
+        </div>
 
         <p className="beta-splash__footer">{t('betaSplash.footer')}</p>
       </div>
