@@ -11,6 +11,7 @@ import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
+import { registerNotificationRoutes } from './notifications.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
@@ -108,6 +109,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contentChecker,
     specRefiner: options.specRefiner,
   });
+
+  await registerNotificationRoutes(app, { store });
 
   app.get('/api/health', async () => ({ status: 'ok', provider: generator.name, privateBeta }));
 
