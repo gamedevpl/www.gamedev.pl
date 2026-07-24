@@ -22,7 +22,27 @@
     "smartNoMatchTitle": "No exact game found yet for \"{{query}}\"",
     "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
     "smartBuildBtn": "Build \"{{query}}\" with AI",
-    "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit"
+    "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit",
+    "micStart": "Speak",
+    "micListening": "Listening...",
+    "micUnsupported": "Speech recognition not supported in this browser",
+    "micDenied": "Microphone permission denied",
+    "uploadImage": "Upload Image",
+    "drawSketch": "Draw Sketch",
+    "dragDropHint": "Drop image files here to attach to prompt",
+    "attachmentsTitle": "Attached Visuals ({{count}}):",
+    "removeAttachment": "Remove attachment"
+  },
+  "sketch": {
+    "title": "Sketch Simple Drawing",
+    "subtitle": "Draw a visual concept, map layout, or character idea for your game.",
+    "clear": "Clear",
+    "undo": "Undo",
+    "brushSize": "Brush",
+    "eraser": "Eraser",
+    "pencil": "Pencil",
+    "cancel": "Cancel",
+    "attach": "Attach to Prompt"
   },
   "home": {
     "title": "Describe a game. We build it. You play it.",

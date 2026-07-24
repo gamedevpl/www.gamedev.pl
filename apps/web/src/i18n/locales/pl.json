@@ -22,7 +22,27 @@
     "smartNoMatchTitle": "Brak dokładnej gry dla \"{{query}}\"",
     "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
     "smartBuildBtn": "Stwórz \"{{query}}\" z AI",
-    "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać"
+    "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać",
+    "micStart": "Mów",
+    "micListening": "Słucham...",
+    "micUnsupported": "Rozpoznawanie mowy nie jest wspierane w tej przeglądarce",
+    "micDenied": "Brak dostępu do mikrofonu",
+    "uploadImage": "Wgraj obraz",
+    "drawSketch": "Narysuj szkic",
+    "dragDropHint": "Upuść pliki graficzne tutaj, aby dołączyć do promptu",
+    "attachmentsTitle": "Załączone elementy wizualne ({{count}}):",
+    "removeAttachment": "Usuń załącznik"
+  },
+  "sketch": {
+    "title": "Szkicuj prosty rysunek",
+    "subtitle": "Narysuj koncepcję wizualną, układ planszy lub postać do swojej gry.",
+    "clear": "Wyczyść",
+    "undo": "Cofnij",
+    "brushSize": "Pędzel",
+    "eraser": "Gumka",
+    "pencil": "Ołówek",
+    "cancel": "Anuluj",
+    "attach": "Dołącz do promptu"
   },
   "home": {
     "title": "Opisz grę. My ją budujemy. Ty grasz.",

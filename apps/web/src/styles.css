@@ -367,6 +367,316 @@ a {
   background: #0d1218;
 }
 
+.hero-prompt-card.drag-over {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.3);
+}
+
+.prompt-textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.prompt-media-actions {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(9, 13, 17, 0.85);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.prompt-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prompt-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.mic-btn.listening {
+  color: #f43f5e;
+  animation: pulseMic 1.2s infinite alternate;
+}
+
+@keyframes pulseMic {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4);
+  }
+  100% {
+    transform: scale(1.15);
+    box-shadow: 0 0 12px 4px rgba(244, 63, 94, 0.6);
+  }
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.mic-notice-text {
+  font-size: 0.85rem;
+  color: #f43f5e;
+  margin: -6px 0 4px;
+  text-align: left;
+}
+
+/* ATTACHMENTS PREVIEW */
+.attachments-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.attachments-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--turquoise);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 4px 8px 4px 4px;
+  max-width: 220px;
+}
+
+.attachment-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #000;
+}
+
+.attachment-name {
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.remove-attachment-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.remove-attachment-btn:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.2);
+}
+
+/* SKETCH MODAL STYLING */
+.sketch-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sketch-modal-content {
+  background: #0f172a;
+  border: 1px solid rgba(0, 228, 172, 0.35);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 580px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.sketch-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.sketch-modal-title {
+  font-size: 1.25rem;
+  color: #fff;
+  margin: 0 0 4px;
+}
+
+.sketch-modal-subtitle {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.sketch-canvas-container {
+  display: flex;
+  justify-content: center;
+  background: #0b1017;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.sketch-canvas {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  cursor: crosshair;
+  background: #0b1017;
+}
+
+.sketch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-btn.active {
+  background: rgba(0, 228, 172, 0.2);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  font-weight: 600;
+}
+
+.palette-group {
+  gap: 6px;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+.size-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.size-btn.active {
+  background: var(--turquoise);
+  color: #0b221d;
+  border-color: var(--turquoise);
+}
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action-btn.danger:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: #f43f5e;
+  color: #f43f5e;
+}
+
+.sketch-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 /* SMART INTENT CARDS */
 .smart-intent-card {
   margin: 8px 0 4px;

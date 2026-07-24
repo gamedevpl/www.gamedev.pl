@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogEntry } from './catalog.js';
+import { SketchModal } from './SketchModal.js';
 
 type HeroPromptSectionProps = {
   initialPrompt?: string;
@@ -12,6 +13,12 @@ type HeroPromptSectionProps = {
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
   onGenerateMock: (prompt: string) => void;
+};
+
+export type VisualAttachment = {
+  id: string;
+  name: string;
+  dataUrl: string;
 };
 
 function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry | null {
@@ -61,6 +68,34 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
   return null;
 }
 
+interface SpeechRecognitionResultItem {
+  transcript: string;
+}
+
+interface SpeechRecognitionResult {
+  [index: number]: SpeechRecognitionResultItem;
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResult[];
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
 export function HeroPromptSection({
   initialPrompt = '',
   catalogEntries = [],
@@ -74,18 +109,156 @@ export function HeroPromptSection({
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
   const [promptText, setPromptText] = useState(initialPrompt);
+  const [attachments, setAttachments] = useState<VisualAttachment[]>([]);
+  const [isSketchOpen, setIsSketchOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [micNotice, setMicNotice] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Web Speech Recognition
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  const toggleSpeechRecognition = () => {
+    setMicNotice(null);
+    const win = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionInstance;
+      webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+    };
+    const SpeechClass = win.SpeechRecognition || win.webkitSpeechRecognition;
+
+    if (!SpeechClass) {
+      setMicNotice(t('hero.micUnsupported'));
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechClass();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = window.navigator.language || 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setPromptText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          setMicNotice(t('hero.micDenied'));
+        } else {
+          setMicNotice(`Speech error: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: unknown) {
+      setIsListening(false);
+      setMicNotice(err instanceof Error ? err.message : 'Voice recognition error');
+    }
+  };
 
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
 
   const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
 
+  const handleFiles = (files: FileList | File[]) => {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (dataUrl) {
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: file.name,
+              dataUrl,
+            },
+          ]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleSaveSketch = (dataUrl: string) => {
+    setAttachments((prev) => [
+      ...prev,
+      {
+        id: `sketch-${Date.now()}`,
+        name: `Sketch ${prev.length + 1}`,
+        dataUrl,
+      },
+    ]);
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const handlePrimarySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = promptText.trim();
-    if (!trimmed) return;
-    onGenerateMock(trimmed);
-    const autoTitle = trimmed.slice(0, 40).trim() || 'My AI Game';
-    onSubmitSpec(autoTitle, trimmed);
+    if (!trimmed && attachments.length === 0) return;
+
+    let finalPrompt = trimmed;
+    if (attachments.length > 0) {
+      const attachSummary = attachments.map((a) => a.name).join(', ');
+      finalPrompt = trimmed
+        ? `${trimmed}\n\n[Visual attachments: ${attachSummary}]`
+        : `Game idea with attached visuals: ${attachSummary}`;
+    }
+
+    onGenerateMock(finalPrompt);
+    const autoTitle = trimmed.slice(0, 40).trim() || 'My Visual AI Game';
+    onSubmitSpec(autoTitle, finalPrompt);
   };
 
   return (
@@ -94,22 +267,91 @@ export function HeroPromptSection({
         <h1 className="hero-headline">{t('hero.mainTitle')}</h1>
       </div>
 
-      <div className="hero-prompt-card">
+      <div
+        className={`hero-prompt-card ${isDragging ? 'drag-over' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <form onSubmit={handlePrimarySubmit} className="prompt-box-form">
-          <textarea
-            className="big-prompt-input"
-            autoFocus
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-            placeholder={t('hero.bigPromptPlaceholder')}
-            rows={2}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                handlePrimarySubmit(e);
-              }
-            }}
-          />
+          <div className="prompt-textarea-wrapper">
+            <textarea
+              className="big-prompt-input"
+              autoFocus
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder={t('hero.bigPromptPlaceholder')}
+              rows={2}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handlePrimarySubmit(e);
+                }
+              }}
+            />
+
+            <div className="prompt-media-actions">
+              <button
+                type="button"
+                className={`prompt-icon-btn mic-btn ${isListening ? 'listening' : ''}`}
+                onClick={toggleSpeechRecognition}
+                title={isListening ? t('hero.micListening') : t('hero.micStart')}
+                aria-label={t('hero.micStart')}
+              >
+                {isListening ? '🎙️' : '🎤'}
+              </button>
+              <button
+                type="button"
+                className="prompt-icon-btn upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title={t('hero.uploadImage')}
+                aria-label={t('hero.uploadImage')}
+              >
+                🖼️
+              </button>
+              <button
+                type="button"
+                className="prompt-icon-btn sketch-btn"
+                onClick={() => setIsSketchOpen(true)}
+                title={t('hero.drawSketch')}
+                aria-label={t('hero.drawSketch')}
+              >
+                🎨
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden-file-input"
+                onChange={handleFileSelect}
+              />
+            </div>
+          </div>
+
+          {micNotice && <p className="mic-notice-text">{micNotice}</p>}
+
+          {attachments.length > 0 && (
+            <div className="attachments-preview-container">
+              <span className="attachments-title">{t('hero.attachmentsTitle', { count: attachments.length })}</span>
+              <div className="attachments-list">
+                {attachments.map((item) => (
+                  <div key={item.id} className="attachment-chip">
+                    <img src={item.dataUrl} alt={item.name} className="attachment-thumb" />
+                    <span className="attachment-name">{item.name}</span>
+                    <button
+                      type="button"
+                      className="remove-attachment-btn"
+                      onClick={() => removeAttachment(item.id)}
+                      title={t('hero.removeAttachment')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {matchedGame && (
             <div className="smart-intent-card matched-card">
@@ -154,7 +396,11 @@ export function HeroPromptSection({
               <button
                 type="submit"
                 className="primary-btn build-btn"
-                disabled={submissionStatus === 'loading' || mockStatus === 'loading' || !promptText.trim()}
+                disabled={
+                  submissionStatus === 'loading' ||
+                  mockStatus === 'loading' ||
+                  (!promptText.trim() && attachments.length === 0)
+                }
               >
                 🚀{' '}
                 {submissionStatus === 'loading' || mockStatus === 'loading'
@@ -167,6 +413,8 @@ export function HeroPromptSection({
 
         {submissionError && <p className="error">{submissionError}</p>}
         {mockError && <p className="error">{mockError}</p>}
+
+        <SketchModal isOpen={isSketchOpen} onClose={() => setIsSketchOpen(false)} onSaveSketch={handleSaveSketch} />
       </div>
     </section>
   );
