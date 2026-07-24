@@ -39,6 +39,74 @@ a single `--set-secrets` list.
   redeploy (or deploy without wiring it). Basic Auth over HTTPS is a stopgap; a domain +
   proper auth is a later decision.
 
+## Outbound email (Resend)
+
+Email is used for **beta invites** today (`npm run beta:invite`) and is the shared
+foundation for **notifications** later (see [`notifications-plan.md`](./notifications-plan.md)).
+The provider is **Resend** (EU / Ireland sending region), reached over its HTTP API — SMTP is
+blocked on Cloud Run. The transport lives behind a seam ([`apps/api/src/mailer.ts`](../apps/api/src/mailer.ts)):
+with `RESEND_API_KEY` present it sends for real, without it the mailer **degrades to a no-op
+console logger**, so deploys stay green whether or not email is configured.
+
+### Sender identity & DNS (one-time, owner-run)
+
+Email is sent from a **dedicated subdomain** — `noreply@mail.gamedev.pl` — so sending
+reputation is isolated from the root domain. In the Resend dashboard, **Add Domain →
+`mail.gamedev.pl`**, choose the **EU (Ireland)** region, then add the records Resend generates
+at the DNS host (gamedev.pl runs on **AWS Route 53**). Verified live values:
+
+| Type | Name                                | Value                                             | Purpose                   |
+| ---- | ----------------------------------- | ------------------------------------------------- | ------------------------- |
+| MX   | `send.mail.gamedev.pl`              | `feedback-smtp.eu-west-1.amazonses.com` (prio 10) | bounce/complaint feedback |
+| TXT  | `send.mail.gamedev.pl`              | `v=spf1 include:amazonses.com ~all`               | SPF (authorized senders)  |
+| TXT  | `resend._domainkey.mail.gamedev.pl` | `p=…` (per-domain key from the dashboard)         | DKIM signing (1024-bit)   |
+
+- **DKIM value is per-domain** — copy it verbatim from the Resend dashboard; it is not
+  reproduced here.
+- **DMARC needs no subdomain record.** The org-level `_dmarc.gamedev.pl` (`v=DMARC1; p=none;`)
+  already covers `mail.gamedev.pl` via DMARC's organizational-domain fallback (subdomains
+  inherit `p=` when no `sp=`/subdomain record exists). Add a dedicated `_dmarc.mail.gamedev.pl`
+  only if you later want a different policy or separate reports for this stream.
+
+### The `resend-api-key` secret
+
+Like the other secrets, the key lives only in Secret Manager and is referenced **by name** in
+both deploy paths; the value is never in the repo.
+
+```bash
+# Create (first time):
+printf '%s' '<Resend API key: re_...>' \
+  | gcloud secrets create resend-api-key --data-file=- --replication-policy=automatic --project gamedevpl
+# Let the Cloud Run runtime SA read it:
+gcloud secrets add-iam-policy-binding resend-api-key \
+  --member="serviceAccount:334141807880-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" --project gamedevpl
+# Rotate later (new version; takes effect on the next revision):
+printf '%s' '<new key>' | gcloud secrets versions add resend-api-key --data-file=- --project gamedevpl
+```
+
+Optional plain env vars (both have code defaults, so only set to override):
+`MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`) and `INVITE_URL`
+(default `https://www.gamedev.pl`).
+
+### Sending beta invites
+
+`beta:invite` pre-approves the address in the `waitlist` collection (same as `beta:approve`)
+**and** emails the invitation, so a colleague gets a link instead of discovering the site and
+joining the waitlist first. Run it from a shell with `RESEND_API_KEY` exported:
+
+```bash
+export RESEND_API_KEY='re_...'
+npm run beta:invite -w @gamedevpl/api -- friend@example.com            # en
+npm run beta:invite -w @gamedevpl/api -- friend@example.com --locale pl
+npm run beta:invite -w @gamedevpl/api -- friend@example.com --dry-run  # preview: no write, no send
+```
+
+It refuses to run without `RESEND_API_KEY` (rather than silently not sending); `--dry-run`
+previews the rendered email with no Firestore write and no send. See
+[`.claude/skills/managing-beta-participants`](../.claude/skills/managing-beta-participants) for
+the full access model.
+
 ## How to deploy manually
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
