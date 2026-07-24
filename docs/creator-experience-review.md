@@ -62,9 +62,24 @@ at the flow from more than one angle. This is the review; the first batch of fix
 
 ## Suggested order
 
-1. **Read-only share link** for a draft/published game (growth, and it defuses token-sharing).
-2. **ETA + failure surfacing** on the status page (`queued` with no ETA is the top drop-off risk).
-3. **Mobile pass** over the status page, the rail and the draft player.
-4. **Agent-authored progress line** per push, replacing inference from commit subjects.
-5. **Retry / abandon** actions on a build, and visible quota.
-6. Accessibility pass (live regions, `datetime`, focus handling on theater open/close).
+Owner agreed with this order on 2026-07-24; 1–4 and 6 have since shipped.
+
+1. ✅ **Read-only share link** — in-progress games get slug permalinks (`#/draft/<slug>`) resolved
+   like published ones, served by `GET /api/drafts/:slug`. No status token, so no change requests
+   and no quota spend from a shared link.
+2. ✅ **ETA + failure surfacing** — `GET /api/submissions/stats` reports the median build time of
+   recently published games (recorded via `publishedAt`), and the PR's check rollup rides along on
+   the status response so a failing build says so. `needs_changes` offers a way to try again.
+3. ✅ **Mobile pass** — status page, rail and links under 640px.
+4. ✅ **Agent-authored progress line** — `games/<slug>/PROGRESS.md` on the agent's branch, top line
+   shown as "Agent says: …". Contract in [agent-progress-notes.md](./agent-progress-notes.md);
+   still to do: land it as a skill in the games repo so agents actually keep the journal.
+5. ⏳ **Retry / abandon** actions on a build, and visible quota. Needs decisions: abandoning means
+   closing the issue (and what happens to an open PR), and quota display needs a read-only quota
+   endpoint the store doesn't expose yet.
+6. ✅ **Accessibility** — theater is a focus-managed dialog with Escape, polite live regions on
+   status copy and the agent note, `aria-current` on the timeline, `datetime` on feed timestamps.
+
+Still open from the persona notes above: in-game text is agent-authored in whatever language the
+agent picked, there is no operator view of stuck/failed builds, and per-build Vertex cost is
+unmeasured.
