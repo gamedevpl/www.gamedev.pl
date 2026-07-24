@@ -6,7 +6,11 @@ declare global {
     google?: {
       accounts: {
         id: {
-          initialize: (config: { client_id?: string; callback: (res: { credential: string }) => void }) => void;
+          initialize: (config: {
+            client_id?: string;
+            auto_select?: boolean;
+            callback: (res: { credential: string }) => void;
+          }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
           prompt: () => void;
         };
@@ -52,6 +56,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
 
     window.google.accounts.id.initialize({
       client_id: clientId,
+      auto_select: true,
       callback: async (response) => {
         try {
           await signInWithGoogleToken(response.credential);
@@ -70,6 +75,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       text: 'signin_with',
       shape: 'rectangular',
     });
+    window.google.accounts.id.prompt();
   }, [scriptLoaded, signInWithGoogleToken, onSuccess, onError]);
 
   return <div ref={buttonRef} className="google-sign-in-container" />;
