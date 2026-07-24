@@ -19,6 +19,9 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     tag: data.tag, // same tag coalesces repeat pings for one event
+    // Re-alert (banner/sound) even when a notification with this tag already
+    // exists — otherwise a same-tag repeat updates silently. Requires a tag.
+    renotify: Boolean(data.tag),
     data: { url: data.url || '/' },
   };
 

@@ -87,7 +87,9 @@ export async function registerPushRoutes(app: FastifyInstance, options: PushRout
       title: 'gamedev.pl',
       body: 'Push notifications are working 🎉',
       url: `${appBaseUrl}/`,
-      tag: 'push-test',
+      // Unique per call so repeat tests always surface a fresh banner — a fixed tag
+      // would let Chrome coalesce the second test silently into the first.
+      tag: `push-test-${Date.now()}`,
     };
 
     let sent = 0;
