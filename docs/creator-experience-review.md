@@ -72,8 +72,9 @@ Owner agreed with this order on 2026-07-24; all six have since shipped.
    the status response so a failing build says so. `needs_changes` offers a way to try again.
 3. ✅ **Mobile pass** — status page, rail and links under 640px.
 4. ✅ **Agent-authored progress line** — `games/<slug>/PROGRESS.md` on the agent's branch, top line
-   shown as "Agent says: …". Contract in [agent-progress-notes.md](./agent-progress-notes.md);
-   still to do: land it as a skill in the games repo so agents actually keep the journal.
+   shown as "Agent says: …". Contract in [agent-progress-notes.md](./agent-progress-notes.md),
+   landed in the games repo as the `report-build-progress` skill + core rule 22 (games PR #31),
+   so agents actually keep the journal.
 5. ✅ **Retry / abandon** actions on a build, and visible quota. Owner's calls: abandoning closes
    the issue **and** the open PR and does **not** refund the quota; retry **prefills** the prompt
    box rather than resubmitting. `abandoned` is a status of its own (a closed issue would
