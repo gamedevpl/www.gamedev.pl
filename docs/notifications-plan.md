@@ -1,7 +1,9 @@
 # Notifications: design & phased plan
 
-> Status: **M0 + M1 + M1.5 built** (2026-07-24). Owner decisions folded in: email promoted
-> to M1.5, provider = Resend (N4/N4b). Goal: tell players and creators when something they
+> Status: **M0 + M1 + M1.5 shipped & verified in prod; M2 Web Push (desktop/Android) built**
+> (2026-07-24). The Cloud Scheduler sweep is live and returning 200 every 2 min. Owner
+> decisions folded in: email promoted to M1.5, provider = Resend (N4/N4b). Goal: tell players
+> and creators when something they
 > care about happens — game generation completed, a game they follow got an update — without
 > forcing them to keep a tab open and poll. Builds on the M1 auth stack (Google sign-in,
 > Firestore, sessions) from [`auth-and-usage-plan.md`](./auth-and-usage-plan.md).
@@ -15,8 +17,25 @@
 > `RESEND_API_KEY` is set; skips unsubscribed/no-address; retries on failure via `emailedAt`),
 > and the signed, wall-exempt one-click unsubscribe endpoint `GET /api/email/unsubscribe`.
 > The in-app bell strings and the emails are both bilingual (en/pl).
-> **Remaining:** just the Cloud Scheduler job that calls the sweep (owner step, below) — the
-> poll path already delivers notifications to active viewers without it.
+>
+> **M2 Web Push (built, 2026-07-24) — the "80/20" slice (desktop Chrome/Firefox/Edge +
+> Android; iOS Safari's PWA-only path deferred):** the push seam `pusher.ts`
+> (`WebPushPusher` over `web-push` HTTP, `NoopPusher` fake, env-gated
+> `createPusherFromEnv`), push-subscription storage on the `Store`
+> (`users/{uid}/pushSubscriptions/{hash-of-endpoint}`), the session-gated
+> `GET /api/push/config` + `POST /api/push/{subscribe,unsubscribe}` routes
+> (`push-routes.ts`), best-effort push fan-out in `emitSubmissionNotification` (fresh
+> notifications only; prunes subscriptions the push service reports 404/410), the tiny
+> notification-only service worker `apps/web/public/sw.js` (push + notificationclick,
+> caches nothing), the client opt-in helper `pushApi.ts`, and a bilingual enable/on/blocked
+> toggle in the `NotificationBell` panel. Real send only when a VAPID keypair is configured
+> (`VAPID_PUBLIC_KEY` env + `vapid-private-key` secret); otherwise push is simply off and the
+> UI hides the toggle. **Owner step to light it up:** create the `vapid-private-key` secret and
+> set the `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` repo vars, then redeploy (commands below).
+>
+> **Remaining:** M3 player-facing events (`game.updated`, `catalog.new_game`) and, if wanted,
+> the iOS PWA slice (manifest + install prompt) so iPhone Safari can receive push. Everything
+> M0–M2 is built; the Cloud Scheduler sweep is live.
 >
 > **Cloud Scheduler setup (owner-run, after a deploy).** The sweep endpoint stays closed
 > (deny-all) until `NOTIFY_SWEEP_AUDIENCE` + `NOTIFY_SWEEP_SA` are set on the service and a
