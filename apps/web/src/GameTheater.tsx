@@ -31,6 +31,13 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
   const exitRef = useRef<HTMLButtonElement | null>(null);
   const player = useGamePlayer(frameRef, true);
 
+  // Callers routinely pass a fresh `onExit` closure on every render (and the status
+  // view re-renders every few seconds while a build polls). Keeping it in a ref lets
+  // the mount effect below stay mount-only: if it re-ran on each new identity it
+  // would yank focus off the game and back onto the chrome mid-play.
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+
   // The theater takes over the whole viewport, so keyboard focus has to come with
   // it — otherwise focus is left behind on the page underneath, and Escape (the
   // reflex for "get me out of here") does nothing. Focus returns on unmount.
@@ -39,7 +46,7 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
     exitRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onExit();
+      if (event.key === 'Escape') onExitRef.current();
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -47,7 +54,7 @@ export function GameTheater({ title, badge, source, onExit, meta }: GameTheaterP
       window.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [onExit]);
+  }, []);
 
   return (
     <section className="panel stage is-playing-full-viewport" role="dialog" aria-modal="true" aria-label={title}>

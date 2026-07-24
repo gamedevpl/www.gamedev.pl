@@ -304,6 +304,81 @@ describe('SubmissionStatusView', () => {
     }
   });
 
+  it('keeps keyboard focus in the game while the build keeps polling', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    try {
+      // A fresh object per poll, like the real API — so each poll actually re-renders
+      // the view (and hands the theater a new onExit closure), which is the condition
+      // that used to steal focus.
+      mockedGetSubmissionStatus.mockImplementation(async () => ({
+        status: 'building',
+        preview: { slug: 'space-runner' },
+        progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      }));
+      mockedGetSubmissionPreview.mockResolvedValue({
+        slug: 'space-runner',
+        title: 'Space Runner',
+        html: '<canvas></canvas>',
+      });
+      await i18n.changeLanguage('en');
+      window.location.hash = '#/status/focus-token';
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'focus-token' }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      await act(async () => {
+        container
+          .querySelector<HTMLButtonElement>('.status-play-cta')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+
+      // GameFrame hands focus to the iframe shortly after the theater mounts.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      const iframe = container.querySelector('iframe[title="Space Runner"]');
+      expect(document.activeElement).toBe(iframe);
+
+      // A WIP draft keeps polling every few seconds, re-rendering the status view and
+      // handing the theater a fresh onExit closure. That must not pull focus back onto
+      // the chrome (the exit button, or the play button underneath) mid-game.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
+        await flushEffects();
+      });
+      expect(document.activeElement).toBe(iframe);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
+        await flushEffects();
+      });
+      expect(document.activeElement).toBe(iframe);
+
+      // Escape still exits, even though the handler now reads onExit through a ref.
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        await flushEffects();
+      });
+      expect(container.querySelector('iframe')).toBeNull();
+
+      await act(async () => {
+        root.unmount();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('relays post-play feedback to the build agent', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
