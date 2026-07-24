@@ -14,9 +14,9 @@
 > templates, best-effort email fan-out in `emitSubmissionNotification` (real send only when
 > `RESEND_API_KEY` is set; skips unsubscribed/no-address; retries on failure via `emailedAt`),
 > and the signed, wall-exempt one-click unsubscribe endpoint `GET /api/email/unsubscribe`.
-> **Remaining:** the Cloud Scheduler job that calls the sweep (owner step, below) and en/pl
-> locale keys for the in-app notification strings (the bell renders English fallbacks until
-> then; the emails are already bilingual).
+> The in-app bell strings and the emails are both bilingual (en/pl).
+> **Remaining:** just the Cloud Scheduler job that calls the sweep (owner step, below) — the
+> poll path already delivers notifications to active viewers without it.
 >
 > **Cloud Scheduler setup (owner-run, after a deploy).** The sweep endpoint stays closed
 > (deny-all) until `NOTIFY_SWEEP_AUDIENCE` + `NOTIFY_SWEEP_SA` are set on the service and a
