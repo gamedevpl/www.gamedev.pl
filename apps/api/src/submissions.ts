@@ -9,6 +9,7 @@ import {
   type LinkedPullRequest,
 } from './github-client.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { notifyOnTransition } from './notify.js';
 import { type Store } from './store.js';
 import {
   deriveStatus,
@@ -257,6 +258,23 @@ export async function registerSubmissionRoutes(
       const linkedPr = await githubClient.findLinkedPR(issueNumber);
       const status = await deriveStatus(issue.state, linkedPr, (slug) => isSlugPublished(githubClient, slug));
       statusCache.set(issueNumber, { value: status, expiresAt: currentTime + 60_000 });
+
+      // Opportunistic detection (docs/notifications-plan.md N1): a poll that
+      // observes a transition emits the owner's notification inline, so it lands
+      // instantly while they're watching. The Cloud Scheduler sweep is the
+      // closed-tab backstop; both converge on the same idempotent emit. Best
+      // effort — a notify failure must never break the status response.
+      if (store) {
+        try {
+          const record = await store.getSubmission(issueNumber);
+          if (record) {
+            await notifyOnTransition({ store }, record, status, token);
+          }
+        } catch (notifyError) {
+          request.log.error({ err: notifyError }, 'notification emit on status poll failed');
+        }
+      }
+
       return reply.send(status);
     } catch (error) {
       request.log.error({ err: error }, 'failed to resolve submission status');

@@ -1,4 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
+import type { SubmissionStatus } from './submission-status.js';
 
 export interface User {
   uid: string;
@@ -15,6 +16,12 @@ export interface SubmissionRecord {
   ownerUid: string;
   createdAt: string;
   title: string;
+  /**
+   * The status we last emitted a notification for. Drives transition detection
+   * (only notify when the mapped event changes) and lets the sweep stop scanning
+   * a submission once it reaches a terminal, already-notified state.
+   */
+  lastNotifiedStatus?: SubmissionStatus;
 }
 
 export interface UsageCounters {
@@ -64,6 +71,12 @@ export interface Store {
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
   getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
+  setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+  /**
+   * Submissions the sweep should still check: those not yet in a terminal,
+   * already-notified state (published / needs_changes recorded as last-notified).
+   */
+  listActiveSubmissions(): Promise<SubmissionRecord[]>;
   checkAndIncrementQuota(
     uid: string,
     dateStr: string,
@@ -133,6 +146,17 @@ export class InMemoryStore implements Store {
   async getSubmission(issueNumber: number): Promise<SubmissionRecord | null> {
     const sub = this.submissions.get(issueNumber);
     return sub ? { ...sub } : null;
+  }
+
+  async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, lastNotifiedStatus: status });
+  }
+
+  async listActiveSubmissions(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
+      .map((s) => ({ ...s }));
   }
 
   async checkAndIncrementQuota(
@@ -344,6 +368,23 @@ export class FirestoreStore implements Store {
     const snap = await this.db.collection('submissions').doc(String(issueNumber)).get();
     if (!snap.exists) return null;
     return snap.data() as SubmissionRecord;
+  }
+
+  async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ lastNotifiedStatus: status }, { merge: true });
+  }
+
+  async listActiveSubmissions(): Promise<SubmissionRecord[]> {
+    // 'in' with the non-terminal set would need a composite index and misses docs
+    // with no lastNotifiedStatus yet; filtering client-side is simpler and the
+    // active set is small (open submissions only).
+    const snap = await this.db.collection('submissions').get();
+    return snap.docs
+      .map((d) => d.data() as SubmissionRecord)
+      .filter((s) => s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes');
   }
 
   async checkAndIncrementQuota(

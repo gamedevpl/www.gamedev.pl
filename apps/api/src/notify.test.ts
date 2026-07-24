@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryStore } from './store.js';
-import { emitSubmissionNotification } from './notify.js';
+import { emitSubmissionNotification, notifyOnTransition, statusToEvent } from './notify.js';
+import type { SubmissionStatusResponse } from './submission-status.js';
 
 describe('InMemoryStore notifications', () => {
   let store: InMemoryStore;
@@ -160,5 +161,58 @@ describe('emitSubmissionNotification', () => {
     expect(first.created).toBe(true);
     expect(second.created).toBe(false);
     expect(await store.listNotifications('g:1')).toHaveLength(1);
+  });
+});
+
+describe('statusToEvent', () => {
+  it('maps notify-worthy statuses and ignores the rest', () => {
+    expect(statusToEvent('building')).toBe('submission.building');
+    expect(statusToEvent('in_review')).toBe('submission.building');
+    expect(statusToEvent('published')).toBe('submission.published');
+    expect(statusToEvent('needs_changes')).toBe('submission.needs_changes');
+    expect(statusToEvent('queued')).toBeNull();
+    expect(statusToEvent('publishing')).toBeNull();
+  });
+});
+
+describe('notifyOnTransition', () => {
+  let store: InMemoryStore;
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.createSubmission(7, 'g:owner', 'Sky Dodge');
+  });
+
+  async function record() {
+    return (await store.getSubmission(7))!;
+  }
+
+  it('emits on the first transition into a notify-worthy status and records it', async () => {
+    const res = await notifyOnTransition({ store }, await record(), { status: 'building' }, 'tok');
+    expect(res.emitted).toBe(true);
+    expect((await store.listNotifications('g:owner'))[0].id).toBe('sub-7-building');
+    expect((await record()).lastNotifiedStatus).toBe('building');
+  });
+
+  it('does not double-notify on building → in_review (same event)', async () => {
+    await notifyOnTransition({ store }, await record(), { status: 'building' }, 'tok');
+    const res = await notifyOnTransition({ store }, await record(), { status: 'in_review' }, 'tok');
+    expect(res.emitted).toBe(false);
+    expect(await store.listNotifications('g:owner')).toHaveLength(1);
+  });
+
+  it('emits published with a play deep-link, then needs no further emit', async () => {
+    const published: SubmissionStatusResponse = { status: 'published', slug: 'sky-dodge' };
+    const res = await notifyOnTransition({ store }, await record(), published, 'tok');
+    expect(res.emitted).toBe(true);
+    const list = await store.listNotifications('g:owner');
+    expect(list[0].link).toBe('#/play/sky-dodge');
+    // published is terminal for the sweep
+    expect(await store.listActiveSubmissions()).toEqual([]);
+  });
+
+  it('does not emit for non-notify statuses', async () => {
+    expect((await notifyOnTransition({ store }, await record(), { status: 'queued' }, 'tok')).emitted).toBe(false);
+    expect((await notifyOnTransition({ store }, await record(), { status: 'publishing' }, 'tok')).emitted).toBe(false);
+    expect(await store.listNotifications('g:owner')).toEqual([]);
   });
 });
