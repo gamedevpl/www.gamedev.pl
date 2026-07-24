@@ -83,6 +83,25 @@ describe('push routes', () => {
     await app.close();
   });
 
+  it('test push returns 503 when push is not configured (no VAPID keys)', async () => {
+    await store.savePushSubscription('g:me', subscription);
+    const app = await buildApp({ store, sessionSecret });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/push/test',
+      headers: authHeaders('g:me'),
+    });
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('test push requires a session', async () => {
+    const app = await buildApp({ store, sessionSecret });
+    const res = await app.inject({ method: 'POST', url: '/api/push/test' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
   it('unsubscribe removes the caller’s subscription', async () => {
     await store.savePushSubscription('g:me', subscription);
     const app = await buildApp({ store, sessionSecret });

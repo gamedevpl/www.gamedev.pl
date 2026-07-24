@@ -6,6 +6,7 @@
     "push": {
       "enable": "Włącz powiadomienia push",
       "on": "Powiadomienia push włączone",
+      "test": "Wyślij testowe",
       "blocked": "Powiadomienia push są zablokowane w ustawieniach przeglądarki."
     },
     "submission": {

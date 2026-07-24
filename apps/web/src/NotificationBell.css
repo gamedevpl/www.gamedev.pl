@@ -136,6 +136,28 @@
   cursor: default;
 }
 
+.notif-push-test {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: #9aa3b2;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notif-push-test:hover:not(:disabled) {
+  color: #40e0d0;
+}
+
+.notif-push-test:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .notif-push-hint {
   display: block;
   font-size: 12px;

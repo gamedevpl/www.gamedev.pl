@@ -6,6 +6,7 @@
     "push": {
       "enable": "Enable push notifications",
       "on": "Push notifications on",
+      "test": "Send a test",
       "blocked": "Push is blocked in your browser settings."
     },
     "submission": {

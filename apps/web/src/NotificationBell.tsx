@@ -7,7 +7,7 @@ import {
   type AppNotification,
   type NotificationType,
 } from './notificationsApi';
-import { pushUiState, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
+import { pushUiState, sendTestPush, subscribeToPush, unsubscribeFromPush, type PushUiState } from './pushApi';
 import './NotificationBell.css';
 
 const POLL_MS = 60_000;
@@ -65,6 +65,17 @@ export function NotificationBell() {
       alive = false;
     };
   }, [user]);
+
+  const testPush = useCallback(async () => {
+    setPushBusy(true);
+    try {
+      await sendTestPush();
+    } catch {
+      // Non-fatal — the OS notification either arrives or it doesn't.
+    } finally {
+      setPushBusy(false);
+    }
+  }, []);
 
   const togglePush = useCallback(async () => {
     setPushBusy(true);
@@ -170,6 +181,11 @@ export function NotificationBell() {
                   {push.subscribed
                     ? t('notifications.push.on', { defaultValue: 'Push notifications on' })
                     : t('notifications.push.enable', { defaultValue: 'Enable push notifications' })}
+                </button>
+              )}
+              {push.subscribed && push.permission === 'granted' && (
+                <button type="button" className="notif-push-test" onClick={() => void testPush()} disabled={pushBusy}>
+                  {t('notifications.push.test', { defaultValue: 'Send a test' })}
                 </button>
               )}
             </div>
